@@ -177,7 +177,7 @@ pub(crate) use transforms::{
 };
 #[cfg(test)]
 use transforms::{
-    appearance_needs_rows, beat_x_extra, drunk_x_extra, itg_actor_rotation_z, mod_divisor,
+    appearance_needs_rows, beat_wave_offset, drunk_x_extra, itg_actor_rotation_z, mod_divisor,
     move_col_extra, note_x_extra, quantize_step, signed_effect_active, sm_scale, tipsy_y_extra,
     tornado_x_extra, visual_effect_params_for_col, visual_pulse_inner_zoom,
     visual_pulse_zoom_for_y, visual_tiny_zoom,
@@ -210,7 +210,7 @@ mod tests {
         ZmodMiniIndicatorText, appearance_needs_rows, append_average_error_bar_part,
         append_beat_bar, append_cue_bar, append_disabled_timing_windows,
         append_edit_measure_number, append_mini_part, append_perspective_parts, append_turn_parts,
-        average_error_bar_mini_scale, beat_factor, beat_scroll_travel, beat_x_extra,
+        average_error_bar_mini_scale, beat_factor, beat_scroll_travel, beat_wave_offset,
         bottom_cap_uv_window, clamp_rounded_i16, clipped_hold_body_bounds, column_cue_alpha,
         column_cue_alpha_anchored, column_cue_alpha_with_fade, column_cue_height,
         column_cue_reverse_top_y, column_flash_alpha, column_flash_alpha_at, column_flash_color,
@@ -1306,10 +1306,10 @@ mod tests {
 
     #[test]
     fn beat_factor_pulses_early_in_each_beat() {
-        assert_eq!(beat_factor(-0.25), 0.0);
-        assert_eq!(beat_factor(0.3), 0.0);
-        assert!((beat_factor(0.0) - 20.0).abs() <= 1e-6);
-        assert!((beat_factor(1.0) + 20.0).abs() <= 1e-6);
+        assert_eq!(beat_factor(-0.25, 0.0, 0.0), 0.0);
+        assert_eq!(beat_factor(0.3, 0.0, 0.0), 0.0);
+        assert!((beat_factor(0.0, 0.0, 0.0) - 20.0).abs() <= 1e-6);
+        assert!((beat_factor(1.0, 0.0, 0.0) + 20.0).abs() <= 1e-6);
     }
 
     #[test]
@@ -3208,14 +3208,14 @@ mod tests {
     }
 
     #[test]
-    fn beat_x_extra_uses_beat_factor_wave() {
-        assert_eq!(beat_x_extra(0.0, 20.0, 0.0, 0.0), 0.0);
-        assert!((beat_x_extra(0.0, 20.0, 1.0, 0.0) - 20.0).abs() <= 1e-6);
+    fn beat_wave_offset_uses_beat_factor_wave() {
+        assert_eq!(beat_wave_offset(0.0, 20.0, 0.0, 0.0), 0.0);
+        assert!((beat_wave_offset(0.0, 20.0, 1.0, 0.0) - 20.0).abs() <= 1e-6);
         let expected = 20.0 * (1.0_f32 + std::f32::consts::FRAC_PI_2).sin();
-        assert!((beat_x_extra(15.0, 20.0, 1.0, 0.0) - expected).abs() <= 1e-6);
+        assert!((beat_wave_offset(15.0, 20.0, 1.0, 0.0) - expected).abs() <= 1e-6);
         // Native ArrowEffects scales the Y wavelength by 1 + BeatPeriod.
-        assert!((beat_x_extra(75.0, 20.0, 1.0, 4.0) - expected).abs() <= 1e-6);
-        assert!((beat_x_extra(7.5, 20.0, -1.0, -0.5) + expected).abs() <= 1e-6);
+        assert!((beat_wave_offset(75.0, 20.0, 1.0, 4.0) - expected).abs() <= 1e-6);
+        assert!((beat_wave_offset(7.5, 20.0, -1.0, -0.5) + expected).abs() <= 1e-6);
     }
 
     #[test]

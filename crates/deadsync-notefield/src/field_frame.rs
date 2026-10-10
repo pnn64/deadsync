@@ -1,5 +1,6 @@
 use crate::transforms::{
-    attenuate_offset, visual_confusion_x_deg, visual_note_rotation_x, visual_note_rotation_y,
+    attenuate_offset, beat_wave_offset, visual_confusion_x_deg, visual_note_rotation_x,
+    visual_note_rotation_y,
 };
 use crate::{
     CapturedActorScratch, CapturedActorSource, HoldBodyCapRequest, HoldEntryPlanRequest,
@@ -519,7 +520,13 @@ fn compose_field_contents<S, F>(
                 lane_transform_caches[local_col],
             )
         });
-        let receptor_draw_y = lane_frame.receptor_draw_y;
+        let receptor_draw_y = lane_frame.receptor_draw_y
+            + beat_wave_offset(
+                0.0,
+                note_inputs.beat_y_factor,
+                visual.beat_y,
+                visual.beat_y_period,
+            );
         let receptor_center_x = lane_frame.receptor_center_x;
         let head_travel_offset = if is_head_dynamic {
             travel.raw_beat(head_beat)
@@ -570,6 +577,12 @@ fn compose_field_contents<S, F>(
                 head_adjusted_travel,
                 col_offsets[local_col],
                 visual.attenuate_y,
+            )
+            + beat_wave_offset(
+                head_adjusted_travel,
+                note_inputs.beat_y_factor,
+                visual.beat_y,
+                visual.beat_y_period,
             );
         let tail_y = dir.mul_add(tail_adjusted_travel, lane_receptor_y)
             + lane_offset
@@ -577,6 +590,12 @@ fn compose_field_contents<S, F>(
                 tail_adjusted_travel,
                 col_offsets[local_col],
                 visual.attenuate_y,
+            )
+            + beat_wave_offset(
+                tail_adjusted_travel,
+                note_inputs.beat_y_factor,
+                visual.beat_y,
+                visual.beat_y_period,
             );
         let note_display = ns.note_display_metrics;
         let lane_reverse = col_dir < 0.0;
@@ -682,7 +701,7 @@ fn compose_field_contents<S, F>(
             && !has_zoom_spline
             && !position_splines[local_col].enabled;
         let sample_hold_path = |screen_y: f32| {
-            // Native GetYOffsetFromYPos inverts Reverse/Tipsy, not AttenuateY.
+            // Native GetYOffsetFromYPos inverts Reverse/Tipsy, not AttenuateY/BeatY.
             // NoteDisplay uses that same offset to sample the hold strip.
             let adjusted_travel = travel.adjusted_from_screen_y_with_lane_offset(
                 lane_receptor_y,
@@ -1190,6 +1209,12 @@ fn compose_visible_notes<S, F>(
                         adjusted_travel,
                         notes.col_offsets[local_col],
                         visual.attenuate_y,
+                    )
+                    + beat_wave_offset(
+                        adjusted_travel,
+                        notes.beat_y_factor,
+                        visual.beat_y,
+                        visual.beat_y_period,
                     );
                 let transform_cache = lane_transform_caches[local_col];
                 let mut world_z = note_world_z_cached(
@@ -1742,6 +1767,7 @@ fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
             bumpy: visual.bumpy,
             parabola_z: visual.parabola_z,
             attenuate_z: visual.attenuate_z,
+            beat_z: visual.beat_z,
             square_z: visual.square_z,
             zigzag_z: visual.zigzag_z,
             twirl: visual.twirl,
@@ -1770,9 +1796,12 @@ fn hold_lane_frame(
             && visual.parabola_x == 0.0
             && visual.attenuate_x == 0.0
             && visual.attenuate_y == 0.0
+            && visual.beat == 0.0
+            && visual.beat_y == 0.0
             && visual.xmode == 0.0
             && visual.parabola_z == 0.0
             && visual.attenuate_z == 0.0
+            && visual.beat_z == 0.0
             && visual.digital == 0.0
             && visual.zigzag == 0.0
             && visual.zigzag_z == 0.0
@@ -1802,7 +1831,7 @@ mod hold_lane_frame_cache_tests {
     fn travel_mods_select_hold_meshes_even_below_epsilon() {
         for (amount, axis) in [-2.5, 2.5, 0.000000025]
             .into_iter()
-            .flat_map(|amount| (0..9).map(move |axis| (amount, axis)))
+            .flat_map(|amount| (0..12).map(move |axis| (amount, axis)))
         {
             let visual = VisualEffects {
                 xmode: if axis == 0 { amount } else { 0.0 },
@@ -1814,6 +1843,9 @@ mod hold_lane_frame_cache_tests {
                 bumpy_x: if axis == 6 { amount } else { 0.0 },
                 tan_bumpy_x: if axis == 7 { amount } else { 0.0 },
                 tan_bumpy: if axis == 8 { amount } else { 0.0 },
+                beat: if axis == 9 { amount } else { 0.0 },
+                beat_y: if axis == 10 { amount } else { 0.0 },
+                beat_z: if axis == 11 { amount } else { 0.0 },
                 ..VisualEffects::default()
             };
             let params = VisualEffectParams::default();
@@ -1828,7 +1860,7 @@ mod hold_lane_frame_cache_tests {
                 lane_note_transform_cache(0.0, params),
             );
             assert!(!frame.use_legacy_sprites);
-            assert_eq!(hold_body_needs_z_buffer(&visual), axis == 2);
+            assert_eq!(hold_body_needs_z_buffer(&visual), axis == 2 || axis == 11);
         }
     }
 

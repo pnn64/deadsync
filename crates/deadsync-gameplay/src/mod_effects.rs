@@ -274,6 +274,16 @@ pub struct VisualOverrides {
     pub pulse_outer: Option<f32>,
     pub pulse_period: Option<f32>,
     pub beat_period: Option<f32>,
+    pub beat_offset: Option<f32>,
+    pub beat_mult: Option<f32>,
+    pub beat_y: Option<f32>,
+    pub beat_y_offset: Option<f32>,
+    pub beat_y_mult: Option<f32>,
+    pub beat_y_period: Option<f32>,
+    pub beat_z: Option<f32>,
+    pub beat_z_offset: Option<f32>,
+    pub beat_z_mult: Option<f32>,
+    pub beat_z_period: Option<f32>,
     pub pulse_offset: Option<f32>,
     pub beat: Option<f32>,
     pub random_speed: Option<f32>,
@@ -368,6 +378,16 @@ impl Default for VisualOverrides {
             pulse_outer: None,
             pulse_period: None,
             beat_period: None,
+            beat_offset: None,
+            beat_mult: None,
+            beat_y: None,
+            beat_y_offset: None,
+            beat_y_mult: None,
+            beat_y_period: None,
+            beat_z: None,
+            beat_z_offset: None,
+            beat_z_mult: None,
+            beat_z_period: None,
             pulse_offset: None,
             beat: None,
             random_speed: None,
@@ -464,6 +484,16 @@ impl VisualOverrides {
             || self.pulse_outer.is_some()
             || self.pulse_period.is_some()
             || self.beat_period.is_some()
+            || self.beat_offset.is_some()
+            || self.beat_mult.is_some()
+            || self.beat_y.is_some()
+            || self.beat_y_offset.is_some()
+            || self.beat_y_mult.is_some()
+            || self.beat_y_period.is_some()
+            || self.beat_z.is_some()
+            || self.beat_z_offset.is_some()
+            || self.beat_z_mult.is_some()
+            || self.beat_z_period.is_some()
             || self.pulse_offset.is_some()
             || self.beat.is_some()
             || self.random_speed.is_some()
@@ -669,6 +699,16 @@ pub struct VisualEffects {
     pub pulse_outer: f32,
     pub pulse_period: f32,
     pub beat_period: f32,
+    pub beat_offset: f32,
+    pub beat_mult: f32,
+    pub beat_y: f32,
+    pub beat_y_offset: f32,
+    pub beat_y_mult: f32,
+    pub beat_y_period: f32,
+    pub beat_z: f32,
+    pub beat_z_offset: f32,
+    pub beat_z_mult: f32,
+    pub beat_z_period: f32,
     pub pulse_offset: f32,
     pub beat: f32,
     pub random_speed: f32,
@@ -771,6 +811,16 @@ impl VisualEffects {
             pulse_outer: 0.0,
             pulse_period: 0.0,
             beat_period: 0.0,
+            beat_offset: 0.0,
+            beat_mult: 0.0,
+            beat_y: 0.0,
+            beat_y_offset: 0.0,
+            beat_y_mult: 0.0,
+            beat_y_period: 0.0,
+            beat_z: 0.0,
+            beat_z_offset: 0.0,
+            beat_z_mult: 0.0,
+            beat_z_period: 0.0,
             pulse_offset: 0.0,
             beat: f32::from((mask & VISUAL_MASK_BIT_BEAT) != 0),
             random_speed: 0.0,
@@ -958,6 +1008,16 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.pulse_outer, base.pulse_outer, step);
     approach_optional_visual(&mut visual.pulse_period, base.pulse_period, step);
     approach_optional_visual(&mut visual.beat_period, base.beat_period, step);
+    approach_optional_visual(&mut visual.beat_offset, base.beat_offset, step);
+    approach_optional_visual(&mut visual.beat_mult, base.beat_mult, step);
+    approach_optional_visual(&mut visual.beat_y, base.beat_y, step);
+    approach_optional_visual(&mut visual.beat_y_offset, base.beat_y_offset, step);
+    approach_optional_visual(&mut visual.beat_y_mult, base.beat_y_mult, step);
+    approach_optional_visual(&mut visual.beat_y_period, base.beat_y_period, step);
+    approach_optional_visual(&mut visual.beat_z, base.beat_z, step);
+    approach_optional_visual(&mut visual.beat_z_offset, base.beat_z_offset, step);
+    approach_optional_visual(&mut visual.beat_z_mult, base.beat_z_mult, step);
+    approach_optional_visual(&mut visual.beat_z_period, base.beat_z_period, step);
     approach_optional_visual(&mut visual.pulse_offset, base.pulse_offset, step);
     approach_optional_visual(&mut visual.beat, base.beat, step);
     approach_optional_visual(&mut visual.random_speed, base.random_speed, step);
@@ -1635,6 +1695,86 @@ pub fn approach_visual_overrides_to_target(
         target.beat_period,
         base.beat_period,
         speed.beat_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_offset,
+        target.beat_offset,
+        base.beat_offset,
+        speed.beat_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_mult,
+        target.beat_mult,
+        base.beat_mult,
+        speed.beat_mult,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_y,
+        target.beat_y,
+        base.beat_y,
+        speed.beat_y,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_y_offset,
+        target.beat_y_offset,
+        base.beat_y_offset,
+        speed.beat_y_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_y_mult,
+        target.beat_y_mult,
+        base.beat_y_mult,
+        speed.beat_y_mult,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_y_period,
+        target.beat_y_period,
+        base.beat_y_period,
+        speed.beat_y_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_z,
+        target.beat_z,
+        base.beat_z,
+        speed.beat_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_z_offset,
+        target.beat_z_offset,
+        base.beat_z_offset,
+        speed.beat_z_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_z_mult,
+        target.beat_z_mult,
+        base.beat_z_mult,
+        speed.beat_z_mult,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_z_period,
+        target.beat_z_period,
+        base.beat_z_period,
+        speed.beat_z_period,
         delta_time,
         1.0,
     );

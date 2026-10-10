@@ -61,6 +61,10 @@ pub(crate) struct VisualEffectParams {
     pub parabola_z: f32,
     pub attenuate_z: f32,
     pub col_x: f32,
+    pub beat_z: f32,
+    pub beat_z_offset: f32,
+    pub beat_z_mult: f32,
+    pub beat_z_period: f32,
     pub square_z: f32,
     pub zigzag_z: f32,
     pub square_z_offset: f32,
@@ -81,6 +85,9 @@ pub(crate) struct LaneNoteTransformCache {
     parabola_z: f32,
     attenuate_z: f32,
     col_x: f32,
+    beat_z: f32,
+    beat_z_factor: f32,
+    beat_z_period: f32,
     square_z: f32,
     zigzag_z: f32,
     square_z_offset: f32,
@@ -284,13 +291,13 @@ pub const fn clamp_rounded_i16(value: f32) -> i16 {
     value.round() as i16
 }
 
-pub(crate) fn beat_factor(song_beat: f32) -> f32 {
-    if !song_beat.is_finite() {
+pub(crate) fn beat_factor(song_beat: f32, offset: f32, mult: f32) -> f32 {
+    if !song_beat.is_finite() || !offset.is_finite() || !mult.is_finite() {
         return 0.0;
     }
     let accel_time = 0.2_f32;
     let total_time = 0.5_f32;
-    let mut beat = song_beat + accel_time;
+    let mut beat = (song_beat + accel_time + offset) * (mult + 1.0);
     let even_beat = (beat as i32 % 2) != 0;
     if beat < 0.0 {
         return 0.0;
@@ -302,11 +309,12 @@ pub(crate) fn beat_factor(song_beat: f32) -> f32 {
         return 0.0;
     }
     let mut factor = if beat < accel_time {
-        let t = sm_scale(beat, 0.0, accel_time, 0.0, 1.0);
+        let t = beat / accel_time;
         t * t
     } else {
-        let t = sm_scale(beat, accel_time, total_time, 1.0, 0.0);
-        (1.0 - t).mul_add(-(1.0 - t), 1.0)
+        // Preserve the multiply-before-divide order of native SCALE.
+        let t = (beat - accel_time) * -1.0 / (total_time - accel_time) + 1.0;
+        1.0 - (1.0 - t) * (1.0 - t)
     };
     if even_beat {
         factor *= -1.0;
@@ -669,6 +677,12 @@ pub(crate) fn note_world_z_cached(
         lane_cache.square_z_offset,
         lane_cache.square_z_period,
     );
+    z += beat_wave_offset(
+        y,
+        lane_cache.beat_z_factor,
+        lane_cache.beat_z,
+        lane_cache.beat_z_period,
+    );
     z
 }
 
@@ -708,6 +722,7 @@ pub(crate) fn visual_hold_body_needs_z_buffer(params: VisualEffectParams) -> boo
         || (params.twirl.is_finite() && params.twirl != 0.0)
         || (params.parabola_z.is_finite() && params.parabola_z != 0.0)
         || (params.attenuate_z.is_finite() && params.attenuate_z != 0.0)
+        || (params.beat_z.is_finite() && params.beat_z != 0.0)
         || (params.zigzag_z.is_finite() && params.zigzag_z != 0.0)
         || (params.square_z.is_finite() && params.square_z != 0.0)
 }
@@ -847,6 +862,9 @@ pub(crate) fn lane_note_transform_cache(
         square_z: params.square_z,
         attenuate_z: params.attenuate_z,
         col_x: params.col_x,
+        beat_z: params.beat_z,
+        beat_z_factor: beat_factor(song_beat, params.beat_z_offset, params.beat_z_mult),
+        beat_z_period: params.beat_z_period,
         zigzag_z: params.zigzag_z,
         square_z_offset: params.square_z_offset,
         zigzag_z_offset: params.zigzag_z_offset,
@@ -977,6 +995,10 @@ pub(crate) fn gameplay_visual_effect_params(
             twirl: visual.twirl,
             parabola_z: visual.parabola_z,
             attenuate_z: visual.attenuate_z,
+            beat_z: visual.beat_z,
+            beat_z_offset: visual.beat_z_offset,
+            beat_z_mult: visual.beat_z_mult,
+            beat_z_period: visual.beat_z_period,
             local_col,
             col_x: 0.0,
             cosecant: visual.cosecant,
@@ -1148,8 +1170,8 @@ pub(crate) fn tipsy_y_extra(
     tipsy * angle.cos() * ARROW_EFFECT_PIXEL_SIZE * TIPSY_ARROW_MAGNITUDE
 }
 
-pub(crate) fn beat_x_extra(y: f32, beat_factor: f32, beat: f32, period: f32) -> f32 {
-    if !signed_effect_active(beat) {
+pub(crate) fn beat_wave_offset(y: f32, beat_factor: f32, beat: f32, period: f32) -> f32 {
+    if beat == 0.0 || !beat.is_finite() {
         return 0.0;
     }
     let shift = beat_factor
@@ -1368,8 +1390,8 @@ pub(crate) fn note_x_extra(
             .unwrap_or(0.0)
             .mul_add(params.invert, out);
     }
-    if signed_effect_active(params.beat) {
-        out += beat_x_extra(y, beat_factor_value, params.beat, params.beat_period);
+    if (params.beat.is_finite() && params.beat != 0.0) {
+        out += beat_wave_offset(y, beat_factor_value, params.beat, params.beat_period);
     }
     out += triangle_wave_offset(
         y, params.zigzag, params.zigzag_offset, params.zigzag_period,
@@ -1502,8 +1524,8 @@ pub(crate) fn note_x_offset_cached(
             .unwrap_or(0.0)
             .mul_add(params.invert, extra);
     }
-    if signed_effect_active(params.beat) {
-        extra += beat_x_extra(y, beat_factor_value, params.beat, params.beat_period);
+    if (params.beat.is_finite() && params.beat != 0.0) {
+        extra += beat_wave_offset(y, beat_factor_value, params.beat, params.beat_period);
     }
     extra += triangle_wave_offset(
         y, params.zigzag, params.zigzag_offset, params.zigzag_period,
@@ -1546,7 +1568,7 @@ pub(crate) fn fill_static_note_x_offsets(
         || params.tan_bumpy_x != 0.0
         || params.drunk != 0.0
         || params.tan_drunk != 0.0
-        || signed_effect_active(params.beat)
+        || (params.beat.is_finite() && params.beat != 0.0)
         || (params.parabola_x.is_finite() && params.parabola_x != 0.0)
         || (params.attenuate_x.is_finite() && params.attenuate_x != 0.0)
         || (params.xmode.is_finite() && params.xmode != 0.0)
@@ -2213,6 +2235,94 @@ mod tests {
                 assert!(
                     (actual - value(key)).abs() < 0.0001,
                     "{key}: {vector}; actual={actual}"
+                );
+            }
+            assert_eq!(
+                visual_hold_body_needs_z_buffer(z_params),
+                value("amount_z") != 0.0
+            );
+        }
+    }
+
+    #[test]
+    fn beat_family_matches_native_vectors() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/beat-family-motion.json"
+        ))
+        .expect("independently compiled native Beat blocks");
+        let vectors = native["vectors"].as_array().expect("native vectors");
+        assert_eq!(vectors.len(), 2400);
+        for vector in vectors {
+            let value = |key: &str| vector[key].as_f64().expect("native float") as f32;
+            let travel = value("travel");
+            let col = value("col_x");
+            let x_params = NoteXParams {
+                beat: value("amount_x"),
+                beat_period: value("period_x"),
+                ..Default::default()
+            };
+            let factor = beat_factor(value("beat"), value("offset_x"), value("mult_x"));
+            let x = note_x_offset(
+                0,
+                travel,
+                factor,
+                0.0,
+                &[col],
+                &[0.0],
+                &[TornadoBounds::default()],
+                &[0.0],
+                x_params,
+                value("tiny"),
+            );
+            let cached_x = note_x_offset_cached(
+                0,
+                travel,
+                factor,
+                0.0,
+                &[col],
+                &[0.0],
+                &[TornadoBounds::default()],
+                &[TornadoLaneCache::default()],
+                &[0.0],
+                x_params,
+                tiny_spacing_scale(value("tiny")),
+            );
+            let y = value("direction") * travel
+                + value("lane_offset")
+                + beat_wave_offset(
+                    travel,
+                    beat_factor(value("beat"), value("offset_y"), value("mult_y")),
+                    value("amount_y"),
+                    value("period_y"),
+                );
+            let z_params = VisualEffectParams {
+                beat_z: value("amount_z"),
+                beat_z_offset: value("offset_z"),
+                beat_z_mult: value("mult_z"),
+                beat_z_period: value("period_z"),
+                col_x: col,
+                ..Default::default()
+            };
+            let z = note_world_z_cached(
+                travel,
+                note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
+                lane_note_transform_cache(value("beat"), z_params),
+            );
+            for (actual, key) in [(x, "x"), (cached_x, "x"), (y, "y"), (z, "z")] {
+                assert!(
+                    (actual - value(key)).abs() < 0.0001,
+                    "{key}: {vector}; actual={actual}"
+                );
+            }
+            for axis in ["x", "y", "z"] {
+                let actual = beat_factor(
+                    value("beat"),
+                    value(&format!("offset_{axis}")),
+                    value(&format!("mult_{axis}")),
+                );
+                assert!(
+                    (actual - value(&format!("factor_{axis}"))).abs() < 0.0001,
+                    "factor {axis}: {vector}; actual={actual}"
                 );
             }
             assert_eq!(

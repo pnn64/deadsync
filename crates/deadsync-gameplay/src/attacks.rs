@@ -671,6 +671,16 @@ pub enum SongLuaEaseMaskTarget {
     VisualPulseOuter,
     VisualPulsePeriod,
     VisualBeatPeriod,
+    VisualBeatOffset,
+    VisualBeatMult,
+    VisualBeatY,
+    VisualBeatYOffset,
+    VisualBeatYMult,
+    VisualBeatYPeriod,
+    VisualBeatZ,
+    VisualBeatZOffset,
+    VisualBeatZMult,
+    VisualBeatZPeriod,
     VisualPulseOffset,
     VisualBeat,
     VisualRandomSpeed,
@@ -2358,6 +2368,16 @@ fn append_song_lua_ease_targets_key(
         "pulseouter" => push(SongLuaEaseMaskTarget::VisualPulseOuter, pct_from, pct_to),
         "pulseperiod" => push(SongLuaEaseMaskTarget::VisualPulsePeriod, pct_from, pct_to),
         "beatperiod" => push(SongLuaEaseMaskTarget::VisualBeatPeriod, pct_from, pct_to),
+        "beatoffset" => push(SongLuaEaseMaskTarget::VisualBeatOffset, pct_from, pct_to),
+        "beatmult" => push(SongLuaEaseMaskTarget::VisualBeatMult, pct_from, pct_to),
+        "beaty" => push(SongLuaEaseMaskTarget::VisualBeatY, pct_from, pct_to),
+        "beatyoffset" => push(SongLuaEaseMaskTarget::VisualBeatYOffset, pct_from, pct_to),
+        "beatymult" => push(SongLuaEaseMaskTarget::VisualBeatYMult, pct_from, pct_to),
+        "beatyperiod" => push(SongLuaEaseMaskTarget::VisualBeatYPeriod, pct_from, pct_to),
+        "beatz" => push(SongLuaEaseMaskTarget::VisualBeatZ, pct_from, pct_to),
+        "beatzoffset" => push(SongLuaEaseMaskTarget::VisualBeatZOffset, pct_from, pct_to),
+        "beatzmult" => push(SongLuaEaseMaskTarget::VisualBeatZMult, pct_from, pct_to),
+        "beatzperiod" => push(SongLuaEaseMaskTarget::VisualBeatZPeriod, pct_from, pct_to),
         "pulseoffset" => push(SongLuaEaseMaskTarget::VisualPulseOffset, pct_from, pct_to),
         "beat" => push(SongLuaEaseMaskTarget::VisualBeat, pct_from, pct_to),
         "randomspeed" => push(SongLuaEaseMaskTarget::VisualRandomSpeed, pct_from, pct_to),
@@ -3086,6 +3106,16 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualPulseOuter => visual.pulse_outer = Some(value),
         SongLuaEaseMaskTarget::VisualPulsePeriod => visual.pulse_period = Some(value),
         SongLuaEaseMaskTarget::VisualBeatPeriod => visual.beat_period = Some(value),
+        SongLuaEaseMaskTarget::VisualBeatOffset => visual.beat_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualBeatMult => visual.beat_mult = Some(value),
+        SongLuaEaseMaskTarget::VisualBeatY => visual.beat_y = Some(value),
+        SongLuaEaseMaskTarget::VisualBeatYOffset => visual.beat_y_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualBeatYMult => visual.beat_y_mult = Some(value),
+        SongLuaEaseMaskTarget::VisualBeatYPeriod => visual.beat_y_period = Some(value),
+        SongLuaEaseMaskTarget::VisualBeatZ => visual.beat_z = Some(value),
+        SongLuaEaseMaskTarget::VisualBeatZOffset => visual.beat_z_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualBeatZMult => visual.beat_z_mult = Some(value),
+        SongLuaEaseMaskTarget::VisualBeatZPeriod => visual.beat_z_period = Some(value),
         SongLuaEaseMaskTarget::VisualPulseOffset => visual.pulse_offset = Some(value),
         SongLuaEaseMaskTarget::VisualBeat => visual.beat = Some(value),
         SongLuaEaseMaskTarget::VisualRandomSpeed => visual.random_speed = Some(value),
@@ -3355,6 +3385,16 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualPulseOuter => window.visual.pulse_outer.is_some(),
         SongLuaEaseMaskTarget::VisualPulsePeriod => window.visual.pulse_period.is_some(),
         SongLuaEaseMaskTarget::VisualBeatPeriod => window.visual.beat_period.is_some(),
+        SongLuaEaseMaskTarget::VisualBeatOffset => window.visual.beat_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualBeatMult => window.visual.beat_mult.is_some(),
+        SongLuaEaseMaskTarget::VisualBeatY => window.visual.beat_y.is_some(),
+        SongLuaEaseMaskTarget::VisualBeatYOffset => window.visual.beat_y_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualBeatYMult => window.visual.beat_y_mult.is_some(),
+        SongLuaEaseMaskTarget::VisualBeatYPeriod => window.visual.beat_y_period.is_some(),
+        SongLuaEaseMaskTarget::VisualBeatZ => window.visual.beat_z.is_some(),
+        SongLuaEaseMaskTarget::VisualBeatZOffset => window.visual.beat_z_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualBeatZMult => window.visual.beat_z_mult.is_some(),
+        SongLuaEaseMaskTarget::VisualBeatZPeriod => window.visual.beat_z_period.is_some(),
         SongLuaEaseMaskTarget::VisualPulseOffset => window.visual.pulse_offset.is_some(),
         SongLuaEaseMaskTarget::VisualBeat => window.visual.beat.is_some(),
         SongLuaEaseMaskTarget::VisualRandomSpeed => window.visual.random_speed.is_some(),
@@ -4749,6 +4789,16 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.pulse_outer, visual.pulse_outer);
     mark_active_target(&mut targets.pulse_period, visual.pulse_period);
     mark_active_target(&mut targets.beat_period, visual.beat_period);
+    mark_active_target(&mut targets.beat_offset, visual.beat_offset);
+    mark_active_target(&mut targets.beat_mult, visual.beat_mult);
+    mark_active_target(&mut targets.beat_y, visual.beat_y);
+    mark_active_target(&mut targets.beat_y_offset, visual.beat_y_offset);
+    mark_active_target(&mut targets.beat_y_mult, visual.beat_y_mult);
+    mark_active_target(&mut targets.beat_y_period, visual.beat_y_period);
+    mark_active_target(&mut targets.beat_z, visual.beat_z);
+    mark_active_target(&mut targets.beat_z_offset, visual.beat_z_offset);
+    mark_active_target(&mut targets.beat_z_mult, visual.beat_z_mult);
+    mark_active_target(&mut targets.beat_z_period, visual.beat_z_period);
     mark_active_target(&mut targets.pulse_offset, visual.pulse_offset);
     mark_active_target(&mut targets.beat, visual.beat);
     mark_active_target(&mut targets.random_speed, visual.random_speed);
@@ -5702,6 +5752,26 @@ fn apply_song_lua_approach_targets(
             }
             SongLuaEaseMaskTarget::VisualBeatPeriod => {
                 attack.visual_speed.beat_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualBeatOffset => {
+                attack.visual_speed.beat_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualBeatMult => attack.visual_speed.beat_mult = Some(speed),
+            SongLuaEaseMaskTarget::VisualBeatY => attack.visual_speed.beat_y = Some(speed),
+            SongLuaEaseMaskTarget::VisualBeatYOffset => {
+                attack.visual_speed.beat_y_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualBeatYMult => attack.visual_speed.beat_y_mult = Some(speed),
+            SongLuaEaseMaskTarget::VisualBeatYPeriod => {
+                attack.visual_speed.beat_y_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualBeatZ => attack.visual_speed.beat_z = Some(speed),
+            SongLuaEaseMaskTarget::VisualBeatZOffset => {
+                attack.visual_speed.beat_z_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualBeatZMult => attack.visual_speed.beat_z_mult = Some(speed),
+            SongLuaEaseMaskTarget::VisualBeatZPeriod => {
+                attack.visual_speed.beat_z_period = Some(speed)
             }
             SongLuaEaseMaskTarget::VisualPulseOffset => {
                 attack.visual_speed.pulse_offset = Some(speed)
@@ -6901,6 +6971,96 @@ fn apply_active_visual_window(
         persisted,
     );
     apply_active_visual_target(
+        &mut values.visual.beat_offset,
+        &mut values.visual_speed.beat_offset,
+        window.visual.beat_offset,
+        window.visual_speed.beat_offset,
+        active_targets.visual.beat_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.beat_mult,
+        &mut values.visual_speed.beat_mult,
+        window.visual.beat_mult,
+        window.visual_speed.beat_mult,
+        active_targets.visual.beat_mult,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.beat_y,
+        &mut values.visual_speed.beat_y,
+        window.visual.beat_y,
+        window.visual_speed.beat_y,
+        active_targets.visual.beat_y,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.beat_y_offset,
+        &mut values.visual_speed.beat_y_offset,
+        window.visual.beat_y_offset,
+        window.visual_speed.beat_y_offset,
+        active_targets.visual.beat_y_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.beat_y_mult,
+        &mut values.visual_speed.beat_y_mult,
+        window.visual.beat_y_mult,
+        window.visual_speed.beat_y_mult,
+        active_targets.visual.beat_y_mult,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.beat_y_period,
+        &mut values.visual_speed.beat_y_period,
+        window.visual.beat_y_period,
+        window.visual_speed.beat_y_period,
+        active_targets.visual.beat_y_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.beat_z,
+        &mut values.visual_speed.beat_z,
+        window.visual.beat_z,
+        window.visual_speed.beat_z,
+        active_targets.visual.beat_z,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.beat_z_offset,
+        &mut values.visual_speed.beat_z_offset,
+        window.visual.beat_z_offset,
+        window.visual_speed.beat_z_offset,
+        active_targets.visual.beat_z_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.beat_z_mult,
+        &mut values.visual_speed.beat_z_mult,
+        window.visual.beat_z_mult,
+        window.visual_speed.beat_z_mult,
+        active_targets.visual.beat_z_mult,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.beat_z_period,
+        &mut values.visual_speed.beat_z_period,
+        window.visual.beat_z_period,
+        window.visual_speed.beat_z_period,
+        active_targets.visual.beat_z_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
         &mut values.visual.pulse_offset,
         &mut values.visual_speed.pulse_offset,
         window.visual.pulse_offset,
@@ -7776,6 +7936,66 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "beatoffset" => set_approached_mod(
+            &mut out.visual.beat_offset,
+            &mut out.visual_speed.beat_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "beatmult" => set_approached_mod(
+            &mut out.visual.beat_mult,
+            &mut out.visual_speed.beat_mult,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "beaty" => set_approached_mod(
+            &mut out.visual.beat_y,
+            &mut out.visual_speed.beat_y,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "beatyoffset" => set_approached_mod(
+            &mut out.visual.beat_y_offset,
+            &mut out.visual_speed.beat_y_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "beatymult" => set_approached_mod(
+            &mut out.visual.beat_y_mult,
+            &mut out.visual_speed.beat_y_mult,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "beatyperiod" => set_approached_mod(
+            &mut out.visual.beat_y_period,
+            &mut out.visual_speed.beat_y_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "beatz" => set_approached_mod(
+            &mut out.visual.beat_z,
+            &mut out.visual_speed.beat_z,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "beatzoffset" => set_approached_mod(
+            &mut out.visual.beat_z_offset,
+            &mut out.visual_speed.beat_z_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "beatzmult" => set_approached_mod(
+            &mut out.visual.beat_z_mult,
+            &mut out.visual_speed.beat_z_mult,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "beatzperiod" => set_approached_mod(
+            &mut out.visual.beat_z_period,
+            &mut out.visual_speed.beat_z_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "pulseoffset" => set_approached_mod(
             &mut out.visual.pulse_offset,
             &mut out.visual_speed.pulse_offset,
@@ -8247,6 +8467,16 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         pulse_outer: merge_attack_value(base.pulse_outer, attack.pulse_outer),
         pulse_period: merge_attack_value(base.pulse_period, attack.pulse_period),
         beat_period: merge_attack_value(base.beat_period, attack.beat_period),
+        beat_offset: merge_attack_value(base.beat_offset, attack.beat_offset),
+        beat_mult: merge_attack_value(base.beat_mult, attack.beat_mult),
+        beat_y: merge_attack_value(base.beat_y, attack.beat_y),
+        beat_y_offset: merge_attack_value(base.beat_y_offset, attack.beat_y_offset),
+        beat_y_mult: merge_attack_value(base.beat_y_mult, attack.beat_y_mult),
+        beat_y_period: merge_attack_value(base.beat_y_period, attack.beat_y_period),
+        beat_z: merge_attack_value(base.beat_z, attack.beat_z),
+        beat_z_offset: merge_attack_value(base.beat_z_offset, attack.beat_z_offset),
+        beat_z_mult: merge_attack_value(base.beat_z_mult, attack.beat_z_mult),
+        beat_z_period: merge_attack_value(base.beat_z_period, attack.beat_z_period),
         pulse_offset: merge_attack_value(base.pulse_offset, attack.pulse_offset),
         beat: merge_attack_value(base.beat, attack.beat),
         random_speed: merge_attack_value(base.random_speed, attack.random_speed),
