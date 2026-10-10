@@ -171,3 +171,10 @@ mod tests {
         assert!(!(manifest.texture_needs_repeat_sampler)("logo.png"));
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/option_support.rs"]
+mod option_perf;
+#[cfg(test)]
+#[path = "../../../tests/perf/option_alloc.rs"]
+mod perf;
