@@ -1870,12 +1870,10 @@
     {
       "title": "Chipsqueak",
       "source_simfile": "Chipsqueak/chipsqueak.sm",
-      "harness_version": "0.1.0",
-      "archive": "f9b5adb23899043e8dbcdbb2906dd76189fde1b410229e7175e74d0884d122b6.tar.zst",
-      "sha256": "f9b5adb23899043e8dbcdbb2906dd76189fde1b410229e7175e74d0884d122b6",
-      "compressed_bytes": 965733,
-      "uncompressed_sha256": "8b353a721729355288e3bcfdb24ba37c6eb2e92d805d2f824c32fce54d96fcdb",
-      "compression_level": 22,
+      "harness_version": "0.1.68",
+      "archive": "d7df48d40d6950f0da7d39f1732bacefab397a4beb479cddb14495e1e5e3e35e.tar.zst",
+      "sha256": "d7df48d40d6950f0da7d39f1732bacefab397a4beb479cddb14495e1e5e3e35e",
+      "compressed_bytes": 1216064,
       "aliases": [
         "c382c2b540c4f3c8232350fb38bb1d7ef2a610d3f99a37bc938e4f5e718f2a4f.tar.zst"
       ]
