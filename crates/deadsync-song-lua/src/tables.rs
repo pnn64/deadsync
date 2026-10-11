@@ -1731,9 +1731,11 @@ pub fn create_prefsmgr_table(
     display_width: i32,
     display_height: i32,
     video_renderers: &str,
+    event_mode: bool,
 ) -> mlua::Result<Table> {
     let prefsmgr = lua.create_table()?;
     let pref_store = lua.create_table()?;
+    pref_store.set("EventMode", event_mode)?;
     let video_renderers = video_renderers.to_string();
     let get_video_renderers = video_renderers.clone();
     let get_pref_store = pref_store.clone();
@@ -1887,6 +1889,8 @@ fn prefsmgr_default_value_normalized(
         Ok(Value::Integer(i64::from(display_height)))
     } else if lower == "videorenderers" {
         Ok(Value::String(lua.create_string(video_renderers)?))
+    } else if lower == "eventmode" {
+        Ok(Value::Boolean(true))
     } else if lower == "visualdelayseconds" {
         Ok(Value::Number(0.0))
     } else if lower == "backgroundfitmode" {
@@ -1907,7 +1911,6 @@ fn prefsmgr_default_value_normalized(
         "autogengroupcourses"
             | "center1player"
             | "eastereggs"
-            | "eventmode"
             | "harshhotlifepenalty"
             | "memorycards"
             | "menutimer"

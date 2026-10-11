@@ -694,6 +694,7 @@ pub fn install_manager_globals(lua: &Lua, context: &SongLuaCompileContext) -> ml
             display_width,
             display_height,
             context.video_renderers.as_str(),
+            context.event_mode,
         )?,
     )?;
     globals.set("DISPLAY", create_display_table(lua, context)?)?;
@@ -816,6 +817,8 @@ pub fn install_screen_manager_globals(
             let top_screen = top_screen.clone();
             move |lua, args: MultiValue| {
                 if let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) {
+                    #[cfg(feature = "test-support")]
+                    record_state_call(lua, "ScreenManager.SetNewScreen", vec![serde_json::json!(name)])?;
                     top_screen.set("Name", name)?;
                 }
                 note_song_lua_side_effect(lua)?;
@@ -1220,6 +1223,29 @@ pub fn install_core_globals(
     install_game_state_globals(lua, context)
 }
 
+// Reference-only worker-VM audit, bounded to two million chronological calls.
+// Shipping builds retain no recording state or allocation.
+#[cfg(feature = "test-support")]
+#[derive(Default)]
+pub(crate) struct SongLuaStateCalls(pub Vec<crate::SongLuaStateCall>);
+
+#[cfg(feature = "test-support")]
+fn record_state_call(lua: &Lua, operation: &'static str, args: Vec<serde_json::Value>) -> mlua::Result<()> {
+    if lua.app_data_ref::<SongLuaStateCalls>().is_none() { return Ok(()) }
+    let runtime = lua.globals().get::<Table>(SONG_LUA_RUNTIME_KEY)?;
+    let call = crate::SongLuaStateCall { operation, args,
+        beat: runtime.get(SONG_LUA_RUNTIME_BEAT_KEY)?,
+        second: runtime.get(SONG_LUA_RUNTIME_SECONDS_KEY)?,
+    };
+    if let Some(mut capture) = lua.app_data_mut::<SongLuaStateCalls>() {
+        if capture.0.len() >= 2_000_000 {
+            return Err(mlua::Error::runtime("game state audit exceeded two million calls"));
+        }
+        capture.0.push(call);
+    }
+    Ok(())
+}
+
 pub fn install_game_state_globals(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -1231,7 +1257,7 @@ pub fn install_game_state_globals(
     let song_runtime = create_song_runtime_table(lua, context)?;
     globals.set(SONG_LUA_RUNTIME_KEY, song_runtime.clone())?;
     let song = create_song_table(lua, context)?;
-    let players = create_player_tables(lua, context, &song_runtime)?;
+    let players = create_player_tables(lua, context, &song_runtime, &song)?;
     for (key, options) in SONG_LUA_PLAYER_OPTIONS_KEYS
         .iter()
         .zip(players.player_options.iter())
@@ -1551,6 +1577,16 @@ pub fn install_game_state_globals(
                 }) else {
                     return Ok(());
                 };
+                #[cfg(feature = "test-support")]
+                {
+                    let steps_type: String = steps.get::<Function>("GetStepsType")?.call(steps.clone())?;
+                    let difficulty: String = steps.get::<Function>("GetDifficulty")?.call(steps.clone())?;
+                    let description: String = steps.get::<Function>("GetDescription")?.call(steps.clone())?;
+                    record_state_call(lua, "GameState.SetCurrentSteps", vec![
+                        serde_json::json!(player), serde_json::json!(steps_type),
+                        serde_json::json!(difficulty), serde_json::json!(description),
+                    ])?;
+                }
                 current_steps.raw_set(player + 1, steps)?;
                 note_song_lua_side_effect(lua)?;
                 Ok(())
@@ -1653,7 +1689,10 @@ pub fn install_game_state_globals(
     )?;
     gamestate.set(
         "IsEventMode",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|lua, _args: MultiValue| {
+            let prefs: Table = lua.globals().get("PREFSMAN")?;
+            prefs.get::<Function>("GetPreference")?.call::<bool>((prefs, "EventMode"))
+        })?,
     )?;
     gamestate.set(
         "GetCurrentTrail",
@@ -1992,7 +2031,8 @@ mod tests {
                 context.player_timing[1] = Some(timing.clone());
                 context.song_music_rate = rate;
                 let runtime = create_song_runtime_table(&lua, &context).expect("song runtime");
-                let players = create_player_tables(&lua, &context, &runtime).expect("native player states");
+                let song = create_song_table(&lua, &context).expect("native song metadata");
+                let players = create_player_tables(&lua, &context, &runtime, &song).expect("native player states");
                 lua.globals().set(SONG_LUA_RUNTIME_KEY, runtime.clone()).expect("install song clock");
                 let effects = create_arrow_effects_table(&lua, &context, |_| "single".into()).expect("ArrowEffects");
                 let offset = effects.get::<Function>("GetYOffset").expect("native offset getter");

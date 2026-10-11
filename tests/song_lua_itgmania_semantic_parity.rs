@@ -768,6 +768,11 @@ fn compile_trace_song_at(
         simfile.parent().unwrap_or_else(|| Path::new(".")),
         song.title.clone(),
     );
+    context.song_steps = song.charts.iter().map(deadsync_song_lua::SongLuaStep::from).collect();
+    let selected_step = song.charts.iter().position(|chart| chart.chart_type == trace.steps_type
+        && chart.difficulty.eq_ignore_ascii_case(trace.difficulty.trim_start_matches("Difficulty_"))
+        && chart.description.trim() == trace.description.trim());
+    context.player_step_indices = [selected_step; 2];
     context.message_actor_order = native_message_order(trace);
     context.song_display_bpms = [song.min_bpm as f32, song.max_bpm as f32];
     context.background_layer_count = song.background_lua_changes.len();
@@ -2841,6 +2846,26 @@ fn update_matching_keeps_retained_actor_variables() {
 
 fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, parity: &mut Parity) {
     parity.section("timeline");
+    for operation in ["GameState.SetCurrentSteps", "ScreenManager.SetNewScreen"] {
+        let mut native = trace.timeline_tracks.iter()
+            .filter(|track| track.kind == "call" && track.operation == operation)
+            .flat_map(|track| &track.samples).collect::<Vec<_>>();
+        native.sort_by_key(|sample| sample.0);
+        let actual = compiled.state_calls.iter().filter(|call| call.operation == operation).collect::<Vec<_>>();
+        parity.check(actual.len() == native.len(), || format!(
+            "{operation} call count: native {}, DeadSync {}", native.len(), actual.len()));
+        for (actual, (_, beat, second, args, _)) in actual.iter().zip(native) {
+            parity.check(actual.args == *args, || format!(
+                "{operation} arguments: native {args:?}, DeadSync {:?}", actual.args));
+            if let Some(beat) = beat {
+                parity.check((actual.beat - beat).abs() <= EPSILON, || format!("{operation} beat differs"));
+            }
+            if let Some(second) = second {
+                parity.check((actual.second - second).abs() <= EPSILON, || format!("{operation} time differs"));
+            }
+        }
+    }
+
     let beat_epsilon = trace.fixture_context.beat_step + EPSILON;
     for track in &trace.timeline_tracks {
         for (_, beat, _, args, _) in &track.samples {

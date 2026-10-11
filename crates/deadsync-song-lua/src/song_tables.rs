@@ -486,27 +486,27 @@ pub fn create_player_tables(
     lua: &Lua,
     context: &SongLuaCompileContext,
     song_runtime: &Table,
+    song: &Table,
 ) -> mlua::Result<PlayerLuaTables> {
     let players = [
         create_player_state_table(lua, context.players[0].clone(), 0, song_runtime)?,
         create_player_state_table(lua, context.players[1].clone(), 1, song_runtime)?,
     ];
-    let steps = [
-        create_steps_table(
-            lua,
-            context.players[0].difficulty,
-            context.players[0].display_bpms,
-            context.song_dir.as_path(),
-            song_lua_style_info(&context.style_name).steps_type,
-        )?,
-        create_steps_table(
-            lua,
-            context.players[1].difficulty,
-            context.players[1].display_bpms,
-            context.song_dir.as_path(),
-            song_lua_style_info(&context.style_name).steps_type,
-        )?,
-    ];
+    let all_steps: Table = song.raw_get("__songlua_steps")?;
+    let mut steps = Vec::with_capacity(LUA_PLAYERS);
+    for index in 0..LUA_PLAYERS {
+        let selected = context.player_step_indices[index]
+            .map(|index| all_steps.raw_get::<Table>(index + 1)).transpose()?;
+        steps.push(match selected {
+            Some(table) => table,
+            None => create_steps_table(
+                lua, context.players[index].difficulty,
+                context.players[index].display_bpms, context.song_dir.as_path(),
+                song_lua_style_info(&context.style_name).steps_type,
+            )?,
+        });
+    }
+    let steps = [steps.remove(0), steps.remove(0)];
     Ok(PlayerLuaTables {
         player_states: [players[0].0.clone(), players[1].0.clone()],
         player_options: [players[0].1[2].clone(), players[1].1[2].clone()],
@@ -1990,11 +1990,8 @@ fn set_player_speedmod_with_key(
 pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let song_dir = song_dir_string(context.song_dir.as_path());
-    let steps_by_type = create_steps_by_steps_type_table(
-        lua,
-        context.song_display_bpms,
-        context.song_dir.as_path(),
-    )?;
+    let all_steps = create_song_steps(lua, context)?;
+    table.raw_set("__songlua_steps", all_steps.clone())?;
     set_string_method(lua, &table, "GetSongDir", &song_dir)?;
     set_string_method(lua, &table, "GetMainTitle", &context.main_title)?;
     set_string_method(lua, &table, "GetDisplayMainTitle", &context.main_title)?;
@@ -2088,74 +2085,36 @@ pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Re
         "GetTimingData",
         lua.create_function(move |_, _args: MultiValue| Ok(timing.clone()))?,
     )?;
-    let all_steps = steps_by_type.clone();
-    table.set(
-        "GetAllSteps",
-        lua.create_function(move |_, _args: MultiValue| Ok(all_steps.clone()))?,
-    )?;
-    table.set(
-        "HasStepsType",
-        lua.create_function(|_, args: MultiValue| {
-            Ok(method_arg(&args, 0)
-                .cloned()
-                .is_some_and(song_lua_steps_type_is_dance_single))
-        })?,
-    )?;
-    table.set(
-        "HasStepsTypeAndDifficulty",
-        lua.create_function(|_, args: MultiValue| {
-            Ok(method_arg(&args, 0)
-                .cloned()
-                .is_some_and(song_lua_steps_type_is_dance_single)
-                && method_arg(&args, 1)
-                    .cloned()
-                    .and_then(song_lua_difficulty_from_value)
-                    .is_some())
-        })?,
-    )?;
-    table.set(
-        "HasEdits",
-        lua.create_function(|_, args: MultiValue| {
-            Ok(method_arg(&args, 0)
-                .cloned()
-                .is_some_and(song_lua_steps_type_is_dance_single))
-        })?,
-    )?;
-    let one_steps = steps_by_type.clone();
-    table.set(
-        "GetOneSteps",
-        lua.create_function(move |_, args: MultiValue| {
-            if !method_arg(&args, 0)
-                .cloned()
-                .is_some_and(song_lua_steps_type_is_dance_single)
-            {
-                return Ok(Value::Nil);
+    for method in ["GetAllSteps", "GetStepsByStepsType", "GetOneSteps", "HasStepsType",
+        "HasStepsTypeAndDifficulty", "HasEdits"] {
+        let steps = all_steps.clone();
+        table.set(method, lua.create_function(move |lua, args: MultiValue| {
+            let type_name = method_arg(&args, 0).cloned().and_then(read_string);
+            let difficulty = if method == "HasEdits" { Some(SongLuaDifficulty::Edit) }
+                else { method_arg(&args, 1).cloned().and_then(song_lua_difficulty_from_value) };
+            let result = lua.create_table()?;
+            for step in steps.sequence_values::<Table>() {
+                let step = step?;
+                let step_type: String = step.get::<Function>("GetStepsType")?.call(step.clone())?;
+                let step_diff: String = step.get::<Function>("GetDifficulty")?.call(step.clone())?;
+                let type_matches = method == "GetAllSteps" || type_name.as_ref().is_some_and(|name| {
+                    with_compact_ascii_lowercase_song_key(name, |name| {
+                        with_compact_ascii_lowercase_song_key(&step_type, |step_type| {
+                            name.trim_start_matches("stepstype") == step_type.trim_start_matches("stepstype")
+                        })
+                    })
+                });
+                let diff_matches = !matches!(method, "GetOneSteps" | "HasStepsTypeAndDifficulty" | "HasEdits")
+                    || difficulty.is_some_and(|difficulty| difficulty.sm_name() == step_diff);
+                if type_matches && diff_matches { result.raw_set(result.raw_len() + 1, step)?; }
             }
-            let Some(difficulty) = method_arg(&args, 1)
-                .cloned()
-                .and_then(song_lua_difficulty_from_value)
-            else {
-                return Ok(Value::Nil);
-            };
-            Ok(one_steps
-                .raw_get::<Option<Table>>(usize::from(difficulty.sort_key()) + 1)?
-                .map(Value::Table)
-                .unwrap_or(Value::Nil))
-        })?,
-    )?;
-    let steps_by_type_for_get = steps_by_type;
-    table.set(
-        "GetStepsByStepsType",
-        lua.create_function(move |lua, args: MultiValue| {
-            if !method_arg(&args, 0)
-                .cloned()
-                .is_some_and(song_lua_steps_type_is_dance_single)
-            {
-                return lua.create_table();
+            match method {
+                "HasStepsType" | "HasStepsTypeAndDifficulty" | "HasEdits" => Ok(Value::Boolean(result.raw_len() != 0)),
+                "GetOneSteps" => result.raw_get(1),
+                _ => Ok(Value::Table(result)),
             }
-            Ok(steps_by_type_for_get.clone())
-        })?,
-    )?;
+        })?)?;
+    }
     Ok(table)
 }
 
@@ -2665,33 +2624,20 @@ pub fn create_songman_table(
     Ok(songman)
 }
 
-fn create_steps_by_steps_type_table(
-    lua: &Lua,
-    display_bpms: [f32; 2],
-    song_dir: &Path,
-) -> mlua::Result<Table> {
+fn create_song_steps(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
-    for (idx, difficulty) in [
-        SongLuaDifficulty::Beginner,
-        SongLuaDifficulty::Easy,
-        SongLuaDifficulty::Medium,
-        SongLuaDifficulty::Hard,
-        SongLuaDifficulty::Challenge,
-        SongLuaDifficulty::Edit,
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        table.raw_set(
-            idx + 1,
-            create_steps_table(
-                lua,
-                difficulty,
-                display_bpms,
-                song_dir,
-                "StepsType_Dance_Single",
-            )?,
-        )?;
+    for (index, step) in context.song_steps.iter().enumerate() {
+        let display_bpms = context.player_step_indices.iter().position(|selected| *selected == Some(index))
+            .map_or(context.song_display_bpms, |player| context.players[player].display_bpms);
+        let value = create_steps_table(lua, step.difficulty, display_bpms,
+            &context.song_dir, &step.steps_type)?;
+        set_string_method(lua, &value, "GetDescription", &step.description)?;
+        set_string_method(lua, &value, "GetChartName", &step.chart_name)?;
+        set_string_method(lua, &value, "GetAuthorCredit", &step.credit)?;
+        set_string_method(lua, &value, "GetCredit", &step.credit)?;
+        let meter = step.meter;
+        value.set("GetMeter", lua.create_function(move |_, _: MultiValue| Ok(meter))?)?;
+        table.raw_set(index + 1, value)?;
     }
     Ok(table)
 }

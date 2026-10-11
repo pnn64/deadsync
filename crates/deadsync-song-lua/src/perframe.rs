@@ -3247,6 +3247,8 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
     #[cfg(feature = "test-support")]
     lua.set_app_data(crate::song_tables::SongLuaSpeedWrites::default());
     #[cfg(feature = "test-support")]
+    lua.set_app_data(crate::host::SongLuaStateCalls::default());
+    #[cfg(feature = "test-support")]
     lua.set_app_data(crate::song_tables::SongLuaSkinWrites::default());
     let mut replay_overlays = baseline_overlays.clone();
     let started = message_replay.advance(lua, context, overlays, &mut replay_overlays, start)?;
