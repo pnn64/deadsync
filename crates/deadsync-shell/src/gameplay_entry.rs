@@ -5,7 +5,7 @@ use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
 use log::warn;
 use std::sync::Arc;
 
-pub struct GameplayChartEntryPlan {
+pub(crate) struct GameplayChartEntryPlan {
     pub charts: [Arc<ChartData>; MAX_PLAYERS],
     pub chart_indices: [usize; MAX_PLAYERS],
     pub resolved_steps_index: [usize; MAX_PLAYERS],
@@ -52,7 +52,7 @@ fn resolve_chart(
     (requested_steps, chart_index)
 }
 
-pub fn gameplay_chart_entry_plan(
+pub(crate) fn gameplay_chart_entry_plan(
     song: &Arc<SongData>,
     requested_steps: [usize; MAX_PLAYERS],
     preferred_steps: [usize; MAX_PLAYERS],
@@ -107,7 +107,7 @@ pub(crate) fn take_player_charts(
     })
 }
 
-pub fn gameplay_last_played_commands(
+pub(crate) fn gameplay_last_played_commands(
     song: &SongData,
     plan: &GameplayChartEntryPlan,
     preferred_steps: [usize; MAX_PLAYERS],
@@ -141,7 +141,7 @@ pub fn gameplay_last_played_commands(
     commands
 }
 
-pub(crate) type PreparedGameplaySongLua =
+pub type PreparedGameplaySongLua =
     deadsync_song_lua::playback::PreparedGameplaySongLua<deadsync_assets::noteskin::SpriteSlot>;
 
 fn reload_chart_indices(
@@ -169,7 +169,7 @@ fn reload_chart_indices(
 }
 
 /// Replace metadata and note payloads together before gameplay owns them.
-pub(crate) fn apply_song_lua_reload(
+pub fn apply_song_lua_reload(
     song: &SongData,
     charts: &mut [Arc<ChartData>; MAX_PLAYERS],
     payloads: &mut [Arc<GameplayChartData>; MAX_PLAYERS],
@@ -187,7 +187,8 @@ pub(crate) fn apply_song_lua_reload(
     Ok(true)
 }
 
-pub(crate) fn prepare_song_lua(
+/// Construct the owned gameplay Lua session on the CPU load worker.
+pub fn prepare_song_lua(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
     timing: [&deadsync_rules::timing::TimingData; MAX_PLAYERS],
@@ -198,8 +199,9 @@ pub(crate) fn prepare_song_lua(
     display_size: (u32, u32),
     session: &deadsync_gameplay::GameplaySession,
     config: &deadsync_gameplay::GameplayConfig,
-    video_renderer: deadlib_render_core::BackendType,
+    video_renderer: &str,
     random_seed: u32,
+    live: bool,
 ) -> PreparedGameplaySongLua {
     if song.background_lua_changes.is_empty() && song.foreground_lua_changes.is_empty() {
         return PreparedGameplaySongLua::default();
@@ -215,9 +217,10 @@ pub(crate) fn prepare_song_lua(
         display_size,
         session,
         config,
-        &video_renderer.to_string(),
+        video_renderer,
     );
     context.random_seed = random_seed;
+    context.live = live;
     match deadsync_simfile::app_runtime::load_chart_timings(song, config.global_offset_seconds) {
         Ok(mut timings) => {
             let sync_offset = if config.machine_pack_ini_offsets {

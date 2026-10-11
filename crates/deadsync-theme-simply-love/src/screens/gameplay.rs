@@ -972,6 +972,9 @@ impl State {
             self.gameplay.progress.stage.song_completed_naturally = true;
             self.song_lua_out = Some(SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY });
         }
+        if matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen)) if screen == "ScreenGameplay") {
+            effects.push(ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::ReloadSongLua));
+        }
         // Entry events precede the first real update and must reach the shell
         // exactly once. The shell drains this buffer every frame.
         self.song_lua_output.append(output);

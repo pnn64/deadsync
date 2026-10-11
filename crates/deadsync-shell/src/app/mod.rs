@@ -691,6 +691,7 @@ struct GameplayInitFinish {
     entry_started: Instant,
     payload_ms: f64,
     restart: bool,
+    lua_reload: bool,
     reused_payload: bool,
     config: config::app_config::Config,
 }
@@ -1606,12 +1607,15 @@ pub struct App {
     gameplay_sfx: GameplaySfx,
     ui_sfx: audio_requests::UiSfx,
     /// At most one CPU-only Gameplay construction job. Song Lua charts build
-    /// their deterministic 60 Hz timeline here so the application thread can
+    /// their retained actor session here so the application thread can
     /// continue pumping the window and rendering the loading frame. The job is
     /// started at the Gameplay transition, has no gameplay-frame miss path or
     /// eviction, and hands ownership back through a one-entry channel. GPU and
     /// audio resources remain application-thread work after completion.
     pending_gameplay_init: Option<PendingGameplayInit>,
+    /// Sole-owner handoff at a queued Lua screen boundary. The existing CPU
+    /// load worker consumes it; replacement actors retain the same Lua VM.
+    pending_song_lua_reload: Option<deadsync_song_lua::SongLuaLiveScene>,
     /// One speculative, CPU-only load owned by the Select Music confirmation
     /// transition. It preloads the selected gameplay chart payload and compiled
     /// song-Lua session. Choosing Player Options drops the handoff; automatic
@@ -2770,8 +2774,9 @@ impl App {
                         display_size,
                         &gameplay_session,
                         &gameplay_config,
-                        video_renderer,
+                        &video_renderer.to_string(),
                         song_lua_seed(),
+                        false,
                     );
                     GameplayPreload {
                         song_path,
@@ -2957,7 +2962,9 @@ impl App {
         // Reconcile chart timing and any video fallback once after the deferred
         // command installs the initial media.
         gs.background_path_dirty = true;
-        let song_start_sfx = gameplay::start_sfx(self.state.session.gameplay_restart_count)
+        let song_start_sfx = if finish.lua_reload { None } else {
+            gameplay::start_sfx(self.state.session.gameplay_restart_count)
+        }
             .and_then(|path| {
                 self.audio.prepare_sfx(&deadsync_assets::resolve_asset_path(
                     path.to_string_lossy().as_ref(),
@@ -2976,7 +2983,7 @@ impl App {
         if let Some(sound) = song_start_sfx {
             self.audio.play_sfx(&sound);
         }
-        if let Some(course) = self.state.session.course_run.as_mut() {
+        if !finish.lua_reload && let Some(course) = self.state.session.course_run.as_mut() {
             course.next_stage_index = course.next_stage_index.saturating_add(1);
         }
         commands
@@ -5196,6 +5203,7 @@ impl App {
             gameplay_sfx: GameplaySfx::default(),
             ui_sfx,
             pending_gameplay_init: None,
+            pending_song_lua_reload: None,
             gameplay_preload: None,
             music_clock,
             live_case: live_case.map(live_case::LiveCaseRuntime::new),
@@ -5447,6 +5455,23 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::RestartGameplay => {
                     self.try_gameplay_restart(event_loop, "missed target");
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::ReloadSongLua => {
+                    if self.state.screens.current_screen != CurrentScreen::Gameplay
+                        || self.pending_gameplay_init.is_some()
+                        || !self.state.screens.gameplay_state.as_ref().is_some_and(|state| state.song_lua.is_some())
+                        || !self.prepare_player_options_for_gameplay_restart()
+                    {
+                        warn!("Cannot reload song Lua without an active gameplay screen");
+                    } else {
+                        self.pending_song_lua_reload = self.state.screens.gameplay_state.as_mut()
+                            .and_then(|state| state.song_lua.take());
+                        self.state.shell.transition = TransitionState::Idle;
+                        self.state.session.restart_pending = false;
+                        self.state.gameplay_offset_save_prompt = None;
+                        self.on_fade_complete(CurrentScreen::Gameplay, event_loop);
+                    }
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::Select {
@@ -9272,7 +9297,7 @@ impl App {
                 ));
             }
         } else if target == CurrentScreen::Gameplay && prev == CurrentScreen::Gameplay {
-            if self.state.session.course_run.is_some() {
+            if self.state.session.course_run.is_some() && self.pending_song_lua_reload.is_none() {
                 let color_index = self.state.screens.gameplay_state.as_ref().map_or(
                     self.state.screens.select_course_state.active_color_index,
                     |gs| gs.gameplay.active_color_index(),
@@ -9570,8 +9595,9 @@ impl App {
                     space::current_window_px(),
                     &gameplay_session,
                     &gameplay_config_from_config(&cfg),
-                    cfg.video_renderer,
+                    &cfg.video_renderer.to_string(),
                     song_lua_seed(),
+                    false,
                 );
                 match crate::gameplay_entry::apply_song_lua_reload(
                     &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
@@ -9707,32 +9733,27 @@ impl App {
             }
         }
         if target == CurrentScreen::Gameplay {
+            let retained_scene = self.pending_song_lua_reload.take();
+            let lua_reload = retained_scene.is_some();
             self.audio.stop_music();
             if prev != CurrentScreen::Gameplay {
                 self.state.session.gameplay_restart_count = 0;
                 self.state.session.restart_pending = false;
             }
             let mut course_display_carry = None;
-            let course_display_totals = self
-                .state
-                .session
-                .course_run
-                .as_ref()
-                .map(|course| course.course_display_totals);
-            let course_display_timing = self
-                .state
-                .session
-                .course_run
-                .as_ref()
-                .map(course_display_timing_for_run);
-            let course_modifiers = self
-                .state
-                .session
-                .course_run
-                .as_ref()
+            // The session cursor already points past the active stage. A Lua
+            // screen replacement reloads that stage without recording it.
+            let mut entry_course = self.state.session.course_run.clone();
+            if lua_reload && let Some(course) = &mut entry_course {
+                course.next_stage_index = course.next_stage_index.saturating_sub(1);
+            }
+            let entry_course = entry_course.as_ref();
+            let course_display_totals = entry_course.map(|course| course.course_display_totals);
+            let course_display_timing = entry_course.map(course_display_timing_for_run);
+            let course_modifiers = entry_course
                 .and_then(CourseRunState::next_stage)
                 .map(|stage| Arc::<str>::from(stage.modifiers.as_str()));
-            let course_life_config = self.state.session.course_run.as_ref().map_or(
+            let course_life_config = entry_course.map_or(
                 [deadsync_gameplay::CourseLifeConfig::Bar; MAX_PLAYERS],
                 |course| {
                     course_life_config_for_stage(
@@ -9742,12 +9763,14 @@ impl App {
                 },
             );
             if prev == CurrentScreen::Gameplay
+                && !lua_reload
                 && self.state.session.course_run.is_some()
                 && let Some(gs) = self.state.screens.gameplay_state.as_mut()
             {
                 crate::gameplay_runtime::exit(gs);
             }
             if prev == CurrentScreen::Gameplay
+                && !lua_reload
                 && self.state.session.course_run.is_some()
                 && let Some(gameplay_results) = self.state.screens.gameplay_state.take()
             {
@@ -9992,7 +10015,7 @@ impl App {
                 };
 
                 let color_index = po_state.active_color_index;
-                let lead_in_timing = self.state.session.course_run.as_ref().and_then(|course| {
+                let lead_in_timing = entry_course.and_then(|course| {
                     (course.next_stage_index > 0).then_some(LeadInTiming {
                         min_seconds_to_step: COURSE_MIN_SECONDS_TO_STEP_NEXT_SONG,
                         min_seconds_to_music: COURSE_MIN_SECONDS_TO_MUSIC_NEXT_SONG,
@@ -10011,8 +10034,7 @@ impl App {
                             course.banner_path.clone(),
                         )
                     });
-                let stage_intro_text: Arc<str> = if let Some(course) =
-                    self.state.session.course_run.as_ref()
+                let stage_intro_text: Arc<str> = if let Some(course) = entry_course
                 {
                     let stage_num = course.next_stage_index.saturating_add(1);
                     if course.course_type == deadsync_theme::views::CourseTypeView::Endless {
@@ -10068,6 +10090,7 @@ impl App {
                     entry_started: gameplay_entry_started,
                     payload_ms,
                     restart: prev == CurrentScreen::Gameplay,
+                    lua_reload,
                     reused_payload: reusing_gameplay_payload,
                     config: cfg,
                 };
@@ -10076,7 +10099,12 @@ impl App {
                 let init = move || {
                     space::set_current_metrics(metrics);
                     space::set_current_window_px(pixel_width, pixel_height);
-                    let prepared_song_lua = prepared_song_lua.unwrap_or_else(|| {
+                    let prepared_song_lua = if let Some(scene) = retained_scene {
+                        deadsync_song_lua::playback::reload_song_lua(
+                            &song_arc, scene, deadsync_assets::song_lua::reload_song_lua,
+                        )?
+                    } else {
+                        prepared_song_lua.unwrap_or_else(|| {
                         crate::gameplay_entry::prepare_song_lua(
                             &song_arc,
                             &charts,
@@ -10088,10 +10116,12 @@ impl App {
                             (pixel_width, pixel_height),
                             &gameplay_session,
                             &gameplay_config,
-                            video_renderer,
+                            &video_renderer.to_string(),
                             song_lua_seed(),
+                            false,
                         )
-                    });
+                        })
+                    };
                     if crate::gameplay_entry::apply_song_lua_reload(
                         &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
                         &gameplay_session, gameplay_config.global_offset_seconds,
@@ -10130,7 +10160,7 @@ impl App {
                         gameplay_init_view,
                     ))
                 };
-                if has_song_lua && !song_lua_prepared {
+                if lua_reload || (has_song_lua && !song_lua_prepared) {
                     self.state.screens.gameplay_state = None;
                     let (sender, receiver) = std::sync::mpsc::sync_channel(1);
                     std::thread::Builder::new()

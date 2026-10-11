@@ -211,7 +211,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
         number(&trace["display"], "logical_width")? as f32,
         number(&trace["display"], "logical_height")? as f32,
     );
-    let mut context = deadsync_profile_gameplay::song_lua_play_context(
+    let prepared = deadsync_shell::gameplay_entry::prepare_song_lua(
         &song,
         &charts,
         std::array::from_fn(|p| &payloads[p].timing),
@@ -226,50 +226,20 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
         &session,
         &config,
         "null",
+        1,
+        true,
     );
-    context.live = true;
-    context.song_step_timing =
-        deadsync_simfile::app_runtime::load_chart_timings(&song, config.global_offset_seconds)?;
-    let group_offset =
-        deadsync_chart::song::sync_pref_offset(deadsync_chart::SyncPref::Default, sync);
-    for timing in &mut context.song_step_timing {
-        timing.shift_song_offset_seconds(group_offset);
-    }
-    let prepared = deadsync_song_lua::playback::prepare_song_lua(
-        &song,
-        &context,
-        deadsync_assets::song_lua::compile_song_lua,
-        deadsync_assets::song_lua::compile_song_lua_layers,
-    );
-    let init_scene = |mut prepared: deadsync_song_lua::playback::PreparedGameplaySongLua<
+    let init_scene = |prepared: deadsync_song_lua::playback::PreparedGameplaySongLua<
         deadsync_assets::noteskin::SpriteSlot,
     >|
      -> Result<Box<gameplay::State>, String> {
         let mut charts = charts.clone();
         let mut payloads = payloads.clone();
-        if let Some(indices) = prepared.loaded_steps() {
-            let selected = indices[0].ok_or("Lua reload did not select P1 steps")?;
-            let chart = Arc::new(
-                song.charts
-                    .get(selected)
-                    .ok_or("Lua selected an absent chart")?
-                    .clone(),
-            );
-            let payload = Arc::new(
-                deadsync_simfile::app_runtime::load_gameplay_charts(
-                    &song,
-                    &[selected],
-                    config.global_offset_seconds,
-                )?
-                .remove(0),
-            );
-            charts = [chart.clone(), chart];
-            payloads = [payload.clone(), payload];
-        }
-        let scene = prepared
-            .take_live_scene()?
-            .ok_or("preparation did not retain a Lua scene")?;
-        let mut state = Box::new(gameplay::init(
+        deadsync_shell::gameplay_entry::apply_song_lua_reload(
+            &song, &mut charts, &mut payloads, &prepared, &session,
+            config.global_offset_seconds,
+        )?;
+        let state = Box::new(gameplay::init(
             song.clone(),
             charts,
             payloads,
@@ -297,7 +267,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
             prepared,
             Default::default(),
         ));
-        state.attach_song_lua(scene)?;
+        if state.song_lua.is_none() { return Err("preparation did not retain a Lua scene".into()); }
         Ok(state)
     };
     let mut state = init_scene(prepared)?;
@@ -354,7 +324,6 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
             );
             scene_count += 1;
             previous_seconds = None;
-            pending_reload = false;
         }
         if frame["scene"].as_u64() != Some(scene_count) {
             return Err(format!(
@@ -389,6 +358,9 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
             gameplay::update(&mut state, delta as f32, snapshot, || host, &mut effects);
         }
         used_frames += 1;
+        pending_reload = effects.iter().any(|effect| matches!(effect,
+            deadsync_theme_simply_love::SimplyLoveEffect::Runtime(
+                deadsync_theme_simply_love::SimplyLoveRuntimeRequest::ReloadSongLua)));
         if first_navigation.is_none()
             && effects.iter().any(|effect| {
                 matches!(
@@ -417,7 +389,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
                     if name != "ScreenGameplay" {
                         return Err(format!("unsupported reload target {name}"));
                     }
-                    pending_reload = true;
+                    if !pending_reload { return Err("gameplay reload did not emit the production runtime effect".into()); }
                     ("SetNewScreen", name)
                 }
             };

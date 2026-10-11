@@ -948,6 +948,8 @@ pub enum SimplyLoveUpdaterRequest {
 #[derive(Clone, Debug)]
 pub enum SimplyLoveRuntimeRequest {
     RestartGameplay,
+    /// Replace the gameplay screen without committing its stage or Lua VM.
+    ReloadSongLua,
     Audio(AudioRequest),
     Media(SimplyLoveMediaRequest),
     Content(SimplyLoveContentRequest),

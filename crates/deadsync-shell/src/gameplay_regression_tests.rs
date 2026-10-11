@@ -714,8 +714,9 @@ mod tests {
             space::current_window_px(),
             &session,
             &GameplayConfig::default(),
-            deadlib_render_core::BackendType::Software,
+            &deadlib_render_core::BackendType::Software.to_string(),
             1,
+            false,
         );
         screen_gameplay::init(
             song,

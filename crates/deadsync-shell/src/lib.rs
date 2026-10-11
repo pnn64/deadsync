@@ -13,7 +13,7 @@ mod dynamic_media;
 mod frame_pacing_trace;
 mod frame_stats;
 mod frame_stutter;
-mod gameplay_entry;
+pub mod gameplay_entry;
 mod gameplay_prewarm;
 mod gameplay_runtime;
 mod graphics;

@@ -620,7 +620,7 @@ pub(crate) fn enter(
     drain(state, audio, sounds, music_clock);
 }
 
-pub(crate) const MAX_UPDATE_EFFECTS: usize = 5;
+pub(crate) const MAX_UPDATE_EFFECTS: usize = 6;
 const MAX_INPUT_EFFECTS: usize = 1;
 
 pub(crate) fn update(
@@ -668,6 +668,9 @@ pub(crate) fn update(
             deadsync_song_lua::SongLuaLiveRequest::Transition(message) if message == "SM_DoNextScreen" => {
                 // The owning theme screen advances the native SL out tween,
                 // dispatches End and navigates after its completion frame.
+            }
+            deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen) if screen == "ScreenGameplay" => {
+                // The owning theme emitted ReloadSongLua at the frame boundary.
             }
             request => log::warn!("Unsupported live song Lua screen request: {request:?}"),
         }
