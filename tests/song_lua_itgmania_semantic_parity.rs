@@ -37,6 +37,9 @@ const PROJECTED_BEAT_EPSILON: f32 = 0.005;
 #[path = "song_lua_itgmania_semantic_parity/whole_song_archives.rs"]
 pub(crate) mod whole_song_archives;
 
+#[path = "song_lua_itgmania_semantic_parity/native_gameplay.rs"]
+mod native_gameplay;
+
 #[path = "support/song_lua_progress.rs"]
 mod progress;
 

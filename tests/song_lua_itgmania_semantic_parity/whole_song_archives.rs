@@ -65,7 +65,9 @@ struct ArchiveChart {
 #[derive(Deserialize)]
 struct ArchiveRuntime {
     display: ArchiveDisplay,
-    update_hz: f32,
+    update_hz: Option<f32>,
+    #[serde(default)]
+    frame_clock: Option<String>,
     random_state: RandomState,
 }
 
@@ -270,8 +272,7 @@ fn selected_archives(index: &ArchiveIndex) -> Vec<&ArchiveEntry> {
     selected
 }
 
-fn extract_archive(entry: &ArchiveEntry) -> ExtractedArchive {
-    let path = archive_root().join(&entry.archive);
+fn extract_archive(entry: &ArchiveEntry, path: &Path) -> ExtractedArchive {
     let metadata = fs::metadata(&path)
         .unwrap_or_else(|error| panic!("missing archive {}: {error}", path.display()));
     assert_eq!(metadata.len(), entry.compressed_bytes, "archive byte count");
@@ -314,11 +315,21 @@ fn validate_archive(entry: &ArchiveEntry, archive: &ExtractedArchive) {
     assert_eq!(manifest.chart.title, entry.title);
     assert_eq!(manifest.chart.source_path, entry.source_simfile);
     assert!(!manifest.itgmania.source_revision.is_empty());
-    assert_eq!(manifest.itgmania.execution, "embedded_bundled_lua");
-    assert!(!manifest.itgmania.launches_executable);
-    assert!(manifest.runtime.update_hz.is_finite() && manifest.runtime.update_hz > 0.0);
-    assert!(manifest.runtime.display.width > 0.0);
-    assert!(manifest.runtime.display.height > 0.0);
+    let native = manifest.itgmania.execution == "native_gameplay";
+    if native {
+        assert!(manifest.itgmania.launches_executable);
+        assert!(manifest.runtime.update_hz.is_none(), "native frames cannot use a fabricated update rate");
+        assert_eq!(manifest.runtime.frame_clock.as_deref(), Some("native-update-frames"));
+        assert!(manifest.runtime.display.width.is_finite() && manifest.runtime.display.width >= 0.0);
+        assert!(manifest.runtime.display.height.is_finite() && manifest.runtime.display.height >= 0.0);
+    } else {
+        assert_eq!(manifest.itgmania.execution, "embedded_bundled_lua");
+        assert!(!manifest.itgmania.launches_executable);
+        assert!(manifest.runtime.update_hz.is_some_and(|rate| rate.is_finite() && rate > 0.0));
+        assert!(manifest.runtime.frame_clock.as_deref().is_none_or(|clock| clock == "fixed-update-rate"));
+        assert!(manifest.runtime.display.width > 0.0);
+        assert!(manifest.runtime.display.height > 0.0);
+    }
     assert!(manifest.runtime.display.logical_width > 0.0);
     assert!(manifest.runtime.display.logical_height > 0.0);
     assert!(!manifest.runtime.random_state.source.is_empty());
@@ -859,7 +870,7 @@ fn whole_song_archive_index_and_streamed_members_are_valid() {
     let mut names = HashSet::new();
     for entry in selected_archives(&index) {
         assert!(names.insert(&entry.archive), "duplicate indexed archive");
-        let archive = extract_archive(entry);
+        let archive = extract_archive(entry, &archive_root().join(&entry.archive));
         validate_archive(entry, &archive);
         let trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
         validate_native_trace(&trace, &archive.manifest);
@@ -890,7 +901,7 @@ fn empty_song_layers_match_native_archive() {
         .iter()
         .find(|entry| entry.source_simfile == "Bank Account/Bank Account.sm")
         .expect("complete empty-Lua reference");
-    let archive = extract_archive(entry);
+    let archive = extract_archive(entry, &archive_root().join(&entry.archive));
     validate_archive(entry, &archive);
     let mut trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
     validate_native_trace(&trace, &archive.manifest);
@@ -918,14 +929,14 @@ fn archive_reference_rejects_missing_model_meshes() {
     let control = index.archives.iter().find(|entry| {
         entry.source_simfile == "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc"
     }).expect("complete native non-Model reference");
-    let archive = extract_archive(control);
+    let archive = extract_archive(control, &archive_root().join(&control.archive));
     let trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
     validate_native_trace(&trace, &archive.manifest);
 
     let model = index.archives.iter().find(|entry| {
         entry.archive == "bb1b35239bf8665e24e2e7c5aaaf90dc0beb1df3457023a1a6958bae8a074b85.tar.zst"
     }).expect("complete native KABOOOOOM Model reference");
-    let archive = extract_archive(model);
+    let archive = extract_archive(model, &archive_root().join(&model.archive));
     let mut trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
     assert!(trace.actor_definitions.iter().any(|definition| {
         definition.class == "Model" && !definition.runtime_actors.is_empty()
@@ -948,7 +959,7 @@ fn archive_reference_rejects_obsolete_replays() {
         .iter()
         .find(|entry| entry.source_simfile == "Bank Account/Bank Account.sm")
         .expect("complete native reference");
-    let mut archive = extract_archive(entry);
+    let mut archive = extract_archive(entry, &archive_root().join(&entry.archive));
     let mut trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
     validate_native_trace(&trace, &archive.manifest);
     let native_position = trace.song_position.take();
@@ -1118,7 +1129,7 @@ fn archive_reference_rejects_obsolete_replays() {
     assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
 }
 
-const USAGE: &str = "Run one complete fixture:\n  cargo test --test full_song_lua <archive.tar.zst>\n\nList fixtures:\n  cargo test --test full_song_lua -- --list\n\nRun the complete corpus:\n  cargo test --test full_song_lua -- --all\n\nThe positional selector accepts a filename, SHA-256 prefix, or song title.\nNo selector prints this help; normal cargo test does not run the expensive corpus.";
+const USAGE: &str = "Run one complete fixture:\n  cargo test --test full_song_lua <archive.tar.zst>\n\nCheck a native capture candidate:\n  cargo test --test full_song_lua -- --archive <path.tar.zst> --report <report.json> [--entry]\n\nList fixtures:\n  cargo test --test full_song_lua -- --list\n\nRun the complete corpus:\n  cargo test --test full_song_lua -- --all\n\nThe positional selector accepts a filename, SHA-256 prefix, or song title.\nNo selector prints this help; normal cargo test does not run the expensive corpus.";
 
 fn select_archive<'a>(
     index: &'a ArchiveIndex,
@@ -1187,6 +1198,44 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
     }
+    // Capture candidates can be checked without publishing them in the fixture store.
+    if args.first().is_some_and(|arg| arg == "--archive") {
+        if !(args.len() == 4 || args.len() == 5 && args[4] == "--entry") || args[2] != "--report" {
+            eprintln!("expected --archive <path.tar.zst> --report <report.json> [--entry]");
+            return ExitCode::FAILURE;
+        }
+        let path = Path::new(&args[1]);
+        let scope = if args.len() == 5 { native_gameplay::Scope::Entry } else { native_gameplay::Scope::Full };
+        let outcome = std::panic::catch_unwind(|| {
+            let decoder = zstd::stream::read::Decoder::new(File::open(path).expect("open capture candidate"))
+                .expect("decode capture candidate");
+            let mut tar = tar::Archive::new(decoder);
+            let mut members = tar.entries().expect("candidate members");
+            let member = members.next().expect("candidate manifest").expect("read candidate manifest");
+            assert_eq!(member.path().expect("manifest path"), Path::new("manifest.json"));
+            let manifest: ArchiveManifest = serde_json::from_reader(member).expect("candidate manifest JSON");
+            let name = path.file_name().and_then(|name| name.to_str()).expect("portable archive filename");
+            let entry = ArchiveEntry {
+                title: manifest.chart.title, source_simfile: manifest.chart.source_path,
+                harness_version: manifest.harness_version, archive: name.into(),
+                sha256: name.strip_suffix(".tar.zst").expect("archive extension").into(),
+                compressed_bytes: fs::metadata(path).expect("candidate metadata").len(),
+                local_only: false, aliases: Vec::new(), retained_version: false,
+            };
+            let archive = extract_archive(&entry, path);
+            validate_archive(&entry, &archive);
+            assert_eq!(archive.manifest.itgmania.execution, "native_gameplay",
+                "candidate replay requires a native gameplay archive");
+            crate::paths::init();
+            let reporter = progress::Reporter::start();
+            replay_native_archive(&archive, scope, Path::new(&args[3]), &reporter.progress)
+        });
+        return match outcome {
+            Ok(true) => ExitCode::SUCCESS,
+            Ok(false) => ExitCode::from(2), // Explicitly incomplete; never a certified fixture.
+            Err(_) => ExitCode::FAILURE,
+        };
+    }
     let index = archive_index();
     if args == ["--list"] {
         for entry in &index.archives {
@@ -1249,9 +1298,13 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
         let progress = &reporter.progress;
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             progress.stage("extracting archive and verifying SHA-256");
-            let archive = extract_archive(entry);
+            let archive = extract_archive(entry, &archive_root().join(&entry.archive));
             progress.stage("validating archive members");
             validate_archive(entry, &archive);
+            if archive.manifest.itgmania.execution == "native_gameplay" {
+                return replay_native_archive(&archive, native_gameplay::Scope::Full,
+                    &archive.root.join("native-report.json"), progress);
+            }
             progress.stage("reading native trace");
             let trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
             validate_native_trace(&trace, &archive.manifest);
@@ -1268,7 +1321,7 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
                 &trace,
                 &compiled,
                 &context,
-                archive.manifest.runtime.update_hz,
+                archive.manifest.runtime.update_hz.expect("validated embedded frame rate"),
                 Some(progress),
             );
             let mut parity = compare_semantics_with_progress(
@@ -1336,6 +1389,54 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
     } else {
         ExitCode::FAILURE
     }
+}
+
+fn replay_native_archive(
+    archive: &ExtractedArchive,
+    scope: native_gameplay::Scope,
+    report_path: &Path,
+    progress: &progress::Progress,
+) -> bool {
+    use std::sync::atomic::Ordering;
+    let trace_path = archive.root.join(&archive.manifest.chart.trace);
+    let trace: Value = serde_json::from_slice(&fs::read(&trace_path).expect("read native gameplay trace"))
+        .expect("parse native gameplay trace");
+    assert_eq!(trace["harness_version"], archive.manifest.harness_version);
+    assert_eq!(trace["schema_version"], archive.manifest.oracle_schema_version);
+    for (key, expected) in [
+        ("width", archive.manifest.runtime.display.width),
+        ("height", archive.manifest.runtime.display.height),
+        ("logical_width", archive.manifest.runtime.display.logical_width),
+        ("logical_height", archive.manifest.runtime.display.logical_height),
+    ] {
+        assert_eq!(trace["display"][key].as_f64().expect("native display dimension") as f32, expected);
+    }
+    if archive.manifest.runtime.display.width == 0.0 || archive.manifest.runtime.display.height == 0.0 {
+        assert_eq!(trace["display"]["video_renderers"], "null", "zero pixel dimensions require the native null renderer");
+    }
+    progress.stage(if scope == native_gameplay::Scope::Entry { "replaying native entry and reload" }
+        else { "replaying every native gameplay frame" });
+    let report = native_gameplay::replay(&trace_path, &archive.root.join(&archive.manifest.chart.simfile),
+        scope, |frame, frames| {
+            progress.frame.store(frame, Ordering::Relaxed);
+            progress.frames.store(frames, Ordering::Relaxed);
+        }).unwrap_or_else(|error| panic!("native gameplay replay failed: {error}"));
+    let mismatches = report["mismatches"].as_array().expect("native comparison failures");
+    let errors = report["errors"].as_array().expect("Lua callback failures");
+    let coverage = report["pending_coverage"].as_array().expect("explicit pending coverage");
+    progress.checks.fetch_add(report["compared_stage_fields"].as_u64().expect("stage field count") as usize, Ordering::Relaxed);
+    progress.failed.fetch_add(mismatches.iter().filter(|item|
+        matches!(item["field"].as_str(), Some("possible" | "current_possible" | "actual" | "misses" |
+            "w1" | "w2" | "failed" | "life_latest" | "difficulty" | "description" | "meter"))).count(), Ordering::Relaxed);
+    fs::write(report_path, serde_json::to_vec_pretty(&report).expect("serialize native report"))
+        .expect("write native report");
+    eprintln!("{} native frames replayed; {} stage fields compared; {} mismatches; {} callback errors",
+        report["replayed_frames"], report["compared_stage_fields"], mismatches.len(), errors.len());
+    for mismatch in mismatches.iter().take(20) { eprintln!("  {mismatch}"); }
+    for pending in coverage { eprintln!("  pending: {pending}"); }
+    eprintln!("report: {}", report_path.display());
+    scope == native_gameplay::Scope::Full && mismatches.is_empty() && errors.is_empty()
+        && coverage.is_empty() && report["whole_song_parity_proven"] == true
 }
 
 #[test]
