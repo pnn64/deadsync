@@ -2157,3 +2157,17 @@ See `native-revalidation-pass224.json`. Position 146 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 225
+
+Position 146, Choices, passes all
+587,440 comparisons against committed DeadSync
+`b9d71be17`. The complete native harness 0.1.68 archive
+contains 26,701 updates over 445.00 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass225.json`. Position 147 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
