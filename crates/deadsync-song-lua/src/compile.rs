@@ -207,6 +207,12 @@ where
     if context.background_layer_count > entry_paths.len() {
         return Err("song lua background count exceeds its session entries".to_owned());
     }
+    if !context.layer_start_beats.is_empty()
+        && (context.layer_start_beats.len() != entry_paths.len()
+            || context.layer_start_beats.iter().any(|beat| !beat.is_finite()))
+    {
+        return Err("song lua layer beats do not match its session entries".into());
+    }
     if primary_index >= entry_paths.len() {
         return Err(format!(
             "song lua primary index {primary_index} is outside {} entries",
@@ -293,6 +299,13 @@ where
                     "SongForeground"
                 };
                 let parent = children.get::<Table>(name).map_err(|err| err.to_string())?;
+                if context.live && index >= context.background_layer_count
+                    && let Some(&beat) = context.layer_start_beats.get(index)
+                {
+                    actor.raw_set("__songlua_foreground_start_beat", beat).map_err(|err| err.to_string())?;
+                    actor.raw_set("__songlua_defer_on", true).map_err(|err| err.to_string())?;
+                    actor.raw_set("__songlua_live_inactive", true).map_err(|err| err.to_string())?;
+                }
                 actor
                     .set("__songlua_parent", parent.clone())
                     .map_err(|err| err.to_string())?;
@@ -311,6 +324,14 @@ where
             // MakeActor runs Init with the parent set; Foreground::LoadFromSong
             // adds the initialized actor to its children afterward.
             if let (Value::Table(actor), Some(parent)) = (&root, parent) {
+                if actor.raw_get::<Option<f32>>("__songlua_foreground_start_beat")
+                    .map_err(|err| err.to_string())?.is_some()
+                {
+                    // Foreground::LoadFromSong hides the actor after MakeActor
+                    // has run Init, before its scheduled On activation.
+                    actor.get::<mlua::Function>("visible").map_err(|err| err.to_string())?
+                        .call::<()>((actor.clone(), false)).map_err(|err| err.to_string())?;
+                }
                 crate::lua_util::push_sequence_child_once(&parent, actor.clone())
                     .map_err(|err| err.to_string())?;
             }

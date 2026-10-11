@@ -10006,6 +10006,9 @@ pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resu
 }
 
 pub fn run_actor_startup_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if actor.raw_get::<Option<bool>>("__songlua_defer_on")?.unwrap_or(false) {
+        return Ok(());
+    }
     if actor
         .get::<Option<bool>>("__songlua_startup_commands_ran")?
         .unwrap_or(false)
@@ -12198,7 +12201,7 @@ pub fn run_actor_compile_update_functions_with_delta(
                     parent,
                     wrapper,
                 } => {
-                    let incoming = match parent {
+                    let mut incoming = match parent {
                         Some(parent) => parent.raw_get::<Option<f64>>(if *wrapper {
                             "__songlua_compile_wrapper_delta"
                         } else {
@@ -12206,7 +12209,7 @@ pub fn run_actor_compile_update_functions_with_delta(
                         })?,
                         None => Some(delta_seconds),
                     };
-                    let span = match parent {
+                    let mut span = match parent {
                         Some(parent) => parent.raw_get::<Option<f32>>(if *wrapper {
                             "__songlua_compile_wrapper_span"
                         } else {
@@ -12214,6 +12217,15 @@ pub fn run_actor_compile_update_functions_with_delta(
                         })?,
                         None => Some(delta_seconds as f32),
                     };
+                    // A scheduled foreground's whole subtree uses its native
+                    // music delta. Dormant/finished layers receive no updates.
+                    if actor.raw_get::<Option<bool>>("__songlua_live_inactive")?.unwrap_or(false) {
+                        incoming = None;
+                        span = None;
+                    } else if let Some(delta) = actor.raw_get::<Option<f64>>("__songlua_live_delta")? {
+                        incoming = Some(delta);
+                        span = Some(delta as f32);
+                    }
                     // Model::Update passes the original delta to its materials
                     // after Actor::Update, even if that Actor is hibernating.
                     crate::model_texture::begin(lua, actor, incoming);
@@ -12605,6 +12617,11 @@ fn run_actor_update_functions_for_table_inner(
     parent_delta_seconds: f64,
     run_recurring_commands: bool,
 ) -> mlua::Result<()> {
+    // Foreground::Update also skips dormant layers during ScreenGameplay's
+    // preparation Update(0), including their descendants and callbacks.
+    if actor.raw_get::<Option<bool>>("__songlua_live_inactive")?.unwrap_or(false) {
+        return Ok(());
+    }
     let Some(parent_delta_seconds) = advance_hibernation(lua, actor, parent_delta_seconds)? else {
         return Ok(());
     };

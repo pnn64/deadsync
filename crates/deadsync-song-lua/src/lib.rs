@@ -1419,6 +1419,9 @@ pub struct SongLuaCompileContext {
     /// Session entry paths list backgrounds first, then foregrounds.
     /// A single-entry compile defaults to the foreground layer.
     pub background_layer_count: usize,
+    /// Authored song beats for session entries, in the same path order.
+    /// Empty for direct actor compilation without a simfile layer schedule.
+    pub layer_start_beats: Vec<f32>,
     pub song_dir: PathBuf,
     pub main_title: String,
     pub song_display_bpms: [f32; 2],
@@ -1463,6 +1466,7 @@ impl SongLuaCompileContext {
     pub fn new(song_dir: impl Into<PathBuf>, main_title: impl Into<String>) -> Self {
         Self {
             background_layer_count: 0,
+            layer_start_beats: Vec::new(),
             live: false,
             song_dir: song_dir.into(),
             main_title: main_title.into(),

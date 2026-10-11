@@ -162,6 +162,7 @@ fn compile_song_lua_layer<S: Clone + std::fmt::Debug>(
 ) -> Option<GameplaySongLuaLayer<S>> {
     let mut context = context.clone();
     context.background_layer_count = usize::from(background);
+    context.layer_start_beats = vec![start_beat];
     match compile_song_lua(path, &context) {
         Ok(compiled) => Some(GameplaySongLuaLayer {
             start_beat,
@@ -199,8 +200,10 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
 ) -> Result<PreparedGameplaySongLua<S>, String> {
     let mut paths = Vec::new();
     let mut targets = Vec::new();
+    let mut start_beats = Vec::new();
     for change in &song.background_lua_changes {
         paths.push(change.path.as_path());
+        start_beats.push(change.start_beat);
         targets.push(SongLuaLayerTarget::Background(change.start_beat));
     }
     let mut context = context.clone();
@@ -210,6 +213,7 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
             continue;
         }
         paths.push(change.path.as_path());
+        start_beats.push(change.start_beat);
         targets.push(if Some(index) == primary_ix {
             SongLuaLayerTarget::Primary
         } else {
@@ -223,6 +227,7 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
     if paths.is_empty() {
         return Ok(PreparedGameplaySongLua::default());
     }
+    context.layer_start_beats = start_beats;
     let compile_started = Instant::now();
     let compiled = compile_song_lua_layers(&paths, primary_index, &context)?;
     if compiled.len() != targets.len() {

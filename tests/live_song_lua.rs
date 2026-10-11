@@ -269,6 +269,9 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
             .push(json!({"field":"startup_scenes", "native":last_scene, "deadsync":scene_count}));
     }
     let mut errors = startup.errors;
+    let mut broadcasts: Vec<_> = startup.broadcasts.iter()
+        .filter(|(_, name, _)| name != "ScreenChanged")
+        .map(|(beat, name, _)| json!({"seconds":0.0,"beat":beat,"name":name})).collect();
     let mut observations = Vec::new();
     let mut requests = Vec::new();
     let mut first_navigation = None;
@@ -324,6 +327,8 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
             first_navigation = Some(seconds);
         }
         let output = state.take_song_lua_output();
+        broadcasts.extend(output.broadcasts.iter()
+            .map(|(beat, name, _)| json!({"seconds":seconds,"beat":beat,"name":name})));
         errors.extend(output.errors);
         if let Some(request) = output.request {
             let (operation, name) = match request {
@@ -423,14 +428,29 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
                 .push(json!({"field":"source_transition", "native":native,"deadsync":actual}));
         }
     }
+    let native_broadcasts: Vec<_> = trace["events"].as_array().ok_or("missing native events")?.iter()
+        .filter(|event| event["operation"] == "MessageManager.Broadcast")
+        .map(|event| json!({"seconds":event["seconds"],"beat":event["beat"],"name":event["args"][0]})).collect();
+    if native_broadcasts.len() != broadcasts.len() {
+        mismatches.push(json!({"field":"source_broadcast_count","native":native_broadcasts.len(),"deadsync":broadcasts.len()}));
+    }
+    for (native, actual) in native_broadcasts.iter().zip(&broadcasts) {
+        if native["name"] != actual["name"]
+            || (number(native, "seconds")? - number(actual, "seconds")?).abs() > 1e-6
+            || (number(native, "beat")? - number(actual, "beat")?).abs() > 1e-6
+        {
+            mismatches.push(json!({"field":"source_broadcast","native":native,"deadsync":actual}));
+        }
+    }
     let report = json!({"diagnostic_only":true,"whole_song_parity_proven":false,"archive_accepted":false,
         "source_simfile":simfile,"native_trace":trace_path,"native_frames":frames.len(),"replayed_frames":used_frames,
         "startup_scenes":scene_count,"selected_description":state.source.charts[0].description,
         "checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,"mismatches":mismatches,
         "errors":errors,"lua_requests":requests,"native_transition_requests":native_requests,
+        "lua_broadcasts":broadcasts,"native_broadcasts":native_broadcasts,
         "first_domain_navigation_seconds":first_navigation, "continued_after_domain_navigation": first_navigation.is_some(),
         "stage_observations":observations,
-        "pending_coverage":["all lifecycle stage observations", "native command/query delivery timing",
+        "pending_coverage":["all lifecycle stage observations", "native command/query delivery timing", "broadcast argument values",
             "full theme stage commitment and history", "score/alive-time getters", "all actor/render/resource state",
             "additional game/style/input/course contexts"]});
     std::fs::write(

@@ -10,6 +10,14 @@ pub(crate) const TAP_SCORES: [&str; 11] = [
 
 pub(crate) struct LiveMode;
 
+struct LiveForeground {
+    actor: Table,
+    start_beat: f32,
+    stop_beat: f32,
+    started: bool,
+    finished: bool,
+}
+
 pub(crate) fn active(lua: &Lua) -> bool {
     lua.app_data_ref::<LiveMode>().is_some()
 }
@@ -112,6 +120,8 @@ pub struct SongLuaLiveScene {
     targets: Vec<(usize, SongLuaLiveTarget)>,
     context: SongLuaCompileContext,
     last_beat: f64,
+    last_music_seconds: f32,
+    foregrounds: Vec<LiveForeground>,
     startup_output: SongLuaLiveOutput,
 }
 
@@ -148,8 +158,17 @@ impl SongLuaLiveScene {
         startup_broadcasts.append(&mut startup_output.broadcasts);
         startup_output.broadcasts = startup_broadcasts;
         let last_beat = f64::from(crate::compile_song_runtime_values(&lua)?.0);
+        let mut foregrounds = Vec::new();
+        if let Value::Table(roots) = &root {
+            for actor in roots.sequence_values::<Value>() {
+                let Value::Table(actor) = actor? else { continue; };
+                if let Some(start_beat) = actor.raw_get::<Option<f32>>("__songlua_foreground_start_beat")? {
+                    foregrounds.push(LiveForeground { actor, start_beat, stop_beat: 0.0, started: false, finished: false });
+                }
+            }
+        }
         Ok(Self { lua, root, stage, players, actors, states, tracked, registry,
-            targets: Vec::new(), context, last_beat, startup_output })
+            targets: Vec::new(), context, last_beat, last_music_seconds: -9999.0, foregrounds, startup_output })
     }
 
     pub fn advance(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {
@@ -172,8 +191,17 @@ impl SongLuaLiveScene {
         self.last_beat = beat;
         crate::lua_util::set_live_frame(&self.lua, frame.screen_seconds, beat, frame.delta_seconds);
         crate::song_tables::advance_option_levels(&self.lua, frame.screen_seconds)?;
+        self.advance_foregrounds(beat as f32, frame.music_seconds as f32)?;
         crate::lua_util::run_actor_compile_update_functions_with_delta(
             &self.lua, &self.root, frame.delta_seconds)?;
+        for foreground in &mut self.foregrounds {
+            if foreground.started && !foreground.finished && beat as f32 > foreground.stop_beat {
+                foreground.actor.get::<Function>("visible")?.call::<()>((foreground.actor.clone(), false))?;
+                foreground.actor.raw_set("__songlua_live_inactive", true)?;
+                foreground.finished = true;
+            }
+        }
+        self.last_music_seconds = frame.music_seconds as f32;
         for (actor, state) in self.actors.iter().zip(&mut self.states) {
             *state = read_state(&self.lua, actor)?;
         }
@@ -186,6 +214,47 @@ impl SongLuaLiveScene {
             crate::reset_actor_capture(&self.lua, actor)?;
         }
         take_output(&self.lua)
+    }
+
+    fn advance_foregrounds(&mut self, beat: f32, music_seconds: f32) -> mlua::Result<()> {
+        if self.foregrounds.is_empty() { return Ok(()); }
+        let prefs = self.lua.globals().get::<Table>("PREFSMAN")?;
+        let rate_tweens = prefs.get::<Function>("GetPreference")?
+            .call::<Option<bool>>((prefs, "RateModsAffectFGChanges"))?.unwrap_or(false);
+        let game = self.lua.globals().get::<Table>("GAMESTATE")?;
+        let options = game.get::<Function>("GetSongOptionsObject")?
+            .call::<Table>((game, "ModsLevel_Current"))?;
+        let rate = if rate_tweens { 1.0 } else { options.get::<Function>("MusicRate")?.call::<f32>(options)? };
+        for foreground in &mut self.foregrounds {
+            let inactive = foreground.finished || beat < foreground.start_beat;
+            foreground.actor.raw_set("__songlua_live_inactive", inactive)?;
+            if inactive { continue; }
+            let visible = foreground.actor.get::<Function>("GetVisible")?.call::<bool>(foreground.actor.clone())?;
+            let delta = if !visible {
+                foreground.actor.get::<Function>("visible")?.call::<()>((foreground.actor.clone(), true))?;
+                foreground.actor.raw_set("__songlua_defer_on", false)?;
+                if foreground.started {
+                    foreground.actor.get::<Function>("playcommand")?.call::<()>((foreground.actor.clone(), "On"))?;
+                } else {
+                    crate::lua_util::run_actor_startup_commands_for_table(&self.lua, &foreground.actor)?;
+                }
+                let start = self.context.song_timing.as_ref().map_or_else(
+                    || crate::song_elapsed_seconds_at(foreground.start_beat, &self.context) * crate::song_music_rate(&self.context),
+                    |timing| timing.get_time_for_beat_exact(foreground.start_beat));
+                let stop = start + crate::lua_util::actor_tween_time_left(&self.lua, &foreground.actor)?;
+                foreground.stop_beat = self.context.song_timing.as_ref().map_or_else(
+                    || crate::song_beat_at_elapsed_seconds(stop / crate::song_music_rate(&self.context), &self.context),
+                    |timing| timing.get_song_position(stop).beat);
+                foreground.started = true;
+                // Foreground::Update consumes the music elapsed since the
+                // authored start, including a first frame that crosses it.
+                (music_seconds - start).max(0.0) / rate
+            } else {
+                (music_seconds - self.last_music_seconds).max(0.0) / rate
+            };
+            foreground.actor.raw_set("__songlua_live_delta", f64::from(delta))?;
+        }
+        Ok(())
     }
 
     fn feed_stats(&self, frame: &SongLuaLiveFrame) -> mlua::Result<()> {
@@ -302,6 +371,120 @@ mod tests {
         context.music_length_seconds = 60.0;
         crate::compile_song_lua_with_default_host(&entry, &context, SongLuaNoteskinResolver::default(),
             |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).expect("live preparation")
+    }
+
+    #[test]
+    fn live_foreground_clock() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-foreground-clock-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("test directory");
+        let early = dir.join("early.lua");
+        let late = dir.join("late.lua");
+        fs::write(dir.join("clock.lua"), r#"
+local label = ...
+return Def.ActorFrame {
+    Name = label,
+    InitCommand = function() MESSAGEMAN:Broadcast('Construct:' .. label) end,
+    OnCommand = function(self) self:sleep(999); MESSAGEMAN:Broadcast('On:' .. label) end,
+    Def.Actor {
+        OnCommand = function(self) self:sleep(0.25):queuecommand('Later') end,
+        LaterCommand = function() MESSAGEMAN:Broadcast('Later:' .. label) end,
+    },
+}
+"#).expect("clock script");
+        fs::write(&early, "return LoadActor('clock.lua', 'early')").expect("early entry");
+        fs::write(&late, "return LoadActor('clock.lua', 'late')").expect("late entry");
+        let mut context = SongLuaCompileContext::new(&dir, "foreground clock");
+        context.live = true;
+        context.song_display_bpms = [120.0; 2];
+        context.layer_start_beats = vec![2.0, 4.0];
+        let mut compiled: Vec<Compiled> = crate::compile_song_lua_layers_with_default_host(&[&early, &late], 0,
+            &context, SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None)
+            .expect("scheduled preparation");
+        let mut scene = compiled[0].live_scene.take().expect("owned scheduled scene");
+        let startup = scene.take_startup_output();
+        let names = startup.broadcasts.iter().map(|(_, name, _)| name.as_str()).collect::<Vec<_>>();
+        assert!(names.contains(&"Construct:early") && names.contains(&"Construct:late"));
+        assert!(!names.iter().any(|name| name.starts_with("On:") || name.starts_with("Later:")));
+        for (index, (music_seconds, expected)) in [
+            (0.75, None), (1.0, Some("On:early")), (1.0, None),
+            (1.125, None), (1.25, None), (1.375, Some("Later:early")),
+            (2.0, Some("On:late")),
+        ].into_iter().enumerate() {
+            let output = scene.advance(SongLuaLiveFrame { music_seconds, beat: music_seconds * 2.0,
+                screen_seconds: (index + 1) as f64 * 0.5, delta_seconds: 0.5, ..Default::default() }).expect("scheduled frame");
+            assert!(output.errors.is_empty());
+            let names = output.broadcasts.iter().map(|(_, name, _)| name.as_str()).collect::<Vec<_>>();
+            assert_eq!(names, expected.into_iter().collect::<Vec<_>>(), "music second {music_seconds}");
+        }
+    }
+
+    #[test]
+    fn live_foreground_late_start() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-foreground-late-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("test directory");
+        let entry = dir.join("late.lua");
+        fs::write(&entry, r#"
+return Def.ActorFrame {
+    OnCommand = function(self)
+        self:sleep(999):SetUpdateFunction(function(self, delta)
+            MESSAGEMAN:Broadcast('Delta:' .. tostring(delta))
+        end)
+    end,
+    Def.Actor {
+        OnCommand = function(self) self:sleep(0.1):queuecommand('Later') end,
+        LaterCommand = function() MESSAGEMAN:Broadcast('Later') end,
+    },
+}
+"#).expect("late script");
+        let mut context = SongLuaCompileContext::new(&dir, "foreground late");
+        context.live = true;
+        context.song_display_bpms = [120.0; 2];
+        context.layer_start_beats = vec![2.0];
+        let mut compiled: Compiled = crate::compile_song_lua_with_default_host(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).expect("late preparation");
+        let mut scene = compiled.live_scene.take().expect("owned scene");
+        let output = scene.advance(SongLuaLiveFrame { music_seconds: 1.125, beat: 2.25,
+            screen_seconds: 5.0, delta_seconds: 0.5, ..Default::default() }).expect("late frame");
+        assert!(output.errors.is_empty());
+        assert_eq!(output.broadcasts.iter().map(|(_, name, _)| name.as_str()).collect::<Vec<_>>(),
+            ["Later", "Delta:0.125"]);
+    }
+
+    #[test]
+    fn live_foreground_finishes() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-foreground-finish-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("test directory");
+        let entry = dir.join("finish.lua");
+        fs::write(&entry, r#"
+local count = 0
+return Def.ActorFrame {
+    Name = 'Finish',
+    InitCommand = function(self) self:SetUpdateFunction(function(self)
+        count = count + 1; MESSAGEMAN:Broadcast('ForegroundTick' .. count)
+    end) end,
+    OnCommand = function(self) self:sleep(0.25) end,
+}
+"#).expect("finish script");
+        let mut context = SongLuaCompileContext::new(&dir, "foreground finish");
+        context.live = true;
+        context.song_display_bpms = [120.0; 2];
+        context.layer_start_beats = vec![2.0];
+        let mut compiled: Compiled = crate::compile_song_lua_with_default_host(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).expect("finish preparation");
+        let global = compiled.live_actor_indices()[compiled.overlays.iter()
+            .position(|actor| actor.name.as_deref() == Some("Finish")).expect("finish actor")];
+        let mut scene = compiled.live_scene.take().expect("owned scene");
+        assert!(!scene.states()[global].visible);
+        assert!(scene.take_startup_output().broadcasts.iter().all(|(_, name, _)| !name.starts_with("ForegroundTick")),
+            "dormant callbacks do not run in preparation");
+        for (index, (music_seconds, tick, visible)) in [(0.75, None, false), (1.0, Some("ForegroundTick1"), true),
+            (1.5, Some("ForegroundTick2"), false), (1.75, None, false), (1.0, None, false)].into_iter().enumerate() {
+            let output = scene.advance(SongLuaLiveFrame { music_seconds, beat: music_seconds * 2.0,
+                screen_seconds: (index + 1) as f64 * 0.5, delta_seconds: 0.5, ..Default::default() }).expect("finish frame");
+            assert!(output.errors.is_empty());
+            assert_eq!(output.broadcasts.iter().map(|(_, name, _)| name.as_str()).collect::<Vec<_>>(), tick.into_iter().collect::<Vec<_>>());
+            assert_eq!(scene.states()[global].visible, visible);
+        }
     }
 
     #[test]
