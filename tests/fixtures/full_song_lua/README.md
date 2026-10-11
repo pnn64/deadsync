@@ -2176,3 +2176,22 @@ See `native-revalidation-choices-reload-gap.json` for source hashes,
 recorded requests, and the required native controls. Position 146 remains
 the next unresolved chart; successful initial-load comparisons do not
 establish gameplay reload parity.
+
+
+## Native scorekeeper startup validation
+
+Harness 0.1.71, commit `ddfd43485`, now loads the complete native
+ScoreKeeperNormal before foreground Lua. Selected Steps, Stage modifiers,
+scoring preferences and stage reset behavior come from the pinned source.
+Reentrant scoring uses the native Lua coroutine pool, with registry ownership
+isolated per song. All 237 harness tests pass; five tests remain ignored.
+
+The fresh Choices capture loads real stage totals but remains partial at its
+required delayed ScreenGameplay reload. The archive command excludes it;
+no new archive was added and the 483-entry index is unchanged. Native gameplay
+judgments and DeadSync's stage totals/live counters remain open. The Technique
+arrow repair retains its passing catalog and Vulkan rendering checks.
+
+See `native-revalidation-native-scorekeeper-load.json` for source hashes,
+committed executable identity, controls and the remaining requirements.
+Position 146 is still the next unresolved chart.
