@@ -1,0 +1,166 @@
+{
+  "pass": 111,
+  "previous_record": "native-revalidation-pass110.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "e1557ce33566e06ce8bbefa1830d69571c39031e",
+  "comparator_sha256": "c2c5582e4bdc2812eca0e8bd55b847fec23902d8d055ca7d24da9c66985c8a84",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "charts": [
+    {
+      "position": 32,
+      "entry": {
+        "title": "[09] Delightful Day",
+        "source_simfile": "[09] Delightful Day - (NO CMOD)/Delightful Day.ssc",
+        "harness_version": "0.1.51",
+        "archive": "fb68cc6fb753f0c189c94f760e0c32673d9039e2e95c31e4ff2d2d9a9dc16ff6.tar.zst",
+        "sha256": "fb68cc6fb753f0c189c94f760e0c32673d9039e2e95c31e4ff2d2d9a9dc16ff6",
+        "compressed_bytes": 51875837,
+        "aliases": [
+          "22dd92290acead307e0abf7d8875c80da90931162476040425404f1b7552db2d.tar.zst"
+        ]
+      },
+      "original_archive_retained": "94383304ec7beb36cd8c721e9209af6791f3a118f156012cd8d4bf503c2751cc.tar.zst",
+      "native_source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+      "native_cli_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+      "native_trace_sha256": "a6a7a43354c837a8633dc83d3bfc2ed280873e4a9a71464edf830ec33fd31713",
+      "native_receipt_sha256": "8573c7ba41c81da9170bbc734037256f93cf728c771492c276caf84b98290819",
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "duration_seconds": 212.3076934814453,
+      "update_frames": 12740,
+      "source_simfile_sha256": "4d62ef0a491f17b53682a123f08052ff3275f1fdfb49fd6cb6b8e8952fa49162",
+      "original_source_unchanged": true,
+      "acceptance": "passed",
+      "comparison_source_commit": "e1557ce33566e06ce8bbefa1830d69571c39031e",
+      "comparisons_passed": 282140
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 32,
+      "source_simfile": "[09] Delightful Day - (NO CMOD)/Delightful Day.ssc",
+      "archive": "fb68cc6fb753f0c189c94f760e0c32673d9039e2e95c31e4ff2d2d9a9dc16ff6.tar.zst",
+      "archive_sha256": "fb68cc6fb753f0c189c94f760e0c32673d9039e2e95c31e4ff2d2d9a9dc16ff6",
+      "harness_version": "0.1.51",
+      "source_commit": "e1557ce33566e06ce8bbefa1830d69571c39031e",
+      "binary_sha256": "c2c5582e4bdc2812eca0e8bd55b847fec23902d8d055ca7d24da9c66985c8a84",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\final-v1-full_song_lua.exe",
+        "fb68cc6fb753f0c189c94f760e0c32673d9039e2e95c31e4ff2d2d9a9dc16ff6.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 11.138117800001055,
+      "comparisons_passed": 282140,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\fresh-032-final-v1.log",
+      "log_sha256": "2a8c07d6cb58d611ff23f8b05c948c2ae7b6b7eea8886501963aa72f589c46c4",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass111-top-032-delightful-day-v1.json",
+      "native_receipt_sha256": "8573c7ba41c81da9170bbc734037256f93cf728c771492c276caf84b98290819",
+      "full_corpus_complete": false
+    }
+  ],
+  "canonical_positions_passed": [
+    32
+  ],
+  "comparisons_passed": 282140,
+  "next_position": 33,
+  "fix": "Retain runtime message queue provenance during pose replay, including the actual unfinished queue delay; replace the obsolete reference with a complete native timing capture.",
+  "remaining_scope": "All original sources and historical contexts, explicit Model culling, additional test observations and native framebuffer parity remain open.",
+  "baseline_failure": {
+    "comparisons_passed": 282139,
+    "comparisons_failed": 1,
+    "binary_sha256": "7300bb972cd5c8b5cc918a9bc5c7f384f0b38d738ec6a48de28013a44990d5e6",
+    "log_sha256": "305d558fec3dd318679bf9d358ab12334337560dbf1cee402bc85f075255d6fb",
+    "source_commit": "e645dfdda90cbec49c1f26279c5218f337e91c71",
+    "failure": "LightsOn alpha tween lost the 0.366665 second unfinished queue delay"
+  },
+  "independent_native_alpha_control": {
+    "native_frames_compared": 648,
+    "max_alpha_error": 0.0,
+    "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+    "harness_source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+    "cli_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+    "native_trace_sha256": "a8bbb2aaf4f6145f1b03109db33eb3e411009d4ba8f2a348b02e538b97ded5b0",
+    "independent_native_sha256": "6f595c4fb1bb3c96da5e0488c4274281b2a6f24cf67463f0682c32fab069d8e1",
+    "dispatches": [
+      {
+        "name": "LightsOff",
+        "seconds": 5.4
+      },
+      {
+        "name": "LightsOn",
+        "seconds": 5.783333333333333
+      },
+      {
+        "name": "Reveal",
+        "seconds": 6.25
+      }
+    ],
+    "native_source": "Actor.h DestTweenState, Actor.cpp UpdateTweening and ActorFrame.cpp UpdateInternal. Dispatcher runs after Fade, matching an ActorFrame update callback."
+  },
+  "regressions": [
+    {
+      "source_commit": "11615108a83bbd79e68b299fc7b5211c6a81cedd",
+      "source_pending_commit": true,
+      "binary_sha256": "6198b52ec16561463f5a556b5a63a8286f532d67cd6d6694e86d288c9bb71e1c",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\final-v1-song_lua_itgmania_semantic_parity.exe",
+        "replayed_alpha_messages_keep_queue_delay",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 8.69196159997955,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-alpha-regression-final-v1.log",
+      "log_sha256": "08cd09d602d2ce1ac9700dd905ff956831cce7b8ecbffb4ca06ce9af46a0a91c",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 259 filtered out; finished in 7.00s"
+      ]
+    },
+    {
+      "source_commit": "11615108a83bbd79e68b299fc7b5211c6a81cedd",
+      "source_pending_commit": true,
+      "binary_sha256": "6198b52ec16561463f5a556b5a63a8286f532d67cd6d6694e86d288c9bb71e1c",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\final-v1-song_lua_itgmania_semantic_parity.exe",
+        "message_queue_backlog_matches_native",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.8196533001028,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\queue-backlog-final-v1.log",
+      "log_sha256": "efbced0c6c2bc785759b42dc2ac90bc2b6d005621888618a5176115b5e400f30",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 259 filtered out; finished in 1.15s"
+      ]
+    },
+    {
+      "source_commit": "11615108a83bbd79e68b299fc7b5211c6a81cedd",
+      "source_pending_commit": true,
+      "binary_sha256": "6198b52ec16561463f5a556b5a63a8286f532d67cd6d6694e86d288c9bb71e1c",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\final-v1-song_lua_itgmania_semantic_parity.exe",
+        "queued_messages_match_native",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 5.767536399886012,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\queued-messages-final-v1.log",
+      "log_sha256": "933c7529c9d05d20393d7a4ff1600010214c1b2ef254cc98caea14f47eb97284",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 259 filtered out; finished in 4.09s"
+      ]
+    }
+  ],
+  "comparison_tolerances_changed": false
+}

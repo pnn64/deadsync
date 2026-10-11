@@ -1,10 +1,8 @@
 //! Compare real option rows and masks with the original three-pass initializer.
 use super::*;
+use crate::perf as allocations;
 use deadsync_profile::PlayerOptionsData;
 use std::hint::black_box;
-#[path = "../../../../../../tests/support/perf.rs"]
-#[allow(dead_code)]
-mod allocations;
 
 mod support {
     pub use super::allocations::measure;

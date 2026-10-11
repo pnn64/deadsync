@@ -1,0 +1,105 @@
+{
+  "pass": 132,
+  "previous_record": "native-revalidation-pass131.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "ba99d38a7db8aa1a7265e9592889d9e6a08887a7",
+  "comparator_sha256": "e77e627b9ad31619be80a3e132b1846ed78a8de4849273b755281e28db25e63c",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    53
+  ],
+  "next_position": 54,
+  "comparisons_passed": 495069,
+  "charts": [
+    {
+      "position": 53,
+      "entry": {
+        "title": "[7124] [12] Picture in My Mind",
+        "source_simfile": "[12] Picture in My Mind (SX) [Zaia]/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc",
+        "harness_version": "0.1.53",
+        "archive": "4bcaccc464ec15233ec98eb4340654a6c5bf366636264b6323b67c75706cc3f5.tar.zst",
+        "sha256": "4bcaccc464ec15233ec98eb4340654a6c5bf366636264b6323b67c75706cc3f5",
+        "compressed_bytes": 210506,
+        "aliases": [
+          "fdcbd97c8ed8ce0aed9d06b69b19a604c0fd5d6af6cea49a87264064a57a8980.tar.zst"
+        ]
+      },
+      "original_archive_retained": "43370fdafa237430555b5dae4b134cec8287c7a6e3149c3450e9d54b9681afa9.tar.zst",
+      "native_source_commit": "d58f2cb385888d36c5c93f2dc1221f75187a8e18",
+      "native_trace_sha256": "5942148bec1f9dfaf1de95a66661a10a4ec11e7175fcebde2db443b4a14add47",
+      "original_source_sha256": {
+        "[12] Picture in My Mind (SX) [Zaia]/bg_Picture_in_my_mind.png": "9fa6dd2c7d0ba2cfd759298625bc7ceb919a726cb23e348db687cb86c9b34bf4",
+        "[12] Picture in My Mind (SX) [Zaia]/bn_Picture_in_my_mind.png": "fa95b0c1745c311d26da78b5f7ac2573495ecaba3e5b55c0ebc10547c7f0f153",
+        "[12] Picture in My Mind (SX) [Zaia]/cdtitle_ZAiA_2023.png": "49ed0bf8c59c6a4f9ba40fe74468a55a27c9f4138145f92936df0351410986af",
+        "[12] Picture in My Mind (SX) [Zaia]/jk_Picture_in_my_mind.png": "fc8738946a305ae29e5544b88c79ce816fbeca18420f8c3c78e2b9fa83a6b251",
+        "[12] Picture in My Mind (SX) [Zaia]/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc": "f626b02b996fe267d8c8816b6e7ceb734c1d0bf53011baa7d6dbab6b85635b73",
+        "[12] Picture in My Mind (SX) [Zaia]/Pinkpantheress, Sam Gellaitry - PICTURE IN MY MIND [NIKKO X WINK RMX].ogg": "35dc7ba5bcdfa7e40bfff700131e94e517bad4ee3c4edcfb6d1d33b710e4ec5e",
+        "[12] Picture in My Mind (SX) [Zaia]/lua/default.lua": "4c55de30736374b160b0b266c489a1c6f04812e8ea8c30b212fd8d22799af19a",
+        "[12] Picture in My Mind (SX) [Zaia]/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "[12] Picture in My Mind (SX) [Zaia]/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "[12] Picture in My Mind (SX) [Zaia]/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46",
+        "[12] Picture in My Mind (SX) [Zaia]/lua/_script.lua": "b00109d40a6c2adaf7767cef711d7a463c97dfdc2448ec62e0fba3faf1c0c0f2"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 6865,
+      "duration_seconds": 114.39688873291016,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 53,
+      "source_simfile": "[12] Picture in My Mind (SX) [Zaia]/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc",
+      "archive": "4bcaccc464ec15233ec98eb4340654a6c5bf366636264b6323b67c75706cc3f5.tar.zst",
+      "archive_sha256": "4bcaccc464ec15233ec98eb4340654a6c5bf366636264b6323b67c75706cc3f5",
+      "harness_version": "0.1.53",
+      "source_commit": "ba99d38a7db8aa1a7265e9592889d9e6a08887a7",
+      "source_pending_commit": false,
+      "binary_sha256": "e77e627b9ad31619be80a3e132b1846ed78a8de4849273b755281e28db25e63c",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-rejected-options-v3-full_song_lua.exe",
+        "4bcaccc464ec15233ec98eb4340654a6c5bf366636264b6323b67c75706cc3f5.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 8.654760700184852,
+      "comparisons_passed": 495069,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-053-native-rejected-v3.log",
+      "log_sha256": "c74c1e16a0ef54dead2e2b30b822ebf2f6060a1f1271e98bfed9f88d753a605a",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass132-top-053-native-v1.json",
+      "native_receipt_sha256": "cf8805a548c07703f66bbcc2f68c1b1a91e185009ce43cc3a869593d2021dcb1",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "ba99d38a7db8aa1a7265e9592889d9e6a08887a7",
+    "source_pending_commit": false,
+    "binary_sha256": "7a79a7f55c1822d618d4f7c7e30848dd3f6b13add51745c9768844e4f2430205",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-rejected-options-v3-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.1945106000639498,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-053-native-pass132.log",
+    "log_sha256": "c2084261426fb81db49ab47d7c476b832973d0a086937a524802db7ebc065f4b",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 261 filtered out; finished in 0.83s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

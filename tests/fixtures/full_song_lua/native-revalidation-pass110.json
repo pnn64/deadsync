@@ -1,0 +1,96 @@
+{
+  "pass": 110,
+  "previous_record": "native-revalidation-pass109.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "e645dfdda90cbec49c1f26279c5218f337e91c71",
+  "comparator_sha256": "7300bb972cd5c8b5cc918a9bc5c7f384f0b38d738ec6a48de28013a44990d5e6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "charts": [
+    {
+      "position": 31,
+      "entry": {
+        "title": "[08] And Drugs↑↑",
+        "source_simfile": "[08] And Drugs - (NO CMOD)/and drugs.ssc",
+        "harness_version": "0.1.51",
+        "archive": "b9ce99dda3a745779ad065f03819360a67c2712d75ab9985cccbfc03424ac19d.tar.zst",
+        "sha256": "b9ce99dda3a745779ad065f03819360a67c2712d75ab9985cccbfc03424ac19d",
+        "compressed_bytes": 255421,
+        "aliases": [
+          "52fbe29fb4aabcc390cff8d467dd701307e0cc4f320c52e0c43cd60e0310f48f.tar.zst"
+        ]
+      },
+      "original_archive_retained": "9c2eb069df348266cf485de5b6166e404205d072072350fd9091846e4fd7cd4a.tar.zst",
+      "native_source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+      "native_cli_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+      "native_trace_sha256": "eb88aa0b389afc8ed8aa433216aef6ae9bbd7c2bd02599e1c694391c7096ad0f",
+      "native_receipt_sha256": "9a478e83f404f70c3d71b94dbcbe959beb2eedc49770b6369c070e3fa7d76079",
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "duration_seconds": 127.20000457763672,
+      "update_frames": 7634,
+      "source_simfile_sha256": "f97560d822ff53567e006cc692f7ee8f372a8fa3c4b90d1a7545402bae1382e7",
+      "original_source_unchanged": true,
+      "acceptance": "passed",
+      "comparison_source_commit": "e645dfdda90cbec49c1f26279c5218f337e91c71",
+      "comparisons_passed": 182791
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 31,
+      "source_simfile": "[08] And Drugs - (NO CMOD)/and drugs.ssc",
+      "archive": "b9ce99dda3a745779ad065f03819360a67c2712d75ab9985cccbfc03424ac19d.tar.zst",
+      "archive_sha256": "b9ce99dda3a745779ad065f03819360a67c2712d75ab9985cccbfc03424ac19d",
+      "harness_version": "0.1.51",
+      "source_commit": "e645dfdda90cbec49c1f26279c5218f337e91c71",
+      "binary_sha256": "7300bb972cd5c8b5cc918a9bc5c7f384f0b38d738ec6a48de28013a44990d5e6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\fixed-v2-full_song_lua.exe",
+        "b9ce99dda3a745779ad065f03819360a67c2712d75ab9985cccbfc03424ac19d.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 40.64052759995684,
+      "comparisons_passed": 182791,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass110\\fresh-031-v1.log",
+      "log_sha256": "81e9899115048e88178b728ceb5a36228e294e09d2af36991fa968d46cd6a69e",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass110-top-031-and-drugs-v1.json",
+      "native_receipt_sha256": "9a478e83f404f70c3d71b94dbcbe959beb2eedc49770b6369c070e3fa7d76079",
+      "full_corpus_complete": false
+    }
+  ],
+  "obsolete_archive_result": {
+    "position": 31,
+    "source_simfile": "[08] And Drugs - (NO CMOD)/and drugs.ssc",
+    "archive": "9c2eb069df348266cf485de5b6166e404205d072072350fd9091846e4fd7cd4a.tar.zst",
+    "archive_sha256": "9c2eb069df348266cf485de5b6166e404205d072072350fd9091846e4fd7cd4a",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\fixed-v2-full_song_lua.exe",
+      "9c2eb069df348266cf485de5b6166e404205d072072350fd9091846e4fd7cd4a.tar.zst"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 0.49287449987605214,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\ordered-after-025-v1-031.log",
+    "log_sha256": "203aed08f91763c535e4acadf46ada12da41052ab9f1b2ee33ab981b5ab7a5a5",
+    "result_lines": [
+      "result: FAILED; 0/1 fixtures passed; 0 comparisons passed, 0 failed (0 total); elapsed 0.23s"
+    ],
+    "comparisons_passed": 0,
+    "comparisons_failed": 0
+  },
+  "canonical_positions_passed": [
+    31
+  ],
+  "comparisons_passed": 182791,
+  "next_position": 32,
+  "fix": "Replace obsolete continuous-bpm reference observations with a complete native-timing capture; original chart and Lua bytes are unchanged.",
+  "remaining_scope": "All original sources and historical contexts, explicit Model culling, additional test observations and native framebuffer parity remain open."
+}

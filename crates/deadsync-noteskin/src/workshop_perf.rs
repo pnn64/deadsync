@@ -1,9 +1,7 @@
 //! Workshop manifest parity, including ordering, Unicode and error paths.
 use super::*;
+use crate::resource_perf_support as allocations;
 use std::hint::black_box;
-#[path = "../../../tests/support/perf.rs"]
-#[allow(dead_code)]
-mod allocations;
 
 mod support {
     pub use super::allocations::measure;

@@ -285,7 +285,7 @@ struct LegacyTMeshUniforms {
     uv_offset: UniformLocation,
     uv_tex_shift: UniformLocation,
     texture_mask: UniformLocation,
-    cull_back: UniformLocation,
+    cull_mode: UniformLocation,
 }
 
 pub struct State {
@@ -1931,7 +1931,7 @@ fn draw_legacy_offscreen_pass(
                             instance.uv_tex_shift[1],
                         );
                         gl.uniform_1_f32(Some(&tmesh_uniforms.texture_mask), instance.texture_mask);
-                        gl.uniform_1_f32(Some(&tmesh_uniforms.cull_back), instance.cull_back);
+                        gl.uniform_1_f32(Some(&tmesh_uniforms.cull_mode), instance.cull_mode);
                         for (location, row) in
                             tmesh_uniforms.sphere_rows.iter().zip(instance.sphere_rows)
                         {
@@ -2697,7 +2697,7 @@ pub fn draw(
                                 Some(&tmesh_uniforms.texture_mask),
                                 instance.texture_mask,
                             );
-                            gl.uniform_1_f32(Some(&tmesh_uniforms.cull_back), instance.cull_back);
+                            gl.uniform_1_f32(Some(&tmesh_uniforms.cull_mode), instance.cull_mode);
                             for (location, row) in
                                 tmesh_uniforms.sphere_rows.iter().zip(instance.sphere_rows)
                             {
@@ -3325,7 +3325,7 @@ fn legacy_tmesh_uniforms(
         uv_offset: uniform_location(gl, program, "u_uv_offset")?,
         uv_tex_shift: uniform_location(gl, program, "u_uv_tex_shift")?,
         texture_mask: uniform_location(gl, program, "u_texture_mask")?,
-        cull_back: uniform_location(gl, program, "u_cull_back")?,
+        cull_mode: uniform_location(gl, program, "u_cull_mode")?,
     })
 }
 

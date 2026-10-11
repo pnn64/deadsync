@@ -84,9 +84,43 @@ pub const STANDARD_DIFFICULTY_COUNT: usize = STANDARD_DIFFICULTY_NAMES.len();
 #[inline(always)]
 #[must_use]
 pub fn standard_difficulty_index(difficulty_name: &str) -> Option<usize> {
-    STANDARD_DIFFICULTY_NAMES
-        .iter()
-        .position(|name| difficulty_name.eq_ignore_ascii_case(name))
+    // These fixed names contain only ASCII letters. Folding their case bit
+    // cannot turn punctuation or non-ASCII bytes into a matching letter.
+    match difficulty_name.as_bytes() {
+        [a, b, c, d] => match [a | 0x20, b | 0x20, c | 0x20, d | 0x20] {
+            [b'e', b'a', b's', b'y'] => Some(1),
+            [b'h', b'a', b'r', b'd'] => Some(3),
+            _ => None,
+        },
+        [a, b, c, d, e, f] if matches!(*a, b'm' | b'M') => {
+            ([a | 0x20, b | 0x20, c | 0x20, d | 0x20, e | 0x20, f | 0x20] == *b"medium")
+                .then_some(2)
+        }
+        [a, b, c, d, e, f, g, h] if matches!(*a, b'b' | b'B') => ([
+            a | 0x20,
+            b | 0x20,
+            c | 0x20,
+            d | 0x20,
+            e | 0x20,
+            f | 0x20,
+            g | 0x20,
+            h | 0x20,
+        ] == *b"beginner")
+            .then_some(0),
+        [a, b, c, d, e, f, g, h, i] if matches!(*a, b'c' | b'C') => ([
+            a | 0x20,
+            b | 0x20,
+            c | 0x20,
+            d | 0x20,
+            e | 0x20,
+            f | 0x20,
+            g | 0x20,
+            h | 0x20,
+            i | 0x20,
+        ] == *b"challenge")
+            .then_some(4),
+        _ => None,
+    }
 }
 
 #[inline]
@@ -346,7 +380,7 @@ impl SongData {
         if subtitle.trim().is_empty() {
             title.to_string()
         } else {
-            format!("{title} {subtitle}")
+            [title, " ", subtitle].concat()
         }
     }
 
@@ -385,13 +419,17 @@ impl SongData {
 
     #[must_use]
     pub fn edit_chart_indices_sorted(&self, chart_type: &str) -> Vec<usize> {
+        let mut edits = self
+            .charts
+            .iter()
+            .enumerate()
+            .filter_map(|(index, chart)| is_edit_chart(chart, chart_type).then_some(index));
+        let Some(first) = edits.next() else {
+            return Vec::new();
+        };
         let mut indices = Vec::with_capacity(self.charts.len());
-        indices.extend(
-            self.charts
-                .iter()
-                .enumerate()
-                .filter_map(|(index, chart)| is_edit_chart(chart, chart_type).then_some(index)),
-        );
+        indices.push(first);
+        indices.extend(edits);
         indices.sort_by(|&left, &right| edit_chart_cmp(&self.charts[left], &self.charts[right]));
         indices
     }
@@ -1221,3 +1259,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "metadata_perf.rs"]
+mod metadata_perf;

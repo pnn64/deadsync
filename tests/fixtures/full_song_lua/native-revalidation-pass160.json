@@ -1,0 +1,105 @@
+{
+  "pass": 160,
+  "previous_record": "native-revalidation-pass159.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "cc6bc40b7670a98d58f33fa8cf8aa7209a717202",
+  "comparator_sha256": "66ae4f070823956b2030faffff9e893389dd084cf7f65e1fa0f4c61d2939d52e",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    81
+  ],
+  "next_position": 82,
+  "comparisons_passed": 492633,
+  "charts": [
+    {
+      "position": 81,
+      "entry": {
+        "title": "Accendio",
+        "source_simfile": "ACCENDIO/aCCENDIO.sm",
+        "harness_version": "0.1.58",
+        "archive": "dbfe59eadc5d35ec4c9396c222cc7201c065c3b97964298b7e6b36e6bfb305a6.tar.zst",
+        "sha256": "dbfe59eadc5d35ec4c9396c222cc7201c065c3b97964298b7e6b36e6bfb305a6",
+        "compressed_bytes": 194994,
+        "aliases": [
+          "9d238478b3a441998f728df5bb134c66d87a2b44ed819fcb2c5a88b64dc175fa.tar.zst"
+        ]
+      },
+      "original_archive_retained": "a7533b69615805cdf933c9443cf3a30e5cd1bb1d667a96a448dc163aaeeb63ad.tar.zst",
+      "native_source_commit": "39e8d831d16360fdf251af08da524cf59d1f9166",
+      "native_trace_sha256": "57637c20959cd820783c5fed4b2f63857c5c9b71503562d03675a2d0d319b0d8",
+      "original_source_sha256": {
+        "ACCENDIO/ACCENDIO.ogg": "f43ab84673bba7f5013a72091f869165193356858e9c27b250a9aecc8b595d4d",
+        "ACCENDIO/aCCENDIO.sm": "63eb67e55ba00d752fa6b0de7b93b0b0549517a53d47920be2ec16b0fef2d6e0",
+        "ACCENDIO/aCCENDIO.ssc": "68fb0798270008151c2456ec657aa9fdbbac23b566762b83e3fb1f6bd778a575",
+        "ACCENDIO/banner.png": "dde684f5f5a4886822293f38b34f69f98cbc7d4554e941bba180ef73e8047c79",
+        "ACCENDIO/data.sme": "54e8ee919f60b9bb56d02c24a7bf1f9e547cf4444239a0f0d064fa1155f75046",
+        "ACCENDIO/snapmed.png": "4583a64fe314b0b97bb2f80783f31ebb04c0119da2f1948163c0f408a95c6c51",
+        "ACCENDIO/lua/default.lua": "8a89fe7559a5b755efdda07bbc971a77e60f2f979e8be1b9563e7df490eca72b",
+        "ACCENDIO/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "ACCENDIO/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "ACCENDIO/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46",
+        "ACCENDIO/lua/_script.lua": "efbf0f8e6f82799ced27e4ad7cb89d2f0dbf4eb0fb7f7d95cf799959cea157cd"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 6829,
+      "duration_seconds": 113.78572082519533,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 81,
+      "source_simfile": "ACCENDIO/aCCENDIO.sm",
+      "archive": "dbfe59eadc5d35ec4c9396c222cc7201c065c3b97964298b7e6b36e6bfb305a6.tar.zst",
+      "archive_sha256": "dbfe59eadc5d35ec4c9396c222cc7201c065c3b97964298b7e6b36e6bfb305a6",
+      "harness_version": "0.1.58",
+      "source_commit": "cc6bc40b7670a98d58f33fa8cf8aa7209a717202",
+      "source_pending_commit": false,
+      "binary_sha256": "66ae4f070823956b2030faffff9e893389dd084cf7f65e1fa0f4c61d2939d52e",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\current-options-v3-full_song_lua.exe",
+        "dbfe59eadc5d35ec4c9396c222cc7201c065c3b97964298b7e6b36e6bfb305a6.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 11.550799299962819,
+      "comparisons_passed": 492633,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-081-current-native-v1.log",
+      "log_sha256": "3b4271cb91a3b38bc1c2cd9cbb49028d05c74ed6acf085445a2593c3f814e33f",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass160-top-081-current-native-v1.json",
+      "native_receipt_sha256": "b0de3ec2a4874c3d6189b214bc0b9a6c4ca4d8b5609f70cb72edbf28db211182",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "cc6bc40b7670a98d58f33fa8cf8aa7209a717202",
+    "source_pending_commit": false,
+    "binary_sha256": "760defe7289ffa92f49ffe64e993b4e32bb51b331a665d8cd7c3d94b6e94408a",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\current-options-v3-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.2593294000253081,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-081-native-pass160.log",
+    "log_sha256": "a5a7cbdd2438cbb8fa43fa1b7718ab393b2fd76436054e33d75ad9c5ff416438",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 269 filtered out; finished in 0.88s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

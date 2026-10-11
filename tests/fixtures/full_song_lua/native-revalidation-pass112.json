@@ -1,0 +1,77 @@
+{
+  "pass": 112,
+  "previous_record": "native-revalidation-pass111.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "e1557ce33566e06ce8bbefa1830d69571c39031e",
+  "comparator_sha256": "c2c5582e4bdc2812eca0e8bd55b847fec23902d8d055ca7d24da9c66985c8a84",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "charts": [
+    {
+      "position": 33,
+      "entry": {
+        "title": "[3878] [09] LALA (Hard)",
+        "source_simfile": "[09] LALA (SH) [Exschwasion]/lala.ssc",
+        "harness_version": "0.1.51",
+        "archive": "35b7f1aec8a7abfa64193d365a8f235daf9862574ab6f1c5234a8035d77f9ca0.tar.zst",
+        "sha256": "35b7f1aec8a7abfa64193d365a8f235daf9862574ab6f1c5234a8035d77f9ca0",
+        "compressed_bytes": 241730,
+        "aliases": [
+          "b4d69b7e820d75854b5b78923a5c64e36b1e6b6e19ffda9a65f4f7615b468515.tar.zst"
+        ]
+      },
+      "original_archive_retained": "13c1e34ac23ac8c1b9f1a216f5085359db3805d4c61f5d06953e09079fa896f8.tar.zst",
+      "native_source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+      "native_cli_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+      "native_trace_sha256": "8651f789265b00564ced9c7bf814f0551545df308d80ea44908b67e9ddb8bb24",
+      "native_receipt_sha256": "cbc4e4e5a187859734048abee5412de41eb584b115e77d134be52caa8a192d16",
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "duration_seconds": 138.46153259277344,
+      "update_frames": 8309,
+      "source_simfile_sha256": "b7b6868b828aaddf3836c19fea0cc8e3c24c49067b0c63c197e26cae32745470",
+      "original_source_unchanged": true,
+      "acceptance": "passed",
+      "comparison_source_commit": "e1557ce33566e06ce8bbefa1830d69571c39031e",
+      "comparisons_passed": 203003
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 33,
+      "source_simfile": "[09] LALA (SH) [Exschwasion]/lala.ssc",
+      "archive": "35b7f1aec8a7abfa64193d365a8f235daf9862574ab6f1c5234a8035d77f9ca0.tar.zst",
+      "archive_sha256": "35b7f1aec8a7abfa64193d365a8f235daf9862574ab6f1c5234a8035d77f9ca0",
+      "harness_version": "0.1.51",
+      "source_commit": "e1557ce33566e06ce8bbefa1830d69571c39031e",
+      "binary_sha256": "c2c5582e4bdc2812eca0e8bd55b847fec23902d8d055ca7d24da9c66985c8a84",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\final-v1-full_song_lua.exe",
+        "35b7f1aec8a7abfa64193d365a8f235daf9862574ab6f1c5234a8035d77f9ca0.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 25.71368099981919,
+      "comparisons_passed": 203003,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass112\\fresh-033-v1.log",
+      "log_sha256": "c6920b089242ba82aa0ee971787bfc63e4ba8caf3b3cb9ee35dccef31a5dd0bf",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass112-top-033-lala-v1.json",
+      "native_receipt_sha256": "cbc4e4e5a187859734048abee5412de41eb584b115e77d134be52caa8a192d16",
+      "full_corpus_complete": false
+    }
+  ],
+  "canonical_positions_passed": [
+    33
+  ],
+  "comparisons_passed": 203003,
+  "next_position": 34,
+  "fix": "Replace obsolete reference observations with a complete native-timing capture; retain original chart and Lua bytes.",
+  "remaining_scope": "All original sources and historical contexts, explicit Model culling, additional test observations and native framebuffer parity remain open."
+}

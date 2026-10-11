@@ -18,7 +18,7 @@ layout(location = 15) in vec4 i_additive_uv;
 layout(location = 0) out vec2 v_uv;
 layout(location = 1) out vec4 v_color;
 layout(location = 2) out float v_texture_mask;
-layout(location = 3) out float v_cull_back;
+layout(location = 3) out float v_cull_mode;
 layout(location = 4) out vec2 v_additive_uv;
 layout(location = 5) out float v_additive;
 layout(push_constant) uniform Push { mat4 proj; } pc;
@@ -48,6 +48,6 @@ void main() {
     v_additive_uv = secondary * i_additive_uv.xy + i_additive_uv.zw;
     v_color = a_color * i_tint;
     v_texture_mask = i_flags.z;
-    v_cull_back = i_flags.w;
+    v_cull_mode = i_flags.w;
     v_additive = float((mode & 4) != 0);
 }

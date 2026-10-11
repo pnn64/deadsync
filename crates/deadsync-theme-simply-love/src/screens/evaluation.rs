@@ -803,7 +803,7 @@ fn build_eval_density_graph_mesh(
         Some(0.5),
         0.5,
     );
-    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+    (!verts.is_empty()).then(|| Arc::from(verts))
 }
 
 fn build_eval_scatter_mesh(
@@ -825,7 +825,7 @@ fn build_eval_scatter_mesh(
         scale,
         palette,
     );
-    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+    (!verts.is_empty()).then(|| Arc::from(verts))
 }
 
 fn build_eval_scatter_bg_mesh(
@@ -849,7 +849,7 @@ fn build_eval_scatter_bg_mesh(
         scale,
         palette,
     );
-    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+    (!verts.is_empty()).then(|| Arc::from(verts))
 }
 
 fn build_eval_timing_hist_mesh(
@@ -873,7 +873,7 @@ fn build_eval_timing_hist_mesh(
         smooth,
         palette,
     );
-    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+    (!verts.is_empty()).then(|| Arc::from(verts))
 }
 
 fn course_graph_stripe_actors(
@@ -2890,7 +2890,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                         eval_graphs::ScatterPlotScale::Itg,
                         judgment_palette,
                     );
-                    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                    (!verts.is_empty()).then(|| Arc::from(verts))
                 };
                 scatter_bg_mesh_itg[player_idx] = build_eval_scatter_bg_mesh(
                     si,
@@ -2915,7 +2915,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                         eval_graphs::ScatterPlotScale::Ex,
                         judgment_palette,
                     );
-                    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                    (!verts.is_empty()).then(|| Arc::from(verts))
                 };
                 scatter_bg_mesh_ex[player_idx] = build_eval_scatter_bg_mesh(
                     si,
@@ -2940,7 +2940,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                         eval_graphs::ScatterPlotScale::HardEx,
                         judgment_palette,
                     );
-                    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                    (!verts.is_empty()).then(|| Arc::from(verts))
                 };
                 scatter_bg_mesh_hard_ex[player_idx] = build_eval_scatter_bg_mesh(
                     si,
@@ -2964,7 +2964,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                     eval_graphs::ScatterPlotScale::Arrow,
                     judgment_palette,
                 );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                (!verts.is_empty()).then(|| Arc::from(verts))
             };
 
             scatter_mesh_quant[player_idx] = {
@@ -2981,7 +2981,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                     eval_graphs::ScatterPlotScale::Quant,
                     judgment_palette,
                 );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                (!verts.is_empty()).then(|| Arc::from(verts))
             };
 
             scatter_mesh_foot_parity[player_idx] = {
@@ -2998,7 +2998,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                     eval_graphs::ScatterPlotScale::FootParity,
                     judgment_palette,
                 );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                (!verts.is_empty()).then(|| Arc::from(verts))
             };
 
             timing_hist_mesh[player_idx] = {
@@ -3017,7 +3017,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                     policy.smooth_histogram,
                     judgment_palette,
                 );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                (!verts.is_empty()).then(|| Arc::from(verts))
             };
 
             timing_hist_mesh_ex[player_idx] = {
@@ -3036,7 +3036,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                     policy.smooth_histogram,
                     judgment_palette,
                 );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                (!verts.is_empty()).then(|| Arc::from(verts))
             };
 
             timing_hist_mesh_hard_ex[player_idx] = {
@@ -3055,7 +3055,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
                     policy.smooth_histogram,
                     judgment_palette,
                 );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                (!verts.is_empty()).then(|| Arc::from(verts))
             };
         }
 

@@ -171,3 +171,27 @@ mod tests {
         assert!(!(manifest.texture_needs_repeat_sampler)("logo.png"));
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/menu_buffers_support.rs"]
+mod menu_buffers_perf_support;
+
+#[cfg(test)]
+#[path = "../../../tests/support/paired_bench.rs"]
+mod paired_bench;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/select_data_support.rs"]
+mod select_data_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/data_paths_support.rs"]
+mod data_paths_perf_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/preview_dataflows_support.rs"]
+mod preview_dataflows_support;

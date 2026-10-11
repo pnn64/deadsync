@@ -94,6 +94,10 @@ mod runtime_regression_tests {
             0
         }
 
+        fn accel_mask_bits(&self) -> u8 {
+            0
+        }
+
         fn visual_mask_bits(&self) -> u16 {
             0
         }
@@ -1277,6 +1281,76 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn attack_flags_use_gameplay_wall_delta() {
+        let mut state = regression_state();
+        state.mods.attacks.mask_windows[0].push(
+            build_song_lua_constant_attack_mask_window(
+                0.0,
+                1000.0,
+                "*1.25 75% NoAttacks,*0.5 -50% RandomAttacks",
+            )
+            .expect("native attack flags"),
+        );
+        // Native PlayerOptions Current probes at 0, .25, .5 and .75 seconds.
+        // Keep music time fixed to exercise the actual gameplay wall-delta path.
+        for (delta, no_attack, rand_attack) in [
+            (0.0, 0.0, 0.0),
+            (0.25, 0.3125, -0.125),
+            (0.25, 0.625, -0.25),
+            (0.25, 0.75, -0.375),
+        ] {
+            state.run_pre_notes_phase(0, 0, 0, delta, 1.0, 0, "unused");
+            let flags = state.mods.attacks.attack_flags[0];
+            assert!((flags.no_attack.expect("Current NoAttack") - no_attack).abs() < 0.0001);
+            assert!((flags.rand_attack.expect("Current RandAttack") - rand_attack).abs() < 0.0001);
+        }
+    }
+
+    #[test]
+    fn attack_flags_approach_from_profile_base() {
+        let mut state = regression_state();
+        state.profiles_runtime.profiles[0].attack_mode = GameplayAttackMode::Off;
+        state.mods.attacks.mask_windows[0].push(
+            build_song_lua_constant_attack_mask_window(0.0, 1000.0, "*0.5 no NoAttacks")
+                .expect("clear profile NoAttack gradually"),
+        );
+        state.run_pre_notes_phase(0, 0, 0, 0.25, 1.0, 0, "unused");
+        assert_eq!(state.mods.attacks.attack_flags[0].no_attack, Some(0.875));
+    }
+
+    #[test]
+    fn expand_phase_uses_gameplay_wall_delta() {
+        let mut state = regression_state();
+        state.mods.attacks.mask_windows[0].push(
+            build_song_lua_constant_attack_mask_window(0.0, 1000.0, "*9999 50% ExpandPeriod")
+                .expect("native period modifier"),
+        );
+        // Expected phases come from unchanged native ArrowEffects::Update.
+        // Song time remains fixed while wall delta crosses multiple wraps.
+        for (delta, expected) in [
+            (0_f32, 0_f32),
+            (0.0166666675_f32, 0.0166666675_f32),
+            (0.25_f32, 0.266666681_f32),
+            (1_f32, 1.26666665_f32),
+            (7_f32, 4.07787609_f32),
+            (2_f32, 1.88908577_f32),
+            (0.0500000007_f32, 1.93908572_f32),
+            (0.0166666675_f32, 1.95575237_f32),
+            (0.125_f32, 2.08075237_f32),
+            (8_f32, 1.70317173_f32),
+            (0.25_f32, 1.95317173_f32),
+            (0_f32, 1.95317173_f32),
+        ] {
+            state.run_pre_notes_phase(0, 0, 0, delta, 1.0, 0, "unused");
+            assert!(
+                (state.mods.expand_seconds[0] - expected).abs() < 0.00001,
+                "delta={delta}, actual={}",
+                state.mods.expand_seconds[0]
+            );
+        }
+    }
+
+    #[test]
     fn regression_state_passes_hot_state_audit() {
         let state = regression_state();
         assert_valid_hot_state_for_tests(
@@ -1932,6 +2006,80 @@ mod runtime_regression_tests {
             })
         );
         assert_eq!(state.players_runtime.players[0].judgment_counts[miss_ix], 1);
+    }
+
+    #[test]
+    fn fail_off_keeps_score() {
+        let mut state = regression_state();
+        state.setup.config.default_fail_type = GameplayFailType::Immediate;
+        state.mods.attacks.mask_windows[0] = vec![
+            build_course_modifier_mask_window("failoff").expect("fail mode window")
+        ];
+        state.refresh_player_attacks(0, 0.0, 0.0);
+        assert_eq!(state.players_runtime.players[0].fail_type, GameplayFailType::Off);
+        let rows = [0, 48];
+        state.chart_runtime.notes = vec![
+            note_with_judgment(0, rows[0], NoteType::Tap, JudgeGrade::Miss, 0.0),
+            note_with_judgment(0, rows[1], NoteType::Tap, JudgeGrade::Fantastic, 4.0),
+        ];
+        state.chart_runtime.note_time_cache_ns = vec![
+            song_time_ns_from_seconds(1.0), song_time_ns_from_seconds(1.5),
+        ];
+        state.chart_runtime.row_entries = rows.iter().enumerate().map(|(index, &row)| {
+            test_row_entry_with_times(&state.chart_runtime.notes,
+                &state.chart_runtime.note_time_cache_ns, row, vec![index])
+        }).collect();
+        state.players_runtime.players[0].life = 0.001;
+        state.finalize_row_judgment(0, rows[0], 0, false);
+        assert_eq!(state.players_runtime.players[0].life, 0.0);
+        assert!(!state.player_score_is_blocked(0));
+        assert!(state.finish_gameplay_if_ready(false).is_none());
+        state.finalize_row_judgment(0, rows[1], 1, false);
+        let player = &state.players_runtime.players[0];
+        assert_eq!(player.scoring_counts.iter().sum::<u32>(), 2);
+        assert_eq!(player.fail_time, None);
+        assert!(player.failed_ex_score_inputs.is_none());
+        assert!(state.force_fail_player(0));
+        assert!(state.player_score_is_blocked(0));
+    }
+
+    #[test]
+    fn fail_modes_finish_song() {
+        for (modifiers, should_fail) in [("failoff", false), ("failatend", true)] {
+            let mut state = regression_state();
+            state.mods.attacks.mask_windows[0] = vec![
+                build_course_modifier_mask_window(modifiers).expect("fail mode window")
+            ];
+            state.refresh_player_attacks(0, 0.0, 0.0);
+            state.players_runtime.players[0].life = 0.0;
+            assert!(!state.player_is_dead(0));
+            assert!(state.finish_gameplay_if_ready(false).is_none());
+            state.clock.song_position.current_music_time_ns = state.music_end_time_ns();
+            assert!(matches!(state.finish_gameplay_if_ready(false),
+                Some(GameplayAction::Navigate(GameplayExit::Complete))));
+            assert_eq!(state.players_runtime.players[0].is_failing, should_fail);
+            assert_eq!(state.individual_song_outcome(0).is_failing, should_fail);
+        }
+    }
+
+    #[test]
+    fn fail_exit_needs_all() {
+        let mut state = regression_state();
+        state.setup.num_players = 2;
+        for player in &mut state.players_runtime.players {
+            player.life = 0.0;
+            player.is_failing = true;
+            player.fail_type = GameplayFailType::Immediate;
+        }
+        for mode in [GameplayFailType::Off, GameplayFailType::EndOfSong,
+            GameplayFailType::ImmediateContinue]
+        {
+            state.players_runtime.players[1].fail_type = mode;
+            assert!(state.finish_gameplay_if_ready(false).is_none());
+        }
+        state.players_runtime.players[1].fail_type = GameplayFailType::Immediate;
+        assert!(matches!(state.finish_gameplay_if_ready(false),
+            Some(GameplayAction::Navigate(GameplayExit::Complete))));
     }
 
     #[test]
@@ -4921,7 +5069,7 @@ mod runtime_regression_tests {
         );
 
         state.clock.visible_timing.current_music_time[0] = 2.0;
-        refresh_active_attack_masks(&mut state, 0.0);
+        refresh_active_attack_masks(&mut state, 2.0);
 
         let visual = effective_visual_effects_for_player(&state, 0);
         assert!((visual.confusion_offset - 3.14).abs() <= 0.000_1);
@@ -5064,13 +5212,13 @@ mod runtime_regression_tests {
         );
 
         state.clock.visible_timing.current_music_time[0] = 0.6;
-        refresh_active_attack_masks(&mut state, 0.0);
+        refresh_active_attack_masks(&mut state, 0.6);
         let visual = effective_visual_effects_for_player(&state, 0);
         assert!((visual.flip - 1.0).abs() <= 0.000_1);
         assert!(visual.invert.abs() <= 0.000_1);
 
         state.clock.visible_timing.current_music_time[0] = 1.1;
-        refresh_active_attack_masks(&mut state, 0.0);
+        refresh_active_attack_masks(&mut state, 0.5);
         let reset = effective_visual_effects_for_player(&state, 0);
         assert!(reset.flip.abs() <= 0.000_1);
         assert!(reset.invert.abs() <= 0.000_1);

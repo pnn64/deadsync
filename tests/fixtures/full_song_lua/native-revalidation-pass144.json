@@ -1,0 +1,106 @@
+{
+  "pass": 144,
+  "previous_record": "native-revalidation-pass143.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+  "comparator_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    65
+  ],
+  "next_position": 66,
+  "comparisons_passed": 285701,
+  "charts": [
+    {
+      "position": 65,
+      "entry": {
+        "title": "[FULL SONG] Stuck in the Abyss",
+        "source_simfile": "[FULL SONG] Stuck in the Abyss [DDDAAA]/stuckintheabyss.ssc",
+        "harness_version": "0.1.54",
+        "archive": "3bda43053994422dd86bd0b17f53da5a197c39e35c16b028dc8330292190018f.tar.zst",
+        "sha256": "3bda43053994422dd86bd0b17f53da5a197c39e35c16b028dc8330292190018f",
+        "compressed_bytes": 1239297,
+        "aliases": [
+          "b72c93dfd0376212bc5499ecb1a9ac51f0f727ce3a2cb36ef69479a333381826.tar.zst"
+        ]
+      },
+      "original_archive_retained": "5b717410c59dc966a671f037adabe5f78d6c9c21ce8edbda72ed12bccefe42cd.tar.zst",
+      "native_source_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+      "native_trace_sha256": "10d251fd8c25a848b4d6374bbd0ddca5f40f8913dadd15bdf0a6b61a0c1112ed",
+      "original_source_sha256": {
+        "[FULL SONG] Stuck in the Abyss [DDDAAA]/CDTitleDDDAAA.png": "e0e81cc9b513d0513044be06168b97af357b337f8765f2c4808e8dd11b8ec8b5",
+        "[FULL SONG] Stuck in the Abyss [DDDAAA]/stuckintheabyss-bg.png": "199ae6e261be33694e7f13313cc0aeda32ba06baddc682bf64ddcaf61f8187c1",
+        "[FULL SONG] Stuck in the Abyss [DDDAAA]/stuckintheabyss-bn.png": "d37a5b6c8d1927a6de9ee8dc48d682f44f172410ec1dc1dc8eb2e58424c58f3a",
+        "[FULL SONG] Stuck in the Abyss [DDDAAA]/stuckintheabyss-jacket.png": "681fecb793b4b578116c76ae86e8954ea2c92ad3db8550065088be65fc878770",
+        "[FULL SONG] Stuck in the Abyss [DDDAAA]/stuckintheabyss.avi": "daff70bef1e7d74cee00d5d42f4030e3212e4fd2891f912702269f78189d31a1",
+        "[FULL SONG] Stuck in the Abyss [DDDAAA]/stuckintheabyss.ogg": "f667a4a316981aeb46f8aebe00bdd5b9fbcd16c63207d1443f9c3d5371fcfc52",
+        "[FULL SONG] Stuck in the Abyss [DDDAAA]/stuckintheabyss.ssc": "41f5a3ca596a54335e2ed6f42e1d1a46ec6ef16a919d074cc20a710835f992ec",
+        "[FULL SONG] Stuck in the Abyss [DDDAAA]/lua/default.lua": "fb3b9ef4876d0507844736e108e28f950b4fc4b08d7d8b9e108750d0255d33e2",
+        "[FULL SONG] Stuck in the Abyss [DDDAAA]/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "[FULL SONG] Stuck in the Abyss [DDDAAA]/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "[FULL SONG] Stuck in the Abyss [DDDAAA]/lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7",
+        "[FULL SONG] Stuck in the Abyss [DDDAAA]/lua/sonnyboy/sonny.png": "116d80202ad1438ec9f92e9ce06b7441dc46713d9e24a2b303060aa5c34fafe4"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 11905,
+      "duration_seconds": 198.3999938964844,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 65,
+      "source_simfile": "[FULL SONG] Stuck in the Abyss [DDDAAA]/stuckintheabyss.ssc",
+      "archive": "3bda43053994422dd86bd0b17f53da5a197c39e35c16b028dc8330292190018f.tar.zst",
+      "archive_sha256": "3bda43053994422dd86bd0b17f53da5a197c39e35c16b028dc8330292190018f",
+      "harness_version": "0.1.54",
+      "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+      "source_pending_commit": false,
+      "binary_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-full_song_lua.exe",
+        "3bda43053994422dd86bd0b17f53da5a197c39e35c16b028dc8330292190018f.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 19.32117629982531,
+      "comparisons_passed": 285701,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-065-native-column-xy-v6.log",
+      "log_sha256": "ad8455b598932994519f5ec2390943a20a0d08310171e244371ff33798c48ba2",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass144-top-065-native-v3.json",
+      "native_receipt_sha256": "0098ff4dd8f723c4cb814df1ac028db7170b6269339ebde02838d52347eeabce",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+    "source_pending_commit": false,
+    "binary_sha256": "9f550263a9682a2386ebb04ff72a66926eca035a0e4f8e18e2def03b2ca1baa7",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.8515739999711514,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-065-native-pass144.log",
+    "log_sha256": "dde1d22cedc87b11102ed99a48499532fec3da7013a2c58110adcce579648f57",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 262 filtered out; finished in 0.48s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

@@ -1,0 +1,121 @@
+{
+  "problem": "The handwritten hidden-signal fixture registers an ActorFrame-only update function on a plain Actor, which the actual native Lua binding rejects.",
+  "change": "Use ActorFrame for the updater; retain the hidden signal Actor, messages, tween values and timing assertions.",
+  "fixture": "tests/fixtures/song-lua/signal-tween.lua",
+  "before_input_sha256": "d28980432cfe4af64c4c44dea8e8c304583f2af3b6a099822bb498cc55ec8a5f",
+  "after_input_sha256": "8e1af52a31632ee9511abb287fcff0441b4c42f0fd6c7a2a9f034dcba316ba35",
+  "native_request": "actor-update-binding.json",
+  "native_request_sha256": "ac22c91c1f74904ddcdb6544afc388cde129646b61f07d0c3f10128e5aa08514",
+  "native_result_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+  "native_control_source_commit": "cc0ea0c0ab70e962785eff8681a6867a3f8689ee",
+  "native_control_executable_sha256": "01d13b917d06ae4f3bdf337469c5ee971f9583c6215b5f32edd069e25eaac4ec",
+  "semantic_host_used": false,
+  "assertions": [
+    "Actual Actor has no SetUpdateFunction; calling it fails.",
+    "ActorFrameTexture inherits the registered ActorFrame update function.",
+    "A function and nil both return the same native actor as specified by COMMON_RETURN_SELF."
+  ],
+  "reference_sources": {
+    "Actor.cpp": {
+      "workspace_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "native_source_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150"
+    },
+    "ActorFrame.cpp": {
+      "workspace_sha256": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+      "native_source_sha256": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac"
+    },
+    "ActorFrameTexture.cpp": {
+      "workspace_sha256": "38d918bd700777bb0a4ce3978c084fca2764e5d6c11a070fd2f9f9c5fc2b6893",
+      "native_source_sha256": "38d918bd700777bb0a4ce3978c084fca2764e5d6c11a070fd2f9f9c5fc2b6893"
+    }
+  },
+  "reference_lines": {
+    "ActorFrame.cpp": [
+      [
+        654,
+        669
+      ],
+      [
+        744,
+        752
+      ]
+    ]
+  },
+  "native_result": {
+    "allocations": [],
+    "diagnostics": [],
+    "provenance": {
+      "execution": "embedded_native_sources",
+      "git_dirty": "false",
+      "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+    },
+    "script_errors": []
+  },
+  "limits": [
+    "This control verifies native Lua method ownership. The existing runtime regression separately checks hidden signal tween values; no framebuffer parity claim."
+  ],
+  "probe_fault": "Independent target samples retained the previous frame clock, so the runtime correctly approached the older callback target instead of evaluating the requested seek position.",
+  "probe_change": "Reset window clocks before each independent target probe; preserve all values and timing assertions. Real chronological playback retains its clocks.",
+  "corrected_probes": [
+    "hidden_actor_tweens_drive_modifiers_without_probe_state",
+    "motion_suboptions_survive_lua_writes_and_reset",
+    "lane_stealth_survives_lua_writes_and_fresh_options"
+  ],
+  "update_order_sources": {
+    "GameLoop.cpp": [280, 282],
+    "GameState.cpp": [1152],
+    "PlayerState.cpp": [58, 99]
+  },
+  "negative_control": "The original production replay implementation passes the corrected fixture and probes. The proposed lazy replay change was discarded; production code is unchanged.",
+  "native_tween_shape": {
+    "request": "signal-tween-shape.json",
+    "request_sha256": "d23cd1210f28ad001193dcdb0be546e686a4629b17222cd6e699d07846571e2a",
+    "result_sha256": "a9ced6edea9def7c60bb5926328e615c86877861b665912267ac5141b3ae60d5",
+    "execution": "actual native Actor::UpdateTweening, no semantic_host.lua",
+    "sampled_actor": "empty ActorFrame inherits Actor tween behavior and has no drawable children",
+    "samples": [
+      {
+        "seconds": 0.0,
+        "x": 0.0,
+        "drawn": false
+      },
+      {
+        "seconds": 0.5,
+        "x": 0.0,
+        "drawn": false
+      },
+      {
+        "seconds": 1.0,
+        "x": 0.0,
+        "drawn": false
+      },
+      {
+        "seconds": 1.25,
+        "x": 0.25,
+        "drawn": false
+      },
+      {
+        "seconds": 1.5,
+        "x": 0.3333333432674408,
+        "drawn": false
+      },
+      {
+        "seconds": 1.75,
+        "x": 0.3333333432674408,
+        "drawn": false
+      },
+      {
+        "seconds": 2.0,
+        "x": 0.5833333730697632,
+        "drawn": false
+      },
+      {
+        "seconds": 2.25,
+        "x": 0.6666666865348816,
+        "drawn": false
+      }
+    ],
+    "limits": "The tween starts at a fixed one-second boundary; this control does not establish dynamic audio/song-position clock parity."
+  }
+}

@@ -9488,10 +9488,6 @@ impl App {
                         return commands;
                     }
                 };
-                let gameplay_charts = [
-                    Arc::new(gameplay_song[0].clone()),
-                    Arc::new(gameplay_song[1].clone()),
-                ];
                 if let Some(plan) = cabinet_light_plan.as_ref() {
                     let (key, events) = cabinet_light_chart_from_loaded(
                         song_arc.as_ref(),
@@ -9502,6 +9498,7 @@ impl App {
                     );
                     self.gameplay_lights.set_cabinet_chart(key, events);
                 }
+                let gameplay_charts = crate::gameplay_entry::take_player_charts(gameplay_song);
                 let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
 
                 if play_style.is_versus() {
@@ -9911,10 +9908,6 @@ impl App {
                             }
                         }
                     };
-                    let gameplay_charts = [
-                        Arc::new(gameplay_song[0].clone()),
-                        Arc::new(gameplay_song[1].clone()),
-                    ];
                     if let Some(plan) = cabinet_light_plan.as_ref() {
                         let (key, events) = cabinet_light_chart_from_loaded(
                             song_arc.as_ref(),
@@ -9927,7 +9920,7 @@ impl App {
                     } else {
                         self.gameplay_lights.clear();
                     }
-                    gameplay_charts
+                    crate::gameplay_entry::take_player_charts(gameplay_song)
                 };
                 let payload_ms = preloaded_payload_ms
                     .unwrap_or_else(|| payload_started.elapsed().as_secs_f64() * 1000.0);

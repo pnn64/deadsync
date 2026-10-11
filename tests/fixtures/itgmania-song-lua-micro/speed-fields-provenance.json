@@ -1,0 +1,120 @@
+{
+  "problem": "Raw native speed methods stored unrelated Lua keys instead of the shared X/C/M and spacing fields",
+  "change": "Read and write the actual shared fields, retain independent raw-field approach speeds and recompute the playback mode from spacing and MaxScrollBPM",
+  "source_parent": "068b2afc0573543f337e0968cf495ea9f3338017",
+  "reference_file": "itgmania/src/PlayerOptions.cpp",
+  "reference_sha256": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+  "reference_lines": {
+    "raw_float_methods": [
+      2165,
+      2168
+    ],
+    "alias_methods": [
+      2526,
+      2607
+    ]
+  },
+  "native_capture": {
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass182-native-speed-fields-v1\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "e67664df2727ca7c755aebd8910e862a668b094149092b3b54df219378fa3600",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "capture_exit_code": 0,
+    "binary_sha256": "9b7ca8237071cb6989345ea9e21c1b95d6adcca036b2b41473a6d81b484dbe8e",
+    "control_sha256": "551f554203a9af2896f4ea06333f52ef1f32792a15eb67bc09d01a5f7bec2da9",
+    "update_frames": 241,
+    "source_commit": "72f8c2504f65a7cbc8038c924ee84da1cf93ab40",
+    "source_pending_commit": false,
+    "capture_complete": true,
+    "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass182-native-speed-fields-v1\\archives\\6f35f4f6fb560250fde2d2917c880a8f32b267b7552a9d2b906f9b4d45699176.tar.zst",
+    "archive_sha256": "6f35f4f6fb560250fde2d2917c880a8f32b267b7552a9d2b906f9b4d45699176",
+    "archive_entry": {
+      "title": "Native speed-fields control",
+      "source_simfile": "control/control.ssc",
+      "harness_version": "0.1.60",
+      "archive": "6f35f4f6fb560250fde2d2917c880a8f32b267b7552a9d2b906f9b4d45699176.tar.zst",
+      "sha256": "6f35f4f6fb560250fde2d2917c880a8f32b267b7552a9d2b906f9b4d45699176",
+      "compressed_bytes": 12939
+    }
+  },
+  "before_control": {
+    "exit_code": 1,
+    "comparisons_passed": 0,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 1.2723793000914156,
+    "archive_sha256": "6f35f4f6fb560250fde2d2917c880a8f32b267b7552a9d2b906f9b4d45699176",
+    "binary_sha256": "7e9f7482ce30ee62af5dc457c1fbdbe80d665abb0c222c27d4bfd472bf00ff53",
+    "source_commit": "068b2afc0573543f337e0968cf495ea9f3338017",
+    "source_pending_commit": false,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass161\\native-speed-fields-before-v1.log",
+    "log_sha256": "ca3fa5d7a790bd3dc50bab239f3e23cd79342ebed148e10f4305946ab9270983",
+    "control_complete": true,
+    "current_worktree_used": false
+  },
+  "native_and_deadsync_execute_identical_getter_assertions": true,
+  "production_regression": "native_speed_fields_drive_playback",
+  "production_targets": {
+    "0.0": "XMod(4)",
+    "1.1": "XMod(-0.5)",
+    "2.1": "CMod(480)",
+    "3.1": "XMod(1)"
+  },
+  "runtime_tests": {
+    "source_commit": "068b2afc0573543f337e0968cf495ea9f3338017",
+    "source_pending_commit": true,
+    "binary_sha256": "8d4fabe977360f8f84e68b871df5de0f68ea0fbd7e7773168de8f1eec9bb3807",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-speed-fields-v1-song_lua_itgmania_semantic_parity.exe",
+      "runtime_modifiers",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 101,
+    "elapsed_seconds": 28.07135450001806,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\native-speed-fields-regressions-v1.log",
+    "log_sha256": "25d46bdf5c756dfeaee4a66a02c48b738c06ec2c081aff1f3098440b01ee1b45",
+    "result_lines": [
+      "test result: FAILED. 36 passed; 3 failed; 2 ignored; 0 measured; 233 filtered out; finished in 26.37s"
+    ]
+  },
+  "option_tests": {
+    "source_commit": "068b2afc0573543f337e0968cf495ea9f3338017",
+    "source_pending_commit": true,
+    "binary_sha256": "85bf89b1c60e12ed7ea01c8b7f32dbf0580a7acf75e36ab5664064a4776c56d3",
+    "binary_path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass161\\native-speed-fields-lib-v1.exe",
+    "exit_code": 0,
+    "elapsed_seconds": 1.720643600448966,
+    "log_sha256": "96a8591022b7500ca6b8275ea5b09fb3d9ccad813a5a43233dc31b9990c339bb",
+    "result_lines": [
+      "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 490 filtered out; finished in 0.10s"
+    ]
+  },
+  "original_archive_result": {
+    "position": 90,
+    "source_simfile": "Among Us In Real Life - Single/Official Among Us In Real Life Official Simulation File - Rebecca Zamolo Shorts.ssc",
+    "archive": "ab5cd932442e83a2247a5cd98223d3ab903799f8727f5809b5b26446e3426115.tar.zst",
+    "archive_sha256": "ab5cd932442e83a2247a5cd98223d3ab903799f8727f5809b5b26446e3426115",
+    "harness_version": "0.1.60",
+    "source_commit": "068b2afc0573543f337e0968cf495ea9f3338017",
+    "source_pending_commit": true,
+    "binary_sha256": "a4d7776d79d1bb1a4d79a439f0aeb2ae1aa09335c4dccfce2d455569d5f7cb3f",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-speed-fields-v1-full_song_lua.exe",
+      "ab5cd932442e83a2247a5cd98223d3ab903799f8727f5809b5b26446e3426115.tar.zst"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 29.534765700343996,
+    "comparisons_passed": 207745,
+    "comparisons_failed": 82,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-090-speed-fields-v1.log",
+    "log_sha256": "5fd808f69bddeefabcc2543c803f7001d608e18011bc4b6ef5b957224d191c36",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass181-top-090-lua-unwind-v1.json",
+    "native_receipt_sha256": "dacb7146739a41314e659af62ef3a93c2380a81cdcf6db2a881841fc3b7ef638",
+    "full_corpus_complete": false
+  },
+  "original_archive_still_pending": true,
+  "fractional_time_spacing_rendering_verified": false,
+  "existing_three_modifier_failures_retained": true,
+  "original_corpus_or_tolerances_changed": false,
+  "full_corpus_complete": false
+}
