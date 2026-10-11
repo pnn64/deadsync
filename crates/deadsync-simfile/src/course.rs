@@ -253,40 +253,33 @@ where
     report_load_progress(&mut progress, 0, total_courses, "", "");
 
     for course_path in course_paths {
-        let (group_display, course_display) = course_progress_names(&course_path, progress_root);
-        let group_display = group_display.to_owned();
-        let course_display = course_display.to_owned();
-        let mut report_done = || {
-            courses_done = courses_done.saturating_add(1);
-            report_load_progress(
-                &mut progress,
-                courses_done,
-                total_courses,
-                &group_display,
-                &course_display,
-            );
-        };
-
-        let course = match parse_course_file(&course_path) {
-            Ok(course) => course,
+        let result = parse_course_file(&course_path).and_then(|course| {
+            validate_course_refs(&course, song_roots, &mut group_dirs, total_song_count)
+                .map_err(|error| error.message)?;
+            Ok(course)
+        });
+        let report_path = match result {
+            Ok(course) => {
+                courses.push((course_path, course));
+                &courses.last().expect("course was just added").0
+            }
             Err(message) => {
                 failures.push(CourseLoadFailure {
                     path: course_path,
                     message,
                 });
-                report_done();
-                continue;
+                &failures.last().expect("failure was just added").path
             }
         };
-
-        match validate_course_refs(&course, song_roots, &mut group_dirs, total_song_count) {
-            Ok(()) => courses.push((course_path, course)),
-            Err(error) => failures.push(CourseLoadFailure {
-                path: course_path,
-                message: error.message,
-            }),
-        }
-        report_done();
+        let (group_display, course_display) = course_progress_names(report_path, progress_root);
+        courses_done = courses_done.saturating_add(1);
+        report_load_progress(
+            &mut progress,
+            courses_done,
+            total_courses,
+            group_display,
+            course_display,
+        );
     }
 
     CourseLoadReport { courses, failures }
@@ -396,7 +389,15 @@ pub fn resolve_course_stage(
             } else {
                 by_song.get(&song_key)
             }?;
-            course_candidates(std::slice::from_ref(resolved), entry, chart_type)
+            return fixed_course_stage(
+                resolved,
+                entry,
+                chart_type,
+                course_difficulty,
+                random_seed,
+                course_path,
+                entry_index,
+            );
         }
         CourseSong::SortPick { .. } | CourseSong::RandomAny => {
             course_candidates(all_songs, entry, chart_type)
@@ -433,12 +434,16 @@ pub fn resolve_course_stage(
         course_path,
         entry_index,
     )?;
-    let chart_pick = random_pick_index(
-        random_seed ^ song_key_hash(candidate.song_key()),
-        course_path,
-        entry_index ^ usize::MAX,
-        candidate.chart_indices.len(),
-    );
+    let chart_pick = if candidate.chart_indices.len() <= 1 {
+        0
+    } else {
+        random_pick_index(
+            random_seed ^ song_key_hash(candidate.song_key()),
+            course_path,
+            entry_index ^ usize::MAX,
+            candidate.chart_indices.len(),
+        )
+    };
     let base_chart = *candidates
         .chart_indices
         .get(candidate.chart_indices.clone())?
@@ -457,6 +462,56 @@ pub fn resolve_course_stage(
         gain_seconds: entry.gain_seconds,
         gain_lives: entry.gain_lives,
     })
+}
+
+fn fixed_course_stage(
+    song: &Arc<SongData>,
+    entry: &CourseEntry,
+    chart_type: &str,
+    course_difficulty: Difficulty,
+    random_seed: u64,
+    course_path: &Path,
+    entry_index: usize,
+) -> Option<ResolvedCourseStage> {
+    if song.charts.is_empty() {
+        return None;
+    }
+    let mut indices = smallvec::SmallVec::<[usize; 8]>::with_capacity(song.charts.len());
+    for (index, chart) in song.charts.iter().enumerate() {
+        if chart.has_note_data
+            && chart.chart_type.eq_ignore_ascii_case(chart_type)
+            && chart_matches_entry(chart, entry)
+        {
+            indices.push(index);
+        }
+    }
+    let pick = course_chart_pick_index(random_seed, course_path, entry_index, song, indices.len());
+    let base_chart = *indices.get(pick)?;
+    Some(ResolvedCourseStage {
+        song: Arc::clone(song),
+        chart_index: shifted_chart_index(song, base_chart, entry, chart_type, course_difficulty),
+        modifiers: entry.modifiers.clone(),
+        gain_seconds: entry.gain_seconds,
+        gain_lives: entry.gain_lives,
+    })
+}
+
+fn course_chart_pick_index(
+    seed: u64,
+    course_path: &Path,
+    entry_index: usize,
+    song: &SongData,
+    len: usize,
+) -> usize {
+    if len <= 1 {
+        return 0;
+    }
+    random_pick_index(
+        seed ^ song_key_hash(&song_unique_key(song)),
+        course_path,
+        entry_index ^ usize::MAX,
+        len,
+    )
 }
 
 fn avoid_course_repeats(
@@ -978,7 +1033,7 @@ pub const fn add_chart_totals(totals: &mut CourseTotals, chart: &ChartData) {
 }
 
 fn random_pick_index(seed: u64, course_path: &Path, entry_index: usize, len: usize) -> usize {
-    if len == 0 {
+    if len <= 1 {
         return 0;
     }
     let mut hasher = XxHash64::with_seed(seed);
@@ -1508,6 +1563,7 @@ mod tests {
             chart_name: String::new(),
             meter,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: hash.to_string(),
             stats: ArrowStats {
@@ -2190,5 +2246,13 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(root);
+    }
+
+    mod ownership_perf {
+        include!("course_ownership_perf.rs");
+    }
+
+    mod loading_perf {
+        include!("../../../tests/perf/course_resolve.rs");
     }
 }

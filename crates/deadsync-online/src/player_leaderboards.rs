@@ -16,9 +16,9 @@ const ITL_WHEEL_FETCH_ENTRIES: usize = 5;
 
 #[derive(Clone, Copy)]
 pub struct PlayerLeaderboardFetchHandlers {
-    pub cache_itl_self: fn(Option<String>, String, String, Option<u32>, Option<u32>),
-    pub cache_srpg_self_score: fn(Option<String>, String, String, u32),
-    pub cache_imported_score: fn(String, String, String, ImportedPlayerScore),
+    pub cache_itl_self: fn(Option<&str>, &str, &str, Option<u32>, Option<u32>),
+    pub cache_srpg_self_score: fn(Option<&str>, &str, &str, u32),
+    pub cache_imported_score: fn(&str, &str, &str, ImportedPlayerScore),
 }
 
 pub fn fetch_player_leaderboards(
@@ -81,49 +81,55 @@ pub fn spawn_player_leaderboard_fetch(
                 .map_err(|error| error.to_string())
             });
 
-        if let Some((itl_self_score, itl_self_rank)) = result.completion.fetched_itl_self {
-            (handlers.cache_itl_self)(
-                result.persistent_profile_id.clone(),
-                result.key.api_key.clone(),
-                result.key.chart_hash.clone(),
-                itl_self_score,
-                itl_self_rank,
-            );
-        }
-        if let Some(srpg_self_score) = result.completion.fetched_srpg_self_score {
-            (handlers.cache_srpg_self_score)(
-                result.persistent_profile_id.clone(),
-                result.key.api_key.clone(),
-                result.key.chart_hash.clone(),
-                srpg_self_score,
-            );
-        }
-        if let Some(imported_score) = result.completion.fetched_imported_score
-            && let Some(profile_id) = result.auto_profile_id.as_deref()
-        {
-            (handlers.cache_imported_score)(
-                profile_id.to_string(),
-                result.gs_username.clone(),
-                result.key.chart_hash.clone(),
-                imported_score,
-            );
-        }
-
-        if let Some(queued_fetch) = result.completion.queued_fetch {
-            spawn_player_leaderboard_fetch(
-                service,
-                PlayerLeaderboardFetchRequest {
-                    key: queued_fetch.key,
-                    gs_username: result.gs_username,
-                    persistent_profile_id: result.persistent_profile_id,
-                    auto_profile_id: result.auto_profile_id,
-                    should_auto_populate: result.should_auto_populate,
-                    max_entries: queued_fetch.max_entries,
-                },
-                handlers,
-            );
+        if let Some(queued_fetch) = complete(handlers, result) {
+            spawn_player_leaderboard_fetch(service, queued_fetch, handlers);
         }
     });
+}
+
+fn complete(
+    handlers: PlayerLeaderboardFetchHandlers,
+    result: deadsync_score::PlayerLeaderboardFetchJobResult<ImportedPlayerScore>,
+) -> Option<PlayerLeaderboardFetchRequest> {
+    if let Some((itl_self_score, itl_self_rank)) = result.completion.fetched_itl_self {
+        (handlers.cache_itl_self)(
+            result.persistent_profile_id.as_deref(),
+            &result.key.api_key,
+            &result.key.chart_hash,
+            itl_self_score,
+            itl_self_rank,
+        );
+    }
+    if let Some(srpg_self_score) = result.completion.fetched_srpg_self_score {
+        (handlers.cache_srpg_self_score)(
+            result.persistent_profile_id.as_deref(),
+            &result.key.api_key,
+            &result.key.chart_hash,
+            srpg_self_score,
+        );
+    }
+    if let Some(imported_score) = result.completion.fetched_imported_score
+        && let Some(profile_id) = result.auto_profile_id.as_deref()
+    {
+        (handlers.cache_imported_score)(
+            profile_id,
+            &result.gs_username,
+            &result.key.chart_hash,
+            imported_score,
+        );
+    }
+
+    if let Some(queued_fetch) = result.completion.queued_fetch {
+        return Some(PlayerLeaderboardFetchRequest {
+            key: queued_fetch.key,
+            gs_username: result.gs_username,
+            persistent_profile_id: result.persistent_profile_id,
+            auto_profile_id: result.auto_profile_id,
+            should_auto_populate: result.should_auto_populate,
+            max_entries: queued_fetch.max_entries,
+        });
+    }
+    None
 }
 
 #[must_use]
@@ -237,53 +243,48 @@ impl PlayerLeaderboardRuntime {
 }
 
 fn cache_itl_self(
-    profile_id: Option<String>,
-    api_key: String,
-    chart_hash: String,
+    profile_id: Option<&str>,
+    api_key: &str,
+    chart_hash: &str,
     itl_self_score: Option<u32>,
     itl_self_rank: Option<u32>,
 ) {
     deadsync_profile::app_runtime::set_cached_online_itl_self_score(
-        profile_id.as_deref(),
-        api_key.as_str(),
-        chart_hash.as_str(),
+        profile_id,
+        api_key,
+        chart_hash,
         itl_self_score,
     );
     deadsync_profile::app_runtime::set_cached_online_itl_self_rank(
-        profile_id.as_deref(),
-        api_key.as_str(),
-        chart_hash.as_str(),
+        profile_id,
+        api_key,
+        chart_hash,
         itl_self_rank,
     );
 }
 
-fn cache_srpg_self_score(
-    profile_id: Option<String>,
-    api_key: String,
-    chart_hash: String,
-    score: u32,
-) {
+fn cache_srpg_self_score(profile_id: Option<&str>, api_key: &str, chart_hash: &str, score: u32) {
     deadsync_profile::app_runtime::set_cached_online_srpg_self_score(
-        profile_id.as_deref(),
-        api_key.as_str(),
-        chart_hash.as_str(),
+        profile_id,
+        api_key,
+        chart_hash,
         Some(score),
     );
 }
 
 fn cache_imported_score(
-    profile_id: String,
-    username: String,
-    chart_hash: String,
+    profile_id: &str,
+    username: &str,
+    chart_hash: &str,
     imported: ImportedPlayerScore,
 ) {
     let song_cache = deadsync_simfile::runtime_cache::get_song_cache();
     deadsync_profile::app_runtime::cache_gs_score_from_leaderboard_import(
-        profile_id.as_str(),
-        username.as_str(),
-        chart_hash.as_str(),
+        profile_id,
+        username,
+        chart_hash,
         imported,
-        |score| imported_score_chart_stats(score, &song_cache, chart_hash.as_str()),
+        |score| imported_score_chart_stats(score, &song_cache, chart_hash),
     );
 }
 
@@ -431,3 +432,7 @@ pub fn cached_itl_tournament_overall_ranks_for_profile_from_app_runtime(
         song_cache.as_slice(),
     )
 }
+
+#[cfg(test)]
+#[path = "player_leaderboards/completion_tests.rs"]
+mod completion_tests;

@@ -103,24 +103,31 @@ fn meter_lookup_matches_original_for_mixed_charts_and_orders() {
 }
 
 #[test]
-fn standard_meter_lookup_avoids_the_edit_buffer_allocation() {
-    let song = song(vec![
-        chart("dance-single", "Beginner", 1, 0, ""),
-        chart("dance-single", "Easy", 3, 0, ""),
-        chart("dance-single", "Medium", 5, 0, ""),
-        chart("dance-single", "Hard", 9, 0, ""),
-    ]);
-    let slots = chart_indices(&song, "dance-single");
-    let (expected, before) =
-        crate::scan_alloc::measure(|| original::meter_indices(&song, "dance-single", &slots));
-    let (actual, after) =
-        crate::scan_alloc::measure(|| meter_indices(&song, "dance-single", &slots));
-    assert_eq!(actual, expected);
-    assert_eq!(before.allocs, 1);
-    assert_eq!(
-        (after.allocs, after.reallocs, after.allocated_bytes),
-        (0, 0, 0)
-    );
+fn meter_lookup_avoids_the_edit_buffer_allocation() {
+    for include_edit in [false, true] {
+        let mut charts = vec![
+            chart("dance-single", "Beginner", 1, 0, ""),
+            chart("dance-single", "Easy", 3, 0, ""),
+            chart("dance-single", "Medium", 5, 0, ""),
+            chart("dance-single", "Hard", 9, 0, ""),
+        ];
+        if include_edit {
+            charts.push(chart("dance-single", "Edit", 9, 20, "edit winner"));
+        }
+        let song = song(charts);
+        let slots = chart_indices(&song, "dance-single");
+        let (expected, before) =
+            crate::scan_alloc::measure(|| original::meter_indices(&song, "dance-single", &slots));
+        let (actual, after) =
+            crate::scan_alloc::measure(|| meter_indices(&song, "dance-single", &slots));
+        assert_eq!(actual, expected);
+        // Main's shared edit helper already avoids allocating without edits.
+        assert_eq!(before.allocs, usize::from(include_edit));
+        assert_eq!(
+            (after.allocs, after.reallocs, after.allocated_bytes),
+            (0, 0, 0)
+        );
+    }
 }
 
 #[test]

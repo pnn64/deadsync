@@ -1,0 +1,54 @@
+{
+  "problem": "The harness returned its generic actor fallback, skipping the gameplay HUD branch; DeadSync had no method and failed to compile Butterfly.",
+  "contract": "ScreenGameplay::GetScreenType returns gameplay. LunaScreen pushes that enum through LuaHelpers::Push. LuaXType prefixes ScreenType_ to the Gameplay enum name.",
+  "expected_lua_value": "ScreenType_Gameplay",
+  "scope": "The song Lua top screen is a ScreenGameplay instance. Plain ActorFrames do not own this Screen method.",
+  "reference_sources": {
+    "Screen.h": {
+      "local_sha256": "f4bf1f827dbd7c967e6a5d71c75dc2c24456477a6f4a81abdad14f21af496fc2",
+      "native_vendor_sha256": "f4bf1f827dbd7c967e6a5d71c75dc2c24456477a6f4a81abdad14f21af496fc2"
+    },
+    "Screen.cpp": {
+      "local_sha256": "d77fc7cd061a7a90584529f95966badc0b5b327438b2b00376c463151fb9ec9a",
+      "native_vendor_sha256": "d77fc7cd061a7a90584529f95966badc0b5b327438b2b00376c463151fb9ec9a"
+    },
+    "ScreenGameplay.h": {
+      "local_sha256": "571f25f3048f038843642349aaf58d0a2a3f2469648ec46d89e7758c1c185337",
+      "native_vendor_sha256": "571f25f3048f038843642349aaf58d0a2a3f2469648ec46d89e7758c1c185337"
+    },
+    "EnumHelper.h": {
+      "local_sha256": "325e35b185836926c00803cf9f29bf8f241273c01094b2e1af7d2f470812ce79",
+      "native_vendor_sha256": "325e35b185836926c00803cf9f29bf8f241273c01094b2e1af7d2f470812ce79"
+    },
+    "LuaBinding.h": {
+      "local_sha256": "b7bc6584d259d016a1b762be51759ab5915045d02c2856fc00cf09023e8deb2d",
+      "native_vendor_sha256": "b7bc6584d259d016a1b762be51759ab5915045d02c2856fc00cf09023e8deb2d"
+    }
+  },
+  "reference_lines": {
+    "ScreenGameplay.h": [
+      177
+    ],
+    "Screen.cpp": [
+      33,
+      40,
+      444,
+      476,
+      482
+    ],
+    "EnumHelper.h": [
+      128,
+      136
+    ],
+    "LuaBinding.h": [
+      185,
+      188
+    ]
+  },
+  "regressions": [
+    "recovered_host_bindings_and_recurring_commands includes screen-type.lua",
+    "compile_song_lua_exposes_top_screen_theme_actor_shapes asserts value and method scope"
+  ],
+  "original_chart_lua_modified": false,
+  "limits": "The getter value is established from identical local and vendored native sources; these tests do not instantiate a full native ScreenGameplay or prove framebuffer parity."
+}

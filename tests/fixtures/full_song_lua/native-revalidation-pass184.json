@@ -1,0 +1,104 @@
+{
+  "pass": 184,
+  "previous_record": "native-revalidation-pass183.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "0e52cbbcfe2ac85312e3c6444dc8838b59be9e0a",
+  "comparator_sha256": "5288e6c1644e50445ad19c0bfee10c05553e4523565b6da97bf768a6d3509324",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    105
+  ],
+  "next_position": 106,
+  "comparisons_passed": 666848,
+  "charts": [
+    {
+      "position": 105,
+      "entry": {
+        "title": "Atmosphere",
+        "source_simfile": "Atmosphere/atmosphere-fakemines.sm",
+        "harness_version": "0.1.62",
+        "archive": "19736fa57303bc9e75ecc423c0df5195e08ab59c69c32f583a8bae21a6c23883.tar.zst",
+        "sha256": "19736fa57303bc9e75ecc423c0df5195e08ab59c69c32f583a8bae21a6c23883",
+        "compressed_bytes": 361456,
+        "aliases": [
+          "90db61e2e112e9285107586a2f97c456f6849318285119cd75d251736caed6a7.tar.zst"
+        ]
+      },
+      "original_archive_retained": "2209fb12c20e864b2c4036061b955256f2f6e0e76eb139a421055bd8961040c2.tar.zst",
+      "native_source_commit": "fa557b90fd9dd1b33126e44a9ec32ebbb0be272e",
+      "native_trace_sha256": "65118e257b365f95b043dfd5e05b5977b85b492075c5db817d97fdb3b894bdb9",
+      "original_source_sha256": {
+        "Atmosphere/atmosphere-fakemines.sm": "3855ab6865eceb88674648c3a072e88e4ac3ad7a596b78899fc865b86e5ebe6f",
+        "Atmosphere/atmosphere-fakemines.ssc": "6162d0b53838cae5f64ea2596458d837d5dac73165739c0e7963ad13d6525a43",
+        "Atmosphere/atmosphere.png": "04026c52f74d0e2d784e9300f625ea6ffa46c66012abeef89a72c9e63d3bb0cd",
+        "Atmosphere/atmosphere2.ogg": "6e8d85a4874890172e28e0381aab5cad33fa79fde668a234bd158279c503d963",
+        "Atmosphere/cdtitle-y.png": "7d71a934981027933c21d4682b7173b053147df8967a8582630e74830a37aaa4",
+        "Atmosphere/lua/default.lua": "8a89fe7559a5b755efdda07bbc971a77e60f2f979e8be1b9563e7df490eca72b",
+        "Atmosphere/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "Atmosphere/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "Atmosphere/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46",
+        "Atmosphere/lua/_script.lua": "2bc33d2192a874a799d53f1727429b6ac48fadec6909c84f0da04116e6af0dbc"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8053,
+      "duration_seconds": 134.1923065185547,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 105,
+      "source_simfile": "Atmosphere/atmosphere-fakemines.sm",
+      "archive": "19736fa57303bc9e75ecc423c0df5195e08ab59c69c32f583a8bae21a6c23883.tar.zst",
+      "archive_sha256": "19736fa57303bc9e75ecc423c0df5195e08ab59c69c32f583a8bae21a6c23883",
+      "harness_version": "0.1.62",
+      "source_commit": "0e52cbbcfe2ac85312e3c6444dc8838b59be9e0a",
+      "source_pending_commit": false,
+      "binary_sha256": "5288e6c1644e50445ad19c0bfee10c05553e4523565b6da97bf768a6d3509324",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass178\\screen-depth-fixed-v2-full_song_lua.exe",
+        "19736fa57303bc9e75ecc423c0df5195e08ab59c69c32f583a8bae21a6c23883.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 17.200011000037193,
+      "comparisons_passed": 666848,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-105-screen-depth-committed-v2.log",
+      "log_sha256": "5e50eb429a3775d8ebbdfa4dd26be04dffafb6a3d15c429eca5e3289e8a39135",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass226-top-105-default-depth-v1.json",
+      "native_receipt_sha256": "8fe9c5921c6e309d06ead79f7696d948e30fe581383af3fb7666d9e1eae696d5",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "0e52cbbcfe2ac85312e3c6444dc8838b59be9e0a",
+    "source_pending_commit": false,
+    "binary_sha256": "5704c1d3ef9eddb26d30ae6075800c3ff9559e47cac2ea854c775bed4adf0f5d",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass178\\screen-depth-fixed-v2-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 2.335056200157851,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-105-native-pass184.log",
+    "log_sha256": "4f9609ed388bceec39b12684a2b2ff431610b12937be65bb41609c3e676998c5",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.76s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

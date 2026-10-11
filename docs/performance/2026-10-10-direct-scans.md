@@ -4,6 +4,8 @@ Pass: 2026-10-10. Branch: `perf/1872-direct-scans-20261010`.
 Base: `4e59125883b7cf5331779a0a95627fea47930fd9`, latest committed main at worktree creation.
 Version: **0.5.1871 -> 0.5.1872**, exactly one patch increment in Cargo.toml and all three workspace-version Cargo.lock entries.
 
+Merge validation update (2026-10-11): the shared edit-index helper on current main already avoids allocation for standard-only songs, so both wheel implementations now allocate zero times for that case. The allocation regression also covers a song with an edit, where the original wheel caller still allocates its temporary vector and the direct scan allocates nothing. The measurements below describe the pinned 2026-10-10 baseline; release benchmarks were not rerun during conflict resolution.
+
 ## Changes
 
 1. Wheel meter lookup selects edit winners directly instead of building and sorting a temporary edit-index Vec and immediately reducing it to one chart per meter. Standard difficulty priority is unchanged. Edits override standard charts at the same meter; edit winners retain the largest step count, then largest Unicode lowercase description, with the last source chart winning exact ties. Only the final distinct-meter SmallVec is sorted. Common standard-only songs now avoid the temporary heap allocation altogether.

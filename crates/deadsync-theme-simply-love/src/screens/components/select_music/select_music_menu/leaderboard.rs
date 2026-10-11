@@ -123,16 +123,6 @@ fn apply_leaderboard_side_snapshot(
     side: &mut LeaderboardSideState,
     snapshot: score_data::CachedPlayerLeaderboardData,
 ) {
-    let current_pane = side.panes.get(side.pane_index).map(|pane| {
-        (
-            pane.name.clone(),
-            pane.is_ex,
-            pane.is_hard_ex(),
-            pane.disabled,
-            pane.personalized,
-        )
-    });
-
     if snapshot.loading {
         side.loading = true;
         side.error_text = None;
@@ -153,6 +143,16 @@ fn apply_leaderboard_side_snapshot(
         return;
     }
 
+    let current_pane = side.panes.get(side.pane_index).map(|pane| {
+        (
+            pane.name.as_str(),
+            pane.is_ex,
+            pane.is_hard_ex(),
+            pane.disabled,
+            pane.personalized,
+        )
+    });
+
     let mut panes = snapshot.data.map_or_else(Vec::new, |data| {
         data.panes
             .iter()
@@ -161,11 +161,6 @@ fn apply_leaderboard_side_snapshot(
             .collect()
     });
     if let Some(machine) = side.machine_pane.clone() {
-        panes.push(machine);
-    }
-    if panes.is_empty()
-        && let Some(machine) = side.machine_pane.clone()
-    {
         panes.push(machine);
     }
 
@@ -197,8 +192,8 @@ fn apply_leaderboard_side_view(
     }
 
     let machine = gs_machine_pane(view.machine_entries);
-    side.machine_pane = Some(machine.clone());
     let Some(snapshot) = view.leaderboards else {
+        side.machine_pane = Some(machine.clone());
         side.loading = false;
         side.error_text = None;
         side.panes.clear();
@@ -207,15 +202,8 @@ fn apply_leaderboard_side_view(
         side.show_icons = false;
         return;
     };
+    side.machine_pane = Some(machine);
     apply_leaderboard_side_snapshot(side, snapshot);
-}
-
-fn overlay_display_entries(
-    runtime: &ScoreboxSideView,
-    pane: &score_data::LeaderboardPane,
-) -> Vec<score_data::LeaderboardEntry> {
-    let entries = entries_with_local_self_state(runtime, pane);
-    score_data::prioritized_leaderboard_entries(entries.as_ref(), GS_LEADERBOARD_NUM_ENTRIES)
 }
 
 #[must_use]
@@ -465,7 +453,12 @@ fn push_leaderboard_overlay_unreserved<const INCLUDE_ICONS: bool>(
         let pane = side
             .panes
             .get(side.pane_index.min(side.panes.len().saturating_sub(1)));
-        let display_entries = pane.map(|pane| overlay_display_entries(&side.scorebox, pane));
+        let entries = pane
+            .filter(|pane| !side.loading && side.error_text.is_none() && !pane.disabled)
+            .map(|pane| entries_with_local_self_state(&side.scorebox, pane));
+        let display_entries = entries.as_ref().map(|entries| {
+            score_data::prioritized_leaderboard_entry_refs(entries, GS_LEADERBOARD_NUM_ENTRIES)
+        });
         let header_text = if side.loading {
             "GrooveStats".to_string()
         } else if let Some(p) = pane {
@@ -636,7 +629,11 @@ fn push_leaderboard_overlay_unreserved<const INCLUDE_ICONS: bool>(
                     if entry.is_fail {
                         score_col = [1.0, 0.0, 0.0, 1.0];
                     }
-                } else if i == 0 && display_entries.as_ref().is_none_or(std::vec::Vec::is_empty) {
+                } else if i == 0
+                    && display_entries
+                        .as_ref()
+                        .is_none_or(|entries| entries.is_empty())
+                {
                     name = GS_LEADERBOARD_NO_SCORES_TEXT.to_string();
                 }
             }
@@ -922,3 +919,11 @@ mod tests {
         assert_eq!(data.p1.panes[0].entries[0].name, "AAA");
     }
 }
+
+#[cfg(test)]
+#[path = "leaderboard/borrowed_state_original.rs"]
+mod borrowed_state_original;
+
+#[cfg(test)]
+#[path = "leaderboard/borrowed_state_perf.rs"]
+mod borrowed_state_perf;

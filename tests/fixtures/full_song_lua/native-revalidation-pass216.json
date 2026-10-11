@@ -1,0 +1,104 @@
+{
+  "pass": 216,
+  "previous_record": "native-revalidation-pass215.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "9eae06eb28faa01d330114e0b49485983fa0d599",
+  "comparator_sha256": "d2646f73b1b0ed8bc50dd2195439e8e04e878b5fdfd3d6afe1b49b72d4ca6cee",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    137
+  ],
+  "next_position": 138,
+  "comparisons_passed": 733744,
+  "charts": [
+    {
+      "position": 137,
+      "entry": {
+        "title": "Bzrp Music Sessions, Vol. 53",
+        "source_simfile": "Bzrp Music Sessions, Volume 53/bzrp53-fakemines.ssc",
+        "harness_version": "0.1.67",
+        "archive": "fdff613be2470ffe5fd53e7999c60a81a2c9087802ee0e80861832024d2703c3.tar.zst",
+        "sha256": "fdff613be2470ffe5fd53e7999c60a81a2c9087802ee0e80861832024d2703c3",
+        "compressed_bytes": 392622,
+        "aliases": [
+          "9a025248776afa78d95fe828dd02fc4b42d473d229202722dfabbc092e12901a.tar.zst"
+        ]
+      },
+      "original_archive_retained": "98cb7e933629c59c47cde4eefcace05d3e4f3c5e4e8cef9f0ba955a06e677b83.tar.zst",
+      "native_source_commit": "7a75d74081a4e0e944e1babde8d8d64363ad625a",
+      "native_trace_sha256": "9e9d386f1361276ed29365c9784fbc70926fca74d3b9d3a8871a54048ea53996",
+      "original_source_sha256": {
+        "Bzrp Music Sessions, Volume 53/bzrp.png": "e968b86de9126522b7f851ff8c5d21b329c6c026d9aaf2924c85c5d384c6527f",
+        "Bzrp Music Sessions, Volume 53/bzrp53-fakemines.sm": "53606e05ac0ffe7c91cef565d8ebd53af71ea8297a5a0cf85237f7684b78a50a",
+        "Bzrp Music Sessions, Volume 53/bzrp53-fakemines.ssc": "16e99d21bf8154190c95940fbcbaaa20f00ce37c4e218e59ba82e7d74e561e01",
+        "Bzrp Music Sessions, Volume 53/bzrp53.ogg": "45deaed35812cc3d89ca97cb93acf22e5376cdffb187060ae14c3be0cec32bb2",
+        "Bzrp Music Sessions, Volume 53/cdtitle-g.png": "86695d9e17c7b2e1426a52ae2e13baac118395ea3aa840332d22a8977a53f008",
+        "Bzrp Music Sessions, Volume 53/lua/default.lua": "8a89fe7559a5b755efdda07bbc971a77e60f2f979e8be1b9563e7df490eca72b",
+        "Bzrp Music Sessions, Volume 53/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "Bzrp Music Sessions, Volume 53/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "Bzrp Music Sessions, Volume 53/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46",
+        "Bzrp Music Sessions, Volume 53/lua/_script.lua": "4a78a2be81e4f19813e29be5678da90f3f4804f304bed82c540f79af1c642151"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8716,
+      "duration_seconds": 145.23809814453125,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 137,
+      "source_simfile": "Bzrp Music Sessions, Volume 53/bzrp53-fakemines.ssc",
+      "archive": "fdff613be2470ffe5fd53e7999c60a81a2c9087802ee0e80861832024d2703c3.tar.zst",
+      "archive_sha256": "fdff613be2470ffe5fd53e7999c60a81a2c9087802ee0e80861832024d2703c3",
+      "harness_version": "0.1.67",
+      "source_commit": "9eae06eb28faa01d330114e0b49485983fa0d599",
+      "source_pending_commit": false,
+      "binary_sha256": "d2646f73b1b0ed8bc50dd2195439e8e04e878b5fdfd3d6afe1b49b72d4ca6cee",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\native-chain-fixtures-v1-full_song_lua.exe",
+        "fdff613be2470ffe5fd53e7999c60a81a2c9087802ee0e80861832024d2703c3.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 21.407018799800426,
+      "comparisons_passed": 733744,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\native-chain-v1-137.log",
+      "log_sha256": "9e021fca019102865d8854830e5af0b205c7d2793b053714ca9a3612ec847518",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass272-top-137-native-v1.json",
+      "native_receipt_sha256": "0765cb6dde1094544b5361d4bd06daa123141b2d66e8dea36b59731e964cbc6d",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "9eae06eb28faa01d330114e0b49485983fa0d599",
+    "source_pending_commit": false,
+    "binary_sha256": "d5607a16044c9d6cf3dab28446701d31a0ccacfeb360a816515df1677b9173eb",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\native-chain-fixtures-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 2.6625230996869504,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-137-native-pass216.log",
+    "log_sha256": "20cf36925b6b5428e77d7d401657cba1623e20830d96a7145accb41f6cd74bff",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 299 filtered out; finished in 2.06s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

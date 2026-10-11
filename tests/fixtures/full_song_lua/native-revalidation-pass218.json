@@ -1,0 +1,136 @@
+{
+  "pass": 218,
+  "previous_record": "native-revalidation-pass217.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "1acb67574b8e32ddda9dca530a3bba724a3a4790",
+  "comparator_sha256": "3a7535528445f0814bccb8190ef550e108c403d2c026ad27cfadbe5b59359dc5",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    139
+  ],
+  "next_position": 140,
+  "comparisons_passed": 268528,
+  "charts": [
+    {
+      "position": 139,
+      "entry": {
+        "title": "Cardstone",
+        "source_simfile": "cards/sm.sm",
+        "harness_version": "0.1.67",
+        "archive": "bc49b78df2ac37878f512689bc65ede287386ae29d08313dd1e4e6396b2b1f80.tar.zst",
+        "sha256": "bc49b78df2ac37878f512689bc65ede287386ae29d08313dd1e4e6396b2b1f80",
+        "compressed_bytes": 74398,
+        "aliases": [
+          "9f085f3ac7cc6381e283918e3b19d8bcaec55c2791f462b05824edf4a9ea9218.tar.zst"
+        ]
+      },
+      "original_archive_retained": "408c6833719b22916e1d118a866dbd16b1f726df0070ac146a9fc93a8213bb90.tar.zst",
+      "native_source_commit": "7a75d74081a4e0e944e1babde8d8d64363ad625a",
+      "native_trace_sha256": "49d4b8a4e1a5ef41f5ddcb9285f7ff3e13fdfff9e413657b56d644f465920fae",
+      "original_source_sha256": {
+        "cards/bad.ogg": "b3b8f972a40aa4ee172843800530ac476140df14c725b6648c59cc3eeb5fd085",
+        "cards/sm.sm": "93e30a19f7dddf50af257f3398fd7211895ec94d8bdb050a822c9c7afa686a6a",
+        "cards/sm.ssc": "a83968520d8552264575bb991ef6b14d0eb6ee5dc11e0743b8eae521ab23fd8b",
+        "cards/sm.ssc.old": "13955e1bb04c40b0ec44e32e65f4b36e9e930859aa979ac43144637eff51e258",
+        "cards/audio/exodia.ogg": "d27f2200b0582f3c66e0c38d04b7445d87fd3df3a48c639c6cffac5673df17b9",
+        "cards/audio/max300.ogg": "2c4cb7f698ab39ba2f23b079053b9ef202099693f0a5223baddce8fd02c190cf",
+        "cards/audio/star_spangled_banner.jpg.ogg": "21618a6c4cc7559b468bebf810e0b466e46c023f02c091af1e1fb0fe609f9f26",
+        "cards/img/america1.png": "6c5dd58110fb47f1337886b8ba758beb032718d2677c3da13a70304513c291e8",
+        "cards/img/america2.png": "fcc9a439e03068705a8a36eca03d06bd77d7f892b6797ebc83afa988f54448db",
+        "cards/img/america3.png": "4e9b492de9ed707f93ea681a5fa9c33cb0cea17bf3fcda6da0d46d9091b92ac4",
+        "cards/img/america4.png": "ec024356110f226d5a2bb8df3f6fc0609a4b88402a350baba3090531e1770bfc",
+        "cards/img/america5.png": "a6c264586c15f69e5d47d5484b99ab8d19d4069059ca873fa7e50eb18720fbef",
+        "cards/img/america6.png": "6d067e7808a92294636347c3e55ed37c7c84451500818c239b2e143b2f8ef388",
+        "cards/img/arrow_giant.png": "97452aa1a1ed9465df79f150d9c6f29cfd50671f569f7f7f80571b4d74e93631",
+        "cards/img/auchenai.png": "8cd320d7faedde6fcc050f5afad84e8f4ddaadb6acee2b3d74c419217eace621",
+        "cards/img/bgh.png": "9f25324347a32d5372df601de12fac484b4374eff5f5c852c20e0af3b5f272e6",
+        "cards/img/coin.png": "9fa321efa873193f880103b14e6569ffca6443f4f9ce45736063fb40ffd4ece5",
+        "cards/img/dreadsteed.png": "f95be25c5398662653cc97145ec9db588bae5cfc8eead1b42b533c7435a68b6c",
+        "cards/img/exodia.png": "812dacaf16545bf06b2ba4aa9aa14bd029b1e6413ccd5da3bbb9a0372c73085d",
+        "cards/img/explorershats.png": "fe063f5dbf54f9b83841d8f425a96e840a373e2aaf1036cd42f98eb1b7b2569c",
+        "cards/img/flip.png": "52ae99713c44040c590eff5b09b7fe97af5cf31880f910d46020a025c6d2371b",
+        "cards/img/forcesavage.png": "877675c34b25bd802ef73569b7d3b5554f9e96a90f7a2e683eb4f52c925a6ed7",
+        "cards/img/FOUR_MANA_SEVEN_SEVEN.png": "8e779aa4f157b09cc41deece6c4d738c1c92785df57b76bac3334b24d65e08f5",
+        "cards/img/funnel.png": "216deb241f3a763f7727909855f30a3b47497cc7e64176649afc6cf10220a67f",
+        "cards/img/herald.png": "0b042dbceca9458026eeef328fd30a1ea13623b3247d1e823a0291339ef5f884",
+        "cards/img/huffer.png": "2dcf7851871c9a0539734540ef16099dff17cea1d800c0bd3734bdb1ba322466",
+        "cards/img/huffer_companion.png": "b07f3cfb5a44617c3ab5c82ea6ca4b201a3644ef203257b1592a350dfe8bbf4b",
+        "cards/img/max300.png": "fe802ec5ff619e51c28a5aa98af7b5fdc0e4a752b9b5441326a3f3e3113cbb18",
+        "cards/img/max300_egg.png": "d7b46b9235dee33f28d3407bd66fe7e2484f2bfe581a8e2ff669f06999455dc1",
+        "cards/img/minion.png": "56046de8e6bc8cbfb57a232f15ff6f318af2b076dd3a21acce304ce25b2184cf",
+        "cards/img/moving.png": "238885e6ecd2faa1f3e4d013df3b362bc27522eead6f49d0db77fd3ea11230d9",
+        "cards/img/powercreep.png": "f769432c87bcfb1a08f790047d3f28d7c2f0535b5c8f1730c004d624b650d803",
+        "cards/img/purify.png": "f10815e29d570d48f77480d3c74e0ab98450311b50932f5f3d805ac0866624aa",
+        "cards/img/trogg.png": "14924f013a53e4dae2969e02cf51a3f79bf048926cc4de9e46872a95ab370b45",
+        "cards/img/trump.png": "c3aeb878d366d92c726c58ca16db9bc800383f61e74e48062619ce02dbb65cba",
+        "cards/img/wall.png": "51f80162cecc441632f775ce3931da3384bb475936bb202c2b4708562e929a24",
+        "cards/img/warsong_commander.png": "6244b2b0895f6d15dff91caf45633fddb39f0af5b03fbc99166ce1a2781d3af8",
+        "cards/img/whirlwind_execute.png": "287d71a9be14ea834f2bdcc565a783514ecc865aaa427f003744a1291b481578",
+        "cards/img/wisp.png": "97edfa1a235c388761d38070a1607ceb9a4349ce1e90367de010b10427dd21c2",
+        "cards/img/yog.png": "914064dd80fc2aa307eb8bb73b13665b83f944cd189711373b06b975a6340f51",
+        "cards/img/your_finished.png": "26da332fd7806ddc61f96235863c288cdbca4273cd2fbaea82224df63c693897",
+        "cards/lua/cards.lua": "e8bda21f40d83881254de493801f656490c8a8c9a497a804919461edbb6816bb"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 12205,
+      "duration_seconds": 203.39393615722656,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 3,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 139,
+      "source_simfile": "cards/sm.sm",
+      "archive": "bc49b78df2ac37878f512689bc65ede287386ae29d08313dd1e4e6396b2b1f80.tar.zst",
+      "archive_sha256": "bc49b78df2ac37878f512689bc65ede287386ae29d08313dd1e4e6396b2b1f80",
+      "harness_version": "0.1.67",
+      "source_commit": "1acb67574b8e32ddda9dca530a3bba724a3a4790",
+      "source_pending_commit": false,
+      "binary_sha256": "3a7535528445f0814bccb8190ef550e108c403d2c026ad27cfadbe5b59359dc5",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\song-metadata-v5-full_song_lua.exe",
+        "bc49b78df2ac37878f512689bc65ede287386ae29d08313dd1e4e6396b2b1f80.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.3210392999462783,
+      "comparisons_passed": 268528,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\song-metadata-v5.log",
+      "log_sha256": "99a1f477922dc594d560dce0e0e9dfa6131b7120d6a91912a58230fab3fef808",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass274-top-139-native-v1.json",
+      "native_receipt_sha256": "02a680c67c77e8fdac4843b03771a93cb89e56485e6f5bb2413a95b6589465f7",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "1acb67574b8e32ddda9dca530a3bba724a3a4790",
+    "source_pending_commit": false,
+    "binary_sha256": "ce0641dbc2b256f22f731c35079242399b92f65ae12e4714f1164b1b60d345b8",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\song-metadata-v5-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.0777182998135686,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-139-native-pass218.log",
+    "log_sha256": "9e1a70b97b0ca69767d85f45a2be28e174f8211d496b921cf9c047da6600d89e",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 299 filtered out; finished in 0.49s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

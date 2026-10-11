@@ -8,12 +8,13 @@
 
 use crate::color;
 use deadlib_assets::AssetManager;
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, TextContent};
 use deadsync_online::itgdb::ItgdbPhase;
 use deadsync_online::pack_page::PagePhase;
 use deadsync_online::popular_packs::PopularPhase;
 use deadsync_online::smo_details::DetailsPhase;
 use deadsync_online::stepmaniaonline::{CatalogPhase, InstallPhase, PackInfo};
+use std::fmt::Write as _;
 
 use super::chart_window;
 use super::detail;
@@ -244,28 +245,18 @@ fn push_reload_dialog(
         return;
     }
 
-    let mut bits: Vec<String> = Vec::with_capacity(2);
-    if packs > 0 {
-        bits.push(format!(
-            "{packs} {}",
-            if packs == 1 { "pack" } else { "packs" }
-        ));
-    }
-    if songs > 0 {
-        bits.push(format!(
-            "{songs} {}",
-            if songs == 1 { "song" } else { "songs" }
-        ));
-    }
     let what = if packs == 0 && songs > 0 {
         "song"
     } else {
         "content"
     };
-    let added = if bits.is_empty() {
-        "Library changed.".to_owned()
-    } else {
-        format!("{} added.", bits.join(" and "))
+    let pack_word = if packs == 1 { "pack" } else { "packs" };
+    let song_word = if songs == 1 { "song" } else { "songs" };
+    let added = match (packs, songs) {
+        (0, 0) => "Library changed.".to_owned(),
+        (0, _) => format!("{songs} {song_word} added."),
+        (_, 0) => format!("{packs} {pack_word} added."),
+        _ => format!("{packs} {pack_word} and {songs} {song_word} added."),
     };
     actors.push(act!(text:
         font("miso"): settext(added):
@@ -780,7 +771,7 @@ fn push_tabs(actors: &mut Vec<Actor>, state: &State) {
             diffuse(icon_ink[0], icon_ink[1], icon_ink[2], icon_ink[3]): z(Z_TEXT)
         ));
         actors.push(act!(text:
-            font("miso"): settext(entry.label().to_owned()):
+            font("miso"): settext(entry.label()):
             align(0.0, 0.5): xy(x + lo::TAB_LABEL_INSET, lo::TABS_Y): zoom(lo::TAB_LABEL_ZOOM):
             maxwidth(lo::TAB_W - lo::TAB_LABEL_INSET - 4.0): horizalign(left):
             diffuse(ink[0], ink[1], ink[2], ink[3]): z(Z_TEXT)
@@ -870,16 +861,28 @@ fn readout_text(state: &State) -> String {
 }
 
 /// Groups of three from the right, as the original's `Commify`.
-pub(super) fn commify(n: usize) -> String {
-    let digits = n.to_string();
-    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
-    for (index, ch) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            out.push(',');
+pub(super) fn commify(mut n: usize) -> String {
+    const DIGITS: usize = usize::MAX.ilog10() as usize + 1;
+    let mut bytes = [0; DIGITS + (DIGITS - 1) / 3];
+    let mut start = bytes.len();
+    let mut group = 0;
+    loop {
+        start -= 1;
+        bytes[start] = b'0' + (n % 10) as u8;
+        n /= 10;
+        if n == 0 {
+            break;
         }
-        out.push(ch);
+        group += 1;
+        if group == 3 {
+            start -= 1;
+            bytes[start] = b',';
+            group = 0;
+        }
     }
-    out
+    std::str::from_utf8(&bytes[start..])
+        .expect("decimal digits and commas are ASCII")
+        .to_owned()
 }
 
 // --- the search results band --------------------------------------------------
@@ -899,7 +902,7 @@ fn push_context_band(actors: &mut Vec<Actor>, state: &State, w: f32) {
         diffuse(1.0, 1.0, 1.0, 0.05): z(Z_PANEL)
     ));
     actors.push(act!(text:
-        font("wendy"): settext(title.to_owned()):
+        font("wendy"): settext(title):
         align(0.0, 0.5): xy(lo::BAND_TITLE_X, lo::BAND_TITLE_Y): zoom(0.42): horizalign(left):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z_TEXT)
     ));
@@ -1499,21 +1502,38 @@ fn push_skeleton_row(
 /// `78 songs  -  640.5 MB  -  added Mar 14, 2026`, with any part absent.
 /// Two spaces, hyphen, two spaces -- the original's separator.
 fn meta_line(state: &State, pack: &PackInfo) -> String {
-    let mut bits: Vec<String> = Vec::with_capacity(4);
+    let bytes = format_bytes(pack.size_bytes);
+    let date = details_for(state, pack)
+        .and_then(|details| details.date_added.as_deref())
+        .map(|date| format_date(date, true));
+    let why = state.search_why.get(&pack.id);
+    let song_len = if pack.song_count > 0 {
+        pack.song_count.ilog10() as usize + 1 + " songs  -  ".len()
+    } else {
+        0
+    };
+    let mut line = String::with_capacity(
+        song_len
+            + bytes.len()
+            + date
+                .as_ref()
+                .map_or(0, |date| date.len() + "  -  added ".len())
+            + why.map_or(0, |why| why.len() + "  -  ".len()),
+    );
     if pack.song_count > 0 {
-        bits.push(format!("{} songs", pack.song_count));
+        write!(line, "{} songs  -  ", pack.song_count).expect("writing to String cannot fail");
     }
-    bits.push(format_bytes(pack.size_bytes));
-    if let Some(date) = details_for(state, pack).and_then(|d| d.date_added.as_deref()) {
-        bits.push(format!("added {}", format_date(date, true)));
+    line.push_str(&bytes);
+    if let Some(date) = date {
+        line.push_str("  -  added ");
+        line.push_str(&date);
     }
-    // Why this row is in a search's answer, last. A result that matched on a
-    // charter's name rather than the pack's looks like a wrong answer until
-    // the row says so.
-    if let Some(why) = state.search_why.get(&pack.id) {
-        bits.push(why.clone());
+    // Keep an empty explanation's separator too, just as the joined fields did.
+    if let Some(why) = why {
+        line.push_str("  -  ");
+        line.push_str(why);
     }
-    bits.join("  -  ")
+    line
 }
 
 /// `2026-03-14` as `March 14, 2026`, or `Mar 14, 2026` in short form.
@@ -1579,31 +1599,21 @@ fn push_type_badge(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo, list
     const DDR_INK: [f32; 4] = [1.0, 0.72, 0.35, 1.0];
     const PAD_INK: [f32; 4] = [0.55, 0.55, 0.55, 1.0];
 
-    let kind = pack
-        .pack_type
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| meaningful(value))
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-
-    let (text, rgba) = if state.query.is_empty() {
-        match kind.as_str() {
-            "mixed" => ("PAD+KEY", KEYBOARD_INK),
-            "ddr" => ("DDR", DDR_INK),
-            _ => return,
-        }
+    let kind = pack.pack_type.as_deref().map(str::trim).unwrap_or_default();
+    let (text, rgba) = if kind.eq_ignore_ascii_case("mixed") {
+        ("PAD+KEY", KEYBOARD_INK)
+    } else if kind.eq_ignore_ascii_case("ddr") {
+        ("DDR", DDR_INK)
+    } else if state.query.is_empty() {
+        return;
+    } else if kind.eq_ignore_ascii_case("keyboard") {
+        ("KEY", KEYBOARD_INK)
     } else {
-        match kind.as_str() {
-            "keyboard" => ("KEY", KEYBOARD_INK),
-            "mixed" => ("PAD+KEY", KEYBOARD_INK),
-            "ddr" => ("DDR", DDR_INK),
-            _ => ("PAD", PAD_INK),
-        }
+        ("PAD", PAD_INK)
     };
 
     actors.push(act!(text:
-        font("miso"): settext(text.to_owned()):
+        font("miso"): settext(text):
         align(0.0, 0.5):
         xy(lo::LIST_X + list_w - lo::ROW_TYPE_BADGE_INSET, y + lo::ROW_BADGE_Y):
         zoom(0.5): maxwidth(40.0): horizalign(left):
@@ -1622,21 +1632,25 @@ pub(super) fn push_status_badge(
     let accent = accent(state);
     let (text, rgba) = if let Some(install) = install_for(state, pack) {
         match install.phase {
-            InstallPhase::Queued => ("queued".to_owned(), META_RGBA),
+            InstallPhase::Queued => (TextContent::Static("queued"), META_RGBA),
             InstallPhase::Downloading => {
                 let pct = if install.total_bytes > 0 {
                     (install.downloaded_bytes as f64 / install.total_bytes as f64 * 100.0) as u32
                 } else {
                     0
                 };
-                (format!("{pct}%"), accent)
+                (
+                    TextContent::inline_format(format_args!("{pct}%"))
+                        .expect("a u32 percentage fits inline text"),
+                    accent,
+                )
             }
-            InstallPhase::Extracting => ("Installing".to_owned(), accent),
-            InstallPhase::Installed => ("Installed".to_owned(), INSTALLED_NOW),
-            InstallPhase::Error => ("Error".to_owned(), ERROR_RGBA),
+            InstallPhase::Extracting => (TextContent::Static("Installing"), accent),
+            InstallPhase::Installed => (TextContent::Static("Installed"), INSTALLED_NOW),
+            InstallPhase::Error => (TextContent::Static("Error"), ERROR_RGBA),
         }
     } else if is_installed(state, pack) {
-        ("In Library".to_owned(), IN_LIBRARY)
+        (TextContent::Static("In Library"), IN_LIBRARY)
     } else {
         return;
     };
@@ -1665,7 +1679,7 @@ fn push_doubles(actors: &mut Vec<Actor>, state: &State) {
 
     for column in 0..2usize {
         let x = lo::dbl_x(column);
-        let list: Vec<usize> = doubles_column(state, column).to_vec();
+        let list = doubles_column(state, column);
         let picked = column == state.doubles_column;
 
         // The picker's focus is the whole column lit as one thing, so "you are
@@ -2235,7 +2249,7 @@ fn push_footer(actors: &mut Vec<Actor>, state: &State, w: f32) {
     // corner it takes is a setting -- so a credit anchored to either one
     // overlaps it for half the people who see it.
     actors.push(act!(text:
-        font("miso"): settext("pack data from stepmaniaonline.net".to_owned()):
+        font("miso"): settext("pack data from stepmaniaonline.net"):
         align(0.5, 0.5): xy(w * 0.5, lo::VERSION_Y + 14.0): zoom(lo::VERSION_ZOOM):
         horizalign(center):
         diffuse(0.55, 0.55, 0.55, 0.75): z(Z_TEXT)
@@ -2474,3 +2488,37 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "render_pipelines_original.rs"]
+mod pipelines_original;
+#[cfg(test)]
+#[path = "render_pipelines_perf.rs"]
+mod pipelines_perf;
+
+#[cfg(test)]
+use super::preview;
+
+#[cfg(test)]
+#[path = "chrome_data_original.rs"]
+mod course_data_original;
+
+#[cfg(test)]
+#[path = "chrome_data_perf.rs"]
+mod course_data_perf;
+
+#[cfg(test)]
+#[path = "render/select_data_original.rs"]
+mod select_data_original;
+
+#[cfg(test)]
+#[path = "render/select_data_perf.rs"]
+mod select_data_perf;
+
+#[cfg(test)]
+#[path = "doubles_render_original.rs"]
+mod doubles_render_original;
+
+#[cfg(test)]
+#[path = "doubles_render_perf.rs"]
+mod doubles_render_perf_tests;

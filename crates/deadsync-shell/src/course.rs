@@ -102,17 +102,17 @@ pub fn course_life_config_for_stage(
 }
 
 fn course_stage_runtime_from_plan(
-    plan: &CourseStagePlan,
+    plan: CourseStagePlan,
     chart_type: &str,
 ) -> Option<CourseStageRuntime> {
     let steps_idx = plan
         .song
         .steps_index_for_chart_hash(chart_type, plan.chart_hash.as_str())?;
     Some(CourseStageRuntime {
-        song: plan.song.clone(),
+        song: plan.song,
         steps_index: [steps_idx; MAX_PLAYERS],
         preferred_difficulty_index: [steps_idx; MAX_PLAYERS],
-        modifiers: plan.modifiers.clone(),
+        modifiers: plan.modifiers,
         gain_seconds: plan.gain_seconds,
         gain_lives: plan.gain_lives,
     })
@@ -149,19 +149,16 @@ pub fn append_endless_cycle(
     if course.course_type != CourseTypeView::Endless || selection.path != course.path {
         return false;
     }
-    let stages: Vec<_> = selection
+    let previous_len = course.stages.len();
+    for stage in selection
         .stages
-        .iter()
+        .into_iter()
         .filter_map(|stage| course_stage_runtime_from_plan(stage, chart_type))
-        .collect();
-    if stages.is_empty() {
-        return false;
+    {
+        add_course_stage_totals(&mut course.course_display_totals, &stage, chart_type);
+        course.stages.push(stage);
     }
-    for stage in &stages {
-        add_course_stage_totals(&mut course.course_display_totals, stage, chart_type);
-    }
-    course.stages.extend(stages);
-    true
+    course.stages.len() != previous_len
 }
 
 pub fn build_course_run_from_selection(
@@ -169,18 +166,15 @@ pub fn build_course_run_from_selection(
     chart_type: &str,
 ) -> Option<CourseRunState> {
     let mut stages = Vec::with_capacity(selection.stages.len());
-    for stage in &selection.stages {
+    let mut course_display_totals = [CourseDisplayTotals::default(); MAX_PLAYERS];
+    for stage in selection.stages {
         if let Some(runtime) = course_stage_runtime_from_plan(stage, chart_type) {
+            add_course_stage_totals(&mut course_display_totals, &runtime, chart_type);
             stages.push(runtime);
         }
     }
     if stages.is_empty() {
         return None;
-    }
-
-    let mut course_display_totals = [CourseDisplayTotals::default(); MAX_PLAYERS];
-    for stage in &stages {
-        add_course_stage_totals(&mut course_display_totals, stage, chart_type);
     }
 
     Some(CourseRunState {
@@ -382,20 +376,33 @@ pub fn build_course_graph_stages(
     course: &CourseRunState,
     chart_type: &str,
 ) -> [Vec<CourseGraphStage>; MAX_PLAYERS] {
-    std::array::from_fn(|player_idx| {
-        let mut out = Vec::with_capacity(course.stages.len());
-        for stage in &course.stages {
-            let Some(chart) = stage
+    let mut out = std::array::from_fn(|_| Vec::with_capacity(course.stages.len()));
+    for stage in &course.stages {
+        let build = |index| {
+            stage
                 .song
-                .chart_for_steps_index(chart_type, stage.steps_index[player_idx])
-            else {
+                .chart_for_steps_index(chart_type, index)
+                .map(|chart| CourseGraphStage {
+                    chart: Arc::new(chart.clone()),
+                    song_last_second: stage.song.precise_last_second(),
+                })
+        };
+        let first = build(stage.steps_index[0]);
+        let second = if stage.steps_index[0] == stage.steps_index[1] {
+            let Some(first) = &first else {
                 continue;
             };
-            out.push(CourseGraphStage {
-                chart: Arc::new(chart.clone()),
-                song_last_second: stage.song.precise_last_second(),
-            });
-        }
-        out
-    })
+            Some(first.clone())
+        } else {
+            build(stage.steps_index[1])
+        };
+        let [p1, p2] = &mut out;
+        p1.extend(first);
+        p2.extend(second);
+    }
+    out
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_updates.rs"]
+mod update_tests;

@@ -216,7 +216,11 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
                 &fallback_offsets[..num_cols],
                 &fallback_invert[..num_cols],
                 &fallback_tornado[..num_cols],
-                beat_factor(request.current_beat),
+                beat_factor(
+                    request.current_beat,
+                    request.visual.beat_offset,
+                    request.visual.beat_mult,
+                ),
             )
         };
 
@@ -820,7 +824,11 @@ mod tests {
                             col_offsets: &offsets[..num_cols],
                             invert: &invert[..num_cols],
                             tornado: &tornado[..num_cols],
-                            beat_factor: beat_factor(request.current_beat),
+                            beat_factor: beat_factor(
+                                request.current_beat,
+                                request.visual.beat_offset,
+                                request.visual.beat_mult,
+                            ),
                         });
                         // Prepared geometry must bypass all fallback calculations.
                         request.spacing_multiplier = f32::NAN;

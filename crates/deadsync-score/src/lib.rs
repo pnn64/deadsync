@@ -2168,13 +2168,19 @@ fn collect_sorted_profile_scores(
 }
 
 fn sort_profile_scores(scores: &mut [(String, CachedScore)]) {
-    scores.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+    if scores.iter().all(|(hash, _)| hash.len() == 16) {
+        scores.sort_unstable_by_key(|(hash, _)| {
+            u128::from_be_bytes(hash.as_bytes().try_into().expect("16-byte chart hash"))
+        });
+    } else {
+        scores.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+    }
 }
 
-fn merged_profile_scores_from_sources(
-    local: Option<&HashMap<String, CachedScore>>,
-    gs: Option<&HashMap<String, CachedScore>>,
-    ac: Option<&HashMap<String, ArrowCloudScores>>,
+fn merged_profile_scores_from_sources<'a>(
+    local: Option<&'a HashMap<String, CachedScore>>,
+    gs: Option<&'a HashMap<String, CachedScore>>,
+    ac: Option<&'a HashMap<String, ArrowCloudScores>>,
 ) -> Vec<(String, CachedScore)> {
     let local = local.filter(|scores| !scores.is_empty());
     let gs = gs.filter(|scores| !scores.is_empty());
@@ -2207,15 +2213,15 @@ fn merged_profile_scores_from_sources(
 
     let capacity =
         local.map_or(0, HashMap::len) + gs.map_or(0, HashMap::len) + ac.map_or(0, HashMap::len);
-    let mut merged = HashMap::with_capacity_and_hasher(capacity, FxBuildHasher);
-    let mut insert = |chart_hash: &str, score: CachedScore| match merged.get_mut(chart_hash) {
-        Some(best) => {
-            *best = best_cached_itg_score([Some(*best), Some(score)])
-                .expect("two scores always produce a best score");
-        }
-        None => {
-            merged.insert(chart_hash.to_owned(), score);
-        }
+    let mut merged = hashbrown::HashMap::with_capacity_and_hasher(capacity, FxBuildHasher);
+    let mut insert = |chart_hash: &'a str, score: CachedScore| {
+        merged
+            .entry(chart_hash)
+            .and_modify(|best| {
+                *best = best_cached_itg_score([Some(*best), Some(score)])
+                    .expect("two scores always produce a best score");
+            })
+            .or_insert(score);
     };
     if let Some(scores) = local {
         for (chart_hash, score) in scores {
@@ -2234,7 +2240,11 @@ fn merged_profile_scores_from_sources(
             }
         }
     }
-    collect_sorted_profile_scores(merged.into_iter())
+    collect_sorted_profile_scores(
+        merged
+            .into_iter()
+            .map(|(hash, score)| (hash.to_owned(), score)),
+    )
 }
 
 impl HeldScoreCaches {
@@ -2387,14 +2397,14 @@ impl<T> SubmitRetryState<T> {
     where
         K: Fn(&T) -> &str,
     {
-        let hash = key(&entry).trim().to_string();
+        let hash = key(&entry).trim();
         if hash.is_empty() {
             return;
         }
         let entries = self.entries_mut(side_index);
         if let Some(stored) = entries
             .iter_mut()
-            .find(|stored| key(stored).eq_ignore_ascii_case(hash.as_str()))
+            .find(|stored| key(stored).eq_ignore_ascii_case(hash))
         {
             *stored = entry;
             return;
@@ -11380,3 +11390,10 @@ mod tests {
 #[path = "../../../tests/support/perf.rs"]
 #[allow(dead_code)]
 mod perf;
+
+#[cfg(test)]
+#[path = "../../../tests/support/paired_bench.rs"]
+mod paired_bench;
+
+#[cfg(test)]
+mod performance_state_flows;

@@ -173,11 +173,90 @@ mod tests {
 }
 
 #[cfg(test)]
-mod scan_alloc {
-    include!("../../../tests/perf/scan_alloc.rs");
+use resource_perf_support as perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/menu_buffers_support.rs"]
+mod menu_buffers_perf_support;
+
+#[cfg(test)]
+#[path = "../../../tests/support/paired_bench.rs"]
+mod paired_bench;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/select_data_support.rs"]
+mod select_data_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/data_paths_support.rs"]
+mod data_paths_perf_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/preview_dataflows_support.rs"]
+mod preview_dataflows_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/resource_support.rs"]
+#[allow(dead_code)]
+mod resource_perf_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/ui_borrowed_state_support.rs"]
+mod ui_borrowed_state_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_data_support.rs"]
+mod course_data_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/string_pipelines_support.rs"]
+mod pipelines_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/transient_buffers_support.rs"]
+mod buffers_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/ui_pipelines_support.rs"]
+mod ui_pipelines_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/view_buffers_support.rs"]
+mod view_buffers_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/overlay_support.rs"]
+mod overlay_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/option_support.rs"]
+mod option_perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/traversal_support.rs"]
+mod traversal_perf;
+
+#[cfg(test)]
+fn traversal_peak_bytes(churn: perf::Churn) -> usize {
+    churn.peak_bytes
 }
 
 #[cfg(test)]
-mod scan_perf {
-    include!("../../../tests/perf/scan_support.rs");
+#[path = "../../../tests/perf/profile_dataflow_support.rs"]
+mod dataflow_perf;
+
+#[cfg(test)]
+fn dataflow_peak_bytes(churn: perf::Churn) -> usize {
+    churn.peak_bytes
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_loading_support.rs"]
+mod course_perf;
+
+#[cfg(test)]
+use resource_perf_support as scan_alloc;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/scan_support.rs"]
+mod scan_perf;

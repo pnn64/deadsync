@@ -1,0 +1,257 @@
+{
+  "problem": "Player tweens started during Init/On or Update(0) were omitted from startup capture. Player clocks advanced only when NoteField wrappers existed. First-frame snapshots read queued destinations instead of current poses.",
+  "change": "Retain external player startup queues, always advance their actor clocks, and capture the current rendered pose for compiler samples and the initial renderer state.",
+  "removed_behavior": "Remove the wrapper-only player clock gate and replace the duplicated pose mapping with one shared mapping.",
+  "source_parent": "c4279fc8c7feac25b7e157418ca27562176f4c3f",
+  "reference_sources": {
+    "src/Actor.cpp": {
+      "sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "lines": [
+        [
+          795,
+          858
+        ],
+        [
+          989,
+          1020
+        ]
+      ]
+    },
+    "src/Actor.h": {
+      "sha256": "76ff31b0dad5cc1198d01dbe735fed769aac40d309017fbb501bcdcef958219b",
+      "lines": [
+        [
+          351,
+          365
+        ]
+      ]
+    },
+    "src/ActorFrame.cpp": {
+      "sha256": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+      "lines": [
+        [
+          449,
+          478
+        ]
+      ]
+    },
+    "src/Tween.cpp": {
+      "sha256": "ae2bcbe0c6e69eaea571467508f8379dd2b8b53b076a9310d300a0c5d9f6d429",
+      "lines": [
+        [
+          18,
+          30
+        ]
+      ]
+    }
+  },
+  "native_capture": {
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass213-native-player-long-tween-v1\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "0a79940f84a8056d0d86b3d90843b2393595d706e0b76863d2e2833c32a5a1ab",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "capture_exit_code": 0,
+    "binary_sha256": "6b6b477653effd6a50106c3baab3382ef4d2fa65bc3f0cf945689fa81f030ceb",
+    "control_sha256": "052815182993de846f2f2c1256559cd83a5cd7d06b792111db27c152caaee866",
+    "update_frames": 241,
+    "source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+    "source_pending_commit": false,
+    "capture_complete": true,
+    "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass213-native-player-long-tween-v1\\archives\\942ab5478f0f175c8e92cdf45072669853b8437d27d1d44cf6c371f7fb87183c.tar.zst",
+    "archive_sha256": "942ab5478f0f175c8e92cdf45072669853b8437d27d1d44cf6c371f7fb87183c",
+    "archive_entry": {
+      "title": "Native player-long-tween control",
+      "source_simfile": "control/control.ssc",
+      "harness_version": "0.1.61",
+      "archive": "942ab5478f0f175c8e92cdf45072669853b8437d27d1d44cf6c371f7fb87183c.tar.zst",
+      "sha256": "942ab5478f0f175c8e92cdf45072669853b8437d27d1d44cf6c371f7fb87183c",
+      "compressed_bytes": 16958
+    }
+  },
+  "before_control": {
+    "exit_code": 1,
+    "comparisons_passed": 4879,
+    "comparisons_failed": 447,
+    "elapsed_seconds": 2.533461000304669,
+    "archive_sha256": "942ab5478f0f175c8e92cdf45072669853b8437d27d1d44cf6c371f7fb87183c",
+    "binary_sha256": "0637cd0a62010c925a837cee0c7c7eb9f5ddba010da81d7e8099effa8be5392c",
+    "source_commit": "c4279fc8c7feac25b7e157418ca27562176f4c3f",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\long-player-baseline-v1-control.log",
+    "log_sha256": "f7f4f256501bf58f485c2255a3911bfce671e6a9deb057f5a3d60fb5b3c0b328",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "before_archive": {
+    "position": 95,
+    "source_simfile": "Anxiety/Anxiety.sm",
+    "archive": "3318aeb2e7fd1de204f12496812fa60f138019834bf2c5222b092403aefa2ce3.tar.zst",
+    "archive_sha256": "3318aeb2e7fd1de204f12496812fa60f138019834bf2c5222b092403aefa2ce3",
+    "harness_version": "0.1.61",
+    "source_commit": "4910a6925cca98dc95ba8a9dbd6039f61bec915a",
+    "source_pending_commit": false,
+    "binary_sha256": "3e6523f86f6d4d3747ee2d54b3b5fe0bf5673ca413411dde6786cd98c8cf30cb",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass176\\ordered-main-v3-full_song_lua.exe",
+      "3318aeb2e7fd1de204f12496812fa60f138019834bf2c5222b092403aefa2ce3.tar.zst"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 24.10479629971087,
+    "comparisons_passed": 284938,
+    "comparisons_failed": 6354,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-095-ordered-main-v3.log",
+    "log_sha256": "2bd20e96e3133a125cfddbd1c4531c08ad7c598a45ed7b2c30a24fea93b1d04c",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass207-top-095-current-main-v1.json",
+    "native_receipt_sha256": "217609f23671123a675de52c8c3159b4b6114ad870f3d5f0140d3a4b79f90b6c",
+    "full_corpus_complete": false
+  },
+  "after_control": {
+    "exit_code": 0,
+    "comparisons_passed": 5326,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 2.3730968004092574,
+    "archive_sha256": "942ab5478f0f175c8e92cdf45072669853b8437d27d1d44cf6c371f7fb87183c",
+    "binary_sha256": "9cf5fab32985bab2554acad020ce08084e8d4caa8762db4e98d91866d01bf25d",
+    "source_commit": "c4279fc8c7feac25b7e157418ca27562176f4c3f",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\long-player-v4-control.log",
+    "log_sha256": "11cfebd470de98306a7be7a5fdd3472daab1008764e36aaacf1797b1f8b713c3",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "after_archive": {
+    "exit_code": 0,
+    "comparisons_passed": 291292,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 25.320415100082755,
+    "archive_sha256": "3318aeb2e7fd1de204f12496812fa60f138019834bf2c5222b092403aefa2ce3",
+    "binary_sha256": "9cf5fab32985bab2554acad020ce08084e8d4caa8762db4e98d91866d01bf25d",
+    "source_commit": "c4279fc8c7feac25b7e157418ca27562176f4c3f",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\fresh-095-long-player-v4.log",
+    "log_sha256": "6e3711e1c07be0e6ce8f030b8bdd73ebd7c6758cf2e426c3ce96e3364ecbb3d6",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "regressions": {
+    "long-player-v4-frames": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "c4279fc8c7feac25b7e157418ca27562176f4c3f",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "482c0e6f4e0c2fe92cd3e3899025484fc8bdfdd8d2da9d203fdcbbd51019482a",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass176\\long-player-v4-song_lua_itgmania_semantic_parity.exe",
+        "runtime_modifiers::long_player_tweens_match_native_frames",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.686921199783683,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\long-player-v4-frames.log",
+      "log_sha256": "d11f74421184b21cead62c7d447ee249d25a95be18551744d463728321907105",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 293 filtered out; finished in 0.92s"
+      ]
+    },
+    "long-player-v4-runtime-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "c4279fc8c7feac25b7e157418ca27562176f4c3f",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "482c0e6f4e0c2fe92cd3e3899025484fc8bdfdd8d2da9d203fdcbbd51019482a",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass176\\long-player-v4-song_lua_itgmania_semantic_parity.exe",
+        "runtime_modifiers",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 9.9596792999655,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\long-player-v4-runtime-tests.log",
+      "log_sha256": "6f099bc83205c02a95c5f1d438e855fff570bbf51344f368fb0e91c0cf844b6b",
+      "result_lines": [
+        "test result: FAILED. 56 passed; 3 failed; 2 ignored; 0 measured; 233 filtered out; finished in 9.40s"
+      ]
+    },
+    "long-player-v4-song-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "c4279fc8c7feac25b7e157418ca27562176f4c3f",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "88623fdbc91ef7726f3a448aab739629ce0175236f2b04df7bb11852327b5110",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass176\\long-player-v4-deadsync_song_lua.exe",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 20.981248300056905,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\long-player-v4-song-tests.log",
+      "log_sha256": "1f43e344c37e75be6a1ebf2ae8f3789e59a811747f79fda445eca0ff70d0373b",
+      "result_lines": [
+        "test result: FAILED. 500 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.64s"
+      ]
+    },
+    "long-player-v4-theme-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "c4279fc8c7feac25b7e157418ca27562176f4c3f",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "3e0d4906c2b482923e4fea8e1c6deac5bdfedfc10e6d61697a912abfbe8e17d8",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass176\\long-player-v4-deadsync_theme_simply_love.exe",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 4.946163900196552,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\long-player-v4-theme-tests.log",
+      "log_sha256": "c5d02da1cb42ba722b6fb4089f77ab55c7911e70acbf13135b29def5fa91ec7a",
+      "result_lines": [
+        "test result: FAILED. 1269 passed; 1 failed; 6 ignored; 0 measured; 0 filtered out; finished in 1.84s"
+      ]
+    },
+    "long-player-v4-technique-arrow": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "c4279fc8c7feac25b7e157418ca27562176f4c3f",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "3e0d4906c2b482923e4fea8e1c6deac5bdfedfc10e6d61697a912abfbe8e17d8",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass176\\long-player-v4-deadsync_theme_simply_love.exe",
+        "screens::components::shared::technique_bg::tests::technique_arrow_renders_and_rotates",
+        "--exact",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 6.4709731000475585,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\long-player-v4-technique-arrow.log",
+      "log_sha256": "bbb5660e65119b6846d6d6d999103f58d505bd483902c224c7550f3d94760daa",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1275 filtered out; finished in 5.86s"
+      ]
+    }
+  },
+  "baseline_failures_preserved": {
+    "long-player-v4-runtime-tests": [
+      "runtime_modifiers::hidden_actor_tweens_drive_modifiers_without_probe_state",
+      "runtime_modifiers::lane_stealth_survives_lua_writes_and_fresh_options",
+      "runtime_modifiers::motion_suboptions_survive_lua_writes_and_reset"
+    ],
+    "long-player-v4-song-tests": [
+      "multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod",
+      "tests::compile_song_lua_accepts_skewy_probe_calls"
+    ],
+    "long-player-v4-theme-tests": [
+      "screens::components::gameplay::notefield::tests::cyber_model_tap_scale_uses_model_height_not_logical_height"
+    ]
+  },
+  "comparison_tolerances_changed": false,
+  "original_chart_and_lua_modified": false,
+  "reference_theme_sources_modified": false,
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "remaining_scope": "The original 501 sources and 492 contexts remain active, including live random attacks and the previously recorded geometry, timing and six baseline regression gaps."
+}

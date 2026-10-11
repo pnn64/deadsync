@@ -1,0 +1,110 @@
+{
+  "pass": 193,
+  "previous_record": "native-revalidation-pass192.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "d240231aaf604dfb96dd4b43091533ee52237f92",
+  "comparator_sha256": "359bf9a46e7b3e6f6bb04576d23969e12565a6a770c76c39271e20e1d41f9ad6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    114
+  ],
+  "next_position": 115,
+  "comparisons_passed": 116603,
+  "charts": [
+    {
+      "position": 114,
+      "entry": {
+        "title": "Bank Account",
+        "source_simfile": "Bank Account/Bank Account.sm",
+        "harness_version": "0.1.64",
+        "archive": "89ccfcb83c3fb05f3b48b922272cc115dc5b69ebf345bd179a1e5a15af1d9edf.tar.zst",
+        "sha256": "89ccfcb83c3fb05f3b48b922272cc115dc5b69ebf345bd179a1e5a15af1d9edf",
+        "compressed_bytes": 55318,
+        "aliases": [
+          "968b0e13a41a5700add5f3789d69b61d18a6802ffa4e97c6b0f97554324e2f47.tar.zst",
+          "3a11347bbb603a5a02eca3de3ddbe5ff45624b040cadec32440c329bfda1736d.tar.zst",
+          "cc5b053ddbb5ff0166a3d531326bd07ff6bfb9f82c1f9cce4e7cf36a90fcc494.tar.zst",
+          "f866f7a8d6b2db79246044cb261a21625dc8e7ea0525f6dca0fbe5cdc0fe0c9f.tar.zst",
+          "1006b3778955cbe93c9fb4a3e02ba449ccf1abd319932a09a5c1ead997d54fb8.tar.zst",
+          "05b1f3435d3a8892b8172bf6b2c7dd7c28f2782d8cadd36e8cd6b17d96b2643f.tar.zst"
+        ]
+      },
+      "original_archive_retained": "ca287cf3d3877dc362c9b9cff0c15075a80c9071123afce2aec33de92686591f.tar.zst",
+      "native_source_commit": "cc0ea0c0ab70e962785eff8681a6867a3f8689ee",
+      "native_trace_sha256": "f432c59496274d196774083e770142ce6500c2a7026511bb3e9d8e2300e95389",
+      "original_source_sha256": {
+        "Bank Account/.DS_Store": "b4bc11226e6c9dee6926d5402477829ad6ba58f9ecc887419563791fe8876241",
+        "Bank Account/Bank Account-bg.png": "663247ccb3426f0427689d267635871bd2415552f23f8c06e32f58fe16196032",
+        "Bank Account/Bank Account-bn.png": "d388f8ff51b2b60a2bd02236478b6374077d939d01b50d2efd1ad393b70cfc69",
+        "Bank Account/Bank Account-jacket.png": "9b805d49c8db46a67ebf24266c9d945a63fa67fba6cac2b082970c8ea27e7e28",
+        "Bank Account/Bank Account.ogg": "e78fa6d3863c61229f76404f86e2008bf4598a5cdd18e5d46a8ea9c8b2401034",
+        "Bank Account/Bank Account.sm": "cd87ad718b46afee6a95c4534b5a1ed7560d01547ca52374d109176dc8d125de",
+        "Bank Account/Bank Account.ssc": "92b09483a60ce1e1a1f6d9c2dcb6b00d4db1382e8c5faaa2a8a087106d1ba7ed",
+        "Bank Account/cdtitle.png": "6ad7999cb50ad60c6ce14ee2bccfa630f56bc7423f00fe1058442bae175d386c",
+        "Bank Account/lua/default.lua": "e391ffc29e9fe7822b96fd40a28a6822b064ffcec1def2a1533d782c62679539",
+        "Bank Account/lua/oldfile.lua": "652e4a27fb639aae3388aa994042fcc249d9b7a935b679ec42f8167315237fad",
+        "Bank Account/lua/script.py": "85bc8793b4e75275d452fb3018809cf9756e86228ea1630b25c74d32cba907b0"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 5300,
+      "duration_seconds": 88.31367492675781,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 2,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 114,
+      "source_simfile": "Bank Account/Bank Account.sm",
+      "archive": "89ccfcb83c3fb05f3b48b922272cc115dc5b69ebf345bd179a1e5a15af1d9edf.tar.zst",
+      "archive_sha256": "89ccfcb83c3fb05f3b48b922272cc115dc5b69ebf345bd179a1e5a15af1d9edf",
+      "harness_version": "0.1.64",
+      "source_commit": "d240231aaf604dfb96dd4b43091533ee52237f92",
+      "source_pending_commit": false,
+      "binary_sha256": "359bf9a46e7b3e6f6bb04576d23969e12565a6a770c76c39271e20e1d41f9ad6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\startup-identities-v1-full_song_lua.exe",
+        "89ccfcb83c3fb05f3b48b922272cc115dc5b69ebf345bd179a1e5a15af1d9edf.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.1590026998892426,
+      "comparisons_passed": 116603,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-114-committed-startup-identities-v1.log",
+      "log_sha256": "5f3859bcc3d27a532949da5bc7b0e0004a58272955a2b252c98a27d8f881c64b",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass241-top-114-rage-file-v2.json",
+      "native_receipt_sha256": "bb63ce9cae35768c492d4687f11dc694bcc5dbf6913cd488617443f2ff8af6c4",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "d240231aaf604dfb96dd4b43091533ee52237f92",
+    "source_pending_commit": false,
+    "binary_sha256": "bf0a97f8c313d0d0d00267c67f61d42bbae1852baad92c8bc0e79d9c6510772b",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\startup-identities-v2-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.0832664999179542,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-114-native-pass193.log",
+    "log_sha256": "383a8e11c043ed3020191758249fb58498da47eb621b9084f5c8ffa7fcd4cad0",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.50s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}
