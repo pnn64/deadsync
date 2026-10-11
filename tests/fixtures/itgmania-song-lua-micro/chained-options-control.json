@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "name": "native float option chain contract",
+  "option_control": true,
+  "lua_assertions": "local function po(method, ...) return _ITG_OPTIONS_AT(0, 'ModsLevel_Song', method, ...) end\nlocal owner = po('DrunkOffset', 2.5, 2, true)\nassert(type(owner) == 'userdata')\nassert(not pcall(function() owner:DrunkOffset(200):DrunkSpeed(1.5):DrunkPeriod(.75) end))\nassert(po('DrunkOffset') == 200)\nassert(po('DrunkSpeed') == 0)\nowner:DrunkOffset(200, nil, true):DrunkSpeed(1.5, nil, true):DrunkPeriod(.75)\nassert(po('DrunkOffset') == 200 and po('DrunkSpeed') == 1.5 and po('DrunkPeriod') == .75)\npo('Stealth4', 1, 4)\nassert(not pcall(function() owner:Stealth1(.75, 2):Stealth4(0):StealthPastReceptors(false) end))\nassert(po('Stealth1') == .75 and po('Stealth4') == 1)\nowner:Stealth1(.75, 2, true):Stealth4(0, nil, true):StealthPastReceptors(false)\nassert(po('Stealth1') == .75 and po('Stealth4') == 0)\n"
+}

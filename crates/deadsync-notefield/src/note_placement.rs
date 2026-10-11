@@ -36,7 +36,7 @@ mod tests {
         speed: ScrollSpeedSetting,
         accel: AccelYParams,
         time_ns: i64,
-        elapsed_screen_s: f32,
+        expand_seconds: f32,
     ) -> crate::ScrollTravel<'_> {
         let beat = timing.get_beat_for_time_ns(time_ns);
         scroll_travel(ScrollTravelRequest {
@@ -54,11 +54,11 @@ mod tests {
             draw_distance_after_targets: 320.0,
             draw_distance_before_targets: 640.0,
             field_zoom: 1.0,
-            elapsed_screen_s,
+            expand_seconds: expand_seconds,
             effect_height: 640.0,
             screen_height: 720.0,
             note_count_stats: &[],
-            arrow_effect_time_s: elapsed_screen_s,
+            arrow_effect_time_s: expand_seconds,
             lane_tipsy: 0.0,
             lane_tipsy_offset: 0.0,
             lane_tipsy_speed: 0.0,

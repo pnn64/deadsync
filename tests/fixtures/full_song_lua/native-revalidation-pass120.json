@@ -1,0 +1,105 @@
+{
+  "pass": 120,
+  "previous_record": "native-revalidation-pass119.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "207e17110432f1252dbf3e6826e13a03b6d1dcca",
+  "comparator_sha256": "c1ed90a7faf15a43e85603b3b80a04b02e82de16ed5feba20eb6c55a2df2839d",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    41
+  ],
+  "next_position": 42,
+  "comparisons_passed": 199543,
+  "charts": [
+    {
+      "position": 41,
+      "entry": {
+        "title": "[6005] [11] CO5M1C R4ILR0AD (Hard)",
+        "source_simfile": "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc",
+        "harness_version": "0.1.52",
+        "archive": "88b8c7f14ed7787714a16083bc9c08acb2abc5927cae947a7862a795f56fab4b.tar.zst",
+        "sha256": "88b8c7f14ed7787714a16083bc9c08acb2abc5927cae947a7862a795f56fab4b",
+        "compressed_bytes": 1296156,
+        "aliases": [
+          "7d36336e7e91c23183bb6355b8dcc8d23f570617f33316c672b4980fe177513c.tar.zst"
+        ]
+      },
+      "original_archive_retained": "6806347d912748a3351032ecdec12caee63ae2af38da2b756cd2dc205b9623c2.tar.zst",
+      "native_source_commit": "ecd483a2e2e7530f9a72aae42dcede686c3a62b7",
+      "native_trace_sha256": "087e2fbc8b305d40283d063b5a8c0bacb6678dbc29e2aab37f1ba262c08acb38",
+      "original_source_sha256": {
+        "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-audio.ogg": "d94ba22f78d60082cd6733ba6e0650497579d4c6a052343b720b47e548c1513f",
+        "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-background.png": "55cdbeda856c4ed74d8656a2207e09caa68e78d501b6b7960543b4b96426ee9e",
+        "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-banner.png": "58d9f680cacf500301c1710e71e9823ee432792b01fee036d2f6790b8da23081",
+        "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc": "d425d8542321b443ac3e334f96a62f53beaf0b29a3d395512a9be302a635ae90",
+        "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/collab-cdtitle.png": "9a3e250f3028a9bd705cd4b6b14e4b6f5ceacb569e58eac9d6f2dce5d6468cca",
+        "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/lua/darkness.png": "593912ded2d22c88404b9911468ba310e16141bf031818953bfaf30a96ad8f61",
+        "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/lua/default.lua": "4dbc8fc17aeac419a81be1c48dc04be98e1113aa86928350c9408ef9e0af0ae1",
+        "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/lua/static.sprite": "0db16c344f2ec72f0fce4c1d729456f6b5bb2830deabad758b835283ede9a063",
+        "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/lua/TopscreenActorList.txt": "0def95194cd0e7d83bea7faf24fd06468e8d7cc252df62737c4c6154fa7ab43a",
+        "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/lua/_static 4x1.png": "8500b1d8ac859a7e47bb119251cc0441c469efeba5f54ef6b9aa17d4c4a64f7b"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8084,
+      "duration_seconds": 134.70968627929688,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 6,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 41,
+      "source_simfile": "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc",
+      "archive": "88b8c7f14ed7787714a16083bc9c08acb2abc5927cae947a7862a795f56fab4b.tar.zst",
+      "archive_sha256": "88b8c7f14ed7787714a16083bc9c08acb2abc5927cae947a7862a795f56fab4b",
+      "harness_version": "0.1.52",
+      "source_commit": "207e17110432f1252dbf3e6826e13a03b6d1dcca",
+      "source_pending_commit": false,
+      "binary_sha256": "c1ed90a7faf15a43e85603b3b80a04b02e82de16ed5feba20eb6c55a2df2839d",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-judgment-draw-v1-full_song_lua.exe",
+        "88b8c7f14ed7787714a16083bc9c08acb2abc5927cae947a7862a795f56fab4b.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 33.614024499896914,
+      "comparisons_passed": 199543,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-041-native-current-v1.log",
+      "log_sha256": "fbec353a441c9934fa8c902ded55800077286d8356c5e69faa4a254d5acf31a2",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass120-top-041-native-v1.json",
+      "native_receipt_sha256": "bef9a0fce60a0bd38bc82bfec3f9414ac35c87f1d6319be04b87cddf3f764600",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "207e17110432f1252dbf3e6826e13a03b6d1dcca",
+    "source_pending_commit": false,
+    "binary_sha256": "621d453087787275bc808d379bdedd51c57d2c211682bb96bd3121183027dd6c",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-judgment-draw-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.3062241999432445,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-041-native-pass120.log",
+    "log_sha256": "4e63ceddd7b587a89fdc9c36b1307ef1e6f5b4a1c194af03b1f3718845d8fb3d",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 0.92s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

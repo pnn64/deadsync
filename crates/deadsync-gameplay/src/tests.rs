@@ -40,45 +40,53 @@ mod tests {
     }
 
     #[test]
-    fn player_life_dead_policy_uses_failing_or_empty_life() {
-        assert!(player_life_is_dead(1.0, true));
-        assert!(player_life_is_dead(0.0, false));
-        assert!(player_life_is_dead(-0.1, false));
-        assert!(!player_life_is_dead(0.1, false));
+    fn fail_modes_stage_rules() {
+        for mode in [GameplayFailType::Off, GameplayFailType::EndOfSong] {
+            let mut player = init_player_runtime_with_caps(PlayerBufferCaps::EMPTY);
+            player.fail_type = mode;
+            player.life = 0.1;
+            let update = apply_player_runtime_life_delta(&mut player, 1.0, -0.2);
+            assert!(!update.failed_now);
+            assert!(!player_runtime_is_dead(&player));
+            assert_eq!(player.fail_time, None);
+            // LifeMeterBar's regeneration lock still applies at zero life.
+            player.combo_after_miss = 1;
+            apply_player_runtime_life_delta(&mut player, 2.0, 0.1);
+            assert!(player.life > 0.0);
+            assert!(!update_player_failure(&mut player, 3.0, true));
+            player.life = 0.0;
+            assert_eq!(update_player_failure(&mut player, 4.0, true),
+                mode == GameplayFailType::EndOfSong);
+            assert_eq!(player.is_failing, mode == GameplayFailType::EndOfSong);
+        }
+        let mut player = init_player_runtime_with_caps(PlayerBufferCaps::EMPTY);
+        player.fail_type = GameplayFailType::Off;
+        player.life = 0.0;
+        player.fail_type = GameplayFailType::ImmediateContinue;
+        assert!(update_player_failure(&mut player, 5.0, false));
+        assert_eq!(player.fail_time, Some(5.0));
+        player.fail_type = GameplayFailType::Off;
+        assert!(!update_player_failure(&mut player, 6.0, false));
+        assert!(player_runtime_is_dead(&player));
+        assert_eq!(player.fail_time, Some(5.0));
     }
 
     #[test]
-    fn joined_players_failed_requires_active_dead_players() {
-        let players = [
-            PlayerLifeStatus {
-                life: 0.0,
-                is_failing: false,
-            },
-            PlayerLifeStatus {
-                life: 1.0,
-                is_failing: true,
-            },
-        ];
-
-        assert!(!all_joined_players_failed(&players, 0));
-        assert!(all_joined_players_failed(&players, 1));
-        assert!(all_joined_players_failed(&players, 2));
-    }
-
-    #[test]
-    fn joined_players_failed_rejects_any_alive_player() {
-        let players = [
-            PlayerLifeStatus {
-                life: 0.0,
-                is_failing: false,
-            },
-            PlayerLifeStatus {
-                life: 0.25,
-                is_failing: false,
-            },
-        ];
-
-        assert!(!all_joined_players_failed(&players, 2));
+    fn joined_fail_modes() {
+        let mut players = std::array::from_fn(|_| init_player_runtime());
+        players[0].life = 0.0;
+        players[1].is_failing = true;
+        assert!(!all_joined_player_runtimes_failed(&players, 0));
+        assert!(all_joined_player_runtimes_failed(&players, 1));
+        assert!(all_joined_player_runtimes_failed(&players, 2));
+        for mode in [GameplayFailType::Off, GameplayFailType::EndOfSong] {
+            players[0].fail_type = mode;
+            assert!(!all_joined_player_runtimes_failed(&players, 2));
+        }
+        players[0].fail_type = GameplayFailType::Immediate;
+        players[1].is_failing = false;
+        players[1].life = 0.25;
+        assert!(!all_joined_player_runtimes_failed(&players, 2));
     }
 
     #[test]
@@ -753,6 +761,7 @@ mod tests {
             None,
             12.0,
             deadsync_rules::life::LIFE_GREAT,
+            true,
         );
 
         assert_eq!(update, GameplayLifeDeltaUpdate::default());
@@ -782,6 +791,7 @@ mod tests {
             Some(&mut course_submit_life),
             12.0,
             -0.6,
+            true,
         );
 
         assert!(!update.failed_now);
@@ -805,6 +815,7 @@ mod tests {
             None,
             8.0,
             deadsync_rules::life::LIFE_MISS,
+            true,
         );
 
         assert!(update.failed_now);
@@ -841,6 +852,7 @@ mod tests {
             None,
             8.0,
             deadsync_rules::life::LIFE_GREAT,
+            true,
         );
 
         assert!(!update.failed_now);
@@ -868,6 +880,7 @@ mod tests {
             Some(&mut course_submit_life),
             8.0,
             deadsync_rules::life::LIFE_GREAT,
+            true,
         );
 
         assert!(update.was_dead);
@@ -2462,6 +2475,8 @@ mod tests {
 
         let output = refresh_active_attack_player(
             ActiveAttackRefreshInput {
+                base_accel: AccelEffects::default(),
+                base_attack_flags: AttackFlags::default(),
                 now: 1.0,
                 delta_time: 0.5,
                 attacks_cleared_for_outro: false,
@@ -2473,6 +2488,8 @@ mod tests {
                 song_lua_ease_windows: &lua_windows,
             },
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
+                active_attack_flags: AttackFlagOverrides::default(),
                 attack_current_appearance: AppearanceEffects::default(),
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: VisibilityOverrides::default(),
@@ -2515,6 +2532,8 @@ mod tests {
 
         let output = refresh_active_attack_player(
             ActiveAttackRefreshInput {
+                base_accel: AccelEffects::default(),
+                base_attack_flags: AttackFlags::default(),
                 now: 1.0,
                 delta_time: 1.0,
                 attacks_cleared_for_outro: true,
@@ -2526,6 +2545,8 @@ mod tests {
                 song_lua_ease_windows: &lua_windows,
             },
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
+                active_attack_flags: AttackFlagOverrides::default(),
                 attack_current_appearance: AppearanceEffects::default(),
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: visibility,
@@ -2569,6 +2590,8 @@ mod tests {
         active_visual.move_y_cols[7] = Some(0.25);
         let states = [
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
+                active_attack_flags: AttackFlagOverrides::default(),
                 attack_current_appearance: AppearanceEffects::default(),
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: VisibilityOverrides::default(),
@@ -2577,6 +2600,8 @@ mod tests {
                 outro_attack_visual: VisualOverrides::default(),
             },
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
+                active_attack_flags: AttackFlagOverrides::default(),
                 attack_current_appearance: AppearanceEffects {
                     hidden: 0.9,
                     sudden: 0.8,
@@ -2604,6 +2629,8 @@ mod tests {
         for state in states {
             for delta_time in [0.0, 1.0 / 120.0, 0.25, 2.0] {
                 let input = ActiveAttackRefreshInput {
+                    base_accel: AccelEffects::default(),
+                    base_attack_flags: AttackFlags::default(),
                     now: 42.0,
                     delta_time,
                     attacks_cleared_for_outro: false,
@@ -2624,7 +2651,7 @@ mod tests {
                 };
                 assert_eq!(
                     refresh_active_attack_player(input, state),
-                    refresh_active_attack_player_full(input, state, None, None),
+                    refresh_active_attack_player_full(input, state, None, None, (input.now, None)),
                 );
             }
         }
@@ -4357,6 +4384,27 @@ mod tests {
             SongLuaPlayerTransform::default(),
         );
         assert!(!runtime.visibility[0].any(), "expired columns must reset");
+    }
+
+    #[test]
+    fn move_z_approach() {
+        // Verified by the native PlayerOptions control in move-z-provenance.json.
+        let target = parse_song_lua_runtime_mods("*2 150% movez1,*2 -50% movez4");
+        let mut current = VisualOverrides::default();
+        let base = VisualEffects::default();
+        approach_visual_overrides_to_target(
+            &mut current, target.visual, target.visual_speed, base, 0.5,
+        );
+        assert_eq!(current.move_z_cols[0], Some(1.0));
+        assert_eq!(current.move_z_cols[3], Some(-0.5));
+        assert_eq!(current.move_z_cols[2], None);
+        approach_visual_overrides_to_target(
+            &mut current, target.visual, target.visual_speed, base, 0.5,
+        );
+        assert_eq!(current.move_z_cols[0], Some(1.5));
+        assert_eq!(merge_attack_visual_effects(base, current).move_z_cols[3], -0.5);
+        approach_visual_overrides_to_base(&mut current, base, 10.0);
+        assert!(current.move_z_cols.iter().all(Option::is_none));
     }
 
     #[test]
@@ -8106,7 +8154,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_ease_targets_convert_confusion_y_offset() {
+    fn song_lua_ease_targets_keep_confusion_y_radians() {
         let mut windows = Vec::new();
 
         assert!(append_song_lua_ease_targets(
@@ -8122,9 +8170,12 @@ mod tests {
             None,
         ));
 
-        assert_eq!(windows[0].target, SongLuaEaseMaskTarget::ConfusionYOffsetY);
-        assert_near(windows[0].from, 90.0);
-        assert_near(windows[0].to, 180.0);
+        assert_eq!(
+            windows[0].target,
+            SongLuaEaseMaskTarget::VisualConfusionYOffset
+        );
+        assert_near(windows[0].from, std::f32::consts::FRAC_PI_2);
+        assert_near(windows[0].to, std::f32::consts::PI);
     }
 
     #[test]
@@ -8783,7 +8834,6 @@ mod tests {
             zoom_x: None,
             zoom_y: Some(1.5),
             zoom_z: Some(f32::NAN),
-            confusion_y_offset: Some(9.0),
         }
         .resolve();
 
@@ -8798,7 +8848,6 @@ mod tests {
         assert_near(resolved.zoom_x, 1.0);
         assert_near(resolved.zoom_y, 1.5);
         assert_near(resolved.zoom_z, 1.0);
-        assert_near(resolved.confusion_y_offset, 9.0);
     }
 
     #[test]
@@ -8817,7 +8866,6 @@ mod tests {
             assert_near(transform.zoom_x, 1.0);
             assert_near(transform.zoom_y, 1.0);
             assert_near(transform.zoom_z, 1.0);
-            assert_near(transform.confusion_y_offset, 0.0);
         }
     }
 
@@ -8837,6 +8885,8 @@ mod tests {
             SongLuaEaseMaskTarget::AccelBoost,
             0.75,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8850,6 +8900,8 @@ mod tests {
             SongLuaEaseMaskTarget::VisualBumpyColumn(2),
             1.5,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8863,6 +8915,8 @@ mod tests {
             SongLuaEaseMaskTarget::AppearanceStealth,
             0.25,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8876,6 +8930,8 @@ mod tests {
             SongLuaEaseMaskTarget::VisibilityDark,
             1.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8889,6 +8945,8 @@ mod tests {
             SongLuaEaseMaskTarget::ScrollReverse,
             0.5,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8902,6 +8960,8 @@ mod tests {
             SongLuaEaseMaskTarget::PerspectiveTilt,
             -1.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8915,6 +8975,8 @@ mod tests {
             SongLuaEaseMaskTarget::MiniPercent,
             30.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8950,6 +9012,8 @@ mod tests {
             SongLuaEaseMaskTarget::ScrollSpeedC,
             -100.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8965,6 +9029,8 @@ mod tests {
             SongLuaEaseMaskTarget::ScrollSpeedC,
             650.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8983,6 +9049,8 @@ mod tests {
             SongLuaEaseMaskTarget::PlayerRotationZ,
             45.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -10413,6 +10481,7 @@ mod tests {
             chart_name: String::new(),
             meter: 0,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: String::new(),
             stats,

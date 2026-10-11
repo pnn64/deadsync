@@ -1,0 +1,105 @@
+{
+  "pass": 143,
+  "previous_record": "native-revalidation-pass142.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+  "comparator_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    64
+  ],
+  "next_position": 65,
+  "comparisons_passed": 394677,
+  "charts": [
+    {
+      "position": 64,
+      "entry": {
+        "title": "[FULL SONG] 粛聖!! ロリ神レクイエム☆",
+        "source_simfile": "[FULL SONG] Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem.ssc",
+        "harness_version": "0.1.54",
+        "archive": "c8c3dbcaaa63e16ec724b54e3320d9aec44bc90f7176ad44535ff0e1df91e592.tar.zst",
+        "sha256": "c8c3dbcaaa63e16ec724b54e3320d9aec44bc90f7176ad44535ff0e1df91e592",
+        "compressed_bytes": 396317,
+        "aliases": [
+          "f173eb6719838ed5bce9d354b01968c2cee8bcd7828452092ecd0c2d53357924.tar.zst"
+        ]
+      },
+      "original_archive_retained": "2d1af2fb210edff23de59a0b3af57e44198473493701f86cc38d8adaec0ae29f.tar.zst",
+      "native_source_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+      "native_trace_sha256": "912f69a2e1643664529f7467123971da7c656b2460f09a60a7586c6c740003e8",
+      "original_source_sha256": {
+        "[FULL SONG] Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem - bg hd.png": "d814ce02d95b224f994888ddaaef8fe0e67fec7d055291cb425642df54851fa6",
+        "[FULL SONG] Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem - bg.png": "fee0f9331713c46a1ddf6d1281a1c030e43548c446cc8844d4c03dc1f473b7d3",
+        "[FULL SONG] Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem - bn.png": "4aa80c76aeddda82b584a2eef8241a99d239594597b2859f3d1ef1eee1c8a7df",
+        "[FULL SONG] Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem - jacket.png": "4a9171be1c01a2ece5899e4f235e50cf63b31911c496c490d9b924fb57d2177e",
+        "[FULL SONG] Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem.avi": "5cdb3906e2b542b94b232c427e4db1bfda8a0e1c31a026750cbbc934114b14a0",
+        "[FULL SONG] Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem.ogg": "9c773df3a4427e261a56230fd245ab533146ea722f728e2805c1077161c13b0b",
+        "[FULL SONG] Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem.ssc": "1116f8606296901d172d2142b9e2da21be9df8b570da18d077e233e7dbbca89e",
+        "[FULL SONG] Shukusei!! Loli God's Requiem [Gpop]/lua/default.lua": "cef88ddd6174c9648b04f03312835d4e61a3ccb6582ec040198f8a6874fc2a25",
+        "[FULL SONG] Shukusei!! Loli God's Requiem [Gpop]/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "[FULL SONG] Shukusei!! Loli God's Requiem [Gpop]/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "[FULL SONG] Shukusei!! Loli God's Requiem [Gpop]/lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 16125,
+      "duration_seconds": 268.7287292480469,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 6,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 64,
+      "source_simfile": "[FULL SONG] Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem.ssc",
+      "archive": "c8c3dbcaaa63e16ec724b54e3320d9aec44bc90f7176ad44535ff0e1df91e592.tar.zst",
+      "archive_sha256": "c8c3dbcaaa63e16ec724b54e3320d9aec44bc90f7176ad44535ff0e1df91e592",
+      "harness_version": "0.1.54",
+      "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+      "source_pending_commit": false,
+      "binary_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-full_song_lua.exe",
+        "c8c3dbcaaa63e16ec724b54e3320d9aec44bc90f7176ad44535ff0e1df91e592.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 89.86995929991826,
+      "comparisons_passed": 394677,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-064-native-column-xy-v6.log",
+      "log_sha256": "f046b47c4f7831b3453080623b85efc1563af3335b1d39529b51e6b256bf1b62",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass143-top-064-native-v3.json",
+      "native_receipt_sha256": "6fba28c74733a4b383de7ee0038b800237b766f1bffeb688c16f9460425d1452",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+    "source_pending_commit": false,
+    "binary_sha256": "9f550263a9682a2386ebb04ff72a66926eca035a0e4f8e18e2def03b2ca1baa7",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.2291661999188364,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-064-native-pass143.log",
+    "log_sha256": "5a5af620f2fd26351816dd10d01309de8eacca5050a69deb9f8f34f09b96b62a",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 262 filtered out; finished in 0.84s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

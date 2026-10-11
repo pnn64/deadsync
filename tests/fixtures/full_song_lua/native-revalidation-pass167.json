@@ -1,0 +1,104 @@
+{
+  "pass": 167,
+  "previous_record": "native-revalidation-pass166.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "1121d63d11fb8922fee95bd721470004f02ab139",
+  "comparator_sha256": "558e94f44afb61ac48edb9915e1301a87db458dfc1492dab91447d58cca76f94",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    88
+  ],
+  "next_position": 89,
+  "comparisons_passed": 333777,
+  "charts": [
+    {
+      "position": 88,
+      "entry": {
+        "title": "合縁事変",
+        "source_simfile": "Aien-Jihen [Gpop]/Aien-Jihen.ssc",
+        "harness_version": "0.1.58",
+        "archive": "8f2f41131a2cfaf8495ad34ca3555b244027542bea2dafcb373391b3696a8e8a.tar.zst",
+        "sha256": "8f2f41131a2cfaf8495ad34ca3555b244027542bea2dafcb373391b3696a8e8a",
+        "compressed_bytes": 579828,
+        "aliases": [
+          "b4e13c9848ac2690e6b6d4ad6c55f49a2c0945f997ce870b3e62d9543b5e6473.tar.zst"
+        ]
+      },
+      "original_archive_retained": "505c7044020696f14a35476d87aeff802e82bee098745834a567cd1dbc9bf285.tar.zst",
+      "native_source_commit": "39e8d831d16360fdf251af08da524cf59d1f9166",
+      "native_trace_sha256": "b28d413c8246eff4cb13e62b4df8ffd1499010b936f5d475ae2506361c05e814",
+      "original_source_sha256": {
+        "Aien-Jihen [Gpop]/Aien-Jihen - bg hd.png": "aefdaa0ebf40330f61b36f4f3982ae5b26fbc9aeec4a0410147fc630fa0dfb2e",
+        "Aien-Jihen [Gpop]/Aien-Jihen - bg.png": "2fb6ccc9552f6f6eb5c4ddadb5a1d79142bb2daad92e2c4003295cb7b92dbf25",
+        "Aien-Jihen [Gpop]/Aien-Jihen - bn.png": "1c8785afdc8e24eaf2375491b9d0bdba78d520bb8956eb77095eb425302c1ab2",
+        "Aien-Jihen [Gpop]/Aien-Jihen - jacket.png": "c31cca0e2202e0951645d9e3af3bc2373012a8ab29092291550a5279877c62e3",
+        "Aien-Jihen [Gpop]/Aien-Jihen.avi": "20cb0caa2fdbd8f8df71738ca61e0877ccaab17e58aeb56d505ec841eca0e269",
+        "Aien-Jihen [Gpop]/Aien-Jihen.ogg": "f2c1c5914c7860ed7969484ae52c164e861b93ab8d1abf6d4442b881db45d665",
+        "Aien-Jihen [Gpop]/Aien-Jihen.ssc": "61bd4784f406b344f58d6cb38785558d397a4400c78d00ed7b5744023cfa8579",
+        "Aien-Jihen [Gpop]/gpopcdtitle.png": "93e71211552d268b52eae46f6a8e4af3c7cf216cd1bb04e847299981c5827583",
+        "Aien-Jihen [Gpop]/Kusogaki/default.lua": "9f649cd1ce63b4755acc1d3e9a94825b68ce3fd9d615bb7027c648103525fee5",
+        "Aien-Jihen [Gpop]/Kusogaki/default.xml": "29b538800f52cd435e03234713c1f727395c1ceb2ae941a2698017cefc1fe1c7"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 15149,
+      "duration_seconds": 252.46153259277344,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 3,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 88,
+      "source_simfile": "Aien-Jihen [Gpop]/Aien-Jihen.ssc",
+      "archive": "8f2f41131a2cfaf8495ad34ca3555b244027542bea2dafcb373391b3696a8e8a.tar.zst",
+      "archive_sha256": "8f2f41131a2cfaf8495ad34ca3555b244027542bea2dafcb373391b3696a8e8a",
+      "harness_version": "0.1.58",
+      "source_commit": "1121d63d11fb8922fee95bd721470004f02ab139",
+      "source_pending_commit": false,
+      "binary_sha256": "558e94f44afb61ac48edb9915e1301a87db458dfc1492dab91447d58cca76f94",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\bounce-tornado-v3-full_song_lua.exe",
+        "8f2f41131a2cfaf8495ad34ca3555b244027542bea2dafcb373391b3696a8e8a.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 9.867876899894327,
+      "comparisons_passed": 333777,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-088-bounce-tornado-v3.log",
+      "log_sha256": "99e8852cc6cb374b1d90c8de32404e46c94002e5531695baf23c1cb3e8e29061",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass170-top-088-bounce-v1.json",
+      "native_receipt_sha256": "0ddd327fa5187ccfb3692e7b49f8de1b11e234ed6870c5dd8d148972d18f7fce",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "1121d63d11fb8922fee95bd721470004f02ab139",
+    "source_pending_commit": false,
+    "binary_sha256": "e0749990919ef24e6f385def3c6a29d86df4513f45c66b6a6199772b53d1cc95",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\bounce-tornado-v3-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.359497600235045,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-088-native-pass167.log",
+    "log_sha256": "45d9630166c46ac6c6da546294303f904a2dd51da1cedc245765f1540aea14ec",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 271 filtered out; finished in 0.82s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

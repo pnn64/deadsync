@@ -1,0 +1,103 @@
+{
+  "pass": 130,
+  "previous_record": "native-revalidation-pass129.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "ba32031b537d122af5be824c3679f5f1d4cc3642",
+  "comparator_sha256": "3af11ad215423b080a5814b4b78882cb8cf6d4f65db4f32d490f2a97d2cf87a5",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    51
+  ],
+  "next_position": 52,
+  "comparisons_passed": 601973,
+  "charts": [
+    {
+      "position": 51,
+      "entry": {
+        "title": "[6804] [12] Godspeed",
+        "source_simfile": "[12] Godspeed (SX) [G. Rosewood]/godspeed.ssc",
+        "harness_version": "0.1.52",
+        "archive": "2b8bb3ff4c7f1817b5ab451cde45c42286269c5b3e1743ef01cc201279825d53.tar.zst",
+        "sha256": "2b8bb3ff4c7f1817b5ab451cde45c42286269c5b3e1743ef01cc201279825d53",
+        "compressed_bytes": 407605,
+        "aliases": [
+          "2c9cb03ef65817b74fe2691c4977d046551d30692fb40bba98ea58ea1f3df785.tar.zst"
+        ]
+      },
+      "original_archive_retained": "f16aaf979e6c41b0955e9717b7c50df138de0157ff66bec74cbe7de5cddbdbbf.tar.zst",
+      "native_source_commit": "ecd483a2e2e7530f9a72aae42dcede686c3a62b7",
+      "native_trace_sha256": "b62f44b8e05c8dcebca51ebec7e01105fb57e7d1efb06da314f65561f31aa428",
+      "original_source_sha256": {
+        "[12] Godspeed (SX) [G. Rosewood]/cdtitle.png": "9978321de78a17ffebeb620df2240c84bb8c6d986b2fc7fa0b813da9f3f46a51",
+        "[12] Godspeed (SX) [G. Rosewood]/godspeed.ogg": "bf09d25dab4e0406d9d35c416edbd8d5a8477e723c7c795b57a2e14950698c8f",
+        "[12] Godspeed (SX) [G. Rosewood]/godspeed.png": "f1d8c04c7743619b748ab33d0eccd03e897fca715ee583289d1e1b4046020123",
+        "[12] Godspeed (SX) [G. Rosewood]/godspeed.ssc": "7575b1e4517dfab79fbe041fab0add23afe49c3fc7c7eab7fde94ec2a29f83b2",
+        "[12] Godspeed (SX) [G. Rosewood]/lua/default.lua": "8a89fe7559a5b755efdda07bbc971a77e60f2f979e8be1b9563e7df490eca72b",
+        "[12] Godspeed (SX) [G. Rosewood]/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "[12] Godspeed (SX) [G. Rosewood]/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "[12] Godspeed (SX) [G. Rosewood]/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46",
+        "[12] Godspeed (SX) [G. Rosewood]/lua/_script.lua": "7f8158dfb5093d76c0ecf02016312009f6f844d954e29c4bd1df32a91de865c3"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8250,
+      "duration_seconds": 137.48202514648438,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 51,
+      "source_simfile": "[12] Godspeed (SX) [G. Rosewood]/godspeed.ssc",
+      "archive": "2b8bb3ff4c7f1817b5ab451cde45c42286269c5b3e1743ef01cc201279825d53.tar.zst",
+      "archive_sha256": "2b8bb3ff4c7f1817b5ab451cde45c42286269c5b3e1743ef01cc201279825d53",
+      "harness_version": "0.1.52",
+      "source_commit": "ba32031b537d122af5be824c3679f5f1d4cc3642",
+      "source_pending_commit": false,
+      "binary_sha256": "3af11ad215423b080a5814b4b78882cb8cf6d4f65db4f32d490f2a97d2cf87a5",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v4-full_song_lua.exe",
+        "2b8bb3ff4c7f1817b5ab451cde45c42286269c5b3e1743ef01cc201279825d53.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 12.182316800113767,
+      "comparisons_passed": 601973,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-051-native-field-v4.log",
+      "log_sha256": "4972083930049283c2dd24ac2892b890994926f37e52aa8c1c9fb38f0973b094",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass130-top-051-native-v1.json",
+      "native_receipt_sha256": "6aa2f3dea1e916a92acff389ec064c76d3680c630e9af0b3c4779ad99470b204",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "ba32031b537d122af5be824c3679f5f1d4cc3642",
+    "source_pending_commit": false,
+    "binary_sha256": "edae09b5a33001563f1ffd578ff31e75abfab8c9f50dcdb3b3cfd4b9794bfc3c",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v4-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.3368425997905433,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-051-native-pass130.log",
+    "log_sha256": "3d13306785c2e26388e6f9e03bc886852659c439e2e0968387d51cbaa688390f",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 0.96s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

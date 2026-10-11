@@ -1,0 +1,415 @@
+{
+  "problem": "AttenuateX/Y/Z lacked gameplay consumers; approached values snapped at zero elapsed time and later Song writes affected Current one update early",
+  "change": "Carry signed attenuation through options, approach/reset state and composed taps, mines, holds and rolls; advance Current using targets from before the Lua update",
+  "removed_behavior": "Zero-delta snap to approached targets",
+  "seek_behavior": "Explicitly reset cached update clocks and settle destination targets; startup keeps a zero-length live update",
+  "target_test_setup": "Independent Song target probes reset cached clocks; their expected values and tolerances are unchanged; the separate Current probe advances through consecutive native update frames",
+  "source_parent": "6d4356314016518f4b461289ed74ff492851bd1b",
+  "reference_sources": {
+    "ArrowEffects.cpp": {
+      "sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+      "lines": [
+        [
+          756,
+          760
+        ],
+        [
+          778,
+          804
+        ],
+        [
+          936,
+          941
+        ],
+        [
+          1450,
+          1455
+        ],
+        [
+          1561,
+          1563
+        ]
+      ]
+    },
+    "PlayerOptions.cpp": {
+      "sha256": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+      "lines": [
+        [
+          177,
+          207
+        ],
+        [
+          2208,
+          2210
+        ]
+      ]
+    },
+    "RageUtil.cpp": {
+      "sha256": "8487049a1d4ed4c2c1c9ae8e232f4039787eb01e7b854684b85394bf6c79c012",
+      "lines": [
+        [
+          48,
+          59
+        ]
+      ]
+    },
+    "NoteDisplay.cpp": {
+      "sha256": "89b00566561cb16a80b277037d4089b7438510b202b241a099d62cd26bdd72e0",
+      "lines": [
+        [
+          1281,
+          1296
+        ],
+        [
+          1334,
+          1348
+        ]
+      ]
+    }
+  },
+  "native_captures": [
+    {
+      "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass191-native-attenuate-v1\\traces\\control\\control.ssc.semantic.json",
+      "trace_sha256": "40ecdb3b3d47286f14d7df31941f941a8307e8febfd4b1baedf401d592ea1901",
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "capture_exit_code": 0,
+      "binary_sha256": "6b6b477653effd6a50106c3baab3382ef4d2fa65bc3f0cf945689fa81f030ceb",
+      "control_sha256": "6b8a85ebf98e46505730036b43030b7085c7dbdf1f2d335218da06b53de894ef",
+      "update_frames": 241,
+      "source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+      "source_pending_commit": false,
+      "capture_complete": true,
+      "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass191-native-attenuate-v1\\archives\\573498c3bcc91fde20d50ae7ec633d4443c668b3a8986c4d2f513f2b6d461937.tar.zst",
+      "archive_sha256": "573498c3bcc91fde20d50ae7ec633d4443c668b3a8986c4d2f513f2b6d461937",
+      "archive_entry": {
+        "title": "Native attenuate control",
+        "source_simfile": "control/control.ssc",
+        "harness_version": "0.1.61",
+        "archive": "573498c3bcc91fde20d50ae7ec633d4443c668b3a8986c4d2f513f2b6d461937.tar.zst",
+        "sha256": "573498c3bcc91fde20d50ae7ec633d4443c668b3a8986c4d2f513f2b6d461937",
+        "compressed_bytes": 12710
+      }
+    },
+    {
+      "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass195-native-attenuate-current-v3\\traces\\control\\control.ssc.semantic.json",
+      "trace_sha256": "03593fdc12be17a6e6b5a9f0b8aa5e6dc5083544dcf5b58c661bc5258f2668e1",
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "capture_exit_code": 0,
+      "binary_sha256": "6b6b477653effd6a50106c3baab3382ef4d2fa65bc3f0cf945689fa81f030ceb",
+      "control_sha256": "80649f36de99fbcc2ca79eceee620e3a683f77edc92c89b8134ebaf0945b0a3a",
+      "update_frames": 241,
+      "source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+      "source_pending_commit": false,
+      "capture_complete": true,
+      "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass195-native-attenuate-current-v3\\archives\\fcf64d19655d2980173511f494f2d3d17b3ffe966b7a7f94660cd08fd2c414fa.tar.zst",
+      "archive_sha256": "fcf64d19655d2980173511f494f2d3d17b3ffe966b7a7f94660cd08fd2c414fa",
+      "archive_entry": {
+        "title": "Native attenuate-current control",
+        "source_simfile": "control/control.ssc",
+        "harness_version": "0.1.61",
+        "archive": "fcf64d19655d2980173511f494f2d3d17b3ffe966b7a7f94660cd08fd2c414fa.tar.zst",
+        "sha256": "fcf64d19655d2980173511f494f2d3d17b3ffe966b7a7f94660cd08fd2c414fa",
+        "compressed_bytes": 14392
+      }
+    }
+  ],
+  "before_control": {
+    "exit_code": 1,
+    "comparisons_passed": 5356,
+    "comparisons_failed": 24,
+    "elapsed_seconds": 1.0186570999212563,
+    "archive_sha256": "573498c3bcc91fde20d50ae7ec633d4443c668b3a8986c4d2f513f2b6d461937",
+    "binary_sha256": "7b47c69aa16b48870c281a0ba0c53b9e260f32697385e604510b387b9aaaa25d",
+    "source_commit": "6d4356314016518f4b461289ed74ff492851bd1b",
+    "source_pending_commit": false,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attenuate-before-v1.log",
+    "log_sha256": "3ff7562b6edc608f4d1fd50b83ef3c0d962170bf9fa0f9b6e22ac66ce2b8157a",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "after_control": {
+    "exit_code": 0,
+    "comparisons_passed": 5380,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 2.0992403998970985,
+    "archive_sha256": "573498c3bcc91fde20d50ae7ec633d4443c668b3a8986c4d2f513f2b6d461937",
+    "binary_sha256": "d2f3627545349e232651cbc9d50019ee6d44fa422e689c6b69b8949e7a5b5888",
+    "source_commit": "6d4356314016518f4b461289ed74ff492851bd1b",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attenuation-v8-control.log",
+    "log_sha256": "14673fa17e3b2ec3c389eac3b5a7ba141cb18e2f79d55039d14e90de8bb63428",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "after_current_control": {
+    "exit_code": 0,
+    "comparisons_passed": 5786,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 2.1210843003354967,
+    "archive_sha256": "fcf64d19655d2980173511f494f2d3d17b3ffe966b7a7f94660cd08fd2c414fa",
+    "binary_sha256": "d2f3627545349e232651cbc9d50019ee6d44fa422e689c6b69b8949e7a5b5888",
+    "source_commit": "6d4356314016518f4b461289ed74ff492851bd1b",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attenuation-v8-current-control.log",
+    "log_sha256": "b7ea43465dc8df1df116c9427a4e5c5df2f155ff3e3b59a568640ac7233e7dfa",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "current_before_failures": [
+    {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "6d4356314016518f4b461289ed74ff492851bd1b",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "c1b32eb507db6b9099d43346ea35870538c303e08ee94291c2c9b4a31e8cb538",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass164\\attenuation-v4-song_lua_itgmania_semantic_parity.exe",
+        "--exact",
+        "runtime_modifiers::attenuation_current_matches_native_frames",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 2.573203899897635,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attenuation-v4-current-test.log",
+      "log_sha256": "1f7d0450de700c6cebd02e31a04b47edbef4145ef3c55e4900183b0e5c460183",
+      "result_lines": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 280 filtered out; finished in 0.93s"
+      ]
+    },
+    {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "6d4356314016518f4b461289ed74ff492851bd1b",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "9db28224fd24371d3f08ce54765c91b0f48e8129634392c0561de7898c653cc2",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass164\\attenuation-v5-song_lua_itgmania_semantic_parity.exe",
+        "--exact",
+        "runtime_modifiers::attenuation_current_matches_native_frames",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 3.235363799612969,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attenuation-v5-current-test.log",
+      "log_sha256": "0808e6f6a46d42a2730f0c4f4e8398271b4ccc9f2a4f71964ca30ba8a3e7c607",
+      "result_lines": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 280 filtered out; finished in 0.85s"
+      ]
+    }
+  ],
+  "current_native_samples": 108,
+  "current_test": "runtime_modifiers::attenuation_current_matches_native_frames",
+  "motion_oracle": {
+    "reference_file": "C:\\GitHub\\rework\\itgmania\\src\\ArrowEffects.cpp",
+    "reference_sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+    "native_blocks_sha256": {
+      "X": "1883ff0e04bcf510ebd2b260faf5d66e0b10d90acdfb6a97c90f3cb2dbe09632",
+      "Y": "c8195deb97eb7018b7de802f36ce9fd2aab0a8d0e00ab234f4a62b79054f9d4d",
+      "Z": "0ff8c67f0a33ad4413038a015aac9f4fb0396b740d330b1b20b91edd9eb12cc8",
+      "Tiny": "d610bbfdb996d78e91594bf04ad5b89f5f6e1d5d426326418cf5ee0e87959a46"
+    },
+    "original_native_blocks_unchanged": true,
+    "isolated_inputs_used": true,
+    "whole_native_gameplay_used": false,
+    "semantic_host_used": false,
+    "deadsync_used": false,
+    "scope": "Native attenuation X/Y/Z blocks and native Tiny spacing with isolated column offsets, preexisting lane offset and Reverse direction; other effects disabled",
+    "binary_sha256": "55e00e85ad526f73dd29fabab1882d74df77c5a3fdab0e075cca9f783dd8390b"
+  },
+  "native_motion_vectors": 980,
+  "composed_cases": 896,
+  "composed_test": "frame_feedback::tests::composed_attenuation_matches_native_positions",
+  "regression_results": {
+    "gameplay-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "6d4356314016518f4b461289ed74ff492851bd1b",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "5824c51b4345b2424444221885c6e91e7d6b056db7a360394795b3b6fd7fb154",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass164\\attenuation-v8-deadsync_gameplay.exe",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.9513979000039399,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attenuation-v8-gameplay-tests.log",
+      "log_sha256": "33d3303ec7b9f728f7bf16211227588ea4979fc6b97768e5a7e94ace9c759f67",
+      "result_lines": [
+        "test result: ok. 794 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s"
+      ]
+    },
+    "notefield-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "6d4356314016518f4b461289ed74ff492851bd1b",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "8846e8b097c9c49a921ce37301d09ac00f03a392930e548d4abfd3ad7b512a57",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass164\\attenuation-v8-deadsync_notefield.exe",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 4.641694399993867,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attenuation-v8-notefield-tests.log",
+      "log_sha256": "7899d2e28b0cac317af8f2924bbd1f7516531a2ba439263634590b17a842ff41",
+      "result_lines": [
+        "test result: ok. 458 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.28s"
+      ]
+    },
+    "runtime-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "6d4356314016518f4b461289ed74ff492851bd1b",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "234173470b79842024f1606b8fbbb72255f305ca649d43ec0b9f5c562041d424",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass164\\attenuation-v8-song_lua_itgmania_semantic_parity.exe",
+        "runtime_modifiers",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 10.799546299967915,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attenuation-v8-runtime-tests.log",
+      "log_sha256": "1f8a32d7acef1ef658e786d98fe2e2deee18abc445cba96f5a2d88645f60d59e",
+      "result_lines": [
+        "test result: FAILED. 43 passed; 3 failed; 2 ignored; 0 measured; 233 filtered out; finished in 9.08s"
+      ]
+    },
+    "song-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "6d4356314016518f4b461289ed74ff492851bd1b",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "fb00511d68af7bb249ff90ce1de5d31b40e12b3d9bc0d63472fe5fbc9f0b86a8",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass164\\attenuation-v8-deadsync_song_lua.exe",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 19.920548599679023,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attenuation-v8-song-tests.log",
+      "log_sha256": "0a1d97377e6a822aadb20e4d469788cbc7b7453c5fb7505bd03236eba69a6402",
+      "result_lines": [
+        "test result: FAILED. 500 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.20s"
+      ]
+    },
+    "theme-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "6d4356314016518f4b461289ed74ff492851bd1b",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "a84c9427cf63973d545985ed88948f368446f2aaba58a47b7769adadc34e2626",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass164\\attenuation-v8-deadsync_theme_simply_love.exe",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 5.717824200168252,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attenuation-v8-theme-tests.log",
+      "log_sha256": "06a979f69efe060d5e3a36148aaf430699cfa89ec06214495a8d5f3e74820734",
+      "result_lines": [
+        "test result: FAILED. 1269 passed; 1 failed; 6 ignored; 0 measured; 0 filtered out; finished in 3.07s"
+      ]
+    },
+    "technique-arrow": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "6d4356314016518f4b461289ed74ff492851bd1b",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "a84c9427cf63973d545985ed88948f368446f2aaba58a47b7769adadc34e2626",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass164\\attenuation-v8-deadsync_theme_simply_love.exe",
+        "--exact",
+        "screens::components::shared::technique_bg::tests::technique_arrow_renders_and_rotates",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 10.483976300340146,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attenuation-v8-technique-arrow.log",
+      "log_sha256": "80257aa5196589e4ee6efce9e2506a629676c779b3373f6656f2a7e20e86823d",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1275 filtered out; finished in 7.81s"
+      ]
+    },
+    "control": {
+      "exit_code": 0,
+      "comparisons_passed": 5380,
+      "comparisons_failed": 0,
+      "elapsed_seconds": 2.0992403998970985,
+      "archive_sha256": "573498c3bcc91fde20d50ae7ec633d4443c668b3a8986c4d2f513f2b6d461937",
+      "binary_sha256": "d2f3627545349e232651cbc9d50019ee6d44fa422e689c6b69b8949e7a5b5888",
+      "source_commit": "6d4356314016518f4b461289ed74ff492851bd1b",
+      "source_pending_commit": true,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attenuation-v8-control.log",
+      "log_sha256": "14673fa17e3b2ec3c389eac3b5a7ba141cb18e2f79d55039d14e90de8bb63428",
+      "control_complete": true,
+      "main_worktree_used": true,
+      "source_root": "C:\\GitHub\\deadsync"
+    },
+    "current-control": {
+      "exit_code": 0,
+      "comparisons_passed": 5786,
+      "comparisons_failed": 0,
+      "elapsed_seconds": 2.1210843003354967,
+      "archive_sha256": "fcf64d19655d2980173511f494f2d3d17b3ffe966b7a7f94660cd08fd2c414fa",
+      "binary_sha256": "d2f3627545349e232651cbc9d50019ee6d44fa422e689c6b69b8949e7a5b5888",
+      "source_commit": "6d4356314016518f4b461289ed74ff492851bd1b",
+      "source_pending_commit": true,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attenuation-v8-current-control.log",
+      "log_sha256": "b7ea43465dc8df1df116c9427a4e5c5df2f155ff3e3b59a568640ac7233e7dfa",
+      "control_complete": true,
+      "main_worktree_used": true,
+      "source_root": "C:\\GitHub\\deadsync"
+    }
+  },
+  "existing_failures_retained": {
+    "song_lua": 2,
+    "runtime_modifiers": 3,
+    "theme": 1
+  },
+  "original_090_before": {
+    "exit_code": 1,
+    "comparisons_passed": 207794,
+    "comparisons_failed": 68,
+    "elapsed_seconds": 23.730619200039655,
+    "archive_sha256": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143",
+    "binary_sha256": "7b47c69aa16b48870c281a0ba0c53b9e260f32697385e604510b387b9aaaa25d",
+    "source_commit": "412525ab44f5bef1a06e23bf448954b18f391b26",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\fresh-090-lua51-main-v1.log",
+    "log_sha256": "876cec0313c0565d460a83c566cfe2e950b9038dc69d903540385a82ec636218",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "original_090_after": {
+    "exit_code": 1,
+    "comparisons_passed": 207800,
+    "comparisons_failed": 62,
+    "elapsed_seconds": 19.312680800445378,
+    "archive_sha256": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143",
+    "binary_sha256": "d2f3627545349e232651cbc9d50019ee6d44fa422e689c6b69b8949e7a5b5888",
+    "source_commit": "6d4356314016518f4b461289ed74ff492851bd1b",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\fresh-090-attenuation-v8.log",
+    "log_sha256": "d3289f6518a381f3d86ab3b3a46b78c38b9860667a26425a855bbe13feea7150",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "original_090_accepted": false,
+  "tolerances_changed": false,
+  "reference_sources_modified": false,
+  "limitations": [
+    "The isolated C++ motion oracle compiles unchanged native attenuation and Tiny blocks with explicit inputs; it does not execute full native gameplay",
+    "Broader ArrowEffects Lua position helpers in both headless hosts still use simplified behavior and remain an open parity gap",
+    "Native hold-strip inverse does not undo AttenuateY; the existing inverse is preserved; broader ParabolaY hold inverse parity remains open",
+    "62 comparisons remain failing on original corpus position 90; no corpus acceptance or scope reduction"
+  ]
+}

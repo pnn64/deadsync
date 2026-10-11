@@ -921,14 +921,13 @@ pub fn load_and_resample_sfx(
                 }
             }
         }
-        return Ok(Arc::from(decoded_data.into_boxed_slice()));
+        return Ok(Arc::from(decoded_data));
     }
 
     let ratio = f64::from(out_hz) / f64::from(in_hz);
     let mut resampler = new_resampler(ratio, 1.0, in_ch)?;
 
     let mut in_planar = PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES);
-    let mut resample_in = vec![vec![0.0; resampler.input_frames_max()]; in_ch];
     let mut resample_out = vec![vec![0.0; resampler.output_frames_max()]; in_ch];
     let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
     let mut pkt_buf = Vec::new();
@@ -963,17 +962,18 @@ pub fn load_and_resample_sfx(
     }
 
     if !in_planar.is_empty() {
-        let remain = in_planar.available_frames();
         let need = resampler.input_frames_next();
-        let copy_frames = remain.min(need);
         let start = in_planar.start_frame;
-        let end = start + copy_frames;
-        for (dst, channel) in resample_in.iter_mut().zip(&in_planar.channels) {
-            dst[copy_frames..need].fill(0.0);
-            dst[..copy_frames].copy_from_slice(&channel[start..end]);
+        for channel in &mut in_planar.channels {
+            channel.resize(start + need, 0.0);
         }
-        let produced_frames =
-            process_resampler(&mut resampler, &resample_in, 0, &mut resample_out)?.1;
+        let produced_frames = process_resampler(
+            &mut resampler,
+            &in_planar.channels,
+            start,
+            &mut resample_out,
+        )?
+        .1;
         if produced_frames > 0 {
             write_resampler_output(&resample_out, produced_frames, out_ch, &mut out_tmp);
             trim_resampler_lead(&mut out_tmp, out_ch, &mut resampler_lead_frames);
@@ -983,16 +983,17 @@ pub fn load_and_resample_sfx(
     }
 
     let need = resampler.input_frames_next();
-    for dst in &mut resample_in {
-        dst[..need].fill(0.0);
+    for channel in &mut in_planar.channels {
+        channel.resize(need, 0.0);
     }
-    let produced_frames = process_resampler(&mut resampler, &resample_in, 0, &mut resample_out)?.1;
+    let produced_frames =
+        process_resampler(&mut resampler, &in_planar.channels, 0, &mut resample_out)?.1;
     if produced_frames > 0 {
         write_resampler_output(&resample_out, produced_frames, out_ch, &mut out_tmp);
         trim_resampler_lead(&mut out_tmp, out_ch, &mut resampler_lead_frames);
         resampled_data.extend_from_slice(&out_tmp);
     }
-    Ok(Arc::from(resampled_data.into_boxed_slice()))
+    Ok(Arc::from(resampled_data))
 }
 
 #[cfg(test)]
@@ -1274,3 +1275,6 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod perf_tests;

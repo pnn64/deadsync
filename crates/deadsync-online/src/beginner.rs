@@ -252,11 +252,7 @@ fn write_verdicts(path: &Path, verdicts: &HashMap<u64, bool>) -> Result<(), Stri
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
-    let keyed: HashMap<String, bool> = verdicts
-        .iter()
-        .map(|(id, verdict)| (id.to_string(), *verdict))
-        .collect();
-    let text = serde_json::to_string(&keyed).map_err(|error| error.to_string())?;
+    let text = serde_json::to_string(verdicts).map_err(|error| error.to_string())?;
     // Written beside and renamed, so an interrupted write cannot leave a
     // half-file that reads as "no verdicts" next launch.
     let temporary = path.with_extension("tmp");
@@ -319,3 +315,7 @@ mod tests {
         const { assert!(MAX_READS_PER_WALK <= 120, "and not the whole ranking") };
     }
 }
+
+#[cfg(test)]
+#[path = "beginner_verdict_perf.rs"]
+mod verdict_perf_tests;

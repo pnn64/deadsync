@@ -41,6 +41,7 @@ struct NativeModelDraw {
     normals_buffer: usize,
     texture_matrix_scale_buffer: usize,
     texture_mode: String,
+    #[serde(default)] // The native Lua serializer omits an unbound texture.
     texture: Value,
     texture_filtering: bool,
     texture_wrapping: bool,
@@ -304,7 +305,14 @@ fn model_texture_key(
     context: &SongLuaCompileContext,
     texture: &Value,
 ) -> Result<Option<String>, String> {
-    let Some(raw) = texture.as_str() else { return Ok(None) };
+    // Native disables texture sampling for an unbound material. Our mesh
+    // shaders express that with the built-in white texel, never an asset file.
+    if texture.is_null() {
+        return Ok(Some(deadsync_noteskin::model::MODEL_WHITE_TEXTURE.into()));
+    }
+    let raw = texture
+        .as_str()
+        .ok_or_else(|| "native Model texture must be a string or null".to_string())?;
     let path = if let Some(relative) = raw.strip_prefix("noteskin:/") {
         if !trace.noteskin_reference.as_ref().is_some_and(|skin|
             skin.files.iter().any(|file| file.path == Path::new(relative))) {
@@ -421,8 +429,14 @@ fn compare_frame(
             parity,
             reported,
             &format!("{prefix} cull"),
-            (instance.cull_back > 0.5) == (draw.cull_mode == 0),
-            || format!("Model {actor} pass {pass} changes native backface culling"),
+            instance.cull_mode
+                == match draw.cull_mode {
+                    0 => 1.0,
+                    1 => 2.0,
+                    2 => 0.0,
+                    _ => f32::NAN,
+                },
+            || format!("Model {actor} pass {pass} changes native face culling"),
         );
         check_flag(
             parity,
@@ -440,7 +454,7 @@ fn compare_frame(
             reported,
             &format!("{prefix} unsupported state"),
             ((draw.z_write && draw.z_test == 1) || (!draw.z_write && draw.z_test == 0))
-                && matches!(draw.cull_mode, 0 | 2)
+                && matches!(draw.cull_mode, 0..=2)
                 && draw.render_target == 0,
             || {
                 format!(
@@ -782,18 +796,43 @@ fn native_model_texture_paths_require_reference_inventory() {
     let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/itgmania-song-lua-micro/model-texture-images");
     let context = SongLuaCompileContext::new(&directory, "Model texture identities");
     let texture = serde_json::json!("song:/frame-red.png");
-    assert_eq!(model_texture_key(&trace, &context, &texture).unwrap(),
+    assert_eq!(
+        model_texture_key(&trace, &context, &texture).unwrap(),
         Some(deadsync_assets::textures::model_texture_key(
-            &deadsync_assets::textures::canonical_texture_key(directory.join("frame-red.png")))));
-    assert_eq!(model_texture_key(&trace, &context, &Value::Null).unwrap(), None);
+            &deadsync_assets::textures::canonical_texture_key(directory.join("frame-red.png"))
+        ))
+    );
+    assert_eq!(
+        model_texture_key(&trace, &context, &Value::Null).unwrap(),
+        Some(deadsync_noteskin::model::MODEL_WHITE_TEXTURE.into())
+    );
+    for invalid in [
+        serde_json::json!(false),
+        serde_json::json!(42),
+        serde_json::json!({}),
+    ] {
+        assert!(model_texture_key(&trace, &context, &invalid).is_err());
+    }
     let texture = serde_json::json!("noteskin:/dance/cyber/textures/Tap Note parts (mipmaps).png");
     assert!(model_texture_key(&trace, &context, &texture).is_err());
     let relative = PathBuf::from("dance/cyber/textures/Tap Note parts (mipmaps).png");
-    trace.noteskin_reference = Some(NativeNoteskin { skin: "cyber".into(),
-        files: vec![NativeResourceFile { path: relative.clone(), sha256: "inventory already verified by compilation".into() }] });
-    assert_eq!(model_texture_key(&trace, &context, &texture).unwrap(),
-        Some(deadsync_assets::textures::model_texture_key(&deadsync_assets::textures::canonical_texture_key(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/noteskins").join(relative)))));
+    trace.noteskin_reference = Some(NativeNoteskin {
+        skin: "cyber".into(),
+        files: vec![NativeResourceFile {
+            path: relative.clone(),
+            sha256: "inventory already verified by compilation".into(),
+        }],
+    });
+    assert_eq!(
+        model_texture_key(&trace, &context, &texture).unwrap(),
+        Some(deadsync_assets::textures::model_texture_key(
+            &deadsync_assets::textures::canonical_texture_key(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("assets/noteskins")
+                    .join(relative)
+            )
+        ))
+    );
 }
 
 #[test]
@@ -998,6 +1037,59 @@ fn native_model_meshes_match_selected_trace() {
         parity.checks() > trace.update_frames.len(),
         "exercise native Model geometry"
     );
+}
+
+#[test]
+fn native_model_cull_modes_match() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/model-cull-modes");
+    let trace = read_trace_file(&root.join("native.json"));
+    let (compiled, _, context) = compile_trace_song_at(&trace, &root.join("control.ssc"));
+    let mut parity = Parity::default();
+    compare_models(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary(&trace.title));
+    parity.assert_complete("native Model culling defaults, setters, commands and updates");
+    assert_eq!(trace.model_geometry_tracks.len(), 12);
+    assert!(
+        parity.checks() > 340_000,
+        "compare every native Model observation"
+    );
+}
+
+#[test]
+fn model_alpha_cutoff() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/model-alpha-cutoff");
+    let native: Value = serde_json::from_slice(&fs::read(root.join("native.json"))
+        .expect("native Model alpha observations")).expect("valid native observations");
+    assert_eq!(native["oracle"], "itgmania_native_actor_conformance");
+    let mut context = SongLuaCompileContext::new(&root, "Model Alpha Cutoff");
+    context.music_length_seconds = 0.25;
+    let entry = root.join("control.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile Model alpha controls");
+    let c = &compiled[0];
+    let states = compiled_overlay_states_at(c, &context, 0.0, 0.0);
+    let mut composer = WholeSongComposer::new(&c.overlays);
+    let mut cases = 0;
+    for actor in native["samples"][0]["actors"].as_array().expect("native actors") {
+        if actor["kind"] != "model" { continue; }
+        let name = actor["name"].as_str().expect("native Model name");
+        let index = c.overlays.iter().position(|overlay| overlay.name.as_deref() == Some(name))
+            .expect("compiled Model");
+        let frame = composer.render_overlay(&c.overlays, &states, index,
+            [context.screen_width, context.screen_height], 0.0, 0.0);
+        let count = frame.ops.iter().filter_map(|op| match op {
+            DrawOp::TexturedMesh(run) => Some(run.instance_count as usize),
+            _ => None,
+        }).sum::<usize>();
+        assert_eq!(count, actor["draws"].as_array().expect("native Model passes").len(),
+            "native Model passes for {name}");
+        cases += 1;
+    }
+    assert_eq!(cases, 11);
 }
 
 #[test]
