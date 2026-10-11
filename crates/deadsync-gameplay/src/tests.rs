@@ -40,45 +40,53 @@ mod tests {
     }
 
     #[test]
-    fn player_life_dead_policy_uses_failing_or_empty_life() {
-        assert!(player_life_is_dead(1.0, true));
-        assert!(player_life_is_dead(0.0, false));
-        assert!(player_life_is_dead(-0.1, false));
-        assert!(!player_life_is_dead(0.1, false));
+    fn fail_modes_stage_rules() {
+        for mode in [GameplayFailType::Off, GameplayFailType::EndOfSong] {
+            let mut player = init_player_runtime_with_caps(PlayerBufferCaps::EMPTY);
+            player.fail_type = mode;
+            player.life = 0.1;
+            let update = apply_player_runtime_life_delta(&mut player, 1.0, -0.2);
+            assert!(!update.failed_now);
+            assert!(!player_runtime_is_dead(&player));
+            assert_eq!(player.fail_time, None);
+            // LifeMeterBar's regeneration lock still applies at zero life.
+            player.combo_after_miss = 1;
+            apply_player_runtime_life_delta(&mut player, 2.0, 0.1);
+            assert!(player.life > 0.0);
+            assert!(!update_player_failure(&mut player, 3.0, true));
+            player.life = 0.0;
+            assert_eq!(update_player_failure(&mut player, 4.0, true),
+                mode == GameplayFailType::EndOfSong);
+            assert_eq!(player.is_failing, mode == GameplayFailType::EndOfSong);
+        }
+        let mut player = init_player_runtime_with_caps(PlayerBufferCaps::EMPTY);
+        player.fail_type = GameplayFailType::Off;
+        player.life = 0.0;
+        player.fail_type = GameplayFailType::ImmediateContinue;
+        assert!(update_player_failure(&mut player, 5.0, false));
+        assert_eq!(player.fail_time, Some(5.0));
+        player.fail_type = GameplayFailType::Off;
+        assert!(!update_player_failure(&mut player, 6.0, false));
+        assert!(player_runtime_is_dead(&player));
+        assert_eq!(player.fail_time, Some(5.0));
     }
 
     #[test]
-    fn joined_players_failed_requires_active_dead_players() {
-        let players = [
-            PlayerLifeStatus {
-                life: 0.0,
-                is_failing: false,
-            },
-            PlayerLifeStatus {
-                life: 1.0,
-                is_failing: true,
-            },
-        ];
-
-        assert!(!all_joined_players_failed(&players, 0));
-        assert!(all_joined_players_failed(&players, 1));
-        assert!(all_joined_players_failed(&players, 2));
-    }
-
-    #[test]
-    fn joined_players_failed_rejects_any_alive_player() {
-        let players = [
-            PlayerLifeStatus {
-                life: 0.0,
-                is_failing: false,
-            },
-            PlayerLifeStatus {
-                life: 0.25,
-                is_failing: false,
-            },
-        ];
-
-        assert!(!all_joined_players_failed(&players, 2));
+    fn joined_fail_modes() {
+        let mut players = std::array::from_fn(|_| init_player_runtime());
+        players[0].life = 0.0;
+        players[1].is_failing = true;
+        assert!(!all_joined_player_runtimes_failed(&players, 0));
+        assert!(all_joined_player_runtimes_failed(&players, 1));
+        assert!(all_joined_player_runtimes_failed(&players, 2));
+        for mode in [GameplayFailType::Off, GameplayFailType::EndOfSong] {
+            players[0].fail_type = mode;
+            assert!(!all_joined_player_runtimes_failed(&players, 2));
+        }
+        players[0].fail_type = GameplayFailType::Immediate;
+        players[1].is_failing = false;
+        players[1].life = 0.25;
+        assert!(!all_joined_player_runtimes_failed(&players, 2));
     }
 
     #[test]
@@ -753,6 +761,7 @@ mod tests {
             None,
             12.0,
             deadsync_rules::life::LIFE_GREAT,
+            true,
         );
 
         assert_eq!(update, GameplayLifeDeltaUpdate::default());
@@ -782,6 +791,7 @@ mod tests {
             Some(&mut course_submit_life),
             12.0,
             -0.6,
+            true,
         );
 
         assert!(!update.failed_now);
@@ -805,6 +815,7 @@ mod tests {
             None,
             8.0,
             deadsync_rules::life::LIFE_MISS,
+            true,
         );
 
         assert!(update.failed_now);
@@ -841,6 +852,7 @@ mod tests {
             None,
             8.0,
             deadsync_rules::life::LIFE_GREAT,
+            true,
         );
 
         assert!(!update.failed_now);
@@ -868,6 +880,7 @@ mod tests {
             Some(&mut course_submit_life),
             8.0,
             deadsync_rules::life::LIFE_GREAT,
+            true,
         );
 
         assert!(update.was_dead);
@@ -8873,6 +8886,7 @@ mod tests {
             0.75,
             &mut accel,
             &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8887,6 +8901,7 @@ mod tests {
             1.5,
             &mut accel,
             &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8901,6 +8916,7 @@ mod tests {
             0.25,
             &mut accel,
             &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8915,6 +8931,7 @@ mod tests {
             1.0,
             &mut accel,
             &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8929,6 +8946,7 @@ mod tests {
             0.5,
             &mut accel,
             &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8943,6 +8961,7 @@ mod tests {
             -1.0,
             &mut accel,
             &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8957,6 +8976,7 @@ mod tests {
             30.0,
             &mut accel,
             &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8993,6 +9013,7 @@ mod tests {
             -100.0,
             &mut accel,
             &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -9009,6 +9030,7 @@ mod tests {
             650.0,
             &mut accel,
             &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -9028,6 +9050,7 @@ mod tests {
             45.0,
             &mut accel,
             &mut AttackFlagOverrides::default(),
+            &mut None,
             &mut visual,
             &mut appearance,
             &mut visibility,

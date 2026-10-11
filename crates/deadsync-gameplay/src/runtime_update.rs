@@ -149,22 +149,22 @@ where
             }
             log::debug!("Music end time reached. Transitioning to evaluation.");
             self.progress.stage.song_completed_naturally = true;
+            let now = self.current_music_time_seconds();
+            for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
+                if update_player_failure(&mut self.players_runtime.players[player], now, true) {
+                    self.capture_failed_ex_score_inputs(player, self.player_blue_window_ms(player));
+                    self.display.density_graph.life_dirty[player] = true;
+                }
+            }
             self.begin_outro_attack_clear();
             self.finalize_completed_mines();
             return Some(GameplayAction::Navigate(GameplayExit::Complete));
         }
 
-        let battery_forces_immediate = self
-            .players_runtime
-            .players
-            .iter()
+        if self.setup.num_players > 0 && self.players_runtime.players.iter()
             .take(self.setup.num_players.min(MAX_PLAYERS))
-            .any(|player| matches!(player.course_life, CourseLifeState::Battery { .. }));
-        if (matches!(
-            self.setup.config.default_fail_type,
-            GameplayFailType::Immediate
-        ) || battery_forces_immediate)
-            && self.all_joined_players_failed()
+            .all(|player| player.fail_type == GameplayFailType::Immediate
+                && player_runtime_is_dead(player))
         {
             log::debug!("All joined players failed. Transitioning to evaluation.");
             self.progress.stage.song_completed_naturally = false;
@@ -1071,6 +1071,13 @@ where
         ) {
             self.mods.song_lua_player_transforms[player] = transform;
         }
+        let runtime = &mut self.players_runtime.players[player];
+        runtime.fail_type = self.mods.attacks.fail_type[player]
+            .unwrap_or(self.setup.config.default_fail_type);
+        if update_player_failure(runtime, now, false) {
+            self.capture_failed_ex_score_inputs(player, self.player_blue_window_ms(player));
+            self.display.density_graph.life_dirty[player] = true;
+        }
     }
 
     #[inline(always)]
@@ -1793,6 +1800,10 @@ where
             -1.0,
             CourseLifeEvent::ForceFail,
         );
+        // Explicit give-up is a stage failure even when FailSetting is Off.
+        let player = &mut self.players_runtime.players[player_idx];
+        player.is_failing = true;
+        player.fail_time.get_or_insert(current_music_time);
         self.capture_failed_ex_score_inputs(player_idx, self.player_blue_window_ms(player_idx));
         self.display.density_graph.life_dirty[player_idx] = true;
         true

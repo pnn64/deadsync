@@ -1017,7 +1017,7 @@ where
             player_profiles[p].error_bar_options(),
         );
         let course_carry = course_display_carry.as_ref().map(|carry| carry[p]);
-        init_player_runtime_for_song_with_course_life(
+        let mut player = init_player_runtime_for_song_with_course_life(
             init_music_time,
             in_course_stage,
             course_carry,
@@ -1026,7 +1026,9 @@ where
             replay_mode,
             combo_carry[p],
             caps,
-        )
+        );
+        player.fail_type = config.default_fail_type;
+        player
     });
     let assist_clap_rows =
         build_assist_clap_rows_with_capacity(&notes, note_ranges[0], note_count_stats[0].len());

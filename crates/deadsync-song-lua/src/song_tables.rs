@@ -182,7 +182,7 @@ pub(crate) fn advance_option_levels(lua: &Lua, seconds: f64) -> mlua::Result<()>
             if matches!(value, Value::Boolean(_) | Value::String(_))
                 || matches!(
                     key.as_str(),
-                    "modtimersetting" | "batterylives" | "visualdelay"
+                    "modtimersetting" | "failsetting" | "batterylives" | "visualdelay"
                 )
             {
                 current.raw_set(key, value)?;
@@ -666,6 +666,12 @@ fn player_options_parts(lua: &Lua, owner: &Table) -> mlua::Result<Vec<String>> {
             });
         }
     }
+    if let Some(mode) = state.raw_get::<Option<usize>>("failsetting")?
+        && let Some(name) = ["", "FailImmediateContinue", "FailAtEnd", "FailOff"].get(mode)
+        && !name.is_empty()
+    {
+        parts.push((*name).to_string());
+    }
     if let Some(mode) = state.raw_get::<Option<usize>>("modtimersetting")?
         && let Some(name) = ["ModTimerGame", "ModTimerBeat", "ModTimerSong"].get(mode)
     {
@@ -1036,6 +1042,9 @@ fn player_option_number(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<f3
 fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<Function> {
     let owner = owner.clone();
     let name = name.to_ascii_lowercase();
+    if name == "failsetting" {
+        return create_fail_option(lua, &owner);
+    }
     if name == "modtimersetting"
         || (player_option_default_string(&name).is_none() && name != "batterylives")
     {
@@ -1117,6 +1126,34 @@ fn native_option_previous(state: &Table, speeds: &Table, key: &str) -> mlua::Res
             speeds.get::<Option<f32>>(speed_key)?.unwrap_or(1.0),
         )),
     ])
+}
+
+fn create_fail_option(lua: &Lua, owner: &Table) -> mlua::Result<Function> {
+    use deadsync_gameplay::GameplayFailType;
+    let owner = owner.clone();
+    lua.create_function(move |lua, args: MultiValue| {
+        let state = player_option_state(lua, &owner)?;
+        let previous = state.get::<Option<f32>>("failsetting")?.unwrap_or(0.0);
+        if let Some(value) = method_arg(&args, 0).filter(|v| !matches!(v, Value::Nil)) {
+            let mode = if let Value::String(value) = value {
+                let value = value.to_str()?;
+                (0..4).filter_map(|i| GameplayFailType::from_value(i as f32))
+                    .find(|mode| value == mode.lua_name()
+                        || value.eq_ignore_ascii_case(&mode.lua_name()[9..]))
+            } else {
+                read_f32(value.clone()).and_then(GameplayFailType::from_value)
+            }.ok_or_else(|| mlua::Error::runtime("Invalid FailType"))?;
+            state.set("failsetting", mode as u8)?;
+        }
+        Ok(if matches!(args.back(), Some(Value::Boolean(true))) {
+            Value::Table(owner.clone())
+        } else {
+            Value::String(lua.create_string(
+                GameplayFailType::from_value(previous)
+                    .ok_or_else(|| mlua::Error::runtime("Invalid FailType"))?.lua_name()
+            )?)
+        })
+    })
 }
 
 fn create_timer_option(lua: &Lua, owner: &Table) -> mlua::Result<Function> {
@@ -1645,6 +1682,9 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
             );
         }
         let state = player_option_state(lua, owner)?;
+        if let Some(mode) = deadsync_gameplay::GameplayFailType::from_mod(key) {
+            return state.set("failsetting", mode as u8);
+        }
         let timer = match key {
             "modtimergame" => Some(0),
             "modtimerbeat" => Some(1),

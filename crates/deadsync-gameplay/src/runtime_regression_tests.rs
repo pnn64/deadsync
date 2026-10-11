@@ -2009,6 +2009,80 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn fail_off_keeps_score() {
+        let mut state = regression_state();
+        state.setup.config.default_fail_type = GameplayFailType::Immediate;
+        state.mods.attacks.mask_windows[0] = vec![
+            build_course_modifier_mask_window("failoff").expect("fail mode window")
+        ];
+        state.refresh_player_attacks(0, 0.0, 0.0);
+        assert_eq!(state.players_runtime.players[0].fail_type, GameplayFailType::Off);
+        let rows = [0, 48];
+        state.chart_runtime.notes = vec![
+            note_with_judgment(0, rows[0], NoteType::Tap, JudgeGrade::Miss, 0.0),
+            note_with_judgment(0, rows[1], NoteType::Tap, JudgeGrade::Fantastic, 4.0),
+        ];
+        state.chart_runtime.note_time_cache_ns = vec![
+            song_time_ns_from_seconds(1.0), song_time_ns_from_seconds(1.5),
+        ];
+        state.chart_runtime.row_entries = rows.iter().enumerate().map(|(index, &row)| {
+            test_row_entry_with_times(&state.chart_runtime.notes,
+                &state.chart_runtime.note_time_cache_ns, row, vec![index])
+        }).collect();
+        state.players_runtime.players[0].life = 0.001;
+        state.finalize_row_judgment(0, rows[0], 0, false);
+        assert_eq!(state.players_runtime.players[0].life, 0.0);
+        assert!(!state.player_score_is_blocked(0));
+        assert!(state.finish_gameplay_if_ready(false).is_none());
+        state.finalize_row_judgment(0, rows[1], 1, false);
+        let player = &state.players_runtime.players[0];
+        assert_eq!(player.scoring_counts.iter().sum::<u32>(), 2);
+        assert_eq!(player.fail_time, None);
+        assert!(player.failed_ex_score_inputs.is_none());
+        assert!(state.force_fail_player(0));
+        assert!(state.player_score_is_blocked(0));
+    }
+
+    #[test]
+    fn fail_modes_finish_song() {
+        for (modifiers, should_fail) in [("failoff", false), ("failatend", true)] {
+            let mut state = regression_state();
+            state.mods.attacks.mask_windows[0] = vec![
+                build_course_modifier_mask_window(modifiers).expect("fail mode window")
+            ];
+            state.refresh_player_attacks(0, 0.0, 0.0);
+            state.players_runtime.players[0].life = 0.0;
+            assert!(!state.player_is_dead(0));
+            assert!(state.finish_gameplay_if_ready(false).is_none());
+            state.clock.song_position.current_music_time_ns = state.music_end_time_ns();
+            assert!(matches!(state.finish_gameplay_if_ready(false),
+                Some(GameplayAction::Navigate(GameplayExit::Complete))));
+            assert_eq!(state.players_runtime.players[0].is_failing, should_fail);
+            assert_eq!(state.individual_song_outcome(0).is_failing, should_fail);
+        }
+    }
+
+    #[test]
+    fn fail_exit_needs_all() {
+        let mut state = regression_state();
+        state.setup.num_players = 2;
+        for player in &mut state.players_runtime.players {
+            player.life = 0.0;
+            player.is_failing = true;
+            player.fail_type = GameplayFailType::Immediate;
+        }
+        for mode in [GameplayFailType::Off, GameplayFailType::EndOfSong,
+            GameplayFailType::ImmediateContinue]
+        {
+            state.players_runtime.players[1].fail_type = mode;
+            assert!(state.finish_gameplay_if_ready(false).is_none());
+        }
+        state.players_runtime.players[1].fail_type = GameplayFailType::Immediate;
+        assert!(matches!(state.finish_gameplay_if_ready(false),
+            Some(GameplayAction::Navigate(GameplayExit::Complete))));
+    }
+
+    #[test]
     fn column_judgments_include_fatal_frame_then_stop() {
         let mut state = regression_state();
         let rows = [0, 48, 96];

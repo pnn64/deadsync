@@ -147,6 +147,10 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
             // FromString Overhead always resets perspective, even at level zero.
             let mut set_option = |key: String, value: f32| match key.as_str() {
                 "xmod" | "cmod" | "mmod" if speed_observed => {},
+                "failarcade" | "failimmediate" => push("failsetting".into(), 0.0),
+                "failendofsong" | "failimmediatecontinue" => push("failsetting".into(), 1.0),
+                "failatend" => push("failsetting".into(), 2.0),
+                "failoff" => push("failsetting".into(), 3.0),
                 "modtimergame" => push("modtimersetting".into(), 0.0),
                 "modtimerbeat" => push("modtimersetting".into(), 1.0),
                 "modtimersong" => push("modtimersetting".into(), 2.0),
@@ -280,7 +284,18 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                 {
                     continue;
                 }
-                let value = if operation == "ModTimerSetting" {
+                let value = if operation == "FailSetting" {
+                    let Some(target) = args.first().filter(|v| !v.is_null()) else { continue; };
+                    if let Some(raw) = target.as_str() {
+                        // Independent native control verifies these enum writes;
+                        // GameConstantsAndTypes.h establishes their ordinals.
+                        ["Immediate", "ImmediateContinue", "EndOfSong", "Off"].iter()
+                            .position(|name| raw == format!("FailType_{name}")
+                                || raw.eq_ignore_ascii_case(name)).map(|value| value as f32)
+                    } else {
+                        value_f32(Some(target)).filter(|v| (0.0..=3.0).contains(v) && v.fract() == 0.0)
+                    }
+                } else if operation == "ModTimerSetting" {
                     let Some(target) = args.first().filter(|v| !v.is_null()) else {
                         continue;
                     };
@@ -460,6 +475,7 @@ fn runtime_mod_value(
         "dizzy" => visual.dizzy.unwrap_or(0.0),
         "twirl" => visual.twirl.unwrap_or(0.0),
         "roll" => visual.roll.unwrap_or(0.0),
+        "failsetting" => runtime.fail_type[player].unwrap_or(deadsync_gameplay::GameplayFailType::Immediate) as u8 as f32,
         "modtimersetting" => visual.mod_timer_type.unwrap_or_default() as u8 as f32,
         "modtimermult" => visual.mod_timer_mult.unwrap_or(0.0),
         "modtimeroffset" => visual.mod_timer_offset.unwrap_or(0.0),
@@ -4501,4 +4517,26 @@ fn cmd_callback_preserves_initial_player_pose() {
     compare_player_frames(&trace, &compiled, 0, &context, &mut wrong);
     assert_eq!(wrong.sections.iter().map(|section| section.failed).sum::<usize>(),
         trace.update_frames.len());
+}
+
+#[test]
+fn fail_options_runtime() {
+    crate::paths::init();
+    let song_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song-lua");
+    let mut context = SongLuaCompileContext::new(&song_dir, "FailSetting control");
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let entry = song_dir.join("fail-setting.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile fail enums, string modes and fresh assignment");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (now, modes) in [(0.5, [3.0, 1.0]), (1.5, [2.0, 1.0]), (2.5, [0.0, 1.0])] {
+        for player in 0..2 {
+            runtime.refresh_player(player, now, 0.5,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default, SongLuaPlayerTransform::default());
+            assert_eq!(runtime_mod_value(&runtime, player, "failsetting"), Some(modes[player]));
+        }
+    }
 }

@@ -462,6 +462,7 @@ pub struct ParsedAttackMods {
     pub clear_all: bool,
     pub accel: AccelOverrides,
     pub accel_speed: AccelOverrides,
+    pub fail_type: Option<GameplayFailType>,
     pub attack_flags: AttackFlagOverrides,
     pub attack_flag_speed: AttackFlagOverrides,
     pub visual: VisualOverrides,
@@ -488,6 +489,7 @@ impl Default for ParsedAttackMods {
             clear_all: false,
             accel: AccelOverrides::default(),
             accel_speed: AccelOverrides::default(),
+            fail_type: None,
             attack_flags: AttackFlagOverrides::default(),
             attack_flag_speed: AttackFlagOverrides::default(),
             visual: VisualOverrides::default(),
@@ -521,6 +523,7 @@ impl ParsedAttackMods {
     pub fn has_runtime_mask_effect(self) -> bool {
         self.clear_all
             || self.accel.any()
+            || self.fail_type.is_some()
             || self.attack_flags.any()
             || self.visual.any()
             || self.appearance.any()
@@ -580,6 +583,7 @@ pub struct AttackMaskWindow {
     pub chart: ChartAttackEffects,
     pub accel: AccelOverrides,
     pub accel_speed: AccelOverrides,
+    pub fail_type: Option<GameplayFailType>,
     pub attack_flags: AttackFlagOverrides,
     pub attack_flag_speed: AttackFlagOverrides,
     pub visual: VisualOverrides,
@@ -619,6 +623,7 @@ pub fn build_song_lua_constant_attack_mask_window(
         chart: ChartAttackEffects::default(),
         accel: mods.accel,
         accel_speed: mods.accel_speed,
+        fail_type: mods.fail_type,
         attack_flags: mods.attack_flags,
         attack_flag_speed: mods.attack_flag_speed,
         visual: mods.visual,
@@ -652,6 +657,7 @@ pub fn build_course_modifier_mask_window(modifiers: &str) -> Option<AttackMaskWi
         chart: ChartAttackEffects::default(),
         accel: mods.accel,
         accel_speed: mods.accel_speed,
+        fail_type: mods.fail_type,
         attack_flags: mods.attack_flags,
         attack_flag_speed: mods.attack_flag_speed,
         visual: mods.visual,
@@ -679,6 +685,7 @@ pub enum SongLuaEaseMaskTarget {
     AccelExpand,
     AccelExpandPeriod,
     AccelBoomerang,
+    FailSetting,
     NoAttack,
     RandAttack,
     VisualModTimerType,
@@ -2362,6 +2369,7 @@ fn append_song_lua_ease_targets_key(
         "boomerang" => push(SongLuaEaseMaskTarget::AccelBoomerang, pct_from, pct_to),
         "noattack" | "noattacks" => push(SongLuaEaseMaskTarget::NoAttack, pct_from, pct_to),
         "randattack" | "randomattacks" => push(SongLuaEaseMaskTarget::RandAttack, pct_from, pct_to),
+        "failsetting" => push(SongLuaEaseMaskTarget::FailSetting, pct_from, pct_to),
         "modtimersetting" => push(SongLuaEaseMaskTarget::VisualModTimerType, pct_from, pct_to),
         "modtimergame" => push(SongLuaEaseMaskTarget::VisualModTimerType, 0.0, 0.0),
         "modtimerbeat" => push(SongLuaEaseMaskTarget::VisualModTimerType, 1.0, 1.0),
@@ -3142,6 +3150,7 @@ pub fn song_lua_apply_eased_target(
     value: f32,
     accel: &mut AccelOverrides,
     attack_flags: &mut AttackFlagOverrides,
+    fail_type: &mut Option<GameplayFailType>,
     visual: &mut VisualOverrides,
     appearance: &mut AppearanceEffects,
     visibility: &mut VisibilityOverrides,
@@ -3162,6 +3171,7 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::AccelExpand => accel.expand = Some(value),
         SongLuaEaseMaskTarget::AccelExpandPeriod => accel.expand_period = Some(value),
         SongLuaEaseMaskTarget::AccelBoomerang => accel.boomerang = Some(value),
+        SongLuaEaseMaskTarget::FailSetting => *fail_type = GameplayFailType::from_value(value),
         SongLuaEaseMaskTarget::NoAttack => attack_flags.no_attack = Some(value),
         SongLuaEaseMaskTarget::RandAttack => attack_flags.rand_attack = Some(value),
         SongLuaEaseMaskTarget::VisualModTimerType => {
@@ -3405,6 +3415,7 @@ fn attack_mask_window_from_values(
         },
         accel: mods.accel,
         accel_speed: mods.accel_speed,
+        fail_type: mods.fail_type,
         attack_flags: mods.attack_flags,
         attack_flag_speed: mods.attack_flag_speed,
         visual: mods.visual,
@@ -3471,6 +3482,7 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::AccelExpand => window.accel.expand.is_some(),
         SongLuaEaseMaskTarget::AccelExpandPeriod => window.accel.expand_period.is_some(),
         SongLuaEaseMaskTarget::AccelBoomerang => window.accel.boomerang.is_some(),
+        SongLuaEaseMaskTarget::FailSetting => window.fail_type.is_some(),
         SongLuaEaseMaskTarget::NoAttack => window.attack_flags.no_attack.is_some(),
         SongLuaEaseMaskTarget::RandAttack => window.attack_flags.rand_attack.is_some(),
         SongLuaEaseMaskTarget::VisualModTimerType => window.visual.mod_timer_type.is_some(),
@@ -5118,6 +5130,7 @@ pub struct ActiveAttackMaskValues {
     pub chart: ChartAttackEffects,
     pub accel: AccelOverrides,
     pub accel_speed: AccelOverrides,
+    pub fail_type: Option<GameplayFailType>,
     pub attack_flags: AttackFlagOverrides,
     pub attack_flag_speed: AttackFlagOverrides,
     pub visual: VisualOverrides,
@@ -5143,6 +5156,7 @@ impl ActiveAttackMaskValues {
             chart: ChartAttackEffects::default(),
             accel: AccelOverrides::default(),
             accel_speed: AccelOverrides::default(),
+            fail_type: None,
             attack_flags: AttackFlagOverrides::default(),
             attack_flag_speed: AttackFlagOverrides::default(),
             visual: VisualOverrides::default(),
@@ -5164,6 +5178,7 @@ impl ActiveAttackMaskValues {
     fn clear_for_window(&mut self) {
         *self = Self::new(AppearanceEffects::default());
         self.clear_all = true;
+        self.fail_type = Some(GameplayFailType::Immediate);
     }
 }
 
@@ -5211,6 +5226,7 @@ pub struct ActiveAttackRefreshOutput {
     pub active_attack_clear_all: bool,
     pub active_attack_chart: ChartAttackEffects,
     pub active_attack_accel: AccelOverrides,
+    pub active_fail_type: Option<GameplayFailType>,
     pub active_attack_flags: AttackFlagOverrides,
     pub active_attack_visual: VisualOverrides,
     pub active_attack_appearance: AppearanceEffects,
@@ -5232,6 +5248,7 @@ pub struct GameplayAttackRuntimeState {
     pub clear_all: [bool; MAX_PLAYERS],
     pub chart: [ChartAttackEffects; MAX_PLAYERS],
     pub accel: [AccelOverrides; MAX_PLAYERS],
+    pub fail_type: [Option<GameplayFailType>; MAX_PLAYERS],
     pub attack_flags: [AttackFlagOverrides; MAX_PLAYERS],
     pub visual: [VisualOverrides; MAX_PLAYERS],
     pub outro_visual: [VisualOverrides; MAX_PLAYERS],
@@ -5495,6 +5512,7 @@ impl Default for GameplayAttackRuntimeState {
             clear_all: [false; MAX_PLAYERS],
             chart: [ChartAttackEffects::default(); MAX_PLAYERS],
             accel: [AccelOverrides::default(); MAX_PLAYERS],
+            fail_type: [None; MAX_PLAYERS],
             attack_flags: [AttackFlagOverrides::default(); MAX_PLAYERS],
             visual: [VisualOverrides::default(); MAX_PLAYERS],
             outro_visual: [VisualOverrides::default(); MAX_PLAYERS],
@@ -5568,6 +5586,7 @@ impl GameplayAttackRuntimeState {
         self.cleared_for_outro = false;
         self.clear_all = [false; MAX_PLAYERS];
         self.chart = [ChartAttackEffects::default(); MAX_PLAYERS];
+        self.fail_type = [None; MAX_PLAYERS];
         self.attack_flags = [AttackFlagOverrides::default(); MAX_PLAYERS];
         self.accel = [AccelOverrides::default(); MAX_PLAYERS];
         self.visual = [VisualOverrides::default(); MAX_PLAYERS];
@@ -5678,6 +5697,7 @@ impl GameplayAttackRuntimeState {
         self.clear_all[player] = output.active_attack_clear_all;
         self.chart[player] = output.active_attack_chart;
         self.accel[player] = output.active_attack_accel;
+        self.fail_type[player] = output.active_fail_type;
         self.attack_flags[player] = output.active_attack_flags;
         self.visual[player] = output.active_attack_visual;
         self.appearance[player] = output.active_attack_appearance;
@@ -5787,6 +5807,7 @@ fn apply_song_lua_attack_eases_selected(
                 value,
                 &mut attack.accel,
                 &mut attack.attack_flags,
+                &mut attack.fail_type,
                 &mut attack.visual,
                 appearance,
                 &mut attack.visibility,
@@ -5825,6 +5846,7 @@ fn apply_song_lua_approach_targets(
             value,
             &mut attack.accel,
             &mut attack.attack_flags,
+            &mut attack.fail_type,
             &mut attack.visual,
             &mut attack.appearance_target,
             &mut attack.visibility,
@@ -5838,7 +5860,8 @@ fn apply_song_lua_approach_targets(
             SongLuaEaseMaskTarget::VisibilityDarkColumn(col) if col < MAX_COLS => {
                 attack.dark_col_speed[col] = Some(speed)
             }
-            SongLuaEaseMaskTarget::VisualModTimerType
+            SongLuaEaseMaskTarget::FailSetting
+            | SongLuaEaseMaskTarget::VisualModTimerType
             | SongLuaEaseMaskTarget::VisualDizzyHolds
             | SongLuaEaseMaskTarget::VisualZBuffer
             | SongLuaEaseMaskTarget::VisualCosecant => {}
@@ -6163,6 +6186,9 @@ pub fn apply_active_attack_mask_window(
     if window.clear_all {
         values.clear_for_window();
     }
+    if let Some(mode) = window.fail_type {
+        values.fail_type = Some(mode);
+    }
     values.chart.insert_mask |= window.chart.insert_mask;
     values.chart.remove_mask |= window.chart.remove_mask;
     values.chart.holds_mask |= window.chart.holds_mask;
@@ -6336,6 +6362,7 @@ fn refresh_idle_attack_player(
         active_attack_clear_all: false,
         active_attack_chart: ChartAttackEffects::default(),
         active_attack_accel: state.active_attack_accel,
+        active_fail_type: None,
         active_attack_flags: state.active_attack_flags,
         active_attack_visual: VisualOverrides::default(),
         active_attack_appearance: appearance,
@@ -6455,6 +6482,7 @@ fn refresh_active_attack_player_full(
             active_attack_clear_all: false,
             active_attack_chart: ChartAttackEffects::default(),
             active_attack_accel: AccelOverrides::default(),
+            active_fail_type: None,
             active_attack_flags: state.active_attack_flags,
             active_attack_visual: visual,
             active_attack_appearance: appearance,
@@ -6551,6 +6579,7 @@ fn refresh_active_attack_player_full(
         active_attack_clear_all: attack.clear_all,
         active_attack_chart: attack.chart,
         active_attack_accel: attack.accel,
+        active_fail_type: attack.fail_type,
         active_attack_flags: attack.attack_flags,
         active_attack_visual: attack.visual,
         active_attack_appearance: appearance,
@@ -7988,6 +8017,14 @@ fn apply_runtime_mod(
         return;
     }
 
+    if let Some(mode) = GameplayFailType::from_mod(key) {
+        out.fail_type = Some(mode);
+        return;
+    }
+    if key == "failsetting" {
+        out.fail_type = attack_level(percent_value).and_then(GameplayFailType::from_value);
+        return;
+    }
     match key {
         "wide" => out.insert_mask |= INSERT_MASK_BIT_WIDE,
         "big" => out.insert_mask |= INSERT_MASK_BIT_BIG,
@@ -8867,6 +8904,7 @@ pub fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
             "clearall" => {
                 out = ParsedAttackMods {
                     clear_all: true,
+                    fail_type: Some(GameplayFailType::Immediate),
                     ..ParsedAttackMods::default()
                 };
             }
@@ -8925,6 +8963,7 @@ fn parse_song_lua_runtime_mods_core<const BUFFERED: bool>(mods: &str) -> ParsedA
             if key == "clearall" {
                 out = ParsedAttackMods {
                     clear_all: true,
+                    fail_type: Some(GameplayFailType::Immediate),
                     ..ParsedAttackMods::default()
                 };
                 continue;
