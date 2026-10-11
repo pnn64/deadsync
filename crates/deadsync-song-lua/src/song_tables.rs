@@ -2642,9 +2642,10 @@ fn create_song_steps(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result
     for (index, step) in context.song_steps.iter().enumerate() {
         let display_bpms = context.player_step_indices.iter().position(|selected| *selected == Some(index))
             .map_or(context.song_display_bpms, |player| context.players[player].display_bpms);
-        let timing = context.player_step_indices.iter()
-            .position(|selected| *selected == Some(index))
-            .and_then(|player| context.player_timing[player].as_ref())
+        let timing = context.song_step_timing.get(index)
+            .or_else(|| context.player_step_indices.iter()
+                .position(|selected| *selected == Some(index))
+                .and_then(|player| context.player_timing[player].as_ref()))
             .or(context.song_timing.as_ref());
         let value = create_steps_table(lua, step.difficulty, display_bpms,
             &context.song_dir, &step.steps_type, timing)?;

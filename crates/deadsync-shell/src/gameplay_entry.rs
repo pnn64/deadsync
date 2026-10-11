@@ -174,6 +174,13 @@ pub(crate) fn prepare_song_lua(
         &video_renderer.to_string(),
     );
     context.random_seed = random_seed;
+    match deadsync_simfile::app_runtime::load_chart_timings(song, config.global_offset_seconds) {
+        Ok(timings) => context.song_step_timing = timings,
+        Err(error) => {
+            warn!("Cannot load Lua chart timing for '{}': {error}", song.title);
+            return PreparedGameplaySongLua::default();
+        }
+    }
     for (player, profile) in context.players.iter_mut().zip(player_profiles) {
         let Some(choice) = deadsync_assets::textures::resolve_texture_choice_entry(
             profile.judgment_graphic.texture_key(),

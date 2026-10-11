@@ -2419,6 +2419,48 @@ fn gameplay_chart_payload_load_log_entry(
     }
 }
 
+/// Load song-local chart timing before compiling Lua. Decode cached payloads
+/// one at a time; never retain unselected notes or expand their gameplay data.
+/// Cache misses parse at song load, never during gameplay updates.
+pub fn load_chart_timings(
+    song: &SongData,
+    options: &GameplayChartLoadOptions<'_>,
+    music_len: impl FnOnce(Option<&Path>) -> f32,
+) -> Result<Vec<TimingData>, String> {
+    if options.allow_cache_read {
+        let cached = (|| {
+            let cache_path = song_cache_path(options.cache_dir, &song.simfile_path).ok()?;
+            let (cached_song, payload_start) = load_cached_song_for_gameplay(
+                &song.simfile_path, &cache_path, options.verify_cache_freshness,
+            )?;
+            if cached_song.chart_payloads.len() != song.charts.len() {
+                return None;
+            }
+            cached_song.chart_payloads.into_iter().map(|entry| {
+                let payload = load_cached_chart_payload(&cache_path, payload_start, entry)?;
+                Some(TimingData::from_segments(
+                    -payload.offset, options.global_offset_seconds,
+                    &payload.timing_segments.into(), &[],
+                ))
+            }).collect::<Option<Vec<_>>>()
+        })();
+        if let Some(timings) = cached {
+            return Ok(timings);
+        }
+    }
+    let data = parse_song_data_file(
+        &song.simfile_path, options.parse_options, options.global_offset_seconds, music_len,
+    )?;
+    if data.charts.len() != song.charts.len() {
+        return Err("song charts changed before loading Lua timing".into());
+    }
+    Ok(data.charts.into_iter().map(|chart| {
+        TimingData::from_segments(
+            -chart.offset, options.global_offset_seconds, &chart.timing_segments.into(), &[],
+        )
+    }).collect())
+}
+
 pub fn load_gameplay_charts_with_options<F>(
     song: &SongData,
     requested_chart_ixs: &[usize],

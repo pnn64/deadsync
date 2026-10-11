@@ -811,9 +811,8 @@ fn compile_trace_song_at(
                         .collect::<Vec<_>>()
                 )
             });
-        let payload = deadsync_simfile::cache::load_gameplay_charts_with_options(
+        let timings = deadsync_simfile::cache::load_chart_timings(
             &song,
-            &[chart_index],
             &deadsync_simfile::cache::GameplayChartLoadOptions {
                 cache_dir: Path::new("."),
                 parse_options: &ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
@@ -825,7 +824,8 @@ fn compile_trace_song_at(
             |_| 0.0,
         )
         .expect("load reference chart timing");
-        context.player_timing = std::array::from_fn(|_| Some(payload.charts[0].timing.clone()));
+        context.player_timing = std::array::from_fn(|_| Some(timings[chart_index].clone()));
+        context.song_step_timing = timings;
     }
     let timing_bpms = parse_song_timing_bpms(&song.normalized_bpms);
     context.song_timing = song.song_timing.clone();
@@ -954,6 +954,69 @@ fn kind_name(kind: &SongLuaOverlayKind) -> &'static str {
         SongLuaOverlayKind::SongMeterDisplay { .. } => "SongMeterDisplay",
         SongLuaOverlayKind::GraphDisplay { .. } => "GraphDisplay",
         SongLuaOverlayKind::Quad => "Quad",
+    }
+}
+
+#[test]
+fn all_steps_keep_native_timing() {
+    // Exercise both parsed and cached chart payloads through the real compiler;
+    // the captured native control queries song, selected, and unselected timing.
+    let fixture_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro");
+    let root = std::env::temp_dir().join(format!(
+        "deadsync-all-steps-timing-{}-{}", std::process::id(),
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock").as_nanos(),
+    ));
+    let song_dir = root.join("song");
+    fs::create_dir_all(&song_dir).expect("timing control directory");
+    for name in ["timing-data.ssc", "control.lua"] {
+        fs::copy(fixture_dir.join(name), song_dir.join(name)).expect("copy native control");
+    }
+    let simfile = song_dir.join("timing-data.ssc");
+    let parse_options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+    let song = parse_song_meta_file(&simfile, &parse_options, 0.0, |_| 0.0)
+        .expect("parse native control metadata");
+    let cache_dir = root.join("cache");
+    let cache_path = deadsync_simfile::cache::song_cache_path(&cache_dir, &simfile)
+        .expect("control cache path");
+    let data = deadsync_simfile::song::parse_song_data_file(
+        &simfile, &parse_options, 0.0, |_| 0.0,
+    ).expect("parse native control payload");
+    deadsync_simfile::cache::write_song_cache_file(&cache_path, &data, 0.0)
+        .expect("write split timing cache");
+    let native: Value = serde_json::from_slice(
+        &fs::read(fixture_dir.join("timing-data-native.json")).expect("native timing results"),
+    ).expect("native control JSON");
+    for allow_cache_read in [false, true] {
+        let options = deadsync_simfile::cache::GameplayChartLoadOptions {
+            cache_dir: &cache_dir, parse_options: &parse_options, allow_cache_read,
+            allow_cache_write: false, verify_cache_freshness: true, global_offset_seconds: 0.0,
+        };
+        let mut context = SongLuaCompileContext::new(&song_dir, song.title.clone());
+        context.song_step_timing = deadsync_simfile::cache::load_chart_timings(
+            &song, &options, |_| { assert!(!allow_cache_read, "cache hit must avoid parsing"); 0.0 },
+        ).expect("load all chart timing");
+        context.song_steps = song.charts.iter().map(deadsync_song_lua::SongLuaStep::from).collect();
+        context.song_timing = song.song_timing.clone();
+        context.player_step_indices = [Some(0); 2];
+        context.player_timing = std::array::from_fn(|_| Some(context.song_step_timing[0].clone()));
+        let compiled = compile_song_lua_layers(&[song_dir.join("control.lua").as_path()], 0, &context)
+            .expect("compile real timing owner control");
+        let mut checks = 0;
+        for (name, expected) in native.as_object().expect("native owner results") {
+            let state = &compiled[0].overlays.iter().find(|actor| actor.name.as_deref() == Some(name))
+                .expect("compiled timing owner").initial_state;
+            for (method, actual) in [("Actor.x", state.x), ("Actor.y", state.y), ("Actor.z", state.z),
+                ("Actor.aux", state.aux), ("Actor.zoomx", state.zoom_x), ("Actor.zoomy", state.zoom_y),
+                ("Actor.zoomz", state.zoom_z), ("Actor.rotationx", state.rot_x_deg)] {
+                let expected = expected[method].as_f64().expect("native getter value") as f32;
+                assert!((actual - expected).abs() <= 0.000001,
+                    "cache={allow_cache_read}, {name} {method}: {actual} vs native {expected}");
+                checks += 1;
+            }
+        }
+        assert_eq!(checks, 32, "include both SSC charts and the song timing");
     }
 }
 

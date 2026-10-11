@@ -1406,6 +1406,9 @@ pub struct SongLuaCompileContext {
     pub song_timing: Option<deadsync_rules::timing::TimingData>,
     /// Selected chart timing, shared with gameplay; populated before Lua compilation.
     pub player_timing: [Option<deadsync_rules::timing::TimingData>; LUA_PLAYERS],
+    /// Timing for every chart in `song_steps` order, loaded before compilation.
+    /// Song-local ownership keeps unselected SSC timing out of the library cache.
+    pub song_step_timing: Vec<deadsync_rules::timing::TimingData>,
     pub song_music_rate: f32,
     /// Initial ITGmania PRNG seed; fixed per compilation for repeatable playback.
     /// Scripts may reseed it through math.randomseed or MersenneTwister.Seed.
@@ -1445,6 +1448,7 @@ impl SongLuaCompileContext {
             song_timing_bpms: Vec::new(),
             song_timing: None,
             player_timing: std::array::from_fn(|_| None),
+            song_step_timing: Vec::new(),
             song_music_rate: 1.0,
             random_seed: 1,
             #[cfg(feature = "test-support")]
