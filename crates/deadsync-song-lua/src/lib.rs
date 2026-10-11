@@ -20390,6 +20390,23 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn stage_grade_matches_native() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/stage-grade-native.json",
+        )).expect("native stage grade control");
+        let assertions = fixture["lua_assertions"].as_str().expect("native grade assertions");
+        let song_dir = test_dir("native-stage-grade");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, format!(
+            "local function _ITG_STAGE_STATS(player)\n\
+             return STATSMAN:GetCurStageStats():GetPlayerStageStats(player)\nend\n\
+             {assertions}\nreturn Def.ActorFrame{{}}\n",
+        )).expect("stage grade control script");
+        test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Native grade"))
+            .expect("same empty and failed stage grades as native");
+    }
+
+    #[test]
     fn compile_song_lua_accepts_stage_stat_and_high_score_helpers() {
         let song_dir = test_dir("stage-stat-high-score-helpers");
         let entry = song_dir.join("default.lua");
@@ -23838,7 +23855,7 @@ return Def.ActorFrame{}
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "2:Simply Love:Simply Love:0:false:1:1:1:1:1:Theme Manager Compat:true:0:0:0:Grade_Tier07:Player:1"
+            "2:Simply Love:Simply Love:0:false:1:1:1:1:1:Theme Manager Compat:true:0:0:0:Grade_Tier17:Player:1"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
     }

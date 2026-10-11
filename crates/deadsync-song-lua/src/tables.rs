@@ -1332,7 +1332,21 @@ fn create_player_stage_stats_table(
             }
         })?,
     )?;
-    set_string_method(lua, &stats, "GetGrade", "Grade_Tier07")?;
+    stats.set(
+        "GetGrade",
+        lua.create_function({
+            let stats = stats.clone();
+            move |_, _args: MultiValue| {
+                Ok(if stats.get::<Option<bool>>("__songlua_failed")?.unwrap_or(false) {
+                    "Grade_Failed"
+                } else {
+                    // Simply Love's lowest tier is 17. Before judgments, native
+                    // PlayerStageStats computes a zero grade percentage.
+                    "Grade_Tier17"
+                })
+            }
+        })?,
+    )?;
     stats.set(
         "GetFailed",
         lua.create_function({
