@@ -1382,6 +1382,8 @@ pub struct SongLuaStep {
     pub credit: String,
     pub meter: u32,
     pub music_file: String,
+    /// Chart-load maximum before gameplay modifiers, in ITG dance points.
+    pub possible_grade_points: i32,
 }
 
 impl From<&deadsync_chart::ChartData> for SongLuaStep {
@@ -1402,6 +1404,7 @@ impl From<&deadsync_chart::ChartData> for SongLuaStep {
             credit: chart.step_artist.clone(),
             meter: chart.meter,
             music_file: chart.music_file.clone(),
+            possible_grade_points: chart.possible_grade_points,
         }
     }
 }
@@ -1846,6 +1849,9 @@ pub struct SongLuaStateCall {
 
 #[derive(Debug, Clone)]
 pub struct CompiledSongLua<OverlayActor> {
+    /// Charts whose note fields were constructed after startup reloads.
+    pub loaded_steps: Option<[Option<usize>; LUA_PLAYERS]>,
+    pub startup_reloads: u32,
     pub startup: SongLuaStartup,
     pub entry_path: PathBuf,
     pub screen_width: f32,
@@ -1891,6 +1897,8 @@ pub struct CompiledSongLua<OverlayActor> {
 impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
     fn default() -> Self {
         Self {
+            loaded_steps: None,
+            startup_reloads: 0,
             startup: SongLuaStartup::default(),
             entry_path: PathBuf::new(),
             screen_width: 0.0,
@@ -12783,6 +12791,7 @@ return Def.ActorFrame{}
                 description: String::new(), chart_name: String::new(), credit: String::new(),
                 meter: difficulty.meter().max(0) as u32,
                 music_file: String::new(),
+                possible_grade_points: 0,
             }).collect()
     }
 
@@ -12865,14 +12874,18 @@ return Def.ActorFrame{}
         fs::write(&entry, r#"
             assert(GAMESTATE:IsEventMode())
             local all = GAMESTATE:GetCurrentSong():GetStepsByStepsType('StepsType_Dance_Single')
-            assert(#all == 8 and all[1] == GAMESTATE:GetCurrentSteps(PLAYER_1))
+            assert(#all == 8)
+            if not NATIVE_BRANCH_SELECTED then assert(all[1] == GAMESTATE:GetCurrentSteps(PLAYER_1)) end
             return Def.ActorFrame{OnCommand=function(self)
-                local r1 = math.random(1, #all)
-                local r2 = math.random(1, #all - 1)
-                if r2 >= r1 then r2 = r2 + 1 end
-                GAMESTATE:SetCurrentSteps(PLAYER_1, all[r1])
-                GAMESTATE:SetCurrentSteps(PLAYER_2, all[r2])
-                SCREENMAN:SetNewScreen("ScreenGameplay")
+                if not NATIVE_BRANCH_SELECTED then
+                    NATIVE_BRANCH_SELECTED = true
+                    local r1 = math.random(1, #all)
+                    local r2 = math.random(1, #all - 1)
+                    if r2 >= r1 then r2 = r2 + 1 end
+                    GAMESTATE:SetCurrentSteps(PLAYER_1, all[r1])
+                    GAMESTATE:SetCurrentSteps(PLAYER_2, all[r2])
+                    SCREENMAN:SetNewScreen("ScreenGameplay")
+                end
                 mod_actions={{1, GAMESTATE:GetCurrentSteps(PLAYER_1):GetDifficulty() .. ':' ..
                     GAMESTATE:GetCurrentSteps(PLAYER_2):GetDifficulty(), true}}
             end}
@@ -13233,10 +13246,13 @@ return Def.ActorFrame{}
 return Def.Quad{OnCommand=function(self)
     local screen = SCREENMAN:GetTopScreen()
     local name = screen:GetName()
-    SCREENMAN:SetNewScreen("LastRequestMustReplaceThis")
-    assert(SCREENMAN:GetTopScreen() == screen and screen:GetName() == name)
-    SCREENMAN:SetNewScreen("ScreenGameplay")
-    assert(SCREENMAN:GetTopScreen() == screen and screen:GetName() == name)
+    if not REQUESTED_SCREEN then
+        REQUESTED_SCREEN = true
+        SCREENMAN:SetNewScreen("LastRequestMustReplaceThis")
+        assert(SCREENMAN:GetTopScreen() == screen and screen:GetName() == name)
+        SCREENMAN:SetNewScreen("ScreenGameplay")
+        assert(SCREENMAN:GetTopScreen() == screen and screen:GetName() == name)
+    end
     self:x(31)
 end}
 "#).expect("write screen request control");
@@ -13256,8 +13272,10 @@ end}
 return Def.ActorFrame{
     OnCommand=function(self)
         local steps = GAMESTATE:GetCurrentSong():GetStepsByStepsType("StepsType_Dance_Single")
-        GAMESTATE:SetCurrentSteps(PLAYER_1, steps[2])
-        SCREENMAN:SetNewScreen("ScreenGameplay")
+        if GAMESTATE:GetCurrentSteps(PLAYER_1) ~= steps[2] then
+            GAMESTATE:SetCurrentSteps(PLAYER_1, steps[2])
+            SCREENMAN:SetNewScreen("ScreenGameplay")
+        end
         local ps = GAMESTATE:GetPlayerState(PLAYER_1)
         ps:SetPlayerOptions("ModsLevel_Song", "1x, Overhead")
         mod_actions = {
@@ -13913,6 +13931,156 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "4");
+    }
+
+    #[test]
+    fn startup_reload_matches_native() {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro");
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/startup-reload-native.json",
+        )).expect("native reload snapshots");
+        let song = deadsync_simfile::song::parse_song_meta_file(
+            &fixtures.join("startup-reload.ssc"),
+            &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+            0.0, |_| 0.0,
+        ).expect("reload chart metadata");
+        let song_dir = test_dir("native-startup-reload");
+        let entry = song_dir.join("reload.lua");
+        fs::copy(fixtures.join("startup-reload.lua"), &entry).expect("unchanged native control");
+        let observer = song_dir.join("observer.lua");
+        fs::write(&observer, r#"
+RELOAD_SNAPSHOTS = RELOAD_SNAPSHOTS or {}
+return Def.ActorFrame {
+    HarnessReloadControlMessageCommand = function(self, p)
+        RELOAD_SNAPSHOTS[#RELOAD_SNAPSHOTS + 1] = string.format("%d:%s:%d:%d:%s",
+            p.count, p.difficulty, p.possible, p.current_possible, p.top_name)
+    end,
+    OnCommand = function(self)
+        if HARNESS_NATIVE_RELOAD_COUNT == 2 then
+            mod_actions = {{1, table.concat(RELOAD_SNAPSHOTS, ";"), true}}
+        end
+    end,
+}
+"#).expect("reload observer");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Native reload");
+        context.song_steps = song.charts.iter().map(crate::SongLuaStep::from).collect();
+        let initial = context.song_steps.iter().position(|steps|
+            steps.difficulty == SongLuaDifficulty::Challenge).expect("initial Challenge");
+        context.player_step_indices = [Some(initial), None];
+        context.players[0].difficulty = SongLuaDifficulty::Challenge;
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua_layers(&[&entry, &observer], 0, &context)
+            .expect("native control reloads in the same Lua VM");
+        let expected = native["snapshots"].as_array().expect("native startup snapshots").iter()
+            .map(|p| format!("{}:{}:{}:{}:{}", p["count"], p["difficulty"].as_str().expect("difficulty"),
+                p["possible"], p["current_possible"], p["top_name"].as_str().expect("screen name")))
+            .collect::<Vec<_>>().join(";");
+        let easy = context.song_steps.iter().position(|steps|
+            steps.difficulty == SongLuaDifficulty::Easy).expect("replacement Easy");
+        assert!(compiled.iter().flat_map(|layer| &layer.messages)
+            .any(|event| event.message == expected), "{compiled:?}");
+        for layer in compiled {
+            assert_eq!(layer.startup_reloads, 1);
+            assert_eq!(layer.loaded_steps, Some([Some(easy), None]));
+        }
+    }
+
+    #[test]
+    fn startup_reload_keeps_globals_and_deletes_old_queues() {
+        let song_dir = test_dir("startup-reload-lifecycle");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+SCENES = (SCENES or 0) + 1
+local scene = SCENES
+TRACE = TRACE or {}
+local function mark(phase) TRACE[#TRACE + 1] = phase .. scene end
+local stats = STATSMAN:GetCurStageStats()
+local pss = stats:GetPlayerStageStats(PLAYER_1)
+local screen = SCREENMAN:GetTopScreen()
+if scene == 1 then
+    FIRST_STATS, FIRST_PSS, FIRST_SCREEN, FIRST_SCREENMAN = stats, pss, screen, SCREENMAN
+else
+    assert(FIRST_STATS == stats and FIRST_PSS == pss)
+    assert(FIRST_SCREEN ~= screen and FIRST_SCREENMAN == SCREENMAN)
+    assert(FIRST_SCREENMAN:GetTopScreen() == screen)
+    assert(pss:GetScore() == 0)
+end
+return Def.ActorFrame {
+    InitCommand = function(self) mark("init") end,
+    BeginCommand = function(self) mark("begin") end,
+    ScreenChangedMessageCommand = function(self) mark("changed") end,
+    EndCommand = function(self) mark("end") end,
+    ObsoleteCommand = function(self) error("deleted screen queue executed") end,
+    OnCommand = function(self)
+        mark("on")
+        if scene == 1 then
+            pss:SetScore(123)
+            self:sleep(1):queuecommand("Obsolete")
+            SCREENMAN:SetNewScreen("SupersededScreen")
+            SCREENMAN:SetNewScreen("ScreenGameplay")
+            assert(SCREENMAN:GetTopScreen() == screen)
+        else
+            mod_actions = {{1, table.concat(TRACE, ":"), true}}
+        end
+    end,
+}
+"#).expect("reload lifecycle control");
+        let compiled = test_compile_song_lua(&entry,
+            &SongLuaCompileContext::new(&song_dir, "Reload lifecycle"))
+            .expect("startup screen replacement");
+        assert_eq!(compiled.startup_reloads, 1);
+        assert!(compiled.messages.iter().any(|event| event.message ==
+            "init1:begin1:changed1:on1:end1:init2:begin2:changed2:on2"), "{:?}", compiled.messages);
+    }
+
+    #[test]
+    fn startup_reload_discards_init_requests() {
+        let song_dir = test_dir("startup-reload-init-error");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, "return Def.ActorFrame{InitCommand=function() SCREENMAN:SetNewScreen('ScreenGameplay') end}")
+            .expect("Init request control");
+        let compiled = test_compile_song_lua(&entry,
+            &SongLuaCompileContext::new(&song_dir, "Init reload"))
+            .expect("native reports the invalid request and keeps the initialized screen");
+        assert_eq!(compiled.startup_reloads, 0);
+    }
+
+    #[test]
+    fn startup_reload_accepts_zero_delta_updates() {
+        let song_dir = test_dir("startup-reload-update-zero");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+ZERO_SCENES = (ZERO_SCENES or 0) + 1
+local scene = ZERO_SCENES
+return Def.ActorFrame {
+    OnCommand = function(self)
+        if scene == 1 then
+            self:SetUpdateFunction(function(_, dt)
+                assert(dt == 0)
+                SCREENMAN:SetNewScreen("ScreenGameplay")
+            end)
+        else mod_actions = {{1, tostring(ZERO_SCENES), true}} end
+    end,
+}
+"#).expect("zero-delta reload control");
+        let compiled = test_compile_song_lua(&entry,
+            &SongLuaCompileContext::new(&song_dir, "Zero-delta reload"))
+            .expect("reload is consumed at the Update(0) boundary");
+        assert_eq!(compiled.startup_reloads, 1);
+        assert!(compiled.messages.iter().any(|event| event.message == "2"));
+    }
+
+    #[test]
+    fn startup_reload_bounds_endless_requests() {
+        let song_dir = test_dir("startup-reload-endless");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, "return Def.ActorFrame{OnCommand=function() SCREENMAN:SetNewScreen('ScreenGameplay') end}")
+            .expect("endless reload control");
+        let error = test_compile_song_lua(&entry,
+            &SongLuaCompileContext::new(&song_dir, "Endless reload"))
+            .expect_err("do not hang the loader on a script that always reloads");
+        assert!(error.contains("128 startup gameplay reloads"), "{error}");
     }
 
     #[test]

@@ -1127,6 +1127,8 @@ fn set_state_bool_setter(
 pub fn create_statsman_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let statsman = lua.create_table()?;
     let stage_stats = create_stage_stats_table(lua, context)?;
+    lua.set_app_data(SongLuaStageTables(stage_stats.clone()));
+    reset_stage_stats(lua, context)?;
     for name in [
         "GetCurStageStats",
         "GetAccumPlayedStageStats",
@@ -1173,6 +1175,38 @@ pub fn create_statsman_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua
     Ok(statsman)
 }
 
+#[derive(Clone)]
+struct SongLuaStageTables(Table);
+
+pub(crate) fn reset_stage_stats(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<()> {
+    let stage = lua.app_data_ref::<SongLuaStageTables>()
+        .ok_or_else(|| mlua::Error::runtime("missing current stage statistics"))?.0.clone();
+    stage.raw_set("__songlua_gameplay_seconds", 0.0)?;
+    let players = stage.raw_get::<Table>("__songlua_player_stats")?;
+    let current_steps = lua.app_data_ref::<crate::host::SongLuaGameStateGlobals>()
+        .map(|state| state.current_steps.clone());
+    for player in 0..LUA_PLAYERS {
+        let stats = players.raw_get::<Table>(player + 1)?;
+        let possible = context.player_step_indices[player]
+            .and_then(|index| context.song_steps.get(index))
+            .map_or(0, |chart| chart.possible_grade_points);
+        stats.raw_set("__songlua_possible_dance_points", possible)?;
+        for key in ["__songlua_actual_dance_points", "__songlua_current_possible_dance_points",
+            "__songlua_score", "__songlua_cur_max_score"] {
+            stats.raw_set(key, 0)?;
+        }
+        stats.raw_set("__songlua_failed", false)?;
+        if let Some(steps) = &current_steps {
+            let selected = steps.raw_get::<Value>(player + 1)?;
+            for name in ["GetPlayedSteps", "GetPossibleSteps"] {
+                let array = stats.get::<mlua::Function>(name)?.call::<Table>(stats.clone())?;
+                array.raw_set(1, selected.clone())?;
+            }
+        }
+    }
+    Ok(())
+}
+
 fn create_stage_stats_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let stage_stats = lua.create_table()?;
     let player_stats = [
@@ -1199,6 +1233,11 @@ fn create_stage_stats_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua:
         song_lua_style_info(&context.style_name).steps_type,
     )?;
     let song = create_song_table(lua, context)?;
+    let players = lua.create_table()?;
+    for (index, stats) in player_stats.iter().enumerate() {
+        players.raw_set(index + 1, stats.clone())?;
+    }
+    stage_stats.raw_set("__songlua_player_stats", players)?;
     stage_stats.set(
         "GetPlayerStageStats",
         lua.create_function(move |_, args: MultiValue| {
@@ -1232,8 +1271,8 @@ fn create_stage_stats_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua:
     stage_stats.set(
         "GetGameplaySeconds",
         lua.create_function({
-            let total_seconds = context.music_length_seconds.max(0.0);
-            move |_, _args: MultiValue| Ok(total_seconds)
+            let stage = stage_stats.clone();
+            move |_, _args: MultiValue| stage.raw_get::<f64>("__songlua_gameplay_seconds")
         })?,
     )?;
     stage_stats.set(

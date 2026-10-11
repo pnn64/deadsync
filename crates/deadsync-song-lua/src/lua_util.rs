@@ -11484,12 +11484,20 @@ pub(crate) fn run_actor_startup_commands(
     // Screen::BeginScreen propagates Begin before Foreground::Update sends On.
     // This root is the session loader list, so dispatch to its actor children.
     run_named_command_on_children_recursively(lua, root, "BeginCommand", None)?;
+    // LoadDelayedScreen broadcasts after activation, before Update(0) sends On.
+    let messageman = lua.globals().get::<Table>("MESSAGEMAN")?;
+    messageman.get::<Function>("Broadcast")?
+        .call::<()>((messageman.clone(), "ScreenChanged"))?;
     run_actor_startup_commands_for_table(lua, root)?;
     // Wrappers created by Init/On begin at the default ActorFrame state.
     collect_wrapper_initials(root, &mut initial_states)?;
     // Transition settings belong to Init/On, before Update(0) can change them.
     let options = read_startup(lua, context)?;
     let initial_updates = capture_initial_update(lua, root, context)?;
+    // ScreenManager consumes requests after the real zero-delta update.
+    // Queue discovery below may execute future commands; those requests are
+    // observations of future frames and must not trigger a startup reload.
+    let screen_request = lua.remove_app_data::<crate::host::SongLuaScreenRequest>();
     // The chronological replay starts at the first positive frame, so retain
     // real Init/On and Update(0), then exclude queued discovery probes below.
     #[cfg(feature = "test-support")]
@@ -11509,6 +11517,17 @@ pub(crate) fn run_actor_startup_commands(
     let queued = lua
         .remove_app_data::<SongLuaStartupQueues>()
         .expect("startup queue scope was installed above");
+    if let Some(request) = screen_request {
+        // This screen is being deleted now. Its future queue must neither run
+        // nor mutate globals that the replacement screen will inherit.
+        lua.set_app_data(request);
+        return Ok(SongLuaStartupCapture {
+            updates: initial_updates,
+            options,
+            broadcasts,
+            ..SongLuaStartupCapture::default()
+        });
+    }
     // Native queued commands do not execute on the zero-delta startup frame.
     // Discovery probes must leave shared Lua locals and globals at that frame,
     // otherwise chronological replay begins with counters already advanced.
@@ -11570,6 +11589,7 @@ pub(crate) fn run_actor_startup_commands(
     // Keep the discovered command shape until the compiler has collected its
     // declarations. Rewind script state only when chronological replay starts.
     lua.set_app_data(SongLuaStartupLocals(locals));
+    lua.remove_app_data::<crate::host::SongLuaScreenRequest>();
     Ok(SongLuaStartupCapture {
         queued: states,
         tweens: startup_tweens,
@@ -11580,6 +11600,15 @@ pub(crate) fn run_actor_startup_commands(
 }
 
 struct SongLuaStartupLocals(Option<FunctionActionSnapshot>);
+
+pub(crate) fn end_actor_scene(lua: &Lua, root: &Table) -> mlua::Result<()> {
+    // EndScreen dispatches commands without advancing the outgoing actors'
+    // tween queues. Drop their queues after End, including queues it creates.
+    lua.set_app_data(SongLuaStartupQueues(Vec::new()));
+    let result = run_named_command_on_children_recursively(lua, root, "EndCommand", None);
+    lua.remove_app_data::<SongLuaStartupQueues>();
+    result
+}
 
 pub(crate) fn restore_startup_locals(lua: &Lua) -> mlua::Result<()> {
     if let Some(snapshot) = lua

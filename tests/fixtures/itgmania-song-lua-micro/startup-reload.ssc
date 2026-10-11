@@ -1,0 +1,25 @@
+#VERSION:0.83;
+#TITLE:Native gameplay reload control;
+#MUSIC:music.wav;
+#BPMS:0=120;
+#FGCHANGES:0=reload.lua=1=0=0=1=====;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DIFFICULTY:Easy;
+#METER:1;
+#NOTES:
+1000
+0000
+0010
+0000
+;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DIFFICULTY:Challenge;
+#METER:2;
+#NOTES:
+1100
+0110
+0011
+1001
+;

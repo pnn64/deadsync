@@ -26,6 +26,15 @@ pub struct PreparedGameplaySongLua<S> {
 }
 
 impl<S> PreparedGameplaySongLua<S> {
+    /// A shared session reports the note fields constructed by its final scene.
+    pub fn loaded_steps(&self) -> Option<[Option<usize>; crate::LUA_PLAYERS]> {
+        self.primary.iter().map(|primary| &primary.compiled)
+            .chain(self.background_layers.iter().map(|layer| &layer.compiled))
+            .chain(self.foreground_layers.iter().map(|layer| &layer.compiled))
+            .find(|compiled| compiled.startup_reloads > 0)
+            .and_then(|compiled| compiled.loaded_steps)
+    }
+
     pub fn startup(&self) -> crate::SongLuaStartup {
         let mut startup = crate::SongLuaStartup::default();
         for compiled in self

@@ -237,23 +237,6 @@ where
     crate::lua_util::install_message_order(&lua, &context.message_actor_order)
         .map_err(|err| err.to_string())?;
     compile_timer.push_stage("host");
-    let screen_layer_states =
-        crate::lua_util::screen_layer_states(&lua).map_err(|err| err.to_string())?;
-    let roots = lua.create_table().map_err(|err| err.to_string())?;
-    let mut initial_actor_states = std::collections::HashMap::new();
-    // Native Update(0) can start a player's tween from a song callback.
-    // Players are screen siblings, so traversing the song roots misses them.
-    for name in [
-        "__songlua_top_screen_player_1",
-        "__songlua_top_screen_player_2",
-    ] {
-        let actor = lua
-            .globals()
-            .get::<Table>(name)
-            .map_err(|err| err.to_string())?;
-        crate::lua_util::collect_initial_states(&Value::Table(actor), &mut initial_actor_states)
-            .map_err(|err| err.to_string())?;
-    }
     #[cfg(feature = "test-support")]
     lua.set_app_data(crate::song_tables::SongLuaSkinWrites::default());
     #[cfg(feature = "test-support")]
@@ -262,77 +245,136 @@ where
     lua.set_app_data(crate::song_tables::SongLuaSpeedWrites::default());
     #[cfg(feature = "test-support")]
     lua.set_app_data(crate::host::SongLuaStateCalls::default());
-    for (index, entry_path) in entry_paths.iter().enumerate() {
-        let root = execute_script_file(&lua, entry_path, context.song_dir.as_path())
-            .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
-        let parent = if let Value::Table(actor) = &root {
-            #[cfg(feature = "test-support")]
-            actor.raw_set("__songlua_message_path", (index + 1).to_string())
-                .map_err(|err| err.to_string())?;
-            let screen = lua
+    let mut scene_context = context.clone();
+    let mut reloads = 0u32;
+    let mut prior_broadcasts = Vec::new();
+    let (root, screen_layer_states, mut captured_startup, initialized_global_actions,
+        initialized_global_perframes, initialized_global_mods, initialized_global_mod_eases) = loop {
+        let context = &scene_context;
+        #[cfg(feature = "test-support")]
+        if let Some(mut capture) = lua.app_data_mut::<crate::song_tables::SongLuaSkinWrites>() {
+            capture.active = true;
+        }
+        let screen_layer_states =
+            crate::lua_util::screen_layer_states(&lua).map_err(|err| err.to_string())?;
+        let roots = lua.create_table().map_err(|err| err.to_string())?;
+        let mut initial_actor_states = std::collections::HashMap::new();
+        // Native Update(0) can start a player's tween from a song callback.
+        // Players are screen siblings, so traversing the song roots misses them.
+        for name in [
+            "__songlua_top_screen_player_1",
+            "__songlua_top_screen_player_2",
+        ] {
+            let actor = lua
                 .globals()
-                .get::<Table>("__songlua_top_screen")
+                .get::<Table>(name)
                 .map_err(|err| err.to_string())?;
-            let children = crate::actor_children(&lua, &screen).map_err(|err| err.to_string())?;
-            let name = if index < context.background_layer_count {
-                "SongBackground"
-            } else {
-                "SongForeground"
-            };
-            let parent = children.get::<Table>(name).map_err(|err| err.to_string())?;
-            actor
-                .set("__songlua_parent", parent.clone())
-                .map_err(|err| err.to_string())?;
-            Some(parent)
-        } else {
-            None
-        };
-        crate::lua_util::collect_initial_states(&root, &mut initial_actor_states)
-            .map_err(|err| err.to_string())?;
-        run_actor_init_commands(&lua, &root).map_err(|err| {
-            format!(
-                "failed to run actor init commands for '{}': {err}",
-                entry_path.display()
-            )
-        })?;
-        // MakeActor runs Init with the parent set; Foreground::LoadFromSong
-        // adds the initialized actor to its children afterward.
-        if let (Value::Table(actor), Some(parent)) = (&root, parent) {
-            crate::lua_util::push_sequence_child_once(&parent, actor.clone())
+            crate::lua_util::collect_initial_states(&Value::Table(actor), &mut initial_actor_states)
                 .map_err(|err| err.to_string())?;
         }
-        roots
-            .raw_set(index + 1, root)
+        for (index, entry_path) in entry_paths.iter().enumerate() {
+            let root = execute_script_file(&lua, entry_path, context.song_dir.as_path())
+                .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
+            let parent = if let Value::Table(actor) = &root {
+                #[cfg(feature = "test-support")]
+                actor.raw_set("__songlua_message_path", (index + 1).to_string())
+                    .map_err(|err| err.to_string())?;
+                let screen = lua
+                    .globals()
+                    .get::<Table>("__songlua_top_screen")
+                    .map_err(|err| err.to_string())?;
+                let children = crate::actor_children(&lua, &screen).map_err(|err| err.to_string())?;
+                let name = if index < context.background_layer_count {
+                    "SongBackground"
+                } else {
+                    "SongForeground"
+                };
+                let parent = children.get::<Table>(name).map_err(|err| err.to_string())?;
+                actor
+                    .set("__songlua_parent", parent.clone())
+                    .map_err(|err| err.to_string())?;
+                Some(parent)
+            } else {
+                None
+            };
+            crate::lua_util::collect_initial_states(&root, &mut initial_actor_states)
+                .map_err(|err| err.to_string())?;
+            run_actor_init_commands(&lua, &root).map_err(|err| {
+                format!(
+                    "failed to run actor init commands for '{}': {err}",
+                    entry_path.display()
+                )
+            })?;
+            // MakeActor runs Init with the parent set; Foreground::LoadFromSong
+            // adds the initialized actor to its children afterward.
+            if let (Value::Table(actor), Some(parent)) = (&root, parent) {
+                crate::lua_util::push_sequence_child_once(&parent, actor.clone())
+                    .map_err(|err| err.to_string())?;
+            }
+            roots
+                .raw_set(index + 1, root)
+                .map_err(|err| err.to_string())?;
+        }
+        let initialized_global_actions = lua
+            .globals()
+            .get::<Option<Table>>("mod_actions")
             .map_err(|err| err.to_string())?;
-    }
-    let initialized_global_actions = lua
-        .globals()
-        .get::<Option<Table>>("mod_actions")
-        .map_err(|err| err.to_string())?;
-    let initialized_global_perframes = lua
-        .globals()
-        .get::<Option<Table>>("mod_perframes")
-        .map_err(|err| err.to_string())?;
-    let initialized_global_mods = lua
-        .globals()
-        .get::<Option<Table>>("mods")
-        .map_err(|err| err.to_string())?;
-    let initialized_global_mod_eases = lua
-        .globals()
-        .get::<Option<Table>>("mods_ease")
-        .map_err(|err| err.to_string())?;
-    compile_timer.push_stage("execute_init");
-    let root = Value::Table(roots);
-    // Startup queues and the initial update can consume one-shot broadcasts
-    // before the sampled replay starts. Retain their events as well.
-    crate::lua_util::begin_overlay_update_capture_from_indices(&lua, std::iter::empty());
-    let captured_startup = run_actor_startup_commands(&lua, &root, initial_actor_states, context)
-        .map_err(|err| {
-        format!(
-            "failed to run actor startup commands for song lua session '{}': {err}",
-            trace_entry_path.display()
-        )
-    })?;
+        // ScreenManager::LoadDelayedScreen rejects requests made while
+        // constructing or initializing the next screen, before activation.
+        if lua.remove_app_data::<crate::host::SongLuaScreenRequest>().is_some() {
+            log::warn!("Setting a new screen during an InitCommand is not allowed.");
+        }
+        let initialized_global_perframes = lua
+            .globals()
+            .get::<Option<Table>>("mod_perframes")
+            .map_err(|err| err.to_string())?;
+        let initialized_global_mods = lua
+            .globals()
+            .get::<Option<Table>>("mods")
+            .map_err(|err| err.to_string())?;
+        let initialized_global_mod_eases = lua
+            .globals()
+            .get::<Option<Table>>("mods_ease")
+            .map_err(|err| err.to_string())?;
+        compile_timer.push_stage("execute_init");
+        let root = Value::Table(roots);
+        // Startup queues and the initial update can consume one-shot broadcasts
+        // before the sampled replay starts. Retain their events as well.
+        crate::lua_util::begin_overlay_update_capture_from_indices(&lua, std::iter::empty());
+        let captured_startup = run_actor_startup_commands(&lua, &root, initial_actor_states, context)
+            .map_err(|err| {
+                format!(
+                    "failed to run actor startup commands for song lua session '{}': {err}",
+                    trace_entry_path.display()
+                )
+            })?;
+        let request = lua.remove_app_data::<crate::host::SongLuaScreenRequest>()
+            .map(|request| request.0);
+        let Some(request) = request else {
+            break (root, screen_layer_states, captured_startup, initialized_global_actions,
+                initialized_global_perframes, initialized_global_mods, initialized_global_mod_eases);
+        };
+        if request != "ScreenGameplay" {
+            return Err(format!("song Lua startup requested unsupported screen '{request}'"));
+        }
+        if reloads == 128 {
+            return Err("song Lua exceeded 128 startup gameplay reloads".into());
+        }
+        prior_broadcasts.extend(captured_startup.broadcasts);
+        if let Value::Table(root) = &root {
+            crate::lua_util::end_actor_scene(&lua, root).map_err(|err| err.to_string())?;
+        }
+        // Keep GAMESTATE, source globals and the PRNG in this Lua VM. Only
+        // screen-owned actors and stage data are reconstructed at the queue boundary.
+        scene_context = crate::host::selected_scene_context(&lua, context)
+            .map_err(|err| err.to_string())?;
+        crate::host::replace_gameplay_screen(&lua, &scene_context,
+            create_dummy_actor, create_named_child_actor).map_err(|err| err.to_string())?;
+        reloads += 1;
+    };
+    prior_broadcasts.append(&mut captured_startup.broadcasts);
+    captured_startup.broadcasts = prior_broadcasts;
+    let context = &scene_context;
     #[cfg(feature = "test-support")]
     let startup_skin_writes = lua.remove_app_data::<crate::song_tables::SongLuaSkinWrites>()
         .map(|capture| capture.writes).unwrap_or_default();
@@ -393,6 +435,8 @@ where
     let globals = lua.globals();
     let mut out = CompiledSongLua {
         startup,
+        loaded_steps: Some(context.player_step_indices),
+        startup_reloads: reloads,
         entry_path: entry_paths[primary_index].clone(),
         screen_width: context.screen_width,
         screen_height: context.screen_height,
@@ -1434,6 +1478,10 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
         }
     }
 
+    for output in &mut outputs {
+        output.loaded_steps = compiled.loaded_steps;
+        output.startup_reloads = compiled.startup_reloads;
+    }
     let primary = &mut outputs[primary_index];
     #[cfg(feature = "test-support")]
     {

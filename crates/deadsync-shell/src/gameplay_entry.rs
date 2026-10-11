@@ -143,6 +143,50 @@ pub fn gameplay_last_played_commands(
 
 pub(crate) type PreparedGameplaySongLua =
     deadsync_song_lua::playback::PreparedGameplaySongLua<deadsync_assets::noteskin::SpriteSlot>;
+
+fn reload_chart_indices(
+    song: &SongData,
+    steps: [Option<usize>; MAX_PLAYERS],
+    session: &deadsync_gameplay::GameplaySession,
+) -> Result<[usize; MAX_PLAYERS], String> {
+    let mut indices = [0; MAX_PLAYERS];
+    for player in 0..session.play_style.player_count() {
+        let index = steps[player].ok_or_else(|| format!("Lua reload has no chart for player {}", player + 1))?;
+        let chart = song.charts.get(index)
+            .ok_or_else(|| format!("Lua reload selected missing chart {index}"))?;
+        let prefix = if session.play_style.is_pump() { "pump" } else { "dance" };
+        let suffix = if session.play_style.is_double() { "double" } else { "single" };
+        if chart.chart_type != format!("{prefix}-{suffix}") {
+            return Err(format!("Lua reload selected incompatible chart type {}", chart.chart_type));
+        }
+        indices[player] = index;
+    }
+    if !session.play_style.is_versus() {
+        // Lua P1 is the sole runtime player, including a cabinet P2 session.
+        indices[1] = indices[0];
+    }
+    Ok(indices)
+}
+
+/// Replace metadata and note payloads together before gameplay owns them.
+pub(crate) fn apply_song_lua_reload(
+    song: &SongData,
+    charts: &mut [Arc<ChartData>; MAX_PLAYERS],
+    payloads: &mut [Arc<GameplayChartData>; MAX_PLAYERS],
+    prepared: &PreparedGameplaySongLua,
+    session: &deadsync_gameplay::GameplaySession,
+    global_offset_seconds: f32,
+) -> Result<bool, String> {
+    let Some(steps) = prepared.loaded_steps() else { return Ok(false); };
+    let indices = reload_chart_indices(song, steps, session)?;
+    let loaded = deadsync_simfile::app_runtime::load_gameplay_charts(song, &indices, global_offset_seconds)?;
+    // Update only after both players loaded successfully. ChartData carries
+    // the selected chart's music path, which gameplay uses to start audio.
+    *payloads = take_player_charts(loaded);
+    *charts = std::array::from_fn(|player| Arc::new(song.charts[indices[player]].clone()));
+    Ok(true)
+}
+
 pub(crate) fn prepare_song_lua(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
@@ -291,6 +335,31 @@ mod tests {
             last_second_hint: 0.0,
             charts: vec![chart("Hard", "hard"), chart("Challenge", "challenge")],
         })
+    }
+
+    #[test]
+    fn reload_maps_lua_p1_to_single_p2_payloads() {
+        let session = deadsync_gameplay::GameplaySession {
+            player_side: deadsync_gameplay::GameplayInputPlayerSide::P2,
+            joined_sides: [false, true],
+            ..Default::default()
+        };
+        assert_eq!(reload_chart_indices(&song(), [Some(1), None], &session), Ok([1, 1]));
+    }
+
+    #[test]
+    fn reload_keeps_versus_selections_and_rejects_missing_steps() {
+        let session = deadsync_gameplay::GameplaySession {
+            play_style: deadsync_gameplay::GameplayInputPlayStyle::Versus,
+            joined_sides: [true, true],
+            ..Default::default()
+        };
+        assert_eq!(reload_chart_indices(&song(), [Some(1), Some(0)], &session), Ok([1, 0]));
+        assert!(reload_chart_indices(&song(), [Some(1), None], &session).is_err());
+        assert!(reload_chart_indices(&song(), [Some(1), Some(7)], &session).is_err());
+        let mut incompatible = song().as_ref().clone();
+        incompatible.charts[1].chart_type = "dance-double".into();
+        assert!(reload_chart_indices(&incompatible, [Some(1), Some(0)], &session).is_err());
     }
 
     #[test]

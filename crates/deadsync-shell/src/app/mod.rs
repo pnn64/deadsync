@@ -658,7 +658,7 @@ pub struct AppState {
 }
 
 struct PendingGameplayInit {
-    receiver: std::sync::mpsc::Receiver<gameplay::State>,
+    receiver: std::sync::mpsc::Receiver<Result<gameplay::State, String>>,
     finish: GameplayInitFinish,
 }
 
@@ -2991,7 +2991,7 @@ impl App {
             return;
         };
         match result {
-            Ok(gs) => {
+            Ok(Ok(gs)) => {
                 let pending = self
                     .pending_gameplay_init
                     .take()
@@ -3011,17 +3011,21 @@ impl App {
                 // frame from becoming the next frame's simulation delta.
                 self.state.shell.last_frame_time = Instant::now();
             }
+            Ok(Err(error)) => self.fail_gameplay_init(error),
             Err(std::sync::mpsc::TryRecvError::Empty) => {}
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                self.pending_gameplay_init = None;
-                error!("Gameplay preparation worker stopped without returning a state");
-                self.state
-                    .shell
-                    .interaction
-                    .show_message("Unable to prepare gameplay".to_string(), Instant::now());
-                self.handle_navigation_action(CurrentScreen::SelectMusic);
+                self.fail_gameplay_init("Gameplay preparation worker stopped without returning a state".into());
             }
         }
+    }
+
+    fn fail_gameplay_init(&mut self, error: String) {
+        self.pending_gameplay_init = None;
+        error!("Unable to prepare gameplay: {error}");
+        self.state.shell.interaction.show_message(
+            "Unable to prepare gameplay".to_string(), Instant::now(),
+        );
+        self.handle_navigation_action(CurrentScreen::SelectMusic);
     }
 
     /// Apply a window focus change to all subsystems that care about it.
@@ -9450,7 +9454,7 @@ impl App {
                     play_style,
                     player_side,
                 );
-                let charts = chart_plan.charts;
+                let mut charts = chart_plan.charts;
                 let chart_ixs = chart_plan.chart_indices;
                 let resolved_steps_index = chart_plan.resolved_steps_index;
                 let last_played_idx = profile_data::player_side_index(player_side);
@@ -9498,7 +9502,7 @@ impl App {
                     );
                     self.gameplay_lights.set_cabinet_chart(key, events);
                 }
-                let gameplay_charts = crate::gameplay_entry::take_player_charts(gameplay_song);
+                let mut gameplay_charts = crate::gameplay_entry::take_player_charts(gameplay_song);
                 let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
 
                 if play_style.is_versus() {
@@ -9542,7 +9546,7 @@ impl App {
                 );
 
                 let gameplay_session = gameplay_session();
-                let gameplay_init_view = crate::gameplay_runtime::init_view(
+                let mut gameplay_init_view = crate::gameplay_runtime::init_view(
                     &cfg,
                     lobby_views::refresh(),
                     song_arc.as_ref(),
@@ -9569,6 +9573,20 @@ impl App {
                     cfg.video_renderer,
                     song_lua_seed(),
                 );
+                match crate::gameplay_entry::apply_song_lua_reload(
+                    &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
+                    &gameplay_session, cfg.global_offset_seconds,
+                ) {
+                    Ok(true) => crate::gameplay_runtime::refresh_chart_view(
+                        &mut gameplay_init_view, &cfg, &song_arc, &charts,
+                        &gameplay_charts, &player_profiles, &gameplay_session,
+                    ),
+                    Ok(false) => {},
+                    Err(error) => {
+                        self.fail_gameplay_init(error);
+                        return commands;
+                    }
+                }
                 let mut gs = gameplay::init(
                     song_arc,
                     charts,
@@ -9796,7 +9814,7 @@ impl App {
                     play_style,
                     player_side,
                 );
-                let charts = chart_plan.charts;
+                let mut charts = chart_plan.charts;
                 let chart_ixs = chart_plan.chart_indices;
                 let resolved_steps_index = chart_plan.resolved_steps_index;
                 let last_played_idx = profile_data::player_side_index(player_side);
@@ -9844,7 +9862,7 @@ impl App {
                 let payload_started = Instant::now();
                 let mut preloaded_payload_ms = None;
                 let mut prepared_song_lua = None;
-                let gameplay_charts = if let Some(gameplay_charts) = reused_gameplay_charts {
+                let mut gameplay_charts = if let Some(gameplay_charts) = reused_gameplay_charts {
                     debug!(
                         "Reusing gameplay payload for quick restart '{}'",
                         song_arc.title
@@ -10020,7 +10038,7 @@ impl App {
                     play_style,
                 );
                 let gameplay_session = gameplay_session();
-                let gameplay_init_view = crate::gameplay_runtime::init_view(
+                let mut gameplay_init_view = crate::gameplay_runtime::init_view(
                     &cfg,
                     self.gameplay_lobby.refresh_now(),
                     song_arc.as_ref(),
@@ -10044,6 +10062,7 @@ impl App {
                 let music_rate = po_state.music_rate;
                 let video_renderer = cfg.video_renderer;
                 let song_lua_prepared = prepared_song_lua.is_some();
+                let init_config = cfg.clone();
                 let finish = GameplayInitFinish {
                     started: init_started,
                     entry_started: gameplay_entry_started,
@@ -10073,7 +10092,16 @@ impl App {
                             song_lua_seed(),
                         )
                     });
-                    gameplay::init(
+                    if crate::gameplay_entry::apply_song_lua_reload(
+                        &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
+                        &gameplay_session, gameplay_config.global_offset_seconds,
+                    )? {
+                        crate::gameplay_runtime::refresh_chart_view(
+                            &mut gameplay_init_view, &init_config, &song_arc, &charts,
+                            &gameplay_charts, &player_profiles, &gameplay_session,
+                        );
+                    }
+                    Ok(gameplay::init(
                         song_arc,
                         charts,
                         gameplay_charts,
@@ -10100,7 +10128,7 @@ impl App {
                         combo_carry,
                         prepared_song_lua,
                         gameplay_init_view,
-                    )
+                    ))
                 };
                 if has_song_lua && !song_lua_prepared {
                     self.state.screens.gameplay_state = None;
@@ -10113,8 +10141,10 @@ impl App {
                         .expect("failed to start song Lua preparation worker");
                     self.pending_gameplay_init = Some(PendingGameplayInit { receiver, finish });
                 } else {
-                    let gs = init();
-                    commands.extend(self.finish_gameplay_init(gs, &finish));
+                    match init() {
+                        Ok(gs) => commands.extend(self.finish_gameplay_init(gs, &finish)),
+                        Err(error) => self.fail_gameplay_init(error),
+                    }
                 }
             } else {
                 panic!("Navigating to Gameplay without PlayerOptions state!");

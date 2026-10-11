@@ -1,0 +1,28 @@
+{
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "simply_love_commit": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+  "harness_commit": "359a7c4d4df7a955d8a8e0c7adf59329b68135b4",
+  "native_capture": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass337-native-stage-identity-no-input.json",
+  "native_capture_sha256": "cb97e564de47ce0691bd53fd67d1d1c345301e3819666006850c93a9dbc1d064",
+  "scope": "startup reload only; live judgments and evaluation remain outside this control",
+  "snapshots": [
+    {
+      "count": 1,
+      "current_possible": 0,
+      "difficulty": "Difficulty_Challenge",
+      "possible": 20,
+      "top_name": "ScreenGameplay"
+    },
+    {
+      "count": 2,
+      "current_possible": 0,
+      "difficulty": "Difficulty_Easy",
+      "possible": 10,
+      "top_name": "ScreenGameplay"
+    }
+  ],
+  "source_sha256": {
+    "lua": "24eeafaa5c52bb72dcdc01b24ff333db36702f0bb37f0aa7ce7bf6f2b103dbed",
+    "ssc": "1d572d3550a41866237e785590501c7f090972cdba049bfb3f9cbb3f977b0945"
+  }
+}

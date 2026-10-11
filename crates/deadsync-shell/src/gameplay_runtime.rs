@@ -335,6 +335,19 @@ pub(crate) fn init_view(
     }
 }
 
+pub(crate) fn refresh_chart_view(
+    view: &mut GameplayInitView,
+    config: &config::app_config::Config,
+    song: &SongData,
+    charts: &[Arc<ChartData>; 2],
+    gameplay_charts: &[Arc<GameplayChartData>; 2],
+    profiles: &[profile_data::Profile; 2],
+    session: &GameplaySession,
+) {
+    view.scores = score_init_view(charts, profiles, session);
+    view.background_changes = background_changes(config, song, gameplay_charts, session);
+}
+
 pub(crate) fn score_runtime_view(state: &gameplay::State) -> GameplayScoreRuntimeView {
     let mut scorebox_updates = std::array::from_fn(|_| None);
     let mut rival_score_updates = [None; 2];

@@ -43,6 +43,51 @@ pub struct SongLuaHostState {
     pub easing_names: HashMap<*const c_void, String>,
 }
 
+pub(crate) struct SongLuaScreenRequest(pub String);
+
+pub(crate) fn selected_scene_context(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+) -> mlua::Result<SongLuaCompileContext> {
+    let state = lua.app_data_ref::<SongLuaGameStateGlobals>()
+        .ok_or_else(|| mlua::Error::runtime("missing gameplay selection state"))?;
+    let mut selected = context.clone();
+    for player in 0..LUA_PLAYERS {
+        let steps = state.current_steps.raw_get::<Option<Table>>(player + 1)?;
+        let index = steps.as_ref().and_then(|steps| state.step_objects.iter()
+            .position(|(known, _)| known.to_pointer() == steps.to_pointer()));
+        selected.player_step_indices[player] = index.filter(|&index| index < context.song_steps.len());
+        if let Some(index) = index {
+            selected.players[player].difficulty = state.step_objects[index].1.difficulty;
+        }
+        if let Some(index) = selected.player_step_indices[player]
+            && let Some(timing) = selected.song_step_timing.get(index)
+        {
+            selected.player_timing[player] = Some(timing.clone());
+        }
+    }
+    selected.style_name = current_song_lua_style_name(lua);
+    Ok(selected)
+}
+
+pub(crate) fn replace_gameplay_screen(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+    create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
+) -> mlua::Result<()> {
+    let state = lua.app_data_ref::<SongLuaGameStateGlobals>()
+        .ok_or_else(|| mlua::Error::runtime("missing gameplay selection state"))?.clone();
+    // Native screen deletion unsubscribes its actors even when Lua kept a
+    // reference. A fresh scene must not receive its predecessor's messages.
+    lua.globals().set("__songlua_actor_registry", lua.create_table()?)?;
+    let top = create_top_screen_table(lua, context, state.current_sort_order,
+        state.current_song, create_dummy_actor, create_named_child_actor)?;
+    install_screen_manager_globals(lua, top.top_screen, top.players)?;
+    crate::tables::reset_stage_stats(lua, context)?;
+    Ok(())
+}
+
 pub struct SongLuaCompileGlobals {
     prefix_globals: Value,
     mods: Value,
@@ -96,8 +141,9 @@ fn install_compile_globals(
         create_noteskin_table(lua, context, noteskin_resolver, create_dummy_actor)?,
         current_song_lua_style_name,
     )?;
-    let current_sort_order = game_state_globals.current_sort_order;
-    let current_song = game_state_globals.current_song;
+    let current_sort_order = game_state_globals.current_sort_order.clone();
+    let current_song = game_state_globals.current_song.clone();
+    lua.set_app_data(game_state_globals);
 
     let top_screen = create_top_screen_table(
         lua,
@@ -799,11 +845,17 @@ pub fn install_screen_manager_globals(
         })?,
     )?;
 
+    // SCREENMAN is process-owned; Lua references to it survive screen changes.
+    if matches!(globals.raw_get::<Value>("SCREENMAN")?, Value::Table(_)) {
+        return Ok(());
+    }
+
     let screenman = lua.create_table()?;
-    let top_screen_table = top_screen.clone();
     screenman.set(
         "GetTopScreen",
-        lua.create_function(move |_, _args: MultiValue| Ok(top_screen_table.clone()))?,
+        lua.create_function(move |lua, _args: MultiValue| {
+            lua.globals().get::<Table>("__songlua_top_screen")
+        })?,
     )?;
     screenman.set(
         "SystemMessage",
@@ -818,6 +870,7 @@ pub fn install_screen_manager_globals(
             if let Some(_name) = method_arg(&args, 0).cloned().and_then(read_string) {
                 #[cfg(feature = "test-support")]
                 record_state_call(lua, "ScreenManager.SetNewScreen", vec![serde_json::json!(_name)])?;
+                lua.set_app_data(SongLuaScreenRequest(_name));
                 // Native ScreenManager queues the request; the current
                 // screen keeps its identity through this command/update.
             }
@@ -827,15 +880,13 @@ pub fn install_screen_manager_globals(
     )?;
     screenman.set(
         "AddNewScreenToTop",
-        lua.create_function({
-            let top_screen = top_screen;
-            move |lua, args: MultiValue| {
-                if let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) {
-                    top_screen.set("Name", name)?;
-                }
-                note_song_lua_side_effect(lua)?;
-                Ok(())
+        lua.create_function(move |lua, args: MultiValue| {
+            if let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) {
+                let top_screen = lua.globals().get::<Table>("__songlua_top_screen")?;
+                top_screen.set("Name", name)?;
             }
+            note_song_lua_side_effect(lua)?;
+            Ok(())
         })?,
     )?;
     screenman.set(
@@ -1196,9 +1247,12 @@ pub fn install_sound_globals(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     Ok(())
 }
 
+#[derive(Clone)]
 pub struct SongLuaGameStateGlobals {
     pub current_sort_order: Table,
     pub current_song: Table,
+    pub(super) current_steps: Table,
+    step_objects: Rc<Vec<(Table, crate::SongLuaStep)>>,
 }
 
 pub fn install_core_globals(
@@ -1284,6 +1338,7 @@ pub fn install_game_state_globals(
             difficulty: context.players[index].difficulty, description: String::new(),
             chart_name: String::new(), credit: String::new(),
             meter: context.players[index].difficulty.meter().max(0) as u32, music_file: String::new(),
+            possible_grade_points: 0,
         }));
     }
     let step_objects = Rc::new(step_objects);
@@ -1939,6 +1994,8 @@ pub fn install_game_state_globals(
     Ok(SongLuaGameStateGlobals {
         current_sort_order,
         current_song,
+        current_steps,
+        step_objects,
     })
 }
 
