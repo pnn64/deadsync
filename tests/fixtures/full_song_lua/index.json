@@ -1859,12 +1859,10 @@
     {
       "title": "Chewingood!!!",
       "source_simfile": "Chewingood!!!/Chewingood!!!.ssc",
-      "harness_version": "0.1.0",
-      "archive": "9dc763aeb6eb14d4c50a9869af9e04250af9027b3a997ecaa7b20687cd677e19.tar.zst",
-      "sha256": "9dc763aeb6eb14d4c50a9869af9e04250af9027b3a997ecaa7b20687cd677e19",
-      "compressed_bytes": 122199,
-      "uncompressed_sha256": "290ad896f3108b6bca76af5f57e881c0f46a1071c47a7924ee3d9cab974bbedf",
-      "compression_level": 22,
+      "harness_version": "0.1.67",
+      "archive": "4666a4f0d16857e698c4fb56e3c2f857a1aa86e26eaa00d9a0a7257f6a7d6b19.tar.zst",
+      "sha256": "4666a4f0d16857e698c4fb56e3c2f857a1aa86e26eaa00d9a0a7257f6a7d6b19",
+      "compressed_bytes": 154167,
       "aliases": [
         "e09df87cafa599b9b7cdaccd7e788f19d478ba7200e144ec58b84ee9aeb01f7c.tar.zst"
       ]
