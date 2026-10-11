@@ -253,3 +253,10 @@ fn dataflow_peak_bytes(churn: perf::Churn) -> usize {
 #[cfg(test)]
 #[path = "../../../tests/perf/course_loading_support.rs"]
 mod course_perf;
+
+#[cfg(test)]
+use resource_perf_support as scan_alloc;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/scan_support.rs"]
+mod scan_perf;

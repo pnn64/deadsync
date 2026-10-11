@@ -891,17 +891,29 @@ pub(super) fn next_visible_row(
     None
 }
 
+#[inline]
 pub(super) fn parent_anchor_visible_index(
     row_map: &RowMap,
     parent_id: RowId,
     visibility: RowVisibility,
 ) -> Option<i32> {
-    row_map
-        .display_order()
-        .iter()
-        .position(|&id| id == parent_id)
-        .and_then(|idx| row_to_visible_index(row_map, idx, visibility))
-        .map(|idx| idx as i32)
+    let parent = row_map.get(parent_id)?;
+    if !row_visible_with_flags(parent.id, visibility) {
+        return None;
+    }
+    let mut visible_index = 0usize;
+    for &id in row_map.display_order() {
+        if id == parent_id {
+            return Some(visible_index as i32);
+        }
+        if row_map
+            .get(id)
+            .is_some_and(|row| row_visible_with_flags(row.id, visibility))
+        {
+            visible_index += 1;
+        }
+    }
+    None
 }
 
 pub(super) fn hidden_row_anchor_visible_index(
@@ -967,4 +979,10 @@ pub(super) fn arcade_row_uses_choice_focus(state: &State, player_idx: usize) -> 
         .get(row_idx)
         .and_then(|&id| state.pane().row_map.get(id))
         .is_some_and(row_supports_inline_nav)
+}
+
+#[cfg(test)]
+mod direct_scan_perf {
+    use super::*;
+    include!("../../../../../tests/perf/parent_anchor.rs");
 }
