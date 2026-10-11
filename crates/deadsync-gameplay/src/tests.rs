@@ -12059,6 +12059,7 @@ mod tests {
             },
             ItgScoreStage {
                 scoring_counts: [1, 2, 3, 4, 5, 6],
+                current_possible_points: 275,
                 holds_held_for_score: 7,
                 holds_resolved_for_score: 15,
                 rolls_held_for_score: 9,
@@ -12147,6 +12148,7 @@ mod tests {
     fn itg_score_inputs_combine_stage_and_course_carry() {
         let inputs = itg_score_inputs_from_display(
             ItgScoreStage {
+                current_possible_points: 275,
                 scoring_counts: [1, 2, 3, 4, 5, 6],
                 holds_held_for_score: 7,
                 holds_resolved_for_score: 15,
@@ -12158,6 +12160,7 @@ mod tests {
             },
             CourseDisplayCarry {
                 scoring_counts: [10, 20, 30, 40, 50, 60],
+                current_possible_points: 1320,
                 holds_held_for_score: 12,
                 holds_resolved_for_score: 25,
                 rolls_held_for_score: 14,
@@ -12175,11 +12178,10 @@ mod tests {
 
         assert_eq!(inputs.scoring_counts, [11, 22, 33, 44, 55, 66]);
         assert_eq!(inputs.holds_held_for_score, 19);
-        assert_eq!(inputs.holds_resolved_for_score, 40);
+        assert_eq!(inputs.current_possible_points, 1595);
         assert_eq!(inputs.checkpoints_hit, 36);
         assert_eq!(inputs.checkpoints_missed, 38);
         assert_eq!(inputs.rolls_held_for_score, 23);
-        assert_eq!(inputs.rolls_resolved_for_score, 48);
         assert_eq!(inputs.mines_hit_for_score, 27);
         assert_eq!(inputs.possible_grade_points, 500);
     }
@@ -12188,6 +12190,7 @@ mod tests {
     fn itg_score_percent_helpers_preserve_display_units() {
         let inputs = ItgScoreInputs {
             scoring_counts: [1, 0, 0, 0, 0, 0],
+            current_possible_points: 5,
             possible_grade_points: 10,
             ..ItgScoreInputs::default()
         };
@@ -12197,9 +12200,24 @@ mod tests {
     }
 
     #[test]
+    fn predictive_points_progress() {
+        // Earned points remain five while two additional rows are scored
+        // after failure. Native current possible points reach fifteen.
+        let inputs = ItgScoreInputs {
+            scoring_counts: [1, 0, 0, 0, 0, 0],
+            current_possible_points: 15,
+            possible_grade_points: 20,
+            ..ItgScoreInputs::default()
+        };
+        assert_eq!(itg_score_percent_from_inputs(inputs), 0.25);
+        assert_eq!(predictive_itg_score_percent_from_inputs(inputs), 50.0);
+    }
+
+    #[test]
     fn score_display_mode_helpers_select_normal_or_predictive_percent() {
         let itg_inputs = ItgScoreInputs {
             scoring_counts: [1, 0, 0, 0, 0, 0],
+            current_possible_points: 5,
             possible_grade_points: 10,
             ..ItgScoreInputs::default()
         };
@@ -13182,6 +13200,7 @@ mod tests {
             hold,
             HoldResultStatsUpdate {
                 holds_resolved_for_score: 1,
+                current_possible_points: 5,
                 ..HoldResultStatsUpdate::ZERO
             }
         );
@@ -13189,6 +13208,7 @@ mod tests {
             roll,
             HoldResultStatsUpdate {
                 rolls_resolved_for_score: 1,
+                current_possible_points: 5,
                 ..HoldResultStatsUpdate::ZERO
             }
         );
@@ -13208,12 +13228,14 @@ mod tests {
             }
         );
         assert_eq!(dead_held.holds_held, 1);
+        assert_eq!(dead_held.current_possible_points, 5);
         assert_eq!(dead_held.holds_held_for_score, 0);
         assert!(!dead_held.update_grade_totals);
         assert_eq!(
             dead_let_go,
             HoldResultStatsUpdate {
                 decrement_hands_holding: true,
+                current_possible_points: 5,
                 ..HoldResultStatsUpdate::ZERO
             }
         );
@@ -13233,9 +13255,30 @@ mod tests {
     }
 
     #[test]
+    fn native_hold_progress() {
+        for note_type in [NoteType::Hold, NoteType::Roll] {
+            let mut player = init_player_runtime();
+            for result in [HoldResult::Held, HoldResult::LetGo, HoldResult::Missed] {
+                let mut stats = hold_result_stats_state(&player);
+                apply_hold_result_stats_update(&mut stats,
+                    hold_result_stats_update(note_type, result, false, true));
+                set_hold_result_stats_state(&mut player, stats);
+            }
+            assert_eq!(player.current_possible_points, 15);
+            assert_eq!(player.earned_grade_points, 0);
+            assert_eq!(player.holds_resolved_for_score + player.rolls_resolved_for_score, 0);
+            for result in [HoldResult::Held, HoldResult::LetGo, HoldResult::Missed] {
+                assert_eq!(hold_result_stats_update(note_type, result, true, false)
+                    .current_possible_points, 0);
+            }
+        }
+    }
+
+    #[test]
     fn hold_result_stats_application_decrements_hands_and_adds_counts() {
         let mut state = HoldResultStatsState {
             hands_holding_count_for_stats: 2,
+            current_possible_points: 20,
             holds_held: 10,
             holds_held_for_score: 20,
             holds_let_go_for_score: 30,
@@ -13251,6 +13294,7 @@ mod tests {
             HoldResultStatsUpdate {
                 decrement_hands_holding: true,
                 holds_held: 1,
+                current_possible_points: 7,
                 holds_held_for_score: 2,
                 holds_let_go_for_score: 3,
                 holds_resolved_for_score: 7,
@@ -13263,6 +13307,7 @@ mod tests {
         );
 
         assert_eq!(state.hands_holding_count_for_stats, 1);
+        assert_eq!(state.current_possible_points, 27);
         assert_eq!(state.holds_held, 11);
         assert_eq!(state.holds_held_for_score, 22);
         assert_eq!(state.holds_let_go_for_score, 33);
@@ -17250,6 +17295,7 @@ mod tests {
         let ix = judgment::display_judge_ix(JudgeGrade::Miss);
         assert_eq!(state.judgment_counts[ix], 1);
         assert_eq!(state.scoring_counts[ix], 0);
+        assert_eq!(state.current_possible_points, 5);
         assert_eq!(state.current_combo_window_counts.miss, 1);
         assert_eq!(state.combo.combo, 0);
         assert_eq!(state.combo.miss_combo, 1);

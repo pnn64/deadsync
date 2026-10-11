@@ -45,6 +45,7 @@ pub fn course_display_totals_for_player(
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CourseDisplayCarry {
+    pub current_possible_points: i32,
     // ITGmania keeps the same lifemeter alive between nonstop course songs.
     pub life: f32,
     pub course_life: CourseLifeState,
@@ -327,6 +328,7 @@ pub enum GameplayScoreDisplayMode {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CourseDisplayStage {
+    pub current_possible_points: i32,
     pub life: f32,
     pub course_life: CourseLifeState,
     pub judgment_counts: judgment::JudgeCounts,
@@ -379,6 +381,8 @@ pub fn course_display_carry_for_stage(
 
     CourseDisplayCarry {
         life: stage.life.clamp(0.0, 1.0),
+        current_possible_points: previous.current_possible_points
+            .saturating_add(stage.current_possible_points),
         course_life: course_life_carry(stage.course_life),
         judgment_counts,
         scoring_counts,
@@ -461,6 +465,7 @@ pub const fn player_course_display_stage(
 ) -> CourseDisplayStage {
     CourseDisplayStage {
         life: player.life,
+        current_possible_points: player.current_possible_points,
         course_life: player.course_life,
         judgment_counts: player.judgment_counts,
         scoring_counts: player.scoring_counts,

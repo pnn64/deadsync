@@ -169,12 +169,13 @@ pub fn add_judgment_to_window_counts(
     }
 }
 
+pub const TAP_SCORE_MAX: i32 = 5;
 pub const HOLD_SCORE_HELD: i32 = 5;
 pub const MINE_SCORE_HIT: i32 = -6;
 pub const CHECKPOINT_SCORE_HIT: i32 = 0;
 pub const CHECKPOINT_SCORE_MISS: i32 = -8;
 
-const GRADE_POINTS_BY_IX: [i32; JUDGE_GRADE_COUNT] = [5, 4, 2, 0, -6, -12];
+const GRADE_POINTS_BY_IX: [i32; JUDGE_GRADE_COUNT] = [TAP_SCORE_MAX, 4, 2, 0, -6, -12];
 
 #[must_use]
 pub const fn calculate_itg_grade_points_from_counts(
@@ -278,24 +279,6 @@ pub fn calculate_itg_score_percent_from_points(
 
     let scaled = (percent / trunc_interval).floor() * trunc_interval;
     scaled.max(0.0)
-}
-
-#[must_use]
-pub fn current_possible_grade_points_from_counts(
-    scoring_counts: &JudgeCounts,
-    holds_resolved: u32,
-    rolls_resolved: u32,
-) -> i32 {
-    let tap_rows = scoring_counts
-        .iter()
-        .copied()
-        .fold(0u32, u32::saturating_add);
-    let resolved = tap_rows
-        .saturating_add(holds_resolved)
-        .saturating_add(rolls_resolved);
-    i32::try_from(resolved)
-        .unwrap_or(i32::MAX)
-        .saturating_mul(HOLD_SCORE_HELD)
 }
 
 #[inline(always)]
@@ -1508,13 +1491,6 @@ mod tests {
         assert!((kept - 94.0).abs() <= 1e-9);
         assert!((lost - 6.0).abs() <= 1e-9);
         assert!((pace - 0.0).abs() <= 1e-9);
-    }
-
-    #[test]
-    fn current_possible_grade_points_include_resolved_holds() {
-        let counts: JudgeCounts = [2, 3, 0, 0, 0, 1];
-
-        assert_eq!(current_possible_grade_points_from_counts(&counts, 4, 5), 75);
     }
 
     #[test]

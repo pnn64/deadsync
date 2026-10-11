@@ -3971,7 +3971,50 @@ mod runtime_regression_tests {
         let blue_window_ms = state.player_blue_window_ms(0);
         assert_eq!(state.display_ex_score_percent(0, blue_window_ms), 0.0);
         assert_eq!(state.display_itg_score_percent(0), 0.0);
+        assert_eq!(state.players_runtime.players[0].current_possible_points, 0);
         assert!(state.players_runtime.players[0].last_judgment.is_some());
+    }
+
+    #[test]
+    fn native_dance_progress() {
+        // ITGmania ScoreKeeperNormal counts score progress per row even after
+        // failure. Neither weighted judgments nor frozen score counts suffice.
+        let timing = TimingSegments {
+            combos: vec![ComboSegment { beat: 0.0, combo: 3, miss_combo: 2 }],
+            ..TimingSegments::default()
+        };
+        let mut state = regression_state_with_segments(timing, 144);
+        let rows = [0, 48, 96, 144];
+        state.chart_runtime.notes = vec![
+            note_with_judgment(0, rows[0], NoteType::Tap, JudgeGrade::Miss, 0.0),
+            note_with_judgment(0, rows[1], NoteType::Tap, JudgeGrade::Miss, 0.0),
+            note_with_judgment(0, rows[2], NoteType::Tap, JudgeGrade::Fantastic, 0.0),
+            note_with_judgment(1, rows[2], NoteType::Tap, JudgeGrade::Fantastic, 0.0),
+            note_with_judgment(0, rows[3], NoteType::Tap, JudgeGrade::Miss, 0.0),
+        ];
+        state.chart_runtime.note_time_cache_ns = [1.0, 2.0, 3.0, 3.0, 4.0]
+            .map(song_time_ns_from_seconds).to_vec();
+        state.chart_runtime.row_entries = [vec![0], vec![1], vec![2, 3], vec![4]]
+            .into_iter().enumerate().map(|(ix, indices)| {
+                test_row_entry_with_times(&state.chart_runtime.notes,
+                    &state.chart_runtime.note_time_cache_ns, rows[ix], indices)
+            }).collect();
+        state.finalize_row_judgment(0, rows[0], 0, false);
+        state.finalize_row_judgment(0, rows[1], 1, false);
+        assert_eq!(state.players_runtime.players[0].current_possible_points, 10);
+        assert_eq!(state.players_runtime.players[0].earned_grade_points, -24);
+        assert!(state.force_fail_player(0));
+        state.finalize_row_judgment(0, rows[2], 2, false);
+        state.finalize_row_judgment(0, rows[3], 3, false);
+        let player = &state.players_runtime.players[0];
+        assert_eq!(player.current_possible_points, 20);
+        assert_eq!(player.earned_grade_points, -24);
+        assert_eq!(player.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Miss)], 2);
+        assert_eq!(player.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Miss)], 6);
+        assert_eq!(player.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Fantastic)], 3);
+        assert_eq!(state.stage_itg_score_inputs(0).expect("active player").current_possible_points, 20);
+        reset_player_runtime_for_practice(&mut state.players_runtime.players[0], 0.0);
+        assert_eq!(state.players_runtime.players[0].current_possible_points, 0);
     }
 
     #[test]

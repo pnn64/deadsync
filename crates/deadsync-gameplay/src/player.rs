@@ -90,6 +90,9 @@ pub struct PlayerRuntime {
     pub calories_burned: f32,
 
     pub earned_grade_points: i32,
+    /// ScoreKeeperNormal advances this once per scored row/hold after failure,
+    /// independently of combo-weighted judgments and frozen earned points.
+    pub current_possible_points: i32,
 
     pub combo_milestones: Vec<ActiveComboMilestone>,
     pub hands_achieved: u32,
@@ -244,6 +247,7 @@ pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
         fail_time: None,
         calories_burned: 0.0,
         earned_grade_points: 0,
+        current_possible_points: 0,
         combo_milestones: Vec::with_capacity(caps.combo_milestones),
         hands_achieved: 0,
         holds_held: 0,
@@ -540,6 +544,7 @@ pub const fn apply_course_combo_carry(
 #[must_use]
 pub const fn player_score_stage(player: &PlayerRuntime) -> ItgScoreStage {
     ItgScoreStage {
+        current_possible_points: player.current_possible_points,
         scoring_counts: player.scoring_counts,
         holds_held_for_score: player.holds_held_for_score,
         holds_resolved_for_score: player.holds_resolved_for_score,

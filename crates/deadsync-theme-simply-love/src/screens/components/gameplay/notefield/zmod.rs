@@ -12,7 +12,7 @@ use deadsync_notefield::{
     zmod_target_score_missed as crate_zmod_target_score_missed,
 };
 use deadsync_profile as profile_data;
-use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade};
+use deadsync_rules::judgment::{self, JudgeGrade};
 
 use super::super::FRAME_TEXT_MINI_BASE;
 use super::player_blue_window_ms;
@@ -138,12 +138,7 @@ fn zmod_mini_indicator_progress(
         .saturating_add(w4)
         .saturating_add(w5)
         .saturating_add(miss);
-    let resolved_holds = p.holds_resolved_for_score;
-    let resolved_rolls = p.rolls_resolved_for_score;
-    let current_possible_dp = (tap_rows
-        .saturating_add(resolved_holds)
-        .saturating_add(resolved_rolls) as i32)
-        .saturating_mul(HOLD_SCORE_HELD);
+    let current_possible_dp = p.current_possible_points;
 
     let possible_dp = state
         .display_totals_for_player(player_idx)

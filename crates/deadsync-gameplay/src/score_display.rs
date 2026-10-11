@@ -85,6 +85,7 @@ pub const fn capture_failed_ex_score_inputs(
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ItgScoreStage {
+    pub current_possible_points: i32,
     pub scoring_counts: judgment::JudgeCounts,
     pub holds_held_for_score: u32,
     pub holds_resolved_for_score: u32,
@@ -97,14 +98,13 @@ pub struct ItgScoreStage {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ItgScoreInputs {
+    pub current_possible_points: i32,
     pub scoring_counts: judgment::JudgeCounts,
     pub holds_held_for_score: u32,
     pub rolls_held_for_score: u32,
     pub mines_hit_for_score: u32,
     pub checkpoints_hit: u32,
     pub checkpoints_missed: u32,
-    pub holds_resolved_for_score: u32,
-    pub rolls_resolved_for_score: u32,
     pub possible_grade_points: i32,
 }
 
@@ -128,6 +128,8 @@ pub const fn itg_score_inputs_from_display(
         .rolls_held_for_score
         .saturating_add(carry.rolls_held_for_score);
     ItgScoreInputs {
+        current_possible_points: stage.current_possible_points
+            .saturating_add(carry.current_possible_points),
         scoring_counts,
         holds_held_for_score,
         rolls_held_for_score,
@@ -138,12 +140,6 @@ pub const fn itg_score_inputs_from_display(
         checkpoints_missed: stage
             .checkpoints_missed
             .saturating_add(carry.checkpoints_missed),
-        holds_resolved_for_score: stage
-            .holds_resolved_for_score
-            .saturating_add(carry.holds_resolved_for_score),
-        rolls_resolved_for_score: stage
-            .rolls_resolved_for_score
-            .saturating_add(carry.rolls_resolved_for_score),
         possible_grade_points: totals.possible_grade_points,
     }
 }
@@ -171,13 +167,8 @@ pub fn predictive_itg_score_percent_from_inputs(inputs: ItgScoreInputs) -> f64 {
         inputs.checkpoints_hit,
         inputs.checkpoints_missed,
     );
-    let current_possible = judgment::current_possible_grade_points_from_counts(
-        &inputs.scoring_counts,
-        inputs.holds_resolved_for_score,
-        inputs.rolls_resolved_for_score,
-    );
     let (kept, _, _) = judgment::predictive_itg_score_percents(
-        current_possible,
+        inputs.current_possible_points,
         inputs.possible_grade_points,
         actual,
     );

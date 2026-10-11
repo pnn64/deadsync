@@ -791,6 +791,7 @@ pub const fn finalized_row_awards_hand(
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RowFinalizationPlayerState {
+    pub current_possible_points: i32,
     pub combo: ComboState,
     pub current_combo_window_counts: WindowCounts,
     pub judgment_counts: judgment::JudgeCounts,
@@ -801,6 +802,7 @@ pub struct RowFinalizationPlayerState {
 #[must_use]
 pub const fn row_finalization_player_state(player: &PlayerRuntime) -> RowFinalizationPlayerState {
     RowFinalizationPlayerState {
+        current_possible_points: player.current_possible_points,
         combo: player_combo_state(player),
         current_combo_window_counts: player.current_combo_window_counts,
         judgment_counts: player.judgment_counts,
@@ -814,6 +816,7 @@ pub const fn set_row_finalization_player_state(
     state: RowFinalizationPlayerState,
 ) {
     write_player_combo_state(player, state.combo);
+    player.current_possible_points = state.current_possible_points;
     player.current_combo_window_counts = state.current_combo_window_counts;
     player.judgment_counts = state.judgment_counts;
     player.scoring_counts = state.scoring_counts;
@@ -898,6 +901,8 @@ pub fn apply_row_finalization_player_state(
     };
     state.judgment_counts[grade_ix] =
         state.judgment_counts[grade_ix].saturating_add(judgment_count);
+    state.current_possible_points = state.current_possible_points
+        .saturating_add(judgment::TAP_SCORE_MAX);
     let update_grade_totals = !player_dead;
     if update_grade_totals {
         state.scoring_counts[grade_ix] = state.scoring_counts[grade_ix].saturating_add(1);

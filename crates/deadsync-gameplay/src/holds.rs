@@ -346,6 +346,7 @@ pub struct ActiveHoldAdvance {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct HoldResultStatsUpdate {
+    pub current_possible_points: i32,
     pub decrement_hands_holding: bool,
     pub holds_held: u32,
     pub holds_held_for_score: u32,
@@ -360,6 +361,7 @@ pub struct HoldResultStatsUpdate {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct HoldResultStatsState {
+    pub current_possible_points: i32,
     pub hands_holding_count_for_stats: i32,
     pub holds_held: u32,
     pub holds_held_for_score: u32,
@@ -375,6 +377,8 @@ pub const fn apply_hold_result_stats_update(
     state: &mut HoldResultStatsState,
     update: HoldResultStatsUpdate,
 ) {
+    state.current_possible_points = state.current_possible_points
+        .saturating_add(update.current_possible_points);
     if update.decrement_hands_holding && state.hands_holding_count_for_stats > 0 {
         state.hands_holding_count_for_stats -= 1;
     }
@@ -409,6 +413,7 @@ pub struct HoldResolutionPlayerState {
 #[must_use]
 pub const fn hold_result_stats_state(player: &PlayerRuntime) -> HoldResultStatsState {
     HoldResultStatsState {
+        current_possible_points: player.current_possible_points,
         hands_holding_count_for_stats: player.hands_holding_count_for_stats,
         holds_held: player.holds_held,
         holds_held_for_score: player.holds_held_for_score,
@@ -422,6 +427,7 @@ pub const fn hold_result_stats_state(player: &PlayerRuntime) -> HoldResultStatsS
 }
 
 pub const fn set_hold_result_stats_state(player: &mut PlayerRuntime, stats: HoldResultStatsState) {
+    player.current_possible_points = stats.current_possible_points;
     player.hands_holding_count_for_stats = stats.hands_holding_count_for_stats;
     player.holds_held = stats.holds_held;
     player.holds_held_for_score = stats.holds_held_for_score;
@@ -925,6 +931,9 @@ pub const fn hold_result_stats_update(
     if scoring_blocked {
         return update;
     }
+    if matches!(note_type, NoteType::Hold | NoteType::Roll) {
+        update.current_possible_points = judgment::HOLD_SCORE_HELD;
+    }
 
     match (note_type, result, player_dead) {
         (NoteType::Hold, HoldResult::Held, false) => {
@@ -968,6 +977,7 @@ pub const fn hold_result_stats_update(
 
 impl HoldResultStatsUpdate {
     pub const ZERO: Self = Self {
+        current_possible_points: 0,
         decrement_hands_holding: false,
         holds_held: 0,
         holds_held_for_score: 0,
