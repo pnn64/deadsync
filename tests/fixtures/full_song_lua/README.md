@@ -1947,3 +1947,17 @@ See `native-revalidation-pass209.json`. Position 131 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 210
+
+Position 131, Brain Power, passes all
+161,369 comparisons against committed DeadSync
+`3ab88a592`. The complete native harness 0.1.64 archive
+contains 7,314 updates over 121.88 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass210.json`. Position 132 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
