@@ -137,6 +137,7 @@ pub trait GameplayProfileData: Clone {
     fn holds_mask_bits(&self) -> u8;
     fn appearance_mask_bits(&self) -> u8;
     fn visual_mask_bits(&self) -> u16;
+    fn accel_mask_bits(&self) -> u8;
     fn turn_option(&self) -> GameplayTurnOption;
     fn attack_mode(&self) -> GameplayAttackMode;
     fn perspective_effects(&self) -> PerspectiveEffects;

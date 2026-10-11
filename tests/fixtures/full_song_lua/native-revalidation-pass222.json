@@ -1,0 +1,105 @@
+{
+  "pass": 222,
+  "previous_record": "native-revalidation-pass221.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "1acb67574b8e32ddda9dca530a3bba724a3a4790",
+  "comparator_sha256": "3a7535528445f0814bccb8190ef550e108c403d2c026ad27cfadbe5b59359dc5",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    143
+  ],
+  "next_position": 144,
+  "comparisons_passed": 173695,
+  "charts": [
+    {
+      "position": 143,
+      "entry": {
+        "title": "Chewingood!!!",
+        "source_simfile": "Chewingood!!!/Chewingood!!!.ssc",
+        "harness_version": "0.1.67",
+        "archive": "4666a4f0d16857e698c4fb56e3c2f857a1aa86e26eaa00d9a0a7257f6a7d6b19.tar.zst",
+        "sha256": "4666a4f0d16857e698c4fb56e3c2f857a1aa86e26eaa00d9a0a7257f6a7d6b19",
+        "compressed_bytes": 154167,
+        "aliases": [
+          "e09df87cafa599b9b7cdaccd7e788f19d478ba7200e144ec58b84ee9aeb01f7c.tar.zst"
+        ]
+      },
+      "original_archive_retained": "9dc763aeb6eb14d4c50a9869af9e04250af9027b3a997ecaa7b20687cd677e19.tar.zst",
+      "native_source_commit": "7a75d74081a4e0e944e1babde8d8d64363ad625a",
+      "native_trace_sha256": "ed873914041546d3c2b7206a442c18712b6a93372eff278bf40111465f64d7b7",
+      "original_source_sha256": {
+        "Chewingood!!!/Chewingood!!! - bg.png": "ff9356deee2044f49a93fff086be3b7d82d144a3256441d6dc428283095b35e5",
+        "Chewingood!!!/Chewingood!!! - bn.png": "3a7c237e04af6ef27a82a0935091ba5d96d917faa163c66224f960a7141bc6d7",
+        "Chewingood!!!/Chewingood!!! - jacket.png": "fe0614b7c7e8b3dac7c849d63ad5089982978ef731ef4ac2e7004128693c847f",
+        "Chewingood!!!/Chewingood!!!.ogg": "b6eb76b1f6ddc45319368b19fe57adf29076dd4d633f85d4a96d04dfd0952759",
+        "Chewingood!!!/Chewingood!!!.ssc": "2841839e850803b12297cca36a106f415b264dbc9c15e7746db6864db4110eaa",
+        "Chewingood!!!/Chewingood.avi": "48f0fb8ec2f4b82ced6d8ea6b81b6347a711906a581974da7885271f858da368",
+        "Chewingood!!!/gpopcdtitle.png": "93e71211552d268b52eae46f6a8e4af3c7cf216cd1bb04e847299981c5827583",
+        "Chewingood!!!/lua/default.lua": "c3f5281c8789aa9ee6be4bbdc69184a22c94804586e79aacb9ccaae8de92ea58",
+        "Chewingood!!!/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "Chewingood!!!/lua/modhelpers.lua": "0f5910705fadd3d043fe182348e93f0b327a0d14b2ad9a7c442638c2adf573cc",
+        "Chewingood!!!/lua/mods.lua": "78ce399e3ac91f556f26d59fa2b15ab17154246821ab53db8c62120b5034a293"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 6974,
+      "duration_seconds": 116.21052551269533,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 6,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 143,
+      "source_simfile": "Chewingood!!!/Chewingood!!!.ssc",
+      "archive": "4666a4f0d16857e698c4fb56e3c2f857a1aa86e26eaa00d9a0a7257f6a7d6b19.tar.zst",
+      "archive_sha256": "4666a4f0d16857e698c4fb56e3c2f857a1aa86e26eaa00d9a0a7257f6a7d6b19",
+      "harness_version": "0.1.67",
+      "source_commit": "1acb67574b8e32ddda9dca530a3bba724a3a4790",
+      "source_pending_commit": false,
+      "binary_sha256": "3a7535528445f0814bccb8190ef550e108c403d2c026ad27cfadbe5b59359dc5",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\song-metadata-v5-full_song_lua.exe",
+        "4666a4f0d16857e698c4fb56e3c2f857a1aa86e26eaa00d9a0a7257f6a7d6b19.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 28.31853639986366,
+      "comparisons_passed": 173695,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\song-metadata-v5-143.log",
+      "log_sha256": "edd4fa7a60b2f2008d3b946fb7602e1d9dfec87d40cd6b8bb032c21506d9639e",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass278-top-143-native-v1.json",
+      "native_receipt_sha256": "b283c9f5f06ead815c6bcc43bff9cbf9c17303dd95d78dbe1c343fd9a21e44fa",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "1acb67574b8e32ddda9dca530a3bba724a3a4790",
+    "source_pending_commit": false,
+    "binary_sha256": "ce0641dbc2b256f22f731c35079242399b92f65ae12e4714f1164b1b60d345b8",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\song-metadata-v5-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.212669299915433,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-143-native-pass222.log",
+    "log_sha256": "47eb04f326270184f3c33a3d93f4854344f3d7eec8a649401a2c36347518459a",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 299 filtered out; finished in 0.63s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

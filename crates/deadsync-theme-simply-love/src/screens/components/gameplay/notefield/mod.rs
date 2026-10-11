@@ -792,6 +792,7 @@ pub(crate) fn compose_frame(
         },
         visual: NotefieldVisualState {
             elapsed_screen_s: elapsed_screen,
+            expand_seconds: state.mods.expand_seconds[player_idx],
             current_display_beat: state.current_beat_display(),
             accel,
             scroll,

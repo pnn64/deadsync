@@ -1,7 +1,7 @@
 use super::super::layout::pipelines_original as original;
 use super::*;
 use crate::perf::assert_no_churn;
-use crate::pipelines_support::compare;
+use crate::ui_pipelines_support::compare;
 use std::hint::black_box;
 
 fn state_with_preferred_color() -> State {

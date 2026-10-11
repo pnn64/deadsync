@@ -1,0 +1,105 @@
+{
+  "pass": 200,
+  "previous_record": "native-revalidation-pass199.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+  "comparator_sha256": "332064e9b8c045c4441cde0d86a3ee0268483aa0114e839969ec94cd34ad962d",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    121
+  ],
+  "next_position": 122,
+  "comparisons_passed": 1346918,
+  "charts": [
+    {
+      "position": 121,
+      "entry": {
+        "title": "Beauty in Chaos",
+        "source_simfile": "Beauty in chaos/Beauty in Chaos.ssc",
+        "harness_version": "0.1.64",
+        "archive": "99a4efa10433dd956073bfeffd3b90cb29a8140fcb634e61b93e07f62bbf6ef7.tar.zst",
+        "sha256": "99a4efa10433dd956073bfeffd3b90cb29a8140fcb634e61b93e07f62bbf6ef7",
+        "compressed_bytes": 710812,
+        "aliases": [
+          "98990509dc1c82018d31c488001c0738a3152699be214e248e2503d1b7bc44bc.tar.zst"
+        ]
+      },
+      "original_archive_retained": "0dcb18429c6874f7e8fb3927a9be4d6e5eb0d51ca2d89b88a5847ca9678f62f9.tar.zst",
+      "native_source_commit": "cc0ea0c0ab70e962785eff8681a6867a3f8689ee",
+      "native_trace_sha256": "1dfc4a47a72491211a2c49c819030df2d4b5c335d8e3b3e76696ee7c747f25b5",
+      "original_source_sha256": {
+        "Beauty in chaos/banner.png": "b670d291093601bcbc2c65fe998ff138a7716c86c540396e05a83a0366b634c4",
+        "Beauty in chaos/Beauty in Chaos.sm": "d5cffe94db8e7b0017d6772f2ab1f6a8fe109bf96ab03f3b0851f676e442b2cb",
+        "Beauty in chaos/Beauty in Chaos.ssc": "4b2de0f787ba3ef702d9a60a2efc97c854cf9f766e5e4648e06ca8fd02a0dec9",
+        "Beauty in chaos/beauty in chaos_cut2.ogg": "9294c8e97ecf933e03debbeaa61b0cb8d11dd60c42f0c684fcc2e46a7bd5163f",
+        "Beauty in chaos/data.sme": "a84c1dd0e81d6df95da32a9767829a062ec652168f01225e36e9e3ad079481e7",
+        "Beauty in chaos/snap.png": "bada87d940a940b3f0816a93ea6c90427387787e3e9e693cda70359cd69b1ae8",
+        "Beauty in chaos/lua/default.lua": "8a89fe7559a5b755efdda07bbc971a77e60f2f979e8be1b9563e7df490eca72b",
+        "Beauty in chaos/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "Beauty in chaos/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "Beauty in chaos/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46",
+        "Beauty in chaos/lua/_script.lua": "f65a380fe4f45ad31e81aaa84023468f9f849018751952045151144abe47d9a5"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 15751,
+      "duration_seconds": 262.5,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 121,
+      "source_simfile": "Beauty in chaos/Beauty in Chaos.ssc",
+      "archive": "99a4efa10433dd956073bfeffd3b90cb29a8140fcb634e61b93e07f62bbf6ef7.tar.zst",
+      "archive_sha256": "99a4efa10433dd956073bfeffd3b90cb29a8140fcb634e61b93e07f62bbf6ef7",
+      "harness_version": "0.1.64",
+      "source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+      "source_pending_commit": false,
+      "binary_sha256": "332064e9b8c045c4441cde0d86a3ee0268483aa0114e839969ec94cd34ad962d",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-checkpoint-v1-full_song_lua.exe",
+        "99a4efa10433dd956073bfeffd3b90cb29a8140fcb634e61b93e07f62bbf6ef7.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 40.935131299775094,
+      "comparisons_passed": 1346918,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-121-user-merge-checkpoint-v1.log",
+      "log_sha256": "f5296f276e81eee7976cef81328cff744d46fd4dd42fe9fc526b9c5fa710cfd5",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass248-top-121-rage-file-v1.json",
+      "native_receipt_sha256": "03e24dd38d2f9e46c9f428d7c26529eb1bd0814a6c49812a97fb07e3716b155f",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+    "source_pending_commit": false,
+    "binary_sha256": "b0e8f5223fb6f054e64146ce459f958d7ac216ea083b4697424cf01f58d2b0ac",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-checkpoint-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 3.9321790002286434,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-121-native-pass200.log",
+    "log_sha256": "372d4c94c273b8bb042243aeefd76defab46bd1c840471d96a5c7b676ed0e22a",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 3.34s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "status": "native-chart-selection-matched-full-gameplay-pending",
+  "deadsync_code_commit": "8248674abe7d0e70de444566165e4b5c3f6e2b40",
+  "native_harness_commit": "cc4e9f835c9b0189af5251c84282a0dadf1c55de",
+  "harness_version": "0.1.74",
+  "native_reference_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_pin": {
+    "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass300-native-step-tidy-committed-cli-v1.json",
+    "sha256": "1363af7fb29718474713d016af6c1f33f9fccd4d29776fa73eb79e18723aba8c"
+  },
+  "native_cli_sha256": "65d2a9c89360a53c2ff01f61579f68f7aaaa73d1b78998bb5e51e9205e940a1b",
+  "native_tests": {
+    "passed": 240,
+    "failed": 0,
+    "ignored": 5,
+    "results": [
+      "test result: ok. 183 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 116.32s",
+      "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.35s",
+      "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s",
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+      "test result: ok. 23 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 16.62s"
+    ]
+  },
+  "controls": {
+    "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\selection-native-receipt-v4.json",
+    "sha256": "8d28415d03f9e0a208b5aec9469c92b0cba5f6586d69d68627b8c39255f71a78"
+  },
+  "control_provenance": {
+    "path": "C:\\GitHub\\deadsync\\tests\\fixtures\\itgmania-song-lua-micro\\step-selection-provenance.json",
+    "sha256": "7a783d279fbf2da3b7d1283825131d8883ea8c18ac60a6b64d247b4ef217bc55"
+  },
+  "selection_control": {
+    "styles": [
+      "versus",
+      "routine"
+    ],
+    "state_message_snapshots_matched": 16,
+    "explicit_calls_matched": 22,
+    "single_simfile_parsed": true,
+    "routine_metadata_supplied_through_compile_context": true,
+    "routine_simfile_parsing_supported": false
+  },
+  "deadsync_lua": {
+    "passed": 514,
+    "failed": 2,
+    "known_failures": [
+      "multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod",
+      "tests::compile_song_lua_accepts_skewy_probe_calls"
+    ],
+    "receipt": {
+      "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\lua-all-v4.json",
+      "sha256": "e32d99332a5f5092f0e6ce060e50221cfae1c616c23071fcf7ed5342e6a39e7f"
+    }
+  },
+  "checks": {
+    "simfile-all-v1": {
+      "receipt": {
+        "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\simfile-all-v1.json",
+        "sha256": "66f0e85aaf37f8bc67a63cbbfa046e861b53d599e1c489d04b24682e1ebd2e14"
+      },
+      "results": [
+        "test result: ok. 238 passed; 0 failed; 12 ignored; 0 measured; 0 filtered out; finished in 6.89s"
+      ]
+    },
+    "playback-all-v1": {
+      "receipt": {
+        "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\playback-all-v1.json",
+        "sha256": "6e12d128238ad89c403eaa58b04598c0fa3d8bfec4cbcc7b035e32c73a8ec44e"
+      },
+      "results": [
+        "test result: ok. 195 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 5.81s"
+      ]
+    },
+    "changed-targets-check-v2": {
+      "receipt": {
+        "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\changed-targets-check-v2.json",
+        "sha256": "ee2d460a07d5497a29b1ee40dd72683577839cb22aa76b74b17a94554c9b9fc4"
+      },
+      "results": []
+    },
+    "technique-vulkan-v2": {
+      "receipt": {
+        "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\technique-vulkan-v2.json",
+        "sha256": "0b08526447ca9345f0d5937959a3fae64d3276d7545c79f19a5794798c3ef572"
+      },
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1328 filtered out; finished in 7.29s"
+      ]
+    }
+  },
+  "closed_faults": [
+    "The harness selects a native game before composite routine statistics query GetCurrentStyle.",
+    "Semantic Steps use unchanged native duplicate deletion, ordering and difficulty normalization before Lua observes them.",
+    "DeadSync preserves authored chart MUSIC through parser metadata and song cache version 62.",
+    "DeadSync selects known Steps identities, validates players/types, clears one selection on nil and returns GameState.",
+    "Compatible-player selection compares authored music and forces shared-side charts, without silently reloading scores or note data.",
+    "Selection-change messages broadcast synchronously even for the same pointer; nested delivery reaches the same receiver.",
+    "Easiest difficulty follows current selections; test-only audits retain actual explicit broadcast and selection call order.",
+    "The gameplay regression visitor traverses SharedCamera children so affected targets compile."
+  ],
+  "technique": {
+    "catalog_checks_passed": 6,
+    "hidden_vulkan_visibility_rotation_passed": 1,
+    "live_menu_observed": false,
+    "frames": [
+      {
+        "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\technique\\technique-0.png",
+        "sha256": "ac214ba231c8c6f3c261fafbe95f9171b26190796c20de1f7911a4678c6bd7d5"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\technique\\technique-2.5.png",
+        "sha256": "2d0d21ae0ac5ca7bad7eedc5f98796f089984fbd7f2f68f1c9c31f52e10980d9"
+      }
+    ],
+    "installed_game_unchanged": true,
+    "installed_game_sha256": "01dbbbdeb4ab368dd9b99e3b22a670efa7e15c33c753f18992ba32fed86e73e3"
+  },
+  "broad_workspace_compile_attempts": [
+    {
+      "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\workspace-check-v1.json",
+      "sha256": "73664c65b4451f36a72d0ee001dba48f7a8dd1543175f645222b4b0630103515"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\workspace-check-v2.json",
+      "sha256": "a707966caf098d04d66788e0bef6c2ef870b7b2cdf5042d10319cd45ea9d0c8c"
+    }
+  ],
+  "broad_compile_limits": [
+    "Unchanged noteskin tests define duplicate global allocators.",
+    "Unchanged WASAPI mock tests use incompatible Windows COM API versions. Affected project targets compile successfully."
+  ],
+  "choices": {
+    "position": 146,
+    "receipt": {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass301-choices-native-selection-v1\\receipt.json",
+      "sha256": "34ad8d7395d8bd89520480510b88a221d9196b8e6f86809efd25738de0ff0fc6"
+    },
+    "native_errors": [
+      {
+        "beat": 0,
+        "command": "OnCommand",
+        "definition_id": "def-0001",
+        "line": 24,
+        "message": "native delayed screen loading is unavailable in the headless song host",
+        "name": "ScreenGameplay",
+        "operation": "ScreenManager.SetNewScreen",
+        "seconds": 0,
+        "source": "song:/lua/choices.lua"
+      }
+    ],
+    "archives_produced": 0,
+    "public_archive_index_changed": false,
+    "whole_archive_comparison_run": false
+  },
+  "original_scope": {
+    "simfiles": 501,
+    "indexed_sources": 483,
+    "unindexed_sources": 18,
+    "archive_contexts": 492,
+    "historical_variants": 9
+  },
+  "remaining": [
+    "Native delayed ScreenGameplay replacement must retain Lua globals and recreate the gameplay scene.",
+    "Native input judgments and life/score progress must be integrated with source gameplay; DeadSync needs matching live stage data.",
+    "Current-style mutation, typed style ownership and noncanonical style/game contexts still need source-based checks.",
+    "Raw chart selection must be reconciled with post-load normalized/deleted Steps for explicit duplicate chart contexts.",
+    "Routine simfile loading remains unsupported by RSSP; the routine control verifies the configurable Lua API only.",
+    "Known Lua failures, historical runtime failures, full theme initialization, courses and the remaining original corpus remain open."
+  ],
+  "complete_corpus": false,
+  "complete_gameplay_parity": false
+}

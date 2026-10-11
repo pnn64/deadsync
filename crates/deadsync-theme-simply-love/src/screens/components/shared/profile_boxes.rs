@@ -224,7 +224,7 @@ fn preview_noteskin_for_choice(
 }
 
 #[inline(always)]
-fn format_total_songs_played(count: u32) -> String {
+fn format_total_songs_played(count: u32) -> Arc<str> {
     let count_str = count.to_string();
     if count == 1 {
         tr_fmt(
@@ -232,14 +232,12 @@ fn format_total_songs_played(count: u32) -> String {
             "SongPlayedSingular",
             &[("count", &count_str)],
         )
-        .to_string()
     } else {
         tr_fmt(
             "SelectProfile",
             "SongPlayedPlural",
             &[("count", &count_str)],
         )
-        .to_string()
     }
 }
 
@@ -347,7 +345,7 @@ fn build_choices(
             kind: profile_data::ActiveProfile::Local { id: profile.id },
             display_name: profile.display_name.into(),
             avatar_key: profile.avatar_key.map(Arc::from),
-            total_songs: format_total_songs_played(profile.total_songs_played).into(),
+            total_songs: format_total_songs_played(profile.total_songs_played),
             recent_mods: recent_mods.into(),
             noteskin: profile.noteskin,
             judgment: profile.judgment,
@@ -1179,6 +1177,13 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                 apply_zoom_to_actor(child, pivot, zoom);
             }
         }
+        Actor::SharedCamera { children, .. } => {
+            if let Some(children) = std::sync::Arc::get_mut(children) {
+                for child in children {
+                    apply_zoom_to_actor(child, pivot, zoom);
+                }
+            }
+        }
         Actor::CameraPush { .. } | Actor::CameraPop => {}
         Actor::Shadow { len, child, .. } => {
             len[0] *= zoom;
@@ -1228,6 +1233,13 @@ fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
                 apply_offset_to_actor(child, dx, dy);
             }
         }
+        Actor::SharedCamera { children, .. } => {
+            if let Some(children) = std::sync::Arc::get_mut(children) {
+                for child in children {
+                    apply_offset_to_actor(child, dx, dy);
+                }
+            }
+        }
         Actor::CameraPush { .. } | Actor::CameraPop => {}
         Actor::Shadow { child, .. } => apply_offset_to_actor(child, dx, dy),
     }
@@ -1246,6 +1258,7 @@ fn apply_z_offset(actor: &mut Actor, dz: i16) {
         | Actor::SharedTransform { z, .. }
         | Actor::RetainedFrame { z, .. } => *z = z.saturating_add(dz),
         Actor::Camera { .. }
+        | Actor::SharedCamera { .. }
         | Actor::CameraPush { .. }
         | Actor::CameraPop
         | Actor::Shadow { .. } => {}
@@ -1256,7 +1269,9 @@ fn apply_z_offset(actor: &mut Actor, dz: i16) {
                 apply_z_offset(child, dz);
             }
         }
-        Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. } => {
+        Actor::SharedFrame { children, .. }
+        | Actor::SharedTransform { children, .. }
+        | Actor::SharedCamera { children, .. } => {
             if let Some(children) = std::sync::Arc::get_mut(children) {
                 for child in children {
                     apply_z_offset(child, dz);
@@ -1277,7 +1292,9 @@ fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
                 apply_clip_rect_to_actor(child, rect);
             }
         }
-        Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. } => {
+        Actor::SharedFrame { children, .. }
+        | Actor::SharedTransform { children, .. }
+        | Actor::SharedCamera { children, .. } => {
             if let Some(children) = std::sync::Arc::get_mut(children) {
                 for child in children {
                     apply_clip_rect_to_actor(child, rect);
@@ -2312,3 +2329,10 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "profile_boxes_buffers_original.rs"]
+mod buffers_original;
+#[cfg(test)]
+#[path = "profile_boxes_buffers_perf.rs"]
+mod buffers_perf;

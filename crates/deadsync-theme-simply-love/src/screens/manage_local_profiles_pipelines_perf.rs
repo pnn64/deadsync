@@ -1,6 +1,6 @@
 use super::*;
 use crate::perf::measure;
-use crate::pipelines_support::compare;
+use crate::ui_pipelines_support::compare;
 use std::hint::black_box;
 
 fn summary(flags: usize, count: usize) -> crate::SimplyLoveItgImportSummary {
