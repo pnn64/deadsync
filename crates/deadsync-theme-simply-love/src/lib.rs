@@ -207,3 +207,7 @@ mod ui_borrowed_state_support;
 #[cfg(test)]
 #[path = "../../../tests/perf/course_data_support.rs"]
 mod course_data_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/string_pipelines_support.rs"]
+mod pipelines_support;
