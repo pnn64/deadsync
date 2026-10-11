@@ -24,6 +24,81 @@ fn number(value: &Value, key: &str) -> Result<f64, String> {
         .ok_or_else(|| format!("missing finite native {key}"))
 }
 
+fn native_fail_type(trace: &Value) -> Result<deadsync_gameplay::GameplayFailType, String> {
+    use deadsync_gameplay::GameplayFailType;
+    use deadsync_rules::{note, timing};
+    let preferences = &trace["input"]["gameplay_preferences"];
+    if trace["capabilities"]["native_gameplay_preferences"] != true
+        || preferences["initialization"] != "theme-game-mode"
+        || preferences["game_mode"] != "ITG"
+        || preferences["mod_level"] != "ModsLevel_Preferred"
+    {
+        return Err(
+            "native capture must initialize and record Simply Love ITG gameplay inputs".into(),
+        );
+    }
+    if number(preferences, "timing_window_scale")? != 1.0
+        || number(preferences, "timing_window_add")? as f32 != timing::TIMING_WINDOW_ADD_S
+        || number(preferences, "max_input_latency_seconds")? != 0.0
+        || number(preferences, "music_rate")? != 1.0
+    {
+        return Err(
+            "nondefault native timing scale, addition, latency or rate remains pending".into(),
+        );
+    }
+    let windows = &preferences["timing_windows"];
+    let add = timing::TIMING_WINDOW_ADD_S;
+    for (key, expected) in [
+        ("W1", timing::BASE_W1_S),
+        ("W2", timing::BASE_W2_S),
+        ("W3", timing::BASE_W3_S),
+        ("W4", timing::BASE_W4_S),
+        ("W5", timing::BASE_W5_S),
+        ("Mine", timing::BASE_MINE_S),
+    ] {
+        if number(windows, key)? as f32 != expected {
+            return Err(format!(
+                "native {key} timing does not match the independent gameplay rules"
+            ));
+        }
+    }
+    for (key, expected) in [
+        ("Hold", note::TIMING_WINDOW_SECONDS_HOLD),
+        ("Roll", note::TIMING_WINDOW_SECONDS_ROLL),
+    ] {
+        if number(windows, key)? as f32 + add != expected {
+            return Err(format!(
+                "native {key} timing does not match the independent gameplay rules"
+            ));
+        }
+    }
+    for key in ["Attack", "Checkpoint"] {
+        if number(windows, key)? as f32 + add > note::TIMING_WINDOW_SECONDS_ROLL {
+            return Err(format!(
+                "native {key} extends the resolution window; this context remains pending"
+            ));
+        }
+    }
+    let players = preferences["players"]
+        .as_array()
+        .filter(|players| players.len() == 1)
+        .ok_or("native gameplay inputs must contain exactly one player")?;
+    let player = &players[0];
+    if player["player"] != "PlayerNumber_P1"
+        || player["disabled_timing_windows"] != json!([])
+        || player["min_tns_to_hide_notes"] != "TapNoteScore_W3"
+    {
+        return Err("native player timing modifiers differ; this context remains pending".into());
+    }
+    match player["fail_setting"].as_str() {
+        Some("FailType_Immediate") => Ok(GameplayFailType::Immediate),
+        Some("FailType_ImmediateContinue") => Ok(GameplayFailType::ImmediateContinue),
+        Some("FailType_EndOfSong") => Ok(GameplayFailType::EndOfSong),
+        Some("FailType_Off") => Ok(GameplayFailType::Off),
+        _ => Err("native preferred player fail setting is missing or unknown".into()),
+    }
+}
+
 fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
     let trace = read_json(trace_path)?;
     if trace["oracle"] != "itgmania_song_lua_semantic_trace"
@@ -63,6 +138,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
         _ => return Err("native default sync setting is missing or unknown".into()),
     };
     let config = GameplayConfig {
+        default_fail_type: native_fail_type(&trace)?,
         global_offset_seconds: number(preferences, "global_offset_seconds")? as f32,
         visual_delay_seconds: number(preferences, "visual_delay_seconds")? as f32,
         machine_default_sync_pref: sync,

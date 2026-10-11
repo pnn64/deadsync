@@ -2046,6 +2046,30 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn easy_failure_keeps_playing() {
+        let mut state = regression_state();
+        Arc::make_mut(&mut state.source.charts[0]).difficulty = "Easy".into();
+        state.setup.config.default_fail_type = GameplayFailType::Immediate;
+        state.refresh_player_attacks(0, 0.0, 0.0);
+        assert_eq!(state.players_runtime.players[0].fail_type, GameplayFailType::ImmediateContinue);
+        state.players_runtime.players[0].life = 0.0;
+        state.refresh_player_attacks(0, 0.1, 0.1);
+        assert!(state.players_runtime.players[0].is_failing);
+        assert!(state.finish_gameplay_if_ready(false).is_none());
+        state.mods.attacks.mask_windows[0] = vec![
+            build_course_modifier_mask_window("failimmediate").expect("fail mode window")
+        ];
+        state.refresh_player_attacks(0, 0.2, 0.1);
+        assert_eq!(state.players_runtime.players[0].fail_type, GameplayFailType::ImmediateContinue);
+        assert!(state.finish_gameplay_if_ready(false).is_none());
+        Arc::make_mut(&mut state.source.charts[0]).difficulty = "Hard".into();
+        state.refresh_player_attacks(0, 0.3, 0.1);
+        assert_eq!(state.players_runtime.players[0].fail_type, GameplayFailType::Immediate);
+        assert!(matches!(state.finish_gameplay_if_ready(false),
+            Some(GameplayAction::Navigate(GameplayExit::Complete))));
+    }
+
+    #[test]
     fn fail_modes_finish_song() {
         for (modifiers, should_fail) in [("failoff", false), ("failatend", true)] {
             let mut state = regression_state();

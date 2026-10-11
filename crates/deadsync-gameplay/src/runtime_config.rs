@@ -44,6 +44,16 @@ impl GameplayFailType {
     }
 }
 
+pub(crate) fn song_fail_type(fail_type: GameplayFailType, difficulty: &str, in_course: bool) -> GameplayFailType {
+    // GameState::GetPlayerFailType clamps regular Easy charts to at least
+    // ImmediateContinue. Preferred options and attacks retain their raw value.
+    if !in_course && difficulty.eq_ignore_ascii_case("Easy") && fail_type == GameplayFailType::Immediate {
+        GameplayFailType::ImmediateContinue
+    } else {
+        fail_type
+    }
+}
+
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HoldToExitKey {

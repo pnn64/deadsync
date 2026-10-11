@@ -1027,7 +1027,7 @@ where
             combo_carry[p],
             caps,
         );
-        player.fail_type = config.default_fail_type;
+        player.fail_type = song_fail_type(config.default_fail_type, &charts[p].difficulty, in_course_stage);
         player
     });
     let assist_clap_rows =

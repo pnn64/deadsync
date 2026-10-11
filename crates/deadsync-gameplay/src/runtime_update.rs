@@ -1071,9 +1071,11 @@ where
         ) {
             self.mods.song_lua_player_transforms[player] = transform;
         }
-        let runtime = &mut self.players_runtime.players[player];
-        runtime.fail_type = self.mods.attacks.fail_type[player]
+        let fail_type = self.mods.attacks.fail_type[player]
             .unwrap_or(self.setup.config.default_fail_type);
+        let fail_type = song_fail_type(fail_type, &self.source.charts[player].difficulty, self.course_display_is_course_stage());
+        let runtime = &mut self.players_runtime.players[player];
+        runtime.fail_type = fail_type;
         if update_player_failure(runtime, now, false) {
             self.capture_failed_ex_score_inputs(player, self.player_blue_window_ms(player));
             self.display.density_graph.life_dirty[player] = true;
