@@ -54,7 +54,6 @@ pub struct SongLuaCompileGlobals {
 pub fn install_compile_host(
     lua: &Lua,
     context: &SongLuaCompileContext,
-    host: &mut SongLuaHostState,
     noteskin_resolver: SongLuaNoteskinResolver,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
@@ -64,7 +63,6 @@ pub fn install_compile_host(
     let math: Table = lua.globals().get("math")?;
     math.get::<Function>("randomseed")?
         .call::<()>(context.random_seed as i32)?;
-    install_ease_table(lua, host)?;
     install_compile_globals(
         lua,
         context,
@@ -1882,27 +1880,6 @@ pub fn install_late_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua:
         })?,
     )?;
     globals.set("PROFILEMAN", create_profileman_table(lua)?)?;
-    Ok(())
-}
-
-pub fn install_ease_table(lua: &Lua, host: &mut SongLuaHostState) -> mlua::Result<()> {
-    let globals = lua.globals();
-    let ease = lua.create_table()?;
-    for &name in SONG_LUA_EASING_NAMES {
-        let function = lua.create_function(
-            |_, (_t, b, c, d, _p1, _p2): (f32, f32, f32, f32, Value, Value)| {
-                if d.abs() <= f32::EPSILON {
-                    Ok(b + c)
-                } else {
-                    Ok(c.mul_add(f32::min(f32::max(_t / d, 0.0), 1.0), b))
-                }
-            },
-        )?;
-        host.easing_names
-            .insert(function.to_pointer(), name.to_string());
-        ease.set(name, function)?;
-    }
-    globals.set("ease", ease)?;
     Ok(())
 }
 

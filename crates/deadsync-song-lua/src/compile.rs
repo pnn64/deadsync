@@ -227,7 +227,6 @@ where
     install_compile_host(
         &lua,
         context,
-        &mut host,
         noteskin_resolver,
         create_dummy_actor,
         create_named_child_actor,

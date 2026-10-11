@@ -82,7 +82,7 @@ pub use host::{
     SONG_LUA_STARTUP_MESSAGE, SongLuaCompileGlobals, SongLuaDateGlobals, SongLuaGameStateGlobals,
     SongLuaHostState, clone_lua_value, create_arrow_effects_table, create_chunk_env_proxy,
     initial_chunk_environment, install_basic_globals, install_cmd_helpers, install_compile_host,
-    install_core_globals, install_date_globals, install_ease_table, install_game_state_globals,
+    install_core_globals, install_date_globals, install_game_state_globals,
     install_late_globals, install_manager_globals, install_message_manager_globals,
     install_screen_manager_globals, install_screen_string_globals, install_screen_utility_globals,
     install_sound_globals, is_compile_global_name, register_loaded_easing_names,
@@ -5576,6 +5576,13 @@ mod tests {
         (root, entry)
     }
 
+    fn write_easing_lib(song_dir: &Path) {
+        fs::write(
+            song_dir.join("easing.lua"),
+            include_str!("../../../tests/fixtures/song_lua/easing.lua"),
+        ).expect("write chart owned easing library");
+    }
+
     fn test_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
             "deadsync-song-lua-crate-{name}-{}",
@@ -5828,10 +5835,12 @@ mod tests {
     #[test]
     fn compile_song_lua_reads_mod_tables() {
         let song_dir = test_dir("direct");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 mods = {
     {1, 2, "*100 no invert", "len", 2},
 }
@@ -6150,10 +6159,12 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_runs_actor_init_commands() {
         let song_dir = test_dir("init-command");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 return Def.ActorFrame{
     InitCommand=function(self)
         prefix_globals = {
@@ -9943,12 +9954,26 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_keeps_chart_easing_globals() {
+        let song_dir = test_dir("chart-easing-global");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            include_str!("../../../tests/fixtures/song-lua/easing-global.lua"),
+        ).expect("write chart easing guard");
+        test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Chart Easing"))
+            .expect("chart must load its own guarded nonlinear easing functions");
+    }
+
+    #[test]
     fn compile_song_lua_replays_runtime_mod_tables() {
         let song_dir = test_dir("exact-runtime-mod-tables");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 mods = {
     {2, 2, "*100 50 flip", "len"},
 }
@@ -10022,10 +10047,12 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_replays_mixed_runtime_mod_eases() {
         let song_dir = test_dir("mixed-exact-runtime-mod-eases");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 mods = {
     {0, 9999, "*1000 no dizzy", "end"},
 }
@@ -11179,10 +11206,12 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_classifies_player_transform_function_eases() {
         let song_dir = test_dir("function-ease");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local target = nil
 prefix_globals = {}
 
@@ -17650,10 +17679,12 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_accepts_skewy_probe_calls() {
         let song_dir = test_dir("skewy-probe");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local target = nil
 
 mods_ease = {
@@ -18548,10 +18579,12 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_captures_column_position_function_eases() {
         let song_dir = test_dir("column-position-function-eases");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local function bounce_col(v)
     local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
     local ca = nf:GetColumnActors()[2]
@@ -18670,10 +18703,12 @@ end}
     #[test]
     fn compile_song_lua_captures_column_rotation_function_eases() {
         let song_dir = test_dir("column-rotation-function-eases");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local function spin_col(v)
     local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
     for _, column in ipairs(nf:GetColumnActors()) do
@@ -21587,10 +21622,12 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_extracts_overlay_function_actions_and_eases() {
         let song_dir = test_dir("overlay-functions");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local target = nil
 
 mod_actions = {
@@ -21857,10 +21894,12 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_scopes_unprobed_overlay_function_eases() {
         let song_dir = test_dir("unprobed-overlay-function-ease");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local target = nil
 
 mods_ease = {
@@ -21896,10 +21935,12 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_keeps_overlay_rotation_eases_out_of_player_transforms() {
         let song_dir = test_dir("overlay-rotation-ease");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local target = nil
 
 mods_ease = {
@@ -21978,10 +22019,12 @@ return Def.ActorFrame {
     #[test]
     fn compile_song_lua_extracts_xero_aux_overlay_node_eases() {
         let song_dir = test_dir("xero-aux-overlay-node");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 xero = {}
 local eases = {}
 local nodes = {}
@@ -22918,10 +22961,12 @@ return root
     #[test]
     fn compile_song_lua_preserves_overlay_color_for_diffusealpha_eases() {
         let song_dir = test_dir("overlay-diffusealpha-color");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local target = nil
 
 mods_ease = {
@@ -24001,6 +24046,8 @@ return Def.ActorFrame{}
 
     fn generated_runtime_mod_lua() -> &'static str {
         r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
+
 mods = {
     {0, 9999, "*1000 no beat, *1000 no drunk, *1000 no tipsy, *1000 no invert, *1000 no flip, *1000 no dizzy", "end"},
 }
@@ -24620,6 +24667,7 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_supports_generated_runtime_modchart() {
         let root = test_dir("generated-runtime-modchart");
+        write_easing_lib(&root);
         let entry = root.join("default.lua");
         fs::write(&entry, generated_runtime_mod_lua()).unwrap();
 
