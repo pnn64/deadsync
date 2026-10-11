@@ -245,28 +245,18 @@ fn push_reload_dialog(
         return;
     }
 
-    let mut bits: Vec<String> = Vec::with_capacity(2);
-    if packs > 0 {
-        bits.push(format!(
-            "{packs} {}",
-            if packs == 1 { "pack" } else { "packs" }
-        ));
-    }
-    if songs > 0 {
-        bits.push(format!(
-            "{songs} {}",
-            if songs == 1 { "song" } else { "songs" }
-        ));
-    }
     let what = if packs == 0 && songs > 0 {
         "song"
     } else {
         "content"
     };
-    let added = if bits.is_empty() {
-        "Library changed.".to_owned()
-    } else {
-        format!("{} added.", bits.join(" and "))
+    let pack_word = if packs == 1 { "pack" } else { "packs" };
+    let song_word = if songs == 1 { "song" } else { "songs" };
+    let added = match (packs, songs) {
+        (0, 0) => "Library changed.".to_owned(),
+        (0, _) => format!("{songs} {song_word} added."),
+        (_, 0) => format!("{packs} {pack_word} added."),
+        _ => format!("{packs} {pack_word} and {songs} {song_word} added."),
     };
     actors.push(act!(text:
         font("miso"): settext(added):
@@ -781,7 +771,7 @@ fn push_tabs(actors: &mut Vec<Actor>, state: &State) {
             diffuse(icon_ink[0], icon_ink[1], icon_ink[2], icon_ink[3]): z(Z_TEXT)
         ));
         actors.push(act!(text:
-            font("miso"): settext(entry.label().to_owned()):
+            font("miso"): settext(entry.label()):
             align(0.0, 0.5): xy(x + lo::TAB_LABEL_INSET, lo::TABS_Y): zoom(lo::TAB_LABEL_ZOOM):
             maxwidth(lo::TAB_W - lo::TAB_LABEL_INSET - 4.0): horizalign(left):
             diffuse(ink[0], ink[1], ink[2], ink[3]): z(Z_TEXT)
@@ -871,16 +861,28 @@ fn readout_text(state: &State) -> String {
 }
 
 /// Groups of three from the right, as the original's `Commify`.
-pub(super) fn commify(n: usize) -> String {
-    let digits = n.to_string();
-    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
-    for (index, ch) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            out.push(',');
+pub(super) fn commify(mut n: usize) -> String {
+    const DIGITS: usize = usize::MAX.ilog10() as usize + 1;
+    let mut bytes = [0; DIGITS + (DIGITS - 1) / 3];
+    let mut start = bytes.len();
+    let mut group = 0;
+    loop {
+        start -= 1;
+        bytes[start] = b'0' + (n % 10) as u8;
+        n /= 10;
+        if n == 0 {
+            break;
         }
-        out.push(ch);
+        group += 1;
+        if group == 3 {
+            start -= 1;
+            bytes[start] = b',';
+            group = 0;
+        }
     }
-    out
+    std::str::from_utf8(&bytes[start..])
+        .expect("decimal digits and commas are ASCII")
+        .to_owned()
 }
 
 // --- the search results band --------------------------------------------------
@@ -900,7 +902,7 @@ fn push_context_band(actors: &mut Vec<Actor>, state: &State, w: f32) {
         diffuse(1.0, 1.0, 1.0, 0.05): z(Z_PANEL)
     ));
     actors.push(act!(text:
-        font("wendy"): settext(title.to_owned()):
+        font("wendy"): settext(title):
         align(0.0, 0.5): xy(lo::BAND_TITLE_X, lo::BAND_TITLE_Y): zoom(0.42): horizalign(left):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z_TEXT)
     ));
@@ -2247,7 +2249,7 @@ fn push_footer(actors: &mut Vec<Actor>, state: &State, w: f32) {
     // corner it takes is a setting -- so a credit anchored to either one
     // overlaps it for half the people who see it.
     actors.push(act!(text:
-        font("miso"): settext("pack data from stepmaniaonline.net".to_owned()):
+        font("miso"): settext("pack data from stepmaniaonline.net"):
         align(0.5, 0.5): xy(w * 0.5, lo::VERSION_Y + 14.0): zoom(lo::VERSION_ZOOM):
         horizalign(center):
         diffuse(0.55, 0.55, 0.55, 0.75): z(Z_TEXT)
@@ -2486,6 +2488,24 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "render_pipelines_original.rs"]
+mod pipelines_original;
+#[cfg(test)]
+#[path = "render_pipelines_perf.rs"]
+mod pipelines_perf;
+
+#[cfg(test)]
+use super::preview;
+
+#[cfg(test)]
+#[path = "chrome_data_original.rs"]
+mod course_data_original;
+
+#[cfg(test)]
+#[path = "chrome_data_perf.rs"]
+mod course_data_perf;
 
 #[cfg(test)]
 #[path = "render/select_data_original.rs"]

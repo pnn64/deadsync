@@ -1,4 +1,5 @@
 use super::*;
+use crate::resource_perf_support as allocations;
 use std::hint::black_box;
 
 #[path = "perf_original.rs"]
@@ -6,9 +7,6 @@ use std::hint::black_box;
 mod original;
 use original::{OriginalIniData, OriginalRuntimeCache};
 
-#[path = "../../../tests/support/perf.rs"]
-#[allow(dead_code)]
-mod allocations;
 #[path = "../../../tests/support/paired_bench.rs"]
 mod paired;
 

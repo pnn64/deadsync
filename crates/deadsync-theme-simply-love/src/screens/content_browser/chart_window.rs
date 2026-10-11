@@ -15,7 +15,7 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 
 use deadlib_present::actors::Actor;
-use deadsync_assets::noteskin::{Noteskin, SpriteSlot};
+use deadsync_assets::noteskin::{Noteskin, SpriteSlot, SpriteSource};
 use deadsync_notefield::ModelMeshCache;
 use deadsync_online::smo_songs::{PreviewChart, PreviewPhase};
 
@@ -99,12 +99,14 @@ pub fn preview_skin_textures(skin: &Noteskin) -> Vec<(Arc<str>, bool)> {
     let mut textures: Vec<(Arc<str>, bool)> = Vec::new();
     noteskin_draw::for_each_field_slot(skin, SKIN_COLS, |slot: &SpriteSlot| {
         for texture_slot in std::iter::once(slot).chain(slot.model_additive.as_deref()) {
-            for key in std::iter::once(texture_slot.texture_key_shared())
-                .chain(texture_slot.model_texture_keys.iter().cloned())
-            {
-                match textures.iter_mut().find(|(known, _)| *known == key) {
+            let primary = match texture_slot.source.as_ref() {
+                SpriteSource::Atlas { texture_key, .. }
+                | SpriteSource::Animated { texture_key, .. } => texture_key,
+            };
+            for key in std::iter::once(primary).chain(texture_slot.model_texture_keys.iter()) {
+                match textures.iter_mut().find(|(known, _)| *known == *key) {
                     Some((_, model)) => *model |= slot.model.is_some(),
-                    None => textures.push((key, slot.model.is_some())),
+                    None => textures.push((Arc::clone(key), slot.model.is_some())),
                 }
             }
         }
@@ -1030,6 +1032,9 @@ mod tests {
         assert_eq!(notes(&drawn(&state)), 0, "gone");
     }
 }
+
+#[cfg(test)]
+mod resource_perf;
 
 #[cfg(test)]
 mod preview_dataflows {

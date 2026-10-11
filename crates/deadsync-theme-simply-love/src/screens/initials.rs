@@ -103,9 +103,9 @@ struct PlayerEntry {
 }
 
 #[derive(Clone, Debug)]
-struct ChartScoreCache {
-    chart_hash: String,
-    entries: Vec<score_data::LeaderboardEntry>,
+struct ChartScoreCache<'a> {
+    chart_hash: &'a str,
+    entries: &'a [score_data::LeaderboardEntry],
     used: Vec<bool>,
 }
 
@@ -444,11 +444,11 @@ const fn highscore_rank_window(highlight_rank: Option<u32>) -> (u32, u32) {
     (lower, upper)
 }
 
-fn find_chart_score_cache<'a>(
-    chart_caches: &'a mut Vec<ChartScoreCache>,
-    chart_hash: &str,
-    leaderboards: &HashMap<String, Vec<score_data::LeaderboardEntry>>,
-) -> &'a mut ChartScoreCache {
+fn find_chart_score_cache<'cache, 'data>(
+    chart_caches: &'cache mut Vec<ChartScoreCache<'data>>,
+    chart_hash: &'data str,
+    leaderboards: &'data HashMap<String, Vec<score_data::LeaderboardEntry>>,
+) -> &'cache mut ChartScoreCache<'data> {
     if let Some(idx) = chart_caches
         .iter()
         .position(|cache| cache.chart_hash == chart_hash)
@@ -456,9 +456,12 @@ fn find_chart_score_cache<'a>(
         return &mut chart_caches[idx];
     }
 
-    let entries = leaderboards.get(chart_hash).cloned().unwrap_or_default();
+    let entries = leaderboards
+        .get(chart_hash)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
     chart_caches.push(ChartScoreCache {
-        chart_hash: chart_hash.to_string(),
+        chart_hash,
         used: vec![false; entries.len()],
         entries,
     });
@@ -543,7 +546,7 @@ fn build_side_highscore_lists(
     leaderboards: &HashMap<String, Vec<score_data::LeaderboardEntry>>,
 ) -> Vec<Option<StageHighScores>> {
     let mut out = vec![None; stages.len()];
-    let mut chart_caches: Vec<ChartScoreCache> = Vec::with_capacity(stages.len());
+    let mut chart_caches: Vec<ChartScoreCache<'_>> = Vec::with_capacity(stages.len());
     let side_idx = profile_data::player_side_index(side);
 
     for stage_idx in (0..stages.len()).rev() {
@@ -561,13 +564,13 @@ fn build_side_highscore_lists(
             leaderboards,
         );
         let highlight = consume_highlight_rank(
-            cache.entries.as_slice(),
+            cache.entries,
             cache.used.as_mut_slice(),
             initials,
             stage_score_10000(player_stage.score_percent),
         );
 
-        out[stage_idx] = Some(build_stage_highscores(cache.entries.as_slice(), highlight));
+        out[stage_idx] = Some(build_stage_highscores(cache.entries, highlight));
     }
 
     out
@@ -1524,3 +1527,10 @@ mod tests {
         ));
     }
 }
+
+#[cfg(test)]
+#[path = "initials_pipelines_original.rs"]
+mod pipelines_original;
+#[cfg(test)]
+#[path = "initials_pipelines_perf.rs"]
+mod pipelines_perf;
