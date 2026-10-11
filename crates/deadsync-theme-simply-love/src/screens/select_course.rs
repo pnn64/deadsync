@@ -3332,6 +3332,7 @@ mod song_lookup_tests {
             chart_name: String::new(),
             meter: 10,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: hash.to_owned(),
             stats: deadsync_chart::ArrowStats::default(),

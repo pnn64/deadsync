@@ -190,6 +190,7 @@ fn test_chart(hash: &str) -> Arc<ChartData> {
         chart_name: "Stage Chart Name".to_string(),
         meter: 9,
         step_artist: "Stage Artist".to_string(),
+        music_file: String::new(),
         music_path: None,
         short_hash: hash.to_string(),
         stats: ArrowStats {

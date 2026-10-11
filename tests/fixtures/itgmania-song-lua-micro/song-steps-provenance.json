@@ -1,0 +1,26 @@
+{
+  "harness_commit": "7a75d74081a4e0e944e1babde8d8d64363ad625a",
+  "harness_binary_sha256": "b4038da817427703f3bc30c8aea16117e7c3ffa39c93356243d455e1dd694c3d",
+  "command": [
+    "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass269-native-commands-committed-cli-v1.exe",
+    "charts",
+    "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass182\\native-steps-control-v1\\song-steps.sm",
+    "--out",
+    "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass182\\native-steps-control-v1\\native-charts.json"
+  ],
+  "exit_code": 0,
+  "stdout": "{\"charts\":8,\"diagnostics\":[],\"partial_theme_charts\":[],\"raw_metadata_charts\":[],\"rssp_error\":null,\"source_md5\":null,\"source_sha256\":\"bc5a092db8d51d7c17bc9255402a4039413ae9c87a4027d1e36109c72d7d0076\",\"theme_repairs\":[],\"unsupported_charts\":[]}\n",
+  "stderr": "",
+  "source_sm_sha256": "bc5a092db8d51d7c17bc9255402a4039413ae9c87a4027d1e36109c72d7d0076",
+  "native_result_sha256": "bacb45eefd4adc08b60ab013d0a747f0e95d3358c05f2602b759a42154a572e2",
+  "expected_sha256": "64dbbee0aaa7d05ae3b03e94ac2037cbfef310f48b1fda3500ad7a0a58ad0f40",
+  "references": {
+    "C:\\GitHub\\rework\\itgmania\\src\\PrefsManager.cpp": "a522c490a5db7ebc994fdcf918c5eed729c7821322c55f7528e85ff25d25285b",
+    "C:\\GitHub\\rework\\itgmania\\src\\GameState.cpp": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+    "C:\\GitHub\\rework\\itgmania\\src\\Song.cpp": "2fa0405d315ae467c49e138819552c4785f0e7f44b0211f39c2aa5422723d592",
+    "C:\\GitHub\\rework\\itgmania\\src\\NotesLoaderSM.cpp": "e25ba9710dae34f1c98593532f9b270cb3546ddd076d6019b6ff37394c89b417"
+  },
+  "limits": "Chart values use native Song/Steps loader without semantic_host.lua. EventMode default and IsEventMode preference lookup are independently established from the listed reference sources, not a live GameState instance.",
+  "seeded_selection_trace": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass274-top-139-native-v1\\traces\\cards\\sm.sm.semantic.json",
+  "seeded_selection_trace_sha256": "49d4b8a4e1a5ef41f5ddcb9285f7ff3e13fdfff9e413657b56d644f465920fae"
+}

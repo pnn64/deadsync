@@ -1,0 +1,103 @@
+{
+  "pass": 137,
+  "previous_record": "native-revalidation-pass136.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+  "comparator_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    58
+  ],
+  "next_position": 59,
+  "comparisons_passed": 194374,
+  "charts": [
+    {
+      "position": 58,
+      "entry": {
+        "title": "[CRYSTAL_ACCESS]",
+        "source_simfile": "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].sm",
+        "harness_version": "0.1.54",
+        "archive": "e8c001502da5460ec27525b42f5bbe79a925cad47139c3c1b5c3edefbc233fe7.tar.zst",
+        "sha256": "e8c001502da5460ec27525b42f5bbe79a925cad47139c3c1b5c3edefbc233fe7",
+        "compressed_bytes": 167939,
+        "aliases": [
+          "28d74182aa57f95d5b2e6c198e45a3c8a89894aec273a6588d356bac572af5e3.tar.zst"
+        ]
+      },
+      "original_archive_retained": "f657ae12b7c7f7e63701a1e6f2af48f16526ee682720c38ca915fae9705aa9cd.tar.zst",
+      "native_source_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+      "native_trace_sha256": "3c64a08b9f8b5ccfe1e065b789506d1cc072fdfc815f27a772eb30b68bc9bc0d",
+      "original_source_sha256": {
+        "[CRYSTAL_ACCESS]/bg.png": "abf4df375d0b2dffd6fd4d7f26e41234ac6b90269a3eb8fe7a7023f52d70fa61",
+        "[CRYSTAL_ACCESS]/bn.png": "eee766f10191f50730a7544552b2bfea6fe291cc0f4b3f426911f4402fddcd54",
+        "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ogg": "258c993782040c4f64bf01e58d9ff10dcaf8e690cafac15f95e19a1e7baa29a2",
+        "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].sm": "7886f04c75c3a8bbc0da40247344aee87b2ab2a60f0a9e701bec29f3c10fdd5b",
+        "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc": "a06fe2689903ae221bab090525689fd025bbc78ad1cbde931aad23dd18baa6ec",
+        "[CRYSTAL_ACCESS]/lua/default.lua": "3ab7f6ca01fe3e16c54567a88dc02771bc527141e96be10e81bee61e3b9d32d6",
+        "[CRYSTAL_ACCESS]/lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "[CRYSTAL_ACCESS]/lua/modhelpers.lua": "95137697735498b5573a064ded1a6300d27fc1abe51b6cfc75ec932175ea30e2",
+        "[CRYSTAL_ACCESS]/lua/mods.lua": "fd99a26cd06f7dbf8fe3a36c858c31c01e4a64ad773c1dfdbd7f19eea149c7c2"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8641,
+      "duration_seconds": 144,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 6,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 58,
+      "source_simfile": "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].sm",
+      "archive": "e8c001502da5460ec27525b42f5bbe79a925cad47139c3c1b5c3edefbc233fe7.tar.zst",
+      "archive_sha256": "e8c001502da5460ec27525b42f5bbe79a925cad47139c3c1b5c3edefbc233fe7",
+      "harness_version": "0.1.54",
+      "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+      "source_pending_commit": false,
+      "binary_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-full_song_lua.exe",
+        "e8c001502da5460ec27525b42f5bbe79a925cad47139c3c1b5c3edefbc233fe7.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 13.098038400057703,
+      "comparisons_passed": 194374,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-058-native-column-xy-v6.log",
+      "log_sha256": "1c9518d092e91255f76cab27c3c0848ffd9da749fa2e9b2f5c29d24f2f4814a4",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass137-top-058-native-v3.json",
+      "native_receipt_sha256": "9d604ae6b38d22b1f2f6f47bb9c9703e19fe65043d674e3c815efa6d75bb3461",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+    "source_pending_commit": false,
+    "binary_sha256": "9f550263a9682a2386ebb04ff72a66926eca035a0e4f8e18e2def03b2ca1baa7",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.8105897000059485,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-058-native-pass137.log",
+    "log_sha256": "e466f55ac9b4ce5a0b9d134e71809b760b4ea032c95ffb4ff37e44d0318e14ac",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 262 filtered out; finished in 0.44s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

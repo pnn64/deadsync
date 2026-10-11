@@ -274,19 +274,14 @@ pub fn song_search_backspace(open: &mut SongSearchOpen) -> bool {
 
 /// Delete trailing whitespace then the word before it. Returns whether it changed.
 pub fn song_search_delete_word(open: &mut SongSearchOpen) -> bool {
-    let mut chars: Vec<char> = open.query.chars().collect();
-    let before = chars.len();
-    while chars.last().is_some_and(|c| c.is_whitespace()) {
-        chars.pop();
-    }
-    while chars.last().is_some_and(|c| !c.is_whitespace()) {
-        chars.pop();
-    }
-    if chars.len() == before {
-        return false;
-    }
-    open.query = chars.into_iter().collect();
-    true
+    let before = open.query.len();
+    let end = open
+        .query
+        .trim_end()
+        .trim_end_matches(|c: char| !c.is_whitespace())
+        .len();
+    open.query.truncate(end);
+    end != before
 }
 
 #[inline(always)]
@@ -349,12 +344,13 @@ pub fn song_search_completion(open: &SongSearchOpen) -> Option<SongSearchComplet
     // typed, and no ghost can truthfully be drawn over that.
     let accepted = song_search_query_completed_with(&open.query, &label);
     let consumed = fuzzy::folded_prefix_len(&open.query, &accepted)?;
-    let remainder: String = accepted.chars().skip(consumed).collect();
-    if remainder.is_empty() {
-        return None;
-    }
+    let (split, _) = accepted.char_indices().nth(consumed)?;
+    let remainder = &accepted[split..];
+    let mut display = String::with_capacity(open.query.len() + remainder.len());
+    display.push_str(&open.query);
+    display.push_str(remainder);
     Some(SongSearchCompletion {
-        display: format!("{}{remainder}", open.query),
+        display,
         typed: open.query.clone(),
         accepted,
     })
@@ -978,6 +974,7 @@ mod tests {
             chart_name: String::new(),
             meter,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: String::new(),
             stats: deadsync_chart::ArrowStats::default(),
@@ -1340,3 +1337,11 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "song_search/data_paths_perf.rs"]
+mod data_paths_perf;
+
+#[cfg(test)]
+#[path = "song_search/menu_buffers_perf.rs"]
+mod menu_buffers_perf;

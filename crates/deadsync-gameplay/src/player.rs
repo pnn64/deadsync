@@ -85,6 +85,7 @@ pub struct PlayerRuntime {
     pub course_life: CourseLifeState,
     pub combo_after_miss: u32,
     pub is_failing: bool,
+    pub fail_type: crate::GameplayFailType,
     pub fail_time: Option<f32>,
     pub calories_burned: f32,
 
@@ -239,6 +240,7 @@ pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
         course_life: CourseLifeState::Bar,
         combo_after_miss: 0,
         is_failing: false,
+        fail_type: crate::GameplayFailType::default(),
         fail_time: None,
         calories_burned: 0.0,
         earned_grade_points: 0,

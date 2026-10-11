@@ -456,6 +456,9 @@ pub fn normalize_player_option_value(lua: &Lua, name: &str, value: Value) -> mlu
 
 #[inline(always)]
 pub fn default_player_option_value(lua: &Lua, name: &str) -> mlua::Result<Value> {
+    if name == "failsetting" {
+        return Ok(Value::Integer(0));
+    }
     if player_option_uses_bool(name) {
         return Ok(Value::Boolean(false));
     }
@@ -617,12 +620,8 @@ mod tests {
             Value::Boolean(true)
         );
         assert_eq!(
-            default_player_option_value(&lua, "failsetting")
-                .unwrap()
-                .as_string()
-                .unwrap()
-                .to_string_lossy(),
-            "FailType_Immediate"
+            default_player_option_value(&lua, "failsetting").unwrap(),
+            Value::Integer(0)
         );
         assert_eq!(
             normalize_player_option_value(&lua, "reverse", Value::Number(0.5)).unwrap(),

@@ -17,3 +17,12 @@ pub mod xml;
 
 #[cfg(test)]
 mod pipeline_tests;
+
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf_alloc;
+
+#[cfg(test)]
+#[path = "../../../tests/support/paired_bench.rs"]
+mod paired_bench;

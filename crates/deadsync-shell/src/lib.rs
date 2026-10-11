@@ -97,3 +97,10 @@ mod tests {
 
 #[cfg(test)]
 mod gameplay_regression_tests;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/owned_support.rs"]
+mod owned_perf;
+#[cfg(test)]
+#[path = "../../../tests/perf/owned_alloc.rs"]
+mod perf;
