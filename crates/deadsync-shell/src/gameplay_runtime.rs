@@ -666,10 +666,8 @@ pub(crate) fn update(
     if let Some(request) = output.request {
         match request {
             deadsync_song_lua::SongLuaLiveRequest::Transition(message) if message == "SM_DoNextScreen" => {
-                // ScreenGameplay handles this after the normal 0.5s + 1s SL
-                // out transition. Do not stop music or judge future rows here.
-                state.gameplay.progress.stage.song_completed_naturally = true;
-                effects.push(ThemeEffect::Navigate(deadsync_theme_simply_love::screens::SimplyLoveScreen::Evaluation));
+                // The owning theme screen advances the native SL out tween,
+                // dispatches End and navigates after its completion frame.
             }
             request => log::warn!("Unsupported live song Lua screen request: {request:?}"),
         }
@@ -823,6 +821,7 @@ pub(crate) fn push_actors(
     );
     state.song_scratch = Some(song);
     state.frame_scratch = Some(hud);
+    gameplay::push_song_lua_out(actors, state);
     segments
 }
 

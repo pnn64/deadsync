@@ -96,6 +96,7 @@ pub enum SongLuaLiveTarget {
 #[derive(Debug)]
 pub struct SongLuaLiveBroadcast {
     pub beat: f32,
+    pub music_seconds: f64,
     pub name: String,
     /// Snapshot before listeners run. Unsupported trace values remain an
     /// explicit diagnostic gap; they do not interrupt message delivery.
@@ -112,6 +113,16 @@ pub struct SongLuaLiveOutput {
     pub sounds: Vec<crate::SongLuaSoundEvent>,
     /// Native-style callback errors retain partial state and are reported once.
     pub errors: Vec<String>,
+}
+
+impl SongLuaLiveOutput {
+    pub fn append(&mut self, mut next: Self) {
+        if next.request.is_some() { self.request = next.request; }
+        self.broadcasts.append(&mut next.broadcasts);
+        self.source_broadcasts.append(&mut next.source_broadcasts);
+        self.sounds.append(&mut next.sounds);
+        self.errors.append(&mut next.errors);
+    }
 }
 
 /// Owns one initialized Lua scene on the gameplay/screen thread. Worker
@@ -136,7 +147,8 @@ pub struct SongLuaLiveScene {
     last_beat: f64,
     last_music_seconds: f32,
     foregrounds: Vec<LiveForeground>,
-    startup_output: SongLuaLiveOutput,
+    pub(crate) startup_output: SongLuaLiveOutput,
+    ended: bool,
 }
 
 impl fmt::Debug for SongLuaLiveScene {
@@ -185,10 +197,11 @@ impl SongLuaLiveScene {
         }
         Ok(Self { lua, root, stage, players, actors, states, tracked, registry,
             targets: Vec::new(), context, entry_paths, primary_index, last_beat,
-            last_music_seconds: -9999.0, foregrounds, startup_output })
+            last_music_seconds: -9999.0, foregrounds, startup_output, ended: false })
     }
 
     pub fn advance(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {
+        if self.ended { return Err(mlua::Error::runtime("cannot advance an ended song Lua scene")); }
         // GameState.cpp::UpdateSongPosition maintains global Song timing apart
         // from each Player's selected Steps timing. The domain frame carries
         // the player's beat; Lua's GAMESTATE and music effects use the song.
@@ -306,11 +319,15 @@ impl SongLuaLiveScene {
                 crate::entry_file_path(path).as_ref() == Some(saved))
     }
 
-    pub(crate) fn end_for_reload(&self) -> mlua::Result<SongLuaCompileContext> {
+    /// ScreenManager pops the outgoing screen before dispatching End. The
+    /// caller consumes its effects before deleting or replacing the scene.
+    pub fn end(&mut self) -> mlua::Result<SongLuaLiveOutput> {
+        if self.ended { return Ok(SongLuaLiveOutput::default()); }
+        self.ended = true;
         if let Value::Table(root) = &self.root {
             crate::lua_util::end_actor_scene(&self.lua, root)?;
         }
-        self.selected_context()
+        take_output(&self.lua)
     }
 
     /// Screen-entry binding from shared Lua actor positions to prepared visual
@@ -780,6 +797,47 @@ end }
         assert_eq!(output.source_broadcasts[2].params.as_ref().expect("empty table"),
             &Some(serde_json::json!([])));
         assert_eq!(output.source_broadcasts[3].params.as_ref().expect("no params"), &None);
+    }
+
+    #[test]
+    fn live_end_output() {
+        let mut compiled = compile("end-output", r#"
+            SCENES=(SCENES or 0)+1
+            local count=SCENES
+            return Def.ActorFrame {
+                OnCommand=function(self) MESSAGEMAN:Broadcast('Entry', {count=count}) end,
+                EndCommand=function(self)
+                    MESSAGEMAN:Broadcast('RootEnd', {count=count, top=SCREENMAN:GetTopScreen() ~= nil})
+                end,
+                Def.Actor {
+                    EndCommand=function(self)
+                        MESSAGEMAN:Broadcast('ChildEnd', {count=count})
+                        self:queuecommand('Retired')
+                    end,
+                    RetiredCommand=function(self) MESSAGEMAN:Broadcast('Retired') end,
+                },
+            }
+        "#);
+        let mut scene = compiled.live_scene.take().expect("first scene");
+        scene.take_startup_output();
+        scene.advance(SongLuaLiveFrame { music_seconds: 2.0, beat: 4.0,
+            screen_seconds: 10.0, delta_seconds: 0.02, ..Default::default() }).expect("old frame");
+        let mut compiled = crate::reload_song_lua_with_default_host(scene,
+            |_, _, _| Ok(Arc::<[()]>::from([])),
+            |_| None::<crate::SongLuaOverlayModelLayer<()>>, |_, _| None).expect("same-VM reload");
+        let mut scene = compiled[0].live_scene.take().expect("replacement");
+        let output = scene.take_startup_output();
+        assert_eq!(output.source_broadcasts.iter().map(|event| event.name.as_str()).collect::<Vec<_>>(),
+            ["RootEnd", "ChildEnd", "Entry"]);
+        assert_eq!(output.source_broadcasts[0].music_seconds, 2.0);
+        assert_eq!(output.source_broadcasts[1].music_seconds, 2.0);
+        assert_eq!(output.source_broadcasts[2].music_seconds, 0.0);
+        assert_eq!(output.source_broadcasts[0].params.as_ref().expect("plain end params"),
+            &Some(serde_json::json!({"count":1,"top":false})));
+        let output = scene.end().expect("final end");
+        assert_eq!(output.source_broadcasts.len(), 2);
+        assert!(scene.end().expect("end only once").source_broadcasts.is_empty());
+        assert!(scene.advance(SongLuaLiveFrame::default()).is_err(), "ended actors must not update");
     }
 
     #[test]

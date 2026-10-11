@@ -3006,12 +3006,13 @@ fn source_broadcast_table(table: Table, depth: usize, seen: &mut Vec<usize>) -> 
 pub(crate) fn capture_source_broadcast(lua: &Lua, message: &str, params: Option<&Value>) {
     if lua.app_data_ref::<LiveSourceBroadcasts>().is_none() { return; }
     let beat = runtime_broadcast_beat(lua);
+    let music_seconds = compile_song_runtime_values(lua).map_or(0.0, |(_, seconds)| f64::from(seconds));
     let params = match params {
         None | Some(Value::Nil) => Ok(None),
         Some(value) => source_broadcast_value(value.clone(), 0, &mut Vec::new()).map(Some),
     };
     if let Some(mut events) = lua.app_data_mut::<LiveSourceBroadcasts>() {
-        events.0.push(crate::live::SongLuaLiveBroadcast { beat, name: message.to_owned(), params });
+        events.0.push(crate::live::SongLuaLiveBroadcast { beat, music_seconds, name: message.to_owned(), params });
     }
 }
 
@@ -11754,6 +11755,7 @@ pub(crate) fn run_actor_startup_commands(
 struct SongLuaStartupLocals(Option<FunctionActionSnapshot>);
 
 pub(crate) fn end_actor_scene(lua: &Lua, root: &Table) -> mlua::Result<()> {
+    lua.globals().raw_set("__songlua_top_screen", Value::Nil)?;
     // EndScreen dispatches commands without advancing the outgoing actors'
     // tween queues. Drop their queues after End, including queues it creates.
     lua.set_app_data(SongLuaStartupQueues(Vec::new()));

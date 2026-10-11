@@ -24,11 +24,7 @@ fn number(value: &Value, key: &str) -> Result<f64, String> {
         .ok_or_else(|| format!("missing finite native {key}"))
 }
 
-fn broadcast_event(
-    event: &deadsync_song_lua::SongLuaLiveBroadcast,
-    seconds: f64,
-    simfile: &Path,
-) -> Value {
+fn broadcast_event(event: &deadsync_song_lua::SongLuaLiveBroadcast, simfile: &Path) -> Value {
     fn normalize(value: &mut Value, song_dir: &str) {
         match value {
             Value::String(value) => {
@@ -59,7 +55,7 @@ fn broadcast_event(
         normalize(&mut params, &song_dir);
         args.push(params);
     }
-    json!({"seconds":seconds,"beat":event.beat,"name":event.name,
+    json!({"seconds":event.music_seconds,"beat":event.beat,"name":event.name,
         "args":args,"params_error":event.params.as_ref().err()})
 }
 
@@ -318,11 +314,12 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
     let mut broadcasts: Vec<_> = startup
         .source_broadcasts
         .iter()
-        .map(|event| broadcast_event(event, 0.0, simfile))
+        .map(|event| broadcast_event(event, simfile))
         .collect();
     let mut observations = Vec::new();
     let mut requests = Vec::new();
     let mut first_navigation = None;
+    let mut frames_after_navigation = 0;
     let mut checked_samples = 0;
     let mut compared_fields = 0;
     let mut sample_cursor = 0;
@@ -330,6 +327,9 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
     let mut previous_seconds = None;
     let mut used_frames = 0;
     for (index, frame) in frames.iter().enumerate() {
+        if first_navigation.is_some() {
+            frames_after_navigation += 1;
+        }
         if frame["sequence"].as_u64() != Some(index as u64 + 1) {
             return Err("native frame sequence is incomplete".into());
         }
@@ -350,7 +350,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
                 startup
                     .source_broadcasts
                     .iter()
-                    .map(|event| broadcast_event(event, 0.0, simfile)),
+                    .map(|event| broadcast_event(event, simfile)),
             );
             scene_count += 1;
             previous_seconds = None;
@@ -405,7 +405,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
             output
                 .source_broadcasts
                 .iter()
-                .map(|event| broadcast_event(event, seconds, simfile)),
+                .map(|event| broadcast_event(event, simfile)),
         );
         errors.extend(output.errors);
         if let Some(request) = output.request {
@@ -423,25 +423,17 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
             };
             requests.push(json!({"seconds":seconds, "operation":operation, "args":[name]}));
         }
-        let player = &state.players_runtime.players[0];
-        let score = state
-            .stage_itg_score_inputs(0)
-            .ok_or("missing active player score inputs")?;
-        let mut actual = json!({"possible":score.possible_grade_points, "current_possible":player.current_possible_points,
-            "actual":player.earned_grade_points, "misses":player.judgment_counts[5],
-            "w1":player.judgment_counts[0], "w2":player.judgment_counts[1],
-            "failed":player.fail_time.is_some(), "life_latest":player.life,
-            "difficulty":format!("Difficulty_{}", state.source.charts[0].difficulty),
-            "description":state.source.charts[0].description, "meter":state.source.charts[0].meter});
         // Compare independently simulated state only at the recorded observer
         // phase. Native stats are never fed back into gameplay or the Lua VM.
         while sample_cursor < samples.len() {
             let sample = &samples[sample_cursor];
             let at = number(sample, "seconds")?;
-            if sample["phase"] != "progress"
-                || sample["scene"]
-                    .as_u64()
-                    .is_some_and(|scene| scene < scene_count)
+            if !matches!(
+                sample["phase"].as_str(),
+                Some("progress" | "screen-end" | "gameplay-exit")
+            ) || sample["scene"]
+                .as_u64()
+                .is_some_and(|scene| scene < scene_count)
             {
                 sample_cursor += 1;
                 continue;
@@ -462,6 +454,10 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
                 continue;
             }
             checked_samples += 1;
+            let player = &state.players_runtime.players[0];
+            let score = state
+                .stage_itg_score_inputs(0)
+                .ok_or("missing active player score inputs")?;
             let selected = state
                 .song_lua
                 .as_ref()
@@ -474,9 +470,12 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
                 .charts
                 .get(selected)
                 .ok_or("GAMESTATE selected an absent chart")?;
-            actual["difficulty"] = json!(format!("Difficulty_{}", metadata.difficulty));
-            actual["description"] = json!(metadata.description);
-            actual["meter"] = json!(metadata.meter);
+            let actual = json!({"possible":score.possible_grade_points, "current_possible":player.current_possible_points,
+                "actual":player.earned_grade_points, "misses":player.judgment_counts[5],
+                "w1":player.judgment_counts[0], "w2":player.judgment_counts[1],
+                "failed":player.fail_time.is_some(), "life_latest":player.life,
+                "difficulty":format!("Difficulty_{}", metadata.difficulty),
+                "description":metadata.description, "meter":metadata.meter});
             let native = &sample["players"][0];
             for key in [
                 "possible",
@@ -498,11 +497,11 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
                     native[key] == actual[key]
                 };
                 if !equal {
-                    mismatches.push(json!({"seconds":seconds, "field":key,"native":native[key],"deadsync":actual[key]}));
+                    mismatches.push(json!({"phase":sample["phase"],"seconds":seconds, "field":key,"native":native[key],"deadsync":actual[key]}));
                 }
             }
             observations.push(
-                json!({"scene":scene_count,"seconds":seconds,"beat":state.clock.song_position.current_beat,
+                json!({"phase":sample["phase"],"scene":scene_count,"seconds":seconds,"beat":state.clock.song_position.current_beat,
                 "screen_seconds":state.boundary.total_elapsed_in_screen,"player":actual}),
             );
         }
@@ -510,7 +509,12 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
     }
     let expected_samples = samples
         .iter()
-        .filter(|sample| sample["phase"] == "progress")
+        .filter(|sample| {
+            matches!(
+                sample["phase"].as_str(),
+                Some("progress" | "screen-end" | "gameplay-exit")
+            )
+        })
         .count();
     if expected_samples != checked_samples {
         mismatches.push(json!({"field":"stage_sample_coverage", "native":expected_samples,"deadsync":checked_samples}));
@@ -539,6 +543,21 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
             mismatches.push(json!({"field":"source_request", "native":native,"deadsync":actual}));
         }
     }
+    if native_requests.iter().any(|request| {
+        request["operation"] == "StartTransitioningScreen"
+            && request["args"] == json!(["SM_DoNextScreen"])
+    }) {
+        let end = samples
+            .iter()
+            .find(|sample| {
+                sample["phase"] == "screen-end" && sample["scene"].as_u64() == Some(last_scene)
+            })
+            .ok_or("native transition has no final screen-end observation")?;
+        let native = number(end, "seconds")?;
+        if first_navigation.is_none_or(|actual: f64| (actual - native).abs() > 1e-6) {
+            mismatches.push(json!({"field":"screen_end_navigation_clock","native":native,"deadsync":first_navigation}));
+        }
+    }
     let native_broadcasts: Vec<_> = trace["events"].as_array().ok_or("missing native events")?.iter()
         .filter(|event| event["operation"] == "MessageManager.Broadcast")
         .map(|event| json!({"seconds":event["seconds"],"beat":event["beat"],"name":event["args"][0],"args":event["args"]})).collect();
@@ -563,10 +582,11 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
         "checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,"mismatches":mismatches,
         "errors":errors,"lua_requests":requests,"native_transition_requests":native_requests,
         "lua_broadcasts":broadcasts,"native_broadcasts":native_broadcasts,
-        "first_domain_navigation_seconds":first_navigation, "continued_after_domain_navigation": first_navigation.is_some(),
+        "first_domain_navigation_seconds":first_navigation, "continued_after_domain_navigation": frames_after_navigation > 0,
+        "frames_after_domain_navigation":frames_after_navigation,
         "stage_observations":observations,
         "broadcast_params_compared":true,
-        "pending_coverage":["all lifecycle stage observations", "native command/query delivery timing", "complex or truncated broadcast values",
+        "pending_coverage":["overlay-init and screen-active lifecycle observations", "native command/query delivery timing", "complex or truncated broadcast values",
             "full theme stage commitment and history", "score/alive-time getters", "all actor/render/resource state",
             "additional game/style/input/course contexts"]});
     std::fs::write(

@@ -87,6 +87,9 @@ pub(crate) fn replace_gameplay_screen(
         state.current_song, create_dummy_actor, create_named_child_actor)?;
     install_screen_manager_globals(lua, top.top_screen, top.players)?;
     crate::tables::reset_stage_stats(lua, context)?;
+    // LoadNextSong calls ResetMusicStatistics before loading authored actors.
+    // End callbacks still observe the outgoing clock; constructors start at 0.
+    crate::set_compile_song_runtime_values(lua, 0.0, 0.0)?;
     Ok(())
 }
 
@@ -856,7 +859,7 @@ pub fn install_screen_manager_globals(
     screenman.set(
         "GetTopScreen",
         lua.create_function(move |lua, _args: MultiValue| {
-            lua.globals().get::<Table>("__songlua_top_screen")
+            lua.globals().raw_get::<Value>("__songlua_top_screen")
         })?,
     )?;
     screenman.set(

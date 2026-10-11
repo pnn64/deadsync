@@ -755,6 +755,8 @@ pub struct State {
     /// worker. Its fixed pose bindings and render plan live until screen exit.
     pub song_lua: Option<deadsync_song_lua::SongLuaLiveScene>,
     song_lua_output: deadsync_song_lua::SongLuaLiveOutput,
+    song_lua_out: Option<SongLuaOut>,
+    song_lua_ended: bool,
     judgment_palettes: [deadsync_theme::color::JudgmentPalette; MAX_PLAYERS],
     /// Game-thread, song-lifetime identity for the fixed two HUD slots. Built
     /// during gameplay setup, read immutably thereafter, and dropped with the
@@ -959,17 +961,25 @@ impl State {
         std::mem::take(&mut self.song_lua_output)
     }
 
-    fn advance_song_lua(&mut self, delta: f32) -> Result<(), String> {
+    fn advance_song_lua(&mut self, delta: f32, effects: &mut Vec<ThemeEffect>) -> Result<(), String> {
         let Some(scene) = &mut self.song_lua else { return Ok(()); };
         let frame = deadsync_song_lua::SongLuaLiveFrame::from_gameplay(&self.gameplay, delta);
-        let mut output = scene.advance(frame).map_err(|error| error.to_string())?;
+        let output = scene.advance(frame).map_err(|error| error.to_string())?;
+        let request = output.request.as_ref().or(self.song_lua_output.request.as_ref());
+        if matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message)) if message == "SM_DoNextScreen")
+            && self.song_lua_out.is_none()
+        {
+            self.gameplay.progress.stage.song_completed_naturally = true;
+            self.song_lua_out = Some(SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY });
+        }
         // Entry events precede the first real update and must reach the shell
         // exactly once. The shell drains this buffer every frame.
-        self.song_lua_output.broadcasts.append(&mut output.broadcasts);
-        self.song_lua_output.source_broadcasts.append(&mut output.source_broadcasts);
-        self.song_lua_output.sounds.append(&mut output.sounds);
-        self.song_lua_output.errors.append(&mut output.errors);
-        if output.request.is_some() { self.song_lua_output.request = output.request; }
+        self.song_lua_output.append(output);
+        if self.song_lua_out.as_mut().is_some_and(|out| out.advance(delta)) {
+            self.song_lua_output.append(scene.end().map_err(|error| error.to_string())?);
+            self.song_lua_ended = true;
+            effects.push(ThemeEffect::NavigateNoFade(crate::screens::SimplyLoveScreen::Evaluation));
+        }
         scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)
     }
 
@@ -1162,6 +1172,8 @@ impl State {
             gameplay,
             song_lua: None,
             song_lua_output: deadsync_song_lua::SongLuaLiveOutput::default(),
+            song_lua_out: None,
+            song_lua_ended: false,
             judgment_palettes,
             hud_snapshot,
             noteskin_assets,
@@ -2559,6 +2571,31 @@ pub fn prepare_update(state: &mut State, effects: &mut Vec<ThemeEffect>) -> bool
     true
 }
 
+// ScreenGameplay out.lua sleeps 0.5s then tweens for 1s. Actor.cpp consumes
+// each step with f32 arithmetic; Transition::UpdateInternal dispatches its
+// completion on the following update, before advancing the finished tween.
+#[derive(Debug)]
+struct SongLuaOut {
+    phase: u8,
+    left: f32,
+}
+
+impl SongLuaOut {
+    fn advance(&mut self, mut delta: f32) -> bool {
+        if self.phase == 2 { return true; }
+        while self.phase < 2 {
+            let used = self.left.min(delta);
+            delta -= used;
+            self.left -= used;
+            if self.left > 0.0 { break; }
+            self.phase += 1;
+            self.left = if self.phase == 1 { TRANSITION_OUT_FADE_DURATION } else { 0.0 };
+            if delta <= 0.0 { break; }
+        }
+        false
+    }
+}
+
 /// Advances deterministic gameplay using the shell-prepared audio snapshot.
 /// Runtime audio commands remain queued until the shell executes them.
 pub fn update(
@@ -2568,12 +2605,20 @@ pub fn update(
     fallback_host_nanos: impl FnOnce() -> u64,
     effects: &mut Vec<ThemeEffect>,
 ) {
+    if state.song_lua_ended { return; }
     let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);
-    if let Err(error) = state.advance_song_lua(delta_time) {
+    if let Err(error) = state.advance_song_lua(delta_time, effects) {
         state.song_lua_output.errors.push(error);
     }
     update_life_meter_visuals(state, delta_time);
     match action {
+        GameplayAction::Navigate(GameplayExit::Complete)
+        | GameplayAction::NavigateNoFade(GameplayExit::Complete)
+            if state.song_lua_out.is_some() =>
+        {
+            // Native Transition ignores later StartTransitioning calls while
+            // its out tween is active. Keep its original completion clock.
+        }
         GameplayAction::None => {
             if let Some(effect) = missed_target_effect(state) {
                 effects.push(effect);
@@ -3682,6 +3727,16 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
         linear(TRANSITION_OUT_FADE_DURATION): alpha(1.0)
     );
     (vec![actor], TRANSITION_OUT_DURATION)
+}
+
+pub fn push_song_lua_out(actors: &mut Vec<Actor>, state: &State) {
+    let Some(out) = &state.song_lua_out else { return; };
+    let alpha = if out.phase == 0 { 0.0 } else { 1.0 - out.left / TRANSITION_OUT_FADE_DURATION };
+    actors.push(act!(quad:
+        align(0.0, 0.0): xy(0.0, 0.0):
+        zoomto(screen_width(), screen_height()):
+        diffuse(0.0, 0.0, 0.0, alpha): z(1200)
+    ));
 }
 
 // --- DRAWING ---
@@ -5743,6 +5798,22 @@ fn draw_smx_mini_pad(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn song_lua_out_native_clocks() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/itgmania-song-lua-micro/native-out-clocks.json")))
+            .expect("complete native transition inputs");
+        for case in native["cases"].as_array().expect("native cases") {
+            let frames = case["frames"].as_array().expect("native frames");
+            let mut out = super::SongLuaOut { phase: 0, left: 0.5 };
+            let completed = frames.iter().enumerate().find(|(_, frame)|
+                out.advance(frame["delta"].as_f64().expect("native delta") as f32));
+            let (index, frame) = completed.expect("native transition completes");
+            assert_eq!(index, frames.len() - 1, "{} completion frame", case["name"]);
+            assert_eq!(frame["seconds"], case["end_seconds"], "{} completion clock", case["name"]);
+        }
+    }
+
     #[test]
     fn pending_gameplay_keeps_intro_black() {
         let assets = AssetManager::new();
