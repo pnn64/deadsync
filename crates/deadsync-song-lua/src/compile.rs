@@ -95,6 +95,7 @@ where
         entry_paths,
         primary_index,
         context,
+        None,
         noteskin_resolver,
         create_default_dummy_actor,
         create_default_named_child_actor,
@@ -103,6 +104,28 @@ where
         model_layer_from_slot,
         multitap_arrow_visual_spec,
     )
+}
+
+/// Reconstruct a gameplay screen at a consumed runtime navigation boundary.
+/// This is load-time work: callers must rebuild the domain and prewarm the
+/// returned resources before resuming updates, just as at initial entry.
+pub fn reload_song_lua_with_default_host<NoteskinSlot, ModelVertex, MultitapArrowVisualSpec>(
+    scene: crate::SongLuaLiveScene,
+    read_model_slots: fn(&Path, &Path, &Path) -> Result<Arc<[NoteskinSlot]>, String>,
+    model_layer_from_slot: fn(&NoteskinSlot) -> Option<SongLuaOverlayModelLayer<ModelVertex>>,
+    multitap_arrow_visual_spec: MultitapArrowVisualSpec,
+) -> Result<Vec<DefaultCompiledSongLua<NoteskinSlot, ModelVertex>>, String>
+where
+    MultitapArrowVisualSpec: FnMut(&SongLuaCompileContext, &str) -> Option<(
+        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>, SongLuaOverlayState)>,
+{
+    let context = scene.end_for_reload().map_err(|err| err.to_string())?;
+    let entry_paths = scene.entry_paths.clone();
+    let paths = entry_paths.iter().map(|path| path.as_path()).collect::<Vec<_>>();
+    compile_song_lua_layers_with_actors(&paths, scene.primary_index, &context, Some(scene.lua),
+        SongLuaNoteskinResolver::default(), create_default_dummy_actor,
+        create_default_named_child_actor, install_default_actor_methods,
+        read_model_slots, model_layer_from_slot, multitap_arrow_visual_spec)
 }
 
 fn create_default_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Result<Table> {
@@ -167,6 +190,7 @@ where
         &[entry_path],
         0,
         context,
+        None,
         noteskin_resolver,
         create_dummy_actor,
         create_named_child_actor,
@@ -184,6 +208,7 @@ pub fn compile_song_lua_layers_with_actors<NoteskinSlot, ModelVertex, MultitapAr
     entry_paths: &[&Path],
     primary_index: usize,
     context: &SongLuaCompileContext,
+    retained_lua: Option<Lua>,
     noteskin_resolver: SongLuaNoteskinResolver,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
@@ -228,20 +253,23 @@ where
         })
         .collect::<Result<Vec<_>, _>>()?;
     let trace_entry_path = entry_paths[primary_index].clone();
-    let lua = Lua::new();
+    let reloaded = retained_lua.is_some();
+    let lua = retained_lua.unwrap_or_else(Lua::new);
     if context.live {
         crate::lua_util::begin_live_runtime(&lua).map_err(|err| err.to_string())?;
     }
     let mut host = SongLuaHostState::default();
-    install_compile_host(
-        &lua,
-        context,
-        noteskin_resolver,
-        create_dummy_actor,
-        create_named_child_actor,
-        install_actor_methods,
-    )
-    .map_err(|err| err.to_string())?;
+    if reloaded {
+        // ScreenManager::LoadDelayedScreen reconstructs screen-owned state in
+        // the process Lua VM. Reinstalling the host would reset GAMESTATE,
+        // authored globals, player options and the random generator.
+        crate::host::replace_gameplay_screen(&lua, context,
+            create_dummy_actor, create_named_child_actor).map_err(|err| err.to_string())?;
+    } else {
+        install_compile_host(&lua, context, noteskin_resolver,
+            create_dummy_actor, create_named_child_actor, install_actor_methods)
+            .map_err(|err| err.to_string())?;
+    }
     #[cfg(feature = "test-support")]
     crate::lua_util::install_message_order(&lua, &context.message_actor_order)
         .map_err(|err| err.to_string())?;
@@ -476,7 +504,8 @@ where
                 TrackedCompileActorTarget::ScreenLayer(index) => out.screen_layers[index].initial_state = state,
             }
         }
-        out.live_scene = Some(crate::SongLuaLiveScene::new(lua, root, scene_context, tables, tracked_tables, initial_broadcasts)
+        out.live_scene = Some(crate::SongLuaLiveScene::new(lua, root, scene_context,
+            entry_paths.clone(), primary_index, tables, tracked_tables, initial_broadcasts)
             .map_err(|err| err.to_string())?);
         compile_timer.push_stage("live_scene");
         log_song_lua_compile_timing(&trace_entry_path, &compile_timer);

@@ -48,6 +48,31 @@ pub(crate) struct SongLuaOptionLevels {
     pub clock_us: i64,
 }
 
+pub(crate) fn restart_stage_options(lua: &Lua) -> mlua::Result<()> {
+    let Some(mut levels) = lua.app_data_mut::<SongLuaOptionLevels>() else { return Ok(()); };
+    levels.clock_us = 0;
+    let players = levels.players.clone();
+    let songs = levels.songs.clone();
+    drop(levels);
+    // GameState::BeginStage assigns Preferred to Stage for regular play.
+    // ModsGroup::Assign copies it to Song and Current as well. Keep the same
+    // tables: Lua references and preferred modifications outlive the screen.
+    for player in players {
+        for destination in &player[1..] {
+            assign_player_options(lua, destination, &player[0])?;
+        }
+    }
+    for destination in &songs[1..] {
+        for key in SONG_OPTION_SWITCHES.into_iter().chain([
+            "__songlua_music_rate", "__songlua_music_rate_speed",
+            "__songlua_haste", "__songlua_haste_speed",
+        ]) {
+            destination.raw_set(key, songs[0].raw_get::<Value>(key)?)?;
+        }
+    }
+    Ok(())
+}
+
 fn option_approach(value: f32, target: f32, amount: f32) -> mlua::Result<f32> {
     if !(amount >= 0.0) {
         return Err(mlua::Error::runtime("negative native option approach"));

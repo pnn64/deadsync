@@ -60,7 +60,7 @@ pub type GameplayCoreState<P, S> = deadsync_gameplay::GameplayRuntimeState<
 #[path = "playback/prepare.rs"]
 mod prepare;
 use deadlib_assets::present_dsl::cover_sprite;
-pub use prepare::{PreparedGameplaySongLua, prepare_song_lua, song_lua_sound_paths};
+pub use prepare::{PreparedGameplaySongLua, prepare_song_lua, reload_song_lua, song_lua_sound_paths};
 use prepare::{SongLuaOverlayEaseWindowRuntime, SongLuaSoundEvent};
 use smallvec::SmallVec;
 static NEXT_SONG_LUA_AFT_ID: AtomicU64 = AtomicU64::new(1);

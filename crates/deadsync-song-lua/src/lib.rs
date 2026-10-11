@@ -59,6 +59,7 @@ pub use compat::{SongLuaCompatCallbacks, install_default_stdlib_compat, install_
 pub use compile::{
     compile_song_lua_layers_with_actors, compile_song_lua_layers_with_default_host,
     compile_song_lua_with_actors, compile_song_lua_with_default_host,
+    reload_song_lua_with_default_host,
 };
 pub use compile_timing::{
     SongLuaCompileTimer, log_song_lua_compile_timing, song_lua_compile_stage_summary,
@@ -5832,6 +5833,7 @@ mod tests {
             entry_paths,
             primary_index,
             context,
+            None,
             SongLuaNoteskinResolver::default(),
             test_create_dummy_actor,
             test_create_named_child_actor,

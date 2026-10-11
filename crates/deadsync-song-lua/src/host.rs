@@ -77,6 +77,7 @@ pub(crate) fn replace_gameplay_screen(
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
 ) -> mlua::Result<()> {
+    crate::song_tables::restart_stage_options(lua)?;
     let state = lua.app_data_ref::<SongLuaGameStateGlobals>()
         .ok_or_else(|| mlua::Error::runtime("missing gameplay selection state"))?.clone();
     // Native screen deletion unsubscribes its actors even when Lua kept a

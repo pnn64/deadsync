@@ -91,6 +91,15 @@ fn song_lua_noteskin_resolver() -> SongLuaNoteskinResolver {
     }
 }
 
+pub fn reload_song_lua(
+    scene: deadsync_song_lua::SongLuaLiveScene,
+) -> Result<Vec<CompiledSongLua>, String> {
+    deadsync_song_lua::reload_song_lua_with_default_host(
+        scene, crate::noteskin::load_itg_model_slots, model_layer_from_slot,
+        |context, noteskin| multitap_arrow_visual_spec(noteskin, context),
+    )
+}
+
 pub fn model_layer_from_slot(slot: &crate::noteskin::SpriteSlot) -> Option<SongLuaOverlayModelLayer> {
     model_layer_from_slot_frame(slot, 0)
 }

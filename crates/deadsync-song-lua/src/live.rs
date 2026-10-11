@@ -119,6 +119,8 @@ pub struct SongLuaLiveScene {
     pub(crate) registry: Vec<Table>,
     targets: Vec<(usize, SongLuaLiveTarget)>,
     context: SongLuaCompileContext,
+    pub(crate) entry_paths: Vec<std::path::PathBuf>,
+    pub(crate) primary_index: usize,
     last_beat: f64,
     last_music_seconds: f32,
     foregrounds: Vec<LiveForeground>,
@@ -139,6 +141,8 @@ impl SongLuaLiveScene {
         lua: Lua,
         root: Value,
         context: SongLuaCompileContext,
+        entry_paths: Vec<std::path::PathBuf>,
+        primary_index: usize,
         actors: Vec<Table>,
         tracked: Vec<(SongLuaTrackedActorTarget, Table, SongLuaOverlayState)>,
         mut startup_broadcasts: Vec<(f32, String, bool)>,
@@ -168,7 +172,8 @@ impl SongLuaLiveScene {
             }
         }
         Ok(Self { lua, root, stage, players, actors, states, tracked, registry,
-            targets: Vec::new(), context, last_beat, last_music_seconds: -9999.0, foregrounds, startup_output })
+            targets: Vec::new(), context, entry_paths, primary_index, last_beat,
+            last_music_seconds: -9999.0, foregrounds, startup_output })
     }
 
     pub fn advance(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {
@@ -276,6 +281,25 @@ impl SongLuaLiveScene {
     }
 
     pub fn context(&self) -> &SongLuaCompileContext { &self.context }
+
+    /// GAMESTATE may select a different chart while the current Player still
+    /// owns the note field loaded at screen entry.
+    pub fn selected_context(&self) -> mlua::Result<SongLuaCompileContext> {
+        crate::host::selected_scene_context(&self.lua, &self.context)
+    }
+
+    pub fn matches_entries(&self, paths: &[&std::path::Path], primary: usize) -> bool {
+        primary == self.primary_index && paths.len() == self.entry_paths.len()
+            && paths.iter().zip(&self.entry_paths).all(|(path, saved)|
+                crate::entry_file_path(path).as_ref() == Some(saved))
+    }
+
+    pub(crate) fn end_for_reload(&self) -> mlua::Result<SongLuaCompileContext> {
+        if let Value::Table(root) = &self.root {
+            crate::lua_util::end_actor_scene(&self.lua, root)?;
+        }
+        self.selected_context()
+    }
 
     /// Screen-entry binding from shared Lua actor positions to prepared visual
     /// slots. Ownership remains in this scene; the runtime only receives poses.
@@ -636,6 +660,82 @@ end }
             .call::<i32>(stats.clone()).expect("current maximum"), native["snapshots"][1]["possible"].as_i64().expect("native maximum") as i32);
         assert_eq!(scene.context().song_steps[scene.context().player_step_indices[0].expect("selected chart")]
             .difficulty, SongLuaDifficulty::Easy);
+    }
+
+    #[test]
+    fn live_scheduled_reload() {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro");
+        let song = deadsync_simfile::song::parse_song_meta_file(&fixtures.join("startup-reload.ssc"),
+            &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+            0.0, |_| 0.0).expect("native reload simfile");
+        let mut context = SongLuaCompileContext::new(&fixtures, "Scheduled native reload");
+        context.live = true;
+        context.layer_start_beats = vec![0.0];
+        context.song_steps = song.charts.iter().map(crate::SongLuaStep::from).collect();
+        context.player_step_indices[0] = context.song_steps.iter().position(|steps|
+            steps.difficulty == SongLuaDifficulty::Challenge);
+        context.players[0].difficulty = SongLuaDifficulty::Challenge;
+        let mut compiled = crate::compile_song_lua_with_default_host(&fixtures.join("startup-reload.lua"),
+            &context, SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])),
+            |_| None::<crate::SongLuaOverlayModelLayer<()>>, |_, _| None).expect("scheduled scene");
+        assert_eq!(compiled.startup_reloads, 0);
+        let mut scene = compiled.live_scene.take().expect("first scene");
+        let selected = scene.selected_context().expect("raw GAMESTATE selection");
+        assert_ne!(context.player_step_indices[0], selected.player_step_indices[0]);
+        assert_eq!(scene.context().player_step_indices, context.player_step_indices);
+        scene.lua.load(r#"
+            math.randomseed(73)
+            math.random()
+            EXPECTED_RANDOM = math.random()
+            math.randomseed(73)
+            math.random()
+            OLD_MESSAGES, OLD_QUEUES, ENDED = 0, 0, 0
+            local ps = GAMESTATE:GetPlayerState(PLAYER_1)
+            RETAINED_PREFERRED = ps:GetPlayerOptions('ModsLevel_Preferred')
+            RETAINED_CURRENT = ps:GetPlayerOptions('ModsLevel_Current')
+            RETAINED_PREFERRED:Dark(0.25)
+            RETAINED_CURRENT:Dark(0.5)
+            ps:GetPlayerOptions('ModsLevel_Song'):Dark(1, 0.1)
+        "#).exec().expect("random and lifetime controls");
+        let old_actor = scene.actors[0].clone();
+        old_actor.set("RetiredMessageCommand", scene.lua.create_function(|lua, _: Table| {
+            let globals = lua.globals();
+            globals.set("OLD_MESSAGES", globals.get::<u32>("OLD_MESSAGES")? + 1)
+        }).expect("old message listener")).expect("install old listener");
+        old_actor.set("EndCommand", scene.lua.create_function(|lua, _: Table| {
+            let globals = lua.globals();
+            globals.set("ENDED", globals.get::<u32>("ENDED")? + 1)
+        }).expect("old End command")).expect("install End");
+        old_actor.set("StaleCommand", scene.lua.create_function(|lua, _: Table| {
+            lua.globals().set("OLD_QUEUES", 1)
+        }).expect("old queued command")).expect("install stale command");
+        old_actor.get::<Function>("sleep").expect("sleep method")
+            .call::<Table>((old_actor.clone(), 10.0)).expect("old sleep");
+        old_actor.get::<Function>("queuecommand").expect("queue method")
+            .call::<Table>((old_actor.clone(), "Stale")).expect("old queue");
+        let output = scene.advance(SongLuaLiveFrame { music_seconds: 0.017, beat: 0.0,
+            screen_seconds: 2.0, delta_seconds: 0.001, ..Default::default() }).expect("activate foreground");
+        assert_eq!(output.request, Some(SongLuaLiveRequest::NewScreen("ScreenGameplay".into())));
+        let mut layers = crate::reload_song_lua_with_default_host(scene,
+            |_, _, _| Ok(Arc::<[()]>::from([])),
+            |_| None::<crate::SongLuaOverlayModelLayer<()>>, |_, _| None).expect("runtime reload");
+        let mut scene = layers[0].live_scene.take().expect("replacement scene");
+        assert_eq!(scene.context().player_step_indices, selected.player_step_indices);
+        assert_eq!(scene.lua.globals().get::<u32>("HARNESS_NATIVE_RELOAD_COUNT").expect("same VM"), 2);
+        assert_eq!(scene.lua.globals().get::<u32>("ENDED").expect("old End delivered"), 1);
+        let dark = scene.lua.load("return RETAINED_PREFERRED:Dark(), RETAINED_CURRENT:Dark(), GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song'):Dark()")
+            .eval::<(f32, f32, f32)>().expect("restarted regular stage options");
+        assert_eq!(dark, (0.25, 0.25, 0.25));
+        assert_eq!(scene.lua.load("return math.random()").eval::<f64>().expect("next random"),
+            scene.lua.globals().get::<f64>("EXPECTED_RANDOM").expect("retained generator"));
+        assert_eq!(scene.players[0].get::<Function>("GetPossibleDancePoints").expect("possible getter")
+            .call::<i32>(scene.players[0].clone()).expect("replacement maximum"), 10);
+        scene.lua.load("MESSAGEMAN:Broadcast('Retired')").exec().expect("new registry broadcast");
+        scene.advance(SongLuaLiveFrame { music_seconds: 10.0, beat: 20.0,
+            screen_seconds: 10.0, delta_seconds: 10.0, ..Default::default() }).expect("new scene update");
+        assert_eq!(scene.lua.globals().get::<u32>("OLD_MESSAGES").expect("retired listener"), 0);
+        assert_eq!(scene.lua.globals().get::<u32>("OLD_QUEUES").expect("retired queue"), 0);
     }
 
     #[test]

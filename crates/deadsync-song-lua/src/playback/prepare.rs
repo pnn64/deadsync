@@ -64,8 +64,7 @@ impl<S> PreparedGameplaySongLua<S> {
         self.primary.iter().map(|primary| &primary.compiled)
             .chain(self.background_layers.iter().map(|layer| &layer.compiled))
             .chain(self.foreground_layers.iter().map(|layer| &layer.compiled))
-            .find(|compiled| compiled.startup_reloads > 0)
-            .and_then(|compiled| compiled.loaded_steps)
+            .find_map(|compiled| compiled.loaded_steps)
     }
 
     pub fn startup(&self) -> crate::SongLuaStartup {
@@ -192,7 +191,7 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
     song: &SongData,
     primary_ix: Option<usize>,
     context: &crate::SongLuaCompileContext,
-    compile_song_lua_layers: &impl Fn(
+    compile_song_lua_layers: impl FnOnce(
         &[&Path],
         usize,
         &crate::SongLuaCompileContext,
@@ -395,6 +394,24 @@ pub fn prepare_song_lua<S: Clone + std::fmt::Debug>(
             || compile_song_lua_without_primary(song, &context, &compile_song_lua),
             |primary_ix| compile_song_lua_separately(song, primary_ix, &context, &compile_song_lua),
         )
+    })
+}
+
+/// Load the same song's replacement screen while transferring its Lua VM.
+/// Errors stay visible; retrying with independent VMs would lose song state.
+pub fn reload_song_lua<S: Clone + std::fmt::Debug>(
+    song: &SongData,
+    scene: crate::SongLuaLiveScene,
+    reload: impl FnOnce(crate::SongLuaLiveScene) -> Result<Vec<CompiledSongLua<S>>, String>,
+) -> Result<PreparedGameplaySongLua<S>, String> {
+    let primary_ix = song.foreground_lua_changes.iter()
+        .position(|change| change.start_beat <= 0.0 && change.path.is_file());
+    let context = scene.context().clone();
+    compile_song_lua_session(song, primary_ix, &context, move |paths, primary, _| {
+        if !scene.matches_entries(paths, primary) {
+            return Err("song Lua reload entries differ from the retained scene".into());
+        }
+        reload(scene)
     })
 }
 

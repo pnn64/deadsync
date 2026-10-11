@@ -159,7 +159,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
         })
         .ok_or("requested native starting chart is absent")?;
     let first = Arc::new(song.charts[initial].clone());
-    let mut charts = [first.clone(), first];
+    let charts = [first.clone(), first];
     let initial_payload = Arc::new(
         deadsync_simfile::app_runtime::load_gameplay_charts(
             &song,
@@ -168,7 +168,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
         )?
         .remove(0),
     );
-    let mut payloads = [initial_payload.clone(), initial_payload];
+    let payloads = [initial_payload.clone(), initial_payload];
     let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
     let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
     let session = GameplaySession::default();
@@ -200,78 +200,88 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
     for timing in &mut context.song_step_timing {
         timing.shift_song_offset_seconds(group_offset);
     }
-    let mut prepared = deadsync_song_lua::playback::prepare_song_lua(
+    let prepared = deadsync_song_lua::playback::prepare_song_lua(
         &song,
         &context,
         deadsync_assets::song_lua::compile_song_lua,
         deadsync_assets::song_lua::compile_song_lua_layers,
     );
-    if let Some(indices) = prepared.loaded_steps() {
-        let selected = indices[0].ok_or("Lua reload did not select P1 steps")?;
-        let chart = Arc::new(
-            song.charts
-                .get(selected)
-                .ok_or("Lua selected an absent chart")?
-                .clone(),
-        );
-        let payload = Arc::new(
-            deadsync_simfile::app_runtime::load_gameplay_charts(
-                &song,
-                &[selected],
-                config.global_offset_seconds,
-            )?
-            .remove(0),
-        );
-        charts = [chart.clone(), chart];
-        payloads = [payload.clone(), payload];
-    }
-    let scene = prepared
-        .take_live_scene()?
-        .ok_or("preparation did not retain a Lua scene")?;
-    let mut state = gameplay::init(
-        song,
-        charts,
-        payloads,
-        viewport,
-        session,
-        config,
-        5,
-        1.0,
-        scroll,
-        profiles,
-        None,
-        None,
-        None,
-        Arc::from("EVENT"),
-        None,
-        None,
-        None,
-        None,
-        None,
-        [deadsync_gameplay::CourseLifeConfig::Bar; 2],
-        false,
-        None,
-        None,
-        [0; 2],
-        prepared,
-        Default::default(),
-    );
-    state.attach_song_lua(scene)?;
+    let init_scene = |mut prepared: deadsync_song_lua::playback::PreparedGameplaySongLua<
+        deadsync_assets::noteskin::SpriteSlot,
+    >|
+     -> Result<Box<gameplay::State>, String> {
+        let mut charts = charts.clone();
+        let mut payloads = payloads.clone();
+        if let Some(indices) = prepared.loaded_steps() {
+            let selected = indices[0].ok_or("Lua reload did not select P1 steps")?;
+            let chart = Arc::new(
+                song.charts
+                    .get(selected)
+                    .ok_or("Lua selected an absent chart")?
+                    .clone(),
+            );
+            let payload = Arc::new(
+                deadsync_simfile::app_runtime::load_gameplay_charts(
+                    &song,
+                    &[selected],
+                    config.global_offset_seconds,
+                )?
+                .remove(0),
+            );
+            charts = [chart.clone(), chart];
+            payloads = [payload.clone(), payload];
+        }
+        let scene = prepared
+            .take_live_scene()?
+            .ok_or("preparation did not retain a Lua scene")?;
+        let mut state = Box::new(gameplay::init(
+            song.clone(),
+            charts,
+            payloads,
+            viewport,
+            session.clone(),
+            config,
+            5,
+            1.0,
+            scroll,
+            profiles.clone(),
+            None,
+            None,
+            None,
+            Arc::from("EVENT"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            [deadsync_gameplay::CourseLifeConfig::Bar; 2],
+            false,
+            None,
+            None,
+            [0; 2],
+            prepared,
+            Default::default(),
+        ));
+        state.attach_song_lua(scene)?;
+        Ok(state)
+    };
+    let mut state = init_scene(prepared)?;
     let startup = state.take_song_lua_output();
-    let scene_count = startup
+    let startup_scenes = startup
         .broadcasts
         .iter()
         .filter(|(_, name, _)| name == "ScreenChanged")
         .count();
     let mut mismatches = Vec::new();
-    if scene_count as u64 != last_scene {
-        mismatches
-            .push(json!({"field":"startup_scenes", "native":last_scene, "deadsync":scene_count}));
-    }
+    let mut scene_count = startup_scenes as u64;
+    let mut pending_reload = false;
     let mut errors = startup.errors;
-    let mut broadcasts: Vec<_> = startup.broadcasts.iter()
+    let mut broadcasts: Vec<_> = startup
+        .broadcasts
+        .iter()
         .filter(|(_, name, _)| name != "ScreenChanged")
-        .map(|(beat, name, _)| json!({"seconds":0.0,"beat":beat,"name":name})).collect();
+        .map(|(beat, name, _)| json!({"seconds":0.0,"beat":beat,"name":name}))
+        .collect();
     let mut observations = Vec::new();
     let mut requests = Vec::new();
     let mut first_navigation = None;
@@ -285,8 +295,35 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
         if frame["sequence"].as_u64() != Some(index as u64 + 1) {
             return Err("native frame sequence is incomplete".into());
         }
-        if frame["scene"].as_u64() != Some(last_scene) {
-            continue;
+        if pending_reload {
+            let scene = state
+                .song_lua
+                .take()
+                .ok_or("reload has no retained Lua scene")?;
+            let prepared = deadsync_song_lua::playback::reload_song_lua(
+                &song,
+                scene,
+                deadsync_assets::song_lua::reload_song_lua,
+            )?;
+            state = init_scene(prepared)?;
+            let startup = state.take_song_lua_output();
+            errors.extend(startup.errors);
+            broadcasts.extend(
+                startup
+                    .broadcasts
+                    .iter()
+                    .filter(|(_, name, _)| name != "ScreenChanged")
+                    .map(|(beat, name, _)| json!({"seconds":0.0,"beat":beat,"name":name})),
+            );
+            scene_count += 1;
+            previous_seconds = None;
+            pending_reload = false;
+        }
+        if frame["scene"].as_u64() != Some(scene_count) {
+            return Err(format!(
+                "native scene {} differs from independent scene {scene_count} at frame {}",
+                frame["scene"], frame["sequence"]
+            ));
         }
         let seconds = number(frame, "seconds")?;
         let delta = number(frame, "delta")?;
@@ -327,15 +364,25 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
             first_navigation = Some(seconds);
         }
         let output = state.take_song_lua_output();
-        broadcasts.extend(output.broadcasts.iter()
-            .map(|(beat, name, _)| json!({"seconds":seconds,"beat":beat,"name":name})));
+        broadcasts.extend(
+            output
+                .broadcasts
+                .iter()
+                .map(|(beat, name, _)| json!({"seconds":seconds,"beat":beat,"name":name})),
+        );
         errors.extend(output.errors);
         if let Some(request) = output.request {
             let (operation, name) = match request {
                 deadsync_song_lua::SongLuaLiveRequest::Transition(name) => {
                     ("StartTransitioningScreen", name)
                 }
-                deadsync_song_lua::SongLuaLiveRequest::NewScreen(name) => ("SetNewScreen", name),
+                deadsync_song_lua::SongLuaLiveRequest::NewScreen(name) => {
+                    if name != "ScreenGameplay" {
+                        return Err(format!("unsupported reload target {name}"));
+                    }
+                    pending_reload = true;
+                    ("SetNewScreen", name)
+                }
             };
             requests.push(json!({"seconds":seconds, "operation":operation, "args":[name]}));
         }
@@ -343,7 +390,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
         let score = state
             .stage_itg_score_inputs(0)
             .ok_or("missing active player score inputs")?;
-        let actual = json!({"possible":score.possible_grade_points, "current_possible":player.current_possible_points,
+        let mut actual = json!({"possible":score.possible_grade_points, "current_possible":player.current_possible_points,
             "actual":player.earned_grade_points, "misses":player.judgment_counts[5],
             "w1":player.judgment_counts[0], "w2":player.judgment_counts[1],
             "failed":player.fail_time.is_some(), "life_latest":player.life,
@@ -354,9 +401,16 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
         while sample_cursor < samples.len() {
             let sample = &samples[sample_cursor];
             let at = number(sample, "seconds")?;
-            if sample["scene"].as_u64() != Some(last_scene) || sample["phase"] != "progress" {
+            if sample["phase"] != "progress"
+                || sample["scene"]
+                    .as_u64()
+                    .is_some_and(|scene| scene < scene_count)
+            {
                 sample_cursor += 1;
                 continue;
+            }
+            if sample["scene"].as_u64() != Some(scene_count) {
+                break;
             }
             if at > seconds + 1e-6 {
                 break;
@@ -371,6 +425,21 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
                 continue;
             }
             checked_samples += 1;
+            let selected = state
+                .song_lua
+                .as_ref()
+                .ok_or("missing Lua metadata")?
+                .selected_context()
+                .map_err(|error| error.to_string())?
+                .player_step_indices[0]
+                .ok_or("GAMESTATE has no selected P1 chart")?;
+            let metadata = song
+                .charts
+                .get(selected)
+                .ok_or("GAMESTATE selected an absent chart")?;
+            actual["difficulty"] = json!(format!("Difficulty_{}", metadata.difficulty));
+            actual["description"] = json!(metadata.description);
+            actual["meter"] = json!(metadata.meter);
             let native = &sample["players"][0];
             for key in [
                 "possible",
@@ -381,6 +450,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
                 "w2",
                 "failed",
                 "life_latest",
+                "difficulty",
                 "description",
                 "meter",
             ] {
@@ -395,7 +465,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
                 }
             }
             observations.push(
-                json!({"seconds":seconds,"beat":state.clock.song_position.current_beat,
+                json!({"scene":scene_count,"seconds":seconds,"beat":state.clock.song_position.current_beat,
                 "screen_seconds":state.boundary.total_elapsed_in_screen,"player":actual}),
             );
         }
@@ -403,29 +473,33 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
     }
     let expected_samples = samples
         .iter()
-        .filter(|sample| {
-            sample["scene"].as_u64() == Some(last_scene) && sample["phase"] == "progress"
-        })
+        .filter(|sample| sample["phase"] == "progress")
         .count();
     if expected_samples != checked_samples {
         mismatches.push(json!({"field":"stage_sample_coverage", "native":expected_samples,"deadsync":checked_samples}));
     }
+    if scene_count != last_scene {
+        mismatches
+            .push(json!({"field":"scene_coverage", "native":last_scene,"deadsync":scene_count}));
+    }
     let native_requests: Vec<_> = trace["events"].as_array().ok_or("missing native events")?.iter()
-        .filter(|event| event["operation"].as_str().is_some_and(|operation| operation.ends_with(".StartTransitioningScreen")))
-        .map(|event| json!({"seconds":event["seconds"], "operation":"StartTransitioningScreen", "args":event["args"]})).collect();
-    let actual_requests: Vec<_> = requests
-        .iter()
-        .filter(|request| request["operation"] == "StartTransitioningScreen")
-        .collect();
+        .filter_map(|event| {
+            let operation = event["operation"].as_str()?;
+            if !(operation.ends_with(".StartTransitioningScreen") || operation == "ScreenManager.SetNewScreen") {
+                return None;
+            }
+            Some(json!({"seconds":event["seconds"], "operation":operation.rsplit('.').next(), "args":event["args"]}))
+        }).collect();
+    let actual_requests: Vec<_> = requests.iter().collect();
     if native_requests.len() != actual_requests.len() {
-        mismatches.push(json!({"field":"source_transition_count", "native":native_requests.len(), "deadsync":actual_requests.len()}));
+        mismatches.push(json!({"field":"source_request_count", "native":native_requests.len(), "deadsync":actual_requests.len()}));
     }
     for (native, actual) in native_requests.iter().zip(actual_requests) {
-        if native["args"] != actual["args"]
+        if native["operation"] != actual["operation"]
+            || native["args"] != actual["args"]
             || (number(native, "seconds")? - number(actual, "seconds")?).abs() > 1e-6
         {
-            mismatches
-                .push(json!({"field":"source_transition", "native":native,"deadsync":actual}));
+            mismatches.push(json!({"field":"source_request", "native":native,"deadsync":actual}));
         }
     }
     let native_broadcasts: Vec<_> = trace["events"].as_array().ok_or("missing native events")?.iter()
@@ -444,7 +518,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
     }
     let report = json!({"diagnostic_only":true,"whole_song_parity_proven":false,"archive_accepted":false,
         "source_simfile":simfile,"native_trace":trace_path,"native_frames":frames.len(),"replayed_frames":used_frames,
-        "startup_scenes":scene_count,"selected_description":state.source.charts[0].description,
+        "startup_scenes":startup_scenes,"replayed_scenes":scene_count,"selected_description":state.source.charts[0].description,
         "checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,"mismatches":mismatches,
         "errors":errors,"lua_requests":requests,"native_transition_requests":native_requests,
         "lua_broadcasts":broadcasts,"native_broadcasts":native_broadcasts,
