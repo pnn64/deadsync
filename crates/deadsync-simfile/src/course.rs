@@ -389,7 +389,15 @@ pub fn resolve_course_stage(
             } else {
                 by_song.get(&song_key)
             }?;
-            course_candidates(std::slice::from_ref(resolved), entry, chart_type)
+            return fixed_course_stage(
+                resolved,
+                entry,
+                chart_type,
+                course_difficulty,
+                random_seed,
+                course_path,
+                entry_index,
+            );
         }
         CourseSong::SortPick { .. } | CourseSong::RandomAny => {
             course_candidates(all_songs, entry, chart_type)
@@ -426,12 +434,16 @@ pub fn resolve_course_stage(
         course_path,
         entry_index,
     )?;
-    let chart_pick = random_pick_index(
-        random_seed ^ song_key_hash(candidate.song_key()),
-        course_path,
-        entry_index ^ usize::MAX,
-        candidate.chart_indices.len(),
-    );
+    let chart_pick = if candidate.chart_indices.len() <= 1 {
+        0
+    } else {
+        random_pick_index(
+            random_seed ^ song_key_hash(candidate.song_key()),
+            course_path,
+            entry_index ^ usize::MAX,
+            candidate.chart_indices.len(),
+        )
+    };
     let base_chart = *candidates
         .chart_indices
         .get(candidate.chart_indices.clone())?
@@ -450,6 +462,56 @@ pub fn resolve_course_stage(
         gain_seconds: entry.gain_seconds,
         gain_lives: entry.gain_lives,
     })
+}
+
+fn fixed_course_stage(
+    song: &Arc<SongData>,
+    entry: &CourseEntry,
+    chart_type: &str,
+    course_difficulty: Difficulty,
+    random_seed: u64,
+    course_path: &Path,
+    entry_index: usize,
+) -> Option<ResolvedCourseStage> {
+    if song.charts.is_empty() {
+        return None;
+    }
+    let mut indices = smallvec::SmallVec::<[usize; 8]>::with_capacity(song.charts.len());
+    for (index, chart) in song.charts.iter().enumerate() {
+        if chart.has_note_data
+            && chart.chart_type.eq_ignore_ascii_case(chart_type)
+            && chart_matches_entry(chart, entry)
+        {
+            indices.push(index);
+        }
+    }
+    let pick = course_chart_pick_index(random_seed, course_path, entry_index, song, indices.len());
+    let base_chart = *indices.get(pick)?;
+    Some(ResolvedCourseStage {
+        song: Arc::clone(song),
+        chart_index: shifted_chart_index(song, base_chart, entry, chart_type, course_difficulty),
+        modifiers: entry.modifiers.clone(),
+        gain_seconds: entry.gain_seconds,
+        gain_lives: entry.gain_lives,
+    })
+}
+
+fn course_chart_pick_index(
+    seed: u64,
+    course_path: &Path,
+    entry_index: usize,
+    song: &SongData,
+    len: usize,
+) -> usize {
+    if len <= 1 {
+        return 0;
+    }
+    random_pick_index(
+        seed ^ song_key_hash(&song_unique_key(song)),
+        course_path,
+        entry_index ^ usize::MAX,
+        len,
+    )
 }
 
 fn avoid_course_repeats(
@@ -971,7 +1033,7 @@ pub const fn add_chart_totals(totals: &mut CourseTotals, chart: &ChartData) {
 }
 
 fn random_pick_index(seed: u64, course_path: &Path, entry_index: usize, len: usize) -> usize {
-    if len == 0 {
+    if len <= 1 {
         return 0;
     }
     let mut hasher = XxHash64::with_seed(seed);
@@ -2188,5 +2250,9 @@ mod tests {
 
     mod ownership_perf {
         include!("course_ownership_perf.rs");
+    }
+
+    mod loading_perf {
+        include!("../../../tests/perf/course_resolve.rs");
     }
 }

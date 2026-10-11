@@ -22,3 +22,10 @@ pub mod timing;
 
 #[cfg(test)]
 mod metadata_perf;
+
+#[cfg(test)]
+use metadata_perf as perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_loading_support.rs"]
+mod course_perf;
