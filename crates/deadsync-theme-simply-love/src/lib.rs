@@ -187,3 +187,11 @@ mod paired_bench;
 #[cfg(test)]
 #[path = "../../../tests/perf/select_data_support.rs"]
 mod select_data_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/data_paths_support.rs"]
+mod data_paths_perf_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/preview_dataflows_support.rs"]
+mod preview_dataflows_support;
