@@ -219,3 +219,44 @@ mod buffers_support;
 #[cfg(test)]
 #[path = "../../../tests/perf/ui_pipelines_support.rs"]
 mod ui_pipelines_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/view_buffers_support.rs"]
+mod view_buffers_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/overlay_support.rs"]
+mod overlay_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/option_support.rs"]
+mod option_perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/traversal_support.rs"]
+mod traversal_perf;
+
+#[cfg(test)]
+fn traversal_peak_bytes(churn: perf::Churn) -> usize {
+    churn.peak_bytes
+}
+
+#[cfg(test)]
+#[path = "../../../tests/perf/profile_dataflow_support.rs"]
+mod dataflow_perf;
+
+#[cfg(test)]
+fn dataflow_peak_bytes(churn: perf::Churn) -> usize {
+    churn.peak_bytes
+}
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_loading_support.rs"]
+mod course_perf;
+
+#[cfg(test)]
+use resource_perf_support as scan_alloc;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/scan_support.rs"]
+mod scan_perf;
