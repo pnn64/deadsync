@@ -153,12 +153,24 @@ impl SongLuaLiveScene {
     }
 
     pub fn advance(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {
+        // GameState.cpp::UpdateSongPosition maintains global Song timing apart
+        // from each Player's selected Steps timing. The domain frame carries
+        // the player's beat; Lua's GAMESTATE and music effects use the song.
+        let position = self.context.song_timing.as_ref()
+            .map(|timing| timing.get_song_position(frame.music_seconds as f32));
+        let beat = position.as_ref().map_or(frame.beat, |position| f64::from(position.beat));
         self.feed_stats(&frame)?;
-        crate::set_compile_song_runtime_values(&self.lua, frame.beat as f32, frame.music_seconds as f32)?;
+        crate::set_compile_song_runtime_values(&self.lua, beat as f32, frame.music_seconds as f32)?;
+        if let Some(position) = position {
+            let runtime = self.lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
+            runtime.set(crate::SONG_LUA_RUNTIME_BPS_KEY, position.bpm / 60.0)?;
+            runtime.set("__songlua_freeze", position.is_in_freeze)?;
+            runtime.set("__songlua_delay", position.is_in_delay)?;
+        }
         crate::set_compile_song_runtime_delta_values(&self.lua,
-            (frame.beat - self.last_beat) as f32, frame.delta_seconds as f32)?;
-        self.last_beat = frame.beat;
-        crate::lua_util::set_live_frame(&self.lua, frame.screen_seconds, frame.beat, frame.delta_seconds);
+            (beat - self.last_beat) as f32, frame.delta_seconds as f32)?;
+        self.last_beat = beat;
+        crate::lua_util::set_live_frame(&self.lua, frame.screen_seconds, beat, frame.delta_seconds);
         crate::song_tables::advance_option_levels(&self.lua, frame.screen_seconds)?;
         crate::lua_util::run_actor_compile_update_functions_with_delta(
             &self.lua, &self.root, frame.delta_seconds)?;
@@ -338,6 +350,40 @@ return Def.ActorFrame {
         assert_eq!(scene.states()[global].aux, 10.0);
         frame.screen_seconds = 1.2;
         assert!(scene.advance(frame).expect("later frame").broadcasts.is_empty(), "drain events exactly once");
+    }
+
+    #[test]
+    fn live_song_clock() {
+        let mut compiled = compile("song-clock", r#"
+return Def.ActorFrame { OnCommand = function(self)
+    self:SetUpdateFunction(function()
+        CLOCK = {GAMESTATE:GetSongBeat(), GAMESTATE:GetSongPosition():GetSongBeat(),
+            GAMESTATE:GetCurMusicSeconds(), GAMESTATE:GetSongBPS(), GAMESTATE:GetSongPosition():GetCurBPS()}
+    end)
+end }
+"#);
+        let mut scene = compiled.live_scene.take().expect("scene");
+        // Native SongPosition adds the machine offset and group sync offset.
+        // A 120 BPM chart has different beats from this 60 BPM song clock.
+        scene.context.song_timing = Some(deadsync_rules::timing::TimingData::from_segments(
+            0.009, -0.008, &deadsync_rules::timing::TimingSegments {
+                bpms: vec![(0.0, 60.0), (2.0, 120.0)], ..Default::default()
+            }, &[]));
+        scene.lua.set_app_data(crate::runtime::SongLuaClock(
+            scene.context.song_timing.clone().expect("global song timing")));
+        for (seconds, player_beat, expected, bps) in [(1.017, 2.0, 1.0, 1.0), (3.017, 6.0, 4.0, 2.0)] {
+            let output = scene.advance(SongLuaLiveFrame { beat: player_beat, music_seconds: seconds,
+                screen_seconds: seconds, delta_seconds: 0.1, ..Default::default() }).expect("live frame");
+            assert!(output.errors.is_empty());
+            let values = scene.lua.globals().get::<Table>("CLOCK").expect("actual Lua queries");
+            for index in [1, 2] {
+                let actual = values.get::<f64>(index).expect("song beat");
+                assert!((actual - expected).abs() < 1e-5,
+                    "query {index}: seconds={seconds} song={actual} player={player_beat} expected={expected}");
+            }
+            assert!((values.get::<f64>(3).expect("music seconds") - seconds).abs() < 1e-5);
+            for index in [4, 5] { assert_eq!(values.get::<f64>(index).expect("current BPS"), bps); }
+        }
     }
 
     #[test]

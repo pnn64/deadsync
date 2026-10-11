@@ -219,7 +219,15 @@ pub(crate) fn prepare_song_lua(
     );
     context.random_seed = random_seed;
     match deadsync_simfile::app_runtime::load_chart_timings(song, config.global_offset_seconds) {
-        Ok(timings) => context.song_step_timing = timings,
+        Ok(mut timings) => {
+            let sync_offset = if config.machine_pack_ini_offsets {
+                deadsync_chart::song::sync_pref_offset(
+                    deadsync_profile_gameplay::gameplay_pack_data(song, None, None).sync_pref,
+                    config.machine_default_sync_pref)
+            } else { 0.0 };
+            for timing in &mut timings { timing.shift_song_offset_seconds(sync_offset); }
+            context.song_step_timing = timings;
+        }
         Err(error) => {
             warn!("Cannot load Lua chart timing for '{}': {error}", song.title);
             return PreparedGameplaySongLua::default();

@@ -43,6 +43,8 @@ pub fn create_song_runtime_table(
 }
 
 pub(crate) fn song_music_time(lua: &Lua, seconds: f64, rate: f32) -> f32 {
+    // Live frames already carry the audio clock's native music position.
+    if crate::live::active(lua) { return seconds as f32; }
     // Replay seconds are elapsed wall time. SongPosition exposes the native
     // float music timestamp, which includes the song origin and music rate.
     let origin = lua.app_data_ref::<SongLuaClock>()

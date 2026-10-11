@@ -560,6 +560,17 @@ pub fn song_lua_play_context(
         config.center_1player_notefield,
     );
     let (display_width, display_height) = display_size;
+    // These timings enter Lua before the core applies the cabinet/group offsets.
+    // Match runtime_init's settings without substituting selected chart timing
+    // for the global SongPosition maintained by ITGmania.
+    let sync_offset = if config.machine_pack_ini_offsets {
+        deadsync_chart::song::sync_pref_offset(gameplay_pack_data(song, None, None).sync_pref,
+            config.machine_default_sync_pref)
+    } else { 0.0 };
+    if let Some(timing) = &mut context.song_timing {
+        timing.shift_song_offset_seconds(sync_offset);
+        timing.set_global_offset_seconds(config.global_offset_seconds);
+    }
     context.player_timing = std::array::from_fn(|player| {
         let source = if session.p2_runtime_player() {
             1
@@ -568,7 +579,15 @@ pub fn song_lua_play_context(
         };
         context.players[player]
             .enabled
-            .then(|| timing[source].clone())
+            .then(|| {
+                let mut value = timing[source].clone();
+                value.shift_song_offset_seconds(sync_offset);
+                let player_offset = if config.machine_allow_per_player_global_offsets {
+                    runtime_profiles[player].global_offset_shift_ms.clamp(-100, 100) as f32 / 1000.0
+                } else { 0.0 };
+                value.set_global_offset_seconds(config.global_offset_seconds + player_offset);
+                value
+            })
     });
     context.display_width = display_width.max(1) as f32;
     context.display_height = display_height.max(1) as f32;

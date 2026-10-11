@@ -33,7 +33,7 @@ use crate::{
     lua_values_equal, method_arg, note_song_lua_side_effect, player_index_from_value,
     player_number_name, read_f32, read_string, record_song_lua_broadcast, resolve_script_path,
     scale_value, seconds_to_hhmmss, seconds_to_mmss, seconds_to_mmss_ms_ms, seconds_to_mss,
-    seconds_to_mss_ms_ms, song_dir_string, song_display_bps, song_lua_human_player_count,
+    seconds_to_mss_ms_ms, song_dir_string, song_lua_human_player_count,
     song_lua_runtime_number, song_lua_style_column_x, song_music_rate, theme_string, truthy,
 };
 
@@ -1732,10 +1732,12 @@ pub fn install_game_state_globals(
             move |_, _self: Option<Value>| song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)
         })?,
     )?;
-    let song_bps = song_display_bps(context);
     gamestate.set(
         "GetSongBPS",
-        lua.create_function(move |_, _self: Option<Value>| Ok(song_bps))?,
+        lua.create_function({
+            let song_runtime = song_runtime.clone();
+            move |_, _self: Option<Value>| song_runtime.get::<f32>(crate::SONG_LUA_RUNTIME_BPS_KEY)
+        })?,
     )?;
     gamestate.set(
         "GetCurMusicSeconds",
