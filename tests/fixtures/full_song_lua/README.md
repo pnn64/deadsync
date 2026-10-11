@@ -2073,3 +2073,17 @@ See `native-revalidation-pass218.json`. Position 140 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 219
+
+Position 140, Cardstone, passes all
+268,528 comparisons against committed DeadSync
+`1acb67574`. The complete native harness 0.1.67 archive
+contains 12,205 updates over 203.39 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass219.json`. Position 141 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
