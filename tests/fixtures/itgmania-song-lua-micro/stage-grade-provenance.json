@@ -1,0 +1,28 @@
+{
+  "harness_version": "0.1.70",
+  "parent_commit": "d1f6991df0f96d51374aedda21695ec18c0acf36",
+  "source_pending_commit": true,
+  "binary_sha256": "f7ad56d77ca5705c0a95aee19d1dd3b23f2e7c907c5f5921e1f882f6703ec1b5",
+  "native_source_sha256": {
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ScoreKeeperNormal.cpp": "645e68bfa7b8f603c17944b8a4cca7df3df3753dac529dc26d53e8a485978573",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\PlayerStageStats.cpp": "e067b3bba22adc5d016e32fd6384393d2a03d9a1bbbd2b8fe36216b03b4e7497",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ThemeManager.cpp": "13edd778342c85c24a1ec85a7a85835af1aae1b726acbdfb73afadfaf6bff315",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\GameManager.cpp": "2eee53b9f0088acac643bb0e7f04a29933fc9913cb194f75bdbedb5fea7df1cc",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\metrics.ini": "470ae3b31c17ca4e194530b9ca543a15439c134a3aefa47d6d25dd55d1f5bff5",
+    "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\Scripts\\SL_Init.lua": "a85b52a9100e0eed3ddc3a2c873b8b1b211d6a9d99108c306ea8ae9b536089a9",
+    "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\metrics.ini": "221b449c94e5ed38bbdfb4cee157582f20c85ffa8e234398309768945b370a80"
+  },
+  "score_fixture_sha256": "0a746dd21fefc9e1e3fe54dd41f25e6b96adc8d41069e4b9bde4c27f52f33a8a",
+  "stage_grade_fixture_sha256": "5226e39b836089586c9a909f38ea5450b7edc5f2a8c2c47ab298688606ad60b0",
+  "score_output_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+  "stage_grade_output_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+  "observations": [
+    "All three Simply Love modes use source score weights.",
+    "W1 suppression and merciful beginner clamping execute native conversion methods.",
+    "Possible points count note rows and holds/rolls and use max(pre, post).",
+    "Empty stats and dance point limit changes without judgments have Grade_Tier17; failure has Grade_Failed."
+  ],
+  "limits": [
+    "No judgment progress, ScoreKeeperNormal::Load, gameplay reload, course scoring or framebuffer parity established."
+  ]
+}

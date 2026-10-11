@@ -1,0 +1,104 @@
+{
+  "pass": 164,
+  "previous_record": "native-revalidation-pass163.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "73cbeaba14da498d0d1fb73367767082c936c0ea",
+  "comparator_sha256": "c5d7e11b8aa693053d339bf1acbb2ab9f7a3cc798fc8cb2e08824ae6df47af64",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    85
+  ],
+  "next_position": 86,
+  "comparisons_passed": 196634,
+  "charts": [
+    {
+      "position": 85,
+      "entry": {
+        "title": "Aegleseeker",
+        "source_simfile": "Aegleseeker/Aegleseeker.ssc",
+        "harness_version": "0.1.58",
+        "archive": "ae0045afb14bddb8dfea095780934e9ee19155d2db73c8c05316be61d84b29f4.tar.zst",
+        "sha256": "ae0045afb14bddb8dfea095780934e9ee19155d2db73c8c05316be61d84b29f4",
+        "compressed_bytes": 996791,
+        "aliases": [
+          "5e44ae793b37b0be2ec56cad29fc3d6f21d7b2ae4d3b19266341071504debe11.tar.zst"
+        ]
+      },
+      "original_archive_retained": "aae1d802a0ed0130e995886a5b3c2986399986693a049fb54db6564d6ff46e07.tar.zst",
+      "native_source_commit": "39e8d831d16360fdf251af08da524cf59d1f9166",
+      "native_trace_sha256": "73ce0b051b94fac548a4521853fd8f825a1bd4f0de1f1e458e06b354f96f9428",
+      "original_source_sha256": {
+        "Aegleseeker/aeglebg.png": "436fd0d76c13627ca413e2923f855ad388de13652ad3dce10d992ea332d4c2c2",
+        "Aegleseeker/aeglebn.png": "cc5bf15bc26859019afaae224a87f8684fdcf8a1c62f7df5f53a51bbccc91a7d",
+        "Aegleseeker/aeglejacket.png": "a17ef0b4eef804e22dc2f626cd491cec31d544b5a5f2e8e7f885dc2105e1b064",
+        "Aegleseeker/Aegleseeker.ogg": "c92b9b6039eeb516528b2526ec9a7e6728e2fe0eddb5ea09a9a300c2ff850d83",
+        "Aegleseeker/Aegleseeker.ssc": "73c7bedb6be42b0fedc7f107afb557b8ef1fbfcf28fa08e97d1076dff6bd6400",
+        "Aegleseeker/light.png": "5c8c98400171d42e3b23150c22f33ee9a3c1b166317c754820096c6fecbbc50e",
+        "Aegleseeker/deliver/dark.png": "e40f539b8631349bfe369e33adb62f3eb50e1c6694720604ddebf1ea45adc4b6",
+        "Aegleseeker/deliver/deliver1.lua": "397a49d06cdbf1a175a8190404971f5c6dd57651db237ffc9040d0a113bbb115",
+        "Aegleseeker/deliver/deliver2.lua": "fb0013b153eb7428e584143e1c5311d5ce212bedcca3c850993ae4a198d61a17",
+        "Aegleseeker/deliver/words.png": "c0806a4276f1285b8f0cc0584e7ea9bb03c981ff28ffa0ff04111a83a0f3e7b7"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8802,
+      "duration_seconds": 146.6666717529297,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 6,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 85,
+      "source_simfile": "Aegleseeker/Aegleseeker.ssc",
+      "archive": "ae0045afb14bddb8dfea095780934e9ee19155d2db73c8c05316be61d84b29f4.tar.zst",
+      "archive_sha256": "ae0045afb14bddb8dfea095780934e9ee19155d2db73c8c05316be61d84b29f4",
+      "harness_version": "0.1.58",
+      "source_commit": "73cbeaba14da498d0d1fb73367767082c936c0ea",
+      "source_pending_commit": false,
+      "binary_sha256": "c5d7e11b8aa693053d339bf1acbb2ab9f7a3cc798fc8cb2e08824ae6df47af64",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\confusion-x-v3-full_song_lua.exe",
+        "ae0045afb14bddb8dfea095780934e9ee19155d2db73c8c05316be61d84b29f4.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.173204299993813,
+      "comparisons_passed": 196634,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-085-confusion-x-v3.log",
+      "log_sha256": "f76266ad435eea9d586ddb4a17e1b7e976e0561605d8b1849ec3b21972d3ad19",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass165-top-085-confusion-x-v1.json",
+      "native_receipt_sha256": "b002cb1540caeceb7d612e0ce62ec4ebb803a17cf000239024156ad90f79f6b5",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "73cbeaba14da498d0d1fb73367767082c936c0ea",
+    "source_pending_commit": false,
+    "binary_sha256": "37cf808d5df79f71009e174ec45adcc0f8227c9ed4a4bbf7f3b4368bec0d5a3e",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\confusion-x-v3-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.8154234001412988,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-085-native-pass164.log",
+    "log_sha256": "9e13a5eb2acd72f367900cb6a8fd878cd224946e508a366eb68468b5bf052592",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 270 filtered out; finished in 0.43s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

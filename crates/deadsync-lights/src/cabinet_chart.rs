@@ -133,6 +133,9 @@ fn closest_standard_chart_ix(
         };
         let distance = diff_ix.abs_diff(preferred);
         if distance < best_distance {
+            if distance == 0 {
+                return Some(chart_ix);
+            }
             best = Some(chart_ix);
             best_distance = distance;
         }
@@ -761,6 +764,7 @@ mod tests {
             description: String::new(),
             meter: 9,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: hash.to_string(),
             stats: ArrowStats::default(),
@@ -791,5 +795,8 @@ mod tests {
             min_bpm: 120.0,
             max_bpm: 120.0,
         }
+    }
+    mod perf {
+        include!("cabinet_chart_perf.rs");
     }
 }

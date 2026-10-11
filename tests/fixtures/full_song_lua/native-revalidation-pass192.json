@@ -1,0 +1,105 @@
+{
+  "pass": 192,
+  "previous_record": "native-revalidation-pass191.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "d240231aaf604dfb96dd4b43091533ee52237f92",
+  "comparator_sha256": "359bf9a46e7b3e6f6bb04576d23969e12565a6a770c76c39271e20e1d41f9ad6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    113
+  ],
+  "next_position": 114,
+  "comparisons_passed": 209141,
+  "charts": [
+    {
+      "position": 113,
+      "entry": {
+        "title": "竹",
+        "source_simfile": "Bamboo/Take.ssc",
+        "harness_version": "0.1.64",
+        "archive": "d23b4863319782e7b7ad8b8db3872f17a2db463acf379190293f0f5873b70b30.tar.zst",
+        "sha256": "d23b4863319782e7b7ad8b8db3872f17a2db463acf379190293f0f5873b70b30",
+        "compressed_bytes": 182679,
+        "aliases": [
+          "63e2807eff0d0b636961542419dbd314a930ef9fd6883aa340f2b998c96961ce.tar.zst"
+        ]
+      },
+      "original_archive_retained": "79d2a2c238331bd8c4fd4a00f96301cdc081165673b459758181af953961c37e.tar.zst",
+      "native_source_commit": "cc0ea0c0ab70e962785eff8681a6867a3f8689ee",
+      "native_trace_sha256": "13bfe2af44cb5e59e92884df2875a93eaaddbc8c4b890c59e9612079e3fa520b",
+      "original_source_sha256": {
+        "Bamboo/Bamboo - bg.png": "c74eeb7c7263e340bad5d9d35ef9fb9fb8319f0dfb8b2d759e7bc7d0f8bb4dde",
+        "Bamboo/Bamboo - bn.png": "c872e4541e0e2d709784f4a111102639b936cd1c82370de4b397558f519da83b",
+        "Bamboo/Bamboo - jacket.png": "2a3c0680ab1126f68b09d5c881525ba038126dd92f377c8051b03b99acbadd9d",
+        "Bamboo/Bamboo.avi": "4aae59e281cfdbbedbb31dc1628ff2d3682fc818de365c080e448899f2ed4f58",
+        "Bamboo/gpopcdtitle.png": "93e71211552d268b52eae46f6a8e4af3c7cf216cd1bb04e847299981c5827583",
+        "Bamboo/Take.ogg": "971f0e1802bacedbfe4f646147612827e6f7b8c2663914a6adc10ec13ad0b417",
+        "Bamboo/Take.ssc": "bbd668038c9b0877ba21b1c56165388d2e1a64a47d1ca0c4e186ac44b3fc4cab",
+        "Bamboo/lua/default.lua": "5f971841b394fc5feb7c6829c44935b0f8497b1f054eb103ca720f30410d8b2e",
+        "Bamboo/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "Bamboo/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "Bamboo/lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8480,
+      "duration_seconds": 141.30612182617188,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 6,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 113,
+      "source_simfile": "Bamboo/Take.ssc",
+      "archive": "d23b4863319782e7b7ad8b8db3872f17a2db463acf379190293f0f5873b70b30.tar.zst",
+      "archive_sha256": "d23b4863319782e7b7ad8b8db3872f17a2db463acf379190293f0f5873b70b30",
+      "harness_version": "0.1.64",
+      "source_commit": "d240231aaf604dfb96dd4b43091533ee52237f92",
+      "source_pending_commit": false,
+      "binary_sha256": "359bf9a46e7b3e6f6bb04576d23969e12565a6a770c76c39271e20e1d41f9ad6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\startup-identities-v1-full_song_lua.exe",
+        "d23b4863319782e7b7ad8b8db3872f17a2db463acf379190293f0f5873b70b30.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 16.791532900184393,
+      "comparisons_passed": 209141,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-113-committed-startup-identities-v1.log",
+      "log_sha256": "ea8fc386b307c445ebec944ca9dbde40c9cbc90314c993f1acf2de0e71b3a6a6",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass239-top-113-rage-file-v1.json",
+      "native_receipt_sha256": "65fa152176e9a717efdd09a7017dd18c778fbe7a9bae8687e4bb8137d1a06f62",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "d240231aaf604dfb96dd4b43091533ee52237f92",
+    "source_pending_commit": false,
+    "binary_sha256": "bf0a97f8c313d0d0d00267c67f61d42bbae1852baad92c8bc0e79d9c6510772b",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\startup-identities-v2-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.2116999002173543,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-113-native-pass192.log",
+    "log_sha256": "125f0c9a3c08668ea4a7000d27bc953f27f70566becbb6c6bbaf005cc4146e0e",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.64s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

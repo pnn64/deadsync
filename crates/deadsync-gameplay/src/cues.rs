@@ -517,21 +517,19 @@ pub fn build_crossover_cues_for_player_annotations(
     )
 }
 
-// Lowest matching lane wins so results are deterministic. `pos % 4` keeps this
-// working for the second pad of doubles, not just the left pad.
+// Lowest matching lane wins. The outer (0/3) and inner (1/2) masks repeat
+// across both pads so selection also covers doubles.
 #[must_use]
 pub const fn crossover_arrow_col(column_mask: u8, want_outer: bool) -> Option<usize> {
-    let mut m = column_mask;
-    while m != 0 {
-        let c = m.trailing_zeros() as usize;
-        m &= m - 1;
-        let pos = c % 4;
-        let is_outer = pos == 0 || pos == 3;
-        if is_outer == want_outer {
-            return Some(c);
-        }
+    if column_mask == 0 {
+        return None;
     }
-    None
+    let matching = column_mask & if want_outer { 0b1001_1001 } else { 0b0110_0110 };
+    if matching == 0 {
+        None
+    } else {
+        Some(matching.trailing_zeros() as usize)
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -588,42 +586,12 @@ pub fn build_crossover_cues_from_annotations(
 #[allow(clippy::too_many_arguments)]
 fn build_crossover_cues_core(
     annos: &[CrossoverRow],
-    arrow_time: impl FnMut(f32) -> f32,
-    col_start: usize,
-    duration_ms: u16,
-    quantization: u8,
-    include_brackets: bool,
-    first_visible_time: f32,
-) -> Vec<ColumnCue> {
-    let cue_capacity = annos
-        .windows(2)
-        .filter(|pair| {
-            pair[1].is_active_crossover(include_brackets)
-                && !pair[0].is_active_crossover(include_brackets)
-        })
-        .count();
-    build_crossover_cues_core_with_capacity(
-        annos,
-        arrow_time,
-        col_start,
-        duration_ms,
-        quantization,
-        include_brackets,
-        first_visible_time,
-        cue_capacity,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn build_crossover_cues_core_with_capacity(
-    annos: &[CrossoverRow],
     mut arrow_time: impl FnMut(f32) -> f32,
     col_start: usize,
     duration_ms: u16,
     quantization: u8,
     include_brackets: bool,
     first_visible_time: f32,
-    initial_capacity: usize,
 ) -> Vec<ColumnCue> {
     if annos.len() < 2 {
         return Vec::new();
@@ -717,6 +685,14 @@ fn build_crossover_cues_core_with_capacity(
             cue_duration = cue_duration - duration_difference + fade;
         }
         if cues.is_empty() {
+            // Size storage only when the first cue actually needs it.
+            let initial_capacity = annos
+                .windows(2)
+                .filter(|pair| {
+                    pair[1].is_active_crossover(include_brackets)
+                        && !pair[0].is_active_crossover(include_brackets)
+                })
+                .count();
             cues.reserve(initial_capacity);
         }
         cues.push(ColumnCue {

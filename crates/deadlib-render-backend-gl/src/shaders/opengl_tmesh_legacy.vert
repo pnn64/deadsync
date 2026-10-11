@@ -9,7 +9,7 @@ uniform vec2 u_uv_scale;
 uniform vec2 u_uv_offset;
 uniform vec2 u_uv_tex_shift;
 uniform float u_texture_mask;
-uniform float u_cull_back;
+uniform float u_cull_mode;
 uniform mat4 u_model;
 uniform vec4 i_sphere_row0;
 uniform vec4 i_sphere_row1;
@@ -18,7 +18,7 @@ uniform vec4 i_additive_uv;
 varying vec2 v_uv;
 varying vec4 v_color;
 varying float v_texture_mask;
-varying float v_cull_back;
+varying float v_cull_mode;
 varying vec2 v_additive_uv;
 varying float v_additive;
 uniform mat4 u_model_view_proj;
@@ -48,6 +48,6 @@ void main() {
     v_additive_uv = secondary * i_additive_uv.xy + i_additive_uv.zw;
     v_color = a_color * u_tint;
     v_texture_mask = u_texture_mask;
-    v_cull_back = u_cull_back;
+    v_cull_mode = u_cull_mode;
     v_additive = float(mode >= 4.0);
 }
