@@ -1738,12 +1738,10 @@
     {
       "title": "放送",
       "source_simfile": "broadcast/broadcast.ssc",
-      "harness_version": "0.1.0",
-      "archive": "033bb8462d4a3067fff24b23cecdd22dca67688e1ee303ab992662a4fbd471c1.tar.zst",
-      "sha256": "033bb8462d4a3067fff24b23cecdd22dca67688e1ee303ab992662a4fbd471c1",
-      "compressed_bytes": 87111,
-      "uncompressed_sha256": "58fa5311a5d8b0405fa81df5f78506a0a3d98b276f2dc10b1106beb09b0b2f34",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "7f97218dbcd5600c30c2851a9f1fb7f19d5fd25b41f5f2c0a07d890fde7d3711.tar.zst",
+      "sha256": "7f97218dbcd5600c30c2851a9f1fb7f19d5fd25b41f5f2c0a07d890fde7d3711",
+      "compressed_bytes": 114752,
       "aliases": [
         "be4b9f261b80260f6d438e4e31796f50f2b655c8e8a7f3c2f9874e6d2c99d7e6.tar.zst"
       ]
