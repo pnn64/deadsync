@@ -51,7 +51,11 @@ fn prewarm_noteskin_textures(
         for texture_slot in std::iter::once(slot).chain(slot.model_additive.as_deref()) {
             let key = texture_slot.texture_key();
             if slot.model.is_some() {
-                prewarm_model_texture_key(assets, backend, seen, seen_model_textures, key);
+                for key in std::iter::once(key)
+                    .chain(texture_slot.model_texture_keys.iter().map(AsRef::as_ref))
+                {
+                    prewarm_model_texture_key(assets, backend, seen, seen_model_textures, key);
+                }
             } else if insert_texture_key(seen, key) {
                 deadsync_assets::textures::ensure_texture_for_key(
                     assets,
@@ -165,7 +169,14 @@ pub fn prewarm_gameplay_assets<StateDelta>(
                 SongLuaOverlayKind::Model { layers } => {
                     for layer in layers.iter() {
                         for key in std::iter::once(&layer.texture_key)
-                            .chain(layer.additive.as_ref().map(|(key, _)| key))
+                            .chain(layer.additive.as_ref())
+                            .chain(
+                                layer
+                                    .texture_frames
+                                    .iter()
+                                    .chain(layer.additive_frames.iter())
+                                    .filter_map(|frame| frame.texture_key.as_ref()),
+                            )
                         {
                             prewarm_model_texture_key(
                                 assets,
@@ -177,19 +188,23 @@ pub fn prewarm_gameplay_assets<StateDelta>(
                         }
                     }
                 }
-                SongLuaOverlayKind::NoteskinActor { slots } => {
+                SongLuaOverlayKind::NoteskinActor { slots, .. } => {
                     for slot in slots.iter() {
                         if slot.model.is_some() {
                             for texture in
                                 std::iter::once(slot).chain(slot.model_additive.as_deref())
                             {
-                                prewarm_model_texture_key(
-                                    assets,
-                                    backend,
-                                    &mut seen,
-                                    &mut seen_model_textures,
-                                    texture.texture_key(),
-                                );
+                                for key in std::iter::once(texture.texture_key())
+                                    .chain(texture.model_texture_keys.iter().map(AsRef::as_ref))
+                                {
+                                    prewarm_model_texture_key(
+                                        assets,
+                                        backend,
+                                        &mut seen,
+                                        &mut seen_model_textures,
+                                        key,
+                                    );
+                                }
                             }
                         } else if insert_texture_key(&mut seen, slot.texture_key()) {
                             deadsync_assets::textures::ensure_texture_for_key(

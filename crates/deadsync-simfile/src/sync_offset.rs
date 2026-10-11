@@ -245,6 +245,34 @@ pub fn rewrite_simfile_offset_tags(
     Ok((out, changed))
 }
 
+/// [`rewrite_simfile_offset_tags`] for a simfile that may have no `#OFFSET` at
+/// all. A missing offset is an offset of zero, so such a file is given one --
+/// `delta` itself, at the very top, past any byte-order mark and ahead of
+/// every chart, in the file's own line endings. Returns the new text and how
+/// many tags were changed or added.
+pub fn shift_simfile_offsets(simfile_bytes: &[u8], delta: f32) -> Result<(Vec<u8>, usize), String> {
+    let (rewritten, changed) = rewrite_simfile_offset_tags(simfile_bytes, delta)?;
+    if changed > 0 {
+        return Ok((rewritten, changed));
+    }
+    let bom = if simfile_bytes.starts_with(b"\xEF\xBB\xBF") {
+        3
+    } else {
+        0
+    };
+    let newline = if simfile_bytes.windows(2).any(|pair| pair == b"\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    let tag = format!("#OFFSET:{};{newline}", format_offset_tag_value(delta));
+    let mut out = Vec::with_capacity(simfile_bytes.len() + tag.len());
+    out.extend_from_slice(&simfile_bytes[..bom]);
+    out.extend_from_slice(tag.as_bytes());
+    out.extend_from_slice(&simfile_bytes[bom..]);
+    Ok((out, 1))
+}
+
 #[inline(always)]
 #[must_use]
 pub fn simfile_backup_path(simfile_path: &Path) -> PathBuf {
@@ -256,13 +284,7 @@ pub fn simfile_backup_path(simfile_path: &Path) -> PathBuf {
 pub fn save_song_offset_delta_to_simfile(simfile_path: &Path, delta: f32) -> Result<usize, String> {
     let simfile_bytes = std::fs::read(simfile_path)
         .map_err(|e| format!("Failed to read simfile '{}': {e}", simfile_path.display()))?;
-    let (rewritten, changed_tags) = rewrite_simfile_offset_tags(&simfile_bytes, delta)?;
-    if changed_tags == 0 {
-        return Err(format!(
-            "No #OFFSET tags found in simfile '{}'",
-            simfile_path.display()
-        ));
-    }
+    let (rewritten, changed_tags) = shift_simfile_offsets(&simfile_bytes, delta)?;
 
     let backup_path = simfile_backup_path(simfile_path);
     std::fs::copy(simfile_path, &backup_path).map_err(|e| {
@@ -427,6 +449,27 @@ mod tests {
         assert!(out.contains("#offset:0.099;"));
     }
 
+    /// A simfile with no `#OFFSET` is at zero: shifting it gives it one.
+    #[test]
+    fn shifting_a_simfile_without_an_offset_gives_it_one() {
+        assert_eq!(
+            shift_simfile_offsets(b"#TITLE:Song;\n#BPMS:0=120;\n", -0.009).unwrap(),
+            (b"#OFFSET:-0.009;\n#TITLE:Song;\n#BPMS:0=120;\n".to_vec(), 1)
+        );
+        assert_eq!(
+            shift_simfile_offsets(b"\xEF\xBB\xBF#TITLE:Song;\r\n", 0.02).unwrap(),
+            (
+                b"\xEF\xBB\xBF#OFFSET:0.020;\r\n#TITLE:Song;\r\n".to_vec(),
+                1
+            )
+        );
+        assert_eq!(
+            shift_simfile_offsets(b"#OFFSET:0.100;", -0.009).unwrap(),
+            (b"#OFFSET:0.091;".to_vec(), 1),
+            "an offset that is there is moved, not added to"
+        );
+    }
+
     #[test]
     fn rewrite_simfile_offset_tags_rejects_missing_terminator() {
         let err = rewrite_simfile_offset_tags(b"#OFFSET:0.000", 0.001).expect_err("error");
@@ -448,7 +491,8 @@ mod tests {
         let after_failure = root.join("after_failure.ssc");
         std::fs::write(&writable, b"#TITLE:test;\n#OFFSET:0.100;\n").expect("write simfile");
         std::fs::write(&read_only, b"#TITLE:test;\n#OFFSET:0.200;\n").expect("write simfile");
-        std::fs::write(&invalid, b"#TITLE:no offset;\n").expect("write invalid simfile");
+        std::fs::write(&invalid, b"#TITLE:bad offset;\n#OFFSET:abc;\n")
+            .expect("write invalid simfile");
         std::fs::write(&after_failure, b"#TITLE:test;\n#OFFSET:0.300;\n")
             .expect("write simfile after failure");
 
@@ -505,7 +549,7 @@ mod tests {
             summary
                 .first_failure_error
                 .as_deref()
-                .is_some_and(|error| error.contains("No #OFFSET tags"))
+                .is_some_and(|error| error.contains("Malformed #OFFSET tag value"))
         );
         assert_eq!(summary.outcomes.len(), 4);
         assert!(matches!(

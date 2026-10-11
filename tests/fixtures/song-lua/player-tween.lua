@@ -1,5 +1,5 @@
 local fired = false
-return Def.Quad{
+return Def.ActorFrame{
     Name="Result",
     OnCommand=function(self)
         self:SetUpdateFunction(function(self)

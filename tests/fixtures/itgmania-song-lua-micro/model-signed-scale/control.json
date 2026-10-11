@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "name": "model-signed-scale",
+  "samples": [
+    0
+  ],
+  "screen": {
+    "width": 854,
+    "height": 480
+  },
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "camera": {
+      "fov": 0
+    },
+    "children": [
+      {
+        "kind": "model",
+        "name": "IndependentZ",
+        "model_paths": [
+          "../model-material/triangle.txt",
+          "../model-material/triangle.txt",
+          "../model-material/triangle.txt"
+        ],
+        "state": {
+          "position": [
+            150,
+            120,
+            35
+          ],
+          "zoom": [
+            1.25,
+            0.65,
+            2.25
+          ],
+          "rotation": [
+            13,
+            -23,
+            37
+          ],
+          "diffuse": [
+            0.5,
+            0.75,
+            1,
+            0.6
+          ],
+          "glow": [
+            1,
+            0,
+            0,
+            0.25
+          ]
+        }
+      },
+      {
+        "kind": "model",
+        "name": "MirrorX",
+        "model_paths": [
+          "../model-material/triangle.txt",
+          "../model-material/triangle.txt",
+          "../model-material/triangle.txt"
+        ],
+        "state": {
+          "position": [
+            300,
+            120,
+            35
+          ],
+          "zoom": [
+            -1.25,
+            0.65,
+            2.25
+          ],
+          "rotation": [
+            13,
+            -23,
+            37
+          ],
+          "diffuse": [
+            0.5,
+            0.75,
+            1,
+            0.6
+          ],
+          "glow": [
+            1,
+            0,
+            0,
+            0.25
+          ]
+        }
+      },
+      {
+        "kind": "model",
+        "name": "MirrorY",
+        "model_paths": [
+          "../model-material/triangle.txt",
+          "../model-material/triangle.txt",
+          "../model-material/triangle.txt"
+        ],
+        "state": {
+          "position": [
+            450,
+            120,
+            35
+          ],
+          "zoom": [
+            1.25,
+            -0.65,
+            2.25
+          ],
+          "rotation": [
+            13,
+            -23,
+            37
+          ],
+          "diffuse": [
+            0.5,
+            0.75,
+            1,
+            0.6
+          ],
+          "glow": [
+            1,
+            0,
+            0,
+            0.25
+          ]
+        }
+      },
+      {
+        "kind": "model",
+        "name": "MirrorZ",
+        "model_paths": [
+          "../model-material/triangle.txt",
+          "../model-material/triangle.txt",
+          "../model-material/triangle.txt"
+        ],
+        "state": {
+          "position": [
+            600,
+            120,
+            35
+          ],
+          "zoom": [
+            1.25,
+            0.65,
+            -2.25
+          ],
+          "rotation": [
+            13,
+            -23,
+            37
+          ],
+          "diffuse": [
+            0.5,
+            0.75,
+            1,
+            0.6
+          ],
+          "glow": [
+            1,
+            0,
+            0,
+            0.25
+          ]
+        }
+      },
+      {
+        "kind": "frame",
+        "name": "ScaledParent",
+        "state": {
+          "zoom": [
+            1.4,
+            -0.8,
+            -1.7
+          ]
+        },
+        "children": [
+          {
+            "kind": "model",
+            "name": "Inherited",
+            "model_paths": [
+              "../model-material/triangle.txt",
+              "../model-material/triangle.txt",
+              "../model-material/triangle.txt"
+            ],
+            "state": {
+              "position": [
+                220,
+                320,
+                35
+              ],
+              "zoom": [
+                0.75,
+                1.3,
+                -0.6
+              ],
+              "rotation": [
+                13,
+                -23,
+                37
+              ],
+              "diffuse": [
+                0.5,
+                0.75,
+                1,
+                0.6
+              ],
+              "glow": [
+                1,
+                0,
+                0,
+                0.25
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,11 +1,22 @@
 pub mod arrowcloud;
+pub mod banners;
+pub mod beginner;
 pub mod downloads;
 pub mod groovestats;
+pub mod itgdb;
 pub mod lobbies;
+pub mod pack_archive;
+pub mod pack_page;
 pub mod player_leaderboards;
+pub mod popular_packs;
 pub mod runtime;
 pub mod score_compat;
 pub mod score_import;
+pub mod smo_describe;
+pub mod smo_details;
+pub mod smo_search;
+pub mod smo_songs;
+pub mod song_preview;
 pub mod srpg_shop;
 pub mod stepmaniaonline;
 
@@ -86,3 +97,12 @@ mod tests {
         assert_eq!(timeout.to_string(), "request timed out");
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/support/paired_bench.rs"]
+mod paired_bench;
+
+#[cfg(test)]
+#[path = "../../../tests/support/perf.rs"]
+#[allow(dead_code)]
+mod perf;

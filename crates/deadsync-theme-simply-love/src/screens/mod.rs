@@ -1,5 +1,6 @@
 pub mod arrowcloud_login;
 pub mod components;
+pub mod content_browser;
 pub mod credits;
 pub mod evaluation;
 pub mod evaluation_summary;

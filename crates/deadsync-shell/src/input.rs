@@ -107,6 +107,7 @@ pub enum PreScreenInputRoute {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RawKeyTextRoute {
     Ignore,
+    ContentBrowser,
     ManageLocalProfiles,
     Options,
     SelectMusic,
@@ -116,6 +117,7 @@ pub enum RawKeyTextRoute {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RawKeyScreenRoute {
     None,
+    ContentBrowser,
     Sandbox,
     Menu,
     Mappings,
@@ -319,6 +321,7 @@ pub fn pre_screen_input_route(
 #[inline(always)]
 pub const fn raw_key_text_route(screen: Screen) -> RawKeyTextRoute {
     match screen {
+        Screen::ContentBrowser => RawKeyTextRoute::ContentBrowser,
         Screen::ManageLocalProfiles => RawKeyTextRoute::ManageLocalProfiles,
         Screen::Options => RawKeyTextRoute::Options,
         Screen::SelectMusic => RawKeyTextRoute::SelectMusic,
@@ -330,6 +333,7 @@ pub const fn raw_key_text_route(screen: Screen) -> RawKeyTextRoute {
 #[inline(always)]
 pub const fn raw_key_screen_route(screen: Screen) -> RawKeyScreenRoute {
     match screen {
+        Screen::ContentBrowser => RawKeyScreenRoute::ContentBrowser,
         Screen::Sandbox => RawKeyScreenRoute::Sandbox,
         Screen::Menu => RawKeyScreenRoute::Menu,
         Screen::Mappings => RawKeyScreenRoute::Mappings,

@@ -97,6 +97,7 @@ pub fn fixture(kind: usize, blend: BlendMode, depth: bool, glow: bool) -> Render
                     glow,
                 ));
                 f.ops.push(DrawOp::TexturedMesh(TexturedMeshRun {
+                    sampler: None,
                     geometry: 0,
                     instance_start: i,
                     instance_count: 1,

@@ -206,7 +206,7 @@ fn compile_song_lua_reuses_noteskin_tap_model_slots() {
         .iter()
         .find(|overlay| overlay.name.as_deref() == Some("NoteskinTap"))
         .unwrap();
-    let SongLuaOverlayKind::NoteskinActor { slots } = &overlay.kind else {
+    let SongLuaOverlayKind::NoteskinActor { slots, .. } = &overlay.kind else {
         panic!("tap note model should keep loaded noteskin slots");
     };
     assert!(slots.len() >= 2);
@@ -309,7 +309,7 @@ fn compile_song_lua_loads_bundled_noteskin_actor_fixture() {
         .iter()
         .position(|overlay| overlay.name.as_deref() == Some("FixtureArrow"))
         .unwrap();
-    let SongLuaOverlayKind::NoteskinActor { slots } = &compiled.overlays[arrow_index].kind else {
+    let SongLuaOverlayKind::NoteskinActor { slots, .. } = &compiled.overlays[arrow_index].kind else {
         panic!("fixture arrow should reuse the bundled ddr-note actor");
     };
     assert!(slots.len() >= 2);

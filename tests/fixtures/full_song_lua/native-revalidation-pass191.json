@@ -1,0 +1,106 @@
+{
+  "pass": 191,
+  "previous_record": "native-revalidation-pass190.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "d240231aaf604dfb96dd4b43091533ee52237f92",
+  "comparator_sha256": "359bf9a46e7b3e6f6bb04576d23969e12565a6a770c76c39271e20e1d41f9ad6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    112
+  ],
+  "next_position": 113,
+  "comparisons_passed": 699483,
+  "charts": [
+    {
+      "position": 112,
+      "entry": {
+        "title": "Badlands",
+        "source_simfile": "Badlands/Badlands.ssc",
+        "harness_version": "0.1.64",
+        "archive": "6314bf1abe3c94b05ccabd5787c3ee56cd9380438258801f97ddd9dbc6bbf48c.tar.zst",
+        "sha256": "6314bf1abe3c94b05ccabd5787c3ee56cd9380438258801f97ddd9dbc6bbf48c",
+        "compressed_bytes": 480548,
+        "aliases": [
+          "b416acd5931d9f4a28b44dcd91c77f6008e7cda4699ae6855a6eeb1da4b81e52.tar.zst"
+        ]
+      },
+      "original_archive_retained": "bf8d1d0af6aa596698e8201e78aa44f8522fc99800aca0e9a02b605d3687edb7.tar.zst",
+      "native_source_commit": "cc0ea0c0ab70e962785eff8681a6867a3f8689ee",
+      "native_trace_sha256": "182bd023feec2fc549162ca102c837aebc296beb3528b47d97afd5369cafa437",
+      "original_source_sha256": {
+        "Badlands/badlands.ogg": "81374c30c0741df8d55b9b8ce018b8adad09a8716c36ff506ae2c2919d7c3a31",
+        "Badlands/Badlands.ssc": "4263f362cafd8badb2f47dbef604d568f6baf8505eeebfa5856f0aef629e7f4a",
+        "Badlands/banner.png": "0aef83d3e13636827ad37f6dd3b06f956f4edb378548c4e1ce59649c9e97dee2",
+        "Badlands/data.sme": "dda1ee73847359f6950aaf0b33f6df8be89fceb6cf3c77ef16c66992cbbb5c18",
+        "Badlands/snap.png": "bada87d940a940b3f0816a93ea6c90427387787e3e9e693cda70359cd69b1ae8",
+        "Badlands/lua/default.lua": "0cbb62002a83a0a412b4571f89d6353872bcaa7ab23f78684c251238288d85de",
+        "Badlands/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "Badlands/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "Badlands/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46",
+        "Badlands/lua/_script.lua": "9fd2548b474f25920b4d0394641f2c319131d005c20f096512afbfe14d2af4df",
+        "Badlands/lua/gfx/ok.png": "7e9218e5beed5d01544fc25f52d0fe3e4f25706c8ba67afe314c9180866752a9",
+        "Badlands/lua/gfx/_gfx.lua": "aa408201325e1fb32c8a007a4deadf3d7760d56b2272391847213ee3733af819"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8395,
+      "duration_seconds": 139.88571166992188,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 9,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 112,
+      "source_simfile": "Badlands/Badlands.ssc",
+      "archive": "6314bf1abe3c94b05ccabd5787c3ee56cd9380438258801f97ddd9dbc6bbf48c.tar.zst",
+      "archive_sha256": "6314bf1abe3c94b05ccabd5787c3ee56cd9380438258801f97ddd9dbc6bbf48c",
+      "harness_version": "0.1.64",
+      "source_commit": "d240231aaf604dfb96dd4b43091533ee52237f92",
+      "source_pending_commit": false,
+      "binary_sha256": "359bf9a46e7b3e6f6bb04576d23969e12565a6a770c76c39271e20e1d41f9ad6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\startup-identities-v1-full_song_lua.exe",
+        "6314bf1abe3c94b05ccabd5787c3ee56cd9380438258801f97ddd9dbc6bbf48c.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 25.54712319979444,
+      "comparisons_passed": 699483,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-112-committed-startup-identities-v1.log",
+      "log_sha256": "4c0a589995424ddf1fc2d9fae1893f26aa0a8489fda5ce2a6f378b563907ea2e",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass238-top-112-rage-file-v1.json",
+      "native_receipt_sha256": "da120298b7ce4bfe1019851a71f5037e1fd4eaa1c721720964bd003c6cae58ce",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "d240231aaf604dfb96dd4b43091533ee52237f92",
+    "source_pending_commit": false,
+    "binary_sha256": "bf0a97f8c313d0d0d00267c67f61d42bbae1852baad92c8bc0e79d9c6510772b",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\startup-identities-v2-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 2.635610899887979,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-112-native-pass191.log",
+    "log_sha256": "79e1f81b4c83056d22a9ad76452ecdb0d4485de7ae529689119acf841f7b827f",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 2.04s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

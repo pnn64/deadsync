@@ -5,13 +5,13 @@ use ash::{
     vk,
 };
 use deadlib_render_core::{
-    BlendMode, CameraUploadCache, ClockDomainTrace, DenseSlotMap, DrawOp, DrawStats, MeshVertex,
-    PresentModePolicy, PresentModeTrace, PresentStats, RenderFrame, RenderTargetFrame,
+    BlendMode, CameraUploadCache, ClockDomainTrace, DenseSlotMap, DrawOp, DrawStats, MeshSampler,
+    MeshVertex, PresentModePolicy, PresentModeTrace, PresentStats, RenderFrame, RenderTargetFrame,
     SamplerCache, SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw as InstanceData,
     TMeshCacheKey, TextureHandle, TexturedMeshBufferCache,
     TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshUploads, TexturedMeshVertex,
     Yuv420Upload, draw_storage_stats, is_render_target_texture, render_target_base_handle,
-    render_target_uses_nearest, resolve_textured_mesh_geometries,
+    resolve_textured_mesh_geometries, texture_sampler_desc,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -78,10 +78,78 @@ struct PipelinePair {
 pub struct Texture {
     device: Arc<Device>,
     images: TextureImages,
-    descriptor_set: vk::DescriptorSet,
-    descriptor_set_repeat: vk::DescriptorSet,
-    pool: vk::DescriptorPool,
-    nearest_sets: Option<(vk::DescriptorSet, vk::DescriptorSet, vk::DescriptorPool)>,
+    sampler_desc: SamplerDesc,
+    samplers: TextureSamplers,
+}
+
+// Texture-lifetime, render-thread-owned fixed descriptor table. Creation warms
+// all filter/wrap choices; draws index retained sets without allocation or
+// eviction. The three allocation pairs are freed with the texture, including
+// partial creation failures; descriptor work is bounded to six sets per texture.
+struct TextureSamplers {
+    device: Arc<Device>,
+    sets: SamplerCache<vk::DescriptorSet>,
+    pairs: [Option<(vk::DescriptorSet, vk::DescriptorSet, vk::DescriptorPool)>; 3],
+}
+impl Drop for TextureSamplers {
+    fn drop(&mut self) {
+        for &(set, repeat, pool) in self.pairs.iter().flatten() {
+            // SAFETY: this table owns both sets allocated from each retained pool;
+            // the device outlives the table and texture retirement waits for GPU use.
+            unsafe {
+                let _ = self.device.free_descriptor_sets(pool, &[set, repeat]);
+            }
+        }
+    }
+}
+fn create_texture_samplers(
+    state: &mut State,
+    views: [vk::ImageView; 3],
+    desc: SamplerDesc,
+) -> Result<TextureSamplers, Box<dyn Error>> {
+    let mut table = TextureSamplers {
+        device: Arc::clone(
+            state
+                .device
+                .as_ref()
+                .expect("texture creation requires an initialized Vulkan device"),
+        ),
+        sets: SamplerCache::default(),
+        pairs: [None; 3],
+    };
+    let choices = [
+        desc,
+        MeshSampler {
+            filter: SamplerFilter::Linear,
+            wrap: SamplerWrap::Clamp,
+        }
+        .apply(desc),
+        MeshSampler {
+            filter: SamplerFilter::Nearest,
+            wrap: SamplerWrap::Clamp,
+        }
+        .apply(desc),
+    ];
+    for (index, choice) in choices.into_iter().enumerate() {
+        let clamp = SamplerDesc {
+            wrap: SamplerWrap::Clamp,
+            ..choice
+        };
+        let repeat = SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..choice
+        };
+        if table.sets.get(clamp).is_some() {
+            continue;
+        }
+        let a = get_sampler(state, clamp)?;
+        let b = get_sampler(state, repeat)?;
+        let pair = create_texture_descriptor_sets(state, views, a, b)?;
+        table.sets.insert(clamp, pair.0);
+        table.sets.insert(repeat, pair.1);
+        table.pairs[index] = Some(pair);
+    }
+    Ok(table)
 }
 
 #[derive(Debug)]
@@ -114,15 +182,8 @@ pub trait TextureLookup {
 impl Drop for Texture {
     fn drop(&mut self) {
         // SAFETY: `Texture` owns these Vulkan objects, the `Device` outlives `self` via `Arc`,
-        // and both descriptor sets were allocated from `self.pool` and are not freed elsewhere.
+        // and descriptor ownership is retained independently by `self.samplers`.
         unsafe {
-            let _ = self.device.free_descriptor_sets(
-                self.pool,
-                &[self.descriptor_set, self.descriptor_set_repeat],
-            );
-            if let Some((set, repeat, pool)) = self.nearest_sets {
-                let _ = self.device.free_descriptor_sets(pool, &[set, repeat]);
-            }
             let mut destroy = |image: &TextureImage| {
                 self.device.destroy_image_view(image.view, None);
                 self.device.destroy_image(image.image, None);
@@ -1650,16 +1711,7 @@ pub fn create_texture(
 
     state.pending_tex_staging.push(staging);
     let view = create_image_view(device, tex_image, fmt)?;
-    let sampler_default = get_sampler(state, sampler)?;
-    let sampler_repeat = get_sampler(
-        state,
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..sampler
-        },
-    )?;
-    let (set, set_repeat, pool) =
-        create_texture_descriptor_sets(state, [view, view, view], sampler_default, sampler_repeat)?;
+    let samplers = create_texture_samplers(state, [view; 3], sampler)?;
 
     Ok(Texture {
         device: device_arc.clone(),
@@ -1668,10 +1720,8 @@ pub fn create_texture(
             memory: tex_mem,
             view,
         }),
-        descriptor_set: set,
-        descriptor_set_repeat: set_repeat,
-        pool,
-        nearest_sets: None,
+        sampler_desc: sampler,
+        samplers,
     })
 }
 
@@ -1809,32 +1859,9 @@ pub fn create_yuv420_texture(
         .try_into()
         .expect("three YUV plane resources were created");
 
-    let sampler_default = match get_sampler(state, sampler) {
-        Ok(sampler) => sampler,
-        Err(error) => {
-            destroy_texture_images(device, &images);
-            destroy_buffer(device, &staging.resource);
-            return Err(error.into());
-        }
-    };
-    let sampler_repeat = match get_sampler(
-        state,
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..sampler
-        },
-    ) {
-        Ok(sampler) => sampler,
-        Err(error) => {
-            destroy_texture_images(device, &images);
-            destroy_buffer(device, &staging.resource);
-            return Err(error.into());
-        }
-    };
     let views = [images[0].view, images[1].view, images[2].view];
-    let descriptors = create_texture_descriptor_sets(state, views, sampler_default, sampler_repeat);
-    let (descriptor_set, descriptor_set_repeat, pool) = match descriptors {
-        Ok(descriptors) => descriptors,
+    let samplers = match create_texture_samplers(state, views, sampler) {
+        Ok(samplers) => samplers,
         Err(error) => {
             destroy_texture_images(device, &images);
             destroy_buffer(device, &staging.resource);
@@ -1844,10 +1871,6 @@ pub fn create_yuv420_texture(
     let cmd = match begin_pending_texture_upload_cmd(state) {
         Ok(cmd) => cmd,
         Err(error) => {
-            // SAFETY: neither descriptor set nor any image has been submitted.
-            unsafe {
-                let _ = device.free_descriptor_sets(pool, &[descriptor_set, descriptor_set_repeat]);
-            }
             destroy_texture_images(device, &images);
             destroy_buffer(device, &staging.resource);
             return Err(error);
@@ -1870,10 +1893,8 @@ pub fn create_yuv420_texture(
             levels: upload.levels,
             coeffs: upload.coeffs,
         },
-        descriptor_set,
-        descriptor_set_repeat,
-        pool,
-        nearest_sets: None,
+        sampler_desc: sampler,
+        samplers,
     })
 }
 
@@ -2100,17 +2121,14 @@ fn texture_descriptor_set(
     texture: &Texture,
     handle: TextureHandle,
     repeat: bool,
+    sampler: Option<MeshSampler>,
 ) -> vk::DescriptorSet {
-    match (render_target_uses_nearest(handle), repeat) {
-        (true, false) => texture
-            .nearest_sets
-            .map_or(texture.descriptor_set, |sets| sets.0),
-        (true, true) => texture
-            .nearest_sets
-            .map_or(texture.descriptor_set_repeat, |sets| sets.1),
-        (false, false) => texture.descriptor_set,
-        (false, true) => texture.descriptor_set_repeat,
-    }
+    let desc = texture_sampler_desc(texture.sampler_desc, handle, repeat, sampler);
+    *texture
+        .samplers
+        .sets
+        .get(desc)
+        .expect("texture creation prewarms every sampler binding")
 }
 
 fn record_render_pass(
@@ -2215,7 +2233,7 @@ fn record_render_pass(
                     else {
                         continue;
                     };
-                    let set = texture_descriptor_set(texture, run.texture_handle, false);
+                    let set = texture_descriptor_set(texture, run.texture_handle, false, None);
                     let yuv420 = texture.images.is_yuv420();
                     let pipeline_bound = matches!(bound, Bound::YuvSprite) == yuv420
                         && matches!(bound, Bound::Sprite | Bound::YuvSprite);
@@ -2356,8 +2374,10 @@ fn record_render_pass(
                     let Some(source) = uploads.source(run.geometry) else {
                         continue;
                     };
-                    let Some(set) = resolved_texture(state, textures, run.texture_handle)
-                        .map(|texture| texture_descriptor_set(texture, run.texture_handle, true))
+                    let Some(set) =
+                        resolved_texture(state, textures, run.texture_handle).map(|texture| {
+                            texture_descriptor_set(texture, run.texture_handle, true, run.sampler)
+                        })
                     else {
                         continue;
                     };
@@ -2426,7 +2446,9 @@ fn record_render_pass(
                         );
                     }
                     let additive = resolved_texture(state, textures, run.additive_texture)
-                        .map(|texture| texture_descriptor_set(texture, run.additive_texture, true))
+                        .map(|texture| {
+                            texture_descriptor_set(texture, run.additive_texture, true, None)
+                        })
                         .unwrap_or(set);
                     device.cmd_bind_descriptor_sets(
                         cmd,
@@ -5043,34 +5065,7 @@ fn create_offscreen_target(
         wrap: SamplerWrap::Clamp,
         mipmaps: false,
     };
-    let sampler = get_sampler(state, sampler_desc)?;
-    let sampler_repeat = get_sampler(
-        state,
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..sampler_desc
-        },
-    )?;
-    let (descriptor_set, descriptor_set_repeat, pool) =
-        create_texture_descriptor_sets(state, [view; 3], sampler, sampler_repeat)?;
-    let nearest_sampler = get_sampler(
-        state,
-        SamplerDesc {
-            filter: SamplerFilter::Nearest,
-            wrap: SamplerWrap::Clamp,
-            mipmaps: false,
-        },
-    )?;
-    let nearest_repeat_sampler = get_sampler(
-        state,
-        SamplerDesc {
-            filter: SamplerFilter::Nearest,
-            wrap: SamplerWrap::Repeat,
-            mipmaps: false,
-        },
-    )?;
-    let nearest_sets =
-        create_texture_descriptor_sets(state, [view; 3], nearest_sampler, nearest_repeat_sampler)?;
+    let samplers = create_texture_samplers(state, [view; 3], sampler_desc)?;
     let texture = Texture {
         device: Arc::clone(&device),
         images: TextureImages::Rgba(TextureImage {
@@ -5078,10 +5073,8 @@ fn create_offscreen_target(
             memory,
             view,
         }),
-        descriptor_set,
-        descriptor_set_repeat,
-        pool,
-        nearest_sets: Some(nearest_sets),
+        sampler_desc,
+        samplers,
     };
     let depth = if pass.depth {
         Some(create_depth_target(

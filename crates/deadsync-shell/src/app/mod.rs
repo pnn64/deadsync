@@ -4,6 +4,7 @@ use deadsync_score as score_data;
 use deadsync_score::stage_stats;
 mod arrowcloud_result_dialog;
 mod audio_requests;
+mod browser_skin;
 mod commands;
 mod config_requests;
 mod evaluation_views;
@@ -125,10 +126,10 @@ use deadsync_theme_simply_love::views::{
 };
 use deadsync_theme_simply_love::{
     screens::{
-        self, credits, evaluation, evaluation_summary, gameover, gameplay, init, initials,
-        input as input_screen, manage_local_profiles, mappings, menu, options, overscan_adjustment,
-        player_options, practice, profile_load, sandbox, select_color, select_course, select_mode,
-        select_music, select_profile, select_style, test_lights,
+        self, content_browser, credits, evaluation, evaluation_summary, gameover, gameplay, init,
+        initials, input as input_screen, manage_local_profiles, mappings, menu, options,
+        overscan_adjustment, player_options, practice, profile_load, sandbox, select_color,
+        select_course, select_mode, select_music, select_profile, select_style, test_lights,
     },
     visual_styles,
 };
@@ -472,6 +473,7 @@ mod frame_work {
     pub const HEART_RATE_CONFIG: FrameWorkMask = 1 << 7;
     pub const SELECT_MUSIC_VIEW: FrameWorkMask = 1 << 8;
     pub const SELECT_COURSE_VIEW: FrameWorkMask = 1 << 9;
+    pub const CONTENT_BROWSER_VIEW: FrameWorkMask = 1 << 10;
 
     const NON_GAMEPLAY: FrameWorkMask = SMX_CONFIG | ASYNC_RESULTS | HEART_RATE_CONFIG;
 
@@ -481,6 +483,9 @@ mod frame_work {
             super::CurrentScreen::Practice => 0,
             super::CurrentScreen::Menu => NON_GAMEPLAY | MENU_AUTOPROMPT,
             super::CurrentScreen::Options => NON_GAMEPLAY | OPTIONS_VIEW | CONTENT_RELOAD,
+            super::CurrentScreen::ContentBrowser => {
+                NON_GAMEPLAY | CONTENT_BROWSER_VIEW | CONTENT_RELOAD
+            }
             super::CurrentScreen::Init => NON_GAMEPLAY | CONTENT_RELOAD,
             super::CurrentScreen::ProfileLoad => NON_GAMEPLAY | PROFILE_LOAD,
             super::CurrentScreen::SelectMusic => NON_GAMEPLAY | CONTENT_RELOAD | SELECT_MUSIC_VIEW,
@@ -577,6 +582,7 @@ pub struct ScreensState {
     practice_state: Option<practice::State>,
     gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor,
     options_state: options::State,
+    content_browser_state: content_browser::State,
     credits_state: credits::State,
     manage_local_profiles_state: manage_local_profiles::State,
     mappings_state: mappings::State,
@@ -1029,6 +1035,16 @@ fn app_paths_view(dirs: &AppDirs) -> AppPathsView {
     }
 }
 
+/// Texture key for a pack's banner.
+///
+/// Derived from the pack id rather than the URL: ids are short, stable, and
+/// bounded by the catalog, where URLs are long and would leak one entry of
+/// unreclaimable texture metadata each (deadlib-assets has no
+/// `remove_texture_dims`).
+fn pack_banner_texture_key(pack_id: u64) -> String {
+    format!("smo-banner/{pack_id}")
+}
+
 fn options_song_pack_view() -> Vec<OptionsSongPackView> {
     deadsync_simfile::runtime_cache::get_song_cache()
         .iter()
@@ -1159,6 +1175,8 @@ impl ScreensState {
         let mut options_state = options::init(options_init_view(dirs, audio_options, bookkeeping));
         options_state.active_color_index = color_index;
 
+        let mut content_browser_state = content_browser::init();
+        content_browser_state.active_color_index = color_index;
         let mut credits_state = credits::init();
         credits_state.active_color_index = color_index;
 
@@ -1207,6 +1225,7 @@ impl ScreensState {
             practice_state: None,
             gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor::default(),
             options_state,
+            content_browser_state,
             credits_state,
             manage_local_profiles_state,
             mappings_state,
@@ -1294,6 +1313,10 @@ impl ScreensState {
                     smx_assignment.expect("Options requires the live SMX assignment view"),
                     effects,
                 );
+                (None, false)
+            }
+            CurrentScreen::ContentBrowser => {
+                content_browser::update(&mut self.content_browser_state, delta_time);
                 (None, false)
             }
             CurrentScreen::Credits => {
@@ -1568,6 +1591,8 @@ pub struct App {
     >,
     asset_manager: AssetManager,
     option_previews: option_previews::Service,
+    /// The reader's noteskin for the Content Browser's chart preview.
+    browser_skin: browser_skin::Service,
     dynamic_media: DynamicMedia,
     /// Lazily started after the opt-in feature first receives data. The single
     /// bounded worker decodes off the frame thread and fixed texture keys bound
@@ -1643,6 +1668,8 @@ pub struct App {
     /// do not lock the download runtime just to observe an empty queue.
     select_music_ready_reload_generation: u64,
     options_song_pack_generation: u64,
+    /// Song-cache generation the browser's installed-name list was built from.
+    content_browser_song_generation: u64,
     /// Game-thread-owned, app-lifetime updater cursor with one action slot and
     /// `FFmpeg` and Workshop slots. It warms during App construction; atomic
     /// revision reads gate all phase locking, deep cloning, and shell-view
@@ -1804,6 +1831,15 @@ const fn save_summary_needs_attention(summary: &sync_offset::SongOffsetSaveSumma
     summary.skipped_read_only > 0 || summary.failed_files > 0 || summary.cache_refresh_failures > 0
 }
 
+/// "1 song" or "N songs".
+fn songs_counted(count: usize) -> String {
+    if count == 1 {
+        "1 song".to_owned()
+    } else {
+        format!("{count} songs")
+    }
+}
+
 fn save_summary_text(summary: &sync_offset::SongOffsetSaveSummary) -> String {
     format!(
         "saved {} of {} change(s); {} read-only, {} write failure(s), {} cache refresh failure(s)",
@@ -1844,7 +1880,10 @@ impl App {
         let screen = self.state.screens.current_screen;
         if !matches!(
             screen,
-            CurrentScreen::Init | CurrentScreen::Options | CurrentScreen::SelectMusic
+            CurrentScreen::Init
+                | CurrentScreen::Options
+                | CurrentScreen::SelectMusic
+                | CurrentScreen::ContentBrowser
         ) {
             return;
         }
@@ -1865,7 +1904,347 @@ impl App {
                     events,
                 );
             }
+            // The browser's "Reload songs": once its rescan lands, the song
+            // wheel is told and the reader goes out, as the original does.
+            CurrentScreen::ContentBrowser => {
+                if content_browser::sync_reload_events(
+                    &mut self.state.screens.content_browser_state,
+                    events,
+                ) {
+                    select_music::refresh_from_song_packs(
+                        &mut self.state.screens.select_music_state,
+                        deadsync_simfile::runtime_cache::get_song_cache().clone(),
+                    );
+                    self.theme_effect_scratch
+                        .push(ThemeEffect::NavigateNoFade(CurrentScreen::Menu));
+                }
+            }
             _ => unreachable!("content reload events are only polled for reload-capable screens"),
+        }
+    }
+
+    /// Turn fetched banner bytes into textures, and retire the ones the
+    /// cache has let go.
+    ///
+    /// Decoding happens here rather than on the fetch thread because `image`
+    /// belongs to the crates that own a GPU; the network crate deals in bytes.
+    /// A banner is around 800x250, so a decode is well under a millisecond and
+    /// two per frame is the ceiling the upload pump can absorb anyway
+    /// (LIVE_TEXTURE_UPLOAD_MAX_OPS / _MAX_BYTES).
+    fn poll_pack_banners(&mut self) {
+        /// Source bytes decoded on the main thread in one frame.
+        ///
+        /// Budgeted by size rather than by count. A count budget looks fair
+        /// and is not: the catalogue serves banners close to a megabyte of
+        /// PNG, so "two per frame" can mean two megabytes of decode plus the
+        /// RGBA expansion of it, which is tens of milliseconds. Changing tabs
+        /// asks for twenty new banners at once and six workers return them
+        /// together, so that lands as a stall right after the keypress.
+        const DECODE_BYTES_PER_FRAME: usize = 512 * 1024;
+        /// However big the next one is, one always gets through -- a banner
+        /// larger than the whole budget must not stall forever.
+        const MIN_DECODES_PER_FRAME: usize = 1;
+
+        let mut spent = 0usize;
+        let mut decoded = 0usize;
+        // Asked for one at a time so the budget is not spent on images that
+        // are then held over to the next frame anyway.
+        while decoded < MIN_DECODES_PER_FRAME || spent < DECODE_BYTES_PER_FRAME {
+            let Some(fetched) = deadsync_online::banners::take_ready(1).pop() else {
+                break;
+            };
+            spent += fetched.bytes.len();
+            decoded += 1;
+            match image::load_from_memory(&fetched.bytes) {
+                Ok(image) => {
+                    let key = pack_banner_texture_key(fetched.pack_id);
+                    // queue_texture_upload registers the dimensions
+                    // synchronously, so the theme can lay this out on the very
+                    // frame it is queued -- one or more frames before the GPU
+                    // texture exists. A sprite whose texture is not there yet
+                    // is skipped at draw rather than failing.
+                    // `into_rgba8` rather than `to_rgba8`: the decoded image is
+                    // owned here and about to be dropped, so there is no
+                    // reason to copy several megabytes of it first.
+                    self.asset_manager
+                        .queue_texture_upload(key, image.into_rgba8());
+                }
+                Err(error) => {
+                    // Not an image, or a format the decoder does not have.
+                    // Remember it so the row stops asking.
+                    // Bytes that are not a picture will not become one, so
+                    // this answer is settled and must not be retried.
+                    log::debug!(
+                        "Banner for pack {} did not decode: {error}",
+                        fetched.pack_id
+                    );
+                    deadsync_online::banners::mark_failed(fetched.pack_id, true);
+                }
+            }
+        }
+
+        // Eviction has to happen where the Backend is, and the key space is
+        // ours alone -- pack ids, disjoint from every path-derived key -- so
+        // releasing directly is safe without consulting the media owners.
+        let overflow = deadsync_online::banners::overflow();
+        if overflow.is_empty() {
+            return;
+        }
+        let Some(backend) = self.backend.as_mut() else {
+            return;
+        };
+        for pack_id in overflow {
+            let key = pack_banner_texture_key(pack_id);
+            if let Some((_handle, texture)) = self.asset_manager.remove_texture(key.as_str()) {
+                backend.retire_texture(texture);
+            }
+        }
+    }
+
+    fn sync_content_browser_stepmaniaonline(&mut self) {
+        if self.state.screens.current_screen != CurrentScreen::ContentBrowser {
+            return;
+        }
+        // Ask for a catalog when there is not one yet. start_catalog_request
+        // already ignores a call while Loading or Ready, but it does NOT ignore
+        // one after an error -- so gating on Idle here is what stops a failed
+        // fetch from being retried every single frame.
+        let snapshot = deadsync_online::stepmaniaonline::runtime_snapshot();
+        if snapshot.phase == deadsync_online::stepmaniaonline::CatalogPhase::Idle {
+            deadsync_online::stepmaniaonline::runtime_ensure_catalog();
+        }
+        // Banners, dates and chart types come from a second endpoint, on its
+        // own thread. Same Idle gate for the same reason: a failed fetch must
+        // not be retried every frame. The browser lists fine without it.
+        let details = deadsync_online::smo_details::runtime_snapshot();
+        match details.phase {
+            deadsync_online::smo_details::DetailsPhase::Idle => {
+                deadsync_online::smo_details::runtime_ensure_details();
+            }
+            // Tried again after a pause rather than left dead until the
+            // reader refreshes by hand; the service keeps the pause itself.
+            deadsync_online::smo_details::DetailsPhase::Error => {
+                deadsync_online::smo_details::runtime_recover();
+            }
+            _ => {}
+        }
+
+        // itgdb.net supplies the curated doubles category. Optional in the
+        // same way: without it the doubles view falls back to SMO alone.
+        let itgdb = deadsync_online::itgdb::runtime_snapshot();
+        if itgdb.phase == deadsync_online::itgdb::ItgdbPhase::Idle {
+            deadsync_online::itgdb::runtime_ensure_dedicated();
+        }
+
+        // One pack's song list, and only for the detail page that is open.
+        // Asking for the selected row instead would read a pack page for every
+        // row a player scrolls past.
+        match content_browser::wanted_pack_page(&self.state.screens.content_browser_state) {
+            Some(pack_id) => deadsync_online::pack_page::runtime_want(pack_id),
+            None => deadsync_online::pack_page::runtime_clear(),
+        }
+        let page = deadsync_online::pack_page::runtime_snapshot();
+
+        // Searching is three passes -- pack names, chart credits, song titles
+        // -- and only the first can be answered from the catalogue we hold.
+        if let Some(query) =
+            content_browser::wanted_search(&self.state.screens.content_browser_state)
+        {
+            deadsync_online::smo_search::runtime_search(query);
+        }
+        let search = deadsync_online::smo_search::runtime_snapshot();
+
+        // The year view fills itself in rather than asking the reader to.
+        if content_browser::wants_more_pages(&self.state.screens.content_browser_state) {
+            deadsync_online::smo_details::runtime_load_more();
+        }
+
+        // The beginner list is decided by reading pack pages, so it only runs
+        // while its own tab is open.
+        if content_browser::wants_beginner_walk(&self.state.screens.content_browser_state) {
+            let candidates =
+                content_browser::beginner_candidates(&self.state.screens.content_browser_state);
+            deadsync_online::beginner::runtime_walk(
+                &candidates,
+                &self.dirs.beginner_verdict_cache_file(),
+            );
+        }
+        let beginner = deadsync_online::beginner::runtime_snapshot();
+
+        // Rows the details pages never described -- keyboard packs, search
+        // hits, the curated doubles column -- are looked up one at a time, and
+        // only while they are on screen. Stamina and all-around are fetched
+        // whole, because those lists hold only packs with banners and have to
+        // know about every one before they can be drawn.
+        {
+            let state = &self.state.screens.content_browser_state;
+            let wanted = content_browser::wanted_descriptions(state);
+            deadsync_online::smo_describe::runtime_want(&wanted);
+            if let Some(view) = content_browser::wanted_view(state) {
+                deadsync_online::smo_describe::runtime_want_view(view);
+            }
+        }
+        let describe = deadsync_online::smo_describe::runtime_snapshot();
+
+        // The featured strip is what people are playing, which only
+        // arrowcloud knows -- the catalogue has no play data at all.
+        let popular = deadsync_online::popular_packs::runtime_snapshot();
+        if popular.phase == deadsync_online::popular_packs::PopularPhase::Idle {
+            deadsync_online::popular_packs::runtime_ensure_popular();
+        }
+
+        let ready_dirs = deadsync_online::stepmaniaonline::runtime_take_ready_song_dirs();
+
+        // Only the group names are wanted, and only when the library moved.
+        // Rebuilding unconditionally cloned every pack's song vector once per
+        // frame. A finished install forces a rebuild too, because
+        // reload_song_in_cache_with does not bump the generation counter.
+        let generation = deadsync_simfile::runtime_cache::song_cache_generation();
+        let installed = (generation != self.content_browser_song_generation
+            || !ready_dirs.is_empty())
+        .then(|| {
+            self.content_browser_song_generation = generation;
+            let mut packs = deadsync_simfile::runtime_cache::get_song_cache()
+                .iter()
+                .map(|pack| content_browser::InstalledPack {
+                    name: pack.group_name.clone(),
+                    lower: pack.group_name.to_lowercase(),
+                    songs: pack.songs.len(),
+                    // What the pack's own Pack.ini declares, as the scan read
+                    // it -- `Default` when it declares nothing.
+                    sync: pack.sync_pref,
+                    // The copy on this machine. A path is a texture key here,
+                    // the same way every other screen draws pack artwork.
+                    banner: pack
+                        .banner_path
+                        .as_ref()
+                        .map(|path| path.to_string_lossy().into_owned()),
+                })
+                .collect::<Vec<_>>();
+            // The library grid reads in name order, always -- it is a place to
+            // find a pack you already have, so alphabetical is the only order
+            // that helps.
+            packs.sort_by(|a, b| a.lower.cmp(&b.lower));
+            packs
+        });
+
+        // Artwork for what is on screen. The service ignores a pack it has
+        // already fetched, queued or failed, so this is cheap to call every
+        // frame and needs no bookkeeping here.
+        for (pack_id, url) in
+            content_browser::wanted_banners(&self.state.screens.content_browser_state)
+        {
+            deadsync_online::banners::request(pack_id, url.as_str());
+        }
+
+        content_browser::sync_stepmaniaonline(
+            &mut self.state.screens.content_browser_state,
+            content_browser::Services {
+                catalog: snapshot,
+                details,
+                itgdb,
+                page,
+                search,
+                popular,
+                beginner,
+                describe,
+                song_preview: deadsync_online::smo_songs::runtime_preview_snapshot(),
+                song_installs: deadsync_online::smo_songs::runtime_song_installs(),
+                banner_failed: deadsync_online::banners::failed_ids(),
+                pack_ini_offsets_on: self.frame_config.machine_pack_ini_offsets,
+                pack_sync_confidence: self.frame_config.null_or_die_confidence_percent,
+                pack_sync_menu_only: self.frame_config.only_dedicated_menu_buttons,
+                pack_sync_three_key: self.frame_config.three_key_navigation,
+            },
+            ready_dirs,
+            installed,
+        );
+
+        self.check_pack_for_sync();
+        // A shift the sync dialog has asked for, once its panel is on screen:
+        // the rewrite holds this frame.
+        if let Some(shift) =
+            content_browser::take_pack_shift(&mut self.state.screens.content_browser_state)
+        {
+            self.run_pack_shift(shift);
+        }
+
+        // The chart preview: the previews and songs the page asked for, the
+        // music they start and stop, the clock it is timed by, and the
+        // reader's skin.
+        let state = &mut self.state.screens.content_browser_state;
+        for request in content_browser::take_song_requests(state) {
+            match request {
+                content_browser::SongRequest::Preview {
+                    pack_id,
+                    title,
+                    artist,
+                } => {
+                    deadsync_online::smo_songs::runtime_preview_start(
+                        pack_id,
+                        &title,
+                        &artist,
+                        &self.dirs.cache_dir,
+                    );
+                }
+                content_browser::SongRequest::StopPreview => {
+                    deadsync_online::smo_songs::runtime_preview_stop();
+                }
+                content_browser::SongRequest::GetSong {
+                    pack_id,
+                    title,
+                    artist,
+                    itg_sync,
+                } => {
+                    if let Err(reason) = deadsync_online::smo_songs::runtime_queue_song(
+                        pack_id,
+                        &title,
+                        &artist,
+                        itg_sync,
+                        &self.dirs.songs_dir(),
+                        &self.dirs.cache_dir,
+                    ) {
+                        content_browser::song_request_refused(state, reason);
+                    }
+                }
+            }
+        }
+        for request in content_browser::take_audio_requests(state) {
+            self.theme_effect_scratch
+                .push(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+                    request,
+                )));
+        }
+        // Seconds into the playing file, as Select Music reads it. Only while
+        // a preview is up: nothing else on this screen is timed by music.
+        let music_time = (content_browser::preview_active(state) && self.audio.is_available())
+            .then(|| (self.music_clock.snapshot().music_nanos as f64 * 1e-9) as f32);
+        content_browser::set_music_time(state, music_time);
+        if let Some(backend) = self.backend.as_mut() {
+            let skin = self.browser_skin.update(&mut self.asset_manager, backend);
+            // The geometry goes over once, with the first frame the skin does.
+            let models = skin.as_ref().and_then(|_| self.browser_skin.take_models());
+            content_browser::set_preview_skin(
+                &mut self.state.screens.content_browser_state,
+                skin,
+                models,
+            );
+        }
+        // The reader chose "Reload songs" on the way out. Handed over only
+        // once the reload service is free: it refuses a second job, and a
+        // refused job would leave the dialog waiting on a rescan never run.
+        let dirs = if self.content_reload.is_busy() {
+            Vec::new()
+        } else {
+            content_browser::take_pending_reload_dirs(&mut self.state.screens.content_browser_state)
+        };
+        if !dirs.is_empty() {
+            self.theme_effect_scratch.push(ThemeEffect::Runtime(
+                SimplyLoveRuntimeRequest::Content(SimplyLoveContentRequest::ReloadSongDirs {
+                    songs_root: self.dirs.songs_dir(),
+                    pack_dirs: dirs,
+                }),
+            ));
         }
     }
 
@@ -2010,6 +2389,7 @@ impl App {
         let song_events = events.song;
         let select_pack_events = events.select_pack;
         let options_pack_events = events.options_pack;
+        let browser_pack_events = events.browser_pack;
         if !song_events.is_empty() {
             select_music::apply_sync_analysis_events(
                 &mut self.state.screens.select_music_state,
@@ -2030,6 +2410,225 @@ impl App {
                 options_pack_events,
             );
         }
+        if !browser_pack_events.is_empty() {
+            content_browser::apply_sync_analysis_events(
+                &mut self.state.screens.content_browser_state,
+                browser_pack_events,
+            );
+        }
+    }
+
+    /// Whether the browser's sync dialog may change a pack: asked once as it
+    /// opens, with the same check every change makes again before writing.
+    fn check_pack_for_sync(&mut self) {
+        let state = &mut self.state.screens.content_browser_state;
+        let Some(group_name) = content_browser::wanted_pack_check(state) else {
+            return;
+        };
+        let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(&self.dirs.songs_dir());
+        let result = crate::content_reload::writable_pack(
+            &group_name,
+            &roots,
+            &self.dirs.extra_song_roots(),
+        )
+        .map(|_| ());
+        content_browser::set_pack_check(state, &group_name, result);
+    }
+
+    /// The Content Browser's shift: every simfile of a library pack moved by
+    /// the engine's ITG correction, through the same save every pack sync
+    /// uses. The pack's new sync is recorded first, so a shift whose record
+    /// cannot be written is never made, and the same shift is never offered
+    /// twice; if no simfile could be changed after all, the record is put
+    /// back.
+    fn run_pack_shift(&mut self, shift: content_browser::PackShift) {
+        let content_browser::PackShift {
+            group_name,
+            to_null,
+        } = shift;
+        let fail = |app: &mut Self, error: String| {
+            warn!("Could not shift the sync of '{group_name}': {error}");
+            content_browser::finish_pack_sync(
+                &mut app.state.screens.content_browser_state,
+                &group_name,
+                None,
+                Err(error),
+            );
+        };
+        let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(&self.dirs.songs_dir());
+        let pack = match crate::content_reload::writable_pack(
+            &group_name,
+            &roots,
+            &self.dirs.extra_song_roots(),
+        ) {
+            Ok(pack) => pack,
+            Err(error) => return fail(self, error),
+        };
+        let before = match crate::content_reload::write_pack_sync(&pack.dir, &group_name, !to_null)
+        {
+            Ok(before) => before,
+            Err(error) => return fail(self, error),
+        };
+
+        let delta = if to_null {
+            deadsync_chart::song::ITG_SYNC_OFFSET_SECONDS
+        } else {
+            -deadsync_chart::song::ITG_SYNC_OFFSET_SECONDS
+        };
+        let changes: Vec<sync_offset::SongOffsetSyncChange> = pack
+            .simfiles
+            .iter()
+            .map(|simfile_path| sync_offset::SongOffsetSyncChange {
+                simfile_path: simfile_path.clone(),
+                delta_seconds: delta,
+            })
+            .collect();
+        let summary = self.save_song_offset_changes(&changes);
+        let written = written_song_offset_changes(&summary);
+        if !written.is_empty() {
+            self.sync_analysis.refresh_applied(&written);
+        }
+        if summary.saved_files == 0 {
+            let mut error = format!(
+                "no simfile could be changed ({})",
+                save_summary_text(&summary)
+            );
+            if let Err(restore) = crate::content_reload::restore_pack_ini(before) {
+                error.push_str("; ");
+                error.push_str(&restore);
+            }
+            return fail(self, error);
+        }
+
+        let (from, to, recorded) = if to_null {
+            ("ITG", "NULL", deadsync_chart::SyncPref::Null)
+        } else {
+            ("NULL", "ITG", deadsync_chart::SyncPref::Itg)
+        };
+        deadsync_simfile::runtime_cache::set_pack_sync_pref(&group_name, recorded);
+        let mut note = format!(
+            "{group_name}: {} moved from {from} to {to}",
+            songs_counted(summary.saved_files)
+        );
+        if save_summary_needs_attention(&summary) {
+            note.push_str(&format!(" ({})", save_summary_text(&summary)));
+        }
+        info!("Pack sync shift: {note}");
+        content_browser::finish_pack_sync(
+            &mut self.state.screens.content_browser_state,
+            &group_name,
+            Some(recorded),
+            Ok(note),
+        );
+    }
+
+    /// After the Content Browser's Null-or-Die review saves, the pack is
+    /// recorded as NULL: its measured offsets are null now, and a `Pack.ini`
+    /// still saying ITG would move them 9 ms more whenever the engine reads
+    /// it.
+    ///
+    /// Songs the review did not settle -- below the confidence it asks for,
+    /// failed, or with no chart of the play style it measured -- keep the
+    /// offsets they had. In a pack taken to be ITG those are ITG offsets, so
+    /// they are moved to NULL the way a shift moves them, and the whole pack
+    /// then really is what it is recorded as.
+    fn record_measured_pack(&mut self, saved: &sync_offset::SongOffsetSaveSummary) {
+        let state = &self.state.screens.content_browser_state;
+        let Some(group_name) = content_browser::pack_sync_group(state).map(str::to_owned) else {
+            return;
+        };
+        let mut settled: std::collections::HashSet<std::path::PathBuf> =
+            content_browser::measured_settled_simfiles(state)
+                .into_iter()
+                .collect();
+        // Every simfile this save tried, written or not: one it could not write
+        // still carries the review's fix, waiting on a retry, and moving it
+        // now would have that retry apply its fix on top.
+        settled.extend(
+            saved
+                .outcomes
+                .iter()
+                .map(|outcome| outcome.simfile_path.clone()),
+        );
+        let measured = format!(
+            "{group_name}: {} synced by Null-or-Die",
+            songs_counted(saved.saved_files)
+        );
+        let finish = |app: &mut Self, sync: Option<deadsync_chart::SyncPref>, note: String| {
+            content_browser::finish_pack_sync(
+                &mut app.state.screens.content_browser_state,
+                &group_name,
+                sync,
+                Ok(note),
+            );
+        };
+
+        let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(&self.dirs.songs_dir());
+        let recorded = crate::content_reload::writable_pack(
+            &group_name,
+            &roots,
+            &self.dirs.extra_song_roots(),
+        )
+        .and_then(|pack| {
+            crate::content_reload::write_pack_sync(&pack.dir, &group_name, false).map(|_| pack)
+        });
+        let pack = match recorded {
+            Ok(pack) => pack,
+            Err(error) => {
+                warn!("Could not record '{group_name}' as NULL after its pack sync: {error}");
+                return finish(
+                    self,
+                    None,
+                    format!("{measured}, but the pack could not be recorded as NULL: {error}"),
+                );
+            }
+        };
+        deadsync_simfile::runtime_cache::set_pack_sync_pref(
+            &group_name,
+            deadsync_chart::SyncPref::Null,
+        );
+
+        // ITG by its own Pack.ini, or by the machine's default -- but the
+        // default only while the engine applies it at all.
+        let was_itg = pack.sync_pref == deadsync_chart::SyncPref::Itg
+            || (self.frame_config.machine_pack_ini_offsets
+                && deadsync_chart::song::resolve_sync_pref(
+                    pack.sync_pref,
+                    self.frame_config.machine_default_sync_offset.sync_pref(),
+                ) == deadsync_chart::SyncPref::Itg);
+        let leftovers: Vec<sync_offset::SongOffsetSyncChange> = if was_itg {
+            pack.simfiles
+                .iter()
+                .filter(|simfile_path| !settled.contains(*simfile_path))
+                .map(|simfile_path| sync_offset::SongOffsetSyncChange {
+                    simfile_path: simfile_path.clone(),
+                    delta_seconds: deadsync_chart::song::ITG_SYNC_OFFSET_SECONDS,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let mut note = measured;
+        if !leftovers.is_empty() {
+            let shifted = self.save_song_offset_changes(&leftovers);
+            let written = written_song_offset_changes(&shifted);
+            if !written.is_empty() {
+                self.sync_analysis.refresh_applied(&written);
+            }
+            if shifted.saved_files > 0 {
+                note.push_str(&format!(
+                    ", {} more moved from ITG to NULL",
+                    songs_counted(shifted.saved_files)
+                ));
+            }
+            let stuck = leftovers.len() - shifted.saved_files;
+            if stuck > 0 {
+                note.push_str(&format!(", {} could not be moved", songs_counted(stuck)));
+            }
+        }
+        note.push_str(", recorded as NULL");
+        info!("Pack sync measure: {note}");
+        finish(self, Some(deadsync_chart::SyncPref::Null), note);
     }
 
     #[inline(always)]
@@ -3780,6 +4379,9 @@ impl App {
             self.sync_options_song_packs();
             self.sync_options_stepmaniaonline();
         }
+        if work_caps & frame_work::CONTENT_BROWSER_VIEW != 0 {
+            self.sync_content_browser_stepmaniaonline();
+        }
         if work_caps & frame_work::CONTENT_RELOAD != 0 {
             self.sync_content_reload_events();
         }
@@ -3793,6 +4395,7 @@ impl App {
             self.poll_sync_analysis();
             self.poll_song_search();
             self.poll_apply_replaygain();
+            self.poll_pack_banners();
         }
         if work_caps & frame_work::HEART_RATE_CONFIG != 0 {
             self.heart_rate.sync(
@@ -4581,6 +5184,7 @@ impl App {
             smx_difficulty_tint_cache: std::collections::HashMap::new(),
             asset_manager: AssetManager::new(),
             option_previews: option_previews::Service::default(),
+            browser_skin: browser_skin::Service::default(),
             dynamic_media: DynamicMedia::new(),
             arrowcloud_result_dialog: None,
             arrowcloud_result_ready_scratch: Vec::with_capacity(MAX_PLAYERS),
@@ -4607,6 +5211,7 @@ impl App {
             select_music_unlock_rebuild: true,
             select_music_ready_reload_generation: 0,
             options_song_pack_generation: deadsync_simfile::runtime_cache::song_cache_generation(),
+            content_browser_song_generation: u64::MAX,
             updater_view: updater::RuntimeCursor::new(),
             select_music_download_generation: 0,
             select_music_downloads_visible: false,
@@ -5154,6 +5759,9 @@ impl App {
                             Instant::now(),
                         );
                     }
+                    if owner == SimplyLoveSyncOwner::ContentBrowserPack && summary.saved_files > 0 {
+                        self.record_measured_pack(&summary);
+                    }
 
                     let mut events = vec![SimplyLoveSyncEvent::BatchSaveFinished { summary }];
                     match owner {
@@ -5168,6 +5776,12 @@ impl App {
                         SimplyLoveSyncOwner::OptionsPack => {
                             options::apply_sync_analysis_events(
                                 &mut self.state.screens.options_state,
+                                &mut events,
+                            );
+                        }
+                        SimplyLoveSyncOwner::ContentBrowserPack => {
+                            content_browser::apply_sync_analysis_events(
+                                &mut self.state.screens.content_browser_state,
                                 &mut events,
                             );
                         }
@@ -5256,6 +5870,133 @@ impl App {
                                 &mut self.state.screens.select_music_state,
                                 result,
                             );
+                        }
+                        SimplyLoveContentRequest::DeletePack { group_name } => {
+                            let config = config::runtime::get();
+                            let result = if config.allow_song_deletion {
+                                let songs_root = self.dirs.songs_dir();
+                                let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(
+                                    &songs_root,
+                                );
+                                crate::content_reload::delete_pack(
+                                    &group_name,
+                                    &roots,
+                                    &self.dirs.extra_song_roots(),
+                                )
+                            } else {
+                                Err("AllowSongDeletion is disabled".to_owned())
+                            };
+                            match &result {
+                                Ok(done) if done.kept.is_empty() => {
+                                    debug!(
+                                        "Deleted pack '{group_name}': {} songs removed",
+                                        done.removed
+                                    );
+                                }
+                                Ok(done) => warn!(
+                                    "Partly deleted pack '{group_name}': {} removed, {} left: {}",
+                                    done.removed,
+                                    done.kept.len(),
+                                    done.kept.join("; ")
+                                ),
+                                Err(error) => {
+                                    warn!("Pack deletion failed for '{group_name}': {error}");
+                                }
+                            }
+                            content_browser::finish_pack_deletion(
+                                &mut self.state.screens.content_browser_state,
+                                result
+                                    .as_ref()
+                                    .map(|done| done.removed)
+                                    .map_err(Clone::clone),
+                            );
+                        }
+                        SimplyLoveContentRequest::SetPackSync { group_name, itg } => {
+                            let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(
+                                &self.dirs.songs_dir(),
+                            );
+                            let result = crate::content_reload::set_pack_sync(
+                                &group_name,
+                                itg,
+                                &roots,
+                                &self.dirs.extra_song_roots(),
+                            );
+                            let recorded = if itg {
+                                deadsync_chart::SyncPref::Itg
+                            } else {
+                                deadsync_chart::SyncPref::Null
+                            };
+                            // The live catalog takes the value at once, so it
+                            // plays that way without rescanning the pack.
+                            let told = result.map(|_| {
+                                deadsync_simfile::runtime_cache::set_pack_sync_pref(
+                                    &group_name,
+                                    recorded,
+                                );
+                                if itg {
+                                    "recorded as ITG (+9ms) in its Pack.ini".to_owned()
+                                } else {
+                                    "recorded as NULL (0ms) in its Pack.ini".to_owned()
+                                }
+                            });
+                            match &told {
+                                Ok(note) => debug!("Pack '{group_name}': {note}"),
+                                Err(error) => {
+                                    warn!("Could not set sync for '{group_name}': {error}");
+                                }
+                            }
+                            content_browser::finish_pack_sync(
+                                &mut self.state.screens.content_browser_state,
+                                &group_name,
+                                told.is_ok().then_some(recorded),
+                                told,
+                            );
+                        }
+                        SimplyLoveContentRequest::MeasurePackSync { group_name } => {
+                            // Proved again before any simfile is measured for
+                            // saving: a pack the review could save into but
+                            // not record would end up shifted twice.
+                            let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(
+                                &self.dirs.songs_dir(),
+                            );
+                            if let Err(error) = crate::content_reload::writable_pack(
+                                &group_name,
+                                &roots,
+                                &self.dirs.extra_song_roots(),
+                            ) {
+                                content_browser::finish_pack_sync(
+                                    &mut self.state.screens.content_browser_state,
+                                    &group_name,
+                                    None,
+                                    Err(error),
+                                );
+                            } else {
+                                let songs: Vec<Arc<SongData>> = {
+                                    let cache = deadsync_simfile::runtime_cache::get_song_cache();
+                                    let wanted = group_name.to_lowercase();
+                                    cache
+                                        .iter()
+                                        .filter(|pack| pack.group_name.to_lowercase() == wanted)
+                                        .flat_map(|pack| pack.songs.iter().cloned())
+                                        .collect()
+                                };
+                                let view = options_pack_sync_view();
+                                let request = content_browser::begin_pack_measure(
+                                    &mut self.state.screens.content_browser_state,
+                                    &group_name,
+                                    &songs,
+                                    &view.target_chart_type,
+                                    view.preferred_difficulty_index,
+                                );
+                                if let Some(SimplyLoveSyncRequest::StartAnalysis {
+                                    owner,
+                                    targets,
+                                    emit_freq_delta,
+                                }) = request
+                                {
+                                    self.sync_analysis.start(owner, targets, emit_freq_delta);
+                                }
+                            }
                         }
                         SimplyLoveContentRequest::SkipReplayGain => {
                             deadsync_audio_replaygain::request_skip_blocking_analysis();
@@ -5644,6 +6385,30 @@ impl App {
                     SimplyLoveOnlineRequest::RefreshStepManiaOnlineCatalog,
                 ) => {
                     deadsync_online::stepmaniaonline::runtime_refresh_catalog();
+                    deadsync_online::smo_details::runtime_refresh_details();
+                    deadsync_online::smo_describe::runtime_refresh();
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Online(
+                    SimplyLoveOnlineRequest::LoadMoreStepManiaOnlinePacks,
+                ) => {
+                    // On the beginner tab the next helping is more pack pages
+                    // to read, not more catalogue rows to fetch -- and never a
+                    // details page, even when there is nothing to walk yet.
+                    let state = &self.state.screens.content_browser_state;
+                    if content_browser::beginner_showing(state) {
+                        // An empty candidate list would end the walk at once
+                        // as "exhausted", and it would never be tried again.
+                        let candidates = content_browser::beginner_candidates(state);
+                        if !candidates.is_empty() {
+                            deadsync_online::beginner::runtime_find_more(
+                                &candidates,
+                                &self.dirs.beginner_verdict_cache_file(),
+                            );
+                        }
+                    } else {
+                        deadsync_online::smo_details::runtime_load_more();
+                    }
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Online(
@@ -7107,6 +7872,12 @@ impl App {
                     visual_policy,
                 );
             }
+            CurrentScreen::ContentBrowser => content_browser::push_actors(
+                &mut actors,
+                &self.state.screens.content_browser_state,
+                &self.asset_manager,
+                visual_policy,
+            ),
             CurrentScreen::Credits => credits::push_actors(
                 &mut actors,
                 &self.state.screens.credits_state,
@@ -7583,6 +8354,19 @@ impl App {
                 &mut self.state.screens.manage_local_profiles_state,
                 text,
             ),
+            RawKeyTextRoute::ContentBrowser => {
+                debug_assert!(self.theme_effect_scratch.is_empty());
+                content_browser::handle_raw_key_event(
+                    &mut self.state.screens.content_browser_state,
+                    None,
+                    Some(text),
+                    &mut self.theme_effect_scratch,
+                );
+                if let Err(e) = self.drain_theme_effects(event_loop) {
+                    log::error!("Failed to handle Content Browser text input action: {e}");
+                }
+                return;
+            }
             RawKeyTextRoute::Options => {
                 debug_assert!(self.theme_effect_scratch.is_empty());
                 screens::options::handle_raw_key_event(
@@ -7742,6 +8526,22 @@ impl App {
                     if let Err(e) = self.handle_action(action, event_loop) {
                         log::error!("Failed to handle Input raw key action: {e}");
                     }
+                    return true;
+                }
+            }
+            RawKeyScreenRoute::ContentBrowser => {
+                debug_assert!(self.theme_effect_scratch.is_empty());
+                let consumed = content_browser::handle_raw_key_event(
+                    &mut self.state.screens.content_browser_state,
+                    Some(&raw_key),
+                    None,
+                    &mut self.theme_effect_scratch,
+                );
+                let has_effect = !self.theme_effect_scratch.is_empty();
+                if let Err(e) = self.drain_theme_effects(event_loop) {
+                    log::error!("Failed to handle Content Browser raw key action: {e}");
+                }
+                if consumed || has_effect {
                     return true;
                 }
             }
@@ -8252,6 +9052,13 @@ impl App {
     }
 
     fn prepare_screen_state(&mut self, prev: CurrentScreen, target: CurrentScreen) {
+        // A preview's audio stops with the screen; its download stops here,
+        // and so does a pack sync measure that is still running.
+        if prev == CurrentScreen::ContentBrowser && target != CurrentScreen::ContentBrowser {
+            deadsync_online::smo_songs::runtime_preview_stop();
+            self.sync_analysis
+                .cancel(SimplyLoveSyncOwner::ContentBrowserPack);
+        }
         if prev == CurrentScreen::SelectColor {
             let idx = self.state.screens.select_color_state.active_color_index;
             self.sync_screen_color_index(idx);
@@ -8269,6 +9076,14 @@ impl App {
             self.state.screens.init_state.active_color_index = active_color_index;
         } else if target == CurrentScreen::Options {
             self.reset_options_state_for_entry(prev);
+        } else if target == CurrentScreen::ContentBrowser {
+            content_browser::on_enter(&mut self.state.screens.content_browser_state);
+            // Ready by the first preview: a Lua skin can take a moment to
+            // compile, and the window should not open on bare squares.
+            self.browser_skin
+                .want(browser_skin::preview_noteskin_name());
+            self.state.screens.content_browser_state.active_color_index =
+                self.state.screens.menu_state.active_color_index;
         } else if target == CurrentScreen::Credits {
             self.state.screens.credits_state = credits::init();
             self.state.screens.credits_state.active_color_index =
@@ -8673,10 +9488,6 @@ impl App {
                         return commands;
                     }
                 };
-                let gameplay_charts = [
-                    Arc::new(gameplay_song[0].clone()),
-                    Arc::new(gameplay_song[1].clone()),
-                ];
                 if let Some(plan) = cabinet_light_plan.as_ref() {
                     let (key, events) = cabinet_light_chart_from_loaded(
                         song_arc.as_ref(),
@@ -8687,6 +9498,7 @@ impl App {
                     );
                     self.gameplay_lights.set_cabinet_chart(key, events);
                 }
+                let gameplay_charts = crate::gameplay_entry::take_player_charts(gameplay_song);
                 let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
 
                 if play_style.is_versus() {
@@ -9096,10 +9908,6 @@ impl App {
                             }
                         }
                     };
-                    let gameplay_charts = [
-                        Arc::new(gameplay_song[0].clone()),
-                        Arc::new(gameplay_song[1].clone()),
-                    ];
                     if let Some(plan) = cabinet_light_plan.as_ref() {
                         let (key, events) = cabinet_light_chart_from_loaded(
                             song_arc.as_ref(),
@@ -9112,7 +9920,7 @@ impl App {
                     } else {
                         self.gameplay_lights.clear();
                     }
-                    gameplay_charts
+                    crate::gameplay_entry::take_player_charts(gameplay_song)
                 };
                 let payload_ms = preloaded_payload_ms
                     .unwrap_or_else(|| payload_started.elapsed().as_secs_f64() * 1000.0);
@@ -10395,6 +11203,22 @@ mod tests {
         assert_ne!(evaluation & frame_work::ONLINE_VIEW, 0);
         assert_ne!(evaluation & frame_work::ASYNC_RESULTS, 0);
         assert_eq!(evaluation & frame_work::CONTENT_RELOAD, 0);
+
+        // The browser's own work runs on the browser alone, not on every
+        // screen that shares a bit with it.
+        let browser = frame_work::screen_caps(CurrentScreen::ContentBrowser);
+        assert_ne!(browser & frame_work::CONTENT_BROWSER_VIEW, 0);
+        assert_ne!(browser & frame_work::CONTENT_RELOAD, 0);
+        for screen in [
+            CurrentScreen::Menu,
+            CurrentScreen::Options,
+            CurrentScreen::SelectMusic,
+        ] {
+            assert_eq!(
+                frame_work::screen_caps(screen) & frame_work::CONTENT_BROWSER_VIEW,
+                0
+            );
+        }
     }
 
     #[test]

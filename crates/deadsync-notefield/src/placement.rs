@@ -177,10 +177,11 @@ struct NotefieldCameraKey {
     tilt: u32,
     skew: u32,
     reverse: bool,
+    wrapper: [u32; 16],
 }
 
 impl NotefieldCameraKey {
-    const fn new(
+    fn new(
         screen_w: f32,
         screen_h: f32,
         playfield_center_x: f32,
@@ -188,6 +189,7 @@ impl NotefieldCameraKey {
         tilt: f32,
         skew: f32,
         reverse: bool,
+        wrapper: Matrix4,
     ) -> Self {
         Self {
             screen_w: screen_w.to_bits(),
@@ -197,6 +199,7 @@ impl NotefieldCameraKey {
             tilt: tilt.to_bits(),
             skew: skew.to_bits(),
             reverse,
+            wrapper: wrapper.to_cols_array().map(f32::to_bits),
         }
     }
 }
@@ -222,9 +225,14 @@ pub struct NotefieldCameraCache {
     camera: Option<Matrix4>,
     view: Option<Matrix4>,
     stats: NotefieldCameraCacheStats,
+    wrapper: Matrix4,
 }
 
 impl NotefieldCameraCache {
+    pub fn set_wrapper(&mut self, wrapper: Matrix4) {
+        self.wrapper = wrapper;
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn resolve(
         &mut self,
@@ -244,6 +252,7 @@ impl NotefieldCameraCache {
             tilt,
             skew,
             reverse,
+            self.wrapper,
         );
         if self.key == Some(key) {
             self.stats.hits = self.stats.hits.saturating_add(1);
@@ -257,6 +266,7 @@ impl NotefieldCameraCache {
             tilt,
             skew,
             reverse,
+            self.wrapper,
         );
         self.key = Some(key);
         self.camera = camera.map(|(projection, _)| projection);
@@ -294,7 +304,19 @@ impl NotefieldCameraCache {
             * Matrix4::from_rotation_x((30.0 * tilt * reverse).to_radians())
             * Matrix4::from_scale(Vector3::splat(zoom))
             * Matrix4::from_translation(Vector3::new(0.0, -center_offset, 0.0));
-        Some((projection * view, field))
+        Some((projection * view, self.wrapper * field))
+    }
+
+    /// Conjugate the native local wrapper into the field's Y-up world space.
+    #[must_use]
+    pub fn wrapper_model(&self) -> Option<Matrix4> {
+        let key = self.key?;
+        if self.wrapper == Matrix4::IDENTITY { return None; }
+        let x = f32::from_bits(key.playfield_center_x) - 0.5 * f32::from_bits(key.screen_w);
+        let flip = Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
+        Some(Matrix4::from_translation(Vector3::new(x, 0.0, 0.0))
+            * flip * self.wrapper * flip
+            * Matrix4::from_translation(Vector3::new(-x, 0.0, 0.0)))
     }
 
     #[must_use]
@@ -317,6 +339,7 @@ pub(crate) fn notefield_camera(
     tilt: f32,
     skew: f32,
     reverse: bool,
+    wrapper: Matrix4,
 ) -> Option<(Matrix4, Matrix4)> {
     let half_w = 0.5 * screen_w;
     let half_h = 0.5 * screen_h;
@@ -349,7 +372,11 @@ pub(crate) fn notefield_camera(
         * Matrix4::from_scale(Vector3::new(tilt_scale, tilt_scale, 1.0))
         * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0));
 
-    let eye = view * world_to_screen * field;
+    let flip = Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
+    let wrapper = Matrix4::from_translation(Vector3::new(pivot_x, 0.0, 0.0))
+        * flip * wrapper * flip
+        * Matrix4::from_translation(Vector3::new(-pivot_x, 0.0, 0.0));
+    let eye = view * world_to_screen * wrapper * field;
     Some((proj * eye, eye))
 }
 
@@ -732,7 +759,7 @@ mod tests {
     #[test]
     fn field_camera_cache_reuses_exact_inputs() {
         let mut cache = NotefieldCameraCache::default();
-        let expected = notefield_camera(640.0, 480.0, 213.5, 240.0, 0.35, -0.2, false)
+        let expected = notefield_camera(640.0, 480.0, 213.5, 240.0, 0.35, -0.2, false, glam::Mat4::IDENTITY)
             .map(|(projection, _)| projection);
 
         let first = cache.resolve(640.0, 480.0, 213.5, 240.0, 0.35, -0.2, false);
@@ -742,6 +769,24 @@ mod tests {
         assert_eq!(matrix_bits(second), matrix_bits(expected));
         assert_eq!(cache.stats().rebuilds, 1);
         assert_eq!(cache.stats().hits, 1);
+    }
+
+    #[test]
+    fn field_camera_cache_tracks_wrapper_pose() {
+        let mut cache = NotefieldCameraCache::default();
+        let original = cache.resolve(854.0, 480.0, 213.5, 240.0, 0.35, 0.0, false);
+        let pose = glam::Mat4::from_rotation_z(0.2);
+        cache.set_wrapper(pose);
+        let changed = cache.resolve(854.0, 480.0, 213.5, 240.0, 0.35, 0.0, false);
+        assert_ne!(matrix_bits(original), matrix_bits(changed));
+        assert_eq!(cache.generation(), 2);
+        assert_eq!(matrix_bits(changed), matrix_bits(cache.resolve(
+            854.0, 480.0, 213.5, 240.0, 0.35, 0.0, false)));
+        assert_eq!(cache.generation(), 2);
+        cache.set_wrapper(glam::Mat4::IDENTITY);
+        assert_eq!(matrix_bits(original), matrix_bits(cache.resolve(
+            854.0, 480.0, 213.5, 240.0, 0.35, 0.0, false)));
+        assert_eq!(cache.generation(), 3);
     }
 
     #[test]
@@ -763,7 +808,7 @@ mod tests {
             let resolved =
                 cache.resolve(screen_w, screen_h, center_x, center_y, tilt, skew, reverse);
             let expected =
-                notefield_camera(screen_w, screen_h, center_x, center_y, tilt, skew, reverse)
+                notefield_camera(screen_w, screen_h, center_x, center_y, tilt, skew, reverse, glam::Mat4::IDENTITY)
                     .map(|(projection, _)| projection);
             assert_eq!(matrix_bits(resolved), matrix_bits(expected));
             assert_eq!(cache.stats().rebuilds, index as u64 + 1);

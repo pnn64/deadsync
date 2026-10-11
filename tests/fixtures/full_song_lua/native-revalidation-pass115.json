@@ -1,0 +1,151 @@
+{
+  "pass": 115,
+  "previous_record": "native-revalidation-pass114.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "e7fe82d02aa9071c89927d56ddf8c9b970ea63c2",
+  "comparator_sha256": "b0d582fd43e5a2672075327a702b59b57cec36195de9f845e16f4956ccd9911b",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "canonical_positions_passed": [
+    36
+  ],
+  "next_position": 37,
+  "comparisons_passed": 216773579,
+  "fresh_archive_results": [
+    {
+      "position": 36,
+      "source_simfile": "[10] flip69 (DX) [Telperion]/flip69.ssc",
+      "archive": "97aa597691d65bb951a01a8f5d7749ec58bfce78466485f340f685615b87c390.tar.zst",
+      "archive_sha256": "97aa597691d65bb951a01a8f5d7749ec58bfce78466485f340f685615b87c390",
+      "harness_version": "0.1.51",
+      "source_commit": "e7fe82d02aa9071c89927d56ddf8c9b970ea63c2",
+      "source_pending_commit": false,
+      "binary_sha256": "b0d582fd43e5a2672075327a702b59b57cec36195de9f845e16f4956ccd9911b",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-pause-clock-v2-full_song_lua.exe",
+        "97aa597691d65bb951a01a8f5d7749ec58bfce78466485f340f685615b87c390.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 360.4523037998006,
+      "comparisons_passed": 216773579,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-036-native-pause-clock-v2.log",
+      "log_sha256": "45131780c57c0e2bfd18cd93c2f70dc0685597561986ebaa2454231fc2e3b6cb",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass115-top-036-native-lossless-v1.json",
+      "native_receipt_sha256": "9c17c51a91dbc01c444272402cf633515b6eb7f8a54871dced7fcc79b20f1e3f",
+      "full_corpus_complete": false
+    }
+  ],
+  "charts": [
+    {
+      "position": 36,
+      "entry": {
+        "title": "[5604] [10] flip69",
+        "source_simfile": "[10] flip69 (DX) [Telperion]/flip69.ssc",
+        "harness_version": "0.1.51",
+        "archive": "97aa597691d65bb951a01a8f5d7749ec58bfce78466485f340f685615b87c390.tar.zst",
+        "sha256": "97aa597691d65bb951a01a8f5d7749ec58bfce78466485f340f685615b87c390",
+        "compressed_bytes": 99480363,
+        "aliases": [
+          "08a666e9225672aaa69aebf35c9a81406442b08f74ad703375ed7e03b6925b40.tar.zst"
+        ]
+      },
+      "original_archive_retained": "3b29f7f3251b6c8ed1e014a79f626cf9f98c68498391ae664ea80ad612507d48.tar.zst",
+      "native_source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+      "native_cli_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+      "native_trace_sha256": "b7a954450739c40a019459299cd8dbc43cade91c1d3869d1907594c34689c77d",
+      "native_receipt_sha256": "9c17c51a91dbc01c444272402cf633515b6eb7f8a54871dced7fcc79b20f1e3f",
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "update_frames": 7569,
+      "duration_seconds": 126.13138580322266,
+      "original_source_unchanged": true,
+      "original_source_sha256": {
+        "[10] flip69 (DX) [Telperion]/flip69-banner.png": "0e501799b542d61aece76dc47c88d2bb9275bcaaff3c1bf2b81e14a2e547bc54",
+        "[10] flip69 (DX) [Telperion]/flip69-bg.png": "0a75140458e8ae78d9813cd9055fccf8b444706a794765d9c3e6d5515889398f",
+        "[10] flip69 (DX) [Telperion]/flip69-jacket.png": "e64dd2dde55a7105eac688c2bf1008f007cc39afe91de08802d5a21977ca5013",
+        "[10] flip69 (DX) [Telperion]/flip69.ogg": "7d2a8df421ea9fe90ba02373531be18f8a12bcbcd65228ed93fd59462e1d49bc",
+        "[10] flip69 (DX) [Telperion]/flip69.ssc": "0a6841aeca57ec323953c4eb4937d08b68bffbdcd1edb7355f8a3ed4c308d7f3",
+        "[10] flip69 (DX) [Telperion]/multitap/Default.lua": "a84418fb257e0947b07d4b9757b99eaa1739a572e45fe7ae4cef333b6dfe2318",
+        "[10] flip69 (DX) [Telperion]/multitap/flip69.png": "b6881f3224f612fb12587ecd75912a746eba137d501cc3602d2149f0153ede61",
+        "[10] flip69 (DX) [Telperion]/multitap/multitap_data.lua": "9444916d03b312e9556645b8b53a713af26d03acb570d93896bc87f2a4644a64"
+      },
+      "acceptance": "passed",
+      "comparisons_passed": 216773579
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "e7fe82d02aa9071c89927d56ddf8c9b970ea63c2",
+    "source_pending_commit": false,
+    "binary_sha256": "c98fdc9aaf755bf25a041c4222e8ae35c8987bd258bf31971f7a04574b0c620e",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-pause-clock-v2-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 127.43352279998362,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-036-native-clock-v2.log",
+    "log_sha256": "034328b97800d15b0d2b34762bc37d2668167cf13e5211b5f84abee9728dee9b",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 125.67s"
+    ]
+  },
+  "edgar_complete_archive_regression": {
+    "position": 35,
+    "source_simfile": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc",
+    "archive": "f0279455bbad6c96a899705927f9d37fd761071f111d8b1e672f50154b43be55.tar.zst",
+    "archive_sha256": "f0279455bbad6c96a899705927f9d37fd761071f111d8b1e672f50154b43be55",
+    "harness_version": "0.1.51",
+    "source_commit": "e7fe82d02aa9071c89927d56ddf8c9b970ea63c2",
+    "source_pending_commit": false,
+    "binary_sha256": "b0d582fd43e5a2672075327a702b59b57cec36195de9f845e16f4956ccd9911b",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-pause-clock-v2-full_song_lua.exe",
+      "f0279455bbad6c96a899705927f9d37fd761071f111d8b1e672f50154b43be55.tar.zst"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 486.7951460997574,
+    "comparisons_passed": 228297347,
+    "comparisons_failed": 0,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-035-pause-clock-v2.log",
+    "log_sha256": "3036b439ef061e6e20394cc67da3724ea0b420c85dfe2987af74c91229ad1d11",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-top-035-native-lossless-v1.json",
+    "native_receipt_sha256": "fb4a0d1e8cf46770193a0bfae6fb1aae5173a5383dc4ff2fbcd4e33e88e48c05",
+    "full_corpus_complete": false
+  },
+  "lossless_recompression": {
+    "source_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass115-top-036-native-v1.json",
+    "source_receipt_sha256": "4909b21ee74cd2623914b0804344c7c15e6b9ccf9aea43834fa91da99d2fe02e",
+    "original_archive": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass115-top-036-native-v1\\archives\\769b69e34c2b0e1f6d7ac179052bc771072e5a76592db300ccecf912437ce094.tar.zst",
+    "original_archive_sha256": "769b69e34c2b0e1f6d7ac179052bc771072e5a76592db300ccecf912437ce094",
+    "original_compressed_bytes": 121696985,
+    "tool": "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WinGet\\Packages\\oschwartz10612.Poppler_Microsoft.Winget.Source_8wekyb3d8bbwe\\poppler-25.07.0\\Library\\bin\\zstd.exe",
+    "tool_sha256": "959e8299adfbbc039f7d2aede537666aba5e605dec1169f582d88898554a728e",
+    "command": [
+      "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WinGet\\Packages\\oschwartz10612.Poppler_Microsoft.Winget.Source_8wekyb3d8bbwe\\poppler-25.07.0\\Library\\bin\\zstd.exe",
+      "-19",
+      "--long=27",
+      "-T1",
+      "-c"
+    ],
+    "tar_bytes": 2059375104,
+    "original_tar_sha256": "ea01c730d8fcb73d755d932cf949931c584d337f36ecc750c210069693d1d553",
+    "recompressed_tar_sha256": "ea01c730d8fcb73d755d932cf949931c584d337f36ecc750c210069693d1d553",
+    "all_member_bytes_unchanged": true,
+    "elapsed_seconds": 1796.5557706998661
+  },
+  "music_clock_fix_commit": "e7fe82d02aa9071c89927d56ddf8c9b970ea63c2",
+  "music_clock_native_control": "native-revalidation-pass114-music-clock.json",
+  "music_clock_exact_checks": 540,
+  "original_tolerances_retained": true,
+  "remaining_scope": "Original 501 sources and 492 contexts, eight independent Edgar off-grid positions, DeadSync timing getter placeholders, explicit Model culling and framebuffer parity remain open."
+}

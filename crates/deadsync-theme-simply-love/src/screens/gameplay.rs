@@ -5120,6 +5120,8 @@ pub fn draw_field(
         view.show_song_visuals,
         view.apply_attacks,
         request.capture,
+        request.wrapper,
+        request.wrapper_visible,
         state.itl_cmod_warning[player_idx],
         state.display_mods_text(player_idx),
         &state.practice_timing_labels[player_idx],

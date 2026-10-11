@@ -164,7 +164,7 @@ pub const BASE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("swoosh.png"),
     texture_asset("heart.png"),
     TextureAssetSpec {
-        key: "graphics/menu_bg_technique/arrow_tex.png",
+        key: "graphics/menu_bg_technique/arrow_tex.png#itg-model",
         path: "menu_bg_technique/arrow_tex.png",
     },
     TextureAssetSpec {
@@ -172,7 +172,7 @@ pub const BASE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
         path: "menu_bg_technique/square.png",
     },
     TextureAssetSpec {
-        key: "graphics/menu_bg_technique/white_tex.png",
+        key: "graphics/menu_bg_technique/white_tex.png#itg-model",
         path: "menu_bg_technique/white_tex.png",
     },
     texture_asset("fave-icon.png"),
@@ -266,6 +266,26 @@ pub const GRADE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("grades/q.png"),
     texture_asset("grades/affluent.png"),
     texture_asset("grades/goldstar (stretch).png"),
+];
+
+/// The Content Browser's tab icons and its two placeholder graphics.
+///
+/// One per tab, in the tab strip's own order, plus the download arrow the
+/// detail page's button carries, the site's stand-in for a song with no
+/// jacket, and the page dot under the featured grid. All 96x96 and drawn far
+/// smaller -- together they are under ten kilobytes.
+pub const CONTENT_BROWSER_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
+    texture_asset("content_browser/search.png"),
+    texture_asset("content_browser/pad.png"),
+    texture_asset("content_browser/keyboard.png"),
+    texture_asset("content_browser/doubles.png"),
+    texture_asset("content_browser/stamina.png"),
+    texture_asset("content_browser/tech.png"),
+    texture_asset("content_browser/year.png"),
+    texture_asset("content_browser/installed.png"),
+    texture_asset("content_browser/download.png"),
+    texture_asset("content_browser/nobanner.png"),
+    texture_asset("content_browser/dot.png"),
 ];
 
 pub const SUBMIT_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
@@ -672,6 +692,7 @@ pub fn initial_texture_assets() -> impl Iterator<Item = TextureAssetSpec> {
         .chain(SRPG10_EVAL_TEXTURES.into_iter().map(texture_asset))
         .chain(GRADE_TEXTURE_ASSETS.iter().copied())
         .chain(SUBMIT_TEXTURE_ASSETS.iter().copied())
+        .chain(CONTENT_BROWSER_TEXTURE_ASSETS.iter().copied())
 }
 
 #[inline(always)]
@@ -705,7 +726,11 @@ pub fn is_shared_background_texture(key: &str) -> bool {
 pub fn texture_needs_repeat_sampler(key: &str) -> bool {
     matches!(
         key,
-        "swoosh.png" | "graphics/menu_bg_technique/square.png" | "grades/goldstar (stretch).png"
+        "swoosh.png"
+            | "graphics/menu_bg_technique/square.png"
+            | "graphics/menu_bg_technique/arrow_tex.png#itg-model"
+            | "graphics/menu_bg_technique/white_tex.png#itg-model"
+            | "grades/goldstar (stretch).png"
     ) || is_shared_background_texture(key)
 }
 

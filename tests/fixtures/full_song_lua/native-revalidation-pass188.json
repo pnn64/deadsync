@@ -1,0 +1,104 @@
+{
+  "pass": 188,
+  "previous_record": "native-revalidation-pass187.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "61d3d16fbec67ac90381aaeb4922a78329b77159",
+  "comparator_sha256": "c4055dff39f57ad0ceea37f2a5faab73975c74ca35d5deb9d29f98854740ace1",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    109
+  ],
+  "next_position": 110,
+  "comparisons_passed": 320478,
+  "charts": [
+    {
+      "position": 109,
+      "entry": {
+        "title": "Bad Intentions",
+        "source_simfile": "Bad Intentions/Bad Intentions.ssc",
+        "harness_version": "0.1.63",
+        "archive": "570b0dffb5ded94dcaccec8cef2e67e3ca299cce09f5a979b3eaa9bd3fa7ae01.tar.zst",
+        "sha256": "570b0dffb5ded94dcaccec8cef2e67e3ca299cce09f5a979b3eaa9bd3fa7ae01",
+        "compressed_bytes": 331161,
+        "aliases": [
+          "17f7aabcd815a9dbbad71c79a4d22d9811a14526c85176d365ab177a70d66c33.tar.zst"
+        ]
+      },
+      "original_archive_retained": "917f2f11312ee53b542a591986ccb1e5d0722d7a308e35c00e5a1d1c4f94836f.tar.zst",
+      "native_source_commit": "7d01b8d27dddc821b508231c663978bcdd274626",
+      "native_trace_sha256": "641b333aa5c6ec3ead496bc2f0203c4b557dc3e22db05b47bd649acd31f60ac2",
+      "original_source_sha256": {
+        "Bad Intentions/bad banner.jpg": "2304a6763fa02a84fd66a990e7ef70bfcd2f543a5a4d82cf5476ccaa8abe557c",
+        "Bad Intentions/Bad Intentions.ogg": "4592257c678cb6d367b7a0943ecc69ca145477ce963826db190433a3632ff339",
+        "Bad Intentions/Bad Intentions.ssc": "bb5e7915b205a12a1c3e27992d73996ad7678773077c37aeb38a913289b4b6e2",
+        "Bad Intentions/Bad Intentions.ssc.oldsync": "d51c868a01ba6094a4d6914acef44d7eea5fc9a5551eae37f223f60af8216839",
+        "Bad Intentions/bad_bg.jpg": "275782398a068cdbe72d5acbaff672976973b535cc60bf1bf4aca328920abb00",
+        "Bad Intentions/cdtitle.png": "81c87b2ad7c564f8fc974b7f340af69eb4939d9c415b06e9b87402f8221a55c6",
+        "Bad Intentions/desktop.ini": "3c81eb4c7d2bcad3dd6578510517baca9cb4e3ef0d089e5a63e29e2e7753a065",
+        "Bad Intentions/lua/default.lua": "4f5fc78e57cd87825f26e760d18e45bf2e5ae0ddd72d958ebc3c91e23115e9ee",
+        "Bad Intentions/lua/desktop.ini": "3c81eb4c7d2bcad3dd6578510517baca9cb4e3ef0d089e5a63e29e2e7753a065",
+        "Bad Intentions/lua/lib.lua": "107589d22d6683a096edf561ce379f753adb351a50be2cd34bc344a261cf469d"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 9403,
+      "duration_seconds": 156.6923065185547,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 4,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 109,
+      "source_simfile": "Bad Intentions/Bad Intentions.ssc",
+      "archive": "570b0dffb5ded94dcaccec8cef2e67e3ca299cce09f5a979b3eaa9bd3fa7ae01.tar.zst",
+      "archive_sha256": "570b0dffb5ded94dcaccec8cef2e67e3ca299cce09f5a979b3eaa9bd3fa7ae01",
+      "harness_version": "0.1.63",
+      "source_commit": "61d3d16fbec67ac90381aaeb4922a78329b77159",
+      "source_pending_commit": false,
+      "binary_sha256": "c4055dff39f57ad0ceea37f2a5faab73975c74ca35d5deb9d29f98854740ace1",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass178\\combo-child-v2-full_song_lua.exe",
+        "570b0dffb5ded94dcaccec8cef2e67e3ca299cce09f5a979b3eaa9bd3fa7ae01.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 25.663468199782073,
+      "comparisons_passed": 320478,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-109-combo-child-committed-v2.log",
+      "log_sha256": "25d63cf63f77f30afbc7dd0d69452f80c1b957d0aaa1eb928d59afd4e254858d",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass233-top-109-combo-child-v1.json",
+      "native_receipt_sha256": "7d304fd52b67d931dabefb62e8e3fa616ce90026871eac6c0b8597d598c501d7",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "61d3d16fbec67ac90381aaeb4922a78329b77159",
+    "source_pending_commit": false,
+    "binary_sha256": "184f2ed1f769f3b4ae80f35caa08f13ffb798c02f299812ff6c93a289ca189c5",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass178\\combo-child-v2-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.9744174000807106,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-109-native-pass188.log",
+    "log_sha256": "f750f04f39aea0b450a2b401e8c6a3e8fa79be18bccc5e39c3afca6c9a4c3c23",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.41s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

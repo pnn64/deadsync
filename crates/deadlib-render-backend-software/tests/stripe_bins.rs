@@ -126,6 +126,7 @@ mod backend {
                                     texture_mask: false,
                                     blend: BlendMode::Alpha,
                                     depth_test: false,
+                                    sampler: None,
                                     texture_handle: 7,
                                 });
                                 expected.push((rows, StripeItem::tmesh(triangle)));
@@ -152,6 +153,7 @@ mod backend {
                                     mvp: Matrix4::IDENTITY,
                                     blend: BlendMode::Alpha,
                                     depth_test: false,
+                                    sampler: None,
                                     texture_handle: 7,
                                 });
                                 expected.push((

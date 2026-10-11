@@ -1,0 +1,27 @@
+{
+  "pass_number": 56,
+  "status": "compiled native controls verified; implementation repair remains pending",
+  "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+  "harness_version": "0.1.21",
+  "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+  "controls": [
+    {
+      "input": "actor-class-callback-input.json",
+      "input_sha256": "2df122d9e4523b37c05ea614a07d76b19c678c0f353b0c13b28728eb001513a5",
+      "native_output": "actor-class-callback-native.json",
+      "native_output_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+      "native_exit_code": 0,
+      "repeat_identical": true
+    },
+    {
+      "input": "actor-class-multi-return-input.json",
+      "input_sha256": "dcea30937008805c091af5bbf01f26d81ef13d0a30eb5b7a12089ee517e92f5a",
+      "native_output": "actor-class-multi-return-native.json",
+      "native_output_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+      "native_exit_code": 0,
+      "repeat_identical": true
+    }
+  ],
+  "native_source_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "scope": "ActorFrameTexture inherits ActorFrame callback rules and Actor multiple returns. These controls exercise compiled ITGmania, not semantic_host.lua. No corpus fixtures are counted here."
+}

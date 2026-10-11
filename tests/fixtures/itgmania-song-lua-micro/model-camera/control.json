@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "name": "model-camera-depth",
+  "samples": [0],
+  "screen": {"width": 854, "height": 480},
+  "root": {
+    "kind": "frame", "name": "Root",
+    "camera": {"fov": 40, "vanish": [311, 175]},
+    "children": [
+      {
+        "kind": "model", "name": "Perspective",
+        "model_paths": ["../model-material/triangle.txt", "../model-material/triangle.txt", "../model-material/triangle.txt"],
+        "state": {"position": [207, 160, 30], "diffuse": [0.5, 0.75, 1, 0.6], "glow": [1, 0, 0, 0.25]}
+      },
+      {
+        "kind": "frame", "name": "Inherit",
+        "children": [{
+          "kind": "model", "name": "Inherited",
+          "model_paths": ["../model-material/triangle.txt", "../model-material/triangle.txt", "../model-material/triangle.txt"],
+          "state": {"position": [531, 240, -12], "diffuse": [0.5, 0.75, 1, 0.6], "glow": [1, 0, 0, 0.25]}
+        }]
+      },
+      {
+        "kind": "frame", "name": "Reset", "camera": {"fov": 0},
+        "children": [{
+          "kind": "model", "name": "Orthographic",
+          "model_paths": ["../model-material/triangle.txt", "../model-material/triangle.txt", "../model-material/triangle.txt"],
+          "state": {"position": [310, 350, 70], "diffuse": [0.5, 0.75, 1, 0.6], "glow": [1, 0, 0, 0.25]}
+        }]
+      },
+      {
+        "kind": "frame", "name": "Squash", "state": {"zoom": [1, 0.9, 1]},
+        "children": [{
+          "kind": "model", "name": "Rotated",
+          "model_paths": ["../model-material/triangle.txt", "../model-material/triangle.txt", "../model-material/triangle.txt"],
+          "state": {"position": [470, 280, 50], "rotation": [0, 0, 90], "diffuse": [0.5, 0.75, 1, 0.6], "glow": [1, 0, 0, 0.25]}
+        }]
+      }
+    ]
+  }
+}

@@ -1,3 +1,4 @@
+local cover
 return Def.ActorFrame{
     Def.ActorFrame{
         InitCommand=function(self) self:Center() end,
@@ -14,15 +15,21 @@ return Def.ActorFrame{
     Def.Quad{
         Name="Cover",
         InitCommand=function(self)
+            cover = self
             self:FullScreen():diffusealpha(0)
+        end,
+        FadeMessageCommand=function(self) self:sleep(1):smooth(2):diffusealpha(1) end,
+    },
+    Def.ActorFrame{
+        Name="CoverDriver",
+        OnCommand=function(self)
             local fired = false
-            self:SetUpdateFunction(function(self)
+            self:SetUpdateFunction(function()
                 if not fired and GAMESTATE:GetSongBeat() > 0 then
-                    self:sleep(1):smooth(2):diffusealpha(1)
+                    cover:sleep(1):smooth(2):diffusealpha(1)
                     fired = true
                 end
             end)
         end,
-        FadeMessageCommand=function(self) self:sleep(1):smooth(2):diffusealpha(1) end,
     },
 }

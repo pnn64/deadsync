@@ -108,6 +108,15 @@ impl AppDirs {
         self.cache_dir.join("null-or-die-sync.json")
     }
 
+    /// Which packs the Content Browser has decided are beginner-friendly.
+    ///
+    /// Deciding one costs reading its page, and a verdict is about a pack's
+    /// charts -- which do not change. So these are kept with no expiry.
+    #[must_use]
+    pub fn beginner_verdict_cache_file(&self) -> PathBuf {
+        self.cache_dir.join("beginner-packs.json")
+    }
+
     #[must_use]
     pub fn downloads_dir(&self) -> PathBuf {
         self.cache_dir.join("downloads")
@@ -391,17 +400,19 @@ pub struct AssetPaths {
 impl AssetPaths {
     /// Resolve an asset against the startup overlay order; absolute paths pass through.
     pub fn resolve_asset_path(&self, path: &str) -> PathBuf {
-        let original = PathBuf::from(path);
-        if original.is_absolute() {
-            return original;
+        if Path::new(path).is_absolute() {
+            return PathBuf::from(path);
         }
+        let mut candidate = PathBuf::new();
         for root in &self.search_roots {
-            let candidate = root.join(path);
+            candidate.clear();
+            candidate.push(root);
+            candidate.push(path);
             if candidate.exists() {
                 return candidate;
             }
         }
-        original
+        PathBuf::from(path)
     }
 
     pub fn strip_asset_prefix<'a>(&self, path: &'a Path) -> Option<&'a Path> {
@@ -633,3 +644,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "resource_paths_perf.rs"]
+mod resource_perf;

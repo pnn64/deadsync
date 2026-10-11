@@ -1,0 +1,327 @@
+{
+  "pass_number": 67,
+  "status": "native texture filename and dot-component contracts verified; full corpus unfinished",
+  "harness": {
+    "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass67-texture-path-v2.exe",
+    "sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+    "version": "0.1.28",
+    "semantic_host_sha256": "86f3755c01af48cdb8a876d3711b6e553a2f821d5928a228da9ab6a23e88ccc4",
+    "source_pending_commit": false,
+    "command": [
+      "cargo",
+      "build",
+      "--bin",
+      "itgmania-harness-rs",
+      "--message-format=json"
+    ],
+    "source_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003"
+  },
+  "harness_tests": {
+    "exit_code": 0,
+    "seconds": 150.54574584960938,
+    "summary": [
+      "test result: ok. 146 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 150.38s"
+    ],
+    "executable_sha256": "b4a1f5524498b54791c9b669bdda848ca96380057674ddc794884f5f896b5f94",
+    "log_sha256": "356408352047c90678e6d34e8679e545eec1cb19ab2f876ec084623d9fbf2532"
+  },
+  "native_result": {
+    "allocations": [],
+    "diagnostics": [],
+    "provenance": {
+      "execution": "embedded_native_sources",
+      "git_dirty": "false",
+      "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+    },
+    "script_errors": []
+  },
+  "native_sources": {
+    "src/RageTexture.cpp": "209126b1acf0b3f825a55315b748c3558725183d22477ced7c198fef9bd1b6c7",
+    "src/RageTextureID.cpp": "04d3eec5174fa7a6e0631ca9a8f5da54181d9ef9a95b7e63cb666c21ae30dbdd",
+    "src/RageUtil.cpp": "8487049a1d4ed4c2c1c9ae8e232f4039787eb01e7b854684b85394bf6c79c012",
+    "src/RageUtil.h": "f92dea02c8d004bff4197fa2e98ffcf16c4b476fc39c331b998a5a8ccb8bf4de"
+  },
+  "workspace_sources": {
+    "src/RageTexture.cpp": "209126b1acf0b3f825a55315b748c3558725183d22477ced7c198fef9bd1b6c7",
+    "src/RageTextureID.cpp": "04d3eec5174fa7a6e0631ca9a8f5da54181d9ef9a95b7e63cb666c21ae30dbdd",
+    "src/RageUtil.cpp": "8487049a1d4ed4c2c1c9ae8e232f4039787eb01e7b854684b85394bf6c79c012",
+    "src/RageUtil.h": "f92dea02c8d004bff4197fa2e98ffcf16c4b476fc39c331b998a5a8ccb8bf4de"
+  },
+  "fixture_sha256": {
+    "texture-path-input.json": "eb8061ae4f815314ec4b74ecda51cf7b14adaa5085cbfefffd988c3e46752024",
+    "texture-path-native.json": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+    "texture-path.lua": "3af952069e94e0bb02dc2f9e1d3de12ee7d1f11d93351b9a312b9bb6e974e17d",
+    "sprite-load.png": "c21704e2430ff2c421a08438f7b2d412796fb2061312f1b9080f352eea663a15"
+  },
+  "assertions": "Runtime controls use the compiled native Sprite assertion body unchanged after substituting only the fixture path prefix.",
+  "harness_before": {
+    "status": "independently verified harness gap",
+    "harness": {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass65-sprite-v1.exe",
+      "sha256": "e00e95d7b1b8b183d3e2a47765e7e1f2cda38c1c0ae1a3db8ed0792a6438bfe7",
+      "version": "0.1.26",
+      "semantic_host_sha256": "25d283cf4b26fe1af67f59a502f8a6329ff0c70c818e18e78aeec0e14283bf6b",
+      "source_pending_commit": false,
+      "command": [
+        "cargo",
+        "build",
+        "--bin",
+        "itgmania-harness-rs",
+        "--message-format=json"
+      ],
+      "source_commit": "5ebb034b423fb94dca734a95cbb1e4621031534e"
+    },
+    "native": {
+      "allocations": [],
+      "diagnostics": [],
+      "provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      },
+      "script_errors": []
+    },
+    "runtime_errors": [
+      {
+        "actor": "def-0001",
+        "beat": 0,
+        "command": "OnCommand",
+        "definition_id": "def-0001",
+        "line": 1,
+        "message": "C:/GitHub/itgmania-harness/target/song-lua-repair/pass66-texture-path-audit/corpus/probe/default.lua:14: RageTexture GetPath preserves the original texture filename",
+        "name": "OnCommand",
+        "operation": "command.error",
+        "seconds": 0,
+        "source": "song:/default.lua"
+      }
+    ],
+    "command": [
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass65-sprite-v1.exe",
+      "song-lua-semantic-baseline",
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass66-texture-path-audit\\corpus",
+      "--simfile",
+      "probe/probe.sm",
+      "--out",
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass66-texture-path-audit\\traces",
+      "--beat-step",
+      "0.25",
+      "--max-events",
+      "1500000",
+      "--random-seed",
+      "1"
+    ],
+    "input_sha256": "ac747139c3091c1fafb24ce31662dc232ee9a18169168f50b293485da893fd7b",
+    "script_sha256": "a8b69d8d8320b7aeb815cc6b29aa21664f9e667f061be9fa80cb2f0ae603f067",
+    "source": "RageTexture.cpp DEFINE_METHOD(GetPath, GetID().filename); semantic_host.lua normalizes the path through source_path instead.",
+    "published": false
+  },
+  "complete_control_archive": {
+    "entry": {
+      "title": "Native texture filename",
+      "source_simfile": "probe/probe.sm",
+      "harness_version": "0.1.28",
+      "archive": "ee80089c2afa1df59c9efa63b1e99d8f73e4e2e4edc9a183a00a835759de2751.tar.zst",
+      "sha256": "ee80089c2afa1df59c9efa63b1e99d8f73e4e2e4edc9a183a00a835759de2751",
+      "compressed_bytes": 12443
+    },
+    "archive": "C:\\GitHub\\deadsync\\tests\\fixtures\\full_song_lua\\ee80089c2afa1df59c9efa63b1e99d8f73e4e2e4edc9a183a00a835759de2751.tar.zst",
+    "command": [
+      [
+        "song-lua-semantic-baseline",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass67-texture-path-control-v3\\corpus",
+        "--simfile",
+        "probe/probe.sm",
+        "--out",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass67-texture-path-control-v3\\traces",
+        "--beat-step",
+        "0.25",
+        "--max-events",
+        "1500000",
+        "--random-seed",
+        "1"
+      ],
+      [
+        "song-lua-archive",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass67-texture-path-control-v3\\corpus",
+        "--traces",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass67-texture-path-control-v3\\traces",
+        "--out",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass67-texture-path-control-v3\\archives"
+      ]
+    ],
+    "native_status": "ok",
+    "end_position": {
+      "beat": 4,
+      "seconds": 2
+    },
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "members": 4,
+    "cli": {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass67-texture-path-v2.exe",
+      "sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "version": "0.1.28",
+      "semantic_host_sha256": "86f3755c01af48cdb8a876d3711b6e553a2f821d5928a228da9ab6a23e88ccc4",
+      "source_pending_commit": false,
+      "command": [
+        "cargo",
+        "build",
+        "--bin",
+        "itgmania-harness-rs",
+        "--message-format=json"
+      ],
+      "source_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003"
+    },
+    "lua_sha256": "3af952069e94e0bb02dc2f9e1d3de12ee7d1f11d93351b9a312b9bb6e974e17d",
+    "capture_log_sha256": "f72ae0caff4e0fea61cbf29c421b6153375308c0d62f56fccad4f2637b920ee0"
+  },
+  "deadsync_before": {
+    "archive": "ee80089c2afa1df59c9efa63b1e99d8f73e4e2e4edc9a183a00a835759de2751.tar.zst",
+    "version": "0.5.1865",
+    "executable_sha256": "6aad346179f4fd46e97df9a68cbd55c944995c899bf4f977e66366519bf92519",
+    "exit_code": 1,
+    "seconds": 0.24835848808288574,
+    "log_sha256": "b8c3ae53a8cbe7cca6ebcdc239183cab521801692fd87e26192450a2cd35c90b",
+    "failure": "unchanged native dot-component filename assertion",
+    "published": false
+  },
+  "deadsync_after": {
+    "archive": "ee80089c2afa1df59c9efa63b1e99d8f73e4e2e4edc9a183a00a835759de2751.tar.zst",
+    "version": "0.5.1866",
+    "exit_code": 0,
+    "seconds": 0.28137779235839844,
+    "result": "result: ok; 1/1 fixtures passed; 2696 comparisons passed, 0 failed (2696 total); elapsed 0.15s",
+    "log_sha256": "0ca3caae8bd186717601389e26b4d16ae2f31084573aef06e8060bad55929cfe",
+    "executable_sha256": "34508997f48a22b350bab0fd900c7001d022fac5d60ad864e57376491dc94d12"
+  },
+  "deadsync_checks": [
+    {
+      "job": "song-lua-tests",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-song-lua",
+        "--features",
+        "test-support",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "seconds": 215.55568504333496,
+      "summaries": [
+        "test result: ok. 489 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 37.30s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 183 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 34.63s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "14b4955be7cab54c585af1b8e992e31ab8a4f070e29b6e821029f624e0988b4c"
+    },
+    {
+      "job": "production-check",
+      "command": [
+        "cargo",
+        "check",
+        "-p",
+        "deadsync-song-lua",
+        "--lib",
+        "--no-default-features"
+      ],
+      "exit_code": 0,
+      "seconds": 53.85832691192627,
+      "summaries": [],
+      "log_sha256": "637b1408952fbf38f7c190f1ff8f09277c8aa250e1156b103929fcc86735ae99"
+    },
+    {
+      "job": "clock-cache",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "song_clock_survives_cache_round_trip"
+      ],
+      "exit_code": 0,
+      "seconds": 23.466728448867798,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 202 filtered out; finished in 0.02s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "3a8fe1d888d110c7969e180799955c1c7c36af8aa4f705bb37b2da0e8de65c4c"
+    },
+    {
+      "job": "cache-version",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "old_cache_version_is_rejected_before_header_decode"
+      ],
+      "exit_code": 0,
+      "seconds": 1.6631343364715576,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 202 filtered out; finished in 0.01s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "68935e99da85f21824c0071759f6b8c1536b256f30c0f2c320e4e23e4d84806b"
+    }
+  ],
+  "deadsync_pin": {
+    "path": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass67-texture-full-song-v1.exe",
+    "sha256": "34508997f48a22b350bab0fd900c7001d022fac5d60ad864e57376491dc94d12",
+    "version": "0.5.1866",
+    "command": [
+      "cargo",
+      "rustc",
+      "-p",
+      "deadsync",
+      "--test",
+      "full_song_lua",
+      "--features",
+      "deadsync-theme-simply-love/test-support",
+      "--message-format=json"
+    ],
+    "tested_source_sha256": {
+      "Cargo.toml": "4523c309c595cb4dee46d76c9811eeb5e555266b65076ea47bf64793a8fa93e5",
+      "Cargo.lock": "bf2dcc5d9ddec9bb9e30ca6c9e3ab683d975bc93b46b9d416c7b1450e49f9258",
+      "crates/deadsync-song-lua/src/actor_classes.rs": "f9cda87743d0d9dc8cad5a7037e1438e76e2c9c574da7bc708e714eec842fc4f",
+      "crates/deadsync-song-lua/src/lua_util.rs": "bb1f4daed9a85aeb58184311a854705c6b506302b6f22fff4bbadd417cc7c10d",
+      "crates/deadsync-song-lua/src/lib.rs": "7dbdd5371d42ba758436a674d3567aa809602de7d92a1b77db5b2708bfb07e1a",
+      "crates/deadsync-simfile/src/cache.rs": "c612458a5d1169051ba19dca79519746cb87ab050d1df57eee4297a10a5ebd4a"
+    }
+  },
+  "song_cache_version": 57,
+  "historical_pass66_prefix": {
+    "archives": 5,
+    "comparisons": 1027953,
+    "harness_version": "0.1.26",
+    "deadsync_version": "0.5.1865"
+  },
+  "scope": {
+    "simfiles": 501,
+    "indexed_sources": 483,
+    "unindexed_sources": 18,
+    "historical_extra_archives": 9,
+    "archive_variants": 492
+  },
+  "limitations": [
+    "Native image controls verify Lua contracts and headless texture metadata; pixel rendering and texture loading policy remain outside this proof.",
+    "Full corpus, other actor subclasses, font layout and theme context remain unfinished.",
+    "Relative Sprite filenames, Windows device/UNC path domains and texture handle identity require further independent native audits."
+  ],
+  "fixture_setup": "The runtime fixture path strips only the Windows verbatim prefix introduced by canonical temporary roots. The compiled native assertion body is unchanged. No GetSongDir or UNC/device-path behavior is claimed.",
+  "sprite_loading_regression": {
+    "archive": "28590ed27ab7036c998cfeb4deb770d96fd6b87e1c5147ce353ba566fb67ac49.tar.zst",
+    "version": "0.5.1866",
+    "exit_code": 0,
+    "seconds": 0.4393455982208252,
+    "result": "result: ok; 1/1 fixtures passed; 2695 comparisons passed, 0 failed (2695 total); elapsed 0.16s",
+    "log_sha256": "0a5cd2e0ed6c1a6caad09df77bee34feb83f3ed79fab4b7ba2c91d4c901f79f5",
+    "executable_sha256": "34508997f48a22b350bab0fd900c7001d022fac5d60ad864e57376491dc94d12"
+  }
+}

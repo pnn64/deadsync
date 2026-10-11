@@ -140,6 +140,7 @@ fn lua_cmd_commands(body: &str) -> Result<smallvec::SmallVec<[&str; 8]>, String>
     let mut paren = 0_i32;
     let mut brace = 0_i32;
     let mut bracket = 0_i32;
+    let mut block = 0_i32;
     while index < bytes.len() {
         if body[index..].starts_with("--") {
             index = lua_comment_end(body, index);
@@ -147,6 +148,18 @@ fn lua_cmd_commands(body: &str) -> Result<smallvec::SmallVec<[&str; 8]>, String>
             index = lua_quoted_end(body, index)?;
         } else if let Some(open_end) = lua_long_bracket_end(body, index) {
             index = lua_long_string_end(body, index, open_end)?;
+        } else if bytes[index].is_ascii_alphabetic() || bytes[index] == b'_' {
+            let word = index;
+            while index < bytes.len() && lua_ident_byte(bytes[index]) {
+                index += 1;
+            }
+            // Native cmd arguments are Lua expressions, including functions.
+            // A for/while block opens at `do`; elseif shares its existing if.
+            match &body[word..index] {
+                "function" | "if" | "do" | "repeat" => block += 1,
+                "end" | "until" => block -= 1,
+                _ => {}
+            }
         } else {
             match bytes[index] {
                 b'(' => paren += 1,
@@ -155,7 +168,7 @@ fn lua_cmd_commands(body: &str) -> Result<smallvec::SmallVec<[&str; 8]>, String>
                 b'}' => brace -= 1,
                 b'[' => bracket += 1,
                 b']' => bracket -= 1,
-                b';' if paren == 0 && brace == 0 && bracket == 0 => {
+                b';' if paren == 0 && brace == 0 && bracket == 0 && block == 0 => {
                     out.push(&body[start..index]);
                     start = index + 1;
                 }
@@ -324,6 +337,45 @@ mod tests {
             actor.get::<String>("label").unwrap(),
             "--literal; )--long literal"
         );
+    }
+
+    #[test]
+    fn preprocess_lua_cmd_preserves_function_arguments() {
+        let source = r#"return cmd(SetUpdateFunction, function(self)
+            local count = 0;
+            for i = 1, 3 do
+                if i == 1 then count = count + i;
+                elseif i == 2 then do count = count + i; end
+                else count = count + i; end
+            end
+            while count < 7 do count = count + 1; end
+            repeat count = count + 1; until count == 8
+            local nested = function() return "function; do; end", count; end;
+            local label, result = nested(); self.label = label; self.count = result;
+        end; zoom, 2)"#;
+        let lua = mlua::Lua::new();
+        let command = lua
+            .load(preprocess_lua_cmd_syntax(source).unwrap())
+            .eval::<mlua::Function>()
+            .unwrap();
+        let actor = lua
+            .load(
+                r#"return {
+                SetUpdateFunction = function(self, callback) self.callback = callback end,
+                zoom = function(self, value) self.scale = value end,
+            }"#,
+            )
+            .eval::<mlua::Table>()
+            .unwrap();
+        command.call::<mlua::Value>(actor.clone()).unwrap();
+        actor
+            .get::<mlua::Function>("callback")
+            .unwrap()
+            .call::<()>(actor.clone())
+            .unwrap();
+        assert_eq!(actor.get::<i32>("count").unwrap(), 8);
+        assert_eq!(actor.get::<i32>("scale").unwrap(), 2);
+        assert_eq!(actor.get::<String>("label").unwrap(), "function; do; end");
     }
 
     #[test]

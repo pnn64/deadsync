@@ -27,6 +27,28 @@ pub(crate) fn paths() -> &'static deadsync_config::dirs::AssetPaths {
     PATHS.get().expect("asset paths initialized at startup")
 }
 
+#[cfg(test)]
+pub(crate) fn init_asset_paths() {
+    use std::path::Path;
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| {
+        let bundle = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("crate is under the workspace crates directory")
+            .to_path_buf();
+        let data =
+            std::env::temp_dir().join(format!("deadsync-noteskin-paths-{}", std::process::id()));
+        let dirs = deadsync_config::dirs::AppDirs {
+            cache_dir: data.join("cache"),
+            data_dir: data,
+            exe_dir: bundle,
+            portable: false,
+        };
+        init_paths(dirs.asset_paths(None)).expect("initialize fixture asset paths");
+    });
+}
+
 /// Resolve a bundled or data-overlay asset without exposing platform paths to
 /// asset consumers.
 #[must_use]
