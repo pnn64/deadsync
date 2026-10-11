@@ -3045,6 +3045,38 @@ mod tests {
     }
 
     #[test]
+    fn speed_float_ramp_matches_native_before_start() {
+        // Exact native TimingData value captured by harness 0.1.74 at beat 4
+        // and music time -10. See speed-extrapolation-native.json provenance.
+        // DeadSync's constructor takes beat-zero time, the inverse of OFFSET.
+        let timing = TimingData::from_segments(
+            -0.115,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0), (4.0, 180.0)],
+                speeds: vec![
+                    SpeedSegment {
+                        beat: 2.0,
+                        ratio: 0.5,
+                        delay: 0.5,
+                        unit: SpeedUnit::Seconds,
+                    },
+                    SpeedSegment {
+                        beat: 4.0,
+                        ratio: 2.0,
+                        delay: 0.5,
+                        unit: SpeedUnit::Seconds,
+                    },
+                ],
+                ..Default::default()
+            },
+            &[],
+        );
+        assert_eq!(timing.get_speed_multiplier(4.0, -10.0).to_bits(), 3255606968);
+        assert_eq!(timing.get_speed_multiplier_ns(4.0, -10_000_000_000), 0.5);
+    }
+
+    #[test]
     fn unsorted_bpms_preserve_stable_ties_offsets_and_source_data() {
         for ordered in [
             vec![(0.0, 60.0), (4.0, 180.0), (4.0, 240.0), (8.0, 120.0)],

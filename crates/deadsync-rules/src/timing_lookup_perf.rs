@@ -225,7 +225,7 @@ fn timing_cursors_match_original_across_events_offsets_and_rewinds() {
 }
 
 #[test]
-fn speed_lookup_matches_original_bitwise_including_nonfinite_values() {
+fn speed_ns_and_invalid_float_queries_match_original() {
     for delay in [
         f32::NEG_INFINITY,
         -1.0,
@@ -283,14 +283,21 @@ fn speed_lookup_matches_original_bitwise_including_nonfinite_values() {
                     f32::INFINITY,
                     f32::NAN,
                 ] {
+                    let ns = timing_ns_from_seconds(seconds);
+                    let expected = timing.get_speed_multiplier_with_original(beat, || ns);
                     assert_eq!(
-                        timing.get_speed_multiplier(beat, seconds).to_bits(),
-                        timing
-                            .get_speed_multiplier_with_original(beat, || timing_ns_from_seconds(
-                                seconds
-                            ))
-                            .to_bits()
+                        timing.get_speed_multiplier_ns(beat, ns).to_bits(),
+                        expected.to_bits()
                     );
+                    // Finite float queries follow native GetDisplayedSpeedPercent,
+                    // including extrapolation; this frozen helper clamps in ns.
+                    // Invalid float queries still use that integer fallback.
+                    if !beat.is_finite() || !seconds.is_finite() {
+                        assert_eq!(
+                            timing.get_speed_multiplier(beat, seconds).to_bits(),
+                            expected.to_bits()
+                        );
+                    }
                 }
                 for ns in [i64::MIN, -1, 0, 875_000_000, 1_000_000_000, i64::MAX] {
                     assert_eq!(
@@ -408,7 +415,10 @@ fn benchmark_core_lookups() {
                             black_box(if ns {
                                 timing.get_speed_multiplier_ns(black_box(beat), time)
                             } else {
-                                timing.get_speed_multiplier(black_box(beat), seconds)
+                                timing.get_speed_multiplier_ns(
+                                    black_box(beat),
+                                    timing_ns_from_seconds(seconds),
+                                )
                             });
                         },
                     );
