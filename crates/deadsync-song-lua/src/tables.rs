@@ -1324,6 +1324,20 @@ fn create_stage_stats_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua:
     Ok(stage_stats)
 }
 
+fn dance_point_percent(actual: i64, possible: i64) -> f32 {
+    if possible == 0 { return 0.0; }
+    if actual == possible { return 1.0; }
+    // PlayerStageStats::MakePercentScore uses f32 arithmetic and ftruncf.
+    // SL inherits Common::PercentScoreDecimalPlaces=2. Compute pow(0.1f, 4)
+    // at compile time with one final f32 rounding, as native powf does.
+    const INTERVAL: f32 = {
+        let tenth = 0.1_f32 as f64;
+        (tenth * tenth * tenth * tenth) as f32
+    };
+    let percent = (actual as f32 / possible as f32).max(0.0) + 0.000001;
+    (percent / INTERVAL) as i32 as f32 * INTERVAL
+}
+
 fn create_player_stage_stats_table(
     lua: &Lua,
     high_score_name: &str,
@@ -1496,9 +1510,8 @@ fn create_player_stage_stats_table(
                     .unwrap_or(0);
                 let possible = stats
                     .get::<Option<i64>>("__songlua_possible_dance_points")?
-                    .unwrap_or(1)
-                    .max(1);
-                Ok(actual as f64 / possible as f64)
+                    .unwrap_or(0);
+                Ok(dance_point_percent(actual, possible))
             }
         })?,
     )?;
@@ -2956,6 +2969,20 @@ mod tests {
         create_timing_table, display_bpms_for_args, lua_table_to_string, rotate_lua_table,
         set_path_methods, set_string_method,
     };
+    #[test]
+    fn dance_percent_native_values() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/itgmania-song-lua-micro/native-dance-percent.json")))
+            .expect("complete native percent capture");
+        for case in native["cases"].as_array().expect("native cases") {
+            let actual = super::dance_point_percent(case["actual"].as_i64().expect("native points"),
+                case["possible"].as_i64().expect("native total"));
+            assert_eq!(f64::from(actual), case["percent"].as_f64().expect("native percentage"),
+                "native case {}", case["index"]);
+        }
+        assert_eq!(super::dance_point_percent(0, 0), 0.0, "native zero total branch");
+    }
+
     #[test]
     fn split_table_handles_empty_separator() {
         let lua = Lua::new();

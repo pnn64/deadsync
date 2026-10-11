@@ -1,0 +1,68 @@
+{
+  "native_source_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "simply_love_source_commit": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+  "native_trace_sha256": "24bf076ce5a232389ff17521d2c26ddc24cdefe599d02c4966f0c75aee902ee9",
+  "percent_score_decimal_places": 2,
+  "cases": [
+    {
+      "actual": 0,
+      "index": 1,
+      "percent": 0,
+      "possible": 7
+    },
+    {
+      "actual": 1,
+      "index": 2,
+      "percent": 0.33330002427101135,
+      "possible": 3
+    },
+    {
+      "actual": 2,
+      "index": 3,
+      "percent": 0.6666000485420227,
+      "possible": 3
+    },
+    {
+      "actual": 1,
+      "index": 4,
+      "percent": 0.1428000032901764,
+      "possible": 7
+    },
+    {
+      "actual": 123456,
+      "index": 5,
+      "percent": 0.1234000027179718,
+      "possible": 1000000
+    },
+    {
+      "actual": 999949,
+      "index": 6,
+      "percent": 0.9999000430107117,
+      "possible": 1000000
+    },
+    {
+      "actual": 999999,
+      "index": 7,
+      "percent": 1,
+      "possible": 1000000
+    },
+    {
+      "actual": 1000000,
+      "index": 8,
+      "percent": 1,
+      "possible": 1000000
+    },
+    {
+      "actual": -12,
+      "index": 9,
+      "percent": 0,
+      "possible": 20
+    },
+    {
+      "actual": -48,
+      "index": 10,
+      "percent": 0,
+      "possible": 20
+    }
+  ]
+}
