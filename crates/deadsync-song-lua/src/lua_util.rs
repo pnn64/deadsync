@@ -2922,26 +2922,40 @@ pub fn normalize_broadcast_params(
     }
 }
 
-pub fn broadcast_song_lua_message(
-    lua: &Lua,
-    message: &str,
-    params: Option<Value>,
-) -> mlua::Result<()> {
-    if message.trim().is_empty() {
-        return Ok(());
-    }
-    let command = ActorCommandName::new(message, "MessageCommand");
-    let globals = lua.globals();
+fn runtime_broadcast_beat(lua: &Lua) -> f32 {
     // Use the queued command's dispatch frame, including pauses and split
     // chart timing, rather than the callback that originally queued it.
-    let beat = lua
+    lua
         .app_data_ref::<SongLuaQueuedCommand>()
         .and_then(|scope| scope.time.map(|(frame, _)| frame))
         .and_then(|frame| {
             lua.app_data_ref::<SongLuaCompileFrames>()
                 .and_then(|frames| frames.beats.get(frame).copied())
         })
-        .unwrap_or_else(|| compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat));
+        .unwrap_or_else(|| compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat))
+}
+
+pub(crate) fn capture_source_broadcast(lua: &Lua, message: &str, has_params: bool) {
+    let beat = runtime_broadcast_beat(lua);
+    if let Some(mut events) = lua.app_data_mut::<LiveSourceBroadcasts>() {
+        events.0.push((beat, message.to_owned(), has_params));
+    }
+}
+
+pub(crate) fn take_source_broadcasts(lua: &Lua) -> Vec<(f32, String, bool)> {
+    lua.app_data_mut::<LiveSourceBroadcasts>()
+        .map_or_else(Vec::new, |mut events| std::mem::take(&mut events.0))
+}
+
+pub fn broadcast_song_lua_message(
+    lua: &Lua,
+    message: &str,
+    params: Option<Value>,
+) -> mlua::Result<()> {
+    if message.trim().is_empty() { return Ok(()); }
+    let command = ActorCommandName::new(message, "MessageCommand");
+    let globals = lua.globals();
+    let beat = runtime_broadcast_beat(lua);
     // Synchronous On broadcasts are already part of the startup snapshot.
     // Queued startup commands run after this scope, on the first update.
     let on_startup = lua.app_data_ref::<SongLuaStartupQueues>().is_some()
@@ -10555,9 +10569,11 @@ struct ActorTweenStep {
 struct ActorTweenReplays(FxHashMap<usize, ActorTweenReplay>);
 
 struct LiveBroadcasts(Vec<(f32, String, bool)>);
+struct LiveSourceBroadcasts(Vec<(f32, String, bool)>);
 
 pub(crate) fn begin_live_runtime(lua: &Lua) -> mlua::Result<()> {
     lua.set_app_data(LiveBroadcasts(Vec::new()));
+    lua.set_app_data(LiveSourceBroadcasts(Vec::new()));
     lua.set_app_data(crate::live::LiveMode);
     lua.set_app_data(ActorTweenReplays(FxHashMap::default()));
     set_compile_frames(lua, [(0.0, 0.0)].into_iter())?;
@@ -11538,9 +11554,8 @@ pub(crate) fn run_actor_startup_commands(
     // This root is the session loader list, so dispatch to its actor children.
     run_named_command_on_children_recursively(lua, root, "BeginCommand", None)?;
     // LoadDelayedScreen broadcasts after activation, before Update(0) sends On.
-    let messageman = lua.globals().get::<Table>("MESSAGEMAN")?;
-    messageman.get::<Function>("Broadcast")?
-        .call::<()>((messageman.clone(), "ScreenChanged"))?;
+    crate::record_song_lua_broadcast(lua, "ScreenChanged", false)?;
+    broadcast_song_lua_message(lua, "ScreenChanged", None)?;
     run_actor_startup_commands_for_table(lua, root)?;
     // Wrappers created by Init/On begin at the default ActorFrame state.
     collect_wrapper_initials(root, &mut initial_states)?;

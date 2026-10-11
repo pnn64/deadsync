@@ -97,6 +97,9 @@ pub enum SongLuaLiveTarget {
 pub struct SongLuaLiveOutput {
     pub request: Option<SongLuaLiveRequest>,
     pub broadcasts: Vec<(f32, String, bool)>,
+    /// Explicit Lua MESSAGEMAN calls, including calls from engine-message
+    /// listeners. Native source traces omit the engine-generated messages.
+    pub source_broadcasts: Vec<(f32, String, bool)>,
     pub sounds: Vec<crate::SongLuaSoundEvent>,
     /// Native-style callback errors retain partial state and are reported once.
     pub errors: Vec<String>,
@@ -361,13 +364,14 @@ fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
         lua.remove_app_data::<TransitionRequest>().map(|request| SongLuaLiveRequest::Transition(request.0))
     };
     let broadcasts = crate::lua_util::take_runtime_broadcasts(lua);
+    let source_broadcasts = crate::lua_util::take_source_broadcasts(lua);
     let sounds = crate::lua_util::take_runtime_sounds(lua);
     let errors = lua.remove_app_data::<crate::lua_util::SongLuaUpdateErrors>()
         .map_or_else(Vec::new, |errors| errors.0);
     if let Some(history) = lua.globals().raw_get::<Option<Table>>(crate::SONG_LUA_BROADCASTS_KEY)? {
         history.clear()?;
     }
-    Ok(SongLuaLiveOutput { request, broadcasts, sounds, errors })
+    Ok(SongLuaLiveOutput { request, broadcasts, source_broadcasts, sounds, errors })
 }
 
 pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
@@ -660,6 +664,26 @@ end }
             .call::<i32>(stats.clone()).expect("current maximum"), native["snapshots"][1]["possible"].as_i64().expect("native maximum") as i32);
         assert_eq!(scene.context().song_steps[scene.context().player_step_indices[0].expect("selected chart")]
             .difficulty, SongLuaDifficulty::Easy);
+    }
+
+    #[test]
+    fn live_source_broadcasts() {
+        let mut compiled = compile("broadcast-origin", r#"
+            return Def.ActorFrame {
+                OnCommand=function(self)
+                    GAMESTATE:SetCurrentSteps(PLAYER_1, GAMESTATE:GetCurrentSteps(PLAYER_1))
+                    MESSAGEMAN:Broadcast('CurrentStepsP1Changed')
+                end,
+                CurrentStepsP1ChangedMessageCommand=function(self)
+                    MESSAGEMAN:Broadcast('NestedSource')
+                end,
+            }
+        "#);
+        let output = compiled.live_scene.as_mut().expect("owned scene").take_startup_output();
+        assert_eq!(output.source_broadcasts.iter().map(|(_, name, _)| name.as_str()).collect::<Vec<_>>(),
+            ["NestedSource", "CurrentStepsP1Changed", "NestedSource"]);
+        assert_eq!(output.broadcasts.iter().filter(|(_, name, _)| name == "CurrentStepsP1Changed").count(), 2);
+        assert_eq!(output.broadcasts.iter().filter(|(_, name, _)| name == "ScreenChanged").count(), 1);
     }
 
     #[test]

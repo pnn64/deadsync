@@ -277,9 +277,8 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
     let mut pending_reload = false;
     let mut errors = startup.errors;
     let mut broadcasts: Vec<_> = startup
-        .broadcasts
+        .source_broadcasts
         .iter()
-        .filter(|(_, name, _)| name != "ScreenChanged")
         .map(|(beat, name, _)| json!({"seconds":0.0,"beat":beat,"name":name}))
         .collect();
     let mut observations = Vec::new();
@@ -310,9 +309,8 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
             errors.extend(startup.errors);
             broadcasts.extend(
                 startup
-                    .broadcasts
+                    .source_broadcasts
                     .iter()
-                    .filter(|(_, name, _)| name != "ScreenChanged")
                     .map(|(beat, name, _)| json!({"seconds":0.0,"beat":beat,"name":name})),
             );
             scene_count += 1;
@@ -366,7 +364,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
         let output = state.take_song_lua_output();
         broadcasts.extend(
             output
-                .broadcasts
+                .source_broadcasts
                 .iter()
                 .map(|(beat, name, _)| json!({"seconds":seconds,"beat":beat,"name":name})),
         );

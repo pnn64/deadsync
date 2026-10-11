@@ -966,6 +966,7 @@ impl State {
         // Entry events precede the first real update and must reach the shell
         // exactly once. The shell drains this buffer every frame.
         self.song_lua_output.broadcasts.append(&mut output.broadcasts);
+        self.song_lua_output.source_broadcasts.append(&mut output.source_broadcasts);
         self.song_lua_output.sounds.append(&mut output.sounds);
         self.song_lua_output.errors.append(&mut output.errors);
         if output.request.is_some() { self.song_lua_output.request = output.request; }
