@@ -1771,12 +1771,10 @@
     {
       "title": "Butterfly",
       "source_simfile": "Butterfly by DDR/buttchew.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a9b42b71686c8e3a66566da256fb6ee9f02c0807fa3bd256df2a75a2a336d39e.tar.zst",
-      "sha256": "a9b42b71686c8e3a66566da256fb6ee9f02c0807fa3bd256df2a75a2a336d39e",
-      "compressed_bytes": 6388290,
-      "uncompressed_sha256": "dc2e62e966f66ea9dc6ab41b98e2cd50bcfef1d9957848def6a8904449b945a7",
-      "compression_level": 22,
+      "harness_version": "0.1.67",
+      "archive": "e3f0dfc77208659c4ba049914802f6a185cfca5287188f8ccc81a5decbbbe57e.tar.zst",
+      "sha256": "e3f0dfc77208659c4ba049914802f6a185cfca5287188f8ccc81a5decbbbe57e",
+      "compressed_bytes": 7313404,
       "aliases": [
         "1ddc405a3a96f38ff7b105b0669947c6ed0fd16b06a6792fdec914c61126da6b.tar.zst"
       ]

@@ -2003,3 +2003,17 @@ See `native-revalidation-pass213.json`. Position 135 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 214
+
+Position 135, Butterfly, passes all
+654,514 comparisons against committed DeadSync
+`ae36c5c90`. The complete native harness 0.1.67 archive
+contains 8,493 updates over 141.52 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass214.json`. Position 136 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
