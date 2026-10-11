@@ -503,6 +503,7 @@ pub fn create_player_tables(
                 lua, context.players[index].difficulty,
                 context.players[index].display_bpms, context.song_dir.as_path(),
                 song_lua_style_info(&context.style_name).steps_type,
+                context.player_timing[index].as_ref(),
             )?,
         });
     }
@@ -758,6 +759,7 @@ pub fn create_steps_table(
     display_bpms: [f32; 2],
     song_dir: &Path,
     steps_type: &str,
+    timing: Option<&deadsync_rules::timing::TimingData>,
 ) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     set_string_method(lua, &table, "GetDifficulty", difficulty.sm_name())?;
@@ -787,7 +789,7 @@ pub fn create_steps_table(
         "GetMeter",
         lua.create_function(move |_, _args: MultiValue| Ok(meter))?,
     )?;
-    let timing = create_timing_table(lua, display_bpms)?;
+    let timing = create_timing_table(lua, display_bpms, timing)?;
     let display_bpms = create_display_bpms_table(lua, display_bpms)?;
     table.set(
         "GetDisplayBpms",
@@ -2080,7 +2082,18 @@ pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Re
         "GetDisplayBpms",
         lua.create_function(move |_, _args: MultiValue| Ok(display_bpms.clone()))?,
     )?;
-    let timing = create_timing_table(lua, context.song_display_bpms)?;
+    let song_timing = context.song_timing.clone().unwrap_or_else(|| {
+        deadsync_rules::timing::TimingData::from_segments(
+            0.0,
+            0.0,
+            &deadsync_rules::timing::TimingSegments {
+                bpms: context.song_timing_bpms.clone(),
+                ..Default::default()
+            },
+            &[],
+        )
+    });
+    let timing = create_timing_table(lua, context.song_display_bpms, Some(&song_timing))?;
     table.set(
         "GetTimingData",
         lua.create_function(move |_, _args: MultiValue| Ok(timing.clone()))?,
@@ -2629,8 +2642,12 @@ fn create_song_steps(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result
     for (index, step) in context.song_steps.iter().enumerate() {
         let display_bpms = context.player_step_indices.iter().position(|selected| *selected == Some(index))
             .map_or(context.song_display_bpms, |player| context.players[player].display_bpms);
+        let timing = context.player_step_indices.iter()
+            .position(|selected| *selected == Some(index))
+            .and_then(|player| context.player_timing[player].as_ref())
+            .or(context.song_timing.as_ref());
         let value = create_steps_table(lua, step.difficulty, display_bpms,
-            &context.song_dir, &step.steps_type)?;
+            &context.song_dir, &step.steps_type, timing)?;
         set_string_method(lua, &value, "GetDescription", &step.description)?;
         set_string_method(lua, &value, "GetChartName", &step.chart_name)?;
         set_string_method(lua, &value, "GetAuthorCredit", &step.credit)?;

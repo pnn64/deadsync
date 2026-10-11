@@ -12750,6 +12750,7 @@ return Def.ActorFrame{}
 
         let mut context = SongLuaCompileContext::new(&song_dir, "Timing BPM Segments");
         context.song_display_bpms = [120.0, 180.0];
+        context.song_timing_bpms = vec![(0.0, 120.0), (4.0, 180.0)];
         context.players[0].display_bpms = [150.0, 150.0];
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
@@ -24212,6 +24213,7 @@ return Def.ActorFrame{}
         let mut context = SongLuaCompileContext::new(&song_dir, "Song Metadata");
         context.song_steps = test_song_steps();
         context.song_display_bpms = [90.0, 180.0];
+        context.song_timing_bpms = vec![(0.0, 90.0), (4.0, 180.0)];
         context.players[0].difficulty = SongLuaDifficulty::Hard;
         context.players[0].display_bpms = [150.0, 210.0];
         context.music_length_seconds = 123.4;

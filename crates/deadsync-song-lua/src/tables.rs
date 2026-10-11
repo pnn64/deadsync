@@ -1300,6 +1300,7 @@ fn create_player_stage_stats_table(
         player.display_bpms,
         song_dir,
         steps_type,
+        None,
     )?;
     played_steps.raw_set(1, steps.clone())?;
     possible_steps.raw_set(1, steps)?;
@@ -1997,64 +1998,91 @@ pub fn set_path_methods(
     Ok(())
 }
 
-pub fn create_timing_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
+pub fn create_timing_table(
+    lua: &Lua,
+    display_bpms: [f32; 2],
+    timing: Option<&deadsync_rules::timing::TimingData>,
+) -> mlua::Result<Table> {
+    use deadsync_rules::timing::{TimingData, TimingSegments};
+    let timing = timing.cloned().unwrap_or_else(|| {
+        TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, display_bpms[0].max(0.001))],
+                ..TimingSegments::default()
+            },
+            &[],
+        )
+    });
+    let points: std::sync::Arc<[(f32, f32)]> = timing.bpm_segments().collect();
+    let range = points
+        .iter()
+        .fold([f32::MAX, 0.0_f32], |[min, max], &(_, bpm)| {
+            [min.min(bpm), max.max(bpm)]
+        });
     let table = lua.create_table()?;
-    let actual_bpms = create_display_bpms_table(lua, bpms)?;
     table.set(
         "GetActualBPM",
-        lua.create_function(move |_, _args: MultiValue| Ok(actual_bpms.clone()))?,
+        lua.create_function(move |lua, _: MultiValue| lua.create_sequence_from(range))?,
     )?;
-    let timing_bpms = create_timing_bpms_table(lua, bpms)?;
     table.set(
         "GetBPMs",
-        lua.create_function(move |_, _args: MultiValue| Ok(timing_bpms.clone()))?,
+        lua.create_function({
+            let points = points.clone();
+            move |lua, _: MultiValue| lua.create_sequence_from(points.iter().map(|&(_, bpm)| bpm))
+        })?,
     )?;
-    let timed_bpms = create_timed_bpms_table(lua, bpms, true)?;
-    let timed_bpm_strings = create_timed_bpms_table(lua, bpms, false)?;
     table.set(
         "GetBPMsAndTimes",
-        lua.create_function(move |_, args: MultiValue| {
-            Ok(
-                if method_arg(&args, 0)
-                    .cloned()
-                    .and_then(read_boolish)
-                    .unwrap_or(false)
-                {
-                    timed_bpms.clone()
+        lua.create_function(move |lua, args: MultiValue| {
+            // LunaTimingData uses Lua truthiness: zero and empty strings are true.
+            let numeric = !matches!(
+                method_arg(&args, 0),
+                None | Some(Value::Nil | Value::Boolean(false))
+            );
+            let out = lua.create_table()?;
+            for (index, &(beat, bpm)) in points.iter().enumerate() {
+                if numeric {
+                    out.raw_set(index + 1, lua.create_sequence_from([beat, bpm])?)?;
                 } else {
-                    timed_bpm_strings.clone()
-                },
-            )
+                    out.raw_set(index + 1, format!("{beat:.6}={bpm:.6}"))?;
+                }
+            }
+            Ok(out)
         })?,
     )?;
-    let has_bpm_changes = (bpms[0] - bpms[1]).abs() > f32::EPSILON;
+    let changes = timing.has_bpm_changes();
     table.set(
         "HasBPMChanges",
-        lua.create_function(move |_, _args: MultiValue| Ok(has_bpm_changes))?,
+        lua.create_function(move |_, _: MultiValue| Ok(changes))?,
     )?;
-    let bpm_at_beat = bpms[0].max(0.0);
-    table.set(
+    for method in [
         "GetBPMAtBeat",
-        lua.create_function(move |_, _args: MultiValue| Ok(bpm_at_beat))?,
-    )?;
-    table.set(
         "GetElapsedTimeFromBeat",
-        lua.create_function(|_, args: MultiValue| {
-            Ok(method_arg(&args, 0)
-                .cloned()
-                .and_then(read_f32)
-                .unwrap_or(0.0))
-        })?,
-    )?;
-    table.set(
         "GetBeatFromElapsedTime",
-        lua.create_function(|_, args: MultiValue| {
-            Ok(method_arg(&args, 0)
-                .cloned()
-                .and_then(read_f32)
-                .unwrap_or(0.0))
-        })?,
-    )?;
+    ] {
+        let timing = timing.clone();
+        table.set(
+            method,
+            lua.create_function(move |_, args: MultiValue| {
+                let value = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_f32)
+                    .ok_or_else(|| mlua::Error::runtime(format!("{method} requires a number")))?;
+                Ok(match method {
+                    // TimingData::GetBPMAtBeat selects by the rounded note row.
+                    "GetBPMAtBeat" => timing.get_bpm_for_beat(
+                        deadsync_core::timing::note_row_to_beat(
+                            deadsync_core::timing::beat_to_note_row(value),
+                        ),
+                    ),
+                    "GetElapsedTimeFromBeat" => timing.get_time_for_beat_exact(value),
+                    _ => timing.get_beat_for_time(value),
+                })
+            })?,
+        )?;
+    }
     Ok(table)
 }
 
@@ -2775,38 +2803,6 @@ fn create_layout_slot(lua: &Lua, y: f32, max_height: Option<f32>) -> mlua::Resul
     Ok(table)
 }
 
-fn create_timing_bpms_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    table.raw_set(1, bpms[0].max(0.0))?;
-    if (bpms[0] - bpms[1]).abs() > f32::EPSILON {
-        table.raw_set(2, bpms[1].max(0.0))?;
-    }
-    Ok(table)
-}
-
-fn create_timed_bpms_table(lua: &Lua, bpms: [f32; 2], numeric: bool) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    let count = if (bpms[0] - bpms[1]).abs() > f32::EPSILON {
-        2
-    } else {
-        1
-    };
-    for (index, bpm) in bpms.into_iter().take(count).enumerate() {
-        if numeric {
-            let segment = lua.create_table()?;
-            segment.raw_set(1, index as f32)?;
-            segment.raw_set(2, bpm.max(0.0))?;
-            table.raw_set(index + 1, segment)?;
-        } else {
-            table.raw_set(
-                index + 1,
-                format!("{:.6}={:.6}", index as f32, bpm.max(0.0)),
-            )?;
-        }
-    }
-    Ok(table)
-}
-
 fn call_string_method(table: &Table, name: &str) -> mlua::Result<Option<String>> {
     let Some(function) = table.get::<Option<Function>>(name)? else {
         return Ok(None);
@@ -3054,9 +3050,99 @@ mod tests {
     }
 
     #[test]
+    fn timing_getters_match_native() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro");
+        let options =
+            deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let song = deadsync_simfile::song::parse_song_meta_file(
+            &root.join("timing-data.ssc"),
+            &options,
+            0.0,
+            |_| 0.0,
+        )
+        .expect("parse native timing control");
+        let payload = deadsync_simfile::cache::load_gameplay_charts_with_options(
+            &song,
+            &[0, 1],
+            &deadsync_simfile::cache::GameplayChartLoadOptions {
+                cache_dir: &root,
+                parse_options: &options,
+                allow_cache_read: false,
+                allow_cache_write: false,
+                verify_cache_freshness: true,
+                global_offset_seconds: 0.0,
+            },
+            |_| 0.0,
+        )
+        .expect("load both native timing owners");
+        let native: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(root.join("timing-data-native.json")).expect("native timing values"),
+        )
+        .expect("native timing JSON");
+        let lua = Lua::new();
+        for (name, data) in [
+            ("Song", song.song_timing.as_ref().expect("song timing")),
+            ("Chart1", &payload.charts[0].timing),
+            ("Chart2", &payload.charts[1].timing),
+        ] {
+            let timing = create_timing_table(&lua, [60.0, 60.0], Some(data)).unwrap();
+            for (method, arg, key) in [
+                ("GetElapsedTimeFromBeat", 0.0, "Actor.x"),
+                ("GetElapsedTimeFromBeat", 6.0, "Actor.y"),
+                ("GetBeatFromElapsedTime", 3.0, "Actor.z"),
+                ("GetBPMAtBeat", 6.0, "Actor.aux"),
+                ("GetBPMAtBeat", 3.995, "Actor.rotationx"),
+            ] {
+                let value = timing
+                    .get::<mlua::Function>(method)
+                    .unwrap()
+                    .call::<f32>((timing.clone(), arg))
+                    .unwrap();
+                let expected = native[name][key].as_f64().expect("native number") as f32;
+                assert!(
+                    (value - expected).abs() < 0.000_01,
+                    "{name}.{method}: {value} vs {expected}"
+                );
+            }
+            let get = timing.get::<mlua::Function>("GetBPMsAndTimes").unwrap();
+            let rows = get.call::<Table>((timing.clone(), 0)).unwrap();
+            assert_eq!(
+                rows.raw_len() as f64,
+                native[name]["Actor.zoomy"].as_f64().unwrap()
+            );
+            assert_eq!(
+                rows.raw_get::<Table>(1).unwrap().raw_get::<f32>(2).unwrap(),
+                native[name]["Actor.zoomx"].as_f64().unwrap() as f32
+            );
+            let strings = get.call::<Table>(timing.clone()).unwrap();
+            assert!(matches!(
+                strings.raw_get::<Value>(1).unwrap(),
+                Value::String(_)
+            ));
+            rows.raw_set(1, Value::Nil).unwrap();
+            assert!(
+                get.call::<Table>((timing, true))
+                    .unwrap()
+                    .raw_get::<Table>(1)
+                    .is_ok()
+            );
+        }
+    }
+
+    #[test]
     fn timing_table_exposes_bpm_policy() {
         let lua = Lua::new();
-        let timing = create_timing_table(&lua, [120.0, 180.0]).unwrap();
+        let data = deadsync_rules::timing::TimingData::from_segments(
+            0.0,
+            0.0,
+            &deadsync_rules::timing::TimingSegments {
+                bpms: vec![(0.0, 120.0), (4.0, 180.0)],
+                ..Default::default()
+            },
+            &[],
+        );
+        let timing = create_timing_table(&lua, [120.0, 180.0], Some(&data)).unwrap();
         let get_bpms = timing.get::<mlua::Function>("GetBPMs").unwrap();
         let get_timed_bpms = timing.get::<mlua::Function>("GetBPMsAndTimes").unwrap();
         let has_bpm_changes = timing.get::<mlua::Function>("HasBPMChanges").unwrap();
@@ -3069,7 +3155,7 @@ mod tests {
         assert_eq!(bpms.raw_get::<f32>(1).unwrap(), 120.0);
         assert_eq!(bpms.raw_get::<f32>(2).unwrap(), 180.0);
         let second = timed_bpms.raw_get::<Table>(2).unwrap();
-        assert_eq!(second.raw_get::<f32>(1).unwrap(), 1.0);
+        assert_eq!(second.raw_get::<f32>(1).unwrap(), 4.0);
         assert_eq!(second.raw_get::<f32>(2).unwrap(), 180.0);
         assert_eq!(
             timed_bpm_strings.raw_get::<String>(1).unwrap(),

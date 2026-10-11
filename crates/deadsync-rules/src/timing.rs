@@ -1195,6 +1195,10 @@ impl TimingData {
         self.bpms.first().map_or(60.0, |p| p.bpm)
     }
 
+    pub fn bpm_segments(&self) -> impl ExactSizeIterator<Item = (f32, f32)> + '_ {
+        self.bpms.iter().map(|point| (point.beat, point.bpm))
+    }
+
     #[inline(always)]
     #[must_use]
     pub fn has_bpm_changes(&self) -> bool {
