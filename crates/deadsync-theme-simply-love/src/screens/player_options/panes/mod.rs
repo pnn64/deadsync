@@ -448,9 +448,8 @@ fn init_opted_in_bitmask_rows(
     masks: &mut PlayerOptionMasks,
     player_idx: usize,
 ) {
-    let ids: Vec<RowId> = row_map.display_order().to_vec();
-    for id in ids {
-        let Some(row) = row_map.get(id) else {
+    for &id in &row_map.display_order {
+        let Some(row) = row_map.rows[id.index()].as_mut() else {
             continue;
         };
         let RowBehavior::Bitmask(binding) = row.behavior else {
@@ -459,7 +458,6 @@ fn init_opted_in_bitmask_rows(
         if binding.init().is_none() {
             continue;
         }
-        let row = row_map.get_mut(id).expect("row was just observed");
         super::row::init_bitmask_row_from_binding(row, &binding, profile, masks, player_idx);
     }
 }
@@ -469,9 +467,8 @@ fn init_opted_in_cycle_rows(
     profile: &deadsync_profile::PlayerOptionsData,
     player_idx: usize,
 ) {
-    let ids: Vec<RowId> = row_map.display_order().to_vec();
-    for id in ids {
-        let Some(row) = row_map.get_mut(id) else {
+    for &id in &row_map.display_order {
+        let Some(row) = row_map.rows[id.index()].as_mut() else {
             continue;
         };
         match row.behavior {
@@ -491,9 +488,8 @@ fn init_opted_in_numeric_rows(
     profile: &deadsync_profile::PlayerOptionsData,
     player_idx: usize,
 ) {
-    let ids: Vec<RowId> = row_map.display_order().to_vec();
-    for id in ids {
-        let Some(row) = row_map.get(id) else {
+    for &id in &row_map.display_order {
+        let Some(row) = row_map.rows[id.index()].as_mut() else {
             continue;
         };
         let RowBehavior::Numeric(binding) = row.behavior else {
@@ -502,7 +498,6 @@ fn init_opted_in_numeric_rows(
         if binding.init.is_none() {
             continue;
         }
-        let row = row_map.get_mut(id).expect("row was just observed");
         super::row::init_numeric_row_from_binding(row, &binding, profile, player_idx);
     }
 }
@@ -546,3 +541,6 @@ fn apply_derived_masks(
         (rule.apply)(profile, masks);
     }
 }
+
+#[cfg(test)]
+mod direct_data_perf;
