@@ -13007,7 +13007,7 @@ mod tests {
         let note = test_note_at(NoteType::Hold, Some(test_hold()), false, 48, 1.0);
 
         assert_eq!(
-            pending_missed_hold_resolution_for_note(Some(&note), Some(10), 9, MAX_COLS, true),
+            pending_missed_hold_resolution_for_note(Some(&note), 47, MAX_COLS, true),
             PendingMissedHoldResolutionStep::Wait,
         );
     }
@@ -13015,18 +13015,20 @@ mod tests {
     #[test]
     fn pending_missed_hold_resolution_step_removes_stale_entries() {
         assert_eq!(
-            pending_missed_hold_resolution_for_note(None, Some(10), 10, MAX_COLS, true),
+            pending_missed_hold_resolution_for_note(None, 48, MAX_COLS, true),
             PendingMissedHoldResolutionStep::Remove,
         );
+        let mut no_hold = test_note_at(NoteType::Tap, None, false, 48, 1.0);
+        no_hold.column = 0;
         assert_eq!(
-            pending_missed_hold_resolution_for_note(None, None, 10, MAX_COLS, true),
+            pending_missed_hold_resolution_for_note(Some(&no_hold), 48, MAX_COLS, true),
             PendingMissedHoldResolutionStep::Remove,
         );
 
         let mut note = test_note_at(NoteType::Hold, Some(test_hold()), false, 48, 1.0);
         note.column = MAX_COLS;
         assert_eq!(
-            pending_missed_hold_resolution_for_note(Some(&note), Some(10), 10, MAX_COLS, true),
+            pending_missed_hold_resolution_for_note(Some(&note), 48, MAX_COLS, true),
             PendingMissedHoldResolutionStep::Remove,
         );
     }
@@ -13036,7 +13038,7 @@ mod tests {
         let mut missed = test_note_at(NoteType::Hold, Some(test_hold()), false, 48, 1.0);
         missed.hold.as_mut().unwrap().result = Some(HoldResult::Missed);
         assert_eq!(
-            pending_missed_hold_resolution_for_note(Some(&missed), Some(10), 10, MAX_COLS, false),
+            pending_missed_hold_resolution_for_note(Some(&missed), 48, MAX_COLS, false),
             PendingMissedHoldResolutionStep::Resolve(
                 PendingMissedHoldResolution::ShowMissedFeedback
             ),
@@ -13045,7 +13047,7 @@ mod tests {
         let mut scored = test_note_at(NoteType::Hold, Some(test_hold()), false, 48, 1.0);
         scored.result = Some(test_judgment(JudgeGrade::Miss));
         assert_eq!(
-            pending_missed_hold_resolution_for_note(Some(&scored), Some(10), 10, MAX_COLS, true),
+            pending_missed_hold_resolution_for_note(Some(&scored), 48, MAX_COLS, true),
             PendingMissedHoldResolutionStep::Resolve(PendingMissedHoldResolution::ScoreLetGo),
         );
     }
@@ -13062,7 +13064,6 @@ mod tests {
         waiting.hold.as_mut().unwrap().result = Some(HoldResult::Missed);
         waiting.column = 2;
         let notes = vec![missed, scored, waiting];
-        let hold_end_times = [10, 10, 30];
         let mut pending = [true, true, true];
         let mut indices = vec![0, 1, 2];
         let score_by_col = [true, true, true];
@@ -13070,10 +13071,10 @@ mod tests {
 
         let first = collect_pending_missed_hold_resolutions(
             &notes,
-            &hold_end_times,
             &mut pending,
             &mut indices,
             10,
+            &[48, 48, 47],
             &score_by_col,
             &mut events,
         );
@@ -13090,7 +13091,7 @@ mod tests {
             Some(PendingMissedHoldResolutionEvent {
                 note_index: 0,
                 column: 0,
-                end_time_ns: 10,
+                time_ns: 10,
                 resolution: PendingMissedHoldResolution::ShowMissedFeedback,
             })
         );
@@ -13099,10 +13100,10 @@ mod tests {
 
         let second = collect_pending_missed_hold_resolutions(
             &notes,
-            &hold_end_times,
             &mut pending,
             &mut indices,
             10,
+            &[48, 48, 47],
             &score_by_col,
             &mut events,
         );
@@ -13119,7 +13120,7 @@ mod tests {
             Some(PendingMissedHoldResolutionEvent {
                 note_index: 1,
                 column: 1,
-                end_time_ns: 10,
+                time_ns: 10,
                 resolution: PendingMissedHoldResolution::ScoreLetGo,
             })
         );
@@ -13132,17 +13133,16 @@ mod tests {
         let mut no_action = test_note_at(NoteType::Hold, Some(test_hold()), false, 48, 1.0);
         no_action.result = Some(test_judgment(JudgeGrade::Great));
         let notes = vec![no_action];
-        let hold_end_times = [10];
         let mut pending = [true, true, true];
         let mut indices = vec![0, 1, 2];
         let mut events = [None; 2];
 
         let update = collect_pending_missed_hold_resolutions(
             &notes,
-            &hold_end_times,
             &mut pending,
             &mut indices,
             10,
+            &[48],
             &[true],
             &mut events,
         );

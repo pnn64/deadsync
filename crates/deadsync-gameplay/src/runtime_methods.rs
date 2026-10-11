@@ -1167,19 +1167,28 @@ where
         if self.hold_runtime.pending_missed_hold_indices.is_empty() {
             return;
         }
+        let mut player_rows = [0; MAX_PLAYERS];
+        for (player, row) in player_rows.iter_mut().enumerate().take(self.setup.num_players) {
+            let position = self.timing_runtime.time_to_beat_caches.notefield_search_info(
+                player, &self.timing_runtime.timing_players[player], current_time_ns);
+            *row = beat_to_note_row(position.beat);
+        }
+        let mut current_rows_by_column = [0; MAX_COLS];
         let mut score_missed_holds_rolls_by_column = [false; MAX_COLS];
         for col in 0..self.setup.num_cols.min(MAX_COLS) {
+            let player = self.player_for_col(col);
+            current_rows_by_column[col] = player_rows[player];
             score_missed_holds_rolls_by_column[col] =
-                self.progress.stage.score_missed_holds_rolls[self.player_for_col(col)];
+                self.progress.stage.score_missed_holds_rolls[player];
         }
         let mut events = [None; 8];
         loop {
             let update = collect_pending_missed_hold_resolutions(
                 &self.chart_runtime.notes,
-                &self.chart_runtime.hold_end_time_cache_ns,
                 &mut self.hold_runtime.pending_missed_hold_resolution,
                 &mut self.hold_runtime.pending_missed_hold_indices,
                 current_time_ns,
+                &current_rows_by_column[..self.setup.num_cols.min(MAX_COLS)],
                 &score_missed_holds_rolls_by_column[..self.setup.num_cols.min(MAX_COLS)],
                 &mut events,
             );
@@ -1191,7 +1200,7 @@ where
                         self.handle_hold_missed(event.column, event.note_index);
                     }
                     PendingMissedHoldResolution::ScoreLetGo => {
-                        self.handle_hold_let_go(event.column, event.note_index, event.end_time_ns);
+                        self.handle_hold_let_go(event.column, event.note_index, event.time_ns);
                     }
                 }
             }

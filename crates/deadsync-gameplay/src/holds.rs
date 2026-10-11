@@ -793,7 +793,7 @@ pub enum PendingMissedHoldResolutionStep {
 pub struct PendingMissedHoldResolutionEvent {
     pub note_index: usize,
     pub column: usize,
-    pub end_time_ns: SongTimeNs,
+    pub time_ns: SongTimeNs,
     pub resolution: PendingMissedHoldResolution,
 }
 
@@ -825,22 +825,23 @@ pub const fn pending_missed_hold_resolution_action(
 #[must_use]
 pub fn pending_missed_hold_resolution_for_note(
     note: Option<&Note>,
-    hold_end_time_ns: Option<SongTimeNs>,
-    current_time_ns: SongTimeNs,
+    current_row: i32,
     num_cols: usize,
     score_missed_holds_rolls: bool,
 ) -> PendingMissedHoldResolutionStep {
-    let Some(end_time_ns) = hold_end_time_ns else {
-        return PendingMissedHoldResolutionStep::Remove;
-    };
-    if current_time_ns < end_time_ns {
-        return PendingMissedHoldResolutionStep::Wait;
-    }
     let Some(note) = note else {
         return PendingMissedHoldResolutionStep::Remove;
     };
     if note.column >= num_cols {
         return PendingMissedHoldResolutionStep::Remove;
+    }
+    let Some(hold) = &note.hold else {
+        return PendingMissedHoldResolutionStep::Remove;
+    };
+    // Player::UpdateHoldNotes compares rounded fixed-grid note rows, so a
+    // missed hold can resolve before the tail's exact music timestamp.
+    if current_row < beat_to_note_row(hold.end_beat) {
+        return PendingMissedHoldResolutionStep::Wait;
     }
     PendingMissedHoldResolutionStep::Resolve(pending_missed_hold_resolution_action(
         note.hold.as_ref().and_then(|hold| hold.result),
@@ -854,10 +855,10 @@ pub fn pending_missed_hold_resolution_for_note(
 /// Panics if an internal state invariant is violated.
 pub fn collect_pending_missed_hold_resolutions(
     notes: &[Note],
-    hold_end_time_cache_ns: &[SongTimeNs],
     pending_resolution: &mut [bool],
     pending_indices: &mut Vec<usize>,
     current_time_ns: SongTimeNs,
+    current_rows_by_column: &[i32],
     score_missed_holds_rolls_by_column: &[bool],
     events: &mut [Option<PendingMissedHoldResolutionEvent>],
 ) -> PendingMissedHoldResolutionUpdate {
@@ -865,20 +866,17 @@ pub fn collect_pending_missed_hold_resolutions(
     let mut event_count = 0usize;
     while i < pending_indices.len() {
         let note_index = pending_indices[i];
-        let end_time_ns = hold_end_time_cache_ns
-            .get(note_index)
-            .copied()
-            .and_then(cached_hold_end_time_ns);
         let note = notes.get(note_index);
+        let current_row = note.and_then(|note| current_rows_by_column.get(note.column))
+            .copied().unwrap_or(i32::MIN);
         let score_missed_holds_rolls = note
             .and_then(|note| score_missed_holds_rolls_by_column.get(note.column))
             .copied()
             .unwrap_or(false);
         let step = pending_missed_hold_resolution_for_note(
             note,
-            end_time_ns,
-            current_time_ns,
-            score_missed_holds_rolls_by_column.len(),
+            current_row,
+            current_rows_by_column.len(),
             score_missed_holds_rolls,
         );
         match step {
@@ -899,7 +897,7 @@ pub fn collect_pending_missed_hold_resolutions(
                 events[event_count] = Some(PendingMissedHoldResolutionEvent {
                     note_index,
                     column: note.column,
-                    end_time_ns: end_time_ns.expect("resolved missed hold event has an end time"),
+                    time_ns: current_time_ns,
                     resolution,
                 });
                 event_count += 1;

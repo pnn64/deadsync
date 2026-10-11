@@ -2256,7 +2256,7 @@ mod runtime_regression_tests {
     }
 
     #[test]
-    fn scored_missed_hold_resolves_let_go_at_hold_end() {
+    fn missed_hold_resolves_at_rounded_tail_row() {
         let mut state = regression_state();
         let note_time_ns = song_time_ns_from_seconds(1.0);
         let hold_end_ns = song_time_ns_from_seconds(2.0);
@@ -2291,7 +2291,9 @@ mod runtime_regression_tests {
         assert_eq!(state.players_runtime.players[0].holds_let_go_for_score, 0);
         assert_eq!(state.players_runtime.players[0].holds_resolved_for_score, 0);
 
-        state.resolve_pending_missed_holds(hold_end_ns.saturating_sub(1));
+        let before = song_time_ns_from_seconds(state.timing_runtime.timing_players[0]
+            .get_time_for_beat_exact(2.0 - 0.51 / 48.0));
+        state.resolve_pending_missed_holds(before);
         assert_eq!(
             state.chart_runtime.notes[0]
                 .hold
@@ -2302,7 +2304,10 @@ mod runtime_regression_tests {
         assert_eq!(state.players_runtime.players[0].holds_let_go_for_score, 0);
         assert_eq!(state.players_runtime.players[0].holds_resolved_for_score, 0);
 
-        state.resolve_pending_missed_holds(hold_end_ns);
+        let rounded = song_time_ns_from_seconds(state.timing_runtime.timing_players[0]
+            .get_time_for_beat_exact(2.0 - 0.49 / 48.0));
+        assert!(rounded < hold_end_ns);
+        state.resolve_pending_missed_holds(rounded);
 
         assert_eq!(
             state.chart_runtime.notes[0]
