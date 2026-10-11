@@ -173,8 +173,7 @@ mod tests {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/support/perf.rs"]
-mod perf;
+use resource_perf_support as perf;
 
 #[cfg(test)]
 #[path = "../../../tests/perf/menu_buffers_support.rs"]
@@ -195,3 +194,8 @@ mod data_paths_perf_support;
 #[cfg(test)]
 #[path = "../../../tests/perf/preview_dataflows_support.rs"]
 mod preview_dataflows_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/resource_support.rs"]
+#[allow(dead_code)]
+mod resource_perf_support;

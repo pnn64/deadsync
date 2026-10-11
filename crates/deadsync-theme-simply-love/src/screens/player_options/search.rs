@@ -33,7 +33,13 @@ pub(super) struct SettingMatch {
 }
 
 impl SettingMatch {
-    fn new(row_id: RowId, pane: OptionsPane, label: Arc<str>, score: i32) -> Self {
+    fn new(
+        row_id: RowId,
+        pane: OptionsPane,
+        label: Arc<str>,
+        score: i32,
+        pane_text: Arc<str>,
+    ) -> Self {
         Self {
             choice_index: None,
             thumb: None,
@@ -41,7 +47,7 @@ impl SettingMatch {
             pane,
             score,
             row_text: super::search_ranking::SearchRowText::default(),
-            pane_text: pane_label(pane),
+            pane_text,
             retained_text: super::search_text::SearchResultText::default(),
             label,
         }
@@ -143,7 +149,7 @@ pub(super) fn rebuild_matches(state: &State, query: &str) -> Vec<SettingMatch> {
             if let Some((label, score)) =
                 super::search_ranking::matched_setting_label(&q, &row.name.get(), row_aliases(id))
             {
-                matches.push(SettingMatch::new(id, pane, label, score));
+                matches.push(SettingMatch::new(id, pane, label, score, pane_label(pane)));
             }
         }
     }
@@ -199,6 +205,8 @@ pub(super) fn open_component(state: &mut State, player: usize, row: RowId) {
 }
 
 fn component_matches(state: &State, row: RowId, player: usize, query: &str) -> Vec<SettingMatch> {
+    static EMPTY_PANE_TEXT: std::sync::LazyLock<Arc<str>> =
+        std::sync::LazyLock::new(|| Arc::from(""));
     let q = fuzzy::prepare_query(query);
     let mut matches = Vec::new();
     for (index, label) in state.pane().row_map.row(row).choices.iter().enumerate() {
@@ -212,11 +220,15 @@ fn component_matches(state: &State, row: RowId, player: usize, query: &str) -> V
             };
             score
         };
-        let mut item =
-            SettingMatch::new(row, OptionsPane::Display, Arc::from(label.as_str()), score);
+        let mut item = SettingMatch::new(
+            row,
+            OptionsPane::Display,
+            Arc::from(label.as_str()),
+            score,
+            Arc::clone(&EMPTY_PANE_TEXT),
+        );
         item.choice_index = Some(index);
         item.thumb = state.pack_menu.choice_thumb(state, player, row, index);
-        item.pane_text = Arc::from("");
         matches.push(item);
     }
     if !q.is_empty() {
@@ -613,3 +625,6 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
         diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(center)
     ));
 }
+
+#[cfg(test)]
+mod resource_perf;
