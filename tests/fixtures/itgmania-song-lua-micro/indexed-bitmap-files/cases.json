@@ -1,0 +1,530 @@
+[
+  {
+    "name": "win1-model",
+    "file": "win1.bmp",
+    "kind": "model",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "cec18a5373a6c2f01431cd68e8c28f415cc48009345c8611dccfc246900dfa00",
+    "source_sha256": "35458a0c27d81729ab04aea06f19647a880168c0d0e0cd9503c1118cbed38f3b"
+  },
+  {
+    "name": "win1-sprite",
+    "file": "win1.bmp",
+    "kind": "sprite",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "9fe1c615fd67b5a72dad5c4ecc274ecde2c73ee4873d34cf96996261cc44539b",
+    "source_sha256": "35458a0c27d81729ab04aea06f19647a880168c0d0e0cd9503c1118cbed38f3b"
+  },
+  {
+    "name": "os2-1-model",
+    "file": "os2-1.bmp",
+    "kind": "model",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "cec18a5373a6c2f01431cd68e8c28f415cc48009345c8611dccfc246900dfa00",
+    "source_sha256": "f188bfabd947cfb55f8a43ec2459486501323fad0067203204d1da719cd55050"
+  },
+  {
+    "name": "os2-1-sprite",
+    "file": "os2-1.bmp",
+    "kind": "sprite",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "9fe1c615fd67b5a72dad5c4ecc274ecde2c73ee4873d34cf96996261cc44539b",
+    "source_sha256": "f188bfabd947cfb55f8a43ec2459486501323fad0067203204d1da719cd55050"
+  },
+  {
+    "name": "win4-model",
+    "file": "win4.bmp",
+    "kind": "model",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "bf8de17859d1185429fc0d5e060df0b61003ddceab2038af40524126b8e5fb6b",
+    "source_sha256": "a7e424ad09f99ad97e2d5a995faccd8ae757e91d3253baf88671265a0e0dde13"
+  },
+  {
+    "name": "win4-sprite",
+    "file": "win4.bmp",
+    "kind": "sprite",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "22f20873cee8cf579f51655d456381e620d284732e4b2e575aaf5ec2846e8bb5",
+    "source_sha256": "a7e424ad09f99ad97e2d5a995faccd8ae757e91d3253baf88671265a0e0dde13"
+  },
+  {
+    "name": "os2-4-model",
+    "file": "os2-4.bmp",
+    "kind": "model",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "bf8de17859d1185429fc0d5e060df0b61003ddceab2038af40524126b8e5fb6b",
+    "source_sha256": "06698c405d38bfc17c8f62069a172fc0a6da7a37bbd78d8a37c21f6fd706f0d8"
+  },
+  {
+    "name": "os2-4-sprite",
+    "file": "os2-4.bmp",
+    "kind": "sprite",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "22f20873cee8cf579f51655d456381e620d284732e4b2e575aaf5ec2846e8bb5",
+    "source_sha256": "06698c405d38bfc17c8f62069a172fc0a6da7a37bbd78d8a37c21f6fd706f0d8"
+  },
+  {
+    "name": "win8-model",
+    "file": "win8.bmp",
+    "kind": "model",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "d8cd8203c18208b65ced00bacc2e891a0a59e75dfffc09ea9aeff5d1c079d609",
+    "source_sha256": "2f44c91ecd69db5f1ff1de0f71462e7afc1f9d042715cd4d6dc92c757a10cc34"
+  },
+  {
+    "name": "win8-sprite",
+    "file": "win8.bmp",
+    "kind": "sprite",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "b991be0ebe963e06eb0567c4fb9d01b1f126dd1d39c59a984ac6428c98a8dca3",
+    "source_sha256": "2f44c91ecd69db5f1ff1de0f71462e7afc1f9d042715cd4d6dc92c757a10cc34"
+  },
+  {
+    "name": "os2-8-model",
+    "file": "os2-8.bmp",
+    "kind": "model",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "d8cd8203c18208b65ced00bacc2e891a0a59e75dfffc09ea9aeff5d1c079d609",
+    "source_sha256": "a97e5ee484f654cc9a97e418eab808858aa0e4be87988c55ec8e5bdb54ba1047"
+  },
+  {
+    "name": "os2-8-sprite",
+    "file": "os2-8.bmp",
+    "kind": "sprite",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "b991be0ebe963e06eb0567c4fb9d01b1f126dd1d39c59a984ac6428c98a8dca3",
+    "source_sha256": "a97e5ee484f654cc9a97e418eab808858aa0e4be87988c55ec8e5bdb54ba1047"
+  },
+  {
+    "name": "win4-odd-model",
+    "file": "win4-odd.bmp",
+    "kind": "model",
+    "source": [
+      5,
+      3
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "3fcf60516b404b934a9f9384c9077694f5e904215b6a47957e3278d215f9e3ea",
+    "source_sha256": "d862a5d59b25a69fa1c36334ab101f8cb82a53c2f9f36714f61493a7d1f226c7"
+  },
+  {
+    "name": "win8-odd-model",
+    "file": "win8-odd.bmp",
+    "kind": "model",
+    "source": [
+      5,
+      9
+    ],
+    "output": [
+      8,
+      16
+    ],
+    "rgba_bytes": 512,
+    "rgba_sha256": "761231f48d01201b0169b8dff0e46cd8caa3c213e830bba1d65ce13eac4e6365",
+    "source_sha256": "4cc93d946ee60abd85d36fb219fff12dd652ba0f143f9793f7ba343ebcafa5e6"
+  },
+  {
+    "name": "win8-unused-entry-model",
+    "file": "win8-unused-entry.bmp",
+    "kind": "model",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "d8cd8203c18208b65ced00bacc2e891a0a59e75dfffc09ea9aeff5d1c079d609",
+    "source_sha256": "1e22a2786e86aaef1b0c7a1468840459082f0eecc7bc4aa3b10a07d264cd2447"
+  },
+  {
+    "name": "win8-unused-entry-sprite",
+    "file": "win8-unused-entry.bmp",
+    "kind": "sprite",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "478d5cba0a41e985f926f71885cd1411f94cdf5a9645a2e762fbdb06324a533a",
+    "source_sha256": "1e22a2786e86aaef1b0c7a1468840459082f0eecc7bc4aa3b10a07d264cd2447"
+  },
+  {
+    "name": "win8-both-pinks-model",
+    "file": "win8-both-pinks.bmp",
+    "kind": "model",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "e00af8f0397e4ff98a676372762e18579caac2b9ed0ebb887cb1265c0c03df9b",
+    "source_sha256": "0f23968f01efb79d514c65682098dc4bec97f2b06e54bf06b796b3040710e391"
+  },
+  {
+    "name": "win8-both-pinks-sprite",
+    "file": "win8-both-pinks.bmp",
+    "kind": "sprite",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "23df1174a5cc1cbe8ba9d4fb40edc860d97f02fed73235ecb51aa19a1f1b187b",
+    "source_sha256": "0f23968f01efb79d514c65682098dc4bec97f2b06e54bf06b796b3040710e391"
+  },
+  {
+    "name": "gif-global-model",
+    "file": "gif-global.gif",
+    "kind": "model",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "06ff0846dcada3a8c6d9823a60b768d7d2333dc6ab70431d007d13ea69d7aa3c",
+    "source_sha256": "3d4e2e9c81a4e52d79f0ddbd24ebc212a6d94c69045308a4ecfd0c91613b5e68"
+  },
+  {
+    "name": "gif-global-sprite",
+    "file": "gif-global.gif",
+    "kind": "sprite",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "495da575d1b27bd6f16d5e2a58b1229c27001ead2f81e01b792cf64c23507432",
+    "source_sha256": "3d4e2e9c81a4e52d79f0ddbd24ebc212a6d94c69045308a4ecfd0c91613b5e68"
+  },
+  {
+    "name": "gif-local-model",
+    "file": "gif-local.gif",
+    "kind": "model",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "06ff0846dcada3a8c6d9823a60b768d7d2333dc6ab70431d007d13ea69d7aa3c",
+    "source_sha256": "11ba3658478a96ff60449e957184d020d8e59b8b7a0cbf618b688655f8d59bd3"
+  },
+  {
+    "name": "gif-local-sprite",
+    "file": "gif-local.gif",
+    "kind": "sprite",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "495da575d1b27bd6f16d5e2a58b1229c27001ead2f81e01b792cf64c23507432",
+    "source_sha256": "11ba3658478a96ff60449e957184d020d8e59b8b7a0cbf618b688655f8d59bd3"
+  },
+  {
+    "name": "gif-offset-model",
+    "file": "gif-offset.gif",
+    "kind": "model",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "06ff0846dcada3a8c6d9823a60b768d7d2333dc6ab70431d007d13ea69d7aa3c",
+    "source_sha256": "a33290caa341eaf3386df358666209691741850da9f4d121a529010cff0e1d22"
+  },
+  {
+    "name": "gif-offset-sprite",
+    "file": "gif-offset.gif",
+    "kind": "sprite",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "495da575d1b27bd6f16d5e2a58b1229c27001ead2f81e01b792cf64c23507432",
+    "source_sha256": "a33290caa341eaf3386df358666209691741850da9f4d121a529010cff0e1d22"
+  },
+  {
+    "name": "gif-interlaced-model",
+    "file": "gif-interlaced.gif",
+    "kind": "model",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "06ff0846dcada3a8c6d9823a60b768d7d2333dc6ab70431d007d13ea69d7aa3c",
+    "source_sha256": "f6ce497be1d165de0ec0bcb66ab127c1f4a9e7adb9ea99ca5927f118e2740239"
+  },
+  {
+    "name": "gif-interlaced-sprite",
+    "file": "gif-interlaced.gif",
+    "kind": "sprite",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "495da575d1b27bd6f16d5e2a58b1229c27001ead2f81e01b792cf64c23507432",
+    "source_sha256": "f6ce497be1d165de0ec0bcb66ab127c1f4a9e7adb9ea99ca5927f118e2740239"
+  },
+  {
+    "name": "gif-first-frame-model",
+    "file": "gif-first-frame.gif",
+    "kind": "model",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "06ff0846dcada3a8c6d9823a60b768d7d2333dc6ab70431d007d13ea69d7aa3c",
+    "source_sha256": "65fcda8c3a9e09855ab4f87d954d214950ce1f78529263a14df5175375176f1c"
+  },
+  {
+    "name": "gif-first-frame-sprite",
+    "file": "gif-first-frame.gif",
+    "kind": "sprite",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "495da575d1b27bd6f16d5e2a58b1229c27001ead2f81e01b792cf64c23507432",
+    "source_sha256": "65fcda8c3a9e09855ab4f87d954d214950ce1f78529263a14df5175375176f1c"
+  },
+  {
+    "name": "gif-transparent-pink-model",
+    "file": "gif-transparent-pink.gif",
+    "kind": "model",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "839848b6fa4dc70cab5d7a19849b9afe5ddeae0ea85db597532bdd769b972a6b",
+    "source_sha256": "43e7d7ff6c0df9ee631df692e6392892ced5c4dd6ad251bacfc400c650607cd5"
+  },
+  {
+    "name": "gif-transparent-pink-sprite",
+    "file": "gif-transparent-pink.gif",
+    "kind": "sprite",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "d8cd8203c18208b65ced00bacc2e891a0a59e75dfffc09ea9aeff5d1c079d609",
+    "source_sha256": "43e7d7ff6c0df9ee631df692e6392892ced5c4dd6ad251bacfc400c650607cd5"
+  },
+  {
+    "name": "gif-both-pinks-model",
+    "file": "gif-both-pinks.gif",
+    "kind": "model",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "e00af8f0397e4ff98a676372762e18579caac2b9ed0ebb887cb1265c0c03df9b",
+    "source_sha256": "75c80a530acbcd011da1f5177f119d80a49d8ba8c0999b8460c26a0fd2454074"
+  },
+  {
+    "name": "gif-both-pinks-sprite",
+    "file": "gif-both-pinks.gif",
+    "kind": "sprite",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "23df1174a5cc1cbe8ba9d4fb40edc860d97f02fed73235ecb51aa19a1f1b187b",
+    "source_sha256": "75c80a530acbcd011da1f5177f119d80a49d8ba8c0999b8460c26a0fd2454074"
+  },
+  {
+    "name": "gif-odd-model",
+    "file": "gif-odd.gif",
+    "kind": "model",
+    "source": [
+      5,
+      3
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "rgba_bytes": 256,
+    "rgba_sha256": "916cb72310cbd54857f2dcdff24be6918e251badef4353ce4008769f0b079160",
+    "source_sha256": "016ab4d55dbe883764bf5194fe4e3fad833f23ea14aa4a1d86a62808acb5bde9"
+  }
+]

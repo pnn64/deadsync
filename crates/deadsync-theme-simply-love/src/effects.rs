@@ -59,6 +59,28 @@ pub enum SimplyLoveContentRequest {
     DeleteSong {
         simfile_path: PathBuf,
     },
+    /// Permanently delete an installed pack.
+    ///
+    /// Carries the group name and never a path: the shell resolves it against
+    /// the live catalog, so nothing a screen can compose reaches the
+    /// filesystem.
+    DeletePack {
+        group_name: String,
+    },
+    /// Measure a library pack with Null-or-Die from the Content Browser:
+    /// the shell gathers its songs and opens the pack sync review on them.
+    MeasurePackSync {
+        group_name: String,
+    },
+    /// Write a `Pack.ini` `SyncOffset` for an installed pack, so the engine
+    /// knows whether it was authored ITG-synced or null-synced.
+    ///
+    /// Same rule as the delete above: a group name, never a path.
+    SetPackSync {
+        group_name: String,
+        /// `true` writes `SyncOffset=ITG`, `false` writes `SyncOffset=NULL`.
+        itg: bool,
+    },
     /// Ask the shell to cut short the in-progress startup `ReplayGain` analysis
     /// so the loading screen can advance without waiting for every song.
     SkipReplayGain,
@@ -243,6 +265,8 @@ pub enum SimplyLoveOnlineRequest {
     RetryUnlockDownloads,
     EnsureStepManiaOnlineCatalog,
     RefreshStepManiaOnlineCatalog,
+    /// Ask the catalogue for the next page of packs, newest first.
+    LoadMoreStepManiaOnlinePacks,
     DownloadStepManiaOnlinePack {
         pack_id: u64,
     },
@@ -419,6 +443,8 @@ pub enum SimplyLoveSyncOwner {
     SelectMusicSong,
     SelectMusicPack,
     OptionsPack,
+    /// The Content Browser's Installed tab.
+    ContentBrowserPack,
 }
 
 /// Song-search work run off the render thread by the shell's `song_search`

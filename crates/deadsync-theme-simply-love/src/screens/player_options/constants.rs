@@ -14,8 +14,6 @@ pub(super) const ROW_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
 
 pub(super) const PANE_FADE_SECONDS: f32 = 0.2;
 
-pub(super) const TAP_EXPLOSION_PREVIEW_SPEED: f32 = 0.7;
-
 pub(super) const INLINE_SPACING: f32 = 15.75;
 
 pub(super) const TILT_INTENSITY_MIN: f32 = 0.05;

@@ -365,6 +365,8 @@ pub fn combo_multipliers_at_beat(segments: &[ComboSegment], beat: f32) -> (u32, 
 struct SpeedRuntime {
     start_time_ns: TimingNs,
     end_time_ns: TimingNs,
+    start_time: f32,
+    end_time: f32,
     prev_ratio: f32,
 }
 
@@ -727,7 +729,8 @@ impl TimingData {
             let mut last_ratio = 1.0_f32;
             timing_with_stops.scroll_prefix = exact_arc(timing_with_stops.scrolls.len(), |index| {
                 let seg = timing_with_stops.scrolls[index];
-                cum_displayed = (seg.beat - last_real_beat).mul_add(last_ratio, cum_displayed);
+                // TimingData::GetDisplayedBeat rounds the product before adding.
+                cum_displayed += (seg.beat - last_real_beat) * last_ratio;
                 let prefix = ScrollPrefix {
                     beat: seg.beat,
                     cum_displayed,
@@ -1229,6 +1232,14 @@ impl TimingData {
         let mut end_cache = BeatTimeCache::new(self);
         let runtime = exact_arc(self.speeds.len(), |index| {
             let seg = self.speeds[index];
+            // GetDisplayedSpeedPercent uses float endpoints before a delay.
+            // Bake them separately from the integer gameplay timeline.
+            let start_time = self.speed_start_time(seg.beat);
+            let end_time = if seg.unit == SpeedUnit::Seconds {
+                start_time + seg.delay
+            } else {
+                self.speed_start_time(seg.beat + seg.delay)
+            };
             let start_time_ns = self.get_time_for_beat_ns_cached(seg.beat, &mut start_cache);
             let end_time_ns = if seg.delay <= 0.0 {
                 start_time_ns
@@ -1240,12 +1251,76 @@ impl TimingData {
             let value = SpeedRuntime {
                 start_time_ns,
                 end_time_ns,
+                start_time,
+                end_time,
                 prev_ratio,
             };
             prev_ratio = seg.ratio;
             value
         });
         self.speed_runtime = runtime;
+    }
+
+    fn speed_start_time(&self, beat: f32) -> f32 {
+        let row = beat_to_note_row(beat);
+        let delay = self
+            .delays
+            .iter()
+            .find(|seg| beat_to_note_row(seg.beat) == row)
+            .map_or(0.0, |seg| seg.duration);
+        let mut start = GetBeatStarts::default();
+        let mut time = timing_ns_to_seconds(self.beat_start_time_ns());
+        let mut bps = self.get_bpm_for_beat(0.0) / 60.0;
+        // Load-time native float traversal: rounding each event before adding
+        // the next one differs from converting an accumulated integer time.
+        loop {
+            let mut row = i32::MAX;
+            let mut event = TimingEvent::NotFound;
+            find_event(
+                &mut row,
+                &mut event,
+                start,
+                beat,
+                true,
+                &self.bpms,
+                &self.warps,
+                &self.stops,
+                &self.delays,
+            );
+            if event == TimingEvent::NotFound {
+                break;
+            }
+            time += if start.is_warping {
+                0.0
+            } else {
+                note_row_to_beat(row - start.last_row) / bps
+            };
+            match event {
+                TimingEvent::Marker => break,
+                TimingEvent::WarpDest => start.is_warping = false,
+                TimingEvent::Bpm => {
+                    bps = self.bpms[start.bpm_idx].bpm / 60.0;
+                    start.bpm_idx += 1;
+                }
+                TimingEvent::Stop | TimingEvent::StopDelay => {
+                    time += self.stops[start.stop_idx].duration;
+                    start.stop_idx += 1;
+                }
+                TimingEvent::Delay => {
+                    time += self.delays[start.delay_idx].duration;
+                    start.delay_idx += 1;
+                }
+                TimingEvent::Warp => {
+                    start.is_warping = true;
+                    let warp = self.warps[start.warp_idx];
+                    start.warp_destination = start.warp_destination.max(warp.beat + warp.length);
+                    start.warp_idx += 1;
+                }
+                _ => {}
+            }
+            start.last_row = row;
+        }
+        (time - self.global_offset_sec) - delay
     }
 
     /// Update the global offset used for time⇄beat conversion, mirroring
@@ -1502,12 +1577,12 @@ impl TimingData {
         }
         if beat < self.scroll_prefix[0].beat {
             let p = self.scroll_prefix[0];
-            return (beat - p.beat).mul_add(p.ratio, p.cum_displayed);
+            return (beat - p.beat) * p.ratio + p.cum_displayed;
         }
         let idx = self.scroll_prefix.partition_point(|p| p.beat <= beat);
         let i = idx.saturating_sub(1);
         let p = self.scroll_prefix[i];
-        (beat - p.beat).mul_add(p.ratio, p.cum_displayed)
+        (beat - p.beat) * p.ratio + p.cum_displayed
     }
 
     #[inline]
@@ -1544,27 +1619,49 @@ impl TimingData {
         } else {
             self.scroll_prefix[cache.next_prefix - 1]
         };
-        (beat - prefix.beat).mul_add(prefix.ratio, prefix.cum_displayed)
+        (beat - prefix.beat) * prefix.ratio + prefix.cum_displayed
     }
 
     #[inline]
     #[must_use]
     pub fn get_speed_multiplier(&self, beat: f32, time: f32) -> f32 {
-        self.get_speed_multiplier_with(beat, || timing_ns_from_seconds(time))
+        if self.speeds.is_empty() {
+            return 1.0;
+        }
+        if !beat.is_finite() || !time.is_finite() {
+            return self.get_speed_multiplier_ns(beat, timing_ns_from_seconds(time));
+        }
+        // Native speed selection rounds the query beat to a note row.
+        let row = beat_to_note_row(beat);
+        let pos = self
+            .speeds
+            .partition_point(|seg| beat_to_note_row(seg.beat) <= row);
+        let index = pos.saturating_sub(1);
+        let seg = self.speeds[index];
+        let rt = self.speed_runtime[index];
+        if index == 0 && seg.delay > 0.0 && time < rt.start_time {
+            return 1.0;
+        }
+        if rt.end_time >= time && (index > 0 || seg.delay > 0.0) {
+            let duration = rt.end_time - rt.start_time;
+            let progress = if duration == 0.0 {
+                1.0
+            } else {
+                (time - rt.start_time) / duration
+            };
+            // Keep the native subtraction, product and sum rounding, including
+            // zero-duration transitions at their endpoint.
+            return rt.prev_ratio + progress * -(rt.prev_ratio - seg.ratio);
+        }
+        seg.ratio
     }
 
     #[inline]
     #[must_use]
     pub fn get_speed_multiplier_ns(&self, beat: f32, time_ns: i64) -> f32 {
-        self.get_speed_multiplier_with(beat, || time_ns)
-    }
-
-    #[inline(always)]
-    fn get_speed_multiplier_with(&self, beat: f32, time_ns: impl FnOnce() -> i64) -> f32 {
         if self.speeds.is_empty() {
             return 1.0;
         }
-        let time_ns = time_ns();
         let pos = self.speeds.partition_point(|seg| seg.beat <= beat);
         let Some(i) = pos.checked_sub(1) else {
             let first = self.speeds[0];
@@ -2678,6 +2775,188 @@ mod tests {
     }
 
     #[test]
+    fn displayed_speed_matches_native() {
+        // Exact native Actor values, captured by harness 0.1.51 with
+        // ITGmania 5c737928. See tests/fixtures/itgmania-actors/displayed-speed.json.
+        {
+            // seconds-and-beats
+            let timing = TimingData::from_segments(
+                0.125,
+                0.0,
+                &TimingSegments {
+                    bpms: vec![(0.0, 120.0)],
+                    speeds: vec![
+                        SpeedSegment {
+                            beat: 0.0,
+                            ratio: 0.5,
+                            delay: 2.0,
+                            unit: SpeedUnit::Seconds,
+                        },
+                        SpeedSegment {
+                            beat: 4.0,
+                            ratio: 2.0,
+                            delay: 4.0,
+                            unit: SpeedUnit::Beats,
+                        },
+                        SpeedSegment {
+                            beat: 8.0,
+                            ratio: 0.800000011920929,
+                            delay: 0.0,
+                            unit: SpeedUnit::Beats,
+                        },
+                    ],
+                    ..TimingSegments::default()
+                },
+                &[],
+            );
+            for (beat, music, native_bits) in [
+                (-4.0, -1.0, 0x3f800000),
+                (-4.0, 0.0, 0x3f800000),
+                (0.0, 0.0, 0x3f800000),
+                (0.0, 0.125, 0x3f800000),
+                (1.0, 0.375, 0x3f700000),
+                (2.0, 1.125, 0x3f400000),
+                (3.999000072479248, 2.121999979019165, 0x3efed916),
+                (4.0, 2.125, 0x3f000000),
+                (4.0, 2.130000114440918, 0x3f00f5c4),
+                (5.0, 2.625, 0x3f600000),
+                (6.0, 3.125, 0x3fa00000),
+                (7.0, 3.625, 0x3fd00000),
+                (7.999000072479248, 4.119999885559082, 0x3f4cccd2),
+                (8.0, 4.125, 0x3f4ccccc),
+                (8.00100040435791, 4.125999927520752, 0x3f4ccccd),
+            ] {
+                let value = ((beat + 1.0) - beat) * timing.get_speed_multiplier(beat, music);
+                assert_eq!(value.to_bits(), native_bits, "beat {beat}, music {music}");
+            }
+        }
+        {
+            // delay-and-stop
+            let timing = TimingData::from_segments(
+                0.125,
+                0.0,
+                &TimingSegments {
+                    bpms: vec![(0.0, 120.0)],
+                    speeds: vec![
+                        SpeedSegment {
+                            beat: 0.0,
+                            ratio: 0.5,
+                            delay: 2.0,
+                            unit: SpeedUnit::Seconds,
+                        },
+                        SpeedSegment {
+                            beat: 4.0,
+                            ratio: 2.0,
+                            delay: 4.0,
+                            unit: SpeedUnit::Beats,
+                        },
+                        SpeedSegment {
+                            beat: 8.0,
+                            ratio: 0.800000011920929,
+                            delay: 0.0,
+                            unit: SpeedUnit::Beats,
+                        },
+                    ],
+                    delays: vec![
+                        DelaySegment {
+                            beat: 4.0,
+                            duration: 0.30000001192092896,
+                        },
+                        DelaySegment {
+                            beat: 8.0,
+                            duration: 0.4000000059604645,
+                        },
+                    ],
+                    stops: vec![StopSegment {
+                        beat: 6.0,
+                        duration: 0.5,
+                    }],
+                    ..TimingSegments::default()
+                },
+                &[],
+            );
+            for (beat, music, native_bits) in [
+                (3.9800000190734863, 2.119999885559082, 0x3f0051ec),
+                (3.989000082015991, 2.119999885559082, 0x3f0051ee),
+                (3.990000009536743, 2.119999885559082, 0x3efea0e4),
+                (3.999000072479248, 2.119999885559082, 0x3efea0e8),
+                (4.0, 2.124000072479248, 0x3effb9ca),
+                (4.0, 2.125, 0x3f000000),
+                (4.0, 2.2249999046325684, 0x3f0db6da),
+                (4.0, 2.424999952316284, 0x3f292492),
+                (5.0, 2.924999952316284, 0x3f6db6da),
+                (6.0, 3.424999952316284, 0x3f992492),
+                (6.0, 3.674999952316284, 0x3faa4924),
+                (6.0, 3.924999952316284, 0x3fbb6db6),
+                (7.0, 4.425000190734863, 0x3fddb6dc),
+                (7.988999843597412, 4.920000076293945, 0x3fffa842),
+                (7.989999771118164, 4.920000076293945, 0x3f4ccccc),
+                (7.999000072479248, 4.920000076293945, 0x3f4cccd2),
+                (8.0, 4.925000190734863, 0x3f4ccccc),
+                (8.0, 5.324999809265137, 0x3f4ccccd),
+            ] {
+                let value = ((beat + 1.0) - beat) * timing.get_speed_multiplier(beat, music);
+                assert_eq!(value.to_bits(), native_bits, "beat {beat}, music {music}");
+            }
+        }
+        {
+            // first-beat-ramp
+            let timing = TimingData::from_segments(
+                2.1029999256134033,
+                0.0,
+                &TimingSegments {
+                    bpms: vec![(0.0, 146.0)],
+                    speeds: vec![
+                        SpeedSegment {
+                            beat: 0.0,
+                            ratio: 0.30000001192092896,
+                            delay: 4.0,
+                            unit: SpeedUnit::Beats,
+                        },
+                        SpeedSegment {
+                            beat: 4.0,
+                            ratio: 0.8999999761581421,
+                            delay: 3.0,
+                            unit: SpeedUnit::Seconds,
+                        },
+                        SpeedSegment {
+                            beat: 12.0,
+                            ratio: 1.100000023841858,
+                            delay: 0.0,
+                            unit: SpeedUnit::Beats,
+                        },
+                    ],
+                    delays: vec![DelaySegment {
+                        beat: 4.0,
+                        duration: 0.25,
+                    }],
+                    ..TimingSegments::default()
+                },
+                &[],
+            );
+            for (beat, music, native_bits) in [
+                (-4.0, -1.0, 0x3f800000),
+                (-1.0, 2.0, 0x3f800000),
+                (0.0, 2.1029999256134033, 0x3f800000),
+                (0.5, 2.200000047683716, 0x3f756cfa),
+                (1.0, 2.5, 0x3f54b8c1),
+                (2.0, 2.924999952316284, 0x3f26641a),
+                (3.0, 3.3359999656677246, 0x3ef32c50),
+                (3.990000009536743, 3.740000009536743, 0x3e98e668),
+                (4.0, 3.746835708618164, 0x3e99999c),
+                (4.0, 3.871835708618164, 0x3ea66668),
+                (4.0, 3.996835708618164, 0x3eb33335),
+                (6.0, 5.0, 0x3f0cf647),
+                (10.0, 6.746835708618164, 0x3f666666),
+                (12.0, 7.199999809265137, 0x3f8ccccd),
+            ] {
+                let value = ((beat + 1.0) - beat) * timing.get_speed_multiplier(beat, music);
+                assert_eq!(value.to_bits(), native_bits, "beat {beat}, music {music}");
+            }
+        }
+    }
+
+    #[test]
     fn speed_float_queries_preserve_empty_tables_and_extreme_times() {
         for timing in [
             TimingData::default(),
@@ -2708,15 +2987,29 @@ mod tests {
             &[],
         );
         for beat in [-4.0, 0.0, 4.0, f32::NAN, f32::INFINITY] {
-            for time in [-0.0, 0.0, 1.0, f32::MIN, f32::MAX, f32::NAN, f32::INFINITY] {
+            for (time, native) in [
+                (-0.0, 1.0),
+                (0.0, 1.0),
+                (1.0, 0.84375),
+                (f32::MIN, 1.0),
+                (f32::MAX, 0.5),
+                (f32::NAN, 0.0),
+                (f32::INFINITY, 0.0),
+            ] {
+                // Native first-segment ramps use music time even before its
+                // beat. Invalid inputs retain the prior integer fallback.
+                let expected = if beat.is_finite() && time.is_finite() {
+                    native
+                } else {
+                    timing.get_speed_multiplier_ns(beat, timing_ns_from_seconds(time))
+                };
                 assert_eq!(
                     timing.get_speed_multiplier(beat, time).to_bits(),
-                    timing
-                        .get_speed_multiplier_ns(beat, timing_ns_from_seconds(time))
-                        .to_bits()
+                    expected.to_bits()
                 );
             }
         }
+        assert_eq!(timing.get_speed_multiplier_ns(-4.0, 1_000_000_000), 1.0);
     }
 
     #[test]
@@ -3721,6 +4014,47 @@ mod tests {
         assert!((timing.get_displayed_beat(-1.0) - 0.0).abs() < 0.0001);
         assert!((timing.get_displayed_beat(2.0) - 0.0).abs() < 0.0001);
         assert!((timing.get_displayed_beat(5.0) - 1.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn displayed_scroll_matches_native_rounding() {
+        // Native TimingData 5c737928: Edgar SCROLLS, note 160, recorded
+        // ArrowEffects offsets at six 60 Hz frames. FMA shifts these by 1/512px.
+        let timing = timing_with_scrolls(
+            [
+                (0.0, 3.3),
+                (80.0, 1.0),
+                (96.0, 0.7),
+                (112.0, 0.35),
+                (124.0, 0.7),
+                (126.0, 1.0),
+                (152.0, 0.3),
+                (159.0, 0.7),
+                (160.0, 0.35),
+            ]
+            .map(|(beat, ratio)| ScrollSegment { beat, ratio })
+            .to_vec(),
+        );
+        let mut cache = DisplayedBeatCache::new();
+        for (beat, offset) in [
+            (123.41056060791016_f32, 1946.005859375_f32),
+            (153.05667114257812, 158.9140625),
+            (155.69277954101562, 108.30078125),
+            (156.05776977539062, 101.29296875),
+            (163.27667236328125, -73.3984375),
+            (168.18389892578125, -183.3203125),
+        ] {
+            for displayed in [
+                timing.get_displayed_beat(beat),
+                timing.get_displayed_beat_cached(beat, &mut cache),
+            ] {
+                assert_eq!(
+                    ((timing.get_displayed_beat(160.0) - displayed) * 64.0).to_bits(),
+                    offset.to_bits(),
+                    "native scroll offset at beat {beat}",
+                );
+            }
+        }
     }
 
     #[test]

@@ -1,0 +1,14 @@
+#TITLE:Native zero FOV;
+#BPMS:0=60;
+#FGCHANGES:0=zero-fov.lua=1=0=0=1;
+#NOTES:
+     dance-single:
+     :
+     Challenge:
+     1:
+     0,0,0,0,0:
+1000
+0000
+0000
+0000
+;

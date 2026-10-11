@@ -1,0 +1,763 @@
+{
+  "pass": 114,
+  "previous_record": "native-revalidation-pass113.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "d7cff0db62217660690005c75104ab380c164a50",
+  "comparator_sha256": "f57eb86d36a358705ae28da373f669ec912b7de4f412324394c29fdcfe38ca66",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "charts": [
+    {
+      "position": 35,
+      "entry": {
+        "title": "[3752] [09] Who the Hell Is Edgar?",
+        "source_simfile": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc",
+        "harness_version": "0.1.51",
+        "archive": "f0279455bbad6c96a899705927f9d37fd761071f111d8b1e672f50154b43be55.tar.zst",
+        "sha256": "f0279455bbad6c96a899705927f9d37fd761071f111d8b1e672f50154b43be55",
+        "compressed_bytes": 92846934,
+        "aliases": [
+          "f20b506e3b76f09ca751496823707e1f423ff50eb65bd1ef64697e5c6f07aebb.tar.zst"
+        ]
+      },
+      "original_archive_retained": "d23beb53ddd55aec57ebb37566545a86aaeecc1136c274cd17687481cc6abf2d.tar.zst",
+      "native_source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+      "native_cli_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+      "native_trace_sha256": "5a2b328399a1a912a7fb29d396c0f4c3999814e35b7a4099d9636221ad6a32a9",
+      "native_receipt_sha256": "fb4a0d1e8cf46770193a0bfae6fb1aae5173a5383dc4ff2fbcd4e33e88e48c05",
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "duration_seconds": 153.26197814941406,
+      "update_frames": 9197,
+      "source_simfile_sha256": "1b1c6a72af868760f64a01564d674793d252030a6233177197109c07c4a2f65d",
+      "original_source_unchanged": true,
+      "acceptance": "passed",
+      "comparison_source_commit": "d7cff0db62217660690005c75104ab380c164a50",
+      "comparisons_passed": 228297347
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 35,
+      "source_simfile": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc",
+      "archive": "f0279455bbad6c96a899705927f9d37fd761071f111d8b1e672f50154b43be55.tar.zst",
+      "archive_sha256": "f0279455bbad6c96a899705927f9d37fd761071f111d8b1e672f50154b43be55",
+      "harness_version": "0.1.51",
+      "source_commit": "d7cff0db62217660690005c75104ab380c164a50",
+      "source_pending_commit": false,
+      "binary_sha256": "f57eb86d36a358705ae28da373f669ec912b7de4f412324394c29fdcfe38ca66",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\edgar-scroll-v1-full_song_lua.exe",
+        "f0279455bbad6c96a899705927f9d37fd761071f111d8b1e672f50154b43be55.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 450.66819270001724,
+      "comparisons_passed": 228297347,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-035-scroll-v1.log",
+      "log_sha256": "dbab2cf57c4769fc1a62e2f74e5a169972f0b8e619614fbcd61ad113e0569260",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-top-035-native-lossless-v1.json",
+      "native_receipt_sha256": "fb4a0d1e8cf46770193a0bfae6fb1aae5173a5383dc4ff2fbcd4e33e88e48c05",
+      "full_corpus_complete": false,
+      "build_parent_commit": "49d5874b7f53b3d3a087305d39b3f5ec8489b454",
+      "original_result_sha256": "12ff13bb7230e75d82e92371464053613554e196e270c86f5ddd619eb78df35e",
+      "source_binding": "Identical tested source bytes and executable verified against committed scroll fix",
+      "committed_source_pin_sha256": "e56fd8ca3286372930d80cb9cd23bf75c7db49ee17a277c26a993c7d54a32f68"
+    }
+  ],
+  "canonical_positions_passed": [
+    35
+  ],
+  "comparisons_passed": 228297347,
+  "next_position": 36,
+  "fix": "Retain authored multitap hit commands during chronological replay, then replace fused scroll arithmetic in prefix construction and both displayed-beat queries with native float multiplication/addition order. Model projection magnified the prior 1/512px scroll offset error. All original samples and tolerances are retained.",
+  "scroll_fix_commit": "d7cff0db62217660690005c75104ab380c164a50",
+  "native_scroll_control": {
+    "source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+    "native_executable_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+    "native_trace_sha256": "f9f9aadaccb92bd2d3b256d9331e5b13758d73cefc54a4261bc9e7c80bd3c839",
+    "original_simfile_sha256": "1b1c6a72af868760f64a01564d674793d252030a6233177197109c07c4a2f65d",
+    "command": [
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass105-native-current-cli-v1.exe",
+      "song-lua-semantic-baseline",
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-timing-control",
+      "--out",
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-timing-control\\traces",
+      "--until-beat",
+      "1",
+      "--max-events",
+      "500000"
+    ],
+    "exit_code": 0,
+    "provenance": "native-song-timing",
+    "samples": [
+      {
+        "elapsed": 43.5,
+        "note": 112,
+        "values": {
+          "Actor.xy": [
+            105.85000610351562,
+            201.38758850097656
+          ]
+        }
+      },
+      {
+        "elapsed": 43.5,
+        "note": 114,
+        "values": {
+          "Actor.xy": [
+            105.85000610351562,
+            234.1341552734375
+          ]
+        }
+      },
+      {
+        "elapsed": 43.5,
+        "note": 160,
+        "values": {
+          "Actor.xy": [
+            105.85000610351562,
+            1810.6209716796875
+          ]
+        }
+      },
+      {
+        "elapsed": 43.5,
+        "note": 176,
+        "values": {
+          "Actor.xy": [
+            105.85000610351562,
+            2138.0810546875
+          ]
+        }
+      },
+      {
+        "elapsed": 44.583333333333336,
+        "note": 112,
+        "values": {
+          "Actor.xy": [
+            108.48611450195312,
+            133.22097778320312
+          ]
+        }
+      },
+      {
+        "elapsed": 44.583333333333336,
+        "note": 114,
+        "values": {
+          "Actor.xy": [
+            108.48611450195312,
+            171.13441467285156
+          ]
+        }
+      },
+      {
+        "elapsed": 44.583333333333336,
+        "note": 160,
+        "values": {
+          "Actor.xy": [
+            108.48611450195312,
+            1996.3643798828125
+          ]
+        }
+      },
+      {
+        "elapsed": 44.583333333333336,
+        "note": 176,
+        "values": {
+          "Actor.xy": [
+            108.48611450195312,
+            2375.4921875
+          ]
+        }
+      },
+      {
+        "elapsed": 50.71666666666667,
+        "note": 112,
+        "values": {
+          "Actor.xy": [
+            123.41056060791016,
+            -255.595703125
+          ]
+        }
+      },
+      {
+        "elapsed": 50.71666666666667,
+        "note": 114,
+        "values": {
+          "Actor.xy": [
+            123.41056060791016,
+            -210.794921875
+          ]
+        }
+      },
+      {
+        "elapsed": 50.71666666666667,
+        "note": 160,
+        "values": {
+          "Actor.xy": [
+            123.41056060791016,
+            1946.005859375
+          ]
+        }
+      },
+      {
+        "elapsed": 50.71666666666667,
+        "note": 176,
+        "values": {
+          "Actor.xy": [
+            123.41056060791016,
+            2394.005859375
+          ]
+        }
+      },
+      {
+        "elapsed": 62.9,
+        "note": 112,
+        "values": {
+          "Actor.xy": [
+            153.05667114257812,
+            -2042.6875
+          ]
+        }
+      },
+      {
+        "elapsed": 62.9,
+        "note": 114,
+        "values": {
+          "Actor.xy": [
+            153.05667114257812,
+            -1997.88671875
+          ]
+        }
+      },
+      {
+        "elapsed": 62.9,
+        "note": 160,
+        "values": {
+          "Actor.xy": [
+            153.05667114257812,
+            158.9140625
+          ]
+        }
+      },
+      {
+        "elapsed": 62.9,
+        "note": 176,
+        "values": {
+          "Actor.xy": [
+            153.05667114257812,
+            606.9140625
+          ]
+        }
+      },
+      {
+        "elapsed": 63.983333333333334,
+        "note": 112,
+        "values": {
+          "Actor.xy": [
+            155.69277954101562,
+            -2093.30078125
+          ]
+        }
+      },
+      {
+        "elapsed": 63.983333333333334,
+        "note": 114,
+        "values": {
+          "Actor.xy": [
+            155.69277954101562,
+            -2048.5
+          ]
+        }
+      },
+      {
+        "elapsed": 63.983333333333334,
+        "note": 160,
+        "values": {
+          "Actor.xy": [
+            155.69277954101562,
+            108.30078125
+          ]
+        }
+      },
+      {
+        "elapsed": 63.983333333333334,
+        "note": 176,
+        "values": {
+          "Actor.xy": [
+            155.69277954101562,
+            556.30078125
+          ]
+        }
+      },
+      {
+        "elapsed": 64.13333333333334,
+        "note": 112,
+        "values": {
+          "Actor.xy": [
+            156.05776977539062,
+            -2100.30859375
+          ]
+        }
+      },
+      {
+        "elapsed": 64.13333333333334,
+        "note": 114,
+        "values": {
+          "Actor.xy": [
+            156.05776977539062,
+            -2055.5078125
+          ]
+        }
+      },
+      {
+        "elapsed": 64.13333333333334,
+        "note": 160,
+        "values": {
+          "Actor.xy": [
+            156.05776977539062,
+            101.29296875
+          ]
+        }
+      },
+      {
+        "elapsed": 64.13333333333334,
+        "note": 176,
+        "values": {
+          "Actor.xy": [
+            156.05776977539062,
+            549.29296875
+          ]
+        }
+      },
+      {
+        "elapsed": 67.1,
+        "note": 112,
+        "values": {
+          "Actor.xy": [
+            163.27667236328125,
+            -2275
+          ]
+        }
+      },
+      {
+        "elapsed": 67.1,
+        "note": 114,
+        "values": {
+          "Actor.xy": [
+            163.27667236328125,
+            -2230.19921875
+          ]
+        }
+      },
+      {
+        "elapsed": 67.1,
+        "note": 160,
+        "values": {
+          "Actor.xy": [
+            163.27667236328125,
+            -73.3984375
+          ]
+        }
+      },
+      {
+        "elapsed": 67.1,
+        "note": 176,
+        "values": {
+          "Actor.xy": [
+            163.27667236328125,
+            374.6015625
+          ]
+        }
+      },
+      {
+        "elapsed": 69.11666666666666,
+        "note": 112,
+        "values": {
+          "Actor.xy": [
+            168.18389892578125,
+            -2384.921875
+          ]
+        }
+      },
+      {
+        "elapsed": 69.11666666666666,
+        "note": 114,
+        "values": {
+          "Actor.xy": [
+            168.18389892578125,
+            -2340.12109375
+          ]
+        }
+      },
+      {
+        "elapsed": 69.11666666666666,
+        "note": 160,
+        "values": {
+          "Actor.xy": [
+            168.18389892578125,
+            -183.3203125
+          ]
+        }
+      },
+      {
+        "elapsed": 69.11666666666666,
+        "note": 176,
+        "values": {
+          "Actor.xy": [
+            168.18389892578125,
+            264.6796875
+          ]
+        }
+      }
+    ],
+    "postprocess_elapsed_seconds": 0.01657159999012947,
+    "capture_elapsed_seconds": null,
+    "native_runtime_errors": 0,
+    "dropped_native_events": 0,
+    "control.ssc_sha256": "60e5ba3d967539db229f2b4bd8de9fb7a5352c2e2b6f1acdd673870dc4689a88",
+    "control.lua_sha256": "4df41ac90e8e7cc43f2b9a497401494dfb8c132bfd355c6f84f7fad2d4cf7ca2"
+  },
+  "scroll_timing_tests_passed": 45,
+  "native_frame_onsets": {
+    "harness_version": "0.1.51",
+    "native_onsets": [
+      {
+        "actor": "def-0080",
+        "first_visible": {
+          "beat": 104.02500152587892,
+          "frame": 2565,
+          "seconds": 42.75,
+          "visible": true
+        },
+        "name": "MultitapP1_1",
+        "next": {
+          "beat": 113.02833557128906,
+          "frame": 2787,
+          "seconds": 46.45,
+          "visible": false
+        },
+        "previous": {
+          "beat": 0.0,
+          "frame": 0,
+          "seconds": 0.0,
+          "visible": false
+        },
+        "sample_count": 3
+      },
+      {
+        "actor": "def-0083",
+        "first_visible": {
+          "beat": 106.01222229003906,
+          "frame": 2614,
+          "seconds": 43.56666666666667,
+          "visible": true
+        },
+        "name": "MultitapP1_2",
+        "next": {
+          "beat": 115.50222778320312,
+          "frame": 2848,
+          "seconds": 47.46666666666667,
+          "visible": false
+        },
+        "previous": {
+          "beat": 0.0,
+          "frame": 0,
+          "seconds": 0.0,
+          "visible": false
+        },
+        "sample_count": 3
+      },
+      {
+        "actor": "def-0086",
+        "first_visible": {
+          "beat": 108.04000854492188,
+          "frame": 2664,
+          "seconds": 44.4,
+          "visible": true
+        },
+        "name": "MultitapP1_3",
+        "next": {
+          "beat": 117.00277709960938,
+          "frame": 2885,
+          "seconds": 48.083333333333336,
+          "visible": false
+        },
+        "previous": {
+          "beat": 0.0,
+          "frame": 0,
+          "seconds": 0.0,
+          "visible": false
+        },
+        "sample_count": 3
+      },
+      {
+        "actor": "def-0089",
+        "first_visible": {
+          "beat": 110.02722930908205,
+          "frame": 2713,
+          "seconds": 45.21666666666667,
+          "visible": true
+        },
+        "name": "MultitapP1_4",
+        "next": {
+          "beat": 119.51721954345705,
+          "frame": 2947,
+          "seconds": 49.11666666666667,
+          "visible": false
+        },
+        "previous": {
+          "beat": 0.0,
+          "frame": 0,
+          "seconds": 0.0,
+          "visible": false
+        },
+        "sample_count": 3
+      },
+      {
+        "actor": "def-0320",
+        "first_visible": {
+          "beat": 104.02500152587892,
+          "frame": 2565,
+          "seconds": 42.75,
+          "visible": true
+        },
+        "name": "MultitapP2_1",
+        "next": {
+          "beat": 113.02833557128906,
+          "frame": 2787,
+          "seconds": 46.45,
+          "visible": false
+        },
+        "previous": {
+          "beat": 0.0,
+          "frame": 0,
+          "seconds": 0.0,
+          "visible": false
+        },
+        "sample_count": 3
+      },
+      {
+        "actor": "def-0323",
+        "first_visible": {
+          "beat": 106.01222229003906,
+          "frame": 2614,
+          "seconds": 43.56666666666667,
+          "visible": true
+        },
+        "name": "MultitapP2_2",
+        "next": {
+          "beat": 115.50222778320312,
+          "frame": 2848,
+          "seconds": 47.46666666666667,
+          "visible": false
+        },
+        "previous": {
+          "beat": 0.0,
+          "frame": 0,
+          "seconds": 0.0,
+          "visible": false
+        },
+        "sample_count": 3
+      },
+      {
+        "actor": "def-0326",
+        "first_visible": {
+          "beat": 108.04000854492188,
+          "frame": 2664,
+          "seconds": 44.4,
+          "visible": true
+        },
+        "name": "MultitapP2_3",
+        "next": {
+          "beat": 117.00277709960938,
+          "frame": 2885,
+          "seconds": 48.083333333333336,
+          "visible": false
+        },
+        "previous": {
+          "beat": 0.0,
+          "frame": 0,
+          "seconds": 0.0,
+          "visible": false
+        },
+        "sample_count": 3
+      },
+      {
+        "actor": "def-0329",
+        "first_visible": {
+          "beat": 110.02722930908205,
+          "frame": 2713,
+          "seconds": 45.21666666666667,
+          "visible": true
+        },
+        "name": "MultitapP2_4",
+        "next": {
+          "beat": 119.51721954345705,
+          "frame": 2947,
+          "seconds": 49.11666666666667,
+          "visible": false
+        },
+        "previous": {
+          "beat": 0.0,
+          "frame": 0,
+          "seconds": 0.0,
+          "visible": false
+        },
+        "sample_count": 3
+      }
+    ],
+    "source_trace_sha256": "5a2b328399a1a912a7fb29d396c0f4c3999814e35b7a4099d9636221ad6a32a9",
+    "update_frames": 9197
+  },
+  "callback_regression": {
+    "source_commit": "e3256f0c0a6eed1c88f044d60c7ed7bcda027407",
+    "source_pending_commit": true,
+    "binary_sha256": "820bf700813eb5491286c740536e330fc41d2568ce957c89cfb4ab6da5cfb058",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\edgar-hit-fix-v3-song_lua_itgmania_semantic_parity.exe",
+      "multitap::edgar_native_hits_match",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 177.42389619955793,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\edgar-native-hits-v3.log",
+    "log_sha256": "cf01661afbcd3d23cdbdab3183a8b4db85a5a67d104b57b4a7d03020e1581899",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 175.79s"
+    ]
+  },
+  "native_material_control": {
+    "source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+    "executable_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+    "request_sha256": "b6bcabeca4489fa99b84b7a7e1b9e5c3e1e56048a14e726bf28de526f4b901db",
+    "original_fixture_sha256": "fd6b84ecd7bf584c50c57906ab41c1c47c3da92b01d3d79489e1b45a313b76fb",
+    "native_result_sha256": "33cfab258f203b125ce37651c735bd9b6ddbd664f2dfcc899949bf58b7c383a4",
+    "command": [
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass105-native-current-cli-v1.exe",
+      "actor-conformance",
+      "C:\\GitHub\\itgmania-harness\\fixtures\\actors\\cyber-multitap-texture.json",
+      "--out",
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\cyber-multitap-texture-current-native.json"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.15095390006899834,
+    "all_original_cases_identical": true,
+    "sample_count": 29,
+    "native_provenance": {
+      "execution": "embedded_native_sources",
+      "git_dirty": "false",
+      "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+    }
+  },
+  "native_explosion_control": {
+    "all_original_observations_identical": true,
+    "new_observation_fields": [
+      "render_target",
+      "viewport"
+    ],
+    "differences": [],
+    "difference_count": 0,
+    "sample_count": 15,
+    "native_provenance": {
+      "execution": "embedded_native_sources",
+      "git_dirty": "false",
+      "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+    },
+    "native_result_sha256": "1871df44d277d194c3ec124c9bf3a006a790e29454a285ed7c332a2030fe0efc",
+    "original_result_sha256": "518969620d138f1bf518a72c686541d9b130495b06e50e84a50313e5cdc1f1d6"
+  },
+  "lossless_recompression": {
+    "source_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-top-035-native-v1.json",
+    "source_receipt_sha256": "3963be29a663af2b1483b7d5417857a1beaa48abe75963b5120a0656f99dc149",
+    "original_archive": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-top-035-native-v1\\archives\\d5322a21dfbab602a5dacb87e094152b008d50503bf9f909a34a0ba8b25455c5.tar.zst",
+    "original_archive_sha256": "d5322a21dfbab602a5dacb87e094152b008d50503bf9f909a34a0ba8b25455c5",
+    "original_compressed_bytes": 110787442,
+    "tool": "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WinGet\\Packages\\oschwartz10612.Poppler_Microsoft.Winget.Source_8wekyb3d8bbwe\\poppler-25.07.0\\Library\\bin\\zstd.exe",
+    "tool_sha256": "959e8299adfbbc039f7d2aede537666aba5e605dec1169f582d88898554a728e",
+    "command": [
+      "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WinGet\\Packages\\oschwartz10612.Poppler_Microsoft.Winget.Source_8wekyb3d8bbwe\\poppler-25.07.0\\Library\\bin\\zstd.exe",
+      "-19",
+      "--long=27",
+      "-T1",
+      "-c"
+    ],
+    "tar_bytes": 2129627648,
+    "original_tar_sha256": "3386561f882b38b41da9fd3b03171bee130adf94847d35e289fb45b88f9def9b",
+    "recompressed_tar_sha256": "3386561f882b38b41da9fd3b03171bee130adf94847d35e289fb45b88f9def9b",
+    "all_member_bytes_unchanged": true,
+    "elapsed_seconds": 1802.141357100103
+  },
+  "remaining_edgar_onset_test": {
+    "test": "multitap::edgar_countdown_onsets_and_hit_commands",
+    "status": "pending; old no-recorded-updates requirement conflicts with chronological model replay",
+    "receipt": {
+      "source_commit": "e3256f0c0a6eed1c88f044d60c7ed7bcda027407",
+      "source_pending_commit": true,
+      "binary_sha256": "809f6ece1be3e90d6def2aef20aae150052a003f0cc6a742295eda426c6af8cb",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\edgar-hit-fix-v2-song_lua_itgmania_semantic_parity.exe",
+        "multitap::edgar_countdown_onsets_and_hit_commands",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 185.66623670002446,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\edgar-hit-fix-v2.log",
+      "log_sha256": "c409fddb8a31166c0b3791e12685c65ee7d372667a787e2596fe131ed556f15d",
+      "result_lines": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 259 filtered out; finished in 184.01s"
+      ]
+    }
+  },
+  "remaining_scope": "All original sources and historical contexts, explicit Model culling, additional test observations and native framebuffer parity remain open.",
+  "archive_integrity_regression": {
+    "source_commit": "d7cff0db62217660690005c75104ab380c164a50",
+    "source_pending_commit": false,
+    "binary_sha256": "badaea4bdbfdc88e85a0c29160c752178d97c664a82a84e1c82d7e30f27bdc27",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\edgar-scroll-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 130.06780100008473,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-035-target-v2.log",
+    "log_sha256": "9eb462ca7d4f98aacbc83cafbd8a8effb6c5208450039c0966f6d303a3809de3",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 129.56s"
+    ],
+    "archive_filter": "f0279455bbad6c96a899705927f9d37fd761071f111d8b1e672f50154b43be55"
+  },
+  "full_index_integrity_remaining_failure": {
+    "source_commit": "d7cff0db62217660690005c75104ab380c164a50",
+    "source_pending_commit": false,
+    "binary_sha256": "badaea4bdbfdc88e85a0c29160c752178d97c664a82a84e1c82d7e30f27bdc27",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\edgar-scroll-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 101,
+    "elapsed_seconds": 219.91429270012304,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-035-scroll-v1.log",
+    "log_sha256": "e5e5b6152642f8d86c020b52dd05642cc8d735d6ccc1b37cfa0f6badc78c3fb5",
+    "result_lines": [
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 260 filtered out; finished in 218.13s"
+    ],
+    "reason": "An older archive has no native song clock; the original corpus and all historical contexts remain open for native recapture."
+  }
+}

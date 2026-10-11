@@ -1,0 +1,33 @@
+{
+  "name": "native-png16-files",
+  "texture_files": [
+    {
+      "name": "rgb16-strip",
+      "file": "rgb16-strip.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "rgba16-strip",
+      "file": "rgba16-strip.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gray16-strip",
+      "file": "gray16-strip.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gray-alpha16-strip",
+      "file": "gray-alpha16-strip.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    }
+  ]
+}

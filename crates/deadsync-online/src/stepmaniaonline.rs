@@ -22,11 +22,11 @@ const DOWNLOAD_QUEUE_CAPACITY: usize = 8;
 const PROGRESS_STEP_BYTES: u64 = 512 * 1024;
 const MAX_ARCHIVE_BYTES: u64 = 64 * 1024 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES: usize = 200_000;
-const MAX_ARCHIVE_PATH_BYTES: usize = 768;
+pub(crate) const MAX_ARCHIVE_PATH_BYTES: usize = 768;
 const MAX_UNCOMPRESSED_BYTES: u64 = 128 * 1024 * 1024 * 1024;
 const UNCOMPRESSED_HEADROOM_BYTES: u64 = 256 * 1024 * 1024;
-const DESTINATION_MAX_CHARS: usize = 160;
-const WINDOWS_RESERVED_NAMES: [&str; 22] = [
+pub(crate) const DESTINATION_MAX_CHARS: usize = 160;
+pub(crate) const WINDOWS_RESERVED_NAMES: [&str; 22] = [
     "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
     "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
@@ -708,6 +708,19 @@ fn run_download_job(job: DownloadJob) {
     }
 }
 
+/// Hand a finished install elsewhere in the crate to the same reload queue a
+/// pack install uses, so the browser's reload prompt and the shell's rescan
+/// pick it up without knowing where it came from.
+///
+/// The content relay's single-song installs land here with their singles
+/// group as `destination`: one rescan of the group covers every song added to
+/// it, and a second song into the same group is coalesced rather than queued
+/// twice.
+pub(crate) fn queue_ready_song_dir(destination: PathBuf, songs_root: &Path) {
+    let mut runtime = lock_runtime();
+    queue_ready_dir(&mut runtime, destination, songs_root);
+}
+
 fn queue_ready_dir(runtime: &mut RuntimeState, destination: PathBuf, songs_root: &Path) {
     if runtime
         .ready_song_dirs
@@ -843,34 +856,85 @@ fn download_archive(pack: &PackInfo, archive_path: &Path) -> Result<u64, StepMan
 fn write_archive_download(
     pack: &PackInfo,
     archive_path: &Path,
-    mut reader: impl Read,
+    reader: impl Read,
     content_length: Option<u64>,
 ) -> Result<u64, StepManiaOnlineError> {
+    // Catalog sizes can be stale. They are only a progress estimate when the
+    // response has no known length, never an integrity check or a size limit.
+    let total_bytes = content_length.unwrap_or(pack.size_bytes.min(MAX_ARCHIVE_BYTES));
+    let mut next_report = 0u64;
+    let downloaded = stream_to_file(
+        archive_path,
+        reader,
+        content_length,
+        MAX_ARCHIVE_BYTES,
+        |downloaded| {
+            if downloaded >= next_report {
+                set_install_progress(pack.id, downloaded, total_bytes);
+                next_report = downloaded.saturating_add(PROGRESS_STEP_BYTES);
+            }
+            true
+        },
+    )?;
+    if downloaded != pack.size_bytes {
+        log::warn!(
+            "StepManiaOnline pack '{}' downloaded {downloaded} bytes, catalog listed {}; continuing with archive validation.",
+            pack.name,
+            pack.size_bytes
+        );
+    }
+    set_install_progress(pack.id, downloaded, downloaded);
+    Ok(downloaded)
+}
+
+/// Stream a response body into a new file at `path`, a chunk at a time.
+///
+/// The one download loop in the crate: pack archives, single-song archives
+/// and preview audio all come through here, so the rules a body is held to are
+/// the same everywhere. A declared length outside `1..=max_bytes` is refused
+/// before anything touches the disk; without one, `max_bytes` bounds what is
+/// written; and a body that stops short of what it declared is an error
+/// rather than a smaller file.
+///
+/// `on_progress` hears `0` once the file is open and the running total after
+/// every chunk. It throttles its own reporting -- it is called per 64 KiB --
+/// and returning `false` abandons the download, which is how a preview that
+/// has been replaced stops spending bandwidth on audio nobody will play.
+///
+/// The file is created with `create_new`, so a leftover from an earlier run
+/// is an error rather than something appended to; callers clear their temp
+/// path first. On error the partial file is left for the caller to remove,
+/// because only the caller knows whether the path is safe to delete.
+pub(crate) fn stream_to_file(
+    path: &Path,
+    mut reader: impl Read,
+    content_length: Option<u64>,
+    max_bytes: u64,
+    mut on_progress: impl FnMut(u64) -> bool,
+) -> Result<u64, StepManiaOnlineError> {
     if let Some(length) = content_length
-        && (length == 0 || length > MAX_ARCHIVE_BYTES)
+        && (length == 0 || length > max_bytes)
     {
         return Err(StepManiaOnlineError::Archive(format!(
             "server reported {length} bytes, outside the supported range"
         )));
     }
-    // Catalog sizes can be stale. They are only a progress estimate when the
-    // response has no known length, never an integrity check or a size limit.
-    let total_bytes = content_length.unwrap_or(pack.size_bytes.min(MAX_ARCHIVE_BYTES));
-    let download_limit = content_length.unwrap_or(MAX_ARCHIVE_BYTES);
+    let download_limit = content_length.unwrap_or(max_bytes);
 
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(archive_path)
-        .map_err(|error| io_error("create the temporary archive", error))?;
+        .open(path)
+        .map_err(|error| io_error("create the temporary download", error))?;
     let mut buffer = [0u8; 64 * 1024];
     let mut downloaded = 0u64;
-    let mut next_report = 0u64;
-    set_install_progress(pack.id, 0, total_bytes);
+    if !on_progress(0) {
+        return Err(download_abandoned());
+    }
     loop {
         let read = reader
             .read(&mut buffer)
-            .map_err(|error| io_error("read the pack download", error))?;
+            .map_err(|error| io_error("read the download", error))?;
         if read == 0 {
             break;
         }
@@ -881,15 +945,14 @@ fn write_archive_download(
             )));
         }
         file.write_all(&buffer[..read])
-            .map_err(|error| io_error("write the temporary archive", error))?;
+            .map_err(|error| io_error("write the temporary download", error))?;
         downloaded = next;
-        if downloaded >= next_report {
-            set_install_progress(pack.id, downloaded, total_bytes);
-            next_report = downloaded.saturating_add(PROGRESS_STEP_BYTES);
+        if !on_progress(downloaded) {
+            return Err(download_abandoned());
         }
     }
     file.flush()
-        .map_err(|error| io_error("flush the temporary archive", error))?;
+        .map_err(|error| io_error("flush the temporary download", error))?;
     if downloaded == 0 {
         return Err(StepManiaOnlineError::Archive(
             "download is empty".to_string(),
@@ -902,15 +965,17 @@ fn write_archive_download(
             "downloaded {downloaded} bytes, server reported {expected}"
         )));
     }
-    if downloaded != pack.size_bytes {
-        log::warn!(
-            "StepManiaOnline pack '{}' downloaded {downloaded} bytes, catalog listed {}; continuing with archive validation.",
-            pack.name,
-            pack.size_bytes
-        );
-    }
-    set_install_progress(pack.id, downloaded, downloaded);
     Ok(downloaded)
+}
+
+/// What a download stopped by its own caller reports. Never shown: the only
+/// caller that stops one is a preview that has already been replaced, and a
+/// replaced preview publishes nothing.
+fn download_abandoned() -> StepManiaOnlineError {
+    StepManiaOnlineError::Io {
+        action: "finish the download",
+        message: "abandoned by its caller".to_string(),
+    }
 }
 
 #[derive(Debug)]
@@ -923,6 +988,21 @@ fn extract_archive(
     staging: &Path,
     archive_bytes: u64,
 ) -> Result<(), StepManiaOnlineError> {
+    extract_archive_root(archive_path, staging, archive_bytes).map(drop)
+}
+
+/// Validate an archive by the pack installer's rules, extract what is beneath
+/// its one top-level folder into `staging`, and say what that folder was
+/// called.
+///
+/// A pack install throws the name away -- the catalogue names the pack. A
+/// single song keeps it: the relay's song archive is that song's own folder,
+/// and its name is the folder the song lands as.
+pub(crate) fn extract_archive_root(
+    archive_path: &Path,
+    staging: &Path,
+    archive_bytes: u64,
+) -> Result<String, StepManiaOnlineError> {
     let plan = inspect_archive(archive_path, archive_bytes)?;
     fs::create_dir(staging).map_err(|error| io_error("create the staging directory", error))?;
     let file =
@@ -973,7 +1053,7 @@ fn extract_archive(
             )));
         }
     }
-    Ok(())
+    Ok(plan.prefix)
 }
 
 fn inspect_archive(
@@ -1080,7 +1160,7 @@ fn inspect_archive(
 }
 
 #[derive(Debug)]
-struct ArchiveParts<'a> {
+pub(crate) struct ArchiveParts<'a> {
     name: &'a str,
     len: usize,
 }
@@ -1117,7 +1197,7 @@ impl ArchiveParts<'_> {
     }
 }
 
-fn portable_archive_parts(name: &str) -> Result<ArchiveParts<'_>, StepManiaOnlineError> {
+pub(crate) fn portable_archive_parts(name: &str) -> Result<ArchiveParts<'_>, StepManiaOnlineError> {
     if name.is_empty() || name.starts_with('/') || name.starts_with('\\') || name.contains('\0') {
         return Err(StepManiaOnlineError::Archive(format!(
             "entry '{name}' has an invalid path"
@@ -1154,7 +1234,7 @@ fn portable_archive_parts(name: &str) -> Result<ArchiveParts<'_>, StepManiaOnlin
     Ok(ArchiveParts { name, len })
 }
 
-fn safe_unix_entry_type(mode: Option<u32>, is_dir: bool) -> bool {
+pub(crate) fn safe_unix_entry_type(mode: Option<u32>, is_dir: bool) -> bool {
     const FILE_TYPE_MASK: u32 = 0o170_000;
     const REGULAR_FILE: u32 = 0o100_000;
     const DIRECTORY: u32 = 0o040_000;
@@ -1164,7 +1244,7 @@ fn safe_unix_entry_type(mode: Option<u32>, is_dir: bool) -> bool {
     kind == 0 || is_dir && kind == DIRECTORY || !is_dir && kind == REGULAR_FILE
 }
 
-fn is_simfile(name: &str) -> bool {
+pub(crate) fn is_simfile(name: &str) -> bool {
     Path::new(name)
         .extension()
         .and_then(|extension| extension.to_str())
@@ -1223,7 +1303,7 @@ fn sanitized_pack_name(raw: &str, pack_id: u64) -> (String, bool) {
     (output, changed)
 }
 
-const fn invalid_path_char(ch: char) -> bool {
+pub(crate) const fn invalid_path_char(ch: char) -> bool {
     ch.is_control() || matches!(ch, '<' | '>' | ':' | '"' | '|' | '?' | '*')
 }
 
@@ -1264,7 +1344,7 @@ fn choose_destination(root: &Path, pack: &PackInfo) -> Result<PathBuf, StepMania
     Ok(root.join(alternate))
 }
 
-fn child_exists_case_insensitive(
+pub(crate) fn child_exists_case_insensitive(
     root: &Path,
     child_name: &std::ffi::OsStr,
 ) -> Result<bool, StepManiaOnlineError> {
@@ -1284,7 +1364,7 @@ fn child_exists_case_insensitive(
     Ok(false)
 }
 
-fn remove_temp_path(path: &Path) -> Result<(), StepManiaOnlineError> {
+pub(crate) fn remove_temp_path(path: &Path) -> Result<(), StepManiaOnlineError> {
     let metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -1303,7 +1383,7 @@ fn remove_temp_path(path: &Path) -> Result<(), StepManiaOnlineError> {
     }
 }
 
-fn io_error(action: &'static str, error: std::io::Error) -> StepManiaOnlineError {
+pub(crate) fn io_error(action: &'static str, error: std::io::Error) -> StepManiaOnlineError {
     StepManiaOnlineError::Io {
         action,
         message: error.to_string(),

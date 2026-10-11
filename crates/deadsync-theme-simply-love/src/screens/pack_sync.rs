@@ -1147,6 +1147,29 @@ fn row_delta_seconds(row: &RowState) -> Option<f32> {
         .map(quantize_sync_offset_seconds)
 }
 
+/// The simfiles of rows the review has left null: no change to make, a fix an
+/// earlier review saved, or one this review has saved already. A host that
+/// records the pack's sync after a save needs these alongside the ones the
+/// save in hand wrote.
+pub(crate) fn settled_simfiles(state: &OverlayState) -> Vec<PathBuf> {
+    let OverlayState::Visible(data) = state else {
+        return Vec::new();
+    };
+    data.rows
+        .iter()
+        .filter(|row| {
+            matches!(
+                row_disposition(row, data.min_confidence),
+                RowDisposition::NoChange
+                    | RowDisposition::AlreadyApplied
+                    | RowDisposition::Saved
+                    | RowDisposition::CacheRefreshFailed
+            )
+        })
+        .map(|row| row.simfile_path.clone())
+        .collect()
+}
+
 fn row_disposition(row: &RowState, min_confidence: f64) -> RowDisposition {
     match row.phase {
         RowPhase::Pending => RowDisposition::Pending,

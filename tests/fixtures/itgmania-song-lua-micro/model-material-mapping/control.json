@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "name": "native-model-material-spheres",
+  "screen": {
+    "width": 854,
+    "height": 480
+  },
+  "samples": [
+    0.0
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "camera": {
+      "fov": 0
+    },
+    "children": [
+      {
+        "kind": "model",
+        "name": "DiffuseSphere",
+        "model_paths": [
+          "diffuse.txt",
+          "diffuse.txt",
+          "diffuse.txt"
+        ],
+        "state": {
+          "position": [
+            100,
+            200,
+            0
+          ],
+          "glow": [
+            1,
+            0,
+            0,
+            0.25
+          ],
+          "texture_filtering": false,
+          "texture_wrapping": true
+        }
+      },
+      {
+        "kind": "model",
+        "name": "SecondarySphere",
+        "model_paths": [
+          "secondary.txt",
+          "secondary.txt",
+          "secondary.txt"
+        ],
+        "state": {
+          "position": [
+            150,
+            200,
+            0
+          ],
+          "glow": [
+            1,
+            0,
+            0,
+            0.25
+          ],
+          "texture_filtering": false,
+          "texture_wrapping": true
+        }
+      }
+    ]
+  }
+}

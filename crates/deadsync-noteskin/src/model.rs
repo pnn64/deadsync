@@ -1,7 +1,8 @@
 use crate::itg as noteskin_itg;
 use crate::lua::itg_quoted_strings;
 use crate::{
-    ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMesh, ModelTweenSegment, ModelVertex,
+    ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMaterial, ModelMesh, ModelTweenSegment,
+    ModelVertex,
 };
 use std::cell::OnceCell;
 use std::fs;
@@ -35,6 +36,12 @@ pub struct ItgTextureFrame {
     pub delay: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ItgTextureState {
+    pub delay: f32,
+    pub translation: [f32; 2],
+}
+
 #[derive(Debug, Clone)]
 pub struct ItgTextureAnimation {
     pub path: PathBuf,
@@ -46,6 +53,8 @@ pub struct ItgResolvedModelTexture {
     pub sphere_mapped: bool,
     pub texture_path: PathBuf,
     pub animation: Option<ItgTextureAnimation>,
+    /// Native states remain distinct even when every state uses one image.
+    pub states: Arc<[ItgTextureState]>,
     pub tex: ItgModelTexturePath,
 }
 
@@ -55,6 +64,7 @@ impl ItgResolvedModelTexture {
             sphere_mapped: texture_path.to_string_lossy().contains("sphere"),
             texture_path,
             animation: None,
+            states: Arc::from([ItgTextureState { delay: 1.0, translation: [0.0; 2] }]),
             tex: ItgModelTexturePath::default(),
         }
     }
@@ -240,6 +250,7 @@ fn itg_resolve_animated_texture_ini(
         .unwrap_or(0.0);
     let mut cycle_seconds = 0.0f32;
     let mut frames = Vec::new();
+    let mut states = Vec::new();
     let mut has_distinct_image = false;
     // Keep common prefixes on the stack. Longer single-image sequences still
     // need no heap scratch; a later path change can revisit the parsed INI.
@@ -260,6 +271,13 @@ fn itg_resolve_animated_texture_ini(
         if !delay.is_finite() || delay < 0.0 {
             return None;
         }
+        let translation = [*b"TranslateX0000", *b"TranslateY0000"].map(|key| {
+            let key = itg_animated_texture_key(key, idx);
+            ini.get("AnimatedTexture", itg_animated_texture_key_str(&key))
+                .and_then(noteskin_itg::parse_ini_float)
+                .unwrap_or(0.0)
+        });
+        states.push(ItgTextureState { delay, translation });
         if frames.is_empty()
             && let Some(cached) = prefix_delays.get_mut(idx - first_frame_idx)
         {
@@ -292,7 +310,7 @@ fn itg_resolve_animated_texture_ini(
             }
         }
         // Path equality also accepts aliases such as ./frames/a.png. Preserve
-        // those spellings in stored frames without creating a duplicate atlas.
+        // those spellings in stored frames while keeping their actual image identity.
         has_distinct_image = has_distinct_image || frame_path.as_ref() != texture_path;
         if !frames.is_empty() {
             frames.push(ItgTextureFrame {
@@ -304,8 +322,8 @@ fn itg_resolve_animated_texture_ini(
     }
     Some(ItgResolvedModelTexture {
         sphere_mapped: path.to_string_lossy().contains("sphere"),
-        // Repeated references to one image need no atlas. Keep its full UV
-        // domain for scrolling materials instead of adding duplicate tiles.
+        // Repeated references to one image need no binding table. Keep its full UV
+        // domain while retaining each state's delay and translation.
         animation: (has_distinct_image
             && cycle_seconds > f32::EPSILON
             && cycle_seconds.is_finite())
@@ -314,6 +332,7 @@ fn itg_resolve_animated_texture_ini(
             frames,
         }),
         texture_path,
+        states: states.into(),
         tex: ItgModelTexturePath {
             uv_velocity: [tex_velocity_x, tex_velocity_y],
             uv_offset: [tex_offset_x, tex_offset_y],
@@ -324,9 +343,9 @@ fn itg_resolve_animated_texture_ini(
 }
 
 #[inline]
-fn itg_animated_texture_key(mut key: [u8; 9], mut index: usize) -> [u8; 9] {
+fn itg_animated_texture_key<const N: usize>(mut key: [u8; N], mut index: usize) -> [u8; N] {
     debug_assert!(index < 10_000);
-    for digit in key[5..].iter_mut().rev() {
+    for digit in key[N - 4..].iter_mut().rev() {
         *digit = b'0' + (index % 10) as u8;
         index /= 10;
     }
@@ -334,7 +353,7 @@ fn itg_animated_texture_key(mut key: [u8; 9], mut index: usize) -> [u8; 9] {
 }
 
 #[inline]
-fn itg_animated_texture_key_str(key: &[u8; 9]) -> &str {
+fn itg_animated_texture_key_str(key: &[u8]) -> &str {
     std::str::from_utf8(key).expect("animated texture keys are always ASCII")
 }
 
@@ -351,6 +370,7 @@ pub struct ItgResolvedModelLayer {
 
 #[derive(Debug)]
 struct ItgSharedMilkshapeMeshLayer {
+    name: String,
     material_index: i32,
     bone_index: Option<u8>,
     vertices: Arc<[ModelVertex]>,
@@ -360,6 +380,7 @@ struct ItgSharedMilkshapeMeshLayer {
 // Resolution is scoped to one model load. Materials reused by several meshes
 // share their file/INI lookup, including misses, while layers keep owned data.
 struct ItgMilkshapeMaterial<'a> {
+    material: ModelMaterial,
     texture: &'a str,
     additive: &'a str,
     flags: ItgModelMaterialFlags,
@@ -384,6 +405,7 @@ pub struct ItgModelSlotPlan {
     pub additive: Option<ItgResolvedModelTexture>,
     pub animation_length: f32,
     pub texture_animation: Option<ItgTextureAnimation>,
+    pub texture_states: Arc<[ItgTextureState]>,
     pub model: Option<Arc<ModelMesh>>,
     pub model_draw: ModelDrawState,
     pub model_timeline: Arc<[ModelTweenSegment]>,
@@ -419,6 +441,7 @@ impl ItgModelSlotPlan {
             additive: layer.additive,
             animation_length: layer.animation_length,
             texture_animation: layer.texture.animation,
+            texture_states: layer.texture.states,
             model: Some(layer.mesh),
             model_draw,
             model_timeline,
@@ -449,6 +472,7 @@ impl ItgModelSlotPlan {
             additive: None,
             animation_length: tex.uv_cycle_seconds.unwrap_or(1.0),
             texture_animation: texture.animation,
+            texture_states: texture.states,
             model,
             model_draw,
             model_timeline,
@@ -758,6 +782,7 @@ pub fn itg_parse_milkshape_model_layers(
     let mut triangles = Vec::new();
     for _ in 0..mesh_count {
         let mesh_header = lines.next()?;
+        let name = mesh_header.strip_prefix('"')?.split_once('"')?.0;
         let material_index = itg_parse_milkshape_mesh_material_index(mesh_header);
         let vertex_count = lines.next()?.trim().parse::<usize>().ok()?;
         mesh_vertices.clear();
@@ -855,6 +880,7 @@ pub fn itg_parse_milkshape_model_layers(
             model_bounds[4] = model_bounds[4].max(bounds[4]);
             model_bounds[5] = model_bounds[5].max(bounds[5]);
             meshes.push(ItgSharedMilkshapeMeshLayer {
+                name: name.to_owned(),
                 material_index,
                 bone_index,
                 vertices: tri_vertices,
@@ -864,6 +890,22 @@ pub fn itg_parse_milkshape_model_layers(
     }
 
     drop((mesh_vertices, normals, triangles));
+
+    // The rendering path supports per-vertex texture matrix scaling. Native
+    // RageModelGeometry::MergeMeshes appends mesh 1 to mesh 0 without removing
+    // mesh 1 or replacing mesh 0's material/bone binding.
+    if mesh_count == 2 && meshes.len() == 2 && meshes[0].name == meshes[1].name {
+        meshes[0].vertices = meshes[0]
+            .vertices
+            .iter()
+            .chain(meshes[1].vertices.iter())
+            .copied()
+            .collect();
+        for axis in 0..3 {
+            meshes[0].bounds[axis] = meshes[0].bounds[axis].min(meshes[1].bounds[axis]);
+            meshes[0].bounds[axis + 3] = meshes[0].bounds[axis + 3].max(meshes[1].bounds[axis + 3]);
+        }
+    }
 
     if meshes.is_empty() {
         return None;
@@ -889,15 +931,38 @@ pub fn itg_parse_milkshape_model_layers(
     let mut material_textures = Vec::with_capacity(material_count);
     for _ in 0..material_count {
         let name = lines.next()?.trim();
-        let _ambient = lines.next()?;
-        let _diffuse = lines.next()?;
-        let _specular = lines.next()?;
-        let _emissive = lines.next()?;
-        let _shininess = lines.next()?;
-        let _transparency = lines.next()?;
+        let mut read_color = || {
+            let mut parts = lines.next()?.split_whitespace();
+            let mut color = [0.0; 4];
+            for value in &mut color {
+                *value = parts.next()?.parse::<f32>().ok()?;
+                if !value.is_finite() {
+                    return None;
+                }
+            }
+            Some(color)
+        };
+        let ambient = read_color()?;
+        let diffuse = read_color()?;
+        let specular = read_color()?;
+        let emissive = read_color()?;
+        let shininess = lines.next()?.parse::<f32>().ok()?;
+        let transparency = lines.next()?.parse::<f32>().ok()?;
+        if !shininess.is_finite() || !transparency.is_finite() {
+            return None;
+        }
         let texture = lines.next()?.trim();
         let additive = lines.next()?.trim();
         material_textures.push(ItgMilkshapeMaterial {
+            material: ModelMaterial {
+                ambient,
+                diffuse,
+                specular,
+                emissive,
+                shininess,
+                transparency,
+                modulate: true,
+            },
             texture,
             additive,
             flags: itg_parse_model_material_flags(name),
@@ -988,6 +1053,12 @@ pub fn itg_parse_milkshape_model_layers(
             mesh: Arc::new(ModelMesh {
                 vertices: mesh.vertices,
                 bounds,
+                material: Some(
+                    usize::try_from(mesh.material_index)
+                        .ok()
+                        .and_then(|index| material_textures.get(index))
+                        .map_or_else(ModelMaterial::unassigned, |material| material.material),
+                ),
             }),
             texture,
             flags,
@@ -1059,6 +1130,7 @@ mod tests {
 
     fn test_mesh() -> Arc<ModelMesh> {
         Arc::new(ModelMesh {
+            material: None,
             vertices: Arc::from([ModelVertex {
                 normal: [0.0, 0.0, 1.0],
                 pos: [0.0, 0.0, 0.0],
@@ -1067,6 +1139,64 @@ mod tests {
             }]),
             bounds: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
         })
+    }
+
+    #[test]
+    fn equal_mesh_names_preserve_native_merged_draws() {
+        let root = temp_model_root("merged-meshes");
+        let path = root.join("model.txt");
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-song-lua-micro/model-merged-meshes/model-merged-meshes.txt"
+        ));
+        let data = noteskin_itg::NoteskinData {
+            name: "fixture".into(),
+            overrides: vec![],
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        for (name, expected) in [
+            ("joined mesh", [6, 3]),
+            ("Joined mesh", [3, 3]),
+            ("other mesh", [3, 3]),
+        ] {
+            fs::write(
+                &path,
+                source.replacen("\"joined mesh\"", &format!("\"{name}\""), 1),
+            )
+            .unwrap();
+            let layers = itg_parse_milkshape_model_layers(&data, &path, &path).unwrap();
+            assert_eq!(layers.len(), 2);
+            assert_eq!(
+                layers
+                    .iter()
+                    .map(|layer| layer.mesh.vertices.len())
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            if expected[0] == 6 {
+                assert_eq!(
+                    layers[0].mesh.vertices[3].pos,
+                    layers[1].mesh.vertices[0].pos
+                );
+            }
+        }
+        // A third empty mesh still counts in the native geometry list, so the
+        // two drawable meshes must not trigger the two-mesh merge condition.
+        let three = source
+            .replace("Meshes: 2", "Meshes: 3")
+            .replace("Materials: 1", "\"joined mesh\" 0 0\n0\n0\n0\nMaterials: 1");
+        fs::write(&path, three).unwrap();
+        let layers = itg_parse_milkshape_model_layers(&data, &path, &path).unwrap();
+        assert_eq!(
+            layers
+                .iter()
+                .map(|layer| layer.mesh.vertices.len())
+                .collect::<Vec<_>>(),
+            [3, 3]
+        );
+        fs::remove_file(&path).unwrap();
+        fs::remove_dir(&root).unwrap();
     }
 
     #[test]
@@ -1107,6 +1237,7 @@ mod tests {
                 sphere_mapped: false,
                 texture_path: PathBuf::from("tap.png"),
                 animation: None,
+                states: Arc::from([]),
                 tex: ItgModelTexturePath {
                     uv_velocity: [2.0, -1.0],
                     uv_offset: [0.25, 0.5],
@@ -1217,6 +1348,7 @@ Materials: 1
             sphere_mapped: false,
             texture_path: PathBuf::from("tap.png"),
             animation: None,
+            states: Arc::from([]),
             tex: ItgModelTexturePath {
                 uv_velocity: [1.0, 2.0],
                 uv_offset: [0.1, 0.2],
@@ -1448,6 +1580,36 @@ Materials: 1
     }
 
     #[test]
+    fn animated_texture_retains_repeated_image_states() {
+        let root = temp_model_root("repeated-image-states");
+        fs::write(root.join("same.png"), []).unwrap();
+        let path = root.join("texture.ini");
+        fs::write(&path, "[AnimatedTexture]\n\
+            TexVelocityX=0.5\nTexOffsetY=0.25\n\
+            Frame0000=same.png\nDelay0000=0.75\nTranslateX0000=0.125\nTranslateY0000=-0.25\n\
+            Frame0001=same.png\nDelay0001=1.25\nTranslateX0001=-0.375\nTranslateY0001=0.5\n")
+            .unwrap();
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(), name: "test".to_string(),
+            metrics: noteskin_itg::IniData::default(), search_dirs: vec![root.clone()],
+        };
+        let texture = itg_resolve_animated_texture_ini(&data, &path).expect("native repeated states");
+        assert!(texture.animation.is_none(), "one image needs no duplicate atlas tiles");
+        assert_eq!(texture.texture_path, root.join("same.png"));
+        assert_eq!(texture.tex.uv_cycle_seconds, Some(2.0));
+        assert_eq!(texture.tex.uv_velocity, [0.5, 0.0]);
+        assert_eq!(texture.tex.uv_offset, [0.0, 0.25]);
+        assert_eq!(&*texture.states, &[
+            ItgTextureState { delay: 0.75, translation: [0.125, -0.25] },
+            ItgTextureState { delay: 1.25, translation: [-0.375, 0.5] },
+        ]);
+        for name in ["same.png", "texture.ini"] {
+            fs::remove_file(root.join(name)).unwrap();
+        }
+        fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
     fn model_material_paths_accept_windows_separators() {
         let root = temp_model_root("windows-separators");
         let texture_dir = root.join("textures");
@@ -1542,3 +1704,7 @@ fn expand_mesh_vertices(
     }
     (vertices, bounds)
 }
+
+#[cfg(test)]
+#[path = "model_merge_perf.rs"]
+mod resource_perf;

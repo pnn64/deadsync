@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "name": "native BitmapText strict boolean arguments",
+  "lua_assertions": "local label=native_label\nfor _, name in ipairs({\"rainbowscroll\", \"jitter\", \"uppercase\"}) do\n assert(label[name](label, true)==label and label[name](label, false)==label, name..\" accepts booleans and returns self\")\n assert(not pcall(label[name], label), name..\" rejects a missing boolean\")\n assert(not pcall(label[name], label, nil), name..\" rejects nil\")\n for _, value in ipairs({0, 1, \"false\", {}, function() end}) do\n  assert(not pcall(label[name], label, value), name..\" requires a boolean\")\n end\nend\n"
+}

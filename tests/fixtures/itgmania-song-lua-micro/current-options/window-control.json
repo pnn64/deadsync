@@ -1,0 +1,4 @@
+{
+  "option_control": true,
+  "lua_assertions": "local function p(level, name, ...) return _ITG_OPTIONS_AT(0, 'ModsLevel_' .. level, name, ...) end\np('Stage', 'DisableTimingWindow', 0)\nassert(#p('Stage', 'GetDisabledTimingWindows') == 1)\np('Song', 'DisableTimingWindow', 1)\n_ITG_OPTIONS_ADVANCE(0)\nassert(#p('Current', 'GetDisabledTimingWindows') == 1)\np('Stage', 'SetPlayerOptions', '')\nassert(#p('Current', 'GetDisabledTimingWindows') == 0)\nassert(#p('Stage', 'GetDisabledTimingWindows') == 0)\nassert(#p('Song', 'GetDisabledTimingWindows') == 0)\n"
+}

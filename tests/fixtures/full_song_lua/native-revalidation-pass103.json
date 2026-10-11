@@ -1,0 +1,52 @@
+{
+  "pass": 103,
+  "previous_record": "native-revalidation-pass102.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "55212b44e343443a266984d300281bc263f5cf49",
+  "test_repository_commit": "59ea18661e1ee0a054405f77faf724c601d79b67",
+  "comparator": {
+    "path": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass102-current-image-getter-comparators-v1-full_song_lua.exe",
+    "sha256": "51857347af03fa15071cc288ad293360d9e0ca8831c70a3594390f6f3b345908"
+  },
+  "harness_source_commit": "e5ee5826a0cf4024301c969087b1ee3b863e4242",
+  "native_cli_sha256": "be7d5ffa45f5cf75220e21921625d94a278a7c96dd595135e90330437ad8157d",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "charts": [
+    {
+      "position": 8,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "archive": "733a636d41eaa4f2add786f07e40a02f94dbddd2937b777b19231594486f16c7.tar.zst",
+      "archive_sha256": "733a636d41eaa4f2add786f07e40a02f94dbddd2937b777b19231594486f16c7",
+      "archive_bytes": 68365606,
+      "compression_level": 22,
+      "uncompressed_sha256": "64dc696f614452104bee9d7cc4da274c1a34fdc27d2b6d02d5e0f93d2830ad53",
+      "native_trace_sha256": "df82d474abcb6009c5d2195ccb5c50a193251110f50d4077c7e3cf2312717959",
+      "harness_version": "0.1.49",
+      "native_capture_log_sha256": "d40e0d8c766a162810c004522b5feb735dde299080c68b106b7a507acb92b325",
+      "native_archive_log_sha256": "f9148bd1db1ef3fc8dbfc7492412a03d8aa2d9b315426a920d13ab9a52b9b1ee",
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "duration_seconds": 221.77818298339844,
+      "update_frames": 13308,
+      "original_source_unchanged": true,
+      "source_simfile_sha256": "24fa9211245c1c1e36be0a6c473db4833747a455d2b2e801782bd368149dad62",
+      "comparisons_passed": 328107,
+      "comparisons_failed": 0,
+      "test_log_sha256": "fe09fafb64a4543614bd8c46e247b61b5f2c150c4516f6db3f4ff7fe3838fd5e",
+      "original_archive_retained": "1910ab784664f278e102c2652128d8d7d0e631f5e85866a36ed9f2c93573739d.tar.zst",
+      "historical_aliases_retained": true,
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass103-top-008-chikutaku-v1.json",
+      "native_receipt_sha256": "e7bca4ca229d64134457e0d3568503ae10d04a9c937c43cae51436942b69966f"
+    }
+  ],
+  "next_position": 9,
+  "checks": "Archive/member integrity, native endpoint and frame coverage, complete Lua runtime and every-frame composition, semantic geometry, commands, modifiers and player transforms"
+}

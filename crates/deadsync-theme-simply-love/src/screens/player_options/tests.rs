@@ -2078,6 +2078,7 @@ pub(super) mod tests {
         // A triangle shared by materials with different texture dimensions.
         // Every layer must occupy the same screen coordinates after fitting.
         let model = Arc::new(ModelMesh {
+            material: None,
             vertices: Arc::from(
                 [[-32.0, -24.0, 0.0], [32.0, -24.0, 0.0], [0.0, 24.0, 0.0]].map(|pos| {
                     ModelVertex {
@@ -2215,6 +2216,7 @@ pub(super) mod tests {
                 [1.0, 0.0, 0.0, 1.0]
             };
             slot.model = Some(Arc::new(ModelMesh {
+                material: None,
                 vertices: [
                     [left, bottom],
                     [right, bottom],

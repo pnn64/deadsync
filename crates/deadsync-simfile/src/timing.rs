@@ -98,11 +98,9 @@ fn parse_time_signatures_as<T>(
         return vec![make(0.0, 4, 4)];
     }
 
-    out.sort_by(|a, b| {
-        beat_to_note_row(beat(a))
-            .cmp(&beat_to_note_row(beat(b)))
-            .then_with(|| beat(a).total_cmp(&beat(b)))
-    });
+    // For finite beats, row rounding is monotone. The original row-first
+    // comparator's beat tie-break therefore has exactly this same ordering.
+    out.sort_by(|a, b| beat(a).total_cmp(&beat(b)));
     out.dedup_by(|a, b| beat_to_note_row(beat(a)) == beat_to_note_row(beat(b)));
     if out
         .first()
@@ -153,11 +151,9 @@ fn parse_tickcounts_as<T>(
         return vec![make(0.0, 4)];
     }
 
-    out.sort_by(|a, b| {
-        beat_to_note_row(beat(a))
-            .cmp(&beat_to_note_row(beat(b)))
-            .then_with(|| beat(a).total_cmp(&beat(b)))
-    });
+    // For finite beats, row rounding is monotone. The original row-first
+    // comparator's beat tie-break therefore has exactly this same ordering.
+    out.sort_by(|a, b| beat(a).total_cmp(&beat(b)));
     dedup_last_by_row(&mut out, &beat);
     if out
         .first()
@@ -217,11 +213,9 @@ fn parse_combos_as<T>(
         return vec![make(0.0, 1, 1)];
     }
 
-    out.sort_by(|a, b| {
-        beat_to_note_row(beat(a))
-            .cmp(&beat_to_note_row(beat(b)))
-            .then_with(|| beat(a).total_cmp(&beat(b)))
-    });
+    // For finite beats, row rounding is monotone. The original row-first
+    // comparator's beat tie-break therefore has exactly this same ordering.
+    out.sort_by(|a, b| beat(a).total_cmp(&beat(b)));
     dedup_last_by_row(&mut out, &beat);
     if out
         .first()
@@ -591,4 +585,9 @@ mod tests {
             0b1001
         );
     }
+}
+
+#[cfg(test)]
+mod parse_perf {
+    include!("timing_parse_perf.rs");
 }

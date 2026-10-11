@@ -1,0 +1,109 @@
+{
+  "pass": 139,
+  "previous_record": "native-revalidation-pass138.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+  "comparator_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    60
+  ],
+  "next_position": 61,
+  "comparisons_passed": 421837,
+  "charts": [
+    {
+      "position": 60,
+      "entry": {
+        "title": "[F]FS+BR(lv.9) Bunny House",
+        "source_simfile": "[F]FS+BR(lv.9) Bunny House/steps.sm",
+        "harness_version": "0.1.54",
+        "archive": "3efb7d8fd2b0bc1e6093a446dbedf33f536b97a0d42cd2277f7c7a2db7ac602f.tar.zst",
+        "sha256": "3efb7d8fd2b0bc1e6093a446dbedf33f536b97a0d42cd2277f7c7a2db7ac602f",
+        "compressed_bytes": 1259569,
+        "aliases": [
+          "991d3943785b3f678f0b92b23a3737bc514b5f97b9a4bc5a6e3a74618f06adc4.tar.zst"
+        ]
+      },
+      "original_archive_retained": "55b9c5648c2d1049f82756577313be2cedbd54fba46da2678a68f7d966434ebc.tar.zst",
+      "native_source_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+      "native_trace_sha256": "c50d7e1edd985382239ae8c9728eb4891f1f90e5df224eac64f64d5c4b757620",
+      "original_source_sha256": {
+        "[F]FS+BR(lv.9) Bunny House/bg.png": "796c7a9998fa7a02f7b6a72ce74c7cf7c0cf60ae9225ef247408ad36eca62270",
+        "[F]FS+BR(lv.9) Bunny House/bn.png": "3480afc9876e020d58af80e9f39c632022000ea8dc371da98cfaa1e17e0ddc82",
+        "[F]FS+BR(lv.9) Bunny House/bunny_house_cut.ogg": "0882ae20f4b6b79e157baa526e1c0504fc31f82f43997ad4e78c27054619902d",
+        "[F]FS+BR(lv.9) Bunny House/steps.sm": "0d96d66bba54c552cd252ad2ce7c572ee2ed87da9682451da11f13794960cb87",
+        "[F]FS+BR(lv.9) Bunny House/steps.sm.old": "7dd6b83ad9f5b5ad7f3fb14fc798dd5cb36c6bddfaafd68bcb640d9d710b06d9",
+        "[F]FS+BR(lv.9) Bunny House/steps.ssc": "c11b4af274d603396afd2774aee6037fee04f9262ba1d4969e927a2f6a3cbb0c",
+        "[F]FS+BR(lv.9) Bunny House/steps.ssc.old": "3b18841b9869253678081c863a401117b2d9f707a175e8896729fc0a9920bf96",
+        "[F]FS+BR(lv.9) Bunny House/lua/default.lua": "331d57fa4351dd2d8c14ee457ab190a7fc7f1f2d468bbee4afacd3a62af596eb",
+        "[F]FS+BR(lv.9) Bunny House/lua/default.xml": "cd2f138e1ee0d0af536516650e19520af79e67782960f9cdcf5ef2d85d87a51d",
+        "[F]FS+BR(lv.9) Bunny House/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "[F]FS+BR(lv.9) Bunny House/lua/easing.xml": "7c837cba7f448a43995feee284b1502fa5aa32bdc9441efd9279c89ae5a76b25",
+        "[F]FS+BR(lv.9) Bunny House/lua/ligma_fast 1x4.png": "5727a9abc54bd3699159f6c882aca4eda9d75d5ac51fd17368186f1a0518c06a",
+        "[F]FS+BR(lv.9) Bunny House/lua/modhelpers.lua": "258028293c99b2f1b757b20d584b069524ffd3ee141be6499adc31b312bef482",
+        "[F]FS+BR(lv.9) Bunny House/lua/modhelpers.xml": "b4b7e6dcddac030d31ecbcaf2c94a63ad7cae8a5a08e54e27b8e2b8964c197a4",
+        "[F]FS+BR(lv.9) Bunny House/lua/mods.lua": "bf3858e9900b0f2adc806a7d7141f6548e068b0a0517e75393ab779f2631372d"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 9158,
+      "duration_seconds": 152.61363220214844,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 60,
+      "source_simfile": "[F]FS+BR(lv.9) Bunny House/steps.sm",
+      "archive": "3efb7d8fd2b0bc1e6093a446dbedf33f536b97a0d42cd2277f7c7a2db7ac602f.tar.zst",
+      "archive_sha256": "3efb7d8fd2b0bc1e6093a446dbedf33f536b97a0d42cd2277f7c7a2db7ac602f",
+      "harness_version": "0.1.54",
+      "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+      "source_pending_commit": false,
+      "binary_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-full_song_lua.exe",
+        "3efb7d8fd2b0bc1e6093a446dbedf33f536b97a0d42cd2277f7c7a2db7ac602f.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 58.14884959999472,
+      "comparisons_passed": 421837,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-060-native-column-xy-v6.log",
+      "log_sha256": "b112649d9b81ca583ecba284e26892eba36326ae450e87515ee41d7fe144ee87",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass139-top-060-native-v3.json",
+      "native_receipt_sha256": "6e205b23e9e99ac3e22fea3cf7a2bf0f130182741d1ec1a6974061f75bc1adfb",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+    "source_pending_commit": false,
+    "binary_sha256": "9f550263a9682a2386ebb04ff72a66926eca035a0e4f8e18e2def03b2ca1baa7",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.8520129001699388,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-060-native-pass139.log",
+    "log_sha256": "9682260e5cd84a10f5fe78ec2ccf53dea21aa2e2f0cb507c49fd6c4d8392ceaf",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 262 filtered out; finished in 1.46s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

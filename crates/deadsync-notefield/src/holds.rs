@@ -881,8 +881,7 @@ where
     F: Fn(&S) -> SpriteSource,
     P: Fn(f32) -> HoldPathSample,
 {
-    let use_mesh =
-        !is_model && (request.twirl != 0.0 || request.rotation_y_deg.abs() <= f32::EPSILON);
+    let use_mesh = !is_model;
     let mut pooled_pair = None;
     let mut owned_diffuse = Vec::new();
     let mut owned_glow = Vec::new();
@@ -1364,9 +1363,7 @@ fn compose_top_cap<S, F, P>(
     let mut top = sample_path(cap_top);
     top.cap_step = 0.0;
     let bottom = sample_path(cap_bottom);
-    let use_mesh = (request.twirl != 0.0 || !request.use_legacy_sprites)
-        && !is_model
-        && (request.twirl != 0.0 || request.rotation_y_deg.abs() <= f32::EPSILON);
+    let use_mesh = (request.twirl != 0.0 || !request.use_legacy_sprites) && !is_model;
     if use_mesh {
         let (top_alpha, top_glow) = hold_alpha_glow(request, top);
         let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
@@ -1694,9 +1691,7 @@ fn compose_bottom_cap<S, F, P>(
     let mut top = sample_path(draw_top);
     top.cap_step = 0.0;
     let bottom = sample_path(draw_bottom);
-    let use_mesh = (request.twirl != 0.0 || !request.use_legacy_sprites)
-        && !is_model
-        && (request.twirl != 0.0 || request.rotation_y_deg.abs() <= f32::EPSILON);
+    let use_mesh = (request.twirl != 0.0 || !request.use_legacy_sprites) && !is_model;
     if use_mesh {
         let (top_alpha, top_glow) = hold_alpha_glow(request, top);
         let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
@@ -1828,7 +1823,7 @@ pub(crate) fn scale_effect_size(
 pub(crate) fn scale_sprite_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
     let width = size[0].max(0) as f32;
     let height = size[1].max(0) as f32;
-    if height <= 0.0 || target_arrow_px <= 0.0 {
+    if height <= 0.0 {
         return [width, height];
     }
     let scale = target_arrow_px / height;
@@ -1838,7 +1833,7 @@ pub(crate) fn scale_sprite_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f3
 pub(crate) fn scale_hold_part(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
     let width = size[0].max(0) as f32;
     let height = size[1].max(0) as f32;
-    if width <= 0.0 || target_arrow_px <= 0.0 {
+    if width <= 0.0 {
         return [width, height];
     }
     // NoteDisplay scales the sprite's logical dimensions by ArrowEffects zoom.
@@ -2087,7 +2082,7 @@ pub(crate) const fn hold_strip_draw(
         depth_test,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: false,
+        cull_mode: deadlib_render_core::CullMode::None,
         blend,
         z,
     })
@@ -2115,7 +2110,7 @@ pub(crate) const fn hold_strip_glow_draw(
         depth_test,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: false,
+        cull_mode: deadlib_render_core::CullMode::None,
         blend: BlendMode::Alpha,
         z,
     })
@@ -2144,7 +2139,7 @@ const fn hold_reusable_strip_draw(
         depth_test,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: false,
+        cull_mode: deadlib_render_core::CullMode::None,
         blend,
         z,
     })
@@ -2172,7 +2167,7 @@ const fn hold_reusable_strip_glow_draw(
         depth_test,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: false,
+        cull_mode: deadlib_render_core::CullMode::None,
         blend: BlendMode::Alpha,
         z,
     })
@@ -2317,6 +2312,7 @@ mod tests {
         fn model(texture: &str) -> Self {
             Self {
                 model: Some(ModelMesh {
+                    material: None,
                     vertices: Arc::from([ModelVertex {
                         normal: [0.0, 0.0, 1.0],
                         pos: [0.0, 0.0, 0.0],
@@ -3142,7 +3138,7 @@ mod tests {
                     depth_test: true,
                     clear_depth: false,
                     clear_depth_after: false,
-                    cull_back: false,
+                    cull_mode: deadlib_render_core::CullMode::None,
                     vertices: FlatMeshVertices::Reusable(vertices),
                     ..
                 }) if vertices.iter().all(|vertex| vertex.pos.into_iter().all(f32::is_finite))
@@ -4531,5 +4527,40 @@ mod tests {
         assert_eq!(offscreen.head_slot.copied(), Some(10));
         assert_eq!(offscreen.top_cap_slot.copied(), Some(30));
         assert_eq!(offscreen.bottom_cap_slot.copied(), Some(40));
+    }
+}
+
+#[cfg(test)]
+mod confusion_strip_tests {
+    use super::*;
+    #[test]
+    fn confusion_strip_matches_native_widths() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/confusion-spin-strip.json"
+        ))
+        .expect("unchanged native NoteDisplay and quaternion blocks");
+        let vectors = native["vectors"].as_array().expect("native strip rows");
+        assert_eq!(vectors.len(), 672);
+        for vector in vectors {
+            let value = |key: &str| vector[key].as_f64().expect("native float") as f32;
+            let cache = crate::lane_note_transform_cache(
+                value("beat"),
+                crate::VisualEffectParams {
+                    confusion_y: value("strength_y"),
+                    confusion_y_offset: value("offset_y"),
+                    ..Default::default()
+                },
+            );
+            let rotation = cache.confusion_rotation_y_deg
+                + visual_note_rotation_y(value("travel"), value("twirl"));
+            let row = hold_strip_row_3d([0.0; 3], 32.0, rotation, 0.0, 1.0, 0.0, [1.0; 4]);
+            for (axis, key) in ["dx", "dy", "dz"].into_iter().enumerate() {
+                let actual = row[0].pos[axis];
+                assert!(
+                    (actual - value(key)).abs() < 0.0001,
+                    "{key}: {vector}; actual={actual}"
+                );
+            }
+        }
     }
 }

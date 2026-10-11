@@ -57,6 +57,7 @@ fn model_frame() -> RenderFrame {
         ops: (0..3)
             .map(|i| {
                 DrawOp::TexturedMesh(TexturedMeshRun {
+                    sampler: None,
                     additive_texture: 0,
                     geometry: i,
                     instance_start: i,
@@ -153,6 +154,7 @@ fn model_depth_isolation() {
         instance.model_col3[2] = -0.8;
         overlay.tmesh_instances.push(instance);
         overlay.ops.push(DrawOp::TexturedMesh(TexturedMeshRun {
+            sampler: None,
             additive_texture: 0,
             geometry: 1,
             instance_start: 3,
@@ -548,6 +550,7 @@ fn assert_float_capture(
             for textured in [false, true] {
                 frame.ops = vec![if textured {
                     DrawOp::TexturedMesh(TexturedMeshRun {
+                        sampler: None,
                         additive_texture: 0,
                         geometry: 0,
                         instance_start: 0,

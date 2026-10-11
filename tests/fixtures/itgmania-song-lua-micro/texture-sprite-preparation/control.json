@@ -1,0 +1,85 @@
+{
+  "name": "native-sprite-preparation",
+  "texture_files": [
+    {
+      "name": "tiny",
+      "file": "bitmap-sprite-preparation/tiny.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "tiny-wide",
+      "file": "bitmap-sprite-preparation/tiny-wide.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "tiny-tall",
+      "file": "bitmap-sprite-preparation/tiny-tall.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "unit",
+      "file": "bitmap-sprite-preparation/unit.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "stretch",
+      "file": "bitmap-sprite-preparation/panel (stretch).png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "padded",
+      "file": "bitmap-sprite-preparation/padded.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "hires-off",
+      "file": "bitmap-sprite-preparation/hires (doubleres).png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": false
+    },
+    {
+      "name": "capped-tiny",
+      "file": "bitmap-sprite-preparation/capped.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "sheet",
+      "file": "bitmap-sprite-preparation/sheet 2x1.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "resolution",
+      "file": "bitmap-sprite-preparation/source (res 53x12).png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    }
+  ]
+}

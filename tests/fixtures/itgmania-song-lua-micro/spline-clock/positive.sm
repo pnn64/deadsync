@@ -1,0 +1,16 @@
+#TITLE:Positive spline clock offset;
+#MUSIC:unused.ogg;
+#OFFSET:0.125;
+#BPMS:0=120,1=150;
+#FGCHANGES:0=clock.lua=1=0=0=1;
+#NOTES:
+     dance-single:
+     native clock:
+     Challenge:
+     1:
+     0,0,0,0,0:
+0000
+0000
+0000
+1000
+;

@@ -1,9 +1,10 @@
 use deadlib_render_core::{
-    BlendMode, CameraUploadCache, DenseSlotMap, DrawOp, DrawStats, RenderFrame, RenderTargetFrame,
-    SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey, TextureHandle,
-    TexturedMeshBufferCache, TexturedMeshInstanceRaw, TexturedMeshUploads, TexturedMeshVertex,
-    Yuv420Upload, draw_storage_stats, is_render_target_texture, render_target_base_handle,
-    render_target_uses_nearest, resolve_textured_mesh_geometries, resolve_textured_meshes,
+    BlendMode, CameraUploadCache, DenseSlotMap, DrawOp, DrawStats, MeshSampler, RenderFrame,
+    RenderTargetFrame, SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey,
+    TextureHandle, TexturedMeshBufferCache, TexturedMeshInstanceRaw, TexturedMeshUploads,
+    TexturedMeshVertex, Yuv420Upload, draw_storage_stats, is_render_target_texture,
+    render_target_base_handle, resolve_textured_mesh_geometries, resolve_textured_meshes,
+    texture_sampler_desc,
 };
 use glam::Mat4 as Matrix4;
 use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
@@ -24,7 +25,7 @@ use std::{
     num::NonZeroU32,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicU8, Ordering},
     },
     time::Instant,
 };
@@ -207,7 +208,9 @@ const TMESH_ATTRIBS: [(u32, &str); 16] = [
 // is sufficient because the renderer still owns all mutation ordering; the
 // atomic preserves `Texture: Sync` for shared cross-backend texture lookups.
 #[derive(Debug)]
-pub struct Texture(TextureImages, AtomicBool);
+// The render thread owns GL state. The atomic fixed slot retains Sync for
+// texture lookup; each draw changes at most four parameters and never allocates.
+pub struct Texture(TextureImages, SamplerDesc, AtomicU8);
 
 #[derive(Debug)]
 enum TextureImages {
@@ -282,7 +285,7 @@ struct LegacyTMeshUniforms {
     uv_offset: UniformLocation,
     uv_tex_shift: UniformLocation,
     texture_mask: UniformLocation,
-    cull_back: UniformLocation,
+    cull_mode: UniformLocation,
 }
 
 pub struct State {
@@ -812,7 +815,17 @@ pub fn create_texture(
     .map(|texture| {
         Texture(
             TextureImages::Rgba(texture),
-            AtomicBool::new(sampler.filter == SamplerFilter::Nearest),
+            SamplerDesc {
+                mipmaps: false,
+                ..sampler
+            },
+            AtomicU8::new(
+                SamplerDesc {
+                    mipmaps: false,
+                    ..sampler
+                }
+                .slot() as u8,
+            ),
         )
     })
 }
@@ -949,7 +962,17 @@ pub fn create_yuv420_texture(
             levels: upload.levels,
             coeffs: upload.coeffs,
         },
-        AtomicBool::new(sampler.filter == SamplerFilter::Nearest),
+        SamplerDesc {
+            mipmaps: false,
+            ..sampler
+        },
+        AtomicU8::new(
+            SamplerDesc {
+                mipmaps: false,
+                ..sampler
+            }
+            .slot() as u8,
+        ),
     ))
 }
 
@@ -1115,7 +1138,11 @@ fn create_offscreen_target(
             width,
             height,
             float_color,
-            texture: Texture(TextureImages::Rgba(raw), AtomicBool::new(false)),
+            texture: Texture(
+                TextureImages::Rgba(raw),
+                SamplerDesc::default(),
+                AtomicU8::new(SamplerDesc::default().slot() as u8),
+            ),
             framebuffer,
             depth,
             initialized: false,
@@ -1181,44 +1208,43 @@ fn resolved_texture<'a, T: TextureLookup + ?Sized>(
     textures.opengl_texture(handle)
 }
 
-fn apply_render_target_filter(gl: &glow::Context, texture: &Texture, handle: TextureHandle) {
-    let Some(filter) = changed_render_target_filter(&texture.1, handle) else {
+fn apply_texture_sampler(
+    gl: &glow::Context,
+    texture: &Texture,
+    handle: TextureHandle,
+    repeat: bool,
+    sampler: Option<MeshSampler>,
+) {
+    let desc = texture_sampler_desc(texture.1, handle, repeat, sampler);
+    let Some(changes) = changed_texture_sampler(&texture.2, desc) else {
         return;
     };
-    let gl_filter = match filter {
+    let filter = match desc.filter {
         SamplerFilter::Linear => glow::LINEAR,
         SamplerFilter::Nearest => glow::NEAREST,
     };
-    // SAFETY: callers invoke this immediately after binding the referenced AFT
-    // texture on the live render context.
+    let wrap = match desc.wrap {
+        SamplerWrap::Clamp => glow::CLAMP_TO_EDGE,
+        SamplerWrap::Repeat => glow::REPEAT,
+    };
+    // SAFETY: callers have bound this texture on the live render context.
+    // This backend stores only level zero, so minification cannot sample mips.
     unsafe {
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, gl_filter as i32);
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, gl_filter as i32);
+        if changes & 1 != 0 {
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, filter as i32);
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, filter as i32);
+        }
+        if changes & 2 != 0 {
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, wrap as i32);
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, wrap as i32);
+        }
     }
-    texture
-        .1
-        .store(filter == SamplerFilter::Nearest, Ordering::Relaxed);
+    texture.2.store(desc.slot() as u8, Ordering::Relaxed);
 }
-
 #[inline(always)]
-fn changed_render_target_filter(
-    nearest: &AtomicBool,
-    handle: TextureHandle,
-) -> Option<SamplerFilter> {
-    if !is_render_target_texture(handle) {
-        return None;
-    }
-    let current = if nearest.load(Ordering::Relaxed) {
-        SamplerFilter::Nearest
-    } else {
-        SamplerFilter::Linear
-    };
-    let wanted = if render_target_uses_nearest(handle) {
-        SamplerFilter::Nearest
-    } else {
-        SamplerFilter::Linear
-    };
-    (wanted != current).then_some(wanted)
+fn changed_texture_sampler(current: &AtomicU8, wanted: SamplerDesc) -> Option<u8> {
+    let changes = current.load(Ordering::Relaxed) ^ wanted.slot() as u8;
+    (changes != 0).then_some(changes)
 }
 
 #[inline(always)]
@@ -1501,7 +1527,7 @@ fn draw_modern_offscreen_pass(
                         bind_sprite_texture(state, texture);
                         last_bound_tex = Some(texture.primary());
                     }
-                    apply_render_target_filter(gl, texture, run.texture_handle);
+                    apply_texture_sampler(gl, texture, run.texture_handle, false, None);
                     if state.base_instance {
                         gl.draw_elements_instanced_base_vertex_base_instance(
                             glow::TRIANGLES,
@@ -1599,7 +1625,7 @@ fn draw_modern_offscreen_pass(
                         gl.bind_texture(glow::TEXTURE_2D, Some(primary));
                         last_bound_tex = Some(primary);
                     }
-                    apply_render_target_filter(gl, texture, run.texture_handle);
+                    apply_texture_sampler(gl, texture, run.texture_handle, true, run.sampler);
                     let additive =
                         resolved_texture(state, textures, run.additive_texture).unwrap_or(texture);
                     gl.active_texture(glow::TEXTURE1);
@@ -1711,7 +1737,7 @@ fn draw_legacy_offscreen_pass(
                         bytemuck::cast_slice(&projection),
                     );
                     bind_sprite_texture(state, texture);
-                    apply_render_target_filter(gl, texture, run.texture_handle);
+                    apply_texture_sampler(gl, texture, run.texture_handle, false, None);
                     let end = run.instance_start.saturating_add(run.instance_count);
                     for index in run.instance_start..end {
                         let Some(instance) = frame.sprite_instances.get(index as usize) else {
@@ -1849,7 +1875,7 @@ fn draw_legacy_offscreen_pass(
                         bytemuck::cast_slice(&projection),
                     );
                     gl.bind_texture(glow::TEXTURE_2D, Some(texture.primary()));
-                    apply_render_target_filter(gl, texture, run.texture_handle);
+                    apply_texture_sampler(gl, texture, run.texture_handle, true, run.sampler);
                     let additive =
                         resolved_texture(state, textures, run.additive_texture).unwrap_or(texture);
                     gl.active_texture(glow::TEXTURE1);
@@ -1905,7 +1931,7 @@ fn draw_legacy_offscreen_pass(
                             instance.uv_tex_shift[1],
                         );
                         gl.uniform_1_f32(Some(&tmesh_uniforms.texture_mask), instance.texture_mask);
-                        gl.uniform_1_f32(Some(&tmesh_uniforms.cull_back), instance.cull_back);
+                        gl.uniform_1_f32(Some(&tmesh_uniforms.cull_mode), instance.cull_mode);
                         for (location, row) in
                             tmesh_uniforms.sphere_rows.iter().zip(instance.sphere_rows)
                         {
@@ -2241,7 +2267,7 @@ pub fn draw(
                             bind_sprite_texture(state, texture);
                             last_bound_tex = Some(texture.primary());
                         }
-                        apply_render_target_filter(gl, texture, run.texture_handle);
+                        apply_texture_sampler(gl, texture, run.texture_handle, false, None);
 
                         if state.base_instance {
                             gl.draw_elements_instanced_base_vertex_base_instance(
@@ -2352,7 +2378,7 @@ pub fn draw(
                             gl.bind_texture(glow::TEXTURE_2D, Some(primary));
                             last_bound_tex = Some(primary);
                         }
-                        apply_render_target_filter(gl, texture, run.texture_handle);
+                        apply_texture_sampler(gl, texture, run.texture_handle, true, run.sampler);
                         let additive = resolved_texture(state, textures, run.additive_texture)
                             .unwrap_or(texture);
                         gl.active_texture(glow::TEXTURE1);
@@ -2439,7 +2465,7 @@ pub fn draw(
                             bind_sprite_texture(state, texture);
                             last_bound_tex = Some(texture.primary());
                         }
-                        apply_render_target_filter(gl, texture, run.texture_handle);
+                        apply_texture_sampler(gl, texture, run.texture_handle, false, None);
 
                         let end = run.instance_start.saturating_add(run.instance_count);
                         for idx in run.instance_start..end {
@@ -2607,7 +2633,7 @@ pub fn draw(
                             gl.bind_texture(glow::TEXTURE_2D, Some(primary));
                             last_bound_tex = Some(primary);
                         }
-                        apply_render_target_filter(gl, texture, run.texture_handle);
+                        apply_texture_sampler(gl, texture, run.texture_handle, true, run.sampler);
                         let additive = resolved_texture(state, textures, run.additive_texture)
                             .unwrap_or(texture);
                         gl.active_texture(glow::TEXTURE1);
@@ -2671,7 +2697,7 @@ pub fn draw(
                                 Some(&tmesh_uniforms.texture_mask),
                                 instance.texture_mask,
                             );
-                            gl.uniform_1_f32(Some(&tmesh_uniforms.cull_back), instance.cull_back);
+                            gl.uniform_1_f32(Some(&tmesh_uniforms.cull_mode), instance.cull_mode);
                             for (location, row) in
                                 tmesh_uniforms.sphere_rows.iter().zip(instance.sphere_rows)
                             {
@@ -3299,7 +3325,7 @@ fn legacy_tmesh_uniforms(
         uv_offset: uniform_location(gl, program, "u_uv_offset")?,
         uv_tex_shift: uniform_location(gl, program, "u_uv_tex_shift")?,
         texture_mask: uniform_location(gl, program, "u_texture_mask")?,
-        cull_back: uniform_location(gl, program, "u_cull_back")?,
+        cull_mode: uniform_location(gl, program, "u_cull_mode")?,
     })
 }
 
@@ -3367,11 +3393,11 @@ mod vertex_state_tests;
 mod tests {
     use super::{
         GlApi, GlPath, GlVersion, SamplerFilter, Texture, base_instance_capability,
-        changed_render_target_filter, clamp_vertex_count, gl_state_update, parse_gl_version,
+        changed_texture_sampler, clamp_vertex_count, gl_state_update, parse_gl_version,
         surface_extent,
     };
-    use deadlib_render_core::{render_target_sample_handle, render_target_texture_handle};
-    use std::sync::atomic::AtomicBool;
+    use deadlib_render_core::{SamplerDesc, SamplerWrap};
+    use std::sync::atomic::{AtomicU8, Ordering};
 
     #[test]
     fn surface_extent_clamps_zero_dims() {
@@ -3414,34 +3440,23 @@ mod tests {
     }
 
     #[test]
-    fn render_target_filter_changes_only_when_sampling_changes() {
-        let target = render_target_texture_handle(3);
-        let nearest = render_target_sample_handle(target, true);
-
-        assert_eq!(
-            changed_render_target_filter(&AtomicBool::new(false), target),
-            None
-        );
-        assert_eq!(
-            changed_render_target_filter(&AtomicBool::new(false), nearest),
-            Some(SamplerFilter::Nearest)
-        );
-        assert_eq!(
-            changed_render_target_filter(&AtomicBool::new(true), nearest),
-            None
-        );
-        assert_eq!(
-            changed_render_target_filter(&AtomicBool::new(true), target),
-            Some(SamplerFilter::Linear)
-        );
-        assert_eq!(
-            changed_render_target_filter(&AtomicBool::new(false), 42),
-            None
-        );
-        assert_eq!(
-            changed_render_target_filter(&AtomicBool::new(true), 42),
-            None
-        );
+    fn texture_sampler_changes_restore_defaults() {
+        let desc = SamplerDesc::default();
+        let current = AtomicU8::new(desc.slot() as u8);
+        assert_eq!(changed_texture_sampler(&current, desc), None);
+        let nearest = SamplerDesc {
+            filter: SamplerFilter::Nearest,
+            ..desc
+        };
+        assert_eq!(changed_texture_sampler(&current, nearest), Some(1));
+        let both = SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..nearest
+        };
+        assert_eq!(changed_texture_sampler(&current, both), Some(3));
+        current.store(both.slot() as u8, Ordering::Relaxed);
+        assert_eq!(changed_texture_sampler(&current, both), None);
+        assert_eq!(changed_texture_sampler(&current, desc), Some(3));
     }
 
     #[test]

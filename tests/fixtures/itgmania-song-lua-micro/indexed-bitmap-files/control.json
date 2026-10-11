@@ -1,0 +1,250 @@
+{
+  "name": "native-indexed-bitmap-files",
+  "texture_files": [
+    {
+      "name": "win1-model",
+      "file": "win1.bmp",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "win1-sprite",
+      "file": "win1.bmp",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "os2-1-model",
+      "file": "os2-1.bmp",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "os2-1-sprite",
+      "file": "os2-1.bmp",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "win4-model",
+      "file": "win4.bmp",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "win4-sprite",
+      "file": "win4.bmp",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "os2-4-model",
+      "file": "os2-4.bmp",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "os2-4-sprite",
+      "file": "os2-4.bmp",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "win8-model",
+      "file": "win8.bmp",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "win8-sprite",
+      "file": "win8.bmp",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "os2-8-model",
+      "file": "os2-8.bmp",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "os2-8-sprite",
+      "file": "os2-8.bmp",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "win4-odd-model",
+      "file": "win4-odd.bmp",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "win8-odd-model",
+      "file": "win8-odd.bmp",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "win8-unused-entry-model",
+      "file": "win8-unused-entry.bmp",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "win8-unused-entry-sprite",
+      "file": "win8-unused-entry.bmp",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "win8-both-pinks-model",
+      "file": "win8-both-pinks.bmp",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "win8-both-pinks-sprite",
+      "file": "win8-both-pinks.bmp",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gif-global-model",
+      "file": "gif-global.gif",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gif-global-sprite",
+      "file": "gif-global.gif",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gif-local-model",
+      "file": "gif-local.gif",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gif-local-sprite",
+      "file": "gif-local.gif",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gif-offset-model",
+      "file": "gif-offset.gif",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gif-offset-sprite",
+      "file": "gif-offset.gif",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gif-interlaced-model",
+      "file": "gif-interlaced.gif",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gif-interlaced-sprite",
+      "file": "gif-interlaced.gif",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gif-first-frame-model",
+      "file": "gif-first-frame.gif",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gif-first-frame-sprite",
+      "file": "gif-first-frame.gif",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gif-transparent-pink-model",
+      "file": "gif-transparent-pink.gif",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gif-transparent-pink-sprite",
+      "file": "gif-transparent-pink.gif",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gif-both-pinks-model",
+      "file": "gif-both-pinks.gif",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gif-both-pinks-sprite",
+      "file": "gif-both-pinks.gif",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "gif-odd-model",
+      "file": "gif-odd.gif",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "misnamed-bmp-model",
+      "file": "misnamed.png",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "misnamed-bmp-sprite",
+      "file": "misnamed.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    }
+  ]
+}

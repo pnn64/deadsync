@@ -1,0 +1,103 @@
+{
+  "pass": 209,
+  "previous_record": "native-revalidation-pass208.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "3ab88a592e4f870476b3a86209b66efa057246e7",
+  "comparator_sha256": "814f9d38528675594ff27f5c49cede8318b04d1b25e0798455129dfdd50eff29",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    130
+  ],
+  "next_position": 131,
+  "comparisons_passed": 161369,
+  "charts": [
+    {
+      "position": 130,
+      "entry": {
+        "title": "Brain Power",
+        "source_simfile": "Brain Power - [Cardboard Box]/Brain Power.sm",
+        "harness_version": "0.1.64",
+        "archive": "7474f7c949e0a8a85dc83cfe432cfbffdd9a3ed240051e6e0bad6408a5767e4b.tar.zst",
+        "sha256": "7474f7c949e0a8a85dc83cfe432cfbffdd9a3ed240051e6e0bad6408a5767e4b",
+        "compressed_bytes": 13165184,
+        "aliases": [
+          "9bcd500709c8339a67d0ecfecc90b86916141585f4fc3a89da16f5bd1b0b9852.tar.zst"
+        ]
+      },
+      "original_archive_retained": "1a038d81530a6ab56b2e29fe7f8a86d8a2f2716560e2627741c7ee94ee56e879.tar.zst",
+      "native_source_commit": "cc0ea0c0ab70e962785eff8681a6867a3f8689ee",
+      "native_trace_sha256": "1f00eb2aa3cb9ace9e3893dd9812a2dfd1f38bd6d957b98ce4be60eb37053e19",
+      "original_source_sha256": {
+        "Brain Power - [Cardboard Box]/Brain Power.ogg": "6ce1910877cbaf6f64f78f7704a0c8199917b4f86c0372befc6996888aac1abc",
+        "Brain Power - [Cardboard Box]/Brain Power.sm": "a53bb82ba00b19b125cfa74125418f73b1be297d3d42f39709f0828c880fb328",
+        "Brain Power - [Cardboard Box]/Brain Power.ssc": "ab1bed3728ccb835e806e3ed4ca837eb2608e80322d4ea4207a6e377be17a35c",
+        "Brain Power - [Cardboard Box]/Brain Power.ssc.old": "e2052c639734302da6170a91ae144f24a2653d92e3d5f471ab7b514da78df747",
+        "Brain Power - [Cardboard Box]/bg/brain_power_start.mp4": "179bb33566967f03ff4798cbb219ac5bd31116eb3218e5791d67e7fb7d6be439",
+        "Brain Power - [Cardboard Box]/bg/Default.lua": "c322ad3389d1e70e019135dd584a88f6e82e6a9aeac174573fae3c5a4ff1bcf3",
+        "Brain Power - [Cardboard Box]/mods/Default.lua": "ac10e89d298eb0043b95e51349ccf1af219bc8f5832db48b707b971fabd320b2",
+        "Brain Power - [Cardboard Box]/video/brain_power_end.mp4": "f30309c7484383b8fa0304f8dfabd37d218380dcc1a0dff024f0221be352efb3",
+        "Brain Power - [Cardboard Box]/video/Default.lua": "b16dc30d32a84ca4ee8e3d89940ddcb87094e83f7c7c0153d553fcac0f391045"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 7314,
+      "duration_seconds": 121.88297271728516,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 130,
+      "source_simfile": "Brain Power - [Cardboard Box]/Brain Power.sm",
+      "archive": "7474f7c949e0a8a85dc83cfe432cfbffdd9a3ed240051e6e0bad6408a5767e4b.tar.zst",
+      "archive_sha256": "7474f7c949e0a8a85dc83cfe432cfbffdd9a3ed240051e6e0bad6408a5767e4b",
+      "harness_version": "0.1.64",
+      "source_commit": "3ab88a592e4f870476b3a86209b66efa057246e7",
+      "source_pending_commit": false,
+      "binary_sha256": "814f9d38528675594ff27f5c49cede8318b04d1b25e0798455129dfdd50eff29",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\target-probes-final-v2-full_song_lua.exe",
+        "7474f7c949e0a8a85dc83cfe432cfbffdd9a3ed240051e6e0bad6408a5767e4b.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 13.868559499736875,
+      "comparisons_passed": 161369,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\target-probes-v2.log",
+      "log_sha256": "e98018eefd9dc582cc91cbc98689ce4f364966ad0aa1c32e492018f4a3babca4",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass257-top-130-native-v1.json",
+      "native_receipt_sha256": "df854191dc9a7a758b00a6a56486e9b0579a746e32bd1ce67d84927edb65a85c",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "3ab88a592e4f870476b3a86209b66efa057246e7",
+    "source_pending_commit": false,
+    "binary_sha256": "bcebb8a6c842e6e4102d6041c796fbc0659c6702e08b758899b5e31db6ea1d8a",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\target-probes-final-v2-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.2855952000245452,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-130-native-pass209.log",
+    "log_sha256": "b1856e53b64084203f9989c37cf931cd52c3784ef7005e80100b3766150d235a",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.76s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

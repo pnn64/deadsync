@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "name": "native-model-hardware-mesh-merge",
+  "samples": [0],
+  "screen": {"width": 854, "height": 480},
+  "root": {
+    "kind": "frame", "name": "Root",
+    "children": [{
+      "kind": "model", "name": "Merged",
+      "model_paths": ["model-merged-meshes.txt", "model-merged-meshes.txt", "model-merged-meshes.txt"],
+      "state": {"position": [100, 200, 30], "glow": [1, 0, 0, 0.25]}
+    }]
+  }
+}

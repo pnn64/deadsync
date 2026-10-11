@@ -39,7 +39,7 @@ mod tests {
     use deadsync_profile::compat as profile;
     use deadsync_rules::judgment::{JudgeGrade, Judgment, TimingWindow};
     use deadsync_theme_simply_love::screens::gameplay as screen_gameplay;
-    use std::alloc::{GlobalAlloc, Layout, System};
+    use std::alloc::{GlobalAlloc, Layout};
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::{Arc, LazyLock, Mutex};
     use std::{
@@ -111,7 +111,7 @@ mod tests {
     unsafe impl GlobalAlloc for CountingAlloc {
         unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
             // SAFETY: `layout` is forwarded unchanged to the system allocator.
-            let ptr = unsafe { System.alloc(layout) };
+            let ptr = unsafe { crate::perf::CountedSystem.alloc(layout) };
             if !ptr.is_null() && self.counting() {
                 self.allocs.fetch_add(1, Ordering::Relaxed);
                 self.alloc_bytes
@@ -122,7 +122,7 @@ mod tests {
 
         unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
             // SAFETY: `layout` is forwarded unchanged to the system allocator.
-            let ptr = unsafe { System.alloc_zeroed(layout) };
+            let ptr = unsafe { crate::perf::CountedSystem.alloc_zeroed(layout) };
             if !ptr.is_null() && self.counting() {
                 self.allocs.fetch_add(1, Ordering::Relaxed);
                 self.alloc_bytes
@@ -138,12 +138,12 @@ mod tests {
                     .fetch_add(layout.size() as u64, Ordering::Relaxed);
             }
             // SAFETY: the allocator caller supplies the original pointer/layout.
-            unsafe { System.dealloc(ptr, layout) };
+            unsafe { crate::perf::CountedSystem.dealloc(ptr, layout) };
         }
 
         unsafe fn realloc(&self, ptr: *mut u8, old: Layout, new_size: usize) -> *mut u8 {
             // SAFETY: all arguments are forwarded unchanged to `System`.
-            let out = unsafe { System.realloc(ptr, old, new_size) };
+            let out = unsafe { crate::perf::CountedSystem.realloc(ptr, old, new_size) };
             if !out.is_null() && self.counting() {
                 self.reallocs.fetch_add(1, Ordering::Relaxed);
                 self.realloc_bytes
@@ -518,7 +518,8 @@ mod tests {
             Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
                 actor_tree_has_text(children, expected)
             }
-            Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. } => {
+            Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. }
+            | Actor::SharedCamera { children, .. } => {
                 actor_tree_has_text(children, expected)
             }
             Actor::RetainedFrame { frame, .. } => actor_tree_has_text(frame.children(), expected),
@@ -574,6 +575,9 @@ mod tests {
                 alpha * tint[3],
             ),
             Actor::Camera { children, .. } => {
+                top_screen_text_draw(children, expected, base_z, alpha)
+            }
+            Actor::SharedCamera { children, .. } => {
                 top_screen_text_draw(children, expected, base_z, alpha)
             }
             Actor::Shadow { child, .. } => top_screen_text_draw(
@@ -3319,7 +3323,7 @@ return root
                         .flat_map(|layer| &layer.overlays),
                 ) {
                     match &overlay.kind {
-                        deadsync_assets::song_lua::SongLuaOverlayKind::NoteskinActor { slots } => {
+                        deadsync_assets::song_lua::SongLuaOverlayKind::NoteskinActor { slots, .. } => {
                             for slot in slots.iter() {
                                 assets.queue_texture_upload(
                                     slot.texture_key().to_owned(),

@@ -170,17 +170,17 @@ pub(crate) use transforms::{
     compute_tornado_lane_caches, fill_gameplay_lane_effects, fill_move_col_extras,
     fill_static_note_x_offsets, gameplay_visual_effect_params, lane_note_transform_cache,
     note_appearance_cache, note_depth_frame_cache, note_world_z_cached, note_x_offset,
-    note_x_offset_cached, smoothstep01, tiny_spacing_scale, visual_arrow_effect_zoom,
-    visual_arrow_effect_zoom_cached, visual_confusion_rotation_deg,
-    visual_hold_body_needs_z_buffer, visual_hold_head_rotation_z_cached,
-    visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
+    note_x_offset_cached, smoothstep01, tiny_spacing_scale, visual_arrow_effect_zoom_cached,
+    visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer,
+    visual_hold_head_rotation_z_cached, visual_note_rotation_z_cached,
+    visual_use_legacy_hold_sprites,
 };
 #[cfg(test)]
 use transforms::{
-    appearance_needs_rows, beat_x_extra, drunk_x_extra, itg_actor_rotation_z, mod_divisor,
+    appearance_needs_rows, beat_wave_offset, drunk_x_extra, itg_actor_rotation_z, mod_divisor,
     move_col_extra, note_x_extra, quantize_step, signed_effect_active, sm_scale, tipsy_y_extra,
-    tornado_x_extra, visual_effect_params_for_col, visual_pulse_inner_zoom,
-    visual_pulse_zoom_for_y, visual_tiny_zoom,
+    tornado_x_extra, visual_arrow_effect_zoom, visual_effect_params_for_col,
+    visual_pulse_inner_zoom, visual_pulse_zoom_for_y, visual_tiny_zoom,
 };
 #[cfg(test)]
 pub(crate) use transforms::{compute_invert_distances, compute_tornado_bounds};
@@ -210,7 +210,7 @@ mod tests {
         ZmodMiniIndicatorText, appearance_needs_rows, append_average_error_bar_part,
         append_beat_bar, append_cue_bar, append_disabled_timing_windows,
         append_edit_measure_number, append_mini_part, append_perspective_parts, append_turn_parts,
-        average_error_bar_mini_scale, beat_factor, beat_scroll_travel, beat_x_extra,
+        average_error_bar_mini_scale, beat_factor, beat_scroll_travel, beat_wave_offset,
         bottom_cap_uv_window, clamp_rounded_i16, clipped_hold_body_bounds, column_cue_alpha,
         column_cue_alpha_anchored, column_cue_alpha_with_fade, column_cue_height,
         column_cue_reverse_top_y, column_flash_alpha, column_flash_alpha_at, column_flash_color,
@@ -881,7 +881,7 @@ mod tests {
         assert_eq!(scale_sprite_to_arrow([32, 64], 128.0), [64.0, 128.0]);
         assert_eq!(scale_sprite_to_arrow([32, 0], 128.0), [32.0, 0.0]);
         assert_eq!(scale_sprite_to_arrow([-32, 64], 128.0), [0.0, 128.0]);
-        assert_eq!(scale_sprite_to_arrow([32, 64], 0.0), [32.0, 64.0]);
+        assert_eq!(scale_sprite_to_arrow([32, 64], 0.0), [0.0, 0.0]);
     }
 
     #[test]
@@ -889,7 +889,7 @@ mod tests {
         assert_eq!(scale_hold_part([32, 16], 64.0), [32.0, 16.0]);
         assert_eq!(scale_hold_part([0, 16], 64.0), [0.0, 16.0]);
         assert_eq!(scale_hold_part([32, -16], 64.0), [32.0, 0.0]);
-        assert_eq!(scale_hold_part([32, 16], 0.0), [32.0, 16.0]);
+        assert_eq!(scale_hold_part([32, 16], 0.0), [0.0, 0.0]);
     }
 
     #[test]
@@ -1306,10 +1306,10 @@ mod tests {
 
     #[test]
     fn beat_factor_pulses_early_in_each_beat() {
-        assert_eq!(beat_factor(-0.25), 0.0);
-        assert_eq!(beat_factor(0.3), 0.0);
-        assert!((beat_factor(0.0) - 20.0).abs() <= 1e-6);
-        assert!((beat_factor(1.0) + 20.0).abs() <= 1e-6);
+        assert_eq!(beat_factor(-0.25, 0.0, 0.0), 0.0);
+        assert_eq!(beat_factor(0.3, 0.0, 0.0), 0.0);
+        assert!((beat_factor(0.0, 0.0, 0.0) - 20.0).abs() <= 1e-6);
+        assert!((beat_factor(1.0, 0.0, 0.0) + 20.0).abs() <= 1e-6);
     }
 
     #[test]
@@ -2150,6 +2150,34 @@ mod tests {
             (-2.5, 73.25, 0.25, 1.5, -61.75),
             (0.5, -200.0, -0.75, -2.0, 9.499997),
         ] {
+            // Native GetXPos uses the same RageTriangle phase as GetZPos,
+            // then applies Tiny to travel and lane spacing before MoveX.
+            let x_params = NoteXParams {
+                zigzag: amount,
+                zigzag_offset: offset,
+                zigzag_period: period,
+                ..NoteXParams::default()
+            };
+            let expected_x = (-96.0 + expected) * 0.5 + 32.0;
+            for actual_x in [
+                note_x_offset(
+                    0, y, 0.0, 0.0, &columns, &inverse, &tornado,
+                    &[0.5; 4], x_params, 1.0,
+                ),
+                super::note_x_offset_cached(
+                    0, y, 0.0, 0.0, &columns, &inverse, &tornado,
+                    &[], &[32.0; 4], x_params, 0.5,
+                ),
+            ] {
+                assert!(
+                    (actual_x - expected_x).abs() < 0.00002,
+                    "X travel y={y}: {actual_x} vs {expected_x}"
+                );
+            }
+            assert!(!super::fill_static_note_x_offsets(
+                4, &columns, &inverse, &tornado, &[0.0; 4],
+                x_params, 1.0, &mut [0.0; 4],
+            ));
             let params = VisualEffectParams {
                 zigzag_z: amount,
                 zigzag_z_offset: offset,
@@ -3180,14 +3208,14 @@ mod tests {
     }
 
     #[test]
-    fn beat_x_extra_uses_beat_factor_wave() {
-        assert_eq!(beat_x_extra(0.0, 20.0, 0.0, 0.0), 0.0);
-        assert!((beat_x_extra(0.0, 20.0, 1.0, 0.0) - 20.0).abs() <= 1e-6);
+    fn beat_wave_offset_uses_beat_factor_wave() {
+        assert_eq!(beat_wave_offset(0.0, 20.0, 0.0, 0.0), 0.0);
+        assert!((beat_wave_offset(0.0, 20.0, 1.0, 0.0) - 20.0).abs() <= 1e-6);
         let expected = 20.0 * (1.0_f32 + std::f32::consts::FRAC_PI_2).sin();
-        assert!((beat_x_extra(15.0, 20.0, 1.0, 0.0) - expected).abs() <= 1e-6);
+        assert!((beat_wave_offset(15.0, 20.0, 1.0, 0.0) - expected).abs() <= 1e-6);
         // Native ArrowEffects scales the Y wavelength by 1 + BeatPeriod.
-        assert!((beat_x_extra(75.0, 20.0, 1.0, 4.0) - expected).abs() <= 1e-6);
-        assert!((beat_x_extra(7.5, 20.0, -1.0, -0.5) + expected).abs() <= 1e-6);
+        assert!((beat_wave_offset(75.0, 20.0, 1.0, 4.0) - expected).abs() <= 1e-6);
+        assert!((beat_wave_offset(7.5, 20.0, -1.0, -0.5) + expected).abs() <= 1e-6);
     }
 
     #[test]
@@ -3235,18 +3263,87 @@ mod tests {
     }
 
     #[test]
+    fn bounce_tornado_match_native_positions() {
+        // Original ArrowEffects C++ bodies, compiled independently of the
+        // Lua semantic host. Samples include receptors and hold-body travel.
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/bounce-tornado-motion.json"
+        ))
+        .expect("native ArrowEffects motion vectors");
+        let vectors = native["vectors"].as_array().expect("native vectors");
+        assert_eq!(vectors.len(), 108);
+        for v in vectors {
+            let value = |name: &str| v[name].as_f64().expect("native float") as f32;
+            let num_cols = v["columns"].as_u64().expect("columns") as usize;
+            let col = v["column"].as_u64().expect("column") as usize;
+            let columns = if num_cols == 2 {
+                &[-32.0, 32.0][..]
+            } else {
+                &[-96.0, -32.0, 32.0, 96.0][..]
+            };
+            let params = NoteXParams {
+                bounce: value("bounce"),
+                bounce_period: value("bounce_period"),
+                bounce_offset: value("bounce_offset"),
+                tornado: value("tornado"),
+                tornado_period: value("tornado_period"),
+                tornado_offset: value("tornado_offset"),
+                screen_height: 480.0,
+                ..NoteXParams::default()
+            };
+            let mut bounds = [TornadoBounds::default(); 4];
+            super::compute_tornado_bounds(columns, &mut bounds);
+            let mut caches = [super::TornadoLaneCache::default(); 4];
+            super::compute_tornado_lane_caches(columns, &bounds, params.tornado, &mut caches);
+            let travel = value("travel");
+            // Tiny pulls tracks together, then MoveX translates each lane.
+            let expected = value("x") * 0.5 + 32.0;
+            let direct = note_x_offset(
+                col, travel, 0.0, 0.0, columns, &[0.0; 4], &bounds, &[0.5; 4], params, 1.0,
+            );
+            let cached = super::note_x_offset_cached(
+                col, travel, 0.0, 0.0, columns, &[0.0; 4], &bounds, &caches, &[32.0; 4], params,
+                0.5,
+            );
+            assert!((direct - expected).abs() < 0.00005, "{v}: direct={direct}");
+            assert!((cached - expected).abs() < 0.00005, "{v}: cached={cached}");
+            assert!(
+                !super::fill_static_note_x_offsets(
+                    num_cols,
+                    columns,
+                    &[0.0; 4],
+                    &bounds,
+                    &[32.0; 4],
+                    NoteXParams {
+                        tornado: 0.0,
+                        ..params
+                    },
+                    0.5,
+                    &mut [0.0; 4],
+                ),
+                "Bounce requires travel-dependent offsets even without Tornado"
+            );
+        }
+    }
+
+    #[test]
     fn tornado_x_extra_scales_toward_bound_arc() {
         let bounds = TornadoBounds {
             min_x: -96.0,
             max_x: 96.0,
         };
-        assert_eq!(tornado_x_extra(0.0, 0.0, bounds, 480.0, 0.0), 0.0);
-        assert!((tornado_x_extra(0.0, 0.0, bounds, 480.0, 1.0) - 0.0).abs() <= 1e-4);
+        assert_eq!(
+            tornado_x_extra(0.0, 0.0, bounds, 480.0, [0.0, 0.0, 0.0]),
+            0.0
+        );
+        assert!((tornado_x_extra(0.0, 0.0, bounds, 480.0, [1.0, 0.0, 0.0]) - 0.0).abs() <= 1e-4);
         let expected = {
             let radians = std::f32::consts::PI + 80.0 * 6.0 / 480.0;
             sm_scale(radians.cos(), -1.0, 1.0, -96.0, 96.0) + 96.0
         };
-        assert!((tornado_x_extra(80.0, -96.0, bounds, 480.0, 1.0) - expected).abs() <= 1e-4);
+        assert!(
+            (tornado_x_extra(80.0, -96.0, bounds, 480.0, [1.0, 0.0, 0.0]) - expected).abs() <= 1e-4
+        );
     }
 
     #[test]
@@ -4615,12 +4712,12 @@ mod tests {
     #[test]
     fn notefield_view_proj_rejects_invalid_screen_sizes() {
         assert!(
-            notefield_camera(0.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+            notefield_camera(0.0, 480.0, 320.0, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY)
                 .map(|(projection, _)| projection)
                 .is_none()
         );
         assert!(
-            notefield_camera(640.0, f32::NAN, 320.0, 240.0, 0.0, 0.0, false)
+            notefield_camera(640.0, f32::NAN, 320.0, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY)
                 .map(|(projection, _)| projection)
                 .is_none()
         );
@@ -4628,7 +4725,7 @@ mod tests {
 
     #[test]
     fn notefield_view_proj_returns_finite_matrix_for_flat_field() {
-        let matrix = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+        let matrix = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY)
             .map(|(projection, _)| projection)
             .expect("valid notefield projection");
 
@@ -4637,7 +4734,7 @@ mod tests {
 
     #[test]
     fn notefield_view_proj_maps_centered_world_coords_to_clip_space() {
-        let matrix = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+        let matrix = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY)
             .map(|(projection, _)| projection)
             .expect("valid notefield projection");
         let center = matrix.project_point3(glam::Vec3::ZERO);
@@ -4651,13 +4748,13 @@ mod tests {
 
     #[test]
     fn notefield_view_proj_changes_with_tilt_skew_and_reverse() {
-        let flat = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+        let flat = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY)
             .map(|(projection, _)| projection)
             .expect("flat projection");
-        let tilted = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, false)
+        let tilted = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, false, glam::Mat4::IDENTITY)
             .map(|(projection, _)| projection)
             .expect("tilted projection");
-        let reverse = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, true)
+        let reverse = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, true, glam::Mat4::IDENTITY)
             .map(|(projection, _)| projection)
             .expect("reverse projection");
 
@@ -5286,7 +5383,7 @@ mod tests {
                 depth_test: true,
                 clear_depth: false,
                 clear_depth_after: false,
-                cull_back: false,
+                cull_mode: deadlib_render_core::CullMode::None,
                 ..
             })
         ));
@@ -5304,7 +5401,7 @@ mod tests {
                 depth_test: true,
                 clear_depth: false,
                 clear_depth_after: false,
-                cull_back: false,
+                cull_mode: deadlib_render_core::CullMode::None,
                 ..
             })
         ));

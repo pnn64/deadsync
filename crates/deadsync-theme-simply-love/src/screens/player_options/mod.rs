@@ -14,13 +14,9 @@ use deadlib_present::actors::Actor;
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
-use deadlib_render_core::BlendMode;
-use deadsync_assets::noteskin::{
-    self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization, SpriteSlot,
-};
+use deadsync_assets::noteskin::{self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot};
 use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_notefield::noteskin_model_actor_from_draw;
 use deadsync_profile as profile_data;
 use deadsync_theme::AudioRequest;
 use deadsync_theme::views::{NoteskinCatalogView, SmxGifCatalogView};

@@ -1,0 +1,265 @@
+{
+  "purpose": "Execute native Lua 5.1 table construction, pairs order, concatenation and coercion rather than emulating them in Lua 5.4",
+  "source_parent": "412525ab44f5bef1a06e23bf448954b18f391b26",
+  "native_reference": [
+    "itgmania/src/LuaManager.cpp:291-305",
+    "itgmania/extern/lua-5.1/src/lstring.c",
+    "itgmania/extern/lua-5.1/src/ltable.c",
+    "itgmania/extern/lua-5.1/src/lvm.c",
+    "itgmania/extern/lua-5.1/src/lbaselib.c:342-354",
+    "itgmania/extern/lua-5.1/src/ltablib.c:72-74"
+  ],
+  "native_capture": {
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass189-native-table-order-v1\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "0fc523ce34231be45958289aa11d9f4ae9aba5fda1755db44d0cf0a25aa12bb1",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "capture_exit_code": 0,
+    "binary_sha256": "6b6b477653effd6a50106c3baab3382ef4d2fa65bc3f0cf945689fa81f030ceb",
+    "control_sha256": "176d45a8dc261f00936973e772e571d2871bc9fe8cf9b1d8f2e11247098f4275",
+    "update_frames": 241,
+    "source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+    "source_pending_commit": false,
+    "capture_complete": true,
+    "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass189-native-table-order-v1\\archives\\36e003c19fe21fcbe8d4529c606ccf617c2c62c648d235d45d8b73c3a48b3436.tar.zst",
+    "archive_sha256": "36e003c19fe21fcbe8d4529c606ccf617c2c62c648d235d45d8b73c3a48b3436",
+    "archive_entry": {
+      "title": "Native native-table-order control",
+      "source_simfile": "control/control.ssc",
+      "harness_version": "0.1.61",
+      "archive": "36e003c19fe21fcbe8d4529c606ccf617c2c62c648d235d45d8b73c3a48b3436.tar.zst",
+      "sha256": "36e003c19fe21fcbe8d4529c606ccf617c2c62c648d235d45d8b73c3a48b3436",
+      "compressed_bytes": 12665
+    }
+  },
+  "before_control": {
+    "exit_code": 1,
+    "comparisons_passed": 5408,
+    "comparisons_failed": 26,
+    "elapsed_seconds": 0.6449114000424743,
+    "archive_sha256": "36e003c19fe21fcbe8d4529c606ccf617c2c62c648d235d45d8b73c3a48b3436",
+    "binary_sha256": "cad5ccc967a28fac1572f856231e46c3aa169843697fc48c4b9b5ac48fe635e1",
+    "source_commit": "1d4443eb3789ae47dd7ed18ca08c71cc2003ae94",
+    "source_pending_commit": false,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\native-table-order-before-v1.log",
+    "log_sha256": "4bb365b9d9385532261d2c4ce4951ffe828f8cb65661546b213ffda98e8cafa5",
+    "control_complete": true,
+    "current_worktree_used": false
+  },
+  "after_startup_fix_before_native_vm": {
+    "exit_code": 1,
+    "comparisons_passed": 5404,
+    "comparisons_failed": 30,
+    "elapsed_seconds": 1.169757000170648,
+    "archive_sha256": "36e003c19fe21fcbe8d4529c606ccf617c2c62c648d235d45d8b73c3a48b3436",
+    "binary_sha256": "d9a7bcb14b59de0920f651f1740646dc8a434479131d57ec21e3d139ec593ff8",
+    "source_commit": "1d4443eb3789ae47dd7ed18ca08c71cc2003ae94",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\native-table-order-startup-fix-v1.log",
+    "log_sha256": "8693969ee2b4a94bd4064141e4873e601a61be07a3c0e266adf971b88427cfc3",
+    "control_complete": true
+  },
+  "before_vm_order_is_process_dependent": "Lua 5.4 randomizes string hashes, changing order and the number of differing intermediate speed fields between processes",
+  "after_controls_and_regressions": {
+    "native-table-order-lua51-main-v1": {
+      "exit_code": 0,
+      "comparisons_passed": 5434,
+      "comparisons_failed": 0,
+      "elapsed_seconds": 0.9298836998641491,
+      "archive_sha256": "36e003c19fe21fcbe8d4529c606ccf617c2c62c648d235d45d8b73c3a48b3436",
+      "binary_sha256": "7b47c69aa16b48870c281a0ba0c53b9e260f32697385e604510b387b9aaaa25d",
+      "source_commit": "412525ab44f5bef1a06e23bf448954b18f391b26",
+      "source_pending_commit": true,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\native-table-order-lua51-main-v1.log",
+      "log_sha256": "14b7f50cdb6b63a388c9ce29bfda3e515d81df71b53a789744b4ea39d7aef204",
+      "control_complete": true,
+      "main_worktree_used": true,
+      "source_root": "C:\\GitHub\\deadsync"
+    },
+    "startup-speed-defaults-lua51-main-v1": {
+      "exit_code": 0,
+      "comparisons_passed": 5323,
+      "comparisons_failed": 0,
+      "elapsed_seconds": 0.9298837999813259,
+      "archive_sha256": "da9aa6c4fb8e45cfc77e177d1844bc5f9354c9701d4029c6c36a132baf11d130",
+      "binary_sha256": "7b47c69aa16b48870c281a0ba0c53b9e260f32697385e604510b387b9aaaa25d",
+      "source_commit": "412525ab44f5bef1a06e23bf448954b18f391b26",
+      "source_pending_commit": true,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\startup-speed-defaults-lua51-main-v1.log",
+      "log_sha256": "9b73b7ac72773838ce8c43eab875b2a0d258a1fb5e35d8804a3c48880cf9f8d8",
+      "control_complete": true,
+      "main_worktree_used": true,
+      "source_root": "C:\\GitHub\\deadsync"
+    },
+    "song-lua_tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "412525ab44f5bef1a06e23bf448954b18f391b26",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "ded692fb830721ca1438b05de34723fb1551a381be09880c89dae5c274d0d806",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\native-lua51-main-v1-deadsync_song_lua.exe",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 21.276619100011885,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\native-lua51-main-song-lua-tests.log",
+      "log_sha256": "3ee1301de386f9f3524863f64f8797fb7387bc4b76bd1ae9f8a70489e1252ebe",
+      "result_lines": [
+        "test result: FAILED. 500 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.81s"
+      ]
+    },
+    "runtime_tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "412525ab44f5bef1a06e23bf448954b18f391b26",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "808380056eb69f46ea3f518e2d60e57b3f6c72922f88e8a6dd85dd5116546508",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\native-lua51-main-v1-song_lua_itgmania_semantic_parity.exe",
+        "runtime_modifiers",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 10.891754200216383,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\native-lua51-main-runtime-tests.log",
+      "log_sha256": "4d4ed2c14f0508aea836e42bfc4ebe8f0e1264343642bedd0a15a15ce18ee071",
+      "result_lines": [
+        "test result: FAILED. 41 passed; 3 failed; 2 ignored; 0 measured; 233 filtered out; finished in 8.88s"
+      ]
+    },
+    "theme_tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "412525ab44f5bef1a06e23bf448954b18f391b26",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "086969c3618bc35387f04e97f652aea9e4de5a8a40b8c7ef0f041c622a18af17",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\native-lua51-main-v1-deadsync_theme_simply_love.exe",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 5.811832500156015,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\native-lua51-main-theme-tests.log",
+      "log_sha256": "fe88394042a71e0521df287c9a95345ce4b20d8a8ae6b00bd515bc94ab0c8b6b",
+      "result_lines": [
+        "test result: FAILED. 1269 passed; 1 failed; 6 ignored; 0 measured; 0 filtered out; finished in 3.21s"
+      ]
+    },
+    "noteskin-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "412525ab44f5bef1a06e23bf448954b18f391b26",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "4ba42105153e55c6663c45595567a428e11cd6be674f2f75bc3d1e96a230c8a3",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\native-lua51-main-v1-deadsync_noteskin.exe",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.582999000325799,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\native-lua51-main-noteskin-tests.log",
+      "log_sha256": "9a3b9731b52d5cc3f16538eaf4c83232f459e42b9f4d936537ceedf0e12cc937",
+      "result_lines": [
+        "test result: ok. 267 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.21s"
+      ]
+    },
+    "technique-arrow": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "412525ab44f5bef1a06e23bf448954b18f391b26",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "086969c3618bc35387f04e97f652aea9e4de5a8a40b8c7ef0f041c622a18af17",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\native-lua51-main-v1-deadsync_theme_simply_love.exe",
+        "screens::components::shared::technique_bg::tests::technique_arrow_renders_and_rotates",
+        "--exact",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 6.872152300085872,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\native-lua51-main-technique-arrow.log",
+      "log_sha256": "44c9851da33483cde279c7a4ef9c11831cbd799a388577bc81a91df47f25d334",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1275 filtered out; finished in 6.40s"
+      ]
+    }
+  },
+  "remaining_original_chart_comparison": {
+    "exit_code": 1,
+    "comparisons_passed": 207794,
+    "comparisons_failed": 68,
+    "elapsed_seconds": 23.730619200039655,
+    "archive_sha256": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143",
+    "binary_sha256": "7b47c69aa16b48870c281a0ba0c53b9e260f32697385e604510b387b9aaaa25d",
+    "source_commit": "412525ab44f5bef1a06e23bf448954b18f391b26",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\fresh-090-lua51-main-v1.log",
+    "log_sha256": "876cec0313c0565d460a83c566cfe2e950b9038dc69d903540385a82ec636218",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "remaining_original_modifier_keys": [
+    "attenuatex",
+    "attenuatey",
+    "attenuatez",
+    "beatmult",
+    "beatoffset",
+    "beaty",
+    "beatymult",
+    "beatyoffset",
+    "beatyperiod",
+    "beatz",
+    "beatzmult",
+    "beatzoffset",
+    "beatzperiod",
+    "bouncez",
+    "bouncezoffset",
+    "bouncezperiod",
+    "confusionx",
+    "confusiony",
+    "digitalz",
+    "digitalzoffset",
+    "digitalzperiod",
+    "digitalzsteps",
+    "expandperiod",
+    "noattack",
+    "randattack",
+    "sawtooth",
+    "sawtoothperiod",
+    "sawtoothz",
+    "sawtoothzperiod",
+    "shrinklinear",
+    "shrinkmult",
+    "tornadoz",
+    "tornadozoffset",
+    "tornadozperiod"
+  ],
+  "original_chart_accepted": false,
+  "full_corpus_complete": false,
+  "preexisting_failures_preserved": {
+    "song-lua": [
+      "multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod",
+      "tests::compile_song_lua_accepts_skewy_probe_calls"
+    ],
+    "runtime": [
+      "runtime_modifiers::hidden_actor_tweens_drive_modifiers_without_probe_state",
+      "runtime_modifiers::lane_stealth_survives_lua_writes_and_fresh_options",
+      "runtime_modifiers::motion_suboptions_survive_lua_writes_and_reset"
+    ],
+    "theme": [
+      "screens::components::gameplay::notefield::tests::cyber_model_tap_scale_uses_model_height_not_logical_height"
+    ]
+  },
+  "native_source_and_original_song_lua_unchanged": true,
+  "deleted_replacements": [
+    "Lua concatenation AST rewrite and full_moon dependency",
+    "GetChildren Lua 5.1 hash and pairs emulation",
+    "table.getn and unpack compatibility replacements"
+  ],
+  "queued_callback_regression": "1024 queued commands with cycles, shared mutable counters and 512 aliases retain identities and pre-command state",
+  "build_pin": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\native-lua51-main-v1-pin.json",
+  "build_pin_sha256": "af3abd4f550f40522279609b8700bf31bd1d5403bbb214e1916525e2786eacbf"
+}
