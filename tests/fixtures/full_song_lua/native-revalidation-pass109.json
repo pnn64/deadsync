@@ -1,0 +1,214 @@
+{
+  "pass": 109,
+  "previous_record": "native-revalidation-pass108.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "e645dfdda90cbec49c1f26279c5218f337e91c71",
+  "comparator_sha256": "7300bb972cd5c8b5cc918a9bc5c7f384f0b38d738ec6a48de28013a44990d5e6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    26,
+    27,
+    28,
+    29,
+    30
+  ],
+  "comparisons_passed": 3812806,
+  "existing_archive_results": [
+    {
+      "position": 26,
+      "source_simfile": "666/666.ssc",
+      "archive": "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6.tar.zst",
+      "archive_sha256": "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\fixed-v2-full_song_lua.exe",
+        "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 28.365279100369662,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\ordered-after-025-v1-026.log",
+      "log_sha256": "bed4a1b055b0d760ab30c950cfe6007523e679d24e6133325cb35b7c02e7b42e",
+      "result_lines": [
+        "result: ok; 1/1 fixtures passed; 552285 comparisons passed, 0 failed (552285 total); elapsed 28.08s"
+      ],
+      "comparisons_passed": 552285,
+      "comparisons_failed": 0
+    },
+    {
+      "position": 27,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "archive": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst",
+      "archive_sha256": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\fixed-v2-full_song_lua.exe",
+        "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 154.42398319998756,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\ordered-after-025-v1-027.log",
+      "log_sha256": "3cdadee8d35e70b66f5190cf024fc5649ef0c0cecb7d87d9df42e3e252ef9991",
+      "result_lines": [
+        "result: ok; 1/1 fixtures passed; 881665 comparisons passed, 0 failed (881665 total); elapsed 154.14s"
+      ],
+      "comparisons_passed": 881665,
+      "comparisons_failed": 0
+    },
+    {
+      "position": 28,
+      "source_simfile": "99+ [-YOSEFU-]/99+.ssc",
+      "archive": "00f94060905e800369ced918322fe391f65142fdf8e5e1328c9d0b3ff683a124.tar.zst",
+      "archive_sha256": "00f94060905e800369ced918322fe391f65142fdf8e5e1328c9d0b3ff683a124",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\fixed-v2-full_song_lua.exe",
+        "00f94060905e800369ced918322fe391f65142fdf8e5e1328c9d0b3ff683a124.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 144.38641919987276,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\ordered-after-025-v1-028.log",
+      "log_sha256": "47f8c5aa9bd8e6d572cfc93b70c3ba96f526e6673fe388c9f4c540a5fa01b230",
+      "result_lines": [
+        "result: ok; 1/1 fixtures passed; 1339513 comparisons passed, 0 failed (1339513 total); elapsed 144.10s"
+      ],
+      "comparisons_passed": 1339513,
+      "comparisons_failed": 0
+    },
+    {
+      "position": 29,
+      "source_simfile": "[07] 7th Gear - (No CMOD)/7th Gear.ssc",
+      "archive": "a2b9d031dfab0c224ec7392d15eba1847a721fec59b1162b8823582f567556f1.tar.zst",
+      "archive_sha256": "a2b9d031dfab0c224ec7392d15eba1847a721fec59b1162b8823582f567556f1",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\fixed-v2-full_song_lua.exe",
+        "a2b9d031dfab0c224ec7392d15eba1847a721fec59b1162b8823582f567556f1.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 154.64410929987207,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\ordered-after-025-v1-029.log",
+      "log_sha256": "e10c4df52c1a1000acafe490cf05cbc4652600d2f89d518d98f4b99c940aa7c1",
+      "result_lines": [
+        "result: ok; 1/1 fixtures passed; 881665 comparisons passed, 0 failed (881665 total); elapsed 154.35s"
+      ],
+      "comparisons_passed": 881665,
+      "comparisons_failed": 0
+    },
+    {
+      "position": 30,
+      "source_simfile": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc",
+      "archive": "f80142e41e9782af1b5034937794705e2a8e4367d51cc9a71876a2ea56010cf3.tar.zst",
+      "archive_sha256": "f80142e41e9782af1b5034937794705e2a8e4367d51cc9a71876a2ea56010cf3",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\fixed-v2-full_song_lua.exe",
+        "f80142e41e9782af1b5034937794705e2a8e4367d51cc9a71876a2ea56010cf3.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 8.348375900182873,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\ordered-after-025-v1-030.log",
+      "log_sha256": "d6ebdc19e4f69145e7c427aac67b3fce671940b56c08656bc166c5d45d840237",
+      "result_lines": [
+        "result: ok; 1/1 fixtures passed; 157678 comparisons passed, 0 failed (157678 total); elapsed 8.08s"
+      ],
+      "comparisons_passed": 157678,
+      "comparisons_failed": 0
+    },
+    {
+      "position": 31,
+      "source_simfile": "[08] And Drugs - (NO CMOD)/and drugs.ssc",
+      "archive": "9c2eb069df348266cf485de5b6166e404205d072072350fd9091846e4fd7cd4a.tar.zst",
+      "archive_sha256": "9c2eb069df348266cf485de5b6166e404205d072072350fd9091846e4fd7cd4a",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\fixed-v2-full_song_lua.exe",
+        "9c2eb069df348266cf485de5b6166e404205d072072350fd9091846e4fd7cd4a.tar.zst"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.49287449987605214,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\ordered-after-025-v1-031.log",
+      "log_sha256": "203aed08f91763c535e4acadf46ada12da41052ab9f1b2ee33ab981b5ab7a5a5",
+      "result_lines": [
+        "result: FAILED; 0/1 fixtures passed; 0 comparisons passed, 0 failed (0 total); elapsed 0.23s"
+      ],
+      "comparisons_passed": 0,
+      "comparisons_failed": 0
+    }
+  ],
+  "next_position": 31,
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "archive_integrity_check": {
+    "source_commit": "e645dfdda90cbec49c1f26279c5218f337e91c71",
+    "source_pending_commit": false,
+    "binary_sha256": "cb3697af1350d3b3638a0c49367dd166b0d67fcce0ee7fcc29caa05479cf7499",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\fixed-v2-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 30.084013700019568,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\index-025-v1.log",
+    "log_sha256": "12bfb0f092404fe52e922501747508831266fdb6f2488b674d2ea00f214c0833",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 258 filtered out; finished in 29.49s"
+    ]
+  },
+  "additional_test_observations": {
+    "multitap_boundary_baseline": {
+      "binary_source_pin": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\baseline-v1-pin.json",
+      "binary_sha256": "9e583cc91c33f98086938f96f5f608d5a28342d61327eb35f0b8b250c6863cd7",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\baseline-v1-song_lua_itgmania_semantic_parity.exe",
+        "multitap::multitap_boundaries_and_noteskin_commands_match",
+        "--exact",
+        "--nocapture"
+      ],
+      "workspace_env": "C:/GitHub/rework",
+      "exit_code": 101,
+      "log_sha256": "ef18a8000e4546ce4b411f3beca740a1c60a3fe14d3cddab46dcd328ae309d59",
+      "elapsed_seconds": 0.6100470996461809,
+      "result_lines": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 258 filtered out; finished in 0.20s"
+      ]
+    },
+    "multitap_batch": {
+      "source_commit": "3b0f61b73348db057f8d2a189ac86d46da9b6513",
+      "source_pending_commit": true,
+      "binary_sha256": "cb3697af1350d3b3638a0c49367dd166b0d67fcce0ee7fcc29caa05479cf7499",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\fixed-v2-song_lua_itgmania_semantic_parity.exe",
+        "multitap::",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 6.923671999946237,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\multitap-after-v2.log",
+      "log_sha256": "2d4b3099dd63d4c50b9cb684286724bd263ccc26117d92d2c5a8cabaa290fe9a",
+      "result_lines": [
+        "test result: FAILED. 5 passed; 2 failed; 0 ignored; 0 measured; 252 filtered out; finished in 6.51s"
+      ]
+    },
+    "edgar_with_correct_workspace": {
+      "binary_source_pin": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\fixed-v2-pin.json",
+      "binary_sha256": "cb3697af1350d3b3638a0c49367dd166b0d67fcce0ee7fcc29caa05479cf7499",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\fixed-v2-song_lua_itgmania_semantic_parity.exe",
+        "multitap::edgar_countdown_onsets_and_hit_commands",
+        "--exact",
+        "--nocapture"
+      ],
+      "workspace_env": "C:/GitHub/rework",
+      "exit_code": 101,
+      "log_sha256": "36a1c3155ddbea21861149965a8352419aa3383493041ed18852afe7da54a93e",
+      "elapsed_seconds": 205.56914120027795,
+      "result_lines": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 258 filtered out; finished in 205.17s"
+      ]
+    },
+    "edgar_baseline_status": "Not rerun; keep the W1 duplicate explosion assertion pending. The comparator fix modifies only models.rs."
+  },
+  "remaining_scope": "All original sources and historical contexts remain required. Explicit Model default culling, additional test observations, manual draws and native framebuffer parity remain open."
+}

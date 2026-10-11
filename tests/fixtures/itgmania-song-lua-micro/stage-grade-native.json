@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "name": "empty and failed native stage grade",
+  "option_control": true,
+  "lua_assertions": "local p1 = _ITG_STAGE_STATS('PlayerNumber_P1')\nlocal p2 = _ITG_STAGE_STATS('PlayerNumber_P2')\nassert(p1:GetGrade() == 'Grade_Tier17')\nassert(p2:GetGrade() == 'Grade_Tier17')\np1:SetDancePointLimits(8, 10)\nassert(p1:GetGrade() == 'Grade_Tier17')\np1:FailPlayer()\nassert(p1:GetGrade() == 'Grade_Failed')\nassert(p2:GetGrade() == 'Grade_Tier17')\n"
+}

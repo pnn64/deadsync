@@ -900,7 +900,7 @@ fn empty_song_layers_match_native_archive() {
     assert!(trace.roots.is_empty());
     let mut parity = compare_semantics(&trace, &compiled, primary, &context);
     runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
-    runtime_modifiers::compare_player_frames(&trace, &compiled, &context, &mut parity);
+    runtime_modifiers::compare_player_frames(&trace, &compiled, primary, &context, &mut parity);
     parity.assert_complete("song without Lua layers");
     // Missing compiled roots must still fail instead of skipping native actors.
     trace.roots.push("missing-layer".into());
@@ -1284,9 +1284,9 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
             if trace
                 .player_render_tracks
                 .iter()
-                .all(|track| !track.transform_samples.is_empty())
+                .any(|track| !track.transform_samples.is_empty())
             {
-                runtime_modifiers::compare_player_frames(&trace, &compiled, &context, &mut parity);
+                runtime_modifiers::compare_player_frames(&trace, &compiled, primary, &context, &mut parity);
             }
             assert_eq!(
                 progress.checks.load(Ordering::Relaxed),

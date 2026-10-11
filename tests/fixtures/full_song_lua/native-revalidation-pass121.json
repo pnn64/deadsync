@@ -1,0 +1,106 @@
+{
+  "pass": 121,
+  "previous_record": "native-revalidation-pass120.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "207e17110432f1252dbf3e6826e13a03b6d1dcca",
+  "comparator_sha256": "c1ed90a7faf15a43e85603b3b80a04b02e82de16ed5feba20eb6c55a2df2839d",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    42
+  ],
+  "next_position": 43,
+  "comparisons_passed": 193408,
+  "charts": [
+    {
+      "position": 42,
+      "entry": {
+        "title": "[11] 時計の国のジェミニ",
+        "source_simfile": "[11] Gemini in Clockland/Gemini in Clockland.ssc",
+        "harness_version": "0.1.52",
+        "archive": "f6b960e1fa42f107c25c2549c82af09a2dbb72a8b61ae667ecc98e5adce44619.tar.zst",
+        "sha256": "f6b960e1fa42f107c25c2549c82af09a2dbb72a8b61ae667ecc98e5adce44619",
+        "compressed_bytes": 143963,
+        "aliases": [
+          "8c1b261a63b0301f768bf03a2fd953dfa358f5e55ccb6cfd312c76944109f573.tar.zst"
+        ]
+      },
+      "original_archive_retained": "8d1fa22c047c19ab654d1f2cb84f4e67f4eb60b4403f5cb4e3550ee8f484a72f.tar.zst",
+      "native_source_commit": "ecd483a2e2e7530f9a72aae42dcede686c3a62b7",
+      "native_trace_sha256": "3092d0af4d0e762f7aef2af9a29ca14761bd097883e4d1d959ec207c3a694953",
+      "original_source_sha256": {
+        "[11] Gemini in Clockland/bg.png": "72e6142c317372ee3a69b4b378603eec2056be259e562a44408e8e129fa857e3",
+        "[11] Gemini in Clockland/bn.png": "97a02461e6819d86134882da75a99eb4e2fb81fd8acfe7f524744797d8ed12eb",
+        "[11] Gemini in Clockland/desktop.ini": "1b30ce6a4e7254728bf0a3dd52b535e9e6782c097bb89d277d498555e2c070a6",
+        "[11] Gemini in Clockland/Gemini in Clockland.ogg": "7e2c923d9c815b7d0e13db15042a65c3c74337408dbd1de93f54de10ac137718",
+        "[11] Gemini in Clockland/Gemini in Clockland.ssc": "1bc99c31d2ac54cf35a7228a42546bd4af31fb5395163b215b9e7fb8cf8725fd",
+        "[11] Gemini in Clockland/IN CASE OF WHITE SCREEN.txt": "305c405856f9ddc349bf2d7d0e5ceb5d21d91cb5d0dccb62c4dd3e2a2528b290",
+        "[11] Gemini in Clockland/lua/default.lua": "14cd4ed3e14e8eda6cf1a65f2da6361cc1ff87fddbe6f56407c67b09a439ec3f",
+        "[11] Gemini in Clockland/lua/desktop.ini": "1b30ce6a4e7254728bf0a3dd52b535e9e6782c097bb89d277d498555e2c070a6",
+        "[11] Gemini in Clockland/lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "[11] Gemini in Clockland/lua/modhelpers.lua": "3cfa9489d4ff586f21a7d28fa6accbdb7a2c4891e2a6617fc310c5aef850a1ff",
+        "[11] Gemini in Clockland/lua/mods.lua": "95c4fa4ae31002e4d8cd4d2d838eb174fff6a8932ccc404267c9f3bc33cbec5e",
+        "[11] Gemini in Clockland/lua/TopscreenActorList.txt": "5564883965ab6acd9091092eeec350bfa03fb7ebf5249910b2f0d54e31cb77e7"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8421,
+      "duration_seconds": 140.3333282470703,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 6,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 42,
+      "source_simfile": "[11] Gemini in Clockland/Gemini in Clockland.ssc",
+      "archive": "f6b960e1fa42f107c25c2549c82af09a2dbb72a8b61ae667ecc98e5adce44619.tar.zst",
+      "archive_sha256": "f6b960e1fa42f107c25c2549c82af09a2dbb72a8b61ae667ecc98e5adce44619",
+      "harness_version": "0.1.52",
+      "source_commit": "207e17110432f1252dbf3e6826e13a03b6d1dcca",
+      "source_pending_commit": false,
+      "binary_sha256": "c1ed90a7faf15a43e85603b3b80a04b02e82de16ed5feba20eb6c55a2df2839d",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-judgment-draw-v1-full_song_lua.exe",
+        "f6b960e1fa42f107c25c2549c82af09a2dbb72a8b61ae667ecc98e5adce44619.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 16.931018800009042,
+      "comparisons_passed": 193408,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-042-native-current-v1.log",
+      "log_sha256": "e3709d2b727c669c0998dabd2d30cfa744da2eaf3d424e17d04e823683ddcedc",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass121-top-042-native-v1.json",
+      "native_receipt_sha256": "b4406ad26c7416f61a5156c9e75926b28eeb97496dd882797930f6c5337bbd01",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "207e17110432f1252dbf3e6826e13a03b6d1dcca",
+    "source_pending_commit": false,
+    "binary_sha256": "621d453087787275bc808d379bdedd51c57d2c211682bb96bd3121183027dd6c",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-judgment-draw-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.7995588998310268,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-042-native-pass121.log",
+    "log_sha256": "5d1a9ffb61273b22f409e1c680f92a6b5486d5c428598740b1d73cdaad6aa3fc",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 0.42s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

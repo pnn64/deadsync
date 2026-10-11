@@ -1,0 +1,77 @@
+{
+  "pass": 113,
+  "previous_record": "native-revalidation-pass112.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "e1557ce33566e06ce8bbefa1830d69571c39031e",
+  "comparator_sha256": "c2c5582e4bdc2812eca0e8bd55b847fec23902d8d055ca7d24da9c66985c8a84",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "charts": [
+    {
+      "position": 34,
+      "entry": {
+        "title": "[3959] [09] Spectrum Sequence (Hard)",
+        "source_simfile": "[09] Spectrum Sequence (SH) [DRILLBOT vs. valgrind]/spectrumsequence.ssc",
+        "harness_version": "0.1.51",
+        "archive": "b487670d43ad4d4aacd6fffa69b60b3d4ad028622f65bb5666137ec610f4a90e.tar.zst",
+        "sha256": "b487670d43ad4d4aacd6fffa69b60b3d4ad028622f65bb5666137ec610f4a90e",
+        "compressed_bytes": 309510,
+        "aliases": [
+          "e571ba04f9421ea7039df947c3a967adf95e3a86f82330c064ff9adafdaee484.tar.zst"
+        ]
+      },
+      "original_archive_retained": "7e3430c811167ef32d22ba6abccddfab07452fc98403c98c778c92d867025b5a.tar.zst",
+      "native_source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+      "native_cli_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+      "native_trace_sha256": "5a0f03dcdae4f3dd1acec6a86a1323177c8b00ab87a2fc44a77839b009354a0f",
+      "native_receipt_sha256": "d28f12efaa8efe0e7e7a8005385c7f8d67dfa8a4c989a3cb44db1491d072d000",
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "duration_seconds": 136.2816162109375,
+      "update_frames": 8178,
+      "source_simfile_sha256": "0861f4b4c1b0f507a34f832f7f73182c5f46368283056dc0bd2063bbe344ea28",
+      "original_source_unchanged": true,
+      "acceptance": "passed",
+      "comparison_source_commit": "e1557ce33566e06ce8bbefa1830d69571c39031e",
+      "comparisons_passed": 252881
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 34,
+      "source_simfile": "[09] Spectrum Sequence (SH) [DRILLBOT vs. valgrind]/spectrumsequence.ssc",
+      "archive": "b487670d43ad4d4aacd6fffa69b60b3d4ad028622f65bb5666137ec610f4a90e.tar.zst",
+      "archive_sha256": "b487670d43ad4d4aacd6fffa69b60b3d4ad028622f65bb5666137ec610f4a90e",
+      "harness_version": "0.1.51",
+      "source_commit": "e1557ce33566e06ce8bbefa1830d69571c39031e",
+      "binary_sha256": "c2c5582e4bdc2812eca0e8bd55b847fec23902d8d055ca7d24da9c66985c8a84",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\final-v1-full_song_lua.exe",
+        "b487670d43ad4d4aacd6fffa69b60b3d4ad028622f65bb5666137ec610f4a90e.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 24.010013800114393,
+      "comparisons_passed": 252881,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass113\\fresh-034-v1.log",
+      "log_sha256": "38da10e911fddb82c9639c9d99253af99d028e80188e936a40cdf657dfb60f45",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass113-top-034-native-v1.json",
+      "native_receipt_sha256": "d28f12efaa8efe0e7e7a8005385c7f8d67dfa8a4c989a3cb44db1491d072d000",
+      "full_corpus_complete": false
+    }
+  ],
+  "canonical_positions_passed": [
+    34
+  ],
+  "comparisons_passed": 252881,
+  "next_position": 35,
+  "fix": "Replace obsolete reference observations with a complete native-timing capture; retain original chart and Lua bytes.",
+  "remaining_scope": "All original sources and historical contexts, explicit Model culling, additional test observations and native framebuffer parity remain open."
+}

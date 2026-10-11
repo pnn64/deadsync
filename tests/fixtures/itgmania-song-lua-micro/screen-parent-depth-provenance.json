@@ -1,0 +1,283 @@
+{
+  "problem": "The shared screen transform used -1/+1 as the world depth basis instead of native -1000/+1000. Flat overlays discarded authored Z.",
+  "change": "Use the native depth basis for the screen transform and the native geometry path for nonzero overlay Z.",
+  "source_parent_commit": "10623b4d3f7b77bec381300f36da6d7b3d174177",
+  "native_capture": {
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass225-native-screen-parent-depth-v2\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "b7fc73c1b0d936028eb425a0c1e245698ec0e508dca865290b3698c1660b150e",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "capture_exit_code": 0,
+    "binary_sha256": "f701e64d955c9c397b2e200062d73747ab473c9bdd14d37b8d491760c37d2c91",
+    "control_sha256": "b47a8deaea2fe1f14c947af568fd662e7fcb4c766dabb2d5291817a57a95b5d3",
+    "update_frames": 241,
+    "source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+    "source_pending_commit": true,
+    "capture_complete": true,
+    "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass225-native-screen-parent-depth-v2\\archives\\b693934192f92214a7ffa4818aa05808c6b805a38c8ed25afbaa20e40c8df0e8.tar.zst",
+    "archive_sha256": "b693934192f92214a7ffa4818aa05808c6b805a38c8ed25afbaa20e40c8df0e8",
+    "archive_entry": {
+      "title": "Native screen-parent-depth control",
+      "source_simfile": "control/control.ssc",
+      "harness_version": "0.1.62",
+      "archive": "b693934192f92214a7ffa4818aa05808c6b805a38c8ed25afbaa20e40c8df0e8.tar.zst",
+      "sha256": "b693934192f92214a7ffa4818aa05808c6b805a38c8ed25afbaa20e40c8df0e8",
+      "compressed_bytes": 14401
+    }
+  },
+  "native_execution_bytes_match_committed_harness": "fa557b90fd9dd1b33126e44a9ec32ebbb0be272e",
+  "reference_sources": {
+    "RageDisplay.cpp": {
+      "sha256": "79292ce583c1d0a3401419bd4fa752f517269eb1ff19d948b86c6207d6e51370",
+      "lines": [
+        [
+          498,
+          506
+        ],
+        [
+          604,
+          609
+        ]
+      ]
+    },
+    "Actor.cpp": {
+      "sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "lines": [
+        [
+          668,
+          741
+        ]
+      ]
+    },
+    "ActorFrame.cpp": {
+      "sha256": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+      "lines": [
+        [
+          208,
+          213
+        ]
+      ]
+    }
+  },
+  "independent_draws_sha256": "5282fd7aa74f620260efbb420fb1bf3145048c7604938e36e2903fb89300d960",
+  "independent_draws": {
+    "independent_native_corner_count": 32,
+    "pre_fix_host_clip_depth_mismatches": 32,
+    "world_vertices_max_error": 0,
+    "native_draws_sha256": "5282fd7aa74f620260efbb420fb1bf3145048c7604938e36e2903fb89300d960"
+  },
+  "native_control_scope": "Two quads, four phases: screen rotation X, rotation Y with scale, Z translation, and a singular zero scale. A nested parent and nonzero child Z are included. The real production compositor is checked against independent C++ Actor::Draw clip vertices, including normalized depth.",
+  "before": {
+    "source_root": "C:\\GitHub\\deadsync",
+    "source_commit": "10623b4d3f7b77bec381300f36da6d7b3d174177",
+    "source_pending_commit": true,
+    "main_worktree_used": true,
+    "binary_sha256": "fb64ef603bd14a32c718137a5412b4cdf8dd65c2143b16e376ab4f93351a8422",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass178\\screen-depth-unfixed-v1-song_lua_itgmania_semantic_parity.exe",
+      "screen_parent_depth_native_draws",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 101,
+    "elapsed_seconds": 2.9225162002258003,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-depth-unfixed-native-v1.log",
+    "log_sha256": "dee5085b81295e242423ac1cadd2c29aa44ff095c80ec474d23b25233639ecca",
+    "result_lines": [
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.95s"
+    ]
+  },
+  "after": {
+    "native": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "10623b4d3f7b77bec381300f36da6d7b3d174177",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "5704c1d3ef9eddb26d30ae6075800c3ff9559e47cac2ea854c775bed4adf0f5d",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass178\\screen-depth-fixed-v2-song_lua_itgmania_semantic_parity.exe",
+        "screen_parent_",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.9522744002752006,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-depth-fixed-native-v2.log",
+      "log_sha256": "3494dfcca7d282ab58ba2737622452532adcbe769eec07f38a64e89986e3eb9d",
+      "result_lines": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 295 filtered out; finished in 1.01s"
+      ]
+    },
+    "playback": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "10623b4d3f7b77bec381300f36da6d7b3d174177",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "736de401791447dac616e332faf61dcb6a4f500a40ac664bd4a81d972f645f11",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass178\\screen-depth-fixed-v2-playback.exe",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 33.410707800183445,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-depth-fixed-playback-v2.log",
+      "log_sha256": "7653fd3dc4913a3a1602b05ac34fc2d33953f9993cd9a8d661c0f9a688e06776",
+      "result_lines": [
+        "test result: ok. 195 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 31.06s"
+      ]
+    },
+    "notefield": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "10623b4d3f7b77bec381300f36da6d7b3d174177",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "e921f7c77ad3d5ff74c381000df27dc0312434756e5f328533d921ecfdcfd6ce",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass178\\screen-depth-fixed-v2-deadsync_notefield.exe",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 87.85518319997936,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-depth-fixed-notefield-v2.log",
+      "log_sha256": "ee22fb8ca0c4ad9e722239594a963a7490fa8fef5cd8c6a28dc886c17ebf3382",
+      "result_lines": [
+        "test result: ok. 472 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 86.20s"
+      ]
+    },
+    "song": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "10623b4d3f7b77bec381300f36da6d7b3d174177",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "b1e1f9fe76490d37a3eddad669beed8457998d017daf9ceefb79617810a1fc6e",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass178\\screen-depth-fixed-v2-deadsync_song_lua.exe",
+        "--test-threads=1"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 62.96292489999905,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-depth-fixed-song-v2.log",
+      "log_sha256": "2e9dd72d6710d7d5644d8a67e92c8625f1973af615213f2a481cd15a3331bf8e",
+      "result_lines": [
+        "test result: FAILED. 501 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 61.21s"
+      ]
+    },
+    "runtime": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "10623b4d3f7b77bec381300f36da6d7b3d174177",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "5704c1d3ef9eddb26d30ae6075800c3ff9559e47cac2ea854c775bed4adf0f5d",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass178\\screen-depth-fixed-v2-song_lua_itgmania_semantic_parity.exe",
+        "runtime_modifiers",
+        "--test-threads=1"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 47.436193000059575,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-depth-fixed-runtime-v2.log",
+      "log_sha256": "b00128b912ec6c4889daf2100a6992c5dd5ee0915939bd8d8dba95e5f563239d",
+      "result_lines": [
+        "test result: FAILED. 57 passed; 3 failed; 2 ignored; 0 measured; 235 filtered out; finished in 46.92s"
+      ]
+    },
+    "theme": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "10623b4d3f7b77bec381300f36da6d7b3d174177",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "763e041a746b1bc4fb0d754949ac1f9c9a41826e65f986044baca8dd93d4477c",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass178\\screen-depth-fixed-v2-deadsync_theme_simply_love.exe",
+        "--test-threads=1"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 6.987962600309402,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-depth-fixed-theme-v2.log",
+      "log_sha256": "cd65fb0bb0e05faebba087f91210bea686187baaf10e23c553af609351ae2479",
+      "result_lines": [
+        "test result: FAILED. 1269 passed; 1 failed; 6 ignored; 0 measured; 0 filtered out; finished in 4.71s"
+      ]
+    },
+    "control": {
+      "exit_code": 0,
+      "comparisons_passed": 5497,
+      "comparisons_failed": 0,
+      "elapsed_seconds": 2.53364219982177,
+      "archive_sha256": "b693934192f92214a7ffa4818aa05808c6b805a38c8ed25afbaa20e40c8df0e8",
+      "binary_sha256": "5288e6c1644e50445ad19c0bfee10c05553e4523565b6da97bf768a6d3509324",
+      "source_commit": "10623b4d3f7b77bec381300f36da6d7b3d174177",
+      "source_pending_commit": true,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-depth-fixed-control-v2.log",
+      "log_sha256": "eb6657d65c779669881f5801734d3424ec9a26c0bb15eff424df6eda3ab37e97",
+      "control_complete": true,
+      "main_worktree_used": true,
+      "source_root": "C:\\GitHub\\deadsync"
+    },
+    "technique": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "10623b4d3f7b77bec381300f36da6d7b3d174177",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "763e041a746b1bc4fb0d754949ac1f9c9a41826e65f986044baca8dd93d4477c",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass178\\screen-depth-fixed-v2-deadsync_theme_simply_love.exe",
+        "screens::components::shared::technique_bg::tests::technique_arrow_renders_and_rotates",
+        "--exact",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 7.685474100057036,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-depth-fixed-technique-v2.log",
+      "log_sha256": "805fc90fe728cb7c1bb8cf93d368549b5d0befd0c46628864405686e4870f532",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1275 filtered out; finished in 7.02s"
+      ]
+    }
+  },
+  "original_archive_after": {
+    "position": 105,
+    "source_simfile": "Atmosphere/atmosphere-fakemines.sm",
+    "archive": "19736fa57303bc9e75ecc423c0df5195e08ab59c69c32f583a8bae21a6c23883.tar.zst",
+    "archive_sha256": "19736fa57303bc9e75ecc423c0df5195e08ab59c69c32f583a8bae21a6c23883",
+    "harness_version": "0.1.62",
+    "source_commit": "10623b4d3f7b77bec381300f36da6d7b3d174177",
+    "source_pending_commit": true,
+    "binary_sha256": "5288e6c1644e50445ad19c0bfee10c05553e4523565b6da97bf768a6d3509324",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass178\\screen-depth-fixed-v2-full_song_lua.exe",
+      "19736fa57303bc9e75ecc423c0df5195e08ab59c69c32f583a8bae21a6c23883.tar.zst"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 19.08143449993804,
+    "comparisons_passed": 666848,
+    "comparisons_failed": 0,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-105-screen-depth-pending-v2.log",
+    "log_sha256": "040a166c486a25da1065364e0c6d32f361869ef9d0b79c6cf5a402c9b0c9e313",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass226-top-105-default-depth-v1.json",
+    "native_receipt_sha256": "8fe9c5921c6e309d06ead79f7696d948e30fe581383af3fb7666d9e1eae696d5",
+    "full_corpus_complete": false
+  },
+  "technique_images": {
+    "technique-0.png": "ac214ba231c8c6f3c261fafbe95f9171b26190796c20de1f7911a4678c6bd7d5",
+    "technique-2.5.png": "2d0d21ae0ac5ca7bad7eedc5f98796f089984fbd7f2f68f1c9c31f52e10980d9"
+  },
+  "baseline_failures_preserved": {
+    "song": [
+      "multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod",
+      "tests::compile_song_lua_accepts_skewy_probe_calls"
+    ],
+    "runtime": [
+      "runtime_modifiers::hidden_actor_tweens_drive_modifiers_without_probe_state",
+      "runtime_modifiers::lane_stealth_survives_lua_writes_and_fresh_options",
+      "runtime_modifiers::motion_suboptions_survive_lua_writes_and_reset"
+    ],
+    "theme": [
+      "screens::components::gameplay::notefield::tests::cyber_model_tap_scale_uses_model_height_not_logical_height"
+    ]
+  },
+  "existing_comparison_tolerances_changed": false,
+  "original_chart_and_lua_modified": false,
+  "full_corpus_complete": false,
+  "remaining_scope": "All 501 original sources and 492 contexts remain active. Authored child camera inheritance, notefield/HUD 3D screen transforms, depth effects and masked overlays, prior trace refreshes, random attacks, timing gaps and six baseline failures remain open."
+}

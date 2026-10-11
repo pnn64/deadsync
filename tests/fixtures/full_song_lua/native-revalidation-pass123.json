@@ -1,0 +1,119 @@
+{
+  "pass": 123,
+  "previous_record": "native-revalidation-pass122.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "32216ad9ebea5b2b84fd12deed332e7b7fe994ee",
+  "comparator_sha256": "0649cea0c53ef69887c1bf7e4b1d2616ac57445507c6f0b9aa3b660c5f91891b",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    44
+  ],
+  "next_position": 45,
+  "comparisons_passed": 205071,
+  "charts": [
+    {
+      "position": 44,
+      "entry": {
+        "title": "[5916] [11] Let Me Hear That",
+        "source_simfile": "[11] Let Me Hear That (SX) [TaroNuke]/let me hear that.ssc",
+        "harness_version": "0.1.52",
+        "archive": "ab3d68aca1fc3a3660717a794181d8d1d7f14f71aa6931dbd5d9f306e128dfcd.tar.zst",
+        "sha256": "ab3d68aca1fc3a3660717a794181d8d1d7f14f71aa6931dbd5d9f306e128dfcd",
+        "compressed_bytes": 802301,
+        "aliases": [
+          "324bf818a49877a75ea00d0524500b6430bbc97ea4bceafe1717830556760587.tar.zst"
+        ]
+      },
+      "original_archive_retained": "ceca039cfa27d42846a6f5ddfa7ff49a2639a5c00e35d2093dc5eb177554e605.tar.zst",
+      "native_source_commit": "ecd483a2e2e7530f9a72aae42dcede686c3a62b7",
+      "native_trace_sha256": "b9392d4fb0994d5ec0d08a4d78e139abc2b5dac19ea6582139ee68276c08a6ec",
+      "original_source_sha256": {
+        "[11] Let Me Hear That (SX) [TaroNuke]/let me hear that-bg.png": "c4d2e1ccc15c686afab2cd8d00ffff7ea25798076dafa1ed23403d47b6f854cb",
+        "[11] Let Me Hear That (SX) [TaroNuke]/let me hear that-bn.png": "f888a389ff33676bb851f79f74b499fd24c1958f080b327b9cdd318cbcf096a5",
+        "[11] Let Me Hear That (SX) [TaroNuke]/let me hear that.ogg": "09ba22d8423d72fdf616fb97fdebc29e924a6b351c98e901cc69b76b268b595d",
+        "[11] Let Me Hear That (SX) [TaroNuke]/let me hear that.ssc": "053cf80082d3a8731596ab19af559006cbb0ab47659669ae465ad94b239ef05d",
+        "[11] Let Me Hear That (SX) [TaroNuke]/let me hear that.ssc.old": "d164d1cecec064f1104d703c27c74d334842d434563b95a1b49de2740d1771e4",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/default.lua": "fa9078d5f971fb4eddb38a98db91b74dfe9f14a74dbd0df86ddf75eb28f59e79",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/default.xml": "b570c5dcb10bf7b3e47aeb59295f7e7e8a9ab67ca85e12005b3f93e8bd876620",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/easing.xml": "7c837cba7f448a43995feee284b1502fa5aa32bdc9441efd9279c89ae5a76b25",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/floor.png": "fc0cc50884ec73d4f7c1f7271a1bdec8456212900c8783045c3fcf3cece3c0c4",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/modhelpers.lua": "3cfa9489d4ff586f21a7d28fa6accbdb7a2c4891e2a6617fc310c5aef850a1ff",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/modhelpers.xml": "b4b7e6dcddac030d31ecbcaf2c94a63ad7cae8a5a08e54e27b8e2b8964c197a4",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/mods.lua": "95c4fa4ae31002e4d8cd4d2d838eb174fff6a8932ccc404267c9f3bc33cbec5e",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/sky.png": "09022ef6337cd072b51871894768cb45b42f86ba82b57a986db6ffffc3ec0303",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/sun.png": "b251c58e0a26175e9c5a3d8cdf099f36960aeb4dfaeaa1faa47dab116c26b7dc",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/text0001.png": "ac0e5221f317350353d759cd107f60d823dc56878f537787900f6f74021d480c",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/text0002.png": "139f80c7e9e85d0a640df873fd40ae7ff4fa9ee2989a7e68401ebf1cdaf32ef5",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/text0003.png": "a536efc85b3c888cdbd84fea71b244ba681e088c063a5342b6d86f62560bfb88",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/text0004.png": "e6553ee9f3d4cb167daf33ba48984a7908287f50b570fa3f3d7a9b12c589d4da",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/text0005.png": "544eb76a50cdbc7d1141cf3f565c6a3882b6ee4954ac3412e68e0aceea4f36a0",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/text0006.png": "3aed5c4fad92502c5676ebb8dd49280128a328fb0a4e4fb4410192b8d90c9906",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/text0007.png": "20bd4db4597d33bd325da60bdebe18769ec6d0844e0c0ff9fca7aab00f9a3699",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/text0008.png": "a30e13e3fdacadf5077731d4bad318d7beec1e6075c9bd5252e2129c713e4721",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/text0009.png": "baca75a1a23dccb19c3408efd770c2babbe72a5db11fa8efb60402f8f7cdbfa5",
+        "[11] Let Me Hear That (SX) [TaroNuke]/lua/underfloor.png": "2090b66d55f669cd9d573af02a9d1ae6b88bc6c4e1c50556799d7f30d79257a5"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8707,
+      "duration_seconds": 145.09091186523438,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 18,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 44,
+      "source_simfile": "[11] Let Me Hear That (SX) [TaroNuke]/let me hear that.ssc",
+      "archive": "ab3d68aca1fc3a3660717a794181d8d1d7f14f71aa6931dbd5d9f306e128dfcd.tar.zst",
+      "archive_sha256": "ab3d68aca1fc3a3660717a794181d8d1d7f14f71aa6931dbd5d9f306e128dfcd",
+      "harness_version": "0.1.52",
+      "source_commit": "32216ad9ebea5b2b84fd12deed332e7b7fe994ee",
+      "source_pending_commit": false,
+      "binary_sha256": "0649cea0c53ef69887c1bf7e4b1d2616ac57445507c6f0b9aa3b660c5f91891b",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v2-full_song_lua.exe",
+        "ab3d68aca1fc3a3660717a794181d8d1d7f14f71aa6931dbd5d9f306e128dfcd.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 20.767373599577695,
+      "comparisons_passed": 205071,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-044-native-field-v2.log",
+      "log_sha256": "16161f77e5c62d2fafffe2309eec5ca587e72c6b280cb1b869e4c26775bfffb5",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass123-top-044-native-v1.json",
+      "native_receipt_sha256": "da558cf700288a2108fa5333105fad0ca3362ace27302fca63de628d479e4b4b",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "32216ad9ebea5b2b84fd12deed332e7b7fe994ee",
+    "source_pending_commit": false,
+    "binary_sha256": "fe6c8b7e3d0007b416199af149a14c487ea2f47abc18df2784208e0447747c9e",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v2-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.8476453996263444,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-044-native-pass123.log",
+    "log_sha256": "b338305a903f635158269bef1249546a216c718c29f0f7211fe97df79f956a5b",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 0.46s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

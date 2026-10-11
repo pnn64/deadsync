@@ -17,7 +17,6 @@ use std::sync::Arc;
 use deadlib_present::actors::Actor;
 use deadsync_assets::noteskin::{Noteskin, SpriteSlot, SpriteSource};
 use deadsync_notefield::ModelMeshCache;
-use deadsync_noteskin::NoteskinSlot;
 use deadsync_online::smo_songs::{PreviewChart, PreviewPhase};
 
 use super::preview::{self, ARROW_PX, MAX_LANES, PX_PER_SECOND, Preview};
@@ -74,19 +73,18 @@ impl PreviewSkinModels {
 /// model skin's geometry is real work, and nothing here touches the GPU.
 #[must_use]
 pub fn preview_skin_models(skin: &Noteskin) -> PreviewSkinModels {
-    let mut ids: Vec<u64> = Vec::new();
+    let mut slots: Vec<&SpriteSlot> = Vec::new();
     noteskin_draw::for_each_field_slot(skin, SKIN_COLS, |slot| {
-        if slot.model.is_some() && !ids.contains(&slot.stable_id()) {
-            ids.push(slot.stable_id());
+        if slot.model.is_some() && !slots.iter().any(|known| std::ptr::eq(*known, slot)) {
+            slots.push(slot);
         }
     });
-    // Sized to the slots exactly, so registering them never grows it.
-    let mut cache = ModelMeshCache::with_capacity(ids.len());
-    noteskin_draw::for_each_field_slot(skin, SKIN_COLS, |slot| {
-        if slot.model.is_some() {
-            let _ = cache.prewarm_slot(slot);
-        }
-    });
+    // Each SpriteSlot (including a clone) owns a unique stable ID.
+    // Borrowed identity therefore deduplicates exactly the cache's keys.
+    let mut cache = ModelMeshCache::with_capacity(slots.len());
+    for slot in slots {
+        let _ = cache.prewarm_slot(slot);
+    }
     cache.seal();
     cache.reset_stats();
     PreviewSkinModels(cache)
@@ -1037,3 +1035,11 @@ mod tests {
 
 #[cfg(test)]
 mod resource_perf;
+
+#[cfg(test)]
+mod preview_dataflows {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/perf/preview_models.rs"
+    ));
+}

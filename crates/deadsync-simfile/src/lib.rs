@@ -19,3 +19,6 @@ pub mod stats;
 pub mod sync_offset;
 pub mod tags;
 pub mod timing;
+
+#[cfg(test)]
+mod metadata_perf;

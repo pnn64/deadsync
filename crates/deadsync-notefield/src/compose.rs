@@ -52,6 +52,7 @@ pub struct NotefieldGeometry {
 #[derive(Clone, Copy, Debug)]
 pub struct NotefieldVisualState {
     pub elapsed_screen_s: f32,
+    pub expand_seconds: f32,
     pub current_display_beat: f32,
     pub accel: AccelEffects,
     pub scroll: ScrollEffects,
@@ -162,6 +163,9 @@ pub struct NotefieldSongLuaView<'a> {
     pub note_hides: &'a SongLuaNoteHideWindows,
     pub column_offsets: &'a [SongLuaColumnOffsetWindowRuntime],
     pub column_splines: &'a [deadsync_gameplay::SongLuaColumnSplineTrack],
+    /// Local native Actor wrapper matrix, outside the NoteField's own tilt.
+    pub wrapper: glam::Mat4,
+    pub wrapper_visible: bool,
 }
 
 /// Profile-derived behavior and resolved asset availability in canonical terms.
@@ -246,9 +250,11 @@ pub struct PreparedNotefieldNotes<'a, S> {
     pub tap_explosion: Option<&'a NoteskinRuntime<S>>,
     pub target_arrow_px: f32,
     pub beat_factor: f32,
+    pub(crate) beat_y_factor: f32,
     pub col_offsets: [f32; MAX_COLS],
     pub invert_distances: [f32; MAX_COLS],
     pub tornado_bounds: [TornadoBounds; MAX_COLS],
+    pub(crate) tornado_z_bounds: [TornadoBounds; MAX_COLS],
     pub(crate) tornado_lane_caches: [TornadoLaneCache; MAX_COLS],
     pub(crate) move_x_offsets: [f32; MAX_COLS],
     pub(crate) note_depth_frame_cache: NoteDepthFrameCache,
@@ -398,7 +404,7 @@ impl<S> PreparedNotefield<'_, S> {
     pub(crate) fn spline_zoom(&self, col: usize, beat: f32, base: f32) -> f32 {
         let spline = self.column_zoom_splines[col];
         if spline.enabled {
-            spline.sample(self.current_beat, beat).0[0]
+            spline.sample(self.current_beat, beat).0[0] + if spline.absolute { 0.0 } else { base }
         } else {
             base
         }
@@ -631,6 +637,13 @@ fn prepare_notes<'a, S>(
         &mut invert_distances[..num_cols],
         &mut tornado_bounds[..num_cols],
     );
+    let mut tornado_z_bounds = [TornadoBounds::default(); MAX_COLS];
+    if request.visual.visual.tornado_z != 0.0 {
+        crate::transforms::compute_tornado_z_bounds(
+            &col_offsets[..num_cols],
+            &mut tornado_z_bounds[..num_cols],
+        );
+    }
     let mut tornado_lane_caches = [TornadoLaneCache::default(); MAX_COLS];
     compute_tornado_lane_caches(
         &col_offsets[..num_cols],
@@ -672,8 +685,11 @@ fn prepare_notes<'a, S>(
             boost: request.visual.accel.boost,
             brake: request.visual.accel.brake,
             wave: request.visual.accel.wave,
+            wave_period: request.visual.accel.wave_period,
+            parabola_y: request.visual.visual.parabola_y,
             boomerang: request.visual.accel.boomerang,
             expand: request.visual.accel.expand,
+            expand_period: request.visual.accel.expand_period,
         },
         random_speed: request.visual.visual.random_speed,
         stage_seed: request.geometry.stage_seed,
@@ -687,7 +703,7 @@ fn prepare_notes<'a, S>(
         draw_distance_after_targets: -after,
         draw_distance_before_targets: before,
         field_zoom,
-        elapsed_screen_s: request.visual.elapsed_screen_s,
+        expand_seconds: request.visual.expand_seconds,
         effect_height,
         screen_height: request.geometry.screen_height,
         note_count_stats: request.chart.note_count_stats,
@@ -705,10 +721,20 @@ fn prepare_notes<'a, S>(
         receptor: request.noteskin.receptor.unwrap_or(base),
         tap_explosion: request.noteskin.tap_explosion,
         target_arrow_px: ScrollSpeedSetting::ARROW_SPACING * field_zoom,
-        beat_factor: beat_factor(request.chart.visible_beat),
+        beat_factor: beat_factor(
+            request.chart.visible_beat,
+            request.visual.visual.beat_offset,
+            request.visual.visual.beat_mult,
+        ),
+        beat_y_factor: beat_factor(
+            request.chart.visible_beat,
+            request.visual.visual.beat_y_offset,
+            request.visual.visual.beat_y_mult,
+        ),
         col_offsets,
         invert_distances,
         tornado_bounds,
+        tornado_z_bounds,
         tornado_lane_caches,
         move_x_offsets,
         note_depth_frame_cache,

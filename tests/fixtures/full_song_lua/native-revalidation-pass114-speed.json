@@ -1,0 +1,63 @@
+{
+  "updated_utc": "2026-10-10T01:22:36.210684+00:00",
+  "build_parent_commit": "6f420b9ff1cdaaf2650bba9b86fa30c9915a5160",
+  "tested_source_sha256": "9e98f0bb06461f1da1d5d70a73f9d5931889cb99186fb80055b76dfc1241c046",
+  "native_control": "tests/fixtures/itgmania-actors/displayed-speed.json",
+  "native_control_sha256": "c03d47cbbc49e5289be1611bf5afabb8e1a44433643a9f75584187a4bea2001b",
+  "native_reference": "ITGmania 5c737928 TimingData.cpp:1028 GetDisplayedSpeedPercent",
+  "native_speed_samples": 47,
+  "exact_before": 20,
+  "exact_after": 47,
+  "edgar_native_offset_samples": 32,
+  "edgar_native_offset_exact_before": 25,
+  "edgar_native_offset_exact_after": 32,
+  "rules_tests": {
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "deadsync-rules",
+      "--target-dir",
+      "target/song-lua-pass95-build",
+      "--config",
+      "profile.dev.debug=0"
+    ],
+    "exit_code": 0,
+    "log_sha256": "2770e8dbf908c1239ab592302246945f0fe17e701b2c21063c6d6258cd607c93",
+    "result_lines": [
+      "test result: ok. 113 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ]
+  },
+  "complete_native_archive_recheck": {
+    "position": 35,
+    "source_simfile": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc",
+    "archive": "f0279455bbad6c96a899705927f9d37fd761071f111d8b1e672f50154b43be55.tar.zst",
+    "archive_sha256": "f0279455bbad6c96a899705927f9d37fd761071f111d8b1e672f50154b43be55",
+    "harness_version": "0.1.51",
+    "source_commit": "6f420b9ff1cdaaf2650bba9b86fa30c9915a5160",
+    "source_pending_commit": true,
+    "binary_sha256": "480d29c40bd57a87e74d83606c8d6d453861f2f885080d943934df1fc51f2a43",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-speed-v1-full_song_lua.exe",
+      "f0279455bbad6c96a899705927f9d37fd761071f111d8b1e672f50154b43be55.tar.zst"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 450.01239279983565,
+    "comparisons_passed": 228297347,
+    "comparisons_failed": 0,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-035-speed-v1.log",
+    "log_sha256": "d4936dc4bd9827b6ae6a1c9ec7703a64b5a10d7f67646c0655a29884643a44e7",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-top-035-native-lossless-v1.json",
+    "native_receipt_sha256": "fb4a0d1e8cf46770193a0bfae6fb1aae5173a5383dc4ff2fbcd4e33e88e48c05",
+    "full_corpus_complete": false
+  },
+  "integer_judgment_timing_changed": false,
+  "tolerances_changed": false,
+  "remaining_multitap_exact_time_gap": "tests/fixtures/full_song_lua/native-revalidation-pass114-multitap.json",
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false
+}

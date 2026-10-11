@@ -10,7 +10,7 @@ return Def.ActorFrame{
             self:x(1):y(2):z(3):linear(0.5):x(0):y(0):z(0)
         end,
     },
-    Def.Actor{
+    Def.ActorFrame{
         OnCommand=function(self)
             self:SetUpdateFunction(function()
                 local beat=GAMESTATE:GetSongBeat()

@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "loading_mode": "direct_simfile_no_cache",
+  "charts": [
+    {
+      "source_index": 0,
+      "description": "",
+      "difficulty_code": 4,
+      "meter": 11,
+      "credit": "",
+      "steps_type": {
+        "code": 0,
+        "source": "dance-single"
+      }
+    },
+    {
+      "source_index": 1,
+      "description": "",
+      "difficulty_code": 3,
+      "meter": 11,
+      "credit": "",
+      "steps_type": {
+        "code": 0,
+        "source": "dance-single"
+      }
+    },
+    {
+      "source_index": 2,
+      "description": "",
+      "difficulty_code": 2,
+      "meter": 11,
+      "credit": "",
+      "steps_type": {
+        "code": 0,
+        "source": "dance-single"
+      }
+    },
+    {
+      "source_index": 3,
+      "description": "",
+      "difficulty_code": 1,
+      "meter": 11,
+      "credit": "",
+      "steps_type": {
+        "code": 0,
+        "source": "dance-single"
+      }
+    },
+    {
+      "source_index": 4,
+      "description": "",
+      "difficulty_code": 5,
+      "meter": 11,
+      "credit": "",
+      "steps_type": {
+        "code": 0,
+        "source": "dance-single"
+      }
+    },
+    {
+      "source_index": 5,
+      "description": "",
+      "difficulty_code": 5,
+      "meter": 11,
+      "credit": "",
+      "steps_type": {
+        "code": 0,
+        "source": "dance-single"
+      }
+    },
+    {
+      "source_index": 6,
+      "description": "",
+      "difficulty_code": 5,
+      "meter": 11,
+      "credit": "",
+      "steps_type": {
+        "code": 0,
+        "source": "dance-single"
+      }
+    },
+    {
+      "source_index": 7,
+      "description": "",
+      "difficulty_code": 5,
+      "meter": 11,
+      "credit": "",
+      "steps_type": {
+        "code": 0,
+        "source": "dance-single"
+      }
+    }
+  ],
+  "seeded_calls": [
+    [
+      0,
+      "StepsType_Dance_Single",
+      "Difficulty_Easy",
+      ""
+    ],
+    [
+      1,
+      "StepsType_Dance_Single",
+      "Difficulty_Edit",
+      ""
+    ],
+    [
+      "ScreenGameplay"
+    ]
+  ]
+}

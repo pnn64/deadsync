@@ -1017,7 +1017,7 @@ where
             player_profiles[p].error_bar_options(),
         );
         let course_carry = course_display_carry.as_ref().map(|carry| carry[p]);
-        init_player_runtime_for_song_with_course_life(
+        let mut player = init_player_runtime_for_song_with_course_life(
             init_music_time,
             in_course_stage,
             course_carry,
@@ -1026,7 +1026,9 @@ where
             replay_mode,
             combo_carry[p],
             caps,
-        )
+        );
+        player.fail_type = config.default_fail_type;
+        player
     });
     let assist_clap_rows =
         build_assist_clap_rows_with_capacity(&notes, note_ranges[0], note_count_stats[0].len());
@@ -1212,6 +1214,7 @@ where
             profiles: player_profiles,
         },
         mods: GameplayModRuntimeState {
+            expand_seconds: [0.0; MAX_PLAYERS],
             song_lua_visuals,
             song_lua_player_transforms: song_lua_player_transforms_default(),
             attacks: {
@@ -1241,7 +1244,8 @@ where
     };
     state.control.update_trace =
         GameplayUpdateTraceState::from_capacity_snapshot(&state.capacity_trace_snapshot());
-    state.refresh_seek_dependent_state();
+    refresh_active_attack_masks(&mut state, 0.0);
+    state.refresh_live_notefield_options(state.clock.song_position.current_bpm);
     let finalize_ms = finalize_started.elapsed().as_secs_f64() * 1000.0;
     let total_ms = init_started.elapsed().as_secs_f64() * 1000.0;
     if total_ms >= 50.0 {

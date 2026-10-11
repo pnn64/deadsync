@@ -1,0 +1,105 @@
+{
+  "pass": 150,
+  "previous_record": "native-revalidation-pass149.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "63b08812a278d8ba94dd5aae70378dabf4a2dbb2",
+  "comparator_sha256": "615d06f3076fcbbc62d0c15a09d7c573d929c615fd9f539b767133cba8471cd8",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    71
+  ],
+  "next_position": 72,
+  "comparisons_passed": 495069,
+  "charts": [
+    {
+      "position": 71,
+      "entry": {
+        "title": "[T09] Picture in My Mind",
+        "source_simfile": "[T09] Picture in My Mind [nikko X WINK RMX] (SX)/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc",
+        "harness_version": "0.1.54",
+        "archive": "4eafba75ca724163c73a5d9699e6648cad086eaf5787931c4ab15c5ad167a62d.tar.zst",
+        "sha256": "4eafba75ca724163c73a5d9699e6648cad086eaf5787931c4ab15c5ad167a62d",
+        "compressed_bytes": 210355,
+        "aliases": [
+          "8a164d5918672941a2eb26014f683a98975b55be8aad1b7c37ee293f93493418.tar.zst"
+        ]
+      },
+      "original_archive_retained": "f5b651e7284a4fe72f527a7a9cc3d221454203dde7aeb33ed2b087322dc92e87.tar.zst",
+      "native_source_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+      "native_trace_sha256": "06fffa2863e12754fabf899377e20d9740ccbb182a2c21459de97441870604fb",
+      "original_source_sha256": {
+        "[T09] Picture in My Mind [nikko X WINK RMX] (SX)/bg_Picture_in_my_mind.png": "9fa6dd2c7d0ba2cfd759298625bc7ceb919a726cb23e348db687cb86c9b34bf4",
+        "[T09] Picture in My Mind [nikko X WINK RMX] (SX)/bn_Picture_in_my_mind.png": "fa95b0c1745c311d26da78b5f7ac2573495ecaba3e5b55c0ebc10547c7f0f153",
+        "[T09] Picture in My Mind [nikko X WINK RMX] (SX)/cdtitle_ZAiA_2023.png": "49ed0bf8c59c6a4f9ba40fe74468a55a27c9f4138145f92936df0351410986af",
+        "[T09] Picture in My Mind [nikko X WINK RMX] (SX)/jk_Picture_in_my_mind.png": "fc8738946a305ae29e5544b88c79ce816fbeca18420f8c3c78e2b9fa83a6b251",
+        "[T09] Picture in My Mind [nikko X WINK RMX] (SX)/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc": "31509de788060edd9c61a5719cf46129da4e73088e716ae0f58ce33b655cf60f",
+        "[T09] Picture in My Mind [nikko X WINK RMX] (SX)/Pinkpantheress, Sam Gellaitry - PICTURE IN MY MIND [NIKKO X WINK RMX].ogg": "00e9291b774f1324f42f726958007274fd19b682f14df504860e0e8057c90f17",
+        "[T09] Picture in My Mind [nikko X WINK RMX] (SX)/lua/default.lua": "4c55de30736374b160b0b266c489a1c6f04812e8ea8c30b212fd8d22799af19a",
+        "[T09] Picture in My Mind [nikko X WINK RMX] (SX)/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "[T09] Picture in My Mind [nikko X WINK RMX] (SX)/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "[T09] Picture in My Mind [nikko X WINK RMX] (SX)/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46",
+        "[T09] Picture in My Mind [nikko X WINK RMX] (SX)/lua/_script.lua": "b00109d40a6c2adaf7767cef711d7a463c97dfdc2448ec62e0fba3faf1c0c0f2"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 6865,
+      "duration_seconds": 114.39688873291016,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 71,
+      "source_simfile": "[T09] Picture in My Mind [nikko X WINK RMX] (SX)/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc",
+      "archive": "4eafba75ca724163c73a5d9699e6648cad086eaf5787931c4ab15c5ad167a62d.tar.zst",
+      "archive_sha256": "4eafba75ca724163c73a5d9699e6648cad086eaf5787931c4ab15c5ad167a62d",
+      "harness_version": "0.1.54",
+      "source_commit": "63b08812a278d8ba94dd5aae70378dabf4a2dbb2",
+      "source_pending_commit": false,
+      "binary_sha256": "615d06f3076fcbbc62d0c15a09d7c573d929c615fd9f539b767133cba8471cd8",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-cull-after-v3-full_song_lua.exe",
+        "4eafba75ca724163c73a5d9699e6648cad086eaf5787931c4ab15c5ad167a62d.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 9.52069259993732,
+      "comparisons_passed": 495069,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-071-native-model-culling-v3.log",
+      "log_sha256": "4f37d19705b5748fbb407f48fe2df755530b48beafa3b8ba81d4f7df82df8938",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass150-top-071-native-v3.json",
+      "native_receipt_sha256": "044f41497198e5c0dc0391f6a0e1273b86dcfcaa61c11befc9156274623eeda9",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "63b08812a278d8ba94dd5aae70378dabf4a2dbb2",
+    "source_pending_commit": false,
+    "binary_sha256": "5c3f1ac6f61fc7a75c8e1cf1b2cc282e5f29ef38d2872fe817dc0b197d3d08a2",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-cull-after-v3-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.1899160002358258,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-071-native-pass150.log",
+    "log_sha256": "1715eaeed589f72395f19d362c8c09ea28776341fd1246709179d126cc390f3d",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 263 filtered out; finished in 0.80s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

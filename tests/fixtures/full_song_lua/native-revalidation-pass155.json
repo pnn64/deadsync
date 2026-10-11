@@ -1,0 +1,116 @@
+{
+  "pass": 155,
+  "previous_record": "native-revalidation-pass154.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "415cb4223d61df13cbe9983bde8451bb612cfd37",
+  "comparator_sha256": "9d3f164c213b97287d859c6c1c58c108d4738b867c0b8e34594f362c43733204",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    76
+  ],
+  "next_position": 77,
+  "comparisons_passed": 760235,
+  "charts": [
+    {
+      "position": 76,
+      "entry": {
+        "title": "A Dramatic Irony",
+        "source_simfile": "A Dramatic Irony/A Dramatic Irony.ssc",
+        "harness_version": "0.1.56",
+        "archive": "7db9fbbe9b9aaef7a7ff728adff2e573aae7917aa2c1c45cb3bf3676783997c0.tar.zst",
+        "sha256": "7db9fbbe9b9aaef7a7ff728adff2e573aae7917aa2c1c45cb3bf3676783997c0",
+        "compressed_bytes": 16195186,
+        "aliases": [
+          "b1b7a1aa52f6d8a5d2b79c7028e1676f0650a2c8105640dee1962c1bd0a8a67d.tar.zst"
+        ]
+      },
+      "original_archive_retained": "6dd2dc541fb78654743572555b3e3e8cd6f8b5a7c00f8b7cf54df0cd2733e91c.tar.zst",
+      "native_source_commit": "10cb65cb67a4e550316c9bd286a6784b90d6a25d",
+      "native_trace_sha256": "62d4ae5adca692565a49ebaabf63adb21a31b0b905e49aa5b75471e1096fe102",
+      "original_source_sha256": {
+        "A Dramatic Irony/A Dramatic Irony.ogg": "37c93af11d904440e70b25fd07c43b27e400c7ab24e83ae4169dff3d17104b97",
+        "A Dramatic Irony/A Dramatic Irony.ssc": "34ac0b352f59c244678cb2151aa6d43450e384091651375ac74da68dbe28415e",
+        "A Dramatic Irony/bg.png": "bc0d548792208a114ded268af3758786104ced8d15786b3d0493fd529b75779a",
+        "A Dramatic Irony/bn.png": "2a7f1d166e562757a21b31fd850f0560b1c368122136fd67973af8496d0213ab",
+        "A Dramatic Irony/desktop.ini": "3c81eb4c7d2bcad3dd6578510517baca9cb4e3ef0d089e5a63e29e2e7753a065",
+        "A Dramatic Irony/lua/default.lua": "dd7cfe3904bd4aaf8d946784362371d1f64c075b81b31c23664504e661951d2a",
+        "A Dramatic Irony/lua/desktop.ini": "3c81eb4c7d2bcad3dd6578510517baca9cb4e3ef0d089e5a63e29e2e7753a065",
+        "A Dramatic Irony/lua/laser.lua": "6eaebccccf0cd076028956331189d880d0574e62b5844a700fa38b0f8562ea13",
+        "A Dramatic Irony/lua/laserfinale.lua": "6b1b854d3d05c22fe4fd7fcea24588dccad0a51322dd79ce38eda31cf2adb7f0",
+        "A Dramatic Irony/lua/rose.lua": "47100b6dcff7716b487dab9e7522ab85c898b527574bcd07e80f4c6938e46b98",
+        "A Dramatic Irony/lua/stuff/desktop.ini": "3c81eb4c7d2bcad3dd6578510517baca9cb4e3ef0d089e5a63e29e2e7753a065",
+        "A Dramatic Irony/lua/stuff/laser 1x3.png": "08c266b895d3af7feb902926d7f24b7c979bf1fd2ac9e87d32d19a0b27961671",
+        "A Dramatic Irony/lua/stuff/Rose1.png": "07cfd2035cd600b1d493b42b7cabf8cd84fa824950fbd646e5db52504ac1bba3",
+        "A Dramatic Irony/lua/stuff/Rose10.png": "64340c06dc570c87febe30b3a8155d30830f3dd7851f912fd94e4cd7ac9c8c4f",
+        "A Dramatic Irony/lua/stuff/Rose2.png": "d61f73dfc88a0f59d7d123968ddfb5eb1e29a614e1eba62155e6710c91c11338",
+        "A Dramatic Irony/lua/stuff/Rose3.png": "a30ef1d08a3d1b0f7eac88e9c4abcf0952bc4e3eebe5eb1bd45c8ced1debf1c3",
+        "A Dramatic Irony/lua/stuff/Rose4.png": "6672704f78c26126eae79ec399cb7298108a341aba1edcd0ee2f146ae97a6db8",
+        "A Dramatic Irony/lua/stuff/Rose5.png": "7b81f0a87416792f03ed9d57a6d63c0eac929ceeca9167b3cb848c3274b12c87",
+        "A Dramatic Irony/lua/stuff/Rose6.png": "3ab5676290adb88b2c95a80aeb422384def1ffc6274d8922541111472da33899",
+        "A Dramatic Irony/lua/stuff/Rose7.png": "77260c6cfc72693247d2634a725f453157b58934173adcd26d9b68e980064bf7",
+        "A Dramatic Irony/lua/stuff/Rose8.png": "e9eb8a4ba72469a4c3e45177207bd56baa5bb56b477984a9bc3a06889d66276c",
+        "A Dramatic Irony/lua/stuff/Rose9.png": "3dd2edd77f9b7d0cca5014eb4d2f07f2e086adbcce4945803e0ac33fb2938821"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 6643,
+      "duration_seconds": 110.68872833251952,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 17,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 76,
+      "source_simfile": "A Dramatic Irony/A Dramatic Irony.ssc",
+      "archive": "7db9fbbe9b9aaef7a7ff728adff2e573aae7917aa2c1c45cb3bf3676783997c0.tar.zst",
+      "archive_sha256": "7db9fbbe9b9aaef7a7ff728adff2e573aae7917aa2c1c45cb3bf3676783997c0",
+      "harness_version": "0.1.56",
+      "source_commit": "415cb4223d61df13cbe9983bde8451bb612cfd37",
+      "source_pending_commit": false,
+      "binary_sha256": "9d3f164c213b97287d859c6c1c58c108d4738b867c0b8e34594f362c43733204",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-actor-load-order-v4-full_song_lua.exe",
+        "7db9fbbe9b9aaef7a7ff728adff2e573aae7917aa2c1c45cb3bf3676783997c0.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 505.7614700002596,
+      "comparisons_passed": 760235,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-076-native-scalar-v4.log",
+      "log_sha256": "45725f8b2d251e0fec4a48ba48bc04c6e83ef4059d2db5a9564afc992604e684",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass156-top-076-scalar-floats-v1.json",
+      "native_receipt_sha256": "f0ecacec4988eccd362bf16b5f48f57745df31eff80de9679d3cfced660fdb31",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "415cb4223d61df13cbe9983bde8451bb612cfd37",
+    "source_pending_commit": false,
+    "binary_sha256": "b34ac59d816f26a741584df005fb420ca8f3399106fd09bfee12364e7242811a",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-actor-load-order-v4-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 17.98808820033446,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-076-native-pass155.log",
+    "log_sha256": "8b942d43b851dd58d87fe5ca2edf8723e029bf030e07a863e163ca4d6fe41d49",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 266 filtered out; finished in 16.27s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}
