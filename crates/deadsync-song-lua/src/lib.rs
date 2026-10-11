@@ -855,6 +855,9 @@ pub fn theme_metric_value_for_human_players(
     screen_width: f32,
     screen_height: f32,
 ) -> mlua::Result<mlua::Value> {
+    if let Some(value) = sl::read_sl_metric(lua, group, name)? {
+        return Ok(value);
+    }
     if let Some(value) =
         theme_metric_number_for_screen(group, name, human_player_count, screen_width, screen_height)
     {
@@ -1042,6 +1045,21 @@ pub fn theme_metric_names(group: &str) -> Vec<String> {
         names.extend(["BodyWidth", "BodyHeight"].into_iter().map(str::to_string));
     } else if group.eq_ignore_ascii_case("LifeMeterBar") {
         names.push("InitialValue".to_string());
+        names.extend(
+            [
+                "W1", "W2", "W3", "W4", "W5", "Miss", "LetGo", "Held", "HitMine",
+            ]
+            .map(|judgment| format!("LifePercentChange{judgment}")),
+        );
+    } else if group.eq_ignore_ascii_case("ScoreKeeperNormal") {
+        for prefix in ["PercentScoreWeight", "GradeWeight"] {
+            names.extend(
+                [
+                    "W1", "W2", "W3", "W4", "W5", "Miss", "LetGo", "Held", "HitMine", "CheckpointHit",
+                ]
+                .map(|judgment| format!("{prefix}{judgment}")),
+            );
+        }
     } else if group.eq_ignore_ascii_case("MusicWheel") {
         names.push("NumWheelItems".to_string());
     } else if group.eq_ignore_ascii_case("PlayerStageStats") {

@@ -387,7 +387,29 @@ fn create_sl_preferences(lua: &Lua, mode: &str) -> mlua::Result<Table> {
             "TapNoteScore_W3"
         },
     )?;
-    table.set("MinTNSToScoreNotes", "TapNoteScore_None")?;
+    if mode != "Casual" {
+        let prefs = lua.globals().get::<Option<Table>>("ThemePrefs")?;
+        let rescore = match prefs {
+            Some(prefs) => {
+                let get = prefs.get::<mlua::Function>("Get")?;
+                !matches!(
+                    get.call::<Value>("RescoreEarlyHits")?,
+                    Value::Nil | Value::Boolean(false)
+                )
+            }
+            None => false,
+        };
+        table.set(
+            "MinTNSToScoreNotes",
+            if !rescore {
+                "TapNoteScore_None"
+            } else if mode == "FA+" {
+                "TapNoteScore_W4"
+            } else {
+                "TapNoteScore_W3"
+            },
+        )?;
+    }
     table.set("HarshHotLifePenalty", true)?;
     table.set("PercentageScoring", true)?;
     table.set("AllowW1", "AllowW1_Everywhere")?;
@@ -400,11 +422,15 @@ fn create_sl_preferences(lua: &Lua, mode: &str) -> mlua::Result<Table> {
     table.set("TimingWindowSecondsW3", w3)?;
     table.set(
         "TimingWindowSecondsW4",
-        if mode == "Casual" { 0.102 } else { 0.135 },
+        if mode == "ITG" { 0.135 } else { 0.102 },
     )?;
     table.set(
         "TimingWindowSecondsW5",
-        if mode == "Casual" { 0.102 } else { 0.18 },
+        match mode {
+            "Casual" => 0.102,
+            "FA+" => 0.135,
+            _ => 0.18,
+        },
     )?;
     table.set("TimingWindowSecondsHold", 0.32)?;
     table.set("TimingWindowSecondsMine", 0.07)?;
@@ -414,43 +440,120 @@ fn create_sl_preferences(lua: &Lua, mode: &str) -> mlua::Result<Table> {
 
 fn create_sl_metrics(lua: &Lua, mode: &str) -> mlua::Result<Table> {
     let table = lua.create_table()?;
-    let fa_plus = mode == "FA+";
+    // Simply Love Scripts/SL_Init.lua defines separate scoring and life rules
+    // for Casual, ITG and FA+. Score and grade weights share the same values.
+    let scores = match mode {
+        "Casual" => [3, 2, 1, 0, 0, 0, 0, 3, -1, 0],
+        "FA+" => [5, 5, 4, 2, 0, -12, 0, 5, -6, 0],
+        _ => [5, 4, 2, 0, -6, -12, 0, 5, -6, 0],
+    };
     for (name, value) in [
-        ("PercentScoreWeightW1", 3),
-        ("PercentScoreWeightW2", if fa_plus { 3 } else { 2 }),
-        ("PercentScoreWeightW3", 1),
-        ("PercentScoreWeightW4", 0),
-        ("PercentScoreWeightW5", 0),
-        ("PercentScoreWeightMiss", 0),
-        ("PercentScoreWeightLetGo", 0),
-        ("PercentScoreWeightHeld", 3),
-        ("PercentScoreWeightHitMine", -1),
-        ("PercentScoreWeightCheckpointHit", 0),
-        ("GradeWeightW1", 3),
-        ("GradeWeightW2", if fa_plus { 3 } else { 2 }),
-        ("GradeWeightW3", 1),
-        ("GradeWeightW4", 0),
-        ("GradeWeightW5", 0),
-        ("GradeWeightMiss", 0),
-        ("GradeWeightLetGo", 0),
-        ("GradeWeightHeld", 3),
-        ("GradeWeightHitMine", -1),
-        ("GradeWeightCheckpointHit", 0),
-    ] {
-        table.set(name, value)?;
+        "W1",
+        "W2",
+        "W3",
+        "W4",
+        "W5",
+        "Miss",
+        "LetGo",
+        "Held",
+        "HitMine",
+        "CheckpointHit",
+    ]
+    .into_iter()
+    .zip(scores)
+    {
+        for prefix in ["PercentScoreWeight", "GradeWeight"] {
+            table.set(format!("{prefix}{name}"), value)?;
+        }
     }
+    let life = match mode {
+        "Casual" => [0.0; 9],
+        "FA+" => [0.008, 0.008, 0.008, 0.004, 0.0, -0.1, -0.08, 0.008, -0.05],
+        _ => [0.008, 0.008, 0.004, 0.0, -0.05, -0.1, -0.08, 0.008, -0.05],
+    };
     for (name, value) in [
-        ("LifePercentChangeW1", 0.008),
-        ("LifePercentChangeW2", 0.008),
-        ("LifePercentChangeW3", 0.004),
-        ("LifePercentChangeW4", 0.0),
-        ("LifePercentChangeW5", -0.04),
-        ("LifePercentChangeMiss", -0.08),
-        ("LifePercentChangeHitMine", -0.05),
-        ("LifePercentChangeHeld", 0.008),
-        ("LifePercentChangeLetGo", -0.08),
-    ] {
-        table.set(name, value)?;
+        "W1", "W2", "W3", "W4", "W5", "Miss", "LetGo", "Held", "HitMine",
+    ]
+    .into_iter()
+    .zip(life)
+    {
+        table.set(format!("LifePercentChange{name}"), value)?;
     }
+    table.set("InitialValue", 0.5)?;
     Ok(table)
+}
+
+pub(super) fn read_sl_metric(lua: &Lua, group: &str, name: &str) -> mlua::Result<Option<Value>> {
+    // Simply Love metrics.ini evaluates these expressions against the active
+    // mode. Keep unrelated sections from seeing fields of SL.Metrics.
+    let mapped = group.eq_ignore_ascii_case("ScoreKeeperNormal")
+        && (name.starts_with("PercentScoreWeight") || name.starts_with("GradeWeight"))
+        || group.eq_ignore_ascii_case("LifeMeterBar") && name.starts_with("LifePercentChange");
+    if !mapped {
+        return Ok(None);
+    }
+    let Some(sl) = lua.globals().get::<Option<Table>>("SL")? else {
+        return Ok(None);
+    };
+    let mode = sl.get::<Table>("Global")?.get::<mlua::LuaString>("GameMode")?;
+    let metrics = sl.get::<Table>("Metrics")?.get::<Table>(mode)?;
+    let value = metrics.get::<Value>(name)?;
+    Ok((!matches!(value, Value::Nil)).then_some(value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mode_tables_match_simply_love_source() -> mlua::Result<()> {
+        // This fixture contains the unmodified Preferences and Metrics blocks
+        // extracted from the pinned theme, rather than a second Rust table.
+        let source = include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/simply-love-mode-tables.lua"
+        );
+        for rescore in [false, true] {
+            let lua = Lua::new();
+            let prefs = crate::option_rows::create_theme_prefs_table(&lua)?;
+            prefs
+                .get::<mlua::Function>("Set")?
+                .call::<()>(("RescoreEarlyHits", rescore))?;
+            lua.globals().set("ThemePrefs", prefs)?;
+            lua.globals()
+                .set("expected", lua.load(source).eval::<Table>()?)?;
+            let context = SongLuaCompileContext::new(std::path::Path::new("."), "Mode Tables");
+            lua.globals().set("SL", create_sl_table(&lua, &context)?)?;
+            lua.globals()
+                .set("THEME", crate::tables::create_theme_table(&lua, &context)?)?;
+            lua.load(r#"
+                for _, group in ipairs({"Preferences", "Metrics"}) do
+                    for mode, reference in pairs(expected[group]) do
+                        local actual = SL[group][mode]
+                        for key, value in pairs(reference) do
+                            assert(actual[key] == value, group .. "." .. mode .. "." .. key)
+                        end
+                        for key in pairs(actual) do
+                            assert(reference[key] ~= nil, "unexpected " .. group .. "." .. mode .. "." .. key)
+                        end
+                    end
+                end
+                for mode, reference in pairs(expected.Metrics) do
+                    SL.Global.GameMode = mode
+                    for key, value in pairs(reference) do
+                        local group = (key:find("^Life") or key == "InitialValue")
+                            and "LifeMeterBar" or "ScoreKeeperNormal"
+                        assert(THEME:HasMetric(group, key), group .. "." .. key)
+                        assert(THEME:GetMetric(group, key) == value, mode .. "." .. key)
+                        local found = false
+                        for _, name in ipairs(THEME:GetMetricNamesInGroup(group)) do
+                            if name == key then found = true end
+                        end
+                        assert(found, "unlisted " .. group .. "." .. key)
+                    end
+                end
+                assert(THEME:GetMetric("Common", "PercentScoreWeightW1") == nil)
+            "#).exec()?;
+        }
+        Ok(())
+    }
 }

@@ -1,0 +1,33 @@
+{
+  "reference": "Simply Love Scripts/SL_Init.lua",
+  "reference_commit": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+  "reference_file_sha256": "a85b52a9100e0eed3ddc3a2c873b8b1b211d6a9d99108c306ea8ae9b536089a9",
+  "reference_lines": [
+    247,
+    435
+  ],
+  "extraction": "Unmodified adjacent Preferences and Metrics table declarations wrapped in return { ... }",
+  "fixture_sha256": "b2deb4b44288b47bd17d9ae96c8aa553ada8bec18ba51e1fe2f335ff0dbeb1d4",
+  "native_confirmation": {
+    "engine_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+    "engine_exe_sha256": "bc775e28c3c44a0f989c69274813c64cdbd82bc726f96d37428ed3916c33c533",
+    "control": "itgmania-harness/scripts/check_song_lua_runtime.py --until-gameplay-end --autoplay 0",
+    "itg_two_missed_rows": {
+      "possible": 10,
+      "current_possible": 10,
+      "actual": -24,
+      "misses": 2,
+      "life_begin": 0.5,
+      "life_latest": 0.30000001192092896
+    }
+  },
+  "theme_metric_mapping": {
+    "reference": "Simply Love metrics.ini",
+    "sha256": "221b449c94e5ed38bbdfb4cee157582f20c85ffa8e234398309768945b370a80",
+    "lines": [
+      2264,
+      2295
+    ],
+    "semantics": "THEME reads ScoreKeeperNormal weights and LifeMeterBar changes from SL.Metrics[SL.Global.GameMode]"
+  }
+}
