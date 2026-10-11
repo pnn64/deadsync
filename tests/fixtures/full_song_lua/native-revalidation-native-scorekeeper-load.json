@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "status": "native-stage-load-verified-gameplay-reload-pending",
+  "harness_version": "0.1.71",
+  "native_harness_commit": "ddfd43485fd0c2e84c10aded40e4bb65c9847cf0",
+  "native_reference_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_cli_sha256": "bbedd15b09dc2d32f4c52d5d79d89896d39b48eb656efec6397e265e3484f3dd",
+  "native_pin": {
+    "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass294-native-scorekeeper-committed-cli-v1.json",
+    "sha256": "11d18958f65e7a156b86470d898eac428cad5096f103a4d2418a91447853d9d5"
+  },
+  "native_test_receipt": {
+    "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass294-native-scorekeeper-all-checks-v3.json",
+    "sha256": "6b19f740863d67cdd268d4239699460e6b38ad7be498088d529b9deed11e9c51"
+  },
+  "native_tests": {
+    "passed": 237,
+    "failed": 0,
+    "ignored": 5,
+    "results": [
+      "test result: ok. 183 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 111.55s",
+      "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.41s",
+      "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s",
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+      "test result: ok. 20 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 15.89s"
+    ]
+  },
+  "native_source_sha256": {
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ScoreKeeperNormal.cpp": "645e68bfa7b8f603c17944b8a4cca7df3df3753dac529dc26d53e8a485978573",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ScoreKeeper.cpp": "8cc7d218bb1d76199e70b75ac785781d56beae3ab1bcb959c90269c365239c5a",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\PlayerState.cpp": "d54ad94985f1917627af53a55d96986777c9c0b3949768d7822074b09b796280",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\PlayerStageStats.cpp": "e067b3bba22adc5d016e32fd6384393d2a03d9a1bbbd2b8fe36216b03b4e7497",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\GameState.cpp": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\LuaManager.cpp": "7c222e45f0b02bc3f30828aed5a682402297000e6d253652ff39504887e8158a",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\PrefsManager.cpp": "a522c490a5db7ebc994fdcf918c5eed729c7821322c55f7528e85ff25d25285b",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Style.cpp": "ea669af3a0ec3d535c944b085f6d92a0e64ce84aca8bfef396d42f737b8a4a03",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ScreenGameplay.cpp": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ScreenManager.cpp": "6c4edf63e2536ec63caa32cef582bbd41678423f87a9f4f45ab4ccd3a6e16e1e",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\metrics.ini": "470ae3b31c17ca4e194530b9ca543a15439c134a3aefa47d6d25dd55d1f5bff5",
+    "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\Scripts\\SL_Init.lua": "a85b52a9100e0eed3ddc3a2c873b8b1b211d6a9d99108c306ea8ae9b536089a9",
+    "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\metrics.ini": "221b449c94e5ed38bbdfb4cee157582f20c85ffa8e234398309768945b370a80"
+  },
+  "scorekeeper_control": {
+    "path": "C:\\GitHub\\itgmania-harness\\fixtures\\actors\\scorekeeper.json",
+    "sha256": "f1f9365c5c80368c0459a81b34b4e96b599e7255c59557e4bea3e30290b61421"
+  },
+  "implementation_provenance": {
+    "path": "C:\\GitHub\\itgmania-harness\\native\\PROVENANCE.md",
+    "sha256": "43a0d0b43c312abe38df6e855e3f8f0aa07c1d52877ac01046c029f640f36fb0"
+  },
+  "closed_harness_faults": [
+    "Selected native Steps and Stage modifiers load ScoreKeeperNormal before foreground Lua.",
+    "Stage possible points come from the complete native scorekeeper instead of zero-initialized stats.",
+    "PlayerState owns the options consumed by native chart transforms and scorekeeper controls.",
+    "Scoring preference initializers and GameState message IDs match the pinned source.",
+    "Fresh stage counters reset with a new PlayerStageStats value; Init only sets player identity.",
+    "Native Lua Get/Release uses an empty coroutine for reentrant scoring instead of the calling argument stack.",
+    "Each song owns its registry and pool, and teardown restores parent enum and metric references."
+  ],
+  "controls_verified": [
+    "Selected single and double charts load real stage totals before Lua; no judgment hooks are exposed to songs.",
+    "Explicit native rows distinguish jump dance points from note-based combo.",
+    "Native hold, let-go, miss, failure, player isolation and stage reset controls pass.",
+    "Stage transforms use max(pre, post) totals with source scoring modes, W1 and merciful beginner preferences.",
+    "Missing toasty screen/profile access fails explicitly."
+  ],
+  "next_original_position": 146,
+  "next_source_simfile": "Choices - [Aoreo]/Choices.ssc",
+  "next_private_capture": {
+    "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass295-choices-native-score-load-v1\\receipt.json",
+    "sha256": "c228a03b26dd01ba93ffc75bf69853169ff2b1cb50260a9192689e7b8390267b"
+  },
+  "next_capture_status": "partial",
+  "next_capture_runtime_errors": 1,
+  "next_capture_dropped_events": 0,
+  "next_capture_native_stage_score_load": true,
+  "next_capture_stage_score_judgments": false,
+  "next_capture_delayed_screen_loading": false,
+  "complete_archives_produced": 0,
+  "promoted_to_deadsync": false,
+  "full_archive_index_count": 483,
+  "full_archive_index_sha256": "fa63d80f464ee431430a8042305034404903510d6805a2438ecef7a80ce55de7",
+  "source_song_files_unchanged": true,
+  "deadsync_runtime_commit": "c8f3fa9d1f55ac98d8e2e6bd64ec37d46228af24",
+  "deadsync_runtime_modified": false,
+  "technique_verification": {
+    "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass186-technique-confirmation\\verification.json",
+    "sha256": "178097efb0943b24af653e87ab1c294c9067d11e935cf1b0ad0594929b110012"
+  },
+  "technique_checks": {
+    "catalog_passed": 6,
+    "vulkan_arrow_passed": 1,
+    "failed": 0,
+    "limits": "Production renderer and rotation checked in a hidden window; live menu session not observed."
+  },
+  "open_requirements": [
+    "Native delayed ScreenGameplay loading must replace the old scene and retain Lua globals.",
+    "SetCurrentSteps must update the native chart and compatible-player state used by the reload.",
+    "Native gameplay input, tap/hold judgment timing and life changes must drive live stage progress.",
+    "DeadSync stage totals and live counters still require integration with gameplay chart/state data.",
+    "Song grade queries, complete theme initialization and courses remain unsupported in this capture.",
+    "No whole-song parity comparison or native framebuffer pixel comparison was established by these controls."
+  ]
+}

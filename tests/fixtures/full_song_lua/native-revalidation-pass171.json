@@ -1,0 +1,108 @@
+{
+  "pass": 171,
+  "previous_record": "native-revalidation-pass170.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "4910a6925cca98dc95ba8a9dbd6039f61bec915a",
+  "comparator_sha256": "3e6523f86f6d4d3747ee2d54b3b5fe0bf5673ca413411dde6786cd98c8cf30cb",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    92
+  ],
+  "next_position": 93,
+  "comparisons_passed": 182791,
+  "charts": [
+    {
+      "position": 92,
+      "entry": {
+        "title": "And Drugs↑↑",
+        "source_simfile": "And Drugs/and drugs.ssc",
+        "harness_version": "0.1.61",
+        "archive": "94947db8029f86259602a7d0f20f38c79a8681177fdefa4d59a3185042e82c57.tar.zst",
+        "sha256": "94947db8029f86259602a7d0f20f38c79a8681177fdefa4d59a3185042e82c57",
+        "compressed_bytes": 258463,
+        "aliases": [
+          "86d3bf35224f188e4d69eb82660cb69f8c98034820914c381e818fb4905976f0.tar.zst"
+        ]
+      },
+      "original_archive_retained": "8a0eeda7135a95a5d2527d948106a15420b8510a4f709d21d2888e83cfcc87f1.tar.zst",
+      "native_source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+      "native_trace_sha256": "5014a15ff2464a06f58a674838aa0fdae1428459e89758aef6d2d672b6ce688c",
+      "original_source_sha256": {
+        "And Drugs/and drugs.ogg": "ce001ff5c8fa5a4a057370970e5066132644abf2e9960841c3f6bd97cc0f459a",
+        "And Drugs/and drugs.sm": "65f39d12341c377cab701ea6b0ae26a2fead3f87d6dfcb697dcda52fee5fc24a",
+        "And Drugs/and drugs.ssc": "17ccc2dfa0dbf560bb3c5d7abf319f22e22b1cf3d9942f9791cda362bb13f5d0",
+        "And Drugs/bg.png": "77525475ed82ed2c72aeb20249cf51e2f2839f4343b94f561d9c68adcd48bd7f",
+        "And Drugs/bn.png": "a31325a453a8afb4e9c8563350ba8f92acf114971219f6a5c3c42ed33adbc4e7",
+        "And Drugs/cdtitle.png": "33d536e18240fb85aaf5c8afc03bb49fb0f761e1adf22ff44267283fb391ac3e",
+        "And Drugs/delete lua folder if you don't want mods": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "And Drugs/lua/default.lua": "e2398b78f272e0b225d84aceb131c50ca6d5a0ad5e06d255f7e169860c0d458d",
+        "And Drugs/lua/default.xml": "258b926d94ca32a21f4bb2cbd7d72936bae188f5d875f0420d1794f1249b138f",
+        "And Drugs/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "And Drugs/lua/easing.xml": "7c837cba7f448a43995feee284b1502fa5aa32bdc9441efd9279c89ae5a76b25",
+        "And Drugs/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "And Drugs/lua/modhelpers.xml": "15f5f8f4d2afd6c404c54984c19d27f435a0ac8fd42f1cad4d1dc485d3a30c8d",
+        "And Drugs/lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 7634,
+      "duration_seconds": 127.20000457763672,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 6,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 92,
+      "source_simfile": "And Drugs/and drugs.ssc",
+      "archive": "94947db8029f86259602a7d0f20f38c79a8681177fdefa4d59a3185042e82c57.tar.zst",
+      "archive_sha256": "94947db8029f86259602a7d0f20f38c79a8681177fdefa4d59a3185042e82c57",
+      "harness_version": "0.1.61",
+      "source_commit": "4910a6925cca98dc95ba8a9dbd6039f61bec915a",
+      "source_pending_commit": false,
+      "binary_sha256": "3e6523f86f6d4d3747ee2d54b3b5fe0bf5673ca413411dde6786cd98c8cf30cb",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass176\\ordered-main-v3-full_song_lua.exe",
+        "94947db8029f86259602a7d0f20f38c79a8681177fdefa4d59a3185042e82c57.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 44.82234890013933,
+      "comparisons_passed": 182791,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-092-ordered-main-v3.log",
+      "log_sha256": "34b0a4310ebe0dbdfee713872808a0c30e2a3bf72434b34aab6da2d4ebc8a105",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass204-top-092-current-main-v1.json",
+      "native_receipt_sha256": "df59e931d29d6460eaeedcd437cb62e0a5c1db45d00a9ba0b2c96b18f1cd443d",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "4910a6925cca98dc95ba8a9dbd6039f61bec915a",
+    "source_pending_commit": false,
+    "binary_sha256": "22791b322ee544f8a1aa2ae315ccb06ceb77d39a915869a86e08af4efc60a17e",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass176\\ordered-main-v3-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 2.1891069998964667,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-092-native-pass171.log",
+    "log_sha256": "d05c1bd4bc1731de07669b1cfd26c78ee325f0e80ad961e0d132132b2175968f",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 292 filtered out; finished in 0.49s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

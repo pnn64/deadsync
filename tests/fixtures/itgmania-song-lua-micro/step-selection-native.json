@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "controls": [
+    {
+      "kind": "single",
+      "style": "versus",
+      "initial_step_index": 2,
+      "snapshots": [
+        "different-music:first:first:1:1",
+        "same-music:first:second:1:2",
+        "same-pointer:first:second:2:2",
+        "clear-one:nil:second:3:2",
+        "fill-empty:second:second:4:3",
+        "inherited-music:inherited:inherited:5:4",
+        "authored-spelling:spelling:spelling:6:5",
+        "reentrant-selection:second:second:8:6"
+      ],
+      "calls": [
+        [
+          0,
+          "StepsType_Dance_Single",
+          "Difficulty_Challenge",
+          "third"
+        ],
+        [
+          1,
+          "StepsType_Dance_Single",
+          "Difficulty_Challenge",
+          "third"
+        ],
+        [
+          0,
+          "StepsType_Dance_Single",
+          "Difficulty_Easy",
+          "first"
+        ],
+        [
+          1,
+          "StepsType_Dance_Single",
+          "Difficulty_Medium",
+          "second"
+        ],
+        [
+          0,
+          "StepsType_Dance_Single",
+          "Difficulty_Easy",
+          "first"
+        ],
+        [
+          0,
+          null
+        ],
+        [
+          1,
+          "StepsType_Dance_Single",
+          "Difficulty_Medium",
+          "second"
+        ],
+        [
+          0,
+          "StepsType_Dance_Single",
+          "Difficulty_Hard",
+          "inherited"
+        ],
+        [
+          1,
+          "StepsType_Dance_Single",
+          "Difficulty_Edit",
+          "spelling"
+        ],
+        [
+          0,
+          "StepsType_Dance_Single",
+          "Difficulty_Medium",
+          "second"
+        ],
+        [
+          0,
+          "StepsType_Dance_Single",
+          "Difficulty_Easy",
+          "first"
+        ]
+      ],
+      "trace_sha256": "fc5c2af49a8cdaf08e90566d4453900a584b09b833d84429dadbce132fec1274"
+    },
+    {
+      "kind": "routine",
+      "style": "routine",
+      "initial_step_index": 0,
+      "snapshots": [
+        "different-music:first:first:1:1",
+        "same-music:second:second:2:2",
+        "same-pointer:second:second:3:2",
+        "clear-one:nil:second:4:2",
+        "fill-empty:second:second:5:3",
+        "inherited-music:inherited:inherited:6:4",
+        "authored-spelling:spelling:spelling:7:5",
+        "reentrant-selection:second:second:9:6"
+      ],
+      "calls": [
+        [
+          0,
+          "StepsType_Dance_Routine",
+          "Difficulty_Challenge",
+          "third"
+        ],
+        [
+          1,
+          "StepsType_Dance_Routine",
+          "Difficulty_Challenge",
+          "third"
+        ],
+        [
+          0,
+          "StepsType_Dance_Routine",
+          "Difficulty_Easy",
+          "first"
+        ],
+        [
+          1,
+          "StepsType_Dance_Routine",
+          "Difficulty_Medium",
+          "second"
+        ],
+        [
+          0,
+          "StepsType_Dance_Routine",
+          "Difficulty_Medium",
+          "second"
+        ],
+        [
+          0,
+          null
+        ],
+        [
+          1,
+          "StepsType_Dance_Routine",
+          "Difficulty_Medium",
+          "second"
+        ],
+        [
+          0,
+          "StepsType_Dance_Routine",
+          "Difficulty_Hard",
+          "inherited"
+        ],
+        [
+          1,
+          "StepsType_Dance_Routine",
+          "Difficulty_Edit",
+          "spelling"
+        ],
+        [
+          0,
+          "StepsType_Dance_Routine",
+          "Difficulty_Medium",
+          "second"
+        ],
+        [
+          0,
+          "StepsType_Dance_Routine",
+          "Difficulty_Easy",
+          "first"
+        ]
+      ],
+      "trace_sha256": "2b852a09fb83299a0d065962df828292782d1d99a5776a483336e20956c0eafb"
+    }
+  ]
+}

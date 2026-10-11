@@ -1,6 +1,7 @@
 //! Independent noteskin components and previews for Player Options.
 
 use super::*;
+use deadlib_present::actors::TextContent;
 use deadsync_noteskin::pack::{InstalledPack, SLOTS, Selection, Skin};
 use profile_data::{NoteSkin, PlayerOptionsData};
 
@@ -88,50 +89,56 @@ impl PackMenu {
         else {
             return;
         };
-        let names: Vec<_> = rows
-            .row(RowId::NoteSkin)
-            .choices
+        let names = &rows.row(RowId::NoteSkin).choices;
+        let bundled: Vec<_> = names
             .iter()
-            .map(|name| name.as_str().to_string())
+            .filter(|name| !self.skins.iter().any(|skin| skin.id == name.as_str()))
+            .map(|name| {
+                (
+                    NoteSkin::new(name.as_str()),
+                    format!("{} / {name}", tr("PlayerOptions", "SkinBundled")),
+                )
+            })
             .collect();
+        let providers: Vec<_> = self
+            .skins
+            .iter()
+            .filter(|skin| names.iter().any(|name| name.as_str() == skin.id))
+            .map(|skin| (skin, family_label(&skin.id)))
+            .collect();
+        let original_label = tr("PlayerOptions", "SkinOriginal");
         rows.display_order.retain(|id| slot_for_row(*id).is_none());
         for (slot, &(id, title)) in ROWS.iter().enumerate() {
             let mut labels = Vec::new();
             let choices = &mut self.choices[slot];
             choices.clear();
-            if slot == 9 {
-                labels.extend((10..=200).map(|size| format!("{size}%")));
-            } else {
+            if slot != 9 {
                 choices.push(None);
                 labels.push(tr("PlayerOptions", "MatchNoteSkinLabel").to_string());
                 if slot == 6 {
                     choices.push(Some(NoteSkin::none_choice()));
                     labels.push(tr("PlayerOptions", "NoTapExplosionLabel").to_string());
                 }
-                for name in &names {
-                    if self.skins.iter().any(|skin| skin.id == *name) {
-                        continue;
-                    }
-                    choices.push(Some(NoteSkin::new(name)));
-                    labels.push(format!("{} / {name}", tr("PlayerOptions", "SkinBundled")));
+                for (value, label) in &bundled {
+                    choices.push(Some(value.clone()));
+                    labels.push(label.clone());
                 }
-                for skin in self.skins.iter().filter(|skin| names.contains(&skin.id)) {
-                    let family = family_label(&skin.id);
+                for (skin, family) in &providers {
                     for choice in skin
                         .options
                         .iter()
                         .filter(|choice| choice.slot == SLOTS[slot])
                     {
                         let value = if choice.id == "base" {
-                            skin.id.clone()
+                            NoteSkin::new(&skin.id)
                         } else {
-                            format!("{}?{}={}", skin.id, SLOTS[slot], choice.id)
+                            NoteSkin::new(&format!("{}?{}={}", skin.id, SLOTS[slot], choice.id))
                         };
-                        choices.push(Some(NoteSkin::new(&value)));
+                        choices.push(Some(value));
                         let label = if choice.id == "base" {
-                            tr("PlayerOptions", "SkinOriginal").to_string()
+                            original_label.as_ref()
                         } else {
-                            choice.label.clone()
+                            &choice.label
                         };
                         labels.push(format!("{family} / {label}"));
                     }
@@ -155,7 +162,18 @@ impl PackMenu {
                     }
                 }
             }
-            let row = Row::custom(
+            let labels = if slot == 9 {
+                (10..=200)
+                    .map(|size| {
+                        TextContent::inline_format(format_args!("{size}%"))
+                            .expect("10% through 200% fit inline")
+                    })
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice()
+            } else {
+                row::actor_texts(labels)
+            };
+            let row = Row::custom_actor_texts(
                 id,
                 lookup_key("PlayerOptions", title),
                 lookup_key(
@@ -304,3 +322,7 @@ pub(super) fn apply_part(
     sync_player(state, player);
     Outcome::persisted_with_visibility()
 }
+
+#[cfg(test)]
+#[path = "pack_options/menu_buffers_perf.rs"]
+mod menu_buffers_perf;

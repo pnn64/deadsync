@@ -1,0 +1,71 @@
+{
+  "contract": "All loaded song roots receive parent-first Begin before their On pass. Native Screen::BeginScreen calls PlayCommand(Begin); ActorFrame::HandleMessage propagates parent-first; Foreground::Update issues On at the foreground start.",
+  "source_lines": {
+    "Screen.cpp": [
+      93,
+      112
+    ],
+    "ScreenGameplay.cpp": [
+      891,
+      1392,
+      1653
+    ],
+    "ActorFrame.cpp": [
+      538,
+      547
+    ],
+    "Foreground.cpp": [
+      94,
+      123
+    ],
+    "Actor.cpp": [
+      2392,
+      2395
+    ]
+  },
+  "native_request": {
+    "schema_version": 1,
+    "name": "native Begin command binding and wrapper return",
+    "lua_assertions": "local order = {}\nassert(native_proxy:GetTarget() == nil)\nfrozen:addcommand('Begin', function(self)\n    order[#order+1] = 'Begin'\n    self:SetFOV(45)\n    native_target:visible(false)\n    native_proxy:SetTarget(native_target)\nend)\nnative_proxy:addcommand('On', function(self)\n    order[#order+1] = 'On'\n    assert(self:GetTarget() == native_target)\nend)\nfrozen:playcommand('Begin')\nnative_proxy:playcommand('On')\nassert(order[1] == 'Begin' and order[2] == 'On')\nassert(native_proxy:GetTarget() == native_target)\nlocal wrapper = native_proxy:AddWrapperState()\nassert(wrapper == native_proxy:GetWrapperState(1))\nnative_proxy:AddWrapperState()\nassert(native_proxy:GetNumWrapperStates() == 2)\n"
+  },
+  "native_control": {
+    "source_commit": "7a75d74081a4e0e944e1babde8d8d64363ad625a",
+    "source_pending_commit": false,
+    "binary_sha256": "b4038da817427703f3bc30c8aea16117e7c3ffa39c93356243d455e1dd694c3d",
+    "command": [
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass269-native-commands-committed-cli-v1.exe",
+      "actor-conformance",
+      "C:\\GitHub\\itgmania-harness\\target\\native-begin-command-control-v2\\request.json",
+      "--out",
+      "C:\\GitHub\\itgmania-harness\\target\\native-begin-command-control-v2\\result.json"
+    ],
+    "exit_code": 0,
+    "request_sha256": "f9e2c5a55b4747c07c5d979f1c8b79ec316745fe343b7f5be38537446957b1e4",
+    "result_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+    "semantic_host_used": false,
+    "identical_local_and_native_source_sha256": {
+      "Screen.cpp": "d77fc7cd061a7a90584529f95966badc0b5b327438b2b00376c463151fb9ec9a",
+      "ScreenGameplay.cpp": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+      "ScreenWithMenuElements.cpp": "88f95ddf0c66f672f3fa79ab26be6925f1dce019b7544a710e9593c60da7e3ba",
+      "Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+      "ActorProxy.cpp": "88361635de14dd7777a4c004432b3fe7da171d403d080a5544fda8c2e9f008c4",
+      "ActorProxy.h": "a2484891b4c0bbfec2938c95eb0da67eaf6c9d1e2654b0504322fe4cf496ee67",
+      "Foreground.cpp": "04655fe3db304e08f8d424ac6a928858b74182f74ba14ceb658b709324153847"
+    },
+    "result": {
+      "allocations": [],
+      "diagnostics": [],
+      "provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      },
+      "script_errors": []
+    },
+    "limits": "Actual native actor commands, FOV setter, proxy binding and wrapper return. Begin-before-foreground-On lifecycle and parent-first propagation are established from identical checked source; this control does not construct ScreenGameplay."
+  },
+  "regression": "Butterfly binds its player proxies and sets its FOV in Begin. Previously DeadSync ran On without a Begin pass.",
+  "limits": "Actual native actor commands, FOV setter, proxy binding and wrapper return. Begin-before-foreground-On lifecycle and parent-first propagation are established from identical checked source; this control does not construct ScreenGameplay."
+}

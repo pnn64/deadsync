@@ -238,7 +238,7 @@ fn borrowed_leaderboard_rows_remove_temporary_owned_entries() {
         );
         assert!(old.allocated_bytes > new.allocated_bytes);
         assert!(
-            new.peak_added_bytes <= old.peak_added_bytes,
+            new.peak_bytes <= old.peak_bytes,
             "kind={kind}: {old:?} -> {new:?}"
         );
     }

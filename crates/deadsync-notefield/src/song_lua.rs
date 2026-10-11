@@ -100,7 +100,8 @@ fn song_lua_player_y_fold_actor_in_place(actor: &mut Actor, pivot_x: f32, cos_y:
         }
         Actor::Shadow { child, .. } => song_lua_player_y_fold_actor_in_place(child, pivot_x, cos_y),
         // Shared subtrees keep their established wrapper boundary.
-        Actor::SharedTransform { .. } | Actor::CameraPush { .. } | Actor::CameraPop => {}
+        Actor::SharedTransform { .. } | Actor::SharedCamera { .. }
+        | Actor::CameraPush { .. } | Actor::CameraPop => {}
     }
 }
 
@@ -477,7 +478,7 @@ mod tests {
             depth_test: true,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: true,
+            cull_mode: deadlib_render_core::CullMode::Back,
             visible: false,
             blend: BlendMode::Multiply,
             z: -12,
@@ -498,7 +499,7 @@ mod tests {
             uv_offset,
             uv_tex_shift,
             depth_test,
-            cull_back,
+            cull_mode,
             visible,
             blend,
             z,
@@ -524,7 +525,7 @@ mod tests {
         assert_eq!(uv_offset, [0.15, 0.25]);
         assert_eq!(uv_tex_shift, [0.35, 0.45]);
         assert!(depth_test);
-        assert!(cull_back);
+        assert_eq!(cull_mode, deadlib_render_core::CullMode::Back);
         assert!(!visible);
         assert_eq!(blend, BlendMode::Multiply);
         assert_eq!(z, -12);

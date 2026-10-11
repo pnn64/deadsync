@@ -1,4 +1,5 @@
 use rssp::parse::{decode_bytes, unescape_tag};
+use std::borrow::Cow;
 
 #[must_use]
 pub fn latest_simfile_tag_value(simfile_data: &[u8], tag: &[u8]) -> String {
@@ -41,7 +42,13 @@ pub fn latest_simfile_tag_values<const N: usize>(
 
     std::array::from_fn(|index| {
         latest[index]
-            .map(|raw| unescape_tag(decode_bytes(raw).as_ref()).into_owned())
+            .map(|raw| match decode_bytes(raw) {
+                Cow::Borrowed(decoded) => unescape_tag(decoded).into_owned(),
+                Cow::Owned(decoded) => match unescape_tag(&decoded) {
+                    Cow::Borrowed(_) => decoded,
+                    Cow::Owned(unescaped) => unescaped,
+                },
+            })
             .unwrap_or_default()
     })
 }
@@ -274,4 +281,9 @@ mod tests {
             Some(b"first".as_slice())
         );
     }
+}
+
+#[cfg(test)]
+mod parse_perf {
+    include!("tags_parse_perf.rs");
 }

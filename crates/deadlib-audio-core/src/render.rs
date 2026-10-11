@@ -72,6 +72,44 @@ fn convert_music_samples(
     target_gain: f32,
     current_gain: &mut f32,
 ) {
+    if channels == 2
+        && *current_gain != target_gain
+        && (target_gain - *current_gain).abs()
+            <= MUSIC_GAIN_MAX_STEP * (src.len().min(dst.len()) / 2) as f32
+    {
+        // Only split callbacks whose ramp is close to settling. Check every 64
+        // frames, then convert the settled tail in one constant-gain chunk.
+        let samples = src.len().min(dst.len()) / 2 * 2;
+        let mut start = 0;
+        while start < samples {
+            let end = if *current_gain == target_gain {
+                samples
+            } else {
+                (start + 128).min(samples)
+            };
+            convert_music_chunk(
+                &src[start..end],
+                &mut dst[start..end],
+                channels,
+                music_vol,
+                target_gain,
+                current_gain,
+            );
+            start = end;
+        }
+    } else {
+        convert_music_chunk(src, dst, channels, music_vol, target_gain, current_gain);
+    }
+}
+
+fn convert_music_chunk(
+    src: &[i16],
+    dst: &mut [f32],
+    channels: usize,
+    music_vol: f32,
+    target_gain: f32,
+    current_gain: &mut f32,
+) {
     if *current_gain == target_gain {
         let scale = music_vol * target_gain;
         if scale == 0.0 {
@@ -856,3 +894,7 @@ mod tests {
         assert_eq!(render.stale_blocks_left, pool_blocks - (pool_blocks - 1));
     }
 }
+
+#[cfg(test)]
+#[path = "render_perf_tests.rs"]
+mod perf_tests;

@@ -48,6 +48,6 @@ pub fn compare(label: &str, mut original: impl FnMut(), mut current: impl FnMut(
     );
     println!(
         "{label}: peak added live bytes {} -> {}",
-        before.peak_added_bytes, after.peak_added_bytes
+        before.peak_bytes, after.peak_bytes
     );
 }

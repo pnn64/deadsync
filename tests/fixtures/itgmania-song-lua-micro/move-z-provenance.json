@@ -1,0 +1,58 @@
+{
+  "contract": "MoveZ is an unbounded per-column fraction with an approach speed. GetXYZPos adds 64 * MoveZ to GetZPos before spline offsets. Absolute position splines replace the entire ArrowEffects position.",
+  "source_lines": {
+    "ArrowEffects.cpp": [
+      1183,
+      1189
+    ],
+    "ArrowEffects.h": [
+      37,
+      44
+    ],
+    "NoteDisplay.cpp": [
+      364,
+      380
+    ]
+  },
+  "native_request": {
+    "schema_version": 1,
+    "name": "native lane MoveZ fractions and approach",
+    "option_control": true,
+    "lua_assertions": "local function po(level, name, ...)\n    return _ITG_OPTIONS_AT(0, 'ModsLevel_' .. level, name, ...)\nend\nassert(po('Current', 'MoveZ1') == 0)\npo('Song', 'FromString', '*2 150% movez1, *2 -50% movez4')\nassert(po('Song', 'MoveZ1') == 1.5)\nassert(po('Song', 'MoveZ4') == -0.5)\nassert(po('Current', 'MoveZ1') == 0)\n_ITG_OPTIONS_ADVANCE(0.5)\nassert(po('Current', 'MoveZ1') == 1)\nassert(po('Current', 'MoveZ4') == -0.5)\n_ITG_OPTIONS_ADVANCE(1)\nassert(po('Current', 'MoveZ1') == 1.5)\npo('Song', 'MoveZ2', -0.25, 1000)\n_ITG_OPTIONS_ADVANCE(1.5)\nassert(po('Current', 'MoveZ2') == -0.25)\nassert(po('Current', 'MoveZ3') == 0)\n"
+  },
+  "native_control": {
+    "source_commit": "7a75d74081a4e0e944e1babde8d8d64363ad625a",
+    "source_pending_commit": false,
+    "binary_sha256": "b4038da817427703f3bc30c8aea16117e7c3ffa39c93356243d455e1dd694c3d",
+    "command": [
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass269-native-commands-committed-cli-v1.exe",
+      "actor-conformance",
+      "C:\\GitHub\\itgmania-harness\\target\\native-movez-option-control-v2\\request.json",
+      "--out",
+      "C:\\GitHub\\itgmania-harness\\target\\native-movez-option-control-v2\\result.json"
+    ],
+    "exit_code": 0,
+    "request_sha256": "7b19b34ae93e33d636eb26807ed8c46160669fc97e51124f5a2bca4087c28d54",
+    "result_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+    "semantic_host_used": false,
+    "identical_local_and_native_source_sha256": {
+      "PlayerOptions.cpp": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+      "PlayerOptions.h": "07df781a60f741c085a0c170770ad938e3494d0b36db401528b856df8b306d93",
+      "ArrowEffects.cpp": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+      "ArrowEffects.h": "d59829d819c711496efa5bbca868da96fdcd30931099327133ba399f8c4d9f31",
+      "NoteDisplay.cpp": "89b00566561cb16a80b277037d4089b7438510b202b241a099d62cd26bdd72e0"
+    },
+    "result": {
+      "allocations": [],
+      "diagnostics": [],
+      "provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      },
+      "script_errors": []
+    },
+    "limits": "Actual native PlayerOptions parsing, lane setters/getters and approach. Note positioning and spline override rules are established from identical ArrowEffects.h and NoteDisplay.cpp, not a rendered native note field."
+  }
+}

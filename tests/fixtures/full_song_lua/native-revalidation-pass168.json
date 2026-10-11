@@ -1,0 +1,102 @@
+{
+  "pass": 168,
+  "previous_record": "native-revalidation-pass167.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "1121d63d11fb8922fee95bd721470004f02ab139",
+  "comparator_sha256": "558e94f44afb61ac48edb9915e1301a87db458dfc1492dab91447d58cca76f94",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    89
+  ],
+  "next_position": 90,
+  "comparisons_passed": 275803,
+  "charts": [
+    {
+      "position": 89,
+      "entry": {
+        "title": "Airman First Class",
+        "source_simfile": "Airman First Class - [glory limited.]/kpopmix.ssc",
+        "harness_version": "0.1.59",
+        "archive": "fb3e1291a384b5c63713c1d75156ca90abc0e2868c4308dce1de76de0a7d2690.tar.zst",
+        "sha256": "fb3e1291a384b5c63713c1d75156ca90abc0e2868c4308dce1de76de0a7d2690",
+        "compressed_bytes": 14285473,
+        "aliases": [
+          "4279bc63b1662936464a9afe10accb336dbeec58d6c8e2d4d9a2850ff55ff4a6.tar.zst"
+        ]
+      },
+      "original_archive_retained": "ebf1c207285e977b49d2753dd264f1d448d69ade80ea013755aecb16fc0635db.tar.zst",
+      "native_source_commit": "70612e17a1cad6855a3bcca5fff9ef3a6c1d6fe5",
+      "native_trace_sha256": "863d17b326cb4267fa919eec45c5ba69bb0df189810cbf322d65e0c725d4079d",
+      "original_source_sha256": {
+        "Airman First Class - [glory limited.]/black.png": "6df2d2572ed15b8d1eb7a7afd2fd95e0013f786d6ff78f6b30f16d0d7ae41819",
+        "Airman First Class - [glory limited.]/kpopmix.ssc": "6943c9063fb1fbf335efa6962eb75b682584b1a6bfdaf52a0aa4c4da15ac6cb4",
+        "Airman First Class - [glory limited.]/kpopmix.ssc.oldsync": "c25d1681befe666f78116fe9677094639d26ac3109665b5e50b1efbc5ff67bd3",
+        "Airman First Class - [glory limited.]/lame_cut.ogg": "c59e05c7af6a34ef6bd0d1b85797729140226e1fae0022d68741a294e2e3801b",
+        "Airman First Class - [glory limited.]/preview.mp4": "20e65b6daa9fe430249ae34b70d55a506f0d9927b9748c51f0011b1689dbc6b1",
+        "Airman First Class - [glory limited.]/readme.txt": "0de461e5491ae849eba0d6faa7904162cef4bafe4efc4634788df41f3c24694c",
+        "Airman First Class - [glory limited.]/video/bg.mp4": "e10b16465fdc0c45ae495b277405e7599ada685fb27f76505fd1d0a6f74cdf66",
+        "Airman First Class - [glory limited.]/video/Default.lua": "888ee35d1f80798c16edebf3e85f2b559d3587adae7563745a6a9dada9e6de23"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 12535,
+      "duration_seconds": 208.8881378173828,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 4,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 89,
+      "source_simfile": "Airman First Class - [glory limited.]/kpopmix.ssc",
+      "archive": "fb3e1291a384b5c63713c1d75156ca90abc0e2868c4308dce1de76de0a7d2690.tar.zst",
+      "archive_sha256": "fb3e1291a384b5c63713c1d75156ca90abc0e2868c4308dce1de76de0a7d2690",
+      "harness_version": "0.1.59",
+      "source_commit": "1121d63d11fb8922fee95bd721470004f02ab139",
+      "source_pending_commit": false,
+      "binary_sha256": "558e94f44afb61ac48edb9915e1301a87db458dfc1492dab91447d58cca76f94",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\bounce-tornado-v3-full_song_lua.exe",
+        "fb3e1291a384b5c63713c1d75156ca90abc0e2868c4308dce1de76de0a7d2690.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.5533908996731043,
+      "comparisons_passed": 275803,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-089-mp4-bounce-v3.log",
+      "log_sha256": "5731611c04d576868d340c6a209b8286096ff9f958cdecfbc079a7232db63285",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass175-top-089-mp4-v3.json",
+      "native_receipt_sha256": "6087665ad99f91f00423bd993933a09fd7e660c0c7de01924052eb3a4e46778b",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "1121d63d11fb8922fee95bd721470004f02ab139",
+    "source_pending_commit": false,
+    "binary_sha256": "e0749990919ef24e6f385def3c6a29d86df4513f45c66b6a6199772b53d1cc95",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\bounce-tornado-v3-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.034751399885863,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-089-native-pass168.log",
+    "log_sha256": "8417ec07c43e66c3bf1803222f4ee3feb004804bc2c287df3151f5aa733b1f45",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 271 filtered out; finished in 0.62s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

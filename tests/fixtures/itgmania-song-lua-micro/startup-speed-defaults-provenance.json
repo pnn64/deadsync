@@ -1,0 +1,99 @@
+{
+  "purpose": "Retain native default and previously edited approach speeds when amount setters omit an approach argument; keep static startup speeds in production playback",
+  "source_parent": "1d4443eb3789ae47dd7ed18ca08c71cc2003ae94",
+  "native_reference": [
+    "itgmania/src/PlayerOptions.cpp:90-108",
+    "itgmania/src/PlayerOptions.cpp:2536-2580"
+  ],
+  "native_capture": {
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass190-native-startup-speed-defaults-v1\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "0afc8bb9d3ecd4089696f5464f612d09af6f0c71725ed2b39132a368509b896f",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "capture_exit_code": 0,
+    "binary_sha256": "6b6b477653effd6a50106c3baab3382ef4d2fa65bc3f0cf945689fa81f030ceb",
+    "control_sha256": "6b3642755be43d37a98c004a9ee020adc47ece1755e701ea040aaad854403193",
+    "update_frames": 241,
+    "source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+    "source_pending_commit": false,
+    "capture_complete": true,
+    "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass190-native-startup-speed-defaults-v1\\archives\\da9aa6c4fb8e45cfc77e177d1844bc5f9354c9701d4029c6c36a132baf11d130.tar.zst",
+    "archive_sha256": "da9aa6c4fb8e45cfc77e177d1844bc5f9354c9701d4029c6c36a132baf11d130",
+    "archive_entry": {
+      "title": "Native startup-speed-defaults control",
+      "source_simfile": "control/control.ssc",
+      "harness_version": "0.1.61",
+      "archive": "da9aa6c4fb8e45cfc77e177d1844bc5f9354c9701d4029c6c36a132baf11d130.tar.zst",
+      "sha256": "da9aa6c4fb8e45cfc77e177d1844bc5f9354c9701d4029c6c36a132baf11d130",
+      "compressed_bytes": 12279
+    }
+  },
+  "before_control": {
+    "exit_code": 1,
+    "comparisons_passed": 5321,
+    "comparisons_failed": 2,
+    "elapsed_seconds": 0.6225253003649414,
+    "archive_sha256": "da9aa6c4fb8e45cfc77e177d1844bc5f9354c9701d4029c6c36a132baf11d130",
+    "binary_sha256": "cad5ccc967a28fac1572f856231e46c3aa169843697fc48c4b9b5ac48fe635e1",
+    "source_commit": "1d4443eb3789ae47dd7ed18ca08c71cc2003ae94",
+    "source_pending_commit": false,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\startup-speed-defaults-before-v1.log",
+    "log_sha256": "03dad9418c57769d874cd91156d057fa7fb4dc4a8d89904f035f824c66116ee1",
+    "control_complete": true,
+    "current_worktree_used": false
+  },
+  "after_control": {
+    "exit_code": 0,
+    "comparisons_passed": 5323,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 3.0972946998663247,
+    "archive_sha256": "da9aa6c4fb8e45cfc77e177d1844bc5f9354c9701d4029c6c36a132baf11d130",
+    "binary_sha256": "d9a7bcb14b59de0920f651f1740646dc8a434479131d57ec21e3d139ec593ff8",
+    "source_commit": "1d4443eb3789ae47dd7ed18ca08c71cc2003ae94",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\startup-speed-defaults-after-v1.log",
+    "log_sha256": "54a007a6540c10d6267449373c1c08bb0998af4c434dad70d6ed30f8455bced1",
+    "control_complete": true
+  },
+  "runtime_tests": {
+    "source_commit": "1d4443eb3789ae47dd7ed18ca08c71cc2003ae94",
+    "source_pending_commit": true,
+    "binary_sha256": "51b399f9b2c000bc4be5a4db191141b5e4d0c6e3787a52fa2aac7b869a8c1afd",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\startup-speed-defaults-v1-song_lua_itgmania_semantic_parity.exe",
+      "runtime_modifiers",
+      "--nocapture"
+    ],
+    "exit_code": 101,
+    "elapsed_seconds": 31.55719990003854,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\startup-speed-defaults-regressions-v1.log",
+    "log_sha256": "a63d10585c78e177b9771dad03a8a6c15fb1346a2b012f62730c063410585edb",
+    "result_lines": [
+      "test result: FAILED. 40 passed; 3 failed; 2 ignored; 0 measured; 233 filtered out; finished in 6.82s"
+    ]
+  },
+  "song_lua_tests": {
+    "source_commit": "1d4443eb3789ae47dd7ed18ca08c71cc2003ae94",
+    "source_pending_commit": true,
+    "binary_sha256": "34bfdac23c6e8343141aba2c77236825e4d9a5820b45076c91d7837a76a72f65",
+    "binary_path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass161\\startup-speed-defaults-unit-v1.exe",
+    "exit_code": 101,
+    "elapsed_seconds": 50.94261540006846,
+    "log_sha256": "6500cfa8dd1d6d922ca0a64d9e4f3b793f44f7165906ec5bd816f3d6fbf527db",
+    "result_lines": [
+      "test result: FAILED. 500 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 48.97s"
+    ]
+  },
+  "existing_failures_retained": {
+    "song_lua": [
+      "multitap_travel_obeys_chart_timing_and_speedmod",
+      "compile_song_lua_accepts_skewy_probe_calls"
+    ],
+    "runtime": [
+      "hidden_actor_tweens_drive_modifiers_without_probe_state",
+      "lane_stealth_survives_lua_writes_and_fresh_options",
+      "motion_suboptions_survive_lua_writes_and_reset"
+    ]
+  },
+  "full_corpus_complete": false
+}

@@ -227,7 +227,6 @@ where
     install_compile_host(
         &lua,
         context,
-        &mut host,
         noteskin_resolver,
         create_dummy_actor,
         create_named_child_actor,
@@ -242,12 +241,31 @@ where
         crate::lua_util::screen_layer_states(&lua).map_err(|err| err.to_string())?;
     let roots = lua.create_table().map_err(|err| err.to_string())?;
     let mut initial_actor_states = std::collections::HashMap::new();
+    // Native Update(0) can start a player's tween from a song callback.
+    // Players are screen siblings, so traversing the song roots misses them.
+    for name in [
+        "__songlua_top_screen_player_1",
+        "__songlua_top_screen_player_2",
+    ] {
+        let actor = lua
+            .globals()
+            .get::<Table>(name)
+            .map_err(|err| err.to_string())?;
+        crate::lua_util::collect_initial_states(&Value::Table(actor), &mut initial_actor_states)
+            .map_err(|err| err.to_string())?;
+    }
     #[cfg(feature = "test-support")]
     lua.set_app_data(crate::song_tables::SongLuaSkinWrites::default());
+    #[cfg(feature = "test-support")]
+    lua.set_app_data(crate::song_tables::SongLuaBoolWrites::default());
+    #[cfg(feature = "test-support")]
+    lua.set_app_data(crate::song_tables::SongLuaSpeedWrites::default());
+    #[cfg(feature = "test-support")]
+    lua.set_app_data(crate::host::SongLuaStateCalls::default());
     for (index, entry_path) in entry_paths.iter().enumerate() {
         let root = execute_script_file(&lua, entry_path, context.song_dir.as_path())
             .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
-        if let Value::Table(actor) = &root {
+        let parent = if let Value::Table(actor) = &root {
             #[cfg(feature = "test-support")]
             actor.raw_set("__songlua_message_path", (index + 1).to_string())
                 .map_err(|err| err.to_string())?;
@@ -265,9 +283,10 @@ where
             actor
                 .set("__songlua_parent", parent.clone())
                 .map_err(|err| err.to_string())?;
-            crate::lua_util::push_sequence_child_once(&parent, actor.clone())
-                .map_err(|err| err.to_string())?;
-        }
+            Some(parent)
+        } else {
+            None
+        };
         crate::lua_util::collect_initial_states(&root, &mut initial_actor_states)
             .map_err(|err| err.to_string())?;
         run_actor_init_commands(&lua, &root).map_err(|err| {
@@ -276,6 +295,12 @@ where
                 entry_path.display()
             )
         })?;
+        // MakeActor runs Init with the parent set; Foreground::LoadFromSong
+        // adds the initialized actor to its children afterward.
+        if let (Value::Table(actor), Some(parent)) = (&root, parent) {
+            crate::lua_util::push_sequence_child_once(&parent, actor.clone())
+                .map_err(|err| err.to_string())?;
+        }
         roots
             .raw_set(index + 1, root)
             .map_err(|err| err.to_string())?;
@@ -311,6 +336,15 @@ where
     #[cfg(feature = "test-support")]
     let startup_skin_writes = lua.remove_app_data::<crate::song_tables::SongLuaSkinWrites>()
         .map(|capture| capture.writes).unwrap_or_default();
+    #[cfg(feature = "test-support")]
+    let startup_bool_writes = lua.remove_app_data::<crate::song_tables::SongLuaBoolWrites>()
+        .map(|capture| capture.0).unwrap_or_default();
+    #[cfg(feature = "test-support")]
+    let startup_speed_writes = lua.remove_app_data::<crate::song_tables::SongLuaSpeedWrites>()
+        .map(|capture| capture.0).unwrap_or_default();
+    #[cfg(feature = "test-support")]
+    let startup_state_calls = lua.remove_app_data::<crate::host::SongLuaStateCalls>()
+        .map(|capture| capture.0).unwrap_or_default();
     let startup = captured_startup.options;
     let startup_states = captured_startup.queued;
     let mut startup_tweens = captured_startup.tweens;
@@ -365,7 +399,12 @@ where
         ..CompiledSongLua::default()
     };
     #[cfg(feature = "test-support")]
-    { out.noteskin_writes = startup_skin_writes; }
+    {
+        out.noteskin_writes = startup_skin_writes;
+        out.boolean_writes = startup_bool_writes;
+        out.speed_writes = startup_speed_writes;
+        out.state_calls = startup_state_calls;
+    }
     // Real frame-zero broadcasts survive separately from discovery events.
     // Only the latter are replaced by their chronological queue dispatch.
     merge_runtime_messages(&mut out.messages, 0, &initial_broadcasts);
@@ -427,7 +466,8 @@ where
         );
     }
     compile_timer.push_stage("read_overlays");
-    let mut tracked_actors = read_tracked_compile_actors(&lua, create_named_child_actor)?;
+    let mut tracked_actors = read_tracked_compile_actors(&lua, create_named_child_actor)
+        .map_err(|err| format!("failed to read tracked actors: {err}"))?;
     let mut hidden_players = std::array::from_fn(|player| {
         tracked_actors
             .get(player)
@@ -435,19 +475,20 @@ where
     });
     let mut overlay_trigger_counter = 0usize;
     let mut sound_events = startup_sounds;
-    let prefix_is_runtime =
-        update_tree_reads_global(&lua, &root, "prefix_globals").map_err(|err| err.to_string())?;
+    let prefix_is_runtime = update_tree_reads_global(&lua, &root, "prefix_globals")
+        .map_err(|err| format!("failed to inspect prefix update callbacks: {err}"))?;
     let prefix_perframes = globals
         .get::<Option<Table>>("prefix_globals")
-        .map_err(|err| err.to_string())?
+        .map_err(|err| format!("failed to read prefix_globals: {err}"))?
         .and_then(|table| table.get::<Option<Table>>("perframes").ok().flatten());
     let global_perframes = globals
         .get::<Option<Table>>("mod_perframes")
-        .map_err(|err| err.to_string())?;
+        .map_err(|err| format!("failed to read mod_perframes: {err}"))?;
     let runtime_perframe_tables =
-        read_update_function_tables(&lua, &root, &["mod_perframes", "perframes"])?;
-    let update_reads_global_perframes =
-        update_tree_reads_global(&lua, &root, "mod_perframes").map_err(|err| err.to_string())?;
+        read_update_function_tables(&lua, &root, &["mod_perframes", "perframes"])
+            .map_err(|err| format!("failed to read update callback tables: {err}"))?;
+    let update_reads_global_perframes = update_tree_reads_global(&lua, &root, "mod_perframes")
+        .map_err(|err| format!("failed to inspect global update callbacks: {err}"))?;
     let global_perframes_are_runtime = global_perframes.as_ref().is_some_and(|global| {
         runtime_perframe_tables
             .iter()
@@ -712,7 +753,15 @@ where
     out.overlay_updates.extend(update_overlay_tracks);
     #[cfg(feature = "test-support")]
     if let Some(writes) = lua.remove_app_data::<crate::song_tables::SongLuaBoolWrites>() {
-        out.boolean_writes = writes.0;
+        out.boolean_writes.extend(writes.0);
+    }
+    #[cfg(feature = "test-support")]
+    if let Some(calls) = lua.remove_app_data::<crate::host::SongLuaStateCalls>() {
+        out.state_calls.extend(calls.0);
+    }
+    #[cfg(feature = "test-support")]
+    if let Some(writes) = lua.remove_app_data::<crate::song_tables::SongLuaSpeedWrites>() {
+        out.speed_writes.extend(writes.0);
     }
     #[cfg(feature = "test-support")]
     if let Some(writes) = lua.remove_app_data::<crate::song_tables::SongLuaSkinWrites>() {
@@ -1389,6 +1438,8 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     #[cfg(feature = "test-support")]
     {
         primary.boolean_writes = compiled.boolean_writes;
+        primary.speed_writes = compiled.speed_writes;
+        primary.state_calls = compiled.state_calls;
         primary.noteskin_writes = compiled.noteskin_writes;
     }
     primary.startup = compiled.startup;
