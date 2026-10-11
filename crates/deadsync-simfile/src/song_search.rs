@@ -629,6 +629,7 @@ mod tests {
             chart_name: String::new(),
             meter: 12,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: format!("{chart_type}-hash"),
             stats: ArrowStats::default(),

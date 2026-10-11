@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::path::Path;
+use std::rc::Rc;
 
 use chrono::{Datelike, Local, Timelike};
 use mlua::{Function, Lua, MultiValue, Table, Value};
@@ -26,7 +27,7 @@ use crate::{
     create_style_table, create_theme_prefs_rows_table, create_theme_prefs_table,
     create_theme_table, create_top_screen_table, create_trail_table, create_unlockman_table,
     current_song_lua_style_name, display_bpms_for_args, display_bpms_text,
-    easiest_steps_difficulty, format_number_and_suffix, install_def_globals,
+    format_number_and_suffix, install_def_globals,
     install_default_stdlib_compat, install_file_loader_globals, is_song_lua_audio_path,
     lua_values_equal, method_arg, note_song_lua_side_effect, player_index_from_value,
     player_number_name, read_f32, read_string, record_song_lua_broadcast, resolve_script_path,
@@ -883,6 +884,8 @@ pub fn install_message_manager_globals(
                 {
                     broadcast(lua, &message, params)?;
                 }
+                #[cfg(feature = "test-support")]
+                record_state_call(lua, "MessageManager.Broadcast", vec![serde_json::json!(message)])?;
             }
             Ok(messageman_for_broadcast.clone())
         })?,
@@ -1246,6 +1249,17 @@ fn record_state_call(lua: &Lua, operation: &'static str, args: Vec<serde_json::V
     Ok(())
 }
 
+fn write_current_steps(lua: &Lua, selected: &Table, player: usize, steps: Option<Table>) -> mlua::Result<()> {
+    selected.raw_set(player + 1, steps)?;
+    let message = ["CurrentStepsP1Changed", "CurrentStepsP2Changed"][player];
+    // BroadcastOnChange::Set broadcasts even if the pointer did not change.
+    record_song_lua_broadcast(lua, message, false)?;
+    if !lua.globals().raw_get::<Option<bool>>(SONG_LUA_SUPPRESS_BROADCAST_KEY)?.unwrap_or(false) {
+        broadcast_song_lua_message(lua, message, None)?;
+    }
+    Ok(())
+}
+
 pub fn install_game_state_globals(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -1258,6 +1272,23 @@ pub fn install_game_state_globals(
     globals.set(SONG_LUA_RUNTIME_KEY, song_runtime.clone())?;
     let song = create_song_table(lua, context)?;
     let players = create_player_tables(lua, context, &song_runtime, &song)?;
+    // Selection compares immutable authored metadata, not Lua-overridden
+    // getters or resolved audio paths. Keep each table's chart identity.
+    let all_steps: Table = song.raw_get("__songlua_steps")?;
+    let mut step_objects = Vec::with_capacity(context.song_steps.len() + LUA_PLAYERS);
+    for (index, step) in context.song_steps.iter().enumerate() {
+        step_objects.push((all_steps.raw_get::<Table>(index + 1)?, step.clone()));
+    }
+    for (index, table) in players.steps.iter().enumerate() {
+        if step_objects.iter().any(|(known, _)| known.to_pointer() == table.to_pointer()) { continue; }
+        step_objects.push((table.clone(), crate::SongLuaStep {
+            steps_type: crate::song_lua_style_info(&context.style_name).steps_type.into(),
+            difficulty: context.players[index].difficulty, description: String::new(),
+            chart_name: String::new(), credit: String::new(),
+            meter: context.players[index].difficulty.meter().max(0) as u32, music_file: String::new(),
+        }));
+    }
+    let step_objects = Rc::new(step_objects);
     for (key, options) in SONG_LUA_PLAYER_OPTIONS_KEYS
         .iter()
         .zip(players.player_options.iter())
@@ -1527,9 +1558,8 @@ pub fn install_game_state_globals(
         lua.create_function({
             let current_steps = current_steps.clone();
             move |_, args: MultiValue| {
-                let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
-                    return Ok(Value::Nil);
-                };
+                let player = method_arg(&args, 0).and_then(player_index_from_value)
+                    .ok_or_else(|| mlua::Error::runtime("Expected PlayerNumber"))?;
                 Ok(current_steps
                     .raw_get::<Option<Table>>(player + 1)?
                     .map_or(Value::Nil, Value::Table))
@@ -1553,43 +1583,89 @@ pub fn install_game_state_globals(
             }
         })?,
     )?;
-    let easiest_steps_difficulty = easiest_steps_difficulty(&context.players);
     gamestate.set(
         "GetEasiestStepsDifficulty",
-        lua.create_function(move |lua, _args: MultiValue| {
-            let Some(difficulty) = easiest_steps_difficulty else {
-                return Ok(Value::Nil);
-            };
-            Ok(Value::String(lua.create_string(difficulty.sm_name())?))
+        lua.create_function({
+            let current_steps = current_steps.clone();
+            let step_objects = Rc::clone(&step_objects);
+            let enabled = context.players.clone();
+            move |lua, _args: MultiValue| {
+                let mut easiest = None;
+                for (player, active) in enabled.iter().enumerate() {
+                    if !active.enabled { continue; }
+                    let Some(table) = current_steps.raw_get::<Option<Table>>(player + 1)? else {
+                        crate::lua_util::report_script_error(lua,
+                            &format!("GetEasiestStepsDifficulty called but p{} hasn't chosen notes", player + 1))?;
+                        continue;
+                    };
+                    let step = step_objects.iter().find(|(known, _)| known.to_pointer() == table.to_pointer())
+                        .map(|(_, step)| step).ok_or_else(|| mlua::Error::runtime("Unknown selected Steps"))?;
+                    if easiest.is_none_or(|value: crate::SongLuaDifficulty| step.difficulty.sort_key() < value.sort_key()) {
+                        easiest = Some(step.difficulty);
+                    }
+                }
+                easiest.map_or(Ok(Value::Nil), |difficulty| Ok(Value::String(lua.create_string(difficulty.sm_name())?)))
+            }
         })?,
     )?;
     gamestate.set(
         "SetCurrentSteps",
         lua.create_function({
-            let current_steps = current_steps;
+            let current_steps = current_steps.clone();
+            let current_style = current_style.clone();
+            let step_objects = Rc::clone(&step_objects);
+            let enabled = context.players.clone();
+            let owner = gamestate.clone();
             move |lua, args: MultiValue| {
-                let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
-                    return Ok(());
+                let player = method_arg(&args, 0).and_then(player_index_from_value)
+                    .ok_or_else(|| mlua::Error::runtime("Expected PlayerNumber"))?;
+                if matches!(method_arg(&args, 1), None | Some(Value::Nil)) {
+                    write_current_steps(lua, &current_steps, player, None)?;
+                    #[cfg(feature = "test-support")]
+                    record_state_call(lua, "GameState.SetCurrentSteps",
+                        vec![serde_json::json!(player), serde_json::Value::Null])?;
+                    note_song_lua_side_effect(lua)?;
+                    return Ok(owner.clone());
+                }
+                let Some(Value::Table(steps)) = method_arg(&args, 1) else {
+                    return Err(mlua::Error::runtime("Expected Steps"));
                 };
-                let Some(steps) = method_arg(&args, 1).and_then(|value| match value {
-                    Value::Table(table) => Some(table.clone()),
-                    _ => None,
-                }) else {
-                    return Ok(());
-                };
+                let data = step_objects.iter().find(|(known, _)| known.to_pointer() == steps.to_pointer())
+                    .map(|(_, data)| data).ok_or_else(|| mlua::Error::runtime("Expected Steps"))?;
+                let style: Table = current_style.raw_get(1)?;
+                let style_type: String = style.get::<Function>("GetStepsType")?.call(style.clone())?;
+                // Simply Love's default PreferredStyle is none, so native
+                // Common.AutoSetStyle is false. Incompatible charts error.
+                if data.steps_type != style_type {
+                    return Err(mlua::Error::runtime("No compatible style for steps/trail."));
+                }
+                write_current_steps(lua, &current_steps, player, Some(steps.clone()))?;
+                // Native ForceOtherPlayers reads the main selection again after
+                // the synchronous broadcast, which may have changed it.
+                if let Some(main) = current_steps.raw_get::<Option<Table>>(player + 1)? {
+                    let main_data = step_objects.iter().find(|(known, _)| known.to_pointer() == main.to_pointer())
+                        .map(|(_, data)| data).ok_or_else(|| mlua::Error::runtime("Unknown selected Steps"))?;
+                    for (other, active) in enabled.iter().enumerate() {
+                        if !active.enabled { continue; }
+                        let selected = current_steps.raw_get::<Option<Table>>(other + 1)?;
+                        if selected.as_ref().is_some_and(|table| table.to_pointer() == main.to_pointer()) { continue; }
+                        let other_data = selected.as_ref().and_then(|table| step_objects.iter()
+                            .find(|(known, _)| known.to_pointer() == table.to_pointer()).map(|(_, data)| data));
+                        let matches = other_data.is_some_and(|other| other.music_file == main_data.music_file
+                            && !matches!(main_data.steps_type.as_str(), "StepsType_Dance_Routine" | "StepsType_Pump_Routine")
+                            && !matches!(other.steps_type.as_str(), "StepsType_Dance_Routine" | "StepsType_Pump_Routine"));
+                        if !matches { write_current_steps(lua, &current_steps, other, Some(main.clone()))?; }
+                    }
+                }
                 #[cfg(feature = "test-support")]
                 {
-                    let steps_type: String = steps.get::<Function>("GetStepsType")?.call(steps.clone())?;
-                    let difficulty: String = steps.get::<Function>("GetDifficulty")?.call(steps.clone())?;
-                    let description: String = steps.get::<Function>("GetDescription")?.call(steps.clone())?;
                     record_state_call(lua, "GameState.SetCurrentSteps", vec![
-                        serde_json::json!(player), serde_json::json!(steps_type),
-                        serde_json::json!(difficulty), serde_json::json!(description),
+                        serde_json::json!(player), serde_json::json!(data.steps_type),
+                        serde_json::json!(data.difficulty.sm_name()), serde_json::json!(data.description),
                     ])?;
                 }
-                current_steps.raw_set(player + 1, steps)?;
                 note_song_lua_side_effect(lua)?;
-                Ok(())
+                Ok(owner.clone())
             }
         })?,
     )?;

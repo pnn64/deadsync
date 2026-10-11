@@ -974,6 +974,7 @@ mod tests {
             chart_name: String::new(),
             meter,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: String::new(),
             stats: deadsync_chart::ArrowStats::default(),

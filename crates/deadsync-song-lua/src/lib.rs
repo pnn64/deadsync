@@ -390,6 +390,8 @@ pub const SONG_LUA_EASING_NAMES: &[&str] = &[
 const SONG_LUA_COLUMN_X: [f32; SONG_LUA_NOTE_COLUMNS] = [-96.0, -32.0, 32.0, 96.0];
 const SONG_LUA_DOUBLE_COLUMN_X: [f32; SONG_LUA_DOUBLE_NOTE_COLUMNS] =
     [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0];
+const SONG_LUA_PUMP_COLUMN_X: [f32; 5] = [-96.0, -48.0, 0.0, 48.0, 96.0];
+const SONG_LUA_PUMP_DOUBLE_X: [f32; 10] = [-220.0, -172.0, -124.0, -76.0, -28.0, 28.0, 76.0, 124.0, 172.0, 220.0];
 const SONG_LUA_COLUMN_NAMES: [&str; SONG_LUA_NOTE_COLUMNS] = ["Left", "Down", "Up", "Right"];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -437,37 +439,28 @@ pub fn song_lua_style_info(style_name: &str) -> SongLuaStyleInfo {
 }
 
 fn song_lua_style_info_normalized(normalized: &str) -> SongLuaStyleInfo {
-    if matches!(
-        normalized,
-        "double" | "dancedouble" | "stepstypedancedouble"
-    ) {
-        SongLuaStyleInfo {
-            name: "double",
-            steps_type: "StepsType_Dance_Double",
-            style_type: "StyleType_OnePlayerTwoSides",
-            columns: SONG_LUA_DOUBLE_NOTE_COLUMNS,
-            width: 512.0,
-            x_offsets: &SONG_LUA_DOUBLE_COLUMN_X,
-        }
-    } else if normalized == "versus" {
-        SongLuaStyleInfo {
-            name: "versus",
-            steps_type: "StepsType_Dance_Single",
-            style_type: "StyleType_TwoPlayersTwoSides",
-            columns: SONG_LUA_NOTE_COLUMNS,
-            width: 256.0,
-            x_offsets: &SONG_LUA_COLUMN_X,
-        }
-    } else {
-        SongLuaStyleInfo {
-            name: "single",
-            steps_type: "StepsType_Dance_Single",
-            style_type: "StyleType_OnePlayerOneSide",
-            columns: SONG_LUA_NOTE_COLUMNS,
-            width: 256.0,
-            x_offsets: &SONG_LUA_COLUMN_X,
-        }
-    }
+    // GameManager.cpp dance/pump style metadata; Style::GetWidth uses the
+    // span plus average column spacing, including the pump center gap.
+    let (name, steps_type, style_type, x_offsets): (_, _, _, &'static [f32]) = match normalized {
+        "double" | "dancedouble" | "stepstypedancedouble" =>
+            ("double", "StepsType_Dance_Double", "StyleType_OnePlayerTwoSides", &SONG_LUA_DOUBLE_COLUMN_X),
+        "versus" => ("versus", "StepsType_Dance_Single", "StyleType_TwoPlayersTwoSides", &SONG_LUA_COLUMN_X),
+        "couple" | "dancecouple" | "stepstypedancecouple" =>
+            ("couple", "StepsType_Dance_Couple", "StyleType_TwoPlayersTwoSides", &SONG_LUA_COLUMN_X),
+        "routine" | "danceroutine" | "stepstypedanceroutine" =>
+            ("routine", "StepsType_Dance_Routine", "StyleType_TwoPlayersSharedSides", &SONG_LUA_DOUBLE_COLUMN_X),
+        "pumpsingle" | "stepstypepumpsingle" =>
+            ("single", "StepsType_Pump_Single", "StyleType_OnePlayerOneSide", &SONG_LUA_PUMP_COLUMN_X),
+        "pumpversus" => ("versus", "StepsType_Pump_Single", "StyleType_TwoPlayersTwoSides", &SONG_LUA_PUMP_COLUMN_X),
+        "pumpdouble" | "stepstypepumpdouble" =>
+            ("double", "StepsType_Pump_Double", "StyleType_OnePlayerTwoSides", &SONG_LUA_PUMP_DOUBLE_X),
+        "pumproutine" | "stepstypepumproutine" =>
+            ("routine", "StepsType_Pump_Routine", "StyleType_TwoPlayersSharedSides", &SONG_LUA_PUMP_DOUBLE_X),
+        _ => ("single", "StepsType_Dance_Single", "StyleType_OnePlayerOneSide", &SONG_LUA_COLUMN_X),
+    };
+    let span = x_offsets[x_offsets.len() - 1] - x_offsets[0];
+    SongLuaStyleInfo { name, steps_type, style_type, columns: x_offsets.len(),
+        width: span + span / (x_offsets.len() - 1) as f32, x_offsets }
 }
 
 #[inline(always)]
@@ -1370,6 +1363,7 @@ pub struct SongLuaStep {
     pub chart_name: String,
     pub credit: String,
     pub meter: u32,
+    pub music_file: String,
 }
 
 impl From<&deadsync_chart::ChartData> for SongLuaStep {
@@ -1389,6 +1383,7 @@ impl From<&deadsync_chart::ChartData> for SongLuaStep {
             chart_name: chart.chart_name.clone(),
             credit: chart.step_artist.clone(),
             meter: chart.meter,
+            music_file: chart.music_file.clone(),
         }
     }
 }
@@ -12769,7 +12764,61 @@ return Def.ActorFrame{}
                 steps_type: "StepsType_Dance_Single".into(), difficulty,
                 description: String::new(), chart_name: String::new(), credit: String::new(),
                 meter: difficulty.meter().max(0) as u32,
+                music_file: String::new(),
             }).collect()
+    }
+
+    #[test]
+    #[cfg(feature = "test-support")]
+    fn step_selection_matches_native() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro");
+        let expected: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(root.join("step-selection-native.json"))
+                .expect("read native selection capture"),
+        ).expect("native selection JSON");
+        for native in expected["controls"].as_array().expect("native controls") {
+            let kind = native["kind"].as_str().expect("control name");
+            // RSSP currently loads single/double simfiles only. The routine
+            // API control supplies the same chart metadata through the public
+            // compile context; it does not certify routine simfile loading.
+            let song = deadsync_simfile::song::parse_song_meta_file(
+                &root.join("step-selection-single.ssc"),
+                &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+                0.0, |_| 0.0,
+            ).expect("parse native selection control");
+            let mut context = SongLuaCompileContext::new(&root, "Native step selection");
+            context.song_steps = song.charts.iter().map(crate::SongLuaStep::from).collect();
+            if kind == "routine" {
+                for steps in &mut context.song_steps {
+                    steps.steps_type = "StepsType_Dance_Routine".into();
+                }
+            }
+            context.style_name = native["style"].as_str().expect("native style").into();
+            let selected = native["initial_step_index"].as_u64().expect("native initial selection") as usize;
+            context.player_step_indices = [Some(selected); crate::LUA_PLAYERS];
+            for player in &mut context.players {
+                player.difficulty = context.song_steps[selected].difficulty;
+            }
+            context.music_length_seconds = 1.0;
+            let compiled = test_compile_song_lua(&root.join("step-selection.lua"), &context)
+                .expect("native selection script");
+            // On broadcasts are absorbed into the startup snapshot. Audit the
+            // calls themselves rather than looking for scheduled messages.
+            let snapshots: Vec<_> = compiled.state_calls.iter()
+                .filter(|call| call.operation == "MessageManager.Broadcast")
+                .filter_map(|call| call.args.first().and_then(serde_json::Value::as_str))
+                .filter(|message| message.contains(':')).collect();
+            let native_snapshots: Vec<_> = native["snapshots"].as_array().expect("native snapshots")
+                .iter().map(|value| value.as_str().expect("native message")).collect();
+            assert_eq!(snapshots, native_snapshots, "{kind} native state and synchronous messages: {:?}", compiled.info);
+            #[cfg(feature = "test-support")]
+            assert_eq!(compiled.state_calls.iter().filter(|call| call.operation == "GameState.SetCurrentSteps")
+                .map(|call| &call.args).collect::<Vec<_>>(),
+                native["calls"].as_array().expect("native calls").iter()
+                    .map(|call| call.as_array().expect("native arguments")).collect::<Vec<_>>(),
+                "{kind} native call order");
+        }
     }
 
     #[test]
@@ -12816,7 +12865,8 @@ return Def.ActorFrame{}
         let compiled = test_compile_song_lua(&entry, &context).expect("native event-mode branch");
         assert_eq!(compiled.messages[0].message, "Difficulty_Easy:Difficulty_Edit");
         #[cfg(feature = "test-support")]
-        assert_eq!(compiled.state_calls.iter().map(|call| &call.args).collect::<Vec<_>>(),
+        assert_eq!(compiled.state_calls.iter().filter(|call| call.operation != "MessageManager.Broadcast")
+            .map(|call| &call.args).collect::<Vec<_>>(),
             expected["seeded_calls"].as_array().expect("native state calls").iter()
                 .map(|call| call.as_array().expect("native call arguments")).collect::<Vec<_>>());
     }

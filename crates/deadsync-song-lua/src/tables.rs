@@ -2100,6 +2100,7 @@ pub fn create_timing_table(
 
 pub fn create_style_table(lua: &Lua, style_name: &str) -> mlua::Result<Table> {
     let table = lua.create_table()?;
+    table.raw_set("__songlua_style_key", style_name)?;
     let style = crate::song_lua_style_info(style_name);
     let style_name_for_get = style.name.to_string();
     table.set(

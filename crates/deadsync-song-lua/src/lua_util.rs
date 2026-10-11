@@ -1965,6 +1965,7 @@ pub fn current_song_lua_style_name(lua: &Lua) -> String {
     let Ok(Value::Table(style)) = current_gamestate_value(lua, "GetCurrentStyle") else {
         return "single".to_string();
     };
+    if let Ok(Some(key)) = style.raw_get::<Option<String>>("__songlua_style_key") { return key; }
     let Ok(Some(method)) = style.get::<Option<Function>>("GetName") else {
         return "single".to_string();
     };
@@ -2976,13 +2977,21 @@ pub fn broadcast_song_lua_message(
         let params = normalize_broadcast_params(lua, message, params)?;
         // Drain in place so consuming the snapshot does not move its inline buffer.
         actors.drain(..).try_for_each(|(_, actor)| {
-            run_actor_named_command_with_drain_and_params(
+            // Native Actor::HandleMessage invokes the command immediately,
+            // including a reentrant broadcast of the same message. Queue
+            // discovery guards must not suppress that synchronous delivery.
+            let active = actor_active_commands(lua, &actor)?;
+            let previous_active = active.raw_get::<Value>(command.as_str())?;
+            active.raw_set(command.as_str(), Value::Nil)?;
+            let result = run_actor_named_command_with_drain_and_params(
                 lua,
                 &actor,
                 &command,
                 true,
                 params.clone(),
-            )?;
+            );
+            active.raw_set(command.as_str(), previous_active)?;
+            result?;
             if lua.app_data_ref::<SongLuaCompileFrames>().is_some()
                 && let Some(mut deferred) = lua.app_data_mut::<SongLuaDeferredMessages>()
             {

@@ -535,6 +535,7 @@ fn build_charts(
                 chart_name: chart.chart_name_str,
                 meter,
                 step_artist: chart.step_artist_str,
+                music_file: chart.music_path,
                 music_path,
                 offset: chart.chart_offset_seconds as f32,
                 notes: chart.minimized_note_data,

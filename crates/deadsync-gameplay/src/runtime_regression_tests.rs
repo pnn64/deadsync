@@ -754,6 +754,7 @@ mod runtime_regression_tests {
             chart_name: String::new(),
             meter: 12,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: "gameplay-regression".to_string(),
             stats: ArrowStats {
@@ -809,6 +810,7 @@ mod runtime_regression_tests {
             chart_name: String::new(),
             meter: 12,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: "score-validity-test".to_string(),
             stats,

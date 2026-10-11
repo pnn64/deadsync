@@ -1501,6 +1501,7 @@ mod tests {
             chart_name: String::new(),
             meter,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: hash.to_string(),
             stats: ArrowStats {

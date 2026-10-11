@@ -290,6 +290,7 @@ pub(super) mod tests {
             chart_name: String::new(),
             meter: 9,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: "player-options-test".to_string(),
             stats: deadsync_chart::ArrowStats::default(),

@@ -26,9 +26,8 @@ use crate::song::{
     ParseSongOptions, SongAnalyzer, SongParseScratch, parse_song_data_file, parse_song_data_file_in,
 };
 
-// Recompile song Lua after matching native value iterator lookups;
-// older captures ignore table metamethods during iteration.
-pub const SONG_CACHE_VERSION: u8 = 61;
+// Cache authored chart MUSIC separately from the resolved gameplay path.
+pub const SONG_CACHE_VERSION: u8 = 62;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
@@ -869,6 +868,7 @@ pub struct SerializableChartData {
     pub chart_name: String,
     pub meter: u32,
     pub step_artist: String,
+    pub music_file: String,
     pub music_path: Option<String>,
     pub offset: f32,
     pub notes: Vec<u8>,
@@ -1011,6 +1011,7 @@ pub struct CachedChartMeta {
     pub chart_name: String,
     pub meter: u32,
     pub step_artist: String,
+    pub music_file: String,
     pub music_path: Option<String>,
     pub short_hash: String,
     pub stats: CachedArrowStats,
@@ -1096,6 +1097,7 @@ struct BorrowedCachedChartMeta<'a> {
     chart_name: &'a str,
     meter: u32,
     step_artist: &'a str,
+    music_file: &'a str,
     music_path: Option<&'a str>,
     short_hash: &'a str,
     stats: &'a CachedArrowStats,
@@ -1391,6 +1393,7 @@ pub fn build_chart_meta(chart: SerializableChartData, global_offset_seconds: f32
         chart_name: chart.chart_name,
         meter: chart.meter,
         step_artist: chart.step_artist,
+        music_file: chart.music_file,
         music_path: chart.music_path.map(PathBuf::from),
         short_hash: chart.short_hash,
         stats: chart.stats.into(),
@@ -1436,6 +1439,7 @@ pub fn build_cached_chart_meta(
         chart_name: chart.chart_name.clone(),
         meter: chart.meter,
         step_artist: chart.step_artist.clone(),
+        music_file: chart.music_file.clone(),
         music_path: chart.music_path.clone(),
         short_hash: chart.short_hash.clone(),
         stats: chart.stats.clone(),
@@ -1523,6 +1527,7 @@ impl<'a> BorrowedCachedChartMeta<'a> {
             chart_name: &chart.chart_name,
             meter: chart.meter,
             step_artist: &chart.step_artist,
+            music_file: &chart.music_file,
             music_path: chart.music_path.as_deref(),
             short_hash: &chart.short_hash,
             stats: &chart.stats,
@@ -1564,6 +1569,7 @@ pub fn build_chart_meta_from_cache(chart: CachedChartMeta) -> ChartData {
         chart_name: chart.chart_name,
         meter: chart.meter,
         step_artist: chart.step_artist,
+        music_file: chart.music_file,
         music_path: chart.music_path.map(PathBuf::from),
         short_hash: chart.short_hash,
         stats: chart.stats.into(),
@@ -3398,6 +3404,34 @@ mod tests {
     }
 
     #[test]
+    fn authored_music_survives_parse_and_cache() {
+        let root = test_dir("authored-music");
+        let simfile = root.join("song.ssc");
+        let music = root.join("song.ogg");
+        let cache_path = root.join("cache.bin");
+        fs::write(&music, b"").unwrap();
+        let mut text = String::from("#VERSION:0.83;\n#TITLE:Authored music;\n#MUSIC:song.ogg;\n#BPMS:0=120;\n");
+        for (difficulty, tag) in [("Easy", ""), ("Medium", "#MUSIC:song.ogg;\n"),
+            ("Challenge", "#MUSIC:./song.ogg;\n")] {
+            text.push_str(&format!("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DIFFICULTY:{difficulty};\n#METER:1;\n{tag}#NOTES:\n1000\n;\n"));
+        }
+        fs::write(&simfile, text).unwrap();
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let data = crate::song::parse_song_file(&simfile, &options, |_| 0.0).unwrap();
+        let expected = ["", "song.ogg", "./song.ogg"];
+        assert_eq!(data.charts.iter().map(|chart| chart.music_file.as_str()).collect::<Vec<_>>(), expected);
+        assert!(data.charts.iter().all(|chart| chart.music_path.as_deref().map(Path::new) == Some(music.as_path())));
+        let uncached = build_song_meta(data.clone(), 0.0);
+        write_song_cache_file(&cache_path, &data, 0.0).unwrap();
+        let cached = load_cached_song(&simfile, &cache_path, false).unwrap();
+        let restored = build_song_meta_from_cache(cached.data);
+        for song in [uncached, restored] {
+            assert_eq!(song.charts.iter().map(|chart| chart.music_file.as_str()).collect::<Vec<_>>(), expected);
+            assert!(song.charts.iter().all(|chart| chart.music_path.as_deref() == Some(music.as_path())));
+        }
+    }
+
+    #[test]
     fn borrowed_cache_header_matches_owned_wire_format_and_reuses_storage() {
         let mut data = cached_song(Path::new("songs/pack/song/song.ssc"));
         data.subtitle = "Cache subtitle".to_string();
@@ -3411,6 +3445,7 @@ mod tests {
         chart.description = "Wire-compatible chart".to_string();
         chart.chart_name = "Borrowed header".to_string();
         chart.step_artist = "DeadSync".to_string();
+        chart.music_file = "./chart.ogg".to_string();
         chart.music_path = Some("chart.ogg".to_string());
         chart.short_hash = "0123456789abcdef".to_string();
         chart.matrix_profile = Box::new([CachedMatrixInput {
@@ -3731,6 +3766,7 @@ mod tests {
             chart_name: String::new(),
             meter: 1,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             offset: 0.0,
             notes: Vec::new(),
