@@ -13208,6 +13208,27 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn screen_request_keeps_current_name() {
+        let song_dir = test_dir("queued-screen-name");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+return Def.Quad{OnCommand=function(self)
+    local screen = SCREENMAN:GetTopScreen()
+    local name = screen:GetName()
+    SCREENMAN:SetNewScreen("LastRequestMustReplaceThis")
+    assert(SCREENMAN:GetTopScreen() == screen and screen:GetName() == name)
+    SCREENMAN:SetNewScreen("ScreenGameplay")
+    assert(SCREENMAN:GetTopScreen() == screen and screen:GetName() == name)
+    self:x(31)
+end}
+"#).expect("write screen request control");
+        let compiled = test_compile_song_lua(&entry,
+            &SongLuaCompileContext::new(&song_dir, "Queued Screen Name"))
+            .expect("compile native screen request control");
+        assert!(compiled.overlays.iter().any(|actor| actor.initial_state.x == 31.0));
+    }
+
+    #[test]
     fn compile_song_lua_exposes_save_your_tears_compat_helpers() {
         let song_dir = test_dir("save-your-tears-compat");
         let entry = song_dir.join("default.lua");

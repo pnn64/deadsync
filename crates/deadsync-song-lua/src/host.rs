@@ -814,17 +814,15 @@ pub fn install_screen_manager_globals(
     )?;
     screenman.set(
         "SetNewScreen",
-        lua.create_function({
-            let top_screen = top_screen.clone();
-            move |lua, args: MultiValue| {
-                if let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) {
-                    #[cfg(feature = "test-support")]
-                    record_state_call(lua, "ScreenManager.SetNewScreen", vec![serde_json::json!(name)])?;
-                    top_screen.set("Name", name)?;
-                }
-                note_song_lua_side_effect(lua)?;
-                Ok(())
+        lua.create_function(|lua, args: MultiValue| {
+            if let Some(_name) = method_arg(&args, 0).cloned().and_then(read_string) {
+                #[cfg(feature = "test-support")]
+                record_state_call(lua, "ScreenManager.SetNewScreen", vec![serde_json::json!(_name)])?;
+                // Native ScreenManager queues the request; the current
+                // screen keeps its identity through this command/update.
             }
+            note_song_lua_side_effect(lua)?;
+            Ok(())
         })?,
     )?;
     screenman.set(
