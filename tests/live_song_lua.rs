@@ -24,6 +24,45 @@ fn number(value: &Value, key: &str) -> Result<f64, String> {
         .ok_or_else(|| format!("missing finite native {key}"))
 }
 
+fn broadcast_event(
+    event: &deadsync_song_lua::SongLuaLiveBroadcast,
+    seconds: f64,
+    simfile: &Path,
+) -> Value {
+    fn normalize(value: &mut Value, song_dir: &str) {
+        match value {
+            Value::String(value) => {
+                if let Some((_, relative)) = value.split_once(song_dir) {
+                    *value = format!("song:/{relative}");
+                }
+            }
+            Value::Array(values) => values
+                .iter_mut()
+                .for_each(|value| normalize(value, song_dir)),
+            Value::Object(values) => values
+                .values_mut()
+                .for_each(|value| normalize(value, song_dir)),
+            _ => {}
+        }
+    }
+    let mut args = vec![json!(event.name)];
+    if let Ok(Some(params)) = &event.params {
+        let mut params = params.clone();
+        let song_dir = format!(
+            "{}/",
+            simfile
+                .parent()
+                .unwrap_or(Path::new("."))
+                .to_string_lossy()
+                .replace('\\', "/")
+        );
+        normalize(&mut params, &song_dir);
+        args.push(params);
+    }
+    json!({"seconds":seconds,"beat":event.beat,"name":event.name,
+        "args":args,"params_error":event.params.as_ref().err()})
+}
+
 fn native_fail_type(trace: &Value) -> Result<deadsync_gameplay::GameplayFailType, String> {
     use deadsync_gameplay::GameplayFailType;
     use deadsync_rules::{note, timing};
@@ -279,7 +318,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
     let mut broadcasts: Vec<_> = startup
         .source_broadcasts
         .iter()
-        .map(|(beat, name, _)| json!({"seconds":0.0,"beat":beat,"name":name}))
+        .map(|event| broadcast_event(event, 0.0, simfile))
         .collect();
     let mut observations = Vec::new();
     let mut requests = Vec::new();
@@ -311,7 +350,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
                 startup
                     .source_broadcasts
                     .iter()
-                    .map(|(beat, name, _)| json!({"seconds":0.0,"beat":beat,"name":name})),
+                    .map(|event| broadcast_event(event, 0.0, simfile)),
             );
             scene_count += 1;
             previous_seconds = None;
@@ -366,7 +405,7 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
             output
                 .source_broadcasts
                 .iter()
-                .map(|(beat, name, _)| json!({"seconds":seconds,"beat":beat,"name":name})),
+                .map(|event| broadcast_event(event, seconds, simfile)),
         );
         errors.extend(output.errors);
         if let Some(request) = output.request {
@@ -502,12 +541,16 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
     }
     let native_broadcasts: Vec<_> = trace["events"].as_array().ok_or("missing native events")?.iter()
         .filter(|event| event["operation"] == "MessageManager.Broadcast")
-        .map(|event| json!({"seconds":event["seconds"],"beat":event["beat"],"name":event["args"][0]})).collect();
+        .map(|event| json!({"seconds":event["seconds"],"beat":event["beat"],"name":event["args"][0],"args":event["args"]})).collect();
     if native_broadcasts.len() != broadcasts.len() {
         mismatches.push(json!({"field":"source_broadcast_count","native":native_broadcasts.len(),"deadsync":broadcasts.len()}));
     }
     for (native, actual) in native_broadcasts.iter().zip(&broadcasts) {
-        if native["name"] != actual["name"]
+        if !actual["params_error"].is_null() {
+            mismatches
+                .push(json!({"field":"source_broadcast_params_unsupported", "deadsync":actual}));
+        }
+        if native["args"] != actual["args"]
             || (number(native, "seconds")? - number(actual, "seconds")?).abs() > 1e-6
             || (number(native, "beat")? - number(actual, "beat")?).abs() > 1e-6
         {
@@ -522,7 +565,8 @@ fn run(trace_path: &Path, simfile: &Path, out: &Path) -> Result<(), String> {
         "lua_broadcasts":broadcasts,"native_broadcasts":native_broadcasts,
         "first_domain_navigation_seconds":first_navigation, "continued_after_domain_navigation": first_navigation.is_some(),
         "stage_observations":observations,
-        "pending_coverage":["all lifecycle stage observations", "native command/query delivery timing", "broadcast argument values",
+        "broadcast_params_compared":true,
+        "pending_coverage":["all lifecycle stage observations", "native command/query delivery timing", "complex or truncated broadcast values",
             "full theme stage commitment and history", "score/alive-time getters", "all actor/render/resource state",
             "additional game/style/input/course contexts"]});
     std::fs::write(

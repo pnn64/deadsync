@@ -93,13 +93,22 @@ pub enum SongLuaLiveTarget {
     Foreground(usize, usize),
 }
 
+#[derive(Debug)]
+pub struct SongLuaLiveBroadcast {
+    pub beat: f32,
+    pub name: String,
+    /// Snapshot before listeners run. Unsupported trace values remain an
+    /// explicit diagnostic gap; they do not interrupt message delivery.
+    pub params: Result<Option<serde_json::Value>, String>,
+}
+
 #[derive(Debug, Default)]
 pub struct SongLuaLiveOutput {
     pub request: Option<SongLuaLiveRequest>,
     pub broadcasts: Vec<(f32, String, bool)>,
     /// Explicit Lua MESSAGEMAN calls, including calls from engine-message
     /// listeners. Native source traces omit the engine-generated messages.
-    pub source_broadcasts: Vec<(f32, String, bool)>,
+    pub source_broadcasts: Vec<SongLuaLiveBroadcast>,
     pub sounds: Vec<crate::SongLuaSoundEvent>,
     /// Native-style callback errors retain partial state and are reported once.
     pub errors: Vec<String>,
@@ -733,10 +742,44 @@ end }
             }
         "#);
         let output = compiled.live_scene.as_mut().expect("owned scene").take_startup_output();
-        assert_eq!(output.source_broadcasts.iter().map(|(_, name, _)| name.as_str()).collect::<Vec<_>>(),
+        assert_eq!(output.source_broadcasts.iter().map(|event| event.name.as_str()).collect::<Vec<_>>(),
             ["NestedSource", "CurrentStepsP1Changed", "NestedSource"]);
         assert_eq!(output.broadcasts.iter().filter(|(_, name, _)| name == "CurrentStepsP1Changed").count(), 2);
         assert_eq!(output.broadcasts.iter().filter(|(_, name, _)| name == "ScreenChanged").count(), 1);
+    }
+
+    #[test]
+    fn live_source_params() {
+        let mut compiled = compile("broadcast-params", r#"
+            return Def.ActorFrame {
+                OnCommand=function(self)
+                    LOOKUPS=0
+                    local params = setmetatable({ count=2, nested={true, 'original'}, [3]='mixed' }, {
+                        __index=function() LOOKUPS=LOOKUPS+1 end,
+                    })
+                    MESSAGEMAN:Broadcast('Snapshot', params)
+                    local cycle = {}; cycle.self = cycle
+                    MESSAGEMAN:Broadcast('Unsupported', cycle)
+                    MESSAGEMAN:Broadcast('Empty', {})
+                    MESSAGEMAN:Broadcast('NoParams')
+                end,
+                SnapshotMessageCommand=function(self, params)
+                    params.count=99; params.nested[2]='mutated'
+                end,
+                UnsupportedMessageCommand=function(self) DELIVERED=true end,
+            }
+        "#);
+        let scene = compiled.live_scene.as_mut().expect("owned scene");
+        let output = scene.take_startup_output();
+        assert!(output.errors.is_empty(), "trace capture must not interrupt Lua");
+        assert_eq!(scene.lua.globals().get::<u32>("LOOKUPS").expect("raw trace reads"), 0);
+        assert_eq!(output.source_broadcasts[0].params.as_ref().expect("plain values"),
+            &Some(serde_json::json!({"count":2,"nested":[true,"original"],"3":"mixed"})));
+        assert!(output.source_broadcasts[1].params.as_ref().expect_err("cycle stays pending").contains("cycle"));
+        assert!(scene.lua.globals().get::<bool>("DELIVERED").expect("listener ran"));
+        assert_eq!(output.source_broadcasts[2].params.as_ref().expect("empty table"),
+            &Some(serde_json::json!([])));
+        assert_eq!(output.source_broadcasts[3].params.as_ref().expect("no params"), &None);
     }
 
     #[test]

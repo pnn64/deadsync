@@ -925,7 +925,7 @@ pub fn install_message_manager_globals(
                 note_song_lua_side_effect(lua)?;
                 let has_params = matches!(params, Some(Value::Table(_)));
                 record_song_lua_broadcast(lua, &message, has_params)?;
-                crate::lua_util::capture_source_broadcast(lua, &message, has_params);
+                crate::lua_util::capture_source_broadcast(lua, &message, params.as_ref());
                 // Parameterized listeners need their actual values while an
                 // action is baked; a named event cannot retain those values.
                 if has_params

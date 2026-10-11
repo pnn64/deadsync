@@ -2935,14 +2935,87 @@ fn runtime_broadcast_beat(lua: &Lua) -> f32 {
         .unwrap_or_else(|| compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat))
 }
 
-pub(crate) fn capture_source_broadcast(lua: &Lua, message: &str, has_params: bool) {
-    let beat = runtime_broadcast_beat(lua);
-    if let Some(mut events) = lua.app_data_mut::<LiveSourceBroadcasts>() {
-        events.0.push((beat, message.to_owned(), has_params));
+fn source_broadcast_value(value: Value, depth: usize, seen: &mut Vec<usize>) -> Result<serde_json::Value, String> {
+    use serde_json::{Value as Json, json};
+    Ok(match value {
+        Value::Nil => Json::Null,
+        Value::Boolean(value) => json!(value),
+        Value::Integer(value) => json!(value),
+        Value::Number(value) if value.is_finite() => {
+            // Native JSON emits whole Lua numbers without a decimal suffix.
+            serde_json::from_str(&value.to_string()).map_err(|error| error.to_string())?
+        }
+        Value::String(value) => Json::String(value.to_str().map_err(|error| error.to_string())?.replace('\\', "/")),
+        Value::Table(table) => {
+            let identity = table.to_pointer() as usize;
+            if depth >= 5 { return Err("broadcast table exceeds native trace depth".into()); }
+            if seen.contains(&identity) { return Err("broadcast table contains a cycle".into()); }
+            // Native actor identity requires the runtime definition map. Do
+            // not serialize actors as ordinary tables and certify their data.
+            for key in ["GetName", "GetParent"] {
+                if matches!(table.raw_get::<Value>(key).map_err(|error| error.to_string())?, Value::Function(_)) {
+                    return Err("broadcast actor identity remains pending".into());
+                }
+            }
+            seen.push(identity);
+            let result = source_broadcast_table(table, depth, seen);
+            seen.pop();
+            result?
+        }
+        value => return Err(format!("broadcast {} trace remains pending", value.type_name())),
+    })
+}
+
+fn source_broadcast_table(table: Table, depth: usize, seen: &mut Vec<usize>) -> Result<serde_json::Value, String> {
+    use serde_json::Value as Json;
+    let mut entries = Vec::new();
+    let mut max_index = 0;
+    let mut array = true;
+    for pair in table.pairs::<Value, Value>().take(257) {
+        if entries.len() == 256 { return Err("broadcast table exceeds native trace entry limit".into()); }
+        let (key, value) = pair.map_err(|error| error.to_string())?;
+        let (name, index) = match key {
+            Value::String(key) => (key.to_str().map_err(|error| error.to_string())?.to_string(), None),
+            Value::Boolean(key) => (key.to_string(), None),
+            Value::Integer(key) => (key.to_string(), usize::try_from(key).ok().filter(|&key| key > 0)),
+            Value::Number(key) if key.is_finite() && key.fract() == 0.0 => (
+                key.to_string(), (key > 0.0 && key <= 256.0).then_some(key as usize)),
+            _ => return Err("broadcast table key representation remains pending".into()),
+        };
+        array &= index.is_some();
+        max_index = max_index.max(index.unwrap_or(0));
+        entries.push((name, index, source_broadcast_value(value, depth + 1, seen)?));
+    }
+    if array && max_index == entries.len() {
+        let mut values = vec![Json::Null; entries.len()];
+        for (_, index, value) in entries {
+            values[index.expect("dense array keys were checked") - 1] = value;
+        }
+        Ok(Json::Array(values))
+    } else {
+        let mut values = serde_json::Map::new();
+        for (name, _, value) in entries {
+            if values.insert(name, value).is_some() {
+                return Err("broadcast table has colliding stringified keys".into());
+            }
+        }
+        Ok(Json::Object(values))
     }
 }
 
-pub(crate) fn take_source_broadcasts(lua: &Lua) -> Vec<(f32, String, bool)> {
+pub(crate) fn capture_source_broadcast(lua: &Lua, message: &str, params: Option<&Value>) {
+    if lua.app_data_ref::<LiveSourceBroadcasts>().is_none() { return; }
+    let beat = runtime_broadcast_beat(lua);
+    let params = match params {
+        None | Some(Value::Nil) => Ok(None),
+        Some(value) => source_broadcast_value(value.clone(), 0, &mut Vec::new()).map(Some),
+    };
+    if let Some(mut events) = lua.app_data_mut::<LiveSourceBroadcasts>() {
+        events.0.push(crate::live::SongLuaLiveBroadcast { beat, name: message.to_owned(), params });
+    }
+}
+
+pub(crate) fn take_source_broadcasts(lua: &Lua) -> Vec<crate::live::SongLuaLiveBroadcast> {
     lua.app_data_mut::<LiveSourceBroadcasts>()
         .map_or_else(Vec::new, |mut events| std::mem::take(&mut events.0))
 }
@@ -10569,7 +10642,7 @@ struct ActorTweenStep {
 struct ActorTweenReplays(FxHashMap<usize, ActorTweenReplay>);
 
 struct LiveBroadcasts(Vec<(f32, String, bool)>);
-struct LiveSourceBroadcasts(Vec<(f32, String, bool)>);
+struct LiveSourceBroadcasts(Vec<crate::live::SongLuaLiveBroadcast>);
 
 pub(crate) fn begin_live_runtime(lua: &Lua) -> mlua::Result<()> {
     // The process VM survives ScreenGameplay reentry; the actor execution
