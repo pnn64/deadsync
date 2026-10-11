@@ -122,3 +122,7 @@ mod dataflow_perf;
 fn dataflow_peak_bytes(churn: perf::Churn) -> usize {
     churn.peak_added_bytes
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_support.rs"]
+mod course_perf;
