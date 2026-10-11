@@ -231,3 +231,12 @@ mod overlay_support;
 #[cfg(test)]
 #[path = "../../../tests/perf/option_support.rs"]
 mod option_perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/traversal_support.rs"]
+mod traversal_perf;
+
+#[cfg(test)]
+fn traversal_peak_bytes(churn: perf::Churn) -> usize {
+    churn.peak_bytes
+}

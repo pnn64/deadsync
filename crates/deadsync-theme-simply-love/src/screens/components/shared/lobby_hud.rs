@@ -342,15 +342,40 @@ fn build_body_text(
         }
         out.push('\n');
     }
-    let ordered_players = ordered_players(joined);
-    if ordered_players.is_empty() {
+    if joined.players.is_empty() {
         out.push_str("Waiting for players...");
         return out;
     }
     let show_ready_icons = current_screen_name.eq_ignore_ascii_case("ScreenGameplay")
-        && !joined.players.is_empty()
         && !joined.players.iter().all(gameplay_player_ready);
-    for (display_index, (_, player)) in ordered_players.into_iter().enumerate() {
+    let mut score_players: smallvec::SmallVec<[_; 8]> = joined
+        .players
+        .iter()
+        .enumerate()
+        .filter(|(_, player)| is_score_screen(player.screen_name.as_str()))
+        .collect();
+    score_players.sort_unstable_by(|(a_idx, a), (b_idx, b)| {
+        match (
+            a.score.filter(|score| score.is_finite()),
+            b.score.filter(|score| score.is_finite()),
+        ) {
+            (Some(a_score), Some(b_score)) => {
+                b_score.total_cmp(&a_score).then_with(|| a_idx.cmp(b_idx))
+            }
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (None, None) => a_idx.cmp(b_idx),
+        }
+    });
+
+    let ordered = score_players.into_iter().chain(
+        joined
+            .players
+            .iter()
+            .enumerate()
+            .filter(|(_, player)| !is_score_screen(&player.screen_name)),
+    );
+    for (display_index, (_, player)) in ordered.enumerate() {
         if display_index > 0 {
             out.push_str("\n\n");
         }
@@ -396,38 +421,6 @@ fn build_body_text(
         .expect("writing to a String cannot fail");
     }
     out
-}
-
-fn ordered_players(joined: &lobbies::JoinedLobby) -> Vec<(usize, &lobbies::LobbyPlayer)> {
-    let mut score_players: Vec<_> = joined
-        .players
-        .iter()
-        .enumerate()
-        .filter(|(_, player)| is_score_screen(player.screen_name.as_str()))
-        .collect();
-    score_players.sort_by(|(a_idx, a), (b_idx, b)| {
-        match (
-            a.score.filter(|score| score.is_finite()),
-            b.score.filter(|score| score.is_finite()),
-        ) {
-            (Some(a_score), Some(b_score)) => {
-                b_score.total_cmp(&a_score).then_with(|| a_idx.cmp(b_idx))
-            }
-            (Some(_), None) => Ordering::Less,
-            (None, Some(_)) => Ordering::Greater,
-            (None, None) => a_idx.cmp(b_idx),
-        }
-    });
-
-    let mut ordered = score_players;
-    ordered.extend(
-        joined
-            .players
-            .iter()
-            .enumerate()
-            .filter(|(_, player)| !is_score_screen(player.screen_name.as_str())),
-    );
-    ordered
 }
 
 #[inline(always)]
@@ -673,4 +666,12 @@ mod tests {
 
         assert!(lines.iter().any(|line| line.contains("2. Remote [❌]")));
     }
+}
+
+#[cfg(test)]
+mod perf_traversal {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/perf/lobby_order.rs"
+    ));
 }
