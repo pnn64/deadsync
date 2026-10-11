@@ -1804,12 +1804,10 @@
     {
       "title": "c'est business",
       "source_simfile": "c'est business/c'est business.ssc",
-      "harness_version": "0.1.0",
-      "archive": "0ca0f94aa7d4212e7818d6fc1a1e5315aa62d05087cd2f1a624c0159572086c8.tar.zst",
-      "sha256": "0ca0f94aa7d4212e7818d6fc1a1e5315aa62d05087cd2f1a624c0159572086c8",
-      "compressed_bytes": 12747,
-      "uncompressed_sha256": "83a30fbcc91c19c1513dace6018bc6337c193bb89059ec785162a9f4a2141274",
-      "compression_level": 22,
+      "harness_version": "0.1.67",
+      "archive": "435f2f059225269e6ffbde1a0369501ec99ae3d12f98b20b92b3e922956716cd.tar.zst",
+      "sha256": "435f2f059225269e6ffbde1a0369501ec99ae3d12f98b20b92b3e922956716cd",
+      "compressed_bytes": 5638603,
       "aliases": [
         "bfeb478ebf318707bccd7cc7dacbfcf0d54d5466c1b36dae2c4606232b666eff.tar.zst"
       ]

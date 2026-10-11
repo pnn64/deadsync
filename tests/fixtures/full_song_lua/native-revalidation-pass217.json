@@ -1,0 +1,103 @@
+{
+  "pass": 217,
+  "previous_record": "native-revalidation-pass216.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "9eae06eb28faa01d330114e0b49485983fa0d599",
+  "comparator_sha256": "d2646f73b1b0ed8bc50dd2195439e8e04e878b5fdfd3d6afe1b49b72d4ca6cee",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    138
+  ],
+  "next_position": 139,
+  "comparisons_passed": 30932,
+  "charts": [
+    {
+      "position": 138,
+      "entry": {
+        "title": "c'est business",
+        "source_simfile": "c'est business/c'est business.ssc",
+        "harness_version": "0.1.67",
+        "archive": "435f2f059225269e6ffbde1a0369501ec99ae3d12f98b20b92b3e922956716cd.tar.zst",
+        "sha256": "435f2f059225269e6ffbde1a0369501ec99ae3d12f98b20b92b3e922956716cd",
+        "compressed_bytes": 5638603,
+        "aliases": [
+          "bfeb478ebf318707bccd7cc7dacbfcf0d54d5466c1b36dae2c4606232b666eff.tar.zst"
+        ]
+      },
+      "original_archive_retained": "0ca0f94aa7d4212e7818d6fc1a1e5315aa62d05087cd2f1a624c0159572086c8.tar.zst",
+      "native_source_commit": "7a75d74081a4e0e944e1babde8d8d64363ad625a",
+      "native_trace_sha256": "a37c79dc283a9c6ea47b25e04e1f0330cd1eb53257995cf89420cbad0623ed6d",
+      "original_source_sha256": {
+        "c'est business/ban.png": "26f59ac6cc419886527136c68df6d14aa87aa3cd0dcd5db3eb0321591e9ce975",
+        "c'est business/c'est business.ogg": "f9631223fc2504819f36bcbf8b4b42a0bbb5a28756123df77e06a9b0d50b51a9",
+        "c'est business/c'est business.ssc": "5786e3aee55d7254db0177e296999afb35493dbee704f2e7c17d70ae43a9890f",
+        "c'est business/desktop.ini": "3c81eb4c7d2bcad3dd6578510517baca9cb4e3ef0d089e5a63e29e2e7753a065",
+        "c'est business/background/c'est business.mp4": "bab63e458501c78d7a82e8f629bdc32b37819416241844c30d6414e63f98978b",
+        "c'est business/background/default.lua": "a7971512304dd8970e7619e915e7258ec5763325fc6309bb857db7d1e21123a6",
+        "c'est business/background/desktop.ini": "3c81eb4c7d2bcad3dd6578510517baca9cb4e3ef0d089e5a63e29e2e7753a065",
+        "c'est business/c'est business/c'est business.lua": "f78ecd8261c7a1650a6a1bf0ab7f0d2e1a60470f0ec388ab54f9d6daee124093",
+        "c'est business/c'est business/desktop.ini": "3c81eb4c7d2bcad3dd6578510517baca9cb4e3ef0d089e5a63e29e2e7753a065"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 1395,
+      "duration_seconds": 23.231197357177734,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 5,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 138,
+      "source_simfile": "c'est business/c'est business.ssc",
+      "archive": "435f2f059225269e6ffbde1a0369501ec99ae3d12f98b20b92b3e922956716cd.tar.zst",
+      "archive_sha256": "435f2f059225269e6ffbde1a0369501ec99ae3d12f98b20b92b3e922956716cd",
+      "harness_version": "0.1.67",
+      "source_commit": "9eae06eb28faa01d330114e0b49485983fa0d599",
+      "source_pending_commit": false,
+      "binary_sha256": "d2646f73b1b0ed8bc50dd2195439e8e04e878b5fdfd3d6afe1b49b72d4ca6cee",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\native-chain-fixtures-v1-full_song_lua.exe",
+        "435f2f059225269e6ffbde1a0369501ec99ae3d12f98b20b92b3e922956716cd.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.4473884999752045,
+      "comparisons_passed": 30932,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\native-chain-v1-138.log",
+      "log_sha256": "6885efad124c4589b9e7ac724e40c0321e1b9de48ffa123e992027ef4bcf0ae6",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass273-top-138-native-v1.json",
+      "native_receipt_sha256": "bcfaae019fb0bb53cf6a9d4a672143b4b66d482a269889f9a7b5185da5ee21bc",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "9eae06eb28faa01d330114e0b49485983fa0d599",
+    "source_pending_commit": false,
+    "binary_sha256": "d5607a16044c9d6cf3dab28446701d31a0ccacfeb360a816515df1677b9173eb",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\native-chain-fixtures-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.2029397999867797,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-138-native-pass217.log",
+    "log_sha256": "dcfd0d0f22645aea7f2ae817198b543801451333637f1fd2aca0b92741df9ef7",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 299 filtered out; finished in 0.60s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}
