@@ -288,10 +288,8 @@ pub(super) fn default_chart(charts: &[PreviewChart]) -> Option<usize> {
     let top = |doubles: bool| {
         charts.iter().position(|chart| {
             chart.doubles == doubles
-                && matches!(
-                    chart.difficulty.to_ascii_lowercase().as_str(),
-                    "challenge" | "expert"
-                )
+                && (chart.difficulty.eq_ignore_ascii_case("challenge")
+                    || chart.difficulty.eq_ignore_ascii_case("expert"))
         })
     };
     top(false)
@@ -1068,3 +1066,10 @@ mod tests {
         assert!((PX_PER_SECOND - 275.2).abs() < 1e-3);
     }
 }
+
+#[cfg(test)]
+#[path = "preview_pipelines_original.rs"]
+mod pipelines_original;
+#[cfg(test)]
+#[path = "preview_pipelines_perf.rs"]
+mod pipelines_perf;

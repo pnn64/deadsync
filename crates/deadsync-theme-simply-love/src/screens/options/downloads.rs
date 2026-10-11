@@ -66,53 +66,49 @@ pub(super) fn prepare_workshop(phase: &Phase) -> Option<PanelContent> {
         Phase::Idle => return None,
         Phase::Downloading { written, total } => (
             "Downloading",
-            vec![format!(
-                "{} / {}",
-                format_size(*written),
-                format_size(*total)
-            )],
+            Some(format!("{} / {}", format_size(*written), format_size(*total)).into()),
             "Cancel",
             Some(*written as f32 / (*total).max(1) as f32),
             false,
         ),
         Phase::Preparing { done, total } => (
             "Preparing",
-            vec![tr("Downloads", "PreparingBody").to_string()],
+            Some(tr("Downloads", "PreparingBody").into()),
             "Cancel",
             (*total > 0).then(|| *done as f32 / *total as f32),
             *total == 0,
         ),
         Phase::Publishing => (
             "Preparing",
-            vec![tr("Downloads", "PublishingBody").to_string()],
+            Some(tr("Downloads", "PublishingBody").into()),
             "Wait",
             None,
             true,
         ),
-        Phase::Cancelling => ("Cancelling", Vec::new(), "Wait", None, true),
+        Phase::Cancelling => ("Cancelling", None, "Wait", None, true),
         Phase::Installed => (
             "Installed",
-            vec![tr("Downloads", "InstalledBody").to_string()],
+            Some(tr("Downloads", "InstalledBody").into()),
             "Dismiss",
             None,
             false,
         ),
         Phase::Error { detail } => (
             "Error",
-            vec![detail.chars().take(100).collect()],
+            Some(detail.chars().take(100).collect::<String>().into()),
             "Retry",
             None,
             false,
         ),
     };
-    let mut lines = Vec::with_capacity(body.len() + 1);
-    lines.push(tr("Downloads", status).to_string());
+    let mut lines = Vec::with_capacity(usize::from(body.is_some()) + 1);
+    lines.push(tr("Downloads", status).into());
     lines.extend(body);
     Some(PanelContent::new(
-        tr("Downloads", "Workshop").to_string(),
+        tr("Downloads", "Workshop").into(),
         None,
         lines,
-        tr("Downloads", footer).to_string(),
+        tr("Downloads", footer).into(),
         progress,
         spinner,
     ))
@@ -137,3 +133,11 @@ pub(super) fn workshop_input(phase: &Phase, ev: &InputEvent) -> InputOutcome {
         _ => InputOutcome::Consumed,
     }
 }
+
+#[cfg(test)]
+#[path = "../../../../../tests/perf/workshop_original.rs"]
+pub(crate) mod perf_original;
+
+#[cfg(test)]
+#[path = "../../../../../tests/perf/workshop_ownership.rs"]
+pub(crate) mod perf_tests;

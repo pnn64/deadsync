@@ -1,0 +1,104 @@
+{
+  "pass": 174,
+  "previous_record": "native-revalidation-pass173.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "eb8e7d2c2e0a3c49bfc37ba9ed7c3a81c90d9c54",
+  "comparator_sha256": "9cf5fab32985bab2554acad020ce08084e8d4caa8762db4e98d91866d01bf25d",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    95
+  ],
+  "next_position": 96,
+  "comparisons_passed": 291292,
+  "charts": [
+    {
+      "position": 95,
+      "entry": {
+        "title": "Episode 04",
+        "source_simfile": "Anxiety/Anxiety.sm",
+        "harness_version": "0.1.61",
+        "archive": "3318aeb2e7fd1de204f12496812fa60f138019834bf2c5222b092403aefa2ce3.tar.zst",
+        "sha256": "3318aeb2e7fd1de204f12496812fa60f138019834bf2c5222b092403aefa2ce3",
+        "compressed_bytes": 453894,
+        "aliases": [
+          "eaacf54b5f7349f62d6ed1f8358b8e6c6ef4a712525382f1955aac06985eb78e.tar.zst"
+        ]
+      },
+      "original_archive_retained": "f7c15cafd655f36e213004b340bb60b3b4c473a0f94be3a8dd21f7bf2fec9913.tar.zst",
+      "native_source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+      "native_trace_sha256": "aaf2b71e9b78acea99f9d838457831e5a6a6b20e624bf0e881355e648a74c26d",
+      "original_source_sha256": {
+        "Anxiety/Anxiety.mp4": "52b1bd4841ce6c7ceb0eebe7968e2e2ce46f4078cb1ea5516fd560834a2d97d2",
+        "Anxiety/Anxiety.ogg": "4b913d71bedf4aed8da4bb7c14a3e7638cf3ba43555236e4841a33d2e6b5fe0f",
+        "Anxiety/Anxiety.sm": "adde178f3cd392cc673fae70c129116bb411af454239e998c8a47c52a732608a",
+        "Anxiety/Anxiety.ssc": "d985c1bef86ea049230a8fc8bc8235dae842ec28b69fbbb525f330bf8dac7214",
+        "Anxiety/Anxiety.ssc.old": "e5cd9e8c26ca47d31f78ec9b98c5ebac3972351d95b431d86f823997428934f6",
+        "Anxiety/cdtitle.png": "cb82f42f01e36082120e0a815e6be7fb20714f0b78804bf66e19dcb86ea10798",
+        "Anxiety/cdtitle2.png": "28ab776e0d5cb544cc3035c414f26a293c2780e574a30f3efc76f44e97d70889",
+        "Anxiety/desktop.ini": "204356c2dbf52ab1006ecb8166088761490d8d5e656f2cd44fc6cf8b74706ef5",
+        "Anxiety/lua/default.lua": "3b0dd6fcd70aa97a66050b672119bb9758b057ca1ff946aa2af91e50aae1bda1",
+        "Anxiety/lua/desktop.ini": "204356c2dbf52ab1006ecb8166088761490d8d5e656f2cd44fc6cf8b74706ef5"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 12348,
+      "duration_seconds": 205.774658203125,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 3,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 95,
+      "source_simfile": "Anxiety/Anxiety.sm",
+      "archive": "3318aeb2e7fd1de204f12496812fa60f138019834bf2c5222b092403aefa2ce3.tar.zst",
+      "archive_sha256": "3318aeb2e7fd1de204f12496812fa60f138019834bf2c5222b092403aefa2ce3",
+      "harness_version": "0.1.61",
+      "source_commit": "eb8e7d2c2e0a3c49bfc37ba9ed7c3a81c90d9c54",
+      "source_pending_commit": false,
+      "binary_sha256": "9cf5fab32985bab2554acad020ce08084e8d4caa8762db4e98d91866d01bf25d",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass176\\long-player-v4-full_song_lua.exe",
+        "3318aeb2e7fd1de204f12496812fa60f138019834bf2c5222b092403aefa2ce3.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 21.496874100062996,
+      "comparisons_passed": 291292,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-095-long-player-committed-v4.log",
+      "log_sha256": "3bf5516e0d92cc55472f9629f8a194c631877e7493f8b6bf7822f308f02125a0",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass207-top-095-current-main-v1.json",
+      "native_receipt_sha256": "217609f23671123a675de52c8c3159b4b6114ad870f3d5f0140d3a4b79f90b6c",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "eb8e7d2c2e0a3c49bfc37ba9ed7c3a81c90d9c54",
+    "source_pending_commit": false,
+    "binary_sha256": "482c0e6f4e0c2fe92cd3e3899025484fc8bdfdd8d2da9d203fdcbbd51019482a",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass176\\long-player-v4-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.3211990999989212,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-095-native-pass174.log",
+    "log_sha256": "168732e3411336567b12ea615304fd09380ec0db3ad1546aa95a27c081a74dfa",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 293 filtered out; finished in 0.77s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

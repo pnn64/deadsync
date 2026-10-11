@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "name": "native combo child class contracts",
+  "lua_assertions": "assert(type(frozen.GetChild) == 'function')\nassert(frozen:GetChild('missing') == nil and frozen:GetChild('') == nil)\nassert(type(native_label.GetText) == 'function' and native_label.GetChild == nil)\nassert(native_label:visible(false) == native_label)"
+}

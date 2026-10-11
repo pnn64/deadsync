@@ -46,6 +46,9 @@ pub mod update;
 mod profile_ini;
 use profile_ini::ProfileIni;
 
+#[cfg(test)]
+mod perf_tests;
+
 pub const PLAYER_SLOTS: usize = 2;
 pub const SESSION_JOINED_MASK_P1: u8 = 1 << 0;
 pub const SESSION_JOINED_MASK_P2: u8 = 1 << 1;
@@ -692,9 +695,12 @@ pub fn runtime_load_profile_data_for_side(
     let groovestats_ini_path = groovestats_ini_path(profile_dir);
     let arrowcloud_ini_path = arrowcloud_ini_path(profile_dir);
     let stats_path = profile_stats_path(profile_dir);
-    let profile_ini = ProfileIni::load(&profile_ini_path).ok();
-    let groovestats_ini = ProfileIni::load(&groovestats_ini_path).ok();
-    let arrowcloud_ini = ProfileIni::load(&arrowcloud_ini_path).ok();
+    let profile_text = fs::read_to_string(&profile_ini_path).ok();
+    let profile_ini = profile_text.as_deref().map(ProfileIni::parse);
+    let groovestats_text = fs::read_to_string(&groovestats_ini_path).ok();
+    let groovestats_ini = groovestats_text.as_deref().map(ProfileIni::parse);
+    let arrowcloud_text = fs::read_to_string(&arrowcloud_ini_path).ok();
+    let arrowcloud_ini = arrowcloud_text.as_deref().map(ProfileIni::parse);
 
     let ProfileSidecarLoadData {
         stats,
@@ -1295,14 +1301,14 @@ pub fn runtime_save_profile_ini_for_side(
 ) -> Option<RuntimeProfileSidecarWriteError> {
     let profile_id = runtime_active_local_profile_id_for_side(side)?;
     let play_style = runtime_session_play_style();
-    let profile = {
+    let content = {
         let mut profiles = runtime_lock_profiles();
         let profile = &mut profiles[player_side_index(side)];
         profile.store_current_player_options(play_style);
-        profile.clone()
+        render_profile_ini_content(&profile_id, profile)
     };
     let dir = runtime_profile_dir_for_profile_id(root, &profile_id, duplicate);
-    write_profile_ini_dir(&dir, &profile_id, &profile)
+    write_atomic(&profile_ini_path(&dir), content.as_bytes())
         .err()
         .map(|error| RuntimeProfileSidecarWriteError {
             path: profile_ini_path(&dir),
@@ -1318,31 +1324,29 @@ fn runtime_profile_dir_for_profile_id(
     runtime_profile_dir_for_id(root, profile_id, duplicate)
 }
 
-fn runtime_active_profile_id_and_data_for_side(side: PlayerSide) -> Option<(String, Profile)> {
-    let profile_id = runtime_active_local_profile_id_for_side(side)?;
-    let profile = runtime_lock_profiles()[player_side_index(side)].clone();
-    Some((profile_id, profile))
-}
-
 pub fn runtime_save_groovestats_credentials_for_side(
     root: &Path,
     side: PlayerSide,
     duplicate: impl FnMut(&str, &Path, &Path, &Path),
 ) -> Option<RuntimeProfileSidecarWriteError> {
-    let (profile_id, profile) = runtime_active_profile_id_and_data_for_side(side)?;
+    let profile_id = runtime_active_local_profile_id_for_side(side)?;
+    let content = {
+        let profiles = runtime_lock_profiles();
+        let profile = &profiles[player_side_index(side)];
+        render_groovestats_ini_content(
+            &profile.groovestats_api_key,
+            profile.groovestats_is_pad_player,
+            &profile.groovestats_username,
+            profile.groovestats_password.expose(),
+        )
+    };
     let dir = runtime_profile_dir_for_profile_id(root, &profile_id, duplicate);
-    write_groovestats_credentials_dir(
-        &dir,
-        &profile.groovestats_api_key,
-        profile.groovestats_is_pad_player,
-        &profile.groovestats_username,
-        profile.groovestats_password.expose(),
-    )
-    .err()
-    .map(|error| RuntimeProfileSidecarWriteError {
-        path: groovestats_ini_path(&dir),
-        error,
-    })
+    write_atomic(&groovestats_ini_path(&dir), content.as_bytes())
+        .err()
+        .map(|error| RuntimeProfileSidecarWriteError {
+            path: groovestats_ini_path(&dir),
+            error,
+        })
 }
 
 pub fn runtime_save_arrowcloud_api_key_for_side(
@@ -1350,9 +1354,13 @@ pub fn runtime_save_arrowcloud_api_key_for_side(
     side: PlayerSide,
     duplicate: impl FnMut(&str, &Path, &Path, &Path),
 ) -> Option<RuntimeProfileSidecarWriteError> {
-    let (profile_id, profile) = runtime_active_profile_id_and_data_for_side(side)?;
+    let profile_id = runtime_active_local_profile_id_for_side(side)?;
+    let content = {
+        let profiles = runtime_lock_profiles();
+        render_arrowcloud_ini_content(&profiles[player_side_index(side)].arrowcloud_api_key)
+    };
     let dir = runtime_profile_dir_for_profile_id(root, &profile_id, duplicate);
-    write_arrowcloud_api_key_dir(&dir, &profile.arrowcloud_api_key)
+    write_atomic(&arrowcloud_ini_path(&dir), content.as_bytes())
         .err()
         .map(|error| RuntimeProfileSidecarWriteError {
             path: arrowcloud_ini_path(&dir),
@@ -10458,34 +10466,27 @@ impl Profile {
         }
     }
 
-    fn apply_player_options(&mut self, options: &PlayerOptionsData) {
+    fn apply_player_options(&mut self, options: PlayerOptionsData) {
         self.background_filter = options.background_filter;
-        self.hold_judgment_graphic = options.hold_judgment_graphic.clone();
-        self.held_miss_graphic = options.held_miss_graphic.clone();
-        self.judgment_graphic = options.judgment_graphic.clone();
+        self.hold_judgment_graphic = options.hold_judgment_graphic;
+        self.held_miss_graphic = options.held_miss_graphic;
+        self.judgment_graphic = options.judgment_graphic;
         self.combo_font = options.combo_font;
         self.combo_colors = options.combo_colors;
         self.combo_mode = options.combo_mode;
         self.carry_combo_between_songs = options.carry_combo_between_songs;
-        self.noteskin = options.noteskin.clone();
-        self.arrow_noteskin.clone_from(&options.arrow_noteskin);
-        self.hold_active_noteskin
-            .clone_from(&options.hold_active_noteskin);
-        self.hold_inactive_noteskin
-            .clone_from(&options.hold_inactive_noteskin);
-        self.roll_active_noteskin
-            .clone_from(&options.roll_active_noteskin);
-        self.roll_inactive_noteskin
-            .clone_from(&options.roll_inactive_noteskin);
-        self.hold_explosion_noteskin
-            .clone_from(&options.hold_explosion_noteskin);
-        self.lift_noteskin.clone_from(&options.lift_noteskin);
+        self.noteskin = options.noteskin;
+        self.arrow_noteskin = options.arrow_noteskin;
+        self.hold_active_noteskin = options.hold_active_noteskin;
+        self.hold_inactive_noteskin = options.hold_inactive_noteskin;
+        self.roll_active_noteskin = options.roll_active_noteskin;
+        self.roll_inactive_noteskin = options.roll_inactive_noteskin;
+        self.hold_explosion_noteskin = options.hold_explosion_noteskin;
+        self.lift_noteskin = options.lift_noteskin;
         self.mine_size_percent = options.mine_size_percent;
-        self.mine_noteskin.clone_from(&options.mine_noteskin);
-        self.receptor_noteskin
-            .clone_from(&options.receptor_noteskin);
-        self.tap_explosion_noteskin
-            .clone_from(&options.tap_explosion_noteskin);
+        self.mine_noteskin = options.mine_noteskin;
+        self.receptor_noteskin = options.receptor_noteskin;
+        self.tap_explosion_noteskin = options.tap_explosion_noteskin;
         self.tap_explosion_active_mask = options.tap_explosion_active_mask;
         self.scroll_speed = options.scroll_speed;
         self.no_cmod_alternative = options.no_cmod_alternative;
@@ -10556,7 +10557,7 @@ impl Profile {
         self.long_error_bar_threshold_ms = options.long_error_bar_threshold_ms;
         self.long_error_bar_min_samples = options.long_error_bar_min_samples;
         self.step_statistics = options.step_statistics;
-        self.step_stats_extra = options.step_stats_extra.clone();
+        self.step_stats_extra = options.step_stats_extra;
         self.target_score = options.target_score;
         self.target_score_percent = options.target_score_percent;
         self.target_score_miss_policy = options.target_score_miss_policy;
@@ -10587,8 +10588,8 @@ impl Profile {
         self.transparent_density_graph_bg = options.transparent_density_graph_bg;
         self.smx_fsr_display = options.smx_fsr_display;
         self.smx_pad_input_display = options.smx_pad_input_display;
-        self.smx_bg_pack.clone_from(&options.smx_bg_pack);
-        self.smx_judge_pack.clone_from(&options.smx_judge_pack);
+        self.smx_bg_pack = options.smx_bg_pack;
+        self.smx_judge_pack = options.smx_judge_pack;
         self.mini_indicator = options.mini_indicator;
         self.mini_indicator_score_type = options.mini_indicator_score_type;
         self.mini_indicator_subtractive_display = options.mini_indicator_subtractive_display;
@@ -10616,7 +10617,7 @@ impl Profile {
         if self.current_player_options() == options {
             return false;
         }
-        self.apply_player_options(&options);
+        self.apply_player_options(options);
         true
     }
 
@@ -10656,7 +10657,7 @@ impl Profile {
 
     pub fn apply_player_options_for_style(&mut self, style: PlayStyle) {
         let options = self.player_options(style).clone();
-        self.apply_player_options(&options);
+        self.apply_player_options(options);
     }
 
     #[inline(always)]

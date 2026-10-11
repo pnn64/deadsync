@@ -1,0 +1,42 @@
+{
+  "Song": {
+    "Actor.x": 0.125,
+    "Actor.y": 2.625,
+    "Actor.z": 7.5,
+    "Actor.aux": 240,
+    "Actor.zoomy": 3,
+    "Actor.zoomx": 120,
+    "Actor.zoomz": 1,
+    "Actor.rotationx": 240
+  },
+  "Selected": {
+    "Actor.x": -0.25,
+    "Actor.y": 4.416666507720947,
+    "Actor.z": 3.25,
+    "Actor.aux": 180,
+    "Actor.zoomy": 3,
+    "Actor.zoomx": 60,
+    "Actor.zoomz": 1,
+    "Actor.rotationx": 180
+  },
+  "Chart1": {
+    "Actor.x": -0.25,
+    "Actor.y": 4.416666507720947,
+    "Actor.z": 3.25,
+    "Actor.aux": 180,
+    "Actor.zoomy": 3,
+    "Actor.zoomx": 60,
+    "Actor.zoomz": 1,
+    "Actor.rotationx": 180
+  },
+  "Chart2": {
+    "Actor.x": 0.5,
+    "Actor.y": 3.6999998092651367,
+    "Actor.z": 5.125,
+    "Actor.aux": 75,
+    "Actor.zoomy": 3,
+    "Actor.zoomx": 150,
+    "Actor.zoomz": 1,
+    "Actor.rotationx": 75
+  }
+}

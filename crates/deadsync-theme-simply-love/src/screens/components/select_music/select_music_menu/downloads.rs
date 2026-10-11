@@ -49,6 +49,9 @@ struct DownloadsPresentationKey {
 struct DownloadsPresentation {
     key: DownloadsPresentationKey,
     snapshots: Box<[SelectMusicDownloadView]>,
+    // Small queues are fully described by their visible snapshots.
+    // Only longer queues need an additional global status comparison.
+    status: Option<(usize, usize, bool)>,
     children: Arc<[Actor]>,
 }
 
@@ -196,6 +199,27 @@ pub fn push_downloads_overlay(
     } else {
         6 + snapshots.len().min(DOWNLOADS_VIEW_ROWS) * 4
     };
+    let status = || {
+        let (finished, retry_available) =
+            snapshots.iter().fold((0, false), |(done, retry), row| {
+                (
+                    done + usize::from(row.complete),
+                    retry || (row.complete && row.error_message.is_some()),
+                )
+            });
+        (snapshots.len(), finished, retry_available)
+    };
+    let (visible, global_status) = if snapshots.len() > DOWNLOADS_VIEW_ROWS {
+        let start = overlay
+            .scroll_index
+            .min(downloads_scroll_limit(snapshots.len()));
+        (
+            &snapshots[start..start + DOWNLOADS_VIEW_ROWS],
+            Some(status()),
+        )
+    } else {
+        (snapshots, None)
+    };
     let key = DownloadsPresentationKey {
         scroll_index: overlay.scroll_index,
         active_color_index,
@@ -208,22 +232,24 @@ pub fn push_downloads_overlay(
         .borrow()
         .as_ref()
         .filter(|presentation| {
-            presentation.key == key && presentation.snapshots.as_ref() == snapshots
+            presentation.key == key
+                && presentation.snapshots.as_ref() == visible
+                && presentation.status == global_status
         })
         .map(|presentation| Arc::clone(&presentation.children));
     let children = cached.unwrap_or_else(|| {
         let mut children = Vec::with_capacity(capacity);
         push_downloads_overlay_unreserved(
             &mut children,
-            overlay,
-            active_color_index,
-            snapshots,
-            machine_font,
+            key,
+            visible,
+            global_status.unwrap_or_else(status),
         );
         let children = Arc::<[Actor]>::from(children);
         *overlay.presentation.borrow_mut() = Some(DownloadsPresentation {
             key,
-            snapshots: snapshots.to_vec().into_boxed_slice(),
+            snapshots: visible.to_vec().into_boxed_slice(),
+            status: global_status,
             children: Arc::clone(&children),
         });
         children
@@ -234,19 +260,17 @@ pub fn push_downloads_overlay(
 
 fn push_downloads_overlay_unreserved(
     actors: &mut Vec<Actor>,
-    overlay: &DownloadsOverlayStateData,
-    active_color_index: i32,
+    key: DownloadsPresentationKey,
     snapshots: &[SelectMusicDownloadView],
-    machine_font: MachineFont,
+    (total, finished, retry_available): (usize, usize, bool),
 ) {
-    let finished = snapshots
-        .iter()
-        .filter(|snapshot| snapshot.complete)
-        .count();
-    let retry_available = snapshots
-        .iter()
-        .any(|snapshot| snapshot.complete && snapshot.error_message.is_some());
-    let total = snapshots.len();
+    let DownloadsPresentationKey {
+        scroll_index,
+        active_color_index,
+        machine_font,
+        ..
+    } = key;
+    let start = scroll_index.min(downloads_scroll_limit(total));
     let center_x = screen_center_x();
     let center_y = screen_center_y();
     let fill = color::decorative_rgba(active_color_index);
@@ -315,15 +339,7 @@ fn push_downloads_overlay_unreserved(
         return;
     }
 
-    let start = overlay
-        .scroll_index
-        .min(downloads_scroll_limit(snapshots.len()));
-    for (slot, snapshot) in snapshots
-        .iter()
-        .skip(start)
-        .take(DOWNLOADS_VIEW_ROWS)
-        .enumerate()
-    {
+    for (slot, snapshot) in snapshots.iter().enumerate() {
         let row_y = DOWNLOADS_ROW_STEP.mul_add(slot as f32, center_y + DOWNLOADS_LIST_Y);
         let row_x = center_x + DOWNLOADS_LIST_X;
         let percent = download_percent(snapshot.current_bytes, snapshot.total_bytes);
@@ -415,4 +431,12 @@ mod tests {
         };
         assert_eq!(overlay.scroll_index, 0);
     }
+}
+
+#[cfg(test)]
+mod preview_dataflows {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/perf/preview_downloads.rs"
+    ));
 }

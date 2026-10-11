@@ -1,0 +1,106 @@
+{
+  "pass": 208,
+  "previous_record": "native-revalidation-pass207.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+  "comparator_sha256": "332064e9b8c045c4441cde0d86a3ee0268483aa0114e839969ec94cd34ad962d",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    129
+  ],
+  "next_position": 130,
+  "comparisons_passed": 642834,
+  "charts": [
+    {
+      "position": 129,
+      "entry": {
+        "title": "Brain Power",
+        "source_simfile": "Brain Power (Cranky Remix)/Brain Power (Cranky Remix).ssc",
+        "harness_version": "0.1.64",
+        "archive": "6596d65f5ac9532232cba995e4ce8d55451d586c1b9d624a4505e1c4edd1c664.tar.zst",
+        "sha256": "6596d65f5ac9532232cba995e4ce8d55451d586c1b9d624a4505e1c4edd1c664",
+        "compressed_bytes": 413229,
+        "aliases": [
+          "cc42443db195e7c1a1d89a88bde0d3d1d7cb20624413cb7b887fc655c0c6bf27.tar.zst"
+        ]
+      },
+      "original_archive_retained": "ae81c86ba98d58f56c507975948a9b6e5b872cce3cf83a3d85e4713e7828275b.tar.zst",
+      "native_source_commit": "cc0ea0c0ab70e962785eff8681a6867a3f8689ee",
+      "native_trace_sha256": "88bc771e6e0c42b58e07c4435b72f25a2bdb68020a65077b149eb807a46b4fe2",
+      "original_source_sha256": {
+        "Brain Power (Cranky Remix)/Brain Power (Cranky Remix) - bg.png": "bbd890146234e957e5619311d0f9e9a89b740d76d6de452171d940ba259a7d08",
+        "Brain Power (Cranky Remix)/Brain Power (Cranky Remix) - bn.png": "c4e716f1b31b08bd8fa4120b1471c4825f1278ab5844dd121c6a4329a4323a87",
+        "Brain Power (Cranky Remix)/Brain Power (Cranky Remix) - jacket.png": "7c712013cc73488838fa2cc09df488a1cd7945b24896140b4ecdb4a5e8c63d7d",
+        "Brain Power (Cranky Remix)/Brain Power (Cranky Remix).avi": "721bc08793b3045a2726c43727a48816923f23e088da15b2c8718e7a42472ae8",
+        "Brain Power (Cranky Remix)/Brain Power (Cranky Remix).ogg": "6f1f2afe2831204a2031f647620fd3fd41d213fe768166605fe973795ff92593",
+        "Brain Power (Cranky Remix)/Brain Power (Cranky Remix).ssc": "cb840ffcaad858a62e061555110733b9bd008da46fbc6681883bfd5abb5900a9",
+        "Brain Power (Cranky Remix)/gpopcdtitle.png": "93e71211552d268b52eae46f6a8e4af3c7cf216cd1bb04e847299981c5827583",
+        "Brain Power (Cranky Remix)/lua/default.lua": "8a89fe7559a5b755efdda07bbc971a77e60f2f979e8be1b9563e7df490eca72b",
+        "Brain Power (Cranky Remix)/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "Brain Power (Cranky Remix)/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "Brain Power (Cranky Remix)/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46",
+        "Brain Power (Cranky Remix)/lua/_script.lua": "982329e87481e4c7130083891a3f4b80344c691445bf7d592d50948c3aff16a5"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 7092,
+      "duration_seconds": 118.18181610107422,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 129,
+      "source_simfile": "Brain Power (Cranky Remix)/Brain Power (Cranky Remix).ssc",
+      "archive": "6596d65f5ac9532232cba995e4ce8d55451d586c1b9d624a4505e1c4edd1c664.tar.zst",
+      "archive_sha256": "6596d65f5ac9532232cba995e4ce8d55451d586c1b9d624a4505e1c4edd1c664",
+      "harness_version": "0.1.64",
+      "source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+      "source_pending_commit": false,
+      "binary_sha256": "332064e9b8c045c4441cde0d86a3ee0268483aa0114e839969ec94cd34ad962d",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-checkpoint-v1-full_song_lua.exe",
+        "6596d65f5ac9532232cba995e4ce8d55451d586c1b9d624a4505e1c4edd1c664.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 30.092364199925214,
+      "comparisons_passed": 642834,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-129-user-merge-checkpoint-v1.log",
+      "log_sha256": "56795ad617afc1f526f37518a989431c4422aac69b514daa36d99a1add54c16f",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass256-top-129-rage-file-v1.json",
+      "native_receipt_sha256": "bc190fc8b94015db9432b3a5297d8e6e07613b59b4ede39906ade1419d45fe86",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+    "source_pending_commit": false,
+    "binary_sha256": "b0e8f5223fb6f054e64146ce459f958d7ac216ea083b4697424cf01f58d2b0ac",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-checkpoint-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 3.3554433998651803,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-129-native-pass208.log",
+    "log_sha256": "2fc6cfc8eb7b663739d7fa90541b0708558ff427d274ba737ee2215a505e2147",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 2.75s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

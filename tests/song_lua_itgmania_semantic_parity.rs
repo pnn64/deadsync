@@ -768,6 +768,11 @@ fn compile_trace_song_at(
         simfile.parent().unwrap_or_else(|| Path::new(".")),
         song.title.clone(),
     );
+    context.song_steps = song.charts.iter().map(deadsync_song_lua::SongLuaStep::from).collect();
+    let selected_step = song.charts.iter().position(|chart| chart.chart_type == trace.steps_type
+        && chart.difficulty.eq_ignore_ascii_case(trace.difficulty.trim_start_matches("Difficulty_"))
+        && chart.description.trim() == trace.description.trim());
+    context.player_step_indices = [selected_step; 2];
     context.message_actor_order = native_message_order(trace);
     context.song_display_bpms = [song.min_bpm as f32, song.max_bpm as f32];
     context.background_layer_count = song.background_lua_changes.len();
@@ -806,9 +811,8 @@ fn compile_trace_song_at(
                         .collect::<Vec<_>>()
                 )
             });
-        let payload = deadsync_simfile::cache::load_gameplay_charts_with_options(
+        let timings = deadsync_simfile::cache::load_chart_timings(
             &song,
-            &[chart_index],
             &deadsync_simfile::cache::GameplayChartLoadOptions {
                 cache_dir: Path::new("."),
                 parse_options: &ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
@@ -820,7 +824,8 @@ fn compile_trace_song_at(
             |_| 0.0,
         )
         .expect("load reference chart timing");
-        context.player_timing = std::array::from_fn(|_| Some(payload.charts[0].timing.clone()));
+        context.player_timing = std::array::from_fn(|_| Some(timings[chart_index].clone()));
+        context.song_step_timing = timings;
     }
     let timing_bpms = parse_song_timing_bpms(&song.normalized_bpms);
     context.song_timing = song.song_timing.clone();
@@ -950,6 +955,130 @@ fn kind_name(kind: &SongLuaOverlayKind) -> &'static str {
         SongLuaOverlayKind::GraphDisplay { .. } => "GraphDisplay",
         SongLuaOverlayKind::Quad => "Quad",
     }
+}
+
+#[test]
+fn all_steps_keep_native_timing() {
+    // Exercise both parsed and cached chart payloads through the real compiler;
+    // the captured native control queries song, selected, and unselected timing.
+    let fixture_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro");
+    let root = std::env::temp_dir().join(format!(
+        "deadsync-all-steps-timing-{}-{}", std::process::id(),
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock").as_nanos(),
+    ));
+    let song_dir = root.join("song");
+    fs::create_dir_all(&song_dir).expect("timing control directory");
+    for name in ["timing-data.ssc", "control.lua"] {
+        fs::copy(fixture_dir.join(name), song_dir.join(name)).expect("copy native control");
+    }
+    let simfile = song_dir.join("timing-data.ssc");
+    let parse_options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+    let song = parse_song_meta_file(&simfile, &parse_options, 0.0, |_| 0.0)
+        .expect("parse native control metadata");
+    let cache_dir = root.join("cache");
+    let cache_path = deadsync_simfile::cache::song_cache_path(&cache_dir, &simfile)
+        .expect("control cache path");
+    let data = deadsync_simfile::song::parse_song_data_file(
+        &simfile, &parse_options, 0.0, |_| 0.0,
+    ).expect("parse native control payload");
+    deadsync_simfile::cache::write_song_cache_file(&cache_path, &data, 0.0)
+        .expect("write split timing cache");
+    let native: Value = serde_json::from_slice(
+        &fs::read(fixture_dir.join("timing-data-native.json")).expect("native timing results"),
+    ).expect("native control JSON");
+    for allow_cache_read in [false, true] {
+        let options = deadsync_simfile::cache::GameplayChartLoadOptions {
+            cache_dir: &cache_dir, parse_options: &parse_options, allow_cache_read,
+            allow_cache_write: false, verify_cache_freshness: true, global_offset_seconds: 0.0,
+        };
+        let mut context = SongLuaCompileContext::new(&song_dir, song.title.clone());
+        context.song_step_timing = deadsync_simfile::cache::load_chart_timings(
+            &song, &options, |_| { assert!(!allow_cache_read, "cache hit must avoid parsing"); 0.0 },
+        ).expect("load all chart timing");
+        context.song_steps = song.charts.iter().map(deadsync_song_lua::SongLuaStep::from).collect();
+        context.song_timing = song.song_timing.clone();
+        context.player_step_indices = [Some(0); 2];
+        context.player_timing = std::array::from_fn(|_| Some(context.song_step_timing[0].clone()));
+        let compiled = compile_song_lua_layers(&[song_dir.join("control.lua").as_path()], 0, &context)
+            .expect("compile real timing owner control");
+        let mut checks = 0;
+        for (name, expected) in native.as_object().expect("native owner results") {
+            let state = &compiled[0].overlays.iter().find(|actor| actor.name.as_deref() == Some(name))
+                .expect("compiled timing owner").initial_state;
+            for (method, actual) in [("Actor.x", state.x), ("Actor.y", state.y), ("Actor.z", state.z),
+                ("Actor.aux", state.aux), ("Actor.zoomx", state.zoom_x), ("Actor.zoomy", state.zoom_y),
+                ("Actor.zoomz", state.zoom_z), ("Actor.rotationx", state.rot_x_deg)] {
+                let expected = expected[method].as_f64().expect("native getter value") as f32;
+                assert!((actual - expected).abs() <= 0.000001,
+                    "cache={allow_cache_read}, {name} {method}: {actual} vs native {expected}");
+                checks += 1;
+            }
+        }
+        assert_eq!(checks, 32, "include both SSC charts and the song timing");
+    }
+}
+
+#[test]
+fn native_option_assignment() {
+    paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/options-assignment");
+    let trace = read_trace_file(&root.join("native.json"));
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &root.join("control.ssc"));
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary(&trace.title));
+    parity.assert_complete("native options assignment preserves skin and replaces numeric targets");
+    assert!(parity.checks() > 0);
+}
+
+#[test]
+fn native_assignment_snapshots() {
+    paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/options-assignment");
+    let mut trace = read_trace_file(&root.join("native-snapshot.json"));
+    let (compiled, _, context) = compile_trace_song_at(&trace, &root.join("control.ssc"));
+    let assignment = trace.timeline_tracks.iter_mut()
+        .find(|track| track.operation == "PlayerState.SetPlayerOptions")
+        .expect("native fresh assignments");
+    assert_eq!(assignment.samples.len(), 4);
+    assert!(assignment.samples.iter().all(|sample| sample.4.as_ref()
+        .is_some_and(|detail| detail["numeric_options"].is_array())));
+    let mut parity = Parity::default();
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("compiled native assignment getters");
+    assert_eq!(parity.checks(), 24, "eight numeric targets plus finite/coverage guards");
+
+    let assignment = trace.timeline_tracks.iter_mut()
+        .find(|track| track.operation == "PlayerState.SetPlayerOptions").expect("assignments");
+    let final_fields = assignment.samples.last_mut().expect("final assignment").4
+        .as_mut().expect("native detail")["numeric_options"]
+        .as_array_mut().expect("native numeric snapshot");
+    let dark = final_fields.iter_mut().find(|field| field[0] == "dark")
+        .expect("native dark getter");
+    dark[1] = serde_json::json!(0.75);
+    let mut parity = Parity::default();
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    assert!(!parity.gaps.is_empty(), "native getter snapshots must affect the audit");
+}
+
+#[test]
+fn native_current_options() {
+    paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/current-options");
+    let trace = read_trace_file(&root.join("native.json"));
+    assert_eq!(trace.update_frames.len(), 241, "retain the complete control");
+    assert!(trace.runtime_errors.is_empty());
+    assert_eq!(trace.dropped_events, 0);
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &root.join("control.ssc"));
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native Current options remain distinct and approach Song targets");
+    assert!(parity.checks() > 0);
 }
 
 #[test]
@@ -1731,6 +1860,7 @@ fn aft_boundaries_match_native_geometry_and_visibility() {
                     index,
                     state,
                     track.texture_size,
+                    None,
                     None,
                 )
                 .unwrap()
@@ -2779,6 +2909,26 @@ fn update_matching_keeps_retained_actor_variables() {
 
 fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, parity: &mut Parity) {
     parity.section("timeline");
+    for operation in ["GameState.SetCurrentSteps", "ScreenManager.SetNewScreen"] {
+        let mut native = trace.timeline_tracks.iter()
+            .filter(|track| track.kind == "call" && track.operation == operation)
+            .flat_map(|track| &track.samples).collect::<Vec<_>>();
+        native.sort_by_key(|sample| sample.0);
+        let actual = compiled.state_calls.iter().filter(|call| call.operation == operation).collect::<Vec<_>>();
+        parity.check(actual.len() == native.len(), || format!(
+            "{operation} call count: native {}, DeadSync {}", native.len(), actual.len()));
+        for (actual, (_, beat, second, args, _)) in actual.iter().zip(native) {
+            parity.check(actual.args == *args, || format!(
+                "{operation} arguments: native {args:?}, DeadSync {:?}", actual.args));
+            if let Some(beat) = beat {
+                parity.check((actual.beat - beat).abs() <= EPSILON, || format!("{operation} beat differs"));
+            }
+            if let Some(second) = second {
+                parity.check((actual.second - second).abs() <= EPSILON, || format!("{operation} time differs"));
+            }
+        }
+    }
+
     let beat_epsilon = trace.fixture_context.beat_step + EPSILON;
     for track in &trace.timeline_tracks {
         for (_, beat, _, args, _) in &track.samples {
@@ -3321,6 +3471,60 @@ fn replayed_alpha_messages_keep_queue_delay() {
     );
 }
 
+type CommandSlot = (usize, usize, usize);
+
+fn assign_message_target(
+    target: usize,
+    candidates: &[Vec<CommandSlot>],
+    owners: &mut HashMap<CommandSlot, usize>,
+    seen: &mut HashSet<CommandSlot>,
+) -> bool {
+    for &slot in &candidates[target] {
+        if !seen.insert(slot) {
+            continue;
+        }
+        let owner = owners.get(&slot).copied();
+        if owner.is_none_or(|owner| assign_message_target(owner, candidates, owners, seen)) {
+            owners.insert(slot, target);
+            return true;
+        }
+    }
+    false
+}
+
+#[test]
+fn message_match_reassigns() {
+    let a = (0, 0, 0);
+    let b = (0, 0, 1);
+    // A visibility-only expectation fits both captures. The following X/Y
+    // expectation fits only the first; subscriber order must not consume it.
+    let mut candidates = vec![vec![a, b], vec![a]];
+    let mut owners = HashMap::new();
+    assert!(assign_message_target(
+        0,
+        &candidates,
+        &mut owners,
+        &mut HashSet::new()
+    ));
+    assert!(assign_message_target(
+        1,
+        &candidates,
+        &mut owners,
+        &mut HashSet::new()
+    ));
+    assert_eq!(owners.get(&a), Some(&1));
+    assert_eq!(owners.get(&b), Some(&0));
+    // Reassignment must never let two native actors reuse one capture.
+    candidates.push(vec![a]);
+    assert!(!assign_message_target(
+        2,
+        &candidates,
+        &mut owners,
+        &mut HashSet::new()
+    ));
+    assert_eq!(owners.len(), 2);
+}
+
 fn compare_commands(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
@@ -3381,40 +3585,48 @@ fn compare_commands(
         ));
     }
     for (message, targets) in missing {
-        let mut used_dynamic = HashSet::new();
-        let mut unmatched = Vec::new();
-        for (label, target, expected) in targets {
-            let NativeTarget::Actor { layer, .. } = target else {
-                unmatched.push(label);
-                continue;
-            };
-            let Some(layer_compiled) = compiled.get(layer) else {
-                unmatched.push(label);
-                continue;
-            };
-            let candidate = layer_compiled
-                .stateful_message_captures
-                .iter()
-                .enumerate()
-                .filter(|(_, capture)| capture.message == message)
-                .flat_map(|(capture_index, capture)| {
-                    capture.overlay_targets.iter().enumerate().map(
-                        move |(target_index, (overlay_index, properties))| {
-                            (capture_index, target_index, *overlay_index, properties)
-                        },
-                    )
-                })
-                .find(|(capture_index, target_index, overlay_index, properties)| {
-                    !used_dynamic.contains(&(layer, *capture_index, *target_index))
-                        && stateful_command_matches(
+        // Native MessageManager visits its pointer-ordered subscriber set.
+        // Match all required properties one-to-one without letting a broad
+        // expectation consume the only capture fitting a later precise one.
+        let candidates = targets
+            .iter()
+            .map(|(_, target, expected)| {
+                let NativeTarget::Actor { layer, .. } = target else {
+                    return Vec::new();
+                };
+                let Some(layer_compiled) = compiled.get(*layer) else {
+                    return Vec::new();
+                };
+                layer_compiled
+                    .stateful_message_captures
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, capture)| capture.message == message)
+                    .flat_map(|(capture_index, capture)| {
+                        capture.overlay_targets.iter().enumerate().map(
+                            move |(target_index, (overlay_index, properties))| {
+                                (capture_index, target_index, *overlay_index, properties)
+                            },
+                        )
+                    })
+                    .filter(|(capture_index, _, overlay_index, properties)| {
+                        stateful_command_matches(
                             &layer_compiled.stateful_message_captures[*capture_index].writes,
                             *overlay_index,
                             properties,
-                            &expected,
+                            expected,
                         )
-                });
-            if let Some((capture_index, target_index, _, _)) = candidate {
-                used_dynamic.insert((layer, capture_index, target_index));
+                    })
+                    .map(|(capture_index, target_index, _, _)| {
+                        (*layer, capture_index, target_index)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        let mut owners = HashMap::new();
+        let mut unmatched = Vec::new();
+        for (index, (label, _, _)) in targets.into_iter().enumerate() {
+            if assign_message_target(index, &candidates, &mut owners, &mut HashSet::new()) {
                 parity.check(true, String::new);
             } else {
                 unmatched.push(label);
@@ -5153,6 +5365,7 @@ fn compare_lua_perspective(entry: &str) {
                 state,
                 [64.0, 32.0],
                 None,
+                None,
             )
             .expect("finite perspective vertices");
             for (corner, actual) in vertices.iter().enumerate() {
@@ -5172,6 +5385,103 @@ fn compare_lua_perspective(entry: &str) {
     assert_eq!(checks, 112);
 }
 
+#[test]
+fn screen_parent_transform_native_draws() {
+    assert_screen_parent_draws("screen-parent-transform", false);
+}
+
+#[test]
+fn screen_parent_depth_native_draws() {
+    assert_screen_parent_draws("screen-parent-depth", true);
+}
+
+fn assert_screen_parent_draws(name: &str, check_depth: bool) {
+    use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(&root.join(format!(
+        "tests/fixtures/itgmania-song-lua-micro/{name}-native.json",
+    )));
+    let native_draws: Option<Value> = check_depth.then(|| serde_json::from_slice(
+        &std::fs::read(root.join(format!(
+            "tests/fixtures/itgmania-song-lua-micro/{name}-draws-native.json",
+        ))).expect("independent native draw capture"),
+    ).expect("native draw JSON"));
+    let dir = root.join("tests/fixtures/song-lua");
+    let mut context = SongLuaCompileContext::new(&dir, trace.title.clone());
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled = compile_song_lua_layers(
+        &[dir.join(format!("{name}.lua")).as_path()], 0, &context,
+    ).expect("native screen-parent control compiles");
+    let parity = compare_semantics(&trace, &compiled, 0, &context);
+    parity.assert_complete(name);
+    let layer = &compiled[0];
+    let screen_index = layer.screen_overlay_index.expect("captured top screen");
+    let map = projected_drawable_map(&trace, &compiled);
+    let mut composer = WholeSongComposer::new(&layer.overlays);
+    let mut checks = 0;
+    for track in &trace.projected_vertex_tracks {
+        let &(layer_index, index) = map.get(&track.actor).expect("native drawable");
+        assert_eq!(layer_index, 0);
+        for sample in &track.samples {
+            let sample = sample.as_array().expect("native geometry sample");
+            let beat = value_f32(sample.first()).expect("beat");
+            let second = value_f32(sample.get(1)).expect("second");
+            let states = compiled_overlay_states_at(layer, &context, beat, second);
+            let screen_state = compiled_local_states_at(layer, &context, beat, second)[screen_index];
+            let frame = composer.render_screen_overlay(
+                &layer.overlays, &states, index, [854.0, 480.0], second, beat,
+                Some(screen_state),
+            );
+            let actual = rendered_quad_corners(&frame, [854.0, 480.0]);
+            let expected = native_screen_vertices(sample).expect("native corners");
+            assert!(!actual.is_empty(), "native geometry at second {second}");
+            for (from, to) in [(&actual, &expected), (&expected, &actual)] {
+                for corner in from {
+                    assert!(to.iter().any(|target| (0..2).all(|axis| {
+                        (corner[axis] - target[axis]).abs() <= 0.75
+                    })), "{} at {second}: {actual:?} vs {expected:?}", track.actor);
+                    checks += 1;
+                }
+            }
+            if let Some(native) = &native_draws {
+                let phase = (second.floor() as usize).min(3);
+                let name = match track.definition_id.as_deref() {
+                    Some("def-0002") => "Flat",
+                    Some("def-0004") => "Nested",
+                    _ => panic!("unexpected depth control actor"),
+                };
+                let drawn = native["cases"][phase]["native"]["samples"][0]["actors"]
+                    .as_array().expect("native drawn actors").iter()
+                    .find(|actor| actor["name"] == name).expect("native depth control");
+                let expected = drawn["draws"][0]["vertices"].as_array().expect("native vertices")
+                    .iter().map(|vertex| std::array::from_fn(|axis| {
+                        value_f32(vertex["clip"].get(axis)).expect("native clip axis")
+                    })).collect::<Vec<[f32; 4]>>();
+                let host = sample[5].as_array().expect("host clip vertices").iter()
+                    .map(|vertex| std::array::from_fn(|axis| {
+                        value_f32(vertex.get(axis)).expect("host clip axis")
+                    })).collect::<Vec<[f32; 4]>>();
+                assert_native_clips(&host, &expected, "harness", second);
+                assert_native_clips(&rendered_quad_clips(&frame), &expected, "renderer", second);
+            }
+        }
+    }
+    assert_eq!(checks, 80, "two quads, four native phases, every rendered corner");
+}
+
+fn assert_native_clips(actual: &[[f32; 4]], expected: &[[f32; 4]], label: &str, second: f32) {
+    for (from, to) in [(actual, expected), (expected, actual)] {
+        for vertex in from {
+            assert!(to.iter().any(|target| (0..3).all(|axis| {
+                (vertex[axis] / vertex[3] - target[axis] / target[3]).abs() <= 1e-6
+            })), "{label} at {second}: clip {vertex:?} vs {to:?}");
+        }
+    }
+}
+
 fn compiled_perspective_vertices(
     compiled: &CompiledSongLua,
     states: &[SongLuaOverlayState],
@@ -5179,6 +5489,7 @@ fn compiled_perspective_vertices(
     state: SongLuaOverlayState,
     texture_size: [f32; 2],
     screen_camera: Option<SongLuaOverlayState>,
+    screen_matrix: Option<[[f32; 4]; 4]>,
 ) -> Option<[[f32; 2]; 4]> {
     use deadsync_song_lua::playback::actor_conformance as actor;
     let mut parent = compiled.overlays[index].parent_index;
@@ -5219,8 +5530,10 @@ fn compiled_perspective_vertices(
         camera.fov?,
         camera.vanishpoint.unwrap_or(screen.map(|axis| axis * 0.5)),
     );
-    let corners = compiled_world_vertices(state, texture_size)
-        .map(|world| actor::project_world(projection, actor::project_world(view, world)));
+    let corners = compiled_world_vertices(state, texture_size).map(|world| {
+        let world = screen_matrix.map_or(world, |matrix| actor::project_world(matrix, world));
+        actor::project_world(projection, actor::project_world(view, world))
+    });
     // The reference records projected corners before GPU clipping, including
     // negative W. Only an undefined perspective divide prevents comparison.
     if corners.iter().any(|corner| {
@@ -5381,7 +5694,7 @@ fn projected_corners_keep_negative_w() {
         ..CompiledSongLua::default()
     };
     let vertices =
-        compiled_perspective_vertices(&compiled, &[camera, sprite], 1, sprite, [64.0; 2], None)
+        compiled_perspective_vertices(&compiled, &[camera, sprite], 1, sprite, [64.0; 2], None, None)
             .expect("negative W is a defined perspective divide");
     assert!(vertices.iter().flatten().all(|axis| axis.is_finite()));
     assert!(
@@ -5392,7 +5705,7 @@ fn projected_corners_keep_negative_w() {
     );
     let singular = SongLuaOverlayState { z: 320.0, ..sprite };
     assert!(
-        compiled_perspective_vertices(&compiled, &[camera, singular], 1, singular, [64.0; 2], None)
+        compiled_perspective_vertices(&compiled, &[camera, singular], 1, singular, [64.0; 2], None, None)
             .is_none()
     );
 }
@@ -5634,10 +5947,10 @@ fn compare_projected_geometry(
             let states = state_cache
                 .entry((layer, beat.to_bits(), seconds.to_bits()))
                 .or_insert_with(|| {
-                    let mut states =
+                    let states =
                         compiled_overlay_states_at(&compiled[layer], context, beat, seconds);
                     if let Some((screen_layer, index)) = screen_layer {
-                        let screen = screen_states
+                        screen_states
                             .entry((beat.to_bits(), seconds.to_bits()))
                             .or_insert_with(|| {
                                 let mut screen = compiled_command_state_at(
@@ -5655,19 +5968,8 @@ fn compare_projected_geometry(
                                     seconds,
                                     &mut screen,
                                 );
-                                let screen =
-                                    deadsync_song_lua::playback::actor_conformance::transform_state(
-                                        screen,
-                                        [music_seconds, beat],
-                                    );
                                 screen
                             });
-                        // GameplayActorSegments::segments places every screen
-                        // fragment at this shared offset before its camera.
-                        for state in &mut states {
-                            state.x += screen.x;
-                            state.y += screen.y;
-                        }
                     }
                     states
                 });
@@ -5808,8 +6110,18 @@ fn compare_projected_geometry(
             } else {
                 track.texture_size
             };
+            let screen_matrix = screen_states
+                .get(&(beat.to_bits(), seconds.to_bits()))
+                .map(|screen| deadsync_song_lua::playback::actor_conformance::screen_matrix(
+                    *screen, [music_seconds, beat],
+                ));
             let actual_vertices = if track.camera_actor == "orthographic-screen" && !perspective {
-                compiled_world_vertices(state, size).map(|[x, y, _, _]| [x, y])
+                compiled_world_vertices(state, size).map(|world| {
+                    let [x, y, _, _] = screen_matrix.map_or(world, |matrix| {
+                        deadsync_song_lua::playback::actor_conformance::project_world(matrix, world)
+                    });
+                    [x, y]
+                })
             } else {
                 let states = &state_cache[&(layer, beat.to_bits(), seconds.to_bits())];
                 let Some(vertices) = compiled_perspective_vertices(
@@ -5821,6 +6133,7 @@ fn compare_projected_geometry(
                     screen_states
                         .get(&(beat.to_bits(), seconds.to_bits()))
                         .copied(),
+                    screen_matrix,
                 ) else {
                     parity.check_once(false, &mut reported_bounds, || {
                         format!("projected perspective geometry is untested for {definition_id}: missing camera or undefined perspective divide at beat {beat:.3}")
@@ -7270,6 +7583,7 @@ fn near_camera_native() {
             index,
             states[index],
             [64.0, 64.0],
+            None,
             None,
         )
         .expect("finite perspective vertices");
@@ -8994,6 +9308,13 @@ fn rendered_quad_corners(
     frame: &deadlib_present::render::RenderFrame,
     screen: [f32; 2],
 ) -> Vec<[f32; 2]> {
+    rendered_quad_clips(frame).iter().map(|clip| [
+        (clip[0] / clip[3] + 1.0) * screen[0] * 0.5,
+        (1.0 - clip[1] / clip[3]) * screen[1] * 0.5,
+    ]).collect()
+}
+
+fn rendered_quad_clips(frame: &deadlib_present::render::RenderFrame) -> Vec<[f32; 4]> {
     let mut actual = Vec::new();
     for op in &frame.ops {
         if let deadlib_present::render::DrawOp::Sprite(run) = op {
@@ -9025,10 +9346,7 @@ fn rendered_quad_corners(
                             1.0,
                         ],
                     );
-                    actual.push([
-                        (clip[0] / clip[3] + 1.0) * screen[0] * 0.5,
-                        (1.0 - clip[1] / clip[3]) * screen[1] * 0.5,
-                    ]);
+                    actual.push(clip);
                 }
             }
             continue;
@@ -9050,10 +9368,7 @@ fn rendered_quad_corners(
                     ),
                     [vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0],
                 );
-                actual.push([
-                    (clip[0] / clip[3] + 1.0) * screen[0] * 0.5,
-                    (1.0 - clip[1] / clip[3]) * screen[1] * 0.5,
-                ]);
+                actual.push(clip);
             }
         }
     }
@@ -9892,7 +10207,7 @@ fn bad_apple_whole_song_matches_native() {
     let (compiled, primary, context) = compile_trace_song(&trace);
     let mut parity = compare_semantics(&trace, &compiled, primary, &context);
     runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
-    runtime_modifiers::compare_player_frames(&trace, &compiled, &context, &mut parity);
+    runtime_modifiers::compare_player_frames(&trace, &compiled, primary, &context, &mut parity);
     eprintln!("{}", parity.summary("Bad Apple whole song"));
     parity.assert_complete("Bad Apple whole song");
     assert_eq!(

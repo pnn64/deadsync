@@ -1,9 +1,47 @@
 ﻿#[derive(Clone, Copy, Debug, PartialEq)]
 #[derive(Default)]
+#[repr(u8)]
 pub enum GameplayFailType {
     Immediate,
     #[default]
     ImmediateContinue,
+    EndOfSong,
+    Off,
+}
+
+impl GameplayFailType {
+    pub const fn from_value(value: f32) -> Option<Self> {
+        match value {
+            0.0 => Some(Self::Immediate),
+            1.0 => Some(Self::ImmediateContinue),
+            2.0 => Some(Self::EndOfSong),
+            3.0 => Some(Self::Off),
+            _ => None,
+        }
+    }
+
+    pub fn from_mod(key: &str) -> Option<Self> {
+        match key {
+            "failarcade" | "failimmediate" => Some(Self::Immediate),
+            "failendofsong" | "failimmediatecontinue" => Some(Self::ImmediateContinue),
+            "failatend" => Some(Self::EndOfSong),
+            "failoff" => Some(Self::Off),
+            _ => None,
+        }
+    }
+
+    pub const fn lua_name(self) -> &'static str {
+        match self {
+            Self::Immediate => "FailType_Immediate",
+            Self::ImmediateContinue => "FailType_ImmediateContinue",
+            Self::EndOfSong => "FailType_EndOfSong",
+            Self::Off => "FailType_Off",
+        }
+    }
+
+    pub const fn fails_during_play(self) -> bool {
+        matches!(self, Self::Immediate | Self::ImmediateContinue)
+    }
 }
 
 

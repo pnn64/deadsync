@@ -36,3 +36,6 @@ pub use sync_dialog::{
     PackShift, apply_sync_analysis_events, begin_pack_measure, finish_pack_sync,
     measured_settled_simfiles, pack_sync_group, set_pack_check, take_pack_shift, wanted_pack_check,
 };
+
+#[cfg(test)]
+mod owned_results_support;
