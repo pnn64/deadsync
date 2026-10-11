@@ -2,13 +2,13 @@ use super::*;
 pub(crate) type SongLuaOverlayEaseWindowRuntime =
     deadsync_gameplay::SongLuaOverlayEaseWindowRuntime<SongLuaRuntimeOverlayStateDelta>;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) struct GameplayCompiledSongLua<S> {
     pub(crate) compiled: CompiledSongLua<S>,
     pub(crate) compile_ms: f64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) struct GameplaySongLuaLayer<S> {
     pub(crate) start_beat: f32,
     pub(crate) compiled: CompiledSongLua<S>,
@@ -18,7 +18,7 @@ pub(crate) struct GameplaySongLuaLayer<S> {
 ///
 /// The shell may build this on a worker during Select Music's options prompt,
 /// then hand it to the shared gameplay runtime builder.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct PreparedGameplaySongLua<S> {
     pub(crate) primary: Option<GameplayCompiledSongLua<S>>,
     pub(crate) background_layers: Vec<GameplaySongLuaLayer<S>>,

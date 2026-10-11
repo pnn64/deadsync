@@ -223,6 +223,9 @@ where
         .collect::<Result<Vec<_>, _>>()?;
     let trace_entry_path = entry_paths[primary_index].clone();
     let lua = Lua::new();
+    if context.live {
+        crate::lua_util::begin_live_runtime(&lua).map_err(|err| err.to_string())?;
+    }
     let mut host = SongLuaHostState::default();
     install_compile_host(
         &lua,
@@ -368,6 +371,9 @@ where
         // screen-owned actors and stage data are reconstructed at the queue boundary.
         scene_context = crate::host::selected_scene_context(&lua, context)
             .map_err(|err| err.to_string())?;
+        if scene_context.live {
+            crate::lua_util::begin_live_runtime(&lua).map_err(|err| err.to_string())?;
+        }
         crate::host::replace_gameplay_screen(&lua, &scene_context,
             create_dummy_actor, create_named_child_actor).map_err(|err| err.to_string())?;
         reloads += 1;
@@ -393,6 +399,68 @@ where
     let mut initial_updates = captured_startup.updates;
     let initial_broadcasts = captured_startup.broadcasts;
     compile_timer.push_stage("startup_commands");
+    if context.live {
+        // A live scene stops at native Update(0). In particular, extracting
+        // assets must never call listeners or replay future queued commands.
+        mark_compile_layers(&root).map_err(|err| err.to_string())?;
+        let mut overlays = read_overlay_compile_actors(
+            &lua, &root, context,
+            |actor| read_actor_model_layers(actor, read_model_slots, model_layer_from_slot),
+            |actor, _| read_noteskin_tap_actor_slots(actor, read_model_slots),
+            |_| {},
+        )?;
+        let screen_index = overlays.len();
+        let screen = lua.globals().get::<Table>("__songlua_top_screen")
+            .map_err(|err| err.to_string())?;
+        screen.set(COMPILE_LAYER_KEY, primary_index).map_err(|err| err.to_string())?;
+        overlays.push(crate::SongLuaOverlayCompileActor {
+            actor: SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::ActorFrame,
+                name: Some("ScreenGameplay".into()), parent_index: None,
+                initial_state: crate::live::read_state(&lua, &screen).map_err(|err| err.to_string())?,
+                message_commands: Vec::new(),
+            }, table: screen, message_sounds: Vec::new(),
+        });
+        let tracked = read_tracked_compile_actors(&lua, create_named_child_actor)?;
+        let mut hidden_players = std::array::from_fn(|player| tracked.get(player * 3)
+            .is_some_and(|actor| !actor.actor.initial_state.visible));
+        resolve_late_actor_targets(&mut overlays, &mut hidden_players)?;
+        let overlay_layers = overlays.iter().map(|actor| actor.table
+            .get::<Option<usize>>(COMPILE_LAYER_KEY).map(|layer| layer.unwrap_or(primary_index))
+            .map_err(|err| err.to_string())).collect::<Result<Vec<_>, _>>()?;
+        let mut out = CompiledSongLua {
+            startup, loaded_steps: Some(context.player_step_indices), startup_reloads: reloads,
+            entry_path: entry_paths[primary_index].clone(),
+            screen_width: context.screen_width, screen_height: context.screen_height,
+            screen_overlay_index: Some(screen_index), hidden_players,
+            sound_paths: read_song_lua_sound_paths(&lua)?,
+            ..CompiledSongLua::default()
+        };
+        let mut tables = Vec::with_capacity(overlays.len());
+        for mut overlay in overlays {
+            overlay.actor.initial_state = crate::live::read_state(&lua, &overlay.table)
+                .map_err(|err| err.to_string())?;
+            tables.push(overlay.table);
+            out.overlays.push(overlay.actor);
+        }
+        let mut tracked_tables = Vec::with_capacity(tracked.len());
+        for actor in tracked {
+            let state = crate::live::read_state(&lua, &actor.table).map_err(|err| err.to_string())?;
+            tracked_tables.push((actor.target, actor.table, state));
+            match actor.target {
+                TrackedCompileActorTarget::Player(player) => out.player_actors[player].initial_state = state,
+                TrackedCompileActorTarget::PlayerJudgment(player) => out.player_actors[player].judgment.initial_state = state,
+                TrackedCompileActorTarget::PlayerCombo(player) => out.player_actors[player].combo.initial_state = state,
+                TrackedCompileActorTarget::SongForeground => out.song_foreground.initial_state = state,
+                TrackedCompileActorTarget::ScreenLayer(index) => out.screen_layers[index].initial_state = state,
+            }
+        }
+        out.live_scene = Some(crate::SongLuaLiveScene::new(lua, root, scene_context, tables, tracked_tables, initial_broadcasts)
+            .map_err(|err| err.to_string())?);
+        compile_timer.push_stage("live_scene");
+        log_song_lua_compile_timing(&trace_entry_path, &compile_timer);
+        return split_compiled_song_lua(out, overlay_layers, &entry_paths, primary_index);
+    }
     let mut screen_layer_startup = crate::lua_util::capture_startup_states(screen_layer_states)?;
     crate::lua_util::bake_startup_tweens(
         startup_tweens
@@ -1425,6 +1493,9 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
                 .map_or(usize::MAX, |(_, local)| *local);
         }
         outputs[layer].overlays.push(overlay);
+        if compiled.live_scene.is_some() {
+            outputs[layer].live_indices.push(global_index);
+        }
     }
     for mut ease in compiled.overlay_eases.drain(..) {
         let Some(&(layer, local)) = overlay_map.get(ease.overlay_index) else {
@@ -1483,6 +1554,7 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
         output.startup_reloads = compiled.startup_reloads;
     }
     let primary = &mut outputs[primary_index];
+    primary.live_scene = compiled.live_scene.take();
     #[cfg(feature = "test-support")]
     {
         primary.boolean_writes = compiled.boolean_writes;

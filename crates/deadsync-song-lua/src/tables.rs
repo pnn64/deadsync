@@ -1196,6 +1196,13 @@ pub(crate) fn reset_stage_stats(lua: &Lua, context: &SongLuaCompileContext) -> m
             stats.raw_set(key, 0)?;
         }
         stats.raw_set("__songlua_failed", false)?;
+        stats.raw_set("__songlua_life", SONG_LUA_INITIAL_LIFE)?;
+        stats.raw_set("__songlua_combo", 0)?;
+        stats.raw_set("__songlua_miss_combo", 0)?;
+        let tap_scores = stats.raw_get::<Table>("__songlua_tap_scores")?;
+        for name in crate::live::TAP_SCORES {
+            tap_scores.raw_set(name, 0)?;
+        }
         if let Some(steps) = &current_steps {
             let selected = steps.raw_get::<Value>(player + 1)?;
             for name in ["GetPlayedSteps", "GetPossibleSteps"] {
@@ -1331,6 +1338,15 @@ fn create_player_stage_stats_table(
     stats.set("__songlua_actual_dance_points", 0_i64)?;
     stats.set("__songlua_possible_dance_points", 0_i64)?;
     stats.set("__songlua_current_possible_dance_points", 0_i64)?;
+    // Player::Init records initial life before LoadNextSong loads song actors.
+    stats.raw_set("__songlua_life", SONG_LUA_INITIAL_LIFE)?;
+    stats.raw_set("__songlua_combo", 0)?;
+    stats.raw_set("__songlua_miss_combo", 0)?;
+    let tap_scores = lua.create_table()?;
+    for name in crate::live::TAP_SCORES {
+        tap_scores.raw_set(name, 0)?;
+    }
+    stats.raw_set("__songlua_tap_scores", tap_scores)?;
     let high_score = create_high_score_table(lua, high_score_name)?;
     let played_steps = lua.create_table()?;
     let possible_steps = lua.create_table()?;
@@ -1521,15 +1537,15 @@ fn create_player_stage_stats_table(
     )?;
     stats.set(
         "GetCurrentLife",
-        lua.create_function(|_, _args: MultiValue| Ok(SONG_LUA_INITIAL_LIFE))?,
+        lua.create_function(|_, stats: Table| stats.raw_get::<f32>("__songlua_life"))?,
     )?;
     stats.set(
         "GetCurrentCombo",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, stats: Table| stats.raw_get::<u32>("__songlua_combo"))?,
     )?;
     stats.set(
         "GetCurrentMissCombo",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, stats: Table| stats.raw_get::<u32>("__songlua_miss_combo"))?,
     )?;
     stats.set(
         "GetLifeRemainingSeconds",
@@ -1552,7 +1568,13 @@ fn create_player_stage_stats_table(
     )?;
     stats.set(
         "GetTapNoteScores",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, (stats, name): (Table, String)| {
+            let name = name.strip_prefix("TapNoteScore_").unwrap_or(&name);
+            if !crate::live::TAP_SCORES.contains(&name) {
+                return Err(mlua::Error::runtime(format!("invalid TapNoteScore '{name}'")));
+            }
+            stats.raw_get::<Table>("__songlua_tap_scores")?.raw_get::<u32>(name)
+        })?,
     )?;
     stats.set(
         "GetHoldNoteScores",

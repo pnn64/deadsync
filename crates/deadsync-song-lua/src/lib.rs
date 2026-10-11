@@ -25,6 +25,8 @@ mod files;
 mod host;
 mod json;
 mod lua_util;
+mod live;
+pub use live::{SongLuaLiveFrame, SongLuaLiveOutput, SongLuaLivePlayer, SongLuaLiveScene, SongLuaLiveRequest};
 mod mod_windows;
 mod model_texture;
 #[cfg(feature = "test-support")]
@@ -1411,6 +1413,9 @@ impl From<&deadsync_chart::ChartData> for SongLuaStep {
 
 #[derive(Debug, Clone)]
 pub struct SongLuaCompileContext {
+    /// Retain the initialized scene for actual gameplay instead of probing
+    /// future callbacks on the load worker.
+    pub live: bool,
     /// Session entry paths list backgrounds first, then foregrounds.
     /// A single-entry compile defaults to the foreground layer.
     pub background_layer_count: usize,
@@ -1458,6 +1463,7 @@ impl SongLuaCompileContext {
     pub fn new(song_dir: impl Into<PathBuf>, main_title: impl Into<String>) -> Self {
         Self {
             background_layer_count: 0,
+            live: false,
             song_dir: song_dir.into(),
             main_title: main_title.into(),
             song_display_bpms: [60.0, 60.0],
@@ -1847,8 +1853,10 @@ pub struct SongLuaStateCall {
     pub args: Vec<serde_json::Value>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CompiledSongLua<OverlayActor> {
+    pub live_scene: Option<SongLuaLiveScene>,
+    pub(crate) live_indices: Vec<usize>,
     /// Charts whose note fields were constructed after startup reloads.
     pub loaded_steps: Option<[Option<usize>; LUA_PLAYERS]>,
     pub startup_reloads: u32,
@@ -1894,9 +1902,16 @@ pub struct CompiledSongLua<OverlayActor> {
     pub info: SongLuaCompileInfo,
 }
 
+impl<OverlayActor> CompiledSongLua<OverlayActor> {
+    /// Positions in the retained scene, in this layer's overlay order.
+    pub fn live_actor_indices(&self) -> &[usize] { &self.live_indices }
+}
+
 impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
     fn default() -> Self {
         Self {
+            live_scene: None,
+            live_indices: Vec::new(),
             loaded_steps: None,
             startup_reloads: 0,
             startup: SongLuaStartup::default(),

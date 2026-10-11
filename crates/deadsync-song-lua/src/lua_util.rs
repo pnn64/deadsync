@@ -940,6 +940,12 @@ pub fn runtime_broadcast_captures(lua: &Lua) -> Vec<(f32, String, bool)> {
         .unwrap_or_default()
 }
 
+pub(crate) fn take_runtime_broadcasts(lua: &Lua) -> Vec<(f32, String, bool)> {
+    lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
+        .map(|mut capture| std::mem::take(&mut capture.runtime_broadcasts))
+        .unwrap_or_default()
+}
+
 pub(crate) fn capture_runtime_sound(lua: &Lua, path: PathBuf) {
     let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
     let queued_startup = lua.app_data_ref::<SongLuaQueuedStartup>().is_some();
@@ -2788,6 +2794,9 @@ fn broadcast_identity_order() {
 }
 
 pub fn register_song_lua_actor(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if crate::live::active(lua) {
+        ensure_tween_replay(lua, actor)?;
+    }
     let registry = song_lua_actor_registry(lua)?;
     let actor_ptr = actor.to_pointer() as usize;
     for value in registry.sequence_values::<Value>() {
@@ -3898,6 +3907,9 @@ pub fn capture_actor_message_commands(
     lua: &Lua,
     actor: &Table,
 ) -> Result<SongLuaCapturedMessageCommands, String> {
+    if crate::live::active(lua) {
+        return Ok(SongLuaCapturedMessageCommands::default());
+    }
     let mut out = SongLuaCapturedMessageCommands::default();
     let mut command_names = Vec::new();
     for_each_actor_message_command(actor, |name, _| command_names.push(name.to_owned()))
@@ -10515,7 +10527,7 @@ pub struct SongLuaStartupState {
 struct ActorTweenReplay {
     current: SongLuaOverlayState,
     queue: std::collections::VecDeque<ActorTweenStep>,
-    progress: Vec<Vec<[f32; 2]>>,
+    progress: Option<Vec<Vec<[f32; 2]>>>,
     targets: u128,
 }
 
@@ -10531,6 +10543,26 @@ struct ActorTweenStep {
 }
 
 struct ActorTweenReplays(FxHashMap<usize, ActorTweenReplay>);
+
+pub(crate) fn begin_live_runtime(lua: &Lua) -> mlua::Result<()> {
+    lua.set_app_data(crate::live::LiveMode);
+    lua.set_app_data(ActorTweenReplays(FxHashMap::default()));
+    set_compile_frames(lua, [(0.0, 0.0)].into_iter())?;
+    if let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>() {
+        frames.actor_frames = Some(vec![[0.0, 0.0]]);
+    }
+    Ok(())
+}
+
+pub(crate) fn set_live_frame(lua: &Lua, seconds: f64, beat: f64, delta: f64) {
+    if let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>() {
+        frames.times[0] = seconds;
+        frames.beats[0] = beat as f32;
+        if let Some(actor_frames) = &mut frames.actor_frames {
+            actor_frames[0] = [delta as f32, delta as f32];
+        }
+    }
+}
 
 pub(crate) const TWEEN_POSE_TARGETS: [SongLuaOverlayUpdateTarget; 24] = {
     use SongLuaOverlayUpdateTarget as T;
@@ -10646,7 +10678,7 @@ pub(crate) fn begin_tween_replay<Kind>(
             ActorTweenReplay {
                 current,
                 queue,
-                progress: vec![Vec::new(); startup.steps.len()],
+                progress: Some(vec![Vec::new(); startup.steps.len()]),
                 targets,
             },
         );
@@ -10663,8 +10695,10 @@ fn queue_replay_tween(lua: &Lua, actor: &Table, duration: f64, easing: Option<&s
     };
     let to = replay.queue.back().map_or(replay.current, |step| step.to);
     let duration = duration as f32;
-    let index = replay.progress.len();
-    replay.progress.push(Vec::new());
+    let index = replay.progress.as_ref().map_or(0, Vec::len);
+    if let Some(progress) = &mut replay.progress {
+        progress.push(Vec::new());
+    }
     replay.queue.push_back(ActorTweenStep {
         index,
         duration,
@@ -10850,7 +10884,8 @@ pub(crate) fn ensure_tween_replay(lua: &Lua, actor: &Table) -> mlua::Result<()> 
     let current = actor_overlay_initial_state(actor).map_err(mlua::Error::external)?;
     if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() {
         replays.0.insert(actor.to_pointer() as usize, ActorTweenReplay {
-            current, queue: Default::default(), progress: Vec::new(), targets: 0,
+            current, queue: Default::default(),
+            progress: (!crate::live::active(lua)).then(Vec::new), targets: 0,
         });
     }
     Ok(())
@@ -10956,13 +10991,17 @@ fn advance_tween_replay(lua: &Lua, actor: &Table, delta: f64) -> mlua::Result<()
                 } else {
                     time - span * (remaining / delta as f32)
                 };
-                replay.progress[step.index].push([start, step.duration]);
+                if let Some(progress) = &mut replay.progress {
+                    progress[step.index].push([start, step.duration]);
+                }
             }
             let command = beginning.then(|| step.command.clone()).flatten();
             let used = remaining.min(step.left);
             step.left -= used;
             remaining -= used;
-            replay.progress[step.index].push([time, step.left]);
+            if let Some(progress) = &mut replay.progress {
+                progress[step.index].push([time, step.left]);
+            }
             if step.left == 0.0 {
                 crate::apply_overlay_delta(&mut replay.current, &tween_pose_delta(step.to));
                 replay.current.vertex_colors = step.to.vertex_colors;
@@ -11000,13 +11039,14 @@ pub(crate) fn sample_tween_replays(lua: &Lua) {
         .map_or(0.0, |frames| frames.time(frames.frame) as f32);
     if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() {
         for replay in replays.0.values_mut() {
+            let Some(progress) = &mut replay.progress else { continue; };
             if let Some(step) = replay.queue.front()
                 && step.from.is_some()
-                && replay.progress[step.index]
+                && progress[step.index]
                     .last()
                     .is_none_or(|sample| sample[0] != time)
             {
-                replay.progress[step.index].push([time, step.left]);
+                progress[step.index].push([time, step.left]);
             }
         }
     }
@@ -11070,7 +11110,8 @@ pub(crate) fn finish_tween_replay<Kind>(
             let Some(index) = step.and_then(|step| step.checked_sub(1)) else {
                 continue;
             };
-            let samples = &replay.progress[index];
+            let Some(progress) = &replay.progress else { continue; };
+            let samples = &progress[index];
             if !samples.is_empty() {
                 block.progress = Some(samples.clone().into());
             }
@@ -11516,6 +11557,17 @@ pub(crate) fn run_actor_startup_commands(
     let queued = lua
         .remove_app_data::<SongLuaStartupQueues>()
         .expect("startup queue scope was installed above");
+    if context.live {
+        if let Some(request) = screen_request {
+            lua.set_app_data(request);
+        }
+        // ActorTweenReplays already owns the native Init/On queue. No future
+        // command discovery, closure rewinding or timeline baking is allowed.
+        return Ok(SongLuaStartupCapture {
+            updates: initial_updates, options, broadcasts,
+            ..SongLuaStartupCapture::default()
+        });
+    }
     if let Some(request) = screen_request {
         // This screen is being deleted now. Its future queue must neither run
         // nor mutate globals that the replacement screen will inherit.
@@ -11763,6 +11815,13 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
         .app_data_ref::<SongLuaCompileUpdatePlan>()
         .map(|plan| plan.jobs.clone())
         .unwrap_or_default())
+}
+
+pub(crate) fn prepare_live_updates(lua: &Lua, root: &Value) -> mlua::Result<()> {
+    if let Value::Table(root) = root {
+        compile_update_jobs(lua, root)?;
+    }
+    Ok(())
 }
 
 pub(crate) fn actor_tree_update_only(lua: &Lua, root: &Value, name: &str) -> mlua::Result<bool> {
@@ -13422,8 +13481,14 @@ pub fn create_top_screen_table(
         "StartTransitioningScreen",
         lua.create_function({
             let top_screen = top_screen.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, args: MultiValue| {
                 note_song_lua_side_effect(lua)?;
+                if crate::live::active(lua) {
+                    let message = method_arg(&args, 0).cloned().and_then(read_string)
+                        .ok_or_else(|| mlua::Error::runtime("expected a screen transition message"))?;
+                    run_named_command_on_children_recursively(lua, &top_screen, "OffCommand", None)?;
+                    lua.set_app_data(crate::live::TransitionRequest(message));
+                }
                 Ok(top_screen.clone())
             }
         })?,
@@ -16261,7 +16326,15 @@ pub fn reset_actor_capture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set("__songlua_capture_easing", Value::Nil)?;
     actor.set("__songlua_capture_opt1", Value::Nil)?;
     actor.set("__songlua_capture_opt2", Value::Nil)?;
-    actor.set("__songlua_capture_blocks", lua.create_table()?)?;
+    if crate::live::active(lua) {
+        if let Some(blocks) = actor.raw_get::<Option<Table>>("__songlua_capture_blocks")? {
+            blocks.clear()?;
+        } else {
+            actor.set("__songlua_capture_blocks", lua.create_table()?)?;
+        }
+    } else {
+        actor.set("__songlua_capture_blocks", lua.create_table()?)?;
+    }
     actor.set("__songlua_capture_block", Value::Nil)?;
     actor.set("__songlua_capture_immediate_block", Value::Nil)?;
     Ok(())
@@ -18235,7 +18308,7 @@ where
 
     let kind = if actor_type.eq_ignore_ascii_case("Actor") {
         // A referenced plain Actor can drive other actors through tween getters.
-        if name.is_none()
+        if !context.live && name.is_none()
             && initial_state == SongLuaOverlayState::default()
             && message_commands.is_empty()
             && message_sounds.is_empty()
@@ -18252,7 +18325,7 @@ where
             .get::<Option<Function>>("__songlua_draw_function")
             .map_err(|err| err.to_string())?
             .is_some();
-        if parent_index.is_none()
+        if !context.live && parent_index.is_none()
             && name.is_none()
             && initial_state == SongLuaOverlayState::default()
             && message_commands.is_empty()
