@@ -1716,12 +1716,10 @@
     {
       "title": "Brain Power",
       "source_simfile": "Brain Power - [Cardboard Box]/Brain Power.sm",
-      "harness_version": "0.1.0",
-      "archive": "1a038d81530a6ab56b2e29fe7f8a86d8a2f2716560e2627741c7ee94ee56e879.tar.zst",
-      "sha256": "1a038d81530a6ab56b2e29fe7f8a86d8a2f2716560e2627741c7ee94ee56e879",
-      "compressed_bytes": 90327,
-      "uncompressed_sha256": "3604deb819c893e28f7fea66a6a8ff5555b9591e5ee532227b8948a06973d242",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "7474f7c949e0a8a85dc83cfe432cfbffdd9a3ed240051e6e0bad6408a5767e4b.tar.zst",
+      "sha256": "7474f7c949e0a8a85dc83cfe432cfbffdd9a3ed240051e6e0bad6408a5767e4b",
+      "compressed_bytes": 13165184,
       "aliases": [
         "9bcd500709c8339a67d0ecfecc90b86916141585f4fc3a89da16f5bd1b0b9852.tar.zst"
       ]
