@@ -211,3 +211,7 @@ mod course_data_support;
 #[cfg(test)]
 #[path = "../../../tests/perf/string_pipelines_support.rs"]
 mod pipelines_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/transient_buffers_support.rs"]
+mod buffers_support;
