@@ -479,7 +479,10 @@ pub(crate) fn parse_page(body: &str) -> Result<Vec<(u64, PackDetails)>, String> 
             id,
             PackDetails {
                 banner_url: cell(column::BANNER).and_then(banner_url),
-                date_added: cell(column::DATE).and_then(inner_text).filter(is_iso_date),
+                date_added: cell(column::DATE)
+                    .and_then(inner_text)
+                    .filter(|value| is_iso_date(value))
+                    .map(str::to_owned),
                 chart_types: cell(column::TYPES).map(chart_types).unwrap_or_default(),
             },
         ));
@@ -530,7 +533,7 @@ fn merge_page(
 }
 
 fn banner_url(cell: &str) -> Option<String> {
-    let path = attribute(cell, "data-src")?;
+    let path = attribute(cell, "data-src=\"")?;
     // The site's stand-in for a pack with no banner is an image that says
     // "NO BANNER". It is not the pack's art, so it is no art -- as the
     // original reads it.
@@ -550,7 +553,7 @@ fn banner_url(cell: &str) -> Option<String> {
 /// instead would be prettier and is not reliable: a pack with many types only
 /// renders the first few.
 fn chart_types(cell: &str) -> Vec<String> {
-    let Some(raw) = attribute(cell, "data-sort") else {
+    let Some(raw) = attribute(cell, "data-sort=\"") else {
         return Vec::new();
     };
     let decoded = decode_entities(raw);
@@ -564,24 +567,23 @@ fn chart_types(cell: &str) -> Vec<String> {
 
 /// The value of one attribute, without pulling in an HTML parser for what is
 /// always a single well-formed tag written by the same template.
-fn attribute<'a>(cell: &'a str, name: &str) -> Option<&'a str> {
-    let needle = format!("{name}=\"");
-    let start = cell.find(needle.as_str())? + needle.len();
+fn attribute<'a>(cell: &'a str, prefix: &str) -> Option<&'a str> {
+    let start = cell.find(prefix)? + prefix.len();
     let rest = &cell[start..];
     let end = rest.find('"')?;
     Some(&rest[..end])
 }
 
 /// The text between the first `>` and the following `<`.
-fn inner_text(cell: &str) -> Option<String> {
+fn inner_text(cell: &str) -> Option<&str> {
     let start = cell.find('>')? + 1;
     let rest = &cell[start..];
     let end = rest.find('<')?;
     let text = rest[..end].trim();
-    (!text.is_empty()).then(|| text.to_owned())
+    (!text.is_empty()).then_some(text)
 }
 
-fn is_iso_date(value: &String) -> bool {
+fn is_iso_date(value: &str) -> bool {
     value.len() == 10
         && value.as_bytes()[4] == b'-'
         && value.as_bytes()[7] == b'-'
@@ -760,3 +762,7 @@ mod tests {
         assert!(parse_page(r#"{"nope": 1}"#).is_err());
     }
 }
+
+#[cfg(test)]
+#[path = "smo_details_perf.rs"]
+mod perf_tests;

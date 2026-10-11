@@ -1,0 +1,80 @@
+{
+  "reference_file": "C:\\GitHub\\rework\\itgmania\\src\\ArrowEffects.cpp",
+  "reference_sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+  "extracted_functions_sha256": {
+    "ReceptorGetRotationX": "7a036455e1e51e497c22fea4dfdc0a8b1e3e04c9cd94708c2e9111607ca5f02f",
+    "GetRotationX": "1015dd1cbe7758ef53249bdb505d99dfe1516ea3490a4ceb441b16698a11589d"
+  },
+  "original_function_bodies_unchanged": true,
+  "isolated_input_structs_used": true,
+  "whole_native_gameplay_used": false,
+  "semantic_host_used": false,
+  "deadsync_used": false,
+  "binary_sha256": "d72760f45c4a40d3dfce08a07812f1d669ba9843c3d0289e2ec159b74f3caf39",
+  "vectors": [
+    {
+      "offset": 0,
+      "roll": 0,
+      "travel": 128,
+      "receptor": 0,
+      "note": 0,
+      "hold_cap": 0
+    },
+    {
+      "offset": 0,
+      "roll": 2.5,
+      "travel": 128,
+      "receptor": 0,
+      "note": 160,
+      "hold_cap": 0
+    },
+    {
+      "offset": 1.57079637,
+      "roll": 0,
+      "travel": 128,
+      "receptor": 90,
+      "note": 90,
+      "hold_cap": 90
+    },
+    {
+      "offset": 1.57079637,
+      "roll": 2.5,
+      "travel": 128,
+      "receptor": 90,
+      "note": 250,
+      "hold_cap": 90
+    },
+    {
+      "offset": -3.14159274,
+      "roll": 0,
+      "travel": 128,
+      "receptor": -180,
+      "note": -180,
+      "hold_cap": -180
+    },
+    {
+      "offset": -3.14159274,
+      "roll": 2.5,
+      "travel": 128,
+      "receptor": -180,
+      "note": -20,
+      "hold_cap": -180
+    },
+    {
+      "offset": 3.1400001,
+      "roll": 0,
+      "travel": 128,
+      "receptor": 179.908752,
+      "note": 179.908752,
+      "hold_cap": 179.908752
+    },
+    {
+      "offset": 3.1400001,
+      "roll": 2.5,
+      "travel": 128,
+      "receptor": 179.908752,
+      "note": 339.908752,
+      "hold_cap": 179.908752
+    }
+  ]
+}

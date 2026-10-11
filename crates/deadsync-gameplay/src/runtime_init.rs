@@ -1212,6 +1212,7 @@ where
             profiles: player_profiles,
         },
         mods: GameplayModRuntimeState {
+            expand_seconds: [0.0; MAX_PLAYERS],
             song_lua_visuals,
             song_lua_player_transforms: song_lua_player_transforms_default(),
             attacks: {
@@ -1241,7 +1242,8 @@ where
     };
     state.control.update_trace =
         GameplayUpdateTraceState::from_capacity_snapshot(&state.capacity_trace_snapshot());
-    state.refresh_seek_dependent_state();
+    refresh_active_attack_masks(&mut state, 0.0);
+    state.refresh_live_notefield_options(state.clock.song_position.current_bpm);
     let finalize_ms = finalize_started.elapsed().as_secs_f64() * 1000.0;
     let total_ms = init_started.elapsed().as_secs_f64() * 1000.0;
     if total_ms >= 50.0 {

@@ -1,0 +1,5148 @@
+{
+  "pass": 124,
+  "source_parent_commit": "06db3926a260603cb9984927b6121e7286f8100a",
+  "changed_source_sha256": {
+    "crates/deadsync-song-lua/src/lib.rs": "995823a288a5f4b2f0bb9909d2fcd93896cd75f554d4ebb08ebcccfc3dc36fb9",
+    "crates/deadsync-song-lua/src/lua_util.rs": "e4fad3426e92335ce35df9f05d17496b827dc611252cc955f2ed1d256d0d335e",
+    "crates/deadsync-song-lua/src/perframe.rs": "30139f3852e9e3b995064460470c9f43949149a5929f7d044f628fd871e01a0c"
+  },
+  "finding": "The returned song Lua tree excludes Player-owned NoteFields. Their wrappers were sampled but never received native update time, so accumulated spin and queued motion were not retained.",
+  "correction": "Include the external Player/NoteField subtree in chronological update replay when it owns wrappers, retaining parent hibernation and update rate. Mark captured accumulated spin baked so draw effects cannot spin it again.",
+  "native_source_basis": [
+    "ITGmania Player.cpp Player::Update calls ActorFrame::Update",
+    "Actor::Update advances wrapper states before owner UpdateInternal",
+    "Actor.cpp spin accumulates rotation during update and does nothing in PreDraw",
+    "ScreenWithMenuElements sorts children by draw order; Player precedes SongForeground"
+  ],
+  "before": {
+    "log_sha256": "52eb72331b3cfb6693c49a006e65a2299d1617d4a187472974454c940d2ef7c1",
+    "failure": "Native wrapper spin capture assertion failed"
+  },
+  "after": {
+    "source_commit": "06db3926a260603cb9984927b6121e7286f8100a",
+    "source_pending_commit": true,
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass124\\field-spin-v4-unit.exe",
+      "tests::compile_song_lua_keeps_notefield_wrapper_skew_on_child",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "tests_passed": 1,
+    "elapsed_seconds": 1.5430278000421822,
+    "binary_sha256": "7b3bde01f53024df9b52af60a11134100e29572915e0dd870b5894a63cd840f7",
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass124\\field-spin-v4-unit.log",
+    "log_sha256": "6777844d7f76d9b74ab4723b6f32024bf6d70ed1b7476ec70831275918622a9f",
+    "native_control": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass124\\native-wrapper-spin-control.json",
+    "native_control_sha256": "27043bf055beab6b5d7e69c985301ba5a02b57519a88b086e9db99f46b90245e",
+    "native_angles": [
+      {
+        "second": 0.0,
+        "wrapper_rotation_z": 0.0,
+        "owner_rotation_z": 0
+      },
+      {
+        "second": 0.5,
+        "wrapper_rotation_z": 45.0,
+        "owner_rotation_z": 0
+      },
+      {
+        "second": 1.0,
+        "wrapper_rotation_z": 90.00000250447806,
+        "owner_rotation_z": 0
+      }
+    ],
+    "assertions": "Captured outer wrapper spin is baked and is 45 degrees at the native half-second sample; parent transform stays untouched; skew stays on the inner wrapper."
+  },
+  "native_control": {
+    "request": {
+      "schema_version": 1,
+      "name": "notefield-wrapper-spin",
+      "screen": {
+        "width": 854,
+        "height": 480
+      },
+      "samples": [
+        0,
+        0.5,
+        1
+      ],
+      "root": {
+        "kind": "frame",
+        "name": "capture",
+        "children": [
+          {
+            "kind": "frame",
+            "name": "NoteField",
+            "wrappers": [
+              {
+                "name": "spinner",
+                "state": {
+                  "position": [
+                    17,
+                    0,
+                    0
+                  ]
+                },
+                "effect": {
+                  "type": "spin",
+                  "magnitude": [
+                    0,
+                    0,
+                    90
+                  ],
+                  "clock": "timer"
+                }
+              }
+            ],
+            "children": [
+              {
+                "kind": "sprite",
+                "name": "note",
+                "size": [
+                  64,
+                  64
+                ],
+                "state": {
+                  "position": [
+                    32,
+                    -125,
+                    0
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "native": {
+      "fixture": "notefield-wrapper-spin",
+      "oracle": "itgmania_native_actor_conformance",
+      "post_draw_order": [
+        {
+          "enabled": true,
+          "frame": "NoteField",
+          "input": [
+            "note"
+          ],
+          "post": [
+            "note"
+          ]
+        },
+        {
+          "enabled": true,
+          "frame": "capture",
+          "input": [
+            "NoteField"
+          ],
+          "post": [
+            "NoteField"
+          ]
+        }
+      ],
+      "provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      },
+      "random_seed": 1,
+      "samples": [
+        {
+          "actors": [
+            {
+              "alignment": [
+                0.5,
+                0.5
+              ],
+              "base_alpha": 1.0,
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "base_zoom": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "current": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "destination": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "draw_order": 0,
+              "drawn": false,
+              "draws": [],
+              "effect": {
+                "clock": "timer",
+                "color1": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "color2": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "delta": 0.0,
+                "magnitude": [
+                  0.0,
+                  0.0,
+                  10.0
+                ],
+                "offset": 0.0,
+                "period": 1.0,
+                "seconds": 0.0,
+                "type": "none"
+              },
+              "effected": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "kind": "frame",
+              "local_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "name": "capture",
+              "parent_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "projection_matrix": [
+                [
+                  0.0023419202771037817,
+                  0.0,
+                  0.0,
+                  -1.0
+                ],
+                [
+                  0.0,
+                  -0.004166666883975267,
+                  0.0,
+                  1.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  -0.0010000000474974513,
+                  -0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "size": [
+                1.0,
+                1.0
+              ],
+              "start": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "tween_queue": [],
+              "tween_time_left": 0.0,
+              "view_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "visible": true,
+              "world_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "alignment": [
+                0.5,
+                0.5
+              ],
+              "base_alpha": 1.0,
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "base_zoom": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "current": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "destination": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "draw_order": 0,
+              "drawn": false,
+              "draws": [],
+              "effect": {
+                "clock": "timer",
+                "color1": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "color2": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "delta": 0.0,
+                "magnitude": [
+                  0.0,
+                  0.0,
+                  10.0
+                ],
+                "offset": 0.0,
+                "period": 1.0,
+                "seconds": 0.0,
+                "type": "none"
+              },
+              "effected": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "kind": "frame",
+              "local_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "name": "NoteField",
+              "parent_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  17.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "projection_matrix": [
+                [
+                  0.0023419202771037817,
+                  0.0,
+                  0.0,
+                  -1.0
+                ],
+                [
+                  0.0,
+                  -0.004166666883975267,
+                  0.0,
+                  1.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  -0.0010000000474974513,
+                  -0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "size": [
+                1.0,
+                1.0
+              ],
+              "start": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "tween_queue": [],
+              "tween_time_left": 0.0,
+              "view_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "visible": true,
+              "world_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  17.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "alignment": [
+                0.5,
+                0.5
+              ],
+              "base_alpha": 1.0,
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "base_zoom": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "current": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  32.0,
+                  -125.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "destination": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  32.0,
+                  -125.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "draw_order": 0,
+              "drawn": true,
+              "draws": [
+                {
+                  "blend_mode": 0,
+                  "primitive": "quads",
+                  "primitive_index": 0,
+                  "render_target": 0,
+                  "texture_mode": "modulate",
+                  "vertices": [
+                    {
+                      "clip": [
+                        -0.9601873755455017,
+                        1.6541666984558103,
+                        0.0,
+                        1.0
+                      ],
+                      "color": [
+                        255,
+                        255,
+                        255,
+                        255
+                      ],
+                      "local": [
+                        -32.0,
+                        -32.0,
+                        0.0,
+                        1.0
+                      ],
+                      "ndc": [
+                        -0.9601873755455017,
+                        1.6541666984558103,
+                        0.0
+                      ],
+                      "screen": [
+                        16.999990463256836,
+                        -157.0,
+                        0.0
+                      ],
+                      "transformed_uv": [
+                        0.0,
+                        0.0
+                      ],
+                      "uv": [
+                        0.0,
+                        0.0
+                      ],
+                      "view": [
+                        17.0,
+                        -157.0,
+                        0.0,
+                        1.0
+                      ],
+                      "world": [
+                        17.0,
+                        -157.0,
+                        0.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "clip": [
+                        -0.9601873755455017,
+                        1.3875000476837158,
+                        0.0,
+                        1.0
+                      ],
+                      "color": [
+                        255,
+                        255,
+                        255,
+                        255
+                      ],
+                      "local": [
+                        -32.0,
+                        32.0,
+                        0.0,
+                        1.0
+                      ],
+                      "ndc": [
+                        -0.9601873755455017,
+                        1.3875000476837158,
+                        0.0
+                      ],
+                      "screen": [
+                        16.999990463256836,
+                        -93.00001525878906,
+                        0.0
+                      ],
+                      "transformed_uv": [
+                        0.0,
+                        1.0
+                      ],
+                      "uv": [
+                        0.0,
+                        1.0
+                      ],
+                      "view": [
+                        17.0,
+                        -93.0,
+                        0.0,
+                        1.0
+                      ],
+                      "world": [
+                        17.0,
+                        -93.0,
+                        0.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "clip": [
+                        -0.8103044629096986,
+                        1.3875000476837158,
+                        0.0,
+                        1.0
+                      ],
+                      "color": [
+                        255,
+                        255,
+                        255,
+                        255
+                      ],
+                      "local": [
+                        32.0,
+                        32.0,
+                        0.0,
+                        1.0
+                      ],
+                      "ndc": [
+                        -0.8103044629096986,
+                        1.3875000476837158,
+                        0.0
+                      ],
+                      "screen": [
+                        80.99999237060547,
+                        -93.00001525878906,
+                        0.0
+                      ],
+                      "transformed_uv": [
+                        1.0,
+                        1.0
+                      ],
+                      "uv": [
+                        1.0,
+                        1.0
+                      ],
+                      "view": [
+                        81.0,
+                        -93.0,
+                        0.0,
+                        1.0
+                      ],
+                      "world": [
+                        81.0,
+                        -93.0,
+                        0.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "clip": [
+                        -0.8103044629096986,
+                        1.6541666984558103,
+                        0.0,
+                        1.0
+                      ],
+                      "color": [
+                        255,
+                        255,
+                        255,
+                        255
+                      ],
+                      "local": [
+                        32.0,
+                        -32.0,
+                        0.0,
+                        1.0
+                      ],
+                      "ndc": [
+                        -0.8103044629096986,
+                        1.6541666984558103,
+                        0.0
+                      ],
+                      "screen": [
+                        80.99999237060547,
+                        -157.0,
+                        0.0
+                      ],
+                      "transformed_uv": [
+                        1.0,
+                        0.0
+                      ],
+                      "uv": [
+                        1.0,
+                        0.0
+                      ],
+                      "view": [
+                        81.0,
+                        -157.0,
+                        0.0,
+                        1.0
+                      ],
+                      "world": [
+                        81.0,
+                        -157.0,
+                        0.0,
+                        1.0
+                      ]
+                    }
+                  ],
+                  "viewport": [
+                    854.0,
+                    480.0
+                  ]
+                }
+              ],
+              "effect": {
+                "clock": "timer",
+                "color1": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "color2": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "delta": 0.0,
+                "magnitude": [
+                  0.0,
+                  0.0,
+                  10.0
+                ],
+                "offset": 0.0,
+                "period": 1.0,
+                "seconds": 0.0,
+                "type": "none"
+              },
+              "effected": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  32.0,
+                  -125.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "kind": "sprite",
+              "local_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  32.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  -125.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "name": "note",
+              "parent_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  17.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "projection_matrix": [
+                [
+                  0.0023419202771037817,
+                  0.0,
+                  0.0,
+                  -1.0
+                ],
+                [
+                  0.0,
+                  -0.004166666883975267,
+                  0.0,
+                  1.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  -0.0010000000474974513,
+                  -0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "size": [
+                64.0,
+                64.0
+              ],
+              "start": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "tween_queue": [],
+              "tween_time_left": 0.0,
+              "view_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "visible": true,
+              "world_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  49.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  -125.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            }
+          ],
+          "beat": 0.0,
+          "draw_sequence": [
+            "note"
+          ],
+          "time": 0.0
+        },
+        {
+          "actors": [
+            {
+              "alignment": [
+                0.5,
+                0.5
+              ],
+              "base_alpha": 1.0,
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "base_zoom": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "current": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "destination": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "draw_order": 0,
+              "drawn": false,
+              "draws": [],
+              "effect": {
+                "clock": "timer",
+                "color1": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "color2": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "delta": 0.5,
+                "magnitude": [
+                  0.0,
+                  0.0,
+                  10.0
+                ],
+                "offset": 0.0,
+                "period": 1.0,
+                "seconds": 0.5,
+                "type": "none"
+              },
+              "effected": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "kind": "frame",
+              "local_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "name": "capture",
+              "parent_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "projection_matrix": [
+                [
+                  0.0023419202771037817,
+                  0.0,
+                  0.0,
+                  -1.0
+                ],
+                [
+                  0.0,
+                  -0.004166666883975267,
+                  0.0,
+                  1.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  -0.0010000000474974513,
+                  -0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "size": [
+                1.0,
+                1.0
+              ],
+              "start": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "tween_queue": [],
+              "tween_time_left": 0.0,
+              "view_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "visible": true,
+              "world_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "alignment": [
+                0.5,
+                0.5
+              ],
+              "base_alpha": 1.0,
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "base_zoom": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "current": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "destination": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "draw_order": 0,
+              "drawn": false,
+              "draws": [],
+              "effect": {
+                "clock": "timer",
+                "color1": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "color2": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "delta": 0.5,
+                "magnitude": [
+                  0.0,
+                  0.0,
+                  10.0
+                ],
+                "offset": 0.0,
+                "period": 1.0,
+                "seconds": 0.5,
+                "type": "none"
+              },
+              "effected": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "kind": "frame",
+              "local_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "name": "NoteField",
+              "parent_matrix": [
+                [
+                  0.7071067690849304,
+                  -0.7071067690849304,
+                  0.0,
+                  17.0
+                ],
+                [
+                  0.7071067690849304,
+                  0.7071067690849304,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "projection_matrix": [
+                [
+                  0.0023419202771037817,
+                  0.0,
+                  0.0,
+                  -1.0
+                ],
+                [
+                  0.0,
+                  -0.004166666883975267,
+                  0.0,
+                  1.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  -0.0010000000474974513,
+                  -0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "size": [
+                1.0,
+                1.0
+              ],
+              "start": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "tween_queue": [],
+              "tween_time_left": 0.0,
+              "view_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "visible": true,
+              "world_matrix": [
+                [
+                  0.7071067690849304,
+                  -0.7071067690849304,
+                  0.0,
+                  17.0
+                ],
+                [
+                  0.7071067690849304,
+                  0.7071067690849304,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "alignment": [
+                0.5,
+                0.5
+              ],
+              "base_alpha": 1.0,
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "base_zoom": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "current": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  32.0,
+                  -125.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "destination": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  32.0,
+                  -125.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "draw_order": 0,
+              "drawn": true,
+              "draws": [
+                {
+                  "blend_mode": 0,
+                  "primitive": "quads",
+                  "primitive_index": 0,
+                  "render_target": 0,
+                  "texture_mode": "modulate",
+                  "vertices": [
+                    {
+                      "clip": [
+                        -0.7001972794532776,
+                        1.4625656604766846,
+                        0.0,
+                        1.0
+                      ],
+                      "color": [
+                        255,
+                        255,
+                        255,
+                        255
+                      ],
+                      "local": [
+                        -32.0,
+                        -32.0,
+                        0.0,
+                        1.0
+                      ],
+                      "ndc": [
+                        -0.7001972794532776,
+                        1.4625656604766846,
+                        0.0
+                      ],
+                      "screen": [
+                        128.01576232910156,
+                        -111.01576232910156,
+                        0.0
+                      ],
+                      "transformed_uv": [
+                        0.0,
+                        0.0
+                      ],
+                      "uv": [
+                        0.0,
+                        0.0
+                      ],
+                      "view": [
+                        128.01576232910156,
+                        -111.01576232910156,
+                        0.0,
+                        1.0
+                      ],
+                      "world": [
+                        128.01576232910156,
+                        -111.01576232910156,
+                        0.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "clip": [
+                        -0.8061804771423339,
+                        1.2740038633346558,
+                        0.0,
+                        1.0
+                      ],
+                      "color": [
+                        255,
+                        255,
+                        255,
+                        255
+                      ],
+                      "local": [
+                        -32.0,
+                        32.0,
+                        0.0,
+                        1.0
+                      ],
+                      "ndc": [
+                        -0.8061804771423339,
+                        1.2740038633346558,
+                        0.0
+                      ],
+                      "screen": [
+                        82.76093292236328,
+                        -65.76092529296875,
+                        0.0
+                      ],
+                      "transformed_uv": [
+                        0.0,
+                        1.0
+                      ],
+                      "uv": [
+                        0.0,
+                        1.0
+                      ],
+                      "view": [
+                        82.76092529296875,
+                        -65.76092529296875,
+                        0.0,
+                        1.0
+                      ],
+                      "world": [
+                        82.76092529296875,
+                        -65.76092529296875,
+                        0.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "clip": [
+                        -0.7001972794532776,
+                        1.085442066192627,
+                        0.0,
+                        1.0
+                      ],
+                      "color": [
+                        255,
+                        255,
+                        255,
+                        255
+                      ],
+                      "local": [
+                        32.0,
+                        32.0,
+                        0.0,
+                        1.0
+                      ],
+                      "ndc": [
+                        -0.7001972794532776,
+                        1.085442066192627,
+                        0.0
+                      ],
+                      "screen": [
+                        128.01576232910156,
+                        -20.50609588623047,
+                        0.0
+                      ],
+                      "transformed_uv": [
+                        1.0,
+                        1.0
+                      ],
+                      "uv": [
+                        1.0,
+                        1.0
+                      ],
+                      "view": [
+                        128.01576232910156,
+                        -20.506092071533203,
+                        0.0,
+                        1.0
+                      ],
+                      "world": [
+                        128.01576232910156,
+                        -20.506092071533203,
+                        0.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "clip": [
+                        -0.5942140817642212,
+                        1.2740038633346558,
+                        0.0,
+                        1.0
+                      ],
+                      "color": [
+                        255,
+                        255,
+                        255,
+                        255
+                      ],
+                      "local": [
+                        32.0,
+                        -32.0,
+                        0.0,
+                        1.0
+                      ],
+                      "ndc": [
+                        -0.5942140817642212,
+                        1.2740038633346558,
+                        0.0
+                      ],
+                      "screen": [
+                        173.2705841064453,
+                        -65.76092529296875,
+                        0.0
+                      ],
+                      "transformed_uv": [
+                        1.0,
+                        0.0
+                      ],
+                      "uv": [
+                        1.0,
+                        0.0
+                      ],
+                      "view": [
+                        173.27059936523438,
+                        -65.76092529296875,
+                        0.0,
+                        1.0
+                      ],
+                      "world": [
+                        173.27059936523438,
+                        -65.76092529296875,
+                        0.0,
+                        1.0
+                      ]
+                    }
+                  ],
+                  "viewport": [
+                    854.0,
+                    480.0
+                  ]
+                }
+              ],
+              "effect": {
+                "clock": "timer",
+                "color1": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "color2": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "delta": 0.5,
+                "magnitude": [
+                  0.0,
+                  0.0,
+                  10.0
+                ],
+                "offset": 0.0,
+                "period": 1.0,
+                "seconds": 0.5,
+                "type": "none"
+              },
+              "effected": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  32.0,
+                  -125.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "kind": "sprite",
+              "local_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  32.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  -125.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "name": "note",
+              "parent_matrix": [
+                [
+                  0.7071067690849304,
+                  -0.7071067690849304,
+                  0.0,
+                  17.0
+                ],
+                [
+                  0.7071067690849304,
+                  0.7071067690849304,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "projection_matrix": [
+                [
+                  0.0023419202771037817,
+                  0.0,
+                  0.0,
+                  -1.0
+                ],
+                [
+                  0.0,
+                  -0.004166666883975267,
+                  0.0,
+                  1.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  -0.0010000000474974513,
+                  -0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "size": [
+                64.0,
+                64.0
+              ],
+              "start": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "tween_queue": [],
+              "tween_time_left": 0.0,
+              "view_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "visible": true,
+              "world_matrix": [
+                [
+                  0.7071067690849304,
+                  -0.7071067690849304,
+                  0.0,
+                  128.01576232910156
+                ],
+                [
+                  0.7071067690849304,
+                  0.7071067690849304,
+                  0.0,
+                  -65.76092529296875
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            }
+          ],
+          "beat": 1.0,
+          "draw_sequence": [
+            "note"
+          ],
+          "time": 0.5
+        },
+        {
+          "actors": [
+            {
+              "alignment": [
+                0.5,
+                0.5
+              ],
+              "base_alpha": 1.0,
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "base_zoom": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "current": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "destination": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "draw_order": 0,
+              "drawn": false,
+              "draws": [],
+              "effect": {
+                "clock": "timer",
+                "color1": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "color2": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "delta": 0.5,
+                "magnitude": [
+                  0.0,
+                  0.0,
+                  10.0
+                ],
+                "offset": 0.0,
+                "period": 1.0,
+                "seconds": 1.0,
+                "type": "none"
+              },
+              "effected": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "kind": "frame",
+              "local_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "name": "capture",
+              "parent_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "projection_matrix": [
+                [
+                  0.0023419202771037817,
+                  0.0,
+                  0.0,
+                  -1.0
+                ],
+                [
+                  0.0,
+                  -0.004166666883975267,
+                  0.0,
+                  1.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  -0.0010000000474974513,
+                  -0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "size": [
+                1.0,
+                1.0
+              ],
+              "start": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "tween_queue": [],
+              "tween_time_left": 0.0,
+              "view_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "visible": true,
+              "world_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "alignment": [
+                0.5,
+                0.5
+              ],
+              "base_alpha": 1.0,
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "base_zoom": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "current": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "destination": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "draw_order": 0,
+              "drawn": false,
+              "draws": [],
+              "effect": {
+                "clock": "timer",
+                "color1": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "color2": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "delta": 0.5,
+                "magnitude": [
+                  0.0,
+                  0.0,
+                  10.0
+                ],
+                "offset": 0.0,
+                "period": 1.0,
+                "seconds": 1.0,
+                "type": "none"
+              },
+              "effected": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "kind": "frame",
+              "local_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "name": "NoteField",
+              "parent_matrix": [
+                [
+                  -4.371138828673793e-08,
+                  -1.0,
+                  0.0,
+                  17.0
+                ],
+                [
+                  1.0,
+                  -4.371138828673793e-08,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "projection_matrix": [
+                [
+                  0.0023419202771037817,
+                  0.0,
+                  0.0,
+                  -1.0
+                ],
+                [
+                  0.0,
+                  -0.004166666883975267,
+                  0.0,
+                  1.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  -0.0010000000474974513,
+                  -0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "size": [
+                1.0,
+                1.0
+              ],
+              "start": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "tween_queue": [],
+              "tween_time_left": 0.0,
+              "view_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "visible": true,
+              "world_matrix": [
+                [
+                  -4.371138828673793e-08,
+                  -1.0,
+                  0.0,
+                  17.0
+                ],
+                [
+                  1.0,
+                  -4.371138828673793e-08,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "alignment": [
+                0.5,
+                0.5
+              ],
+              "base_alpha": 1.0,
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "base_zoom": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "current": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  32.0,
+                  -125.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "destination": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  32.0,
+                  -125.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "draw_order": 0,
+              "drawn": true,
+              "draws": [
+                {
+                  "blend_mode": 0,
+                  "primitive": "quads",
+                  "primitive_index": 0,
+                  "render_target": 0,
+                  "texture_mode": "modulate",
+                  "vertices": [
+                    {
+                      "clip": [
+                        -0.5925058722496033,
+                        1.0,
+                        0.0,
+                        1.0
+                      ],
+                      "color": [
+                        255,
+                        255,
+                        255,
+                        255
+                      ],
+                      "local": [
+                        -32.0,
+                        -32.0,
+                        0.0,
+                        1.0
+                      ],
+                      "ndc": [
+                        -0.5925058722496033,
+                        1.0,
+                        0.0
+                      ],
+                      "screen": [
+                        174.0,
+                        0.0,
+                        0.0
+                      ],
+                      "transformed_uv": [
+                        0.0,
+                        0.0
+                      ],
+                      "uv": [
+                        0.0,
+                        0.0
+                      ],
+                      "view": [
+                        174.0,
+                        5.7220458984375e-06,
+                        0.0,
+                        1.0
+                      ],
+                      "world": [
+                        174.0,
+                        5.7220458984375e-06,
+                        0.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "clip": [
+                        -0.7423887252807617,
+                        1.0,
+                        0.0,
+                        1.0
+                      ],
+                      "color": [
+                        255,
+                        255,
+                        255,
+                        255
+                      ],
+                      "local": [
+                        -32.0,
+                        32.0,
+                        0.0,
+                        1.0
+                      ],
+                      "ndc": [
+                        -0.7423887252807617,
+                        1.0,
+                        0.0
+                      ],
+                      "screen": [
+                        110.00001525878906,
+                        0.0,
+                        0.0
+                      ],
+                      "transformed_uv": [
+                        0.0,
+                        1.0
+                      ],
+                      "uv": [
+                        0.0,
+                        1.0
+                      ],
+                      "view": [
+                        110.0,
+                        3.814697265625e-06,
+                        0.0,
+                        1.0
+                      ],
+                      "world": [
+                        110.0,
+                        3.814697265625e-06,
+                        0.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "clip": [
+                        -0.7423887252807617,
+                        0.7333333492279053,
+                        0.0,
+                        1.0
+                      ],
+                      "color": [
+                        255,
+                        255,
+                        255,
+                        255
+                      ],
+                      "local": [
+                        32.0,
+                        32.0,
+                        0.0,
+                        1.0
+                      ],
+                      "ndc": [
+                        -0.7423887252807617,
+                        0.7333333492279053,
+                        0.0
+                      ],
+                      "screen": [
+                        110.00001525878906,
+                        63.999996185302734,
+                        0.0
+                      ],
+                      "transformed_uv": [
+                        1.0,
+                        1.0
+                      ],
+                      "uv": [
+                        1.0,
+                        1.0
+                      ],
+                      "view": [
+                        110.0,
+                        64.0,
+                        0.0,
+                        1.0
+                      ],
+                      "world": [
+                        110.0,
+                        64.0,
+                        0.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "clip": [
+                        -0.5925058722496033,
+                        0.7333333492279053,
+                        0.0,
+                        1.0
+                      ],
+                      "color": [
+                        255,
+                        255,
+                        255,
+                        255
+                      ],
+                      "local": [
+                        32.0,
+                        -32.0,
+                        0.0,
+                        1.0
+                      ],
+                      "ndc": [
+                        -0.5925058722496033,
+                        0.7333333492279053,
+                        0.0
+                      ],
+                      "screen": [
+                        174.0,
+                        63.999996185302734,
+                        0.0
+                      ],
+                      "transformed_uv": [
+                        1.0,
+                        0.0
+                      ],
+                      "uv": [
+                        1.0,
+                        0.0
+                      ],
+                      "view": [
+                        174.0,
+                        64.0,
+                        0.0,
+                        1.0
+                      ],
+                      "world": [
+                        174.0,
+                        64.0,
+                        0.0,
+                        1.0
+                      ]
+                    }
+                  ],
+                  "viewport": [
+                    854.0,
+                    480.0
+                  ]
+                }
+              ],
+              "effect": {
+                "clock": "timer",
+                "color1": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "color2": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "delta": 0.5,
+                "magnitude": [
+                  0.0,
+                  0.0,
+                  10.0
+                ],
+                "offset": 0.0,
+                "period": 1.0,
+                "seconds": 1.0,
+                "type": "none"
+              },
+              "effected": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  32.0,
+                  -125.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "kind": "sprite",
+              "local_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  32.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  -125.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "name": "note",
+              "parent_matrix": [
+                [
+                  -4.371138828673793e-08,
+                  -1.0,
+                  0.0,
+                  17.0
+                ],
+                [
+                  1.0,
+                  -4.371138828673793e-08,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "projection_matrix": [
+                [
+                  0.0023419202771037817,
+                  0.0,
+                  0.0,
+                  -1.0
+                ],
+                [
+                  0.0,
+                  -0.004166666883975267,
+                  0.0,
+                  1.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  -0.0010000000474974513,
+                  -0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "size": [
+                64.0,
+                64.0
+              ],
+              "start": {
+                "aux": 0.0,
+                "crop": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "diffuse": [
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                ],
+                "fade": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "glow": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "quaternion": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "skew": [
+                  0.0,
+                  0.0
+                ],
+                "zoom": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              },
+              "tween_queue": [],
+              "tween_time_left": 0.0,
+              "view_matrix": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "visible": true,
+              "world_matrix": [
+                [
+                  -4.371138828673793e-08,
+                  -1.0,
+                  0.0,
+                  142.0
+                ],
+                [
+                  1.0,
+                  -4.371138828673793e-08,
+                  0.0,
+                  32.000003814697266
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            }
+          ],
+          "beat": 2.0,
+          "draw_sequence": [
+            "note"
+          ],
+          "time": 1.0
+        }
+      ],
+      "schema_version": 1,
+      "screen": {
+        "height": 480.0,
+        "width": 854.0
+      }
+    },
+    "angles": [
+      {
+        "second": 0.0,
+        "wrapper_rotation_z": 0.0,
+        "owner_rotation_z": 0
+      },
+      {
+        "second": 0.5,
+        "wrapper_rotation_z": 45.0,
+        "owner_rotation_z": 0
+      },
+      {
+        "second": 1.0,
+        "wrapper_rotation_z": 90.00000250447806,
+        "owner_rotation_z": 0
+      }
+    ],
+    "native_cli_sha256": "c1d933d3be6205de6362e0df77fa8110cc1ba1a9821c9e63eff4cca9b8137d61"
+  },
+  "strict_regressions": [
+    {
+      "position": 43,
+      "source_simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
+      "archive": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst",
+      "archive_sha256": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c",
+      "harness_version": "0.1.52",
+      "source_commit": "06db3926a260603cb9984927b6121e7286f8100a",
+      "source_pending_commit": true,
+      "binary_sha256": "3af11ad215423b080a5814b4b78882cb8cf6d4f65db4f32d490f2a97d2cf87a5",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v4-full_song_lua.exe",
+        "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 11.196275199763477,
+      "comparisons_passed": 102078,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-043-native-field-v4.log",
+      "log_sha256": "f6ae11661578b58f6506cad9cde0e1d50524e630dccb9c024f13a0ccd3bb0b94",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass122-top-043-native-v1.json",
+      "native_receipt_sha256": "bd942652c7da2652ef0279af9a095c0e06250a4c0bd0fcaa3f4b2b866e9ed67f",
+      "full_corpus_complete": false
+    },
+    {
+      "position": 45,
+      "source_simfile": "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/nssk-chart.ssc",
+      "archive": "faa7b7d60bf81e0558f74f68d3813d0e329407fe95a1097cbca9d9993ecd0ae8.tar.zst",
+      "archive_sha256": "faa7b7d60bf81e0558f74f68d3813d0e329407fe95a1097cbca9d9993ecd0ae8",
+      "harness_version": "0.1.52",
+      "source_commit": "06db3926a260603cb9984927b6121e7286f8100a",
+      "source_pending_commit": true,
+      "binary_sha256": "3af11ad215423b080a5814b4b78882cb8cf6d4f65db4f32d490f2a97d2cf87a5",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v4-full_song_lua.exe",
+        "faa7b7d60bf81e0558f74f68d3813d0e329407fe95a1097cbca9d9993ecd0ae8.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 24.1429938999936,
+      "comparisons_passed": 167463,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-045-native-field-v4.log",
+      "log_sha256": "1f661c3776f96f08f8fc29d6a52eb0e7cc648533920ea90065973cb5b4042274",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass124-top-045-native-v1.json",
+      "native_receipt_sha256": "d31ffaef0bdeaa8db9804c1e4b2d6999f7618ab371084a23a73774755cffea38",
+      "full_corpus_complete": false
+    }
+  ],
+  "canonical_archive_promoted": false,
+  "original_tolerances_retained": true,
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "remaining": "Accept complete fixture 45 after committed-source comparison and focused archive integrity. Original 501-source/492-context scope and independent observations remain open."
+}

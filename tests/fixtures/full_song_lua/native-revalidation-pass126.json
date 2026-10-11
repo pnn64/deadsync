@@ -1,0 +1,105 @@
+{
+  "pass": 126,
+  "previous_record": "native-revalidation-pass125.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "ba32031b537d122af5be824c3679f5f1d4cc3642",
+  "comparator_sha256": "3af11ad215423b080a5814b4b78882cb8cf6d4f65db4f32d490f2a97d2cf87a5",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    47
+  ],
+  "next_position": 48,
+  "comparisons_passed": 541079,
+  "charts": [
+    {
+      "position": 47,
+      "entry": {
+        "title": "[6210] [11] Slamurai",
+        "source_simfile": "[11] Slamurai (SX) [Zaia]/Slamurai.ssc",
+        "harness_version": "0.1.52",
+        "archive": "295c36a5b3f9be3f795efe84ab5fd12c5129ad93a71ab40f906612fb6926f927.tar.zst",
+        "sha256": "295c36a5b3f9be3f795efe84ab5fd12c5129ad93a71ab40f906612fb6926f927",
+        "compressed_bytes": 245789,
+        "aliases": [
+          "e7dc184462e8bf07fd9a6a1ed704439eedc8a1718c3e64726a4f3189a75b6691.tar.zst"
+        ]
+      },
+      "original_archive_retained": "6d72b842ce7444a01f63d445d479553970cb8a63f348cc51dd5c1699834b3bf7.tar.zst",
+      "native_source_commit": "ecd483a2e2e7530f9a72aae42dcede686c3a62b7",
+      "native_trace_sha256": "bae5b84f8784fdb254b961705d471563cd78cf7e05faee12d86be13cbbf62de7",
+      "original_source_sha256": {
+        "[11] Slamurai (SX) [Zaia]/bg_Slamurai.png": "e914f83d817373edf23c17dbc8354241de6b8d75bf2e1cbcf0bfcd77dbd73f8f",
+        "[11] Slamurai (SX) [Zaia]/bn_Slamurai.png": "b60972c23032d20921ee179f421f5bcb92db7ef015ff0efd0b938f061f4aaf81",
+        "[11] Slamurai (SX) [Zaia]/cdtitle_ZAiA_2023.png": "49ed0bf8c59c6a4f9ba40fe74468a55a27c9f4138145f92936df0351410986af",
+        "[11] Slamurai (SX) [Zaia]/jk_Slamurai.png": "614fa3cdc28c994d6d295b75c0a537fe43a735e823930f6c5c0abc72b38c20cb",
+        "[11] Slamurai (SX) [Zaia]/kLL Bill - Slamurai.ogg": "83e53f8b53630e102c60bcdd7d3efdaea7ac815edaedef6475d82b4fbbd16ea9",
+        "[11] Slamurai (SX) [Zaia]/Slamurai.ssc": "6ada86a8d8b898d7bd7bb13bebabd0b1cb3286659bd5d7c5ba5d0bf17024cd6c",
+        "[11] Slamurai (SX) [Zaia]/lua/default.lua": "8a89fe7559a5b755efdda07bbc971a77e60f2f979e8be1b9563e7df490eca72b",
+        "[11] Slamurai (SX) [Zaia]/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "[11] Slamurai (SX) [Zaia]/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "[11] Slamurai (SX) [Zaia]/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46",
+        "[11] Slamurai (SX) [Zaia]/lua/_script.lua": "2a5b8fe6858cb5dcabf711a9ce76bce8b2a1860be0103af1538ee02274ce9003"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 7311,
+      "duration_seconds": 121.81817626953124,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 47,
+      "source_simfile": "[11] Slamurai (SX) [Zaia]/Slamurai.ssc",
+      "archive": "295c36a5b3f9be3f795efe84ab5fd12c5129ad93a71ab40f906612fb6926f927.tar.zst",
+      "archive_sha256": "295c36a5b3f9be3f795efe84ab5fd12c5129ad93a71ab40f906612fb6926f927",
+      "harness_version": "0.1.52",
+      "source_commit": "ba32031b537d122af5be824c3679f5f1d4cc3642",
+      "source_pending_commit": false,
+      "binary_sha256": "3af11ad215423b080a5814b4b78882cb8cf6d4f65db4f32d490f2a97d2cf87a5",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v4-full_song_lua.exe",
+        "295c36a5b3f9be3f795efe84ab5fd12c5129ad93a71ab40f906612fb6926f927.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 12.456087599974126,
+      "comparisons_passed": 541079,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-047-native-field-v4.log",
+      "log_sha256": "fccc12c7822659a6637ead966d1d6c08b5b2769cb7aba2b2498acdcc72c1d431",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass126-top-047-native-v1.json",
+      "native_receipt_sha256": "57998654a0aeedb43a26e4309286ec13a0370d7da033ebf7563f2b232cb4ff2f",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "ba32031b537d122af5be824c3679f5f1d4cc3642",
+    "source_pending_commit": false,
+    "binary_sha256": "edae09b5a33001563f1ffd578ff31e75abfab8c9f50dcdb3b3cfd4b9794bfc3c",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v4-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.3227798999287188,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-047-native-pass126.log",
+    "log_sha256": "5fce14ecfae3d83b89b8f6eb4b1f45c668166a87ac0f35256c9fc152a527e8cc",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 0.95s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

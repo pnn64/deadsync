@@ -1,0 +1,988 @@
+{
+  "harness_source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+  "native_executable_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+  "reference_source": "vendor/itgmania/src/TimingData.cpp:1028 GetDisplayedSpeedPercent",
+  "maps": [
+    {
+      "name": "seconds-and-beats",
+      "offset": -0.125,
+      "bpms": "0=120",
+      "speeds": "0=0.5=2=1,4=2=4=0,8=0.8=0=0",
+      "delays": "",
+      "stops": "",
+      "queries": [
+        [
+          -4,
+          -1
+        ],
+        [
+          -4,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0.125
+        ],
+        [
+          1,
+          0.375
+        ],
+        [
+          2,
+          1.125
+        ],
+        [
+          3.999,
+          2.122
+        ],
+        [
+          4,
+          2.125
+        ],
+        [
+          4,
+          2.13
+        ],
+        [
+          5,
+          2.625
+        ],
+        [
+          6,
+          3.125
+        ],
+        [
+          7,
+          3.625
+        ],
+        [
+          7.999,
+          4.12
+        ],
+        [
+          8,
+          4.125
+        ],
+        [
+          8.001,
+          4.126
+        ]
+      ],
+      "command": [
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass105-native-current-cli-v1.exe",
+        "song-lua-semantic-baseline",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-speed-control\\seconds-and-beats",
+        "--out",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-speed-control\\seconds-and-beats\\traces",
+        "--until-beat",
+        "1",
+        "--max-events",
+        "500000"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.7467001997865736,
+      "request_simfile_sha256": "eebf9d3ded3b27fffa44674cdcd9a858314fa091ddaf3d0debc1219ec98ae18e",
+      "request_lua_sha256": "be75821b04b0b57bb91bbfc65ce01f90f435ca034c7598f8bbbbea15a0ed6aa9",
+      "native_trace_sha256": "0ecdb533a8a0f182f1160faacbc657e4fb5e0c4c386bf414f5b2b3dafe62f66b",
+      "song_clock": "native-song-timing",
+      "samples": [
+        {
+          "beat": -4,
+          "music": -1,
+          "values": {
+            "Actor.x": [
+              -4
+            ],
+            "Actor.y": [
+              1
+            ],
+            "Actor.z": [
+              -1.125
+            ]
+          }
+        },
+        {
+          "beat": -4,
+          "music": 0,
+          "values": {
+            "Actor.x": [
+              -4
+            ],
+            "Actor.y": [
+              1
+            ],
+            "Actor.z": [
+              -0.125
+            ]
+          }
+        },
+        {
+          "beat": 0,
+          "music": 0,
+          "values": {
+            "Actor.x": [
+              0
+            ],
+            "Actor.y": [
+              1
+            ],
+            "Actor.z": [
+              -0.125
+            ]
+          }
+        },
+        {
+          "beat": 0,
+          "music": 0.125,
+          "values": {
+            "Actor.x": [
+              0
+            ],
+            "Actor.y": [
+              1
+            ],
+            "Actor.z": [
+              0
+            ]
+          }
+        },
+        {
+          "beat": 1,
+          "music": 0.375,
+          "values": {
+            "Actor.x": [
+              1
+            ],
+            "Actor.y": [
+              0.9375
+            ],
+            "Actor.z": [
+              0.25
+            ]
+          }
+        },
+        {
+          "beat": 2,
+          "music": 1.125,
+          "values": {
+            "Actor.x": [
+              2
+            ],
+            "Actor.y": [
+              0.75
+            ],
+            "Actor.z": [
+              1
+            ]
+          }
+        },
+        {
+          "beat": 3.999,
+          "music": 2.122,
+          "values": {
+            "Actor.x": [
+              3.999000072479248
+            ],
+            "Actor.y": [
+              0.4977499842643738
+            ],
+            "Actor.z": [
+              1.996999979019165
+            ]
+          }
+        },
+        {
+          "beat": 4,
+          "music": 2.125,
+          "values": {
+            "Actor.x": [
+              4
+            ],
+            "Actor.y": [
+              0.5
+            ],
+            "Actor.z": [
+              2
+            ]
+          }
+        },
+        {
+          "beat": 4,
+          "music": 2.13,
+          "values": {
+            "Actor.x": [
+              4
+            ],
+            "Actor.y": [
+              0.5037500858306885
+            ],
+            "Actor.z": [
+              2.005000114440918
+            ]
+          }
+        },
+        {
+          "beat": 5,
+          "music": 2.625,
+          "values": {
+            "Actor.x": [
+              5
+            ],
+            "Actor.y": [
+              0.875
+            ],
+            "Actor.z": [
+              2.5
+            ]
+          }
+        },
+        {
+          "beat": 6,
+          "music": 3.125,
+          "values": {
+            "Actor.x": [
+              6
+            ],
+            "Actor.y": [
+              1.25
+            ],
+            "Actor.z": [
+              3
+            ]
+          }
+        },
+        {
+          "beat": 7,
+          "music": 3.625,
+          "values": {
+            "Actor.x": [
+              7
+            ],
+            "Actor.y": [
+              1.625
+            ],
+            "Actor.z": [
+              3.5
+            ]
+          }
+        },
+        {
+          "beat": 7.999,
+          "music": 4.12,
+          "values": {
+            "Actor.x": [
+              7.999000072479248
+            ],
+            "Actor.y": [
+              0.8000003099441528
+            ],
+            "Actor.z": [
+              3.994999885559082
+            ]
+          }
+        },
+        {
+          "beat": 8,
+          "music": 4.125,
+          "values": {
+            "Actor.x": [
+              8
+            ],
+            "Actor.y": [
+              0.7999999523162842
+            ],
+            "Actor.z": [
+              4
+            ]
+          }
+        },
+        {
+          "beat": 8.001,
+          "music": 4.126,
+          "values": {
+            "Actor.x": [
+              8.00100040435791
+            ],
+            "Actor.y": [
+              0.800000011920929
+            ],
+            "Actor.z": [
+              4.000999927520752
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "delay-and-stop",
+      "offset": -0.125,
+      "bpms": "0=120",
+      "speeds": "0=0.5=2=1,4=2=4=0,8=0.8=0=0",
+      "delays": "4=0.3,8=0.4",
+      "stops": "6=0.5",
+      "queries": [
+        [
+          3.98,
+          2.12
+        ],
+        [
+          3.989,
+          2.12
+        ],
+        [
+          3.99,
+          2.12
+        ],
+        [
+          3.999,
+          2.12
+        ],
+        [
+          4,
+          2.124
+        ],
+        [
+          4,
+          2.125
+        ],
+        [
+          4,
+          2.225
+        ],
+        [
+          4,
+          2.425
+        ],
+        [
+          5,
+          2.925
+        ],
+        [
+          6,
+          3.425
+        ],
+        [
+          6,
+          3.675
+        ],
+        [
+          6,
+          3.925
+        ],
+        [
+          7,
+          4.425
+        ],
+        [
+          7.989,
+          4.92
+        ],
+        [
+          7.99,
+          4.92
+        ],
+        [
+          7.999,
+          4.92
+        ],
+        [
+          8,
+          4.925
+        ],
+        [
+          8,
+          5.325
+        ]
+      ],
+      "command": [
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass105-native-current-cli-v1.exe",
+        "song-lua-semantic-baseline",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-speed-control\\delay-and-stop",
+        "--out",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-speed-control\\delay-and-stop\\traces",
+        "--until-beat",
+        "1",
+        "--max-events",
+        "500000"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.7647467995993793,
+      "request_simfile_sha256": "4db3bc2b2158fc3628dd66d8240c7b05362aa5afbec41007d312a7a04151e626",
+      "request_lua_sha256": "ea5f9001f0df15a7d4a0fc05a3506082f54adffa85209b1222ef1bce8e77aeac",
+      "native_trace_sha256": "4caded600f38266081b85efb57ca02f20940b114c9b1400f220461f9e5528283",
+      "song_clock": "native-song-timing",
+      "samples": [
+        {
+          "beat": 3.98,
+          "music": 2.12,
+          "values": {
+            "Actor.x": [
+              3.9800000190734863
+            ],
+            "Actor.y": [
+              0.5012500286102295
+            ],
+            "Actor.z": [
+              1.994999885559082
+            ]
+          }
+        },
+        {
+          "beat": 3.989,
+          "music": 2.12,
+          "values": {
+            "Actor.x": [
+              3.989000082015991
+            ],
+            "Actor.y": [
+              0.501250147819519
+            ],
+            "Actor.z": [
+              1.994999885559082
+            ]
+          }
+        },
+        {
+          "beat": 3.99,
+          "music": 2.12,
+          "values": {
+            "Actor.x": [
+              3.990000009536743
+            ],
+            "Actor.y": [
+              0.4973212480545044
+            ],
+            "Actor.z": [
+              1.994999885559082
+            ]
+          }
+        },
+        {
+          "beat": 3.999,
+          "music": 2.12,
+          "values": {
+            "Actor.x": [
+              3.999000072479248
+            ],
+            "Actor.y": [
+              0.49732136726379395
+            ],
+            "Actor.z": [
+              1.994999885559082
+            ]
+          }
+        },
+        {
+          "beat": 4,
+          "music": 2.124,
+          "values": {
+            "Actor.x": [
+              4
+            ],
+            "Actor.y": [
+              0.4994643330574035
+            ],
+            "Actor.z": [
+              1.999000072479248
+            ]
+          }
+        },
+        {
+          "beat": 4,
+          "music": 2.125,
+          "values": {
+            "Actor.x": [
+              4
+            ],
+            "Actor.y": [
+              0.5
+            ],
+            "Actor.z": [
+              2
+            ]
+          }
+        },
+        {
+          "beat": 4,
+          "music": 2.225,
+          "values": {
+            "Actor.x": [
+              4
+            ],
+            "Actor.y": [
+              0.553571343421936
+            ],
+            "Actor.z": [
+              2.0999999046325684
+            ]
+          }
+        },
+        {
+          "beat": 4,
+          "music": 2.425,
+          "values": {
+            "Actor.x": [
+              4
+            ],
+            "Actor.y": [
+              0.6607142686843872
+            ],
+            "Actor.z": [
+              2.299999952316284
+            ]
+          }
+        },
+        {
+          "beat": 5,
+          "music": 2.925,
+          "values": {
+            "Actor.x": [
+              5
+            ],
+            "Actor.y": [
+              0.928571343421936
+            ],
+            "Actor.z": [
+              2.799999952316284
+            ]
+          }
+        },
+        {
+          "beat": 6,
+          "music": 3.425,
+          "values": {
+            "Actor.x": [
+              6
+            ],
+            "Actor.y": [
+              1.1964285373687744
+            ],
+            "Actor.z": [
+              3.299999952316284
+            ]
+          }
+        },
+        {
+          "beat": 6,
+          "music": 3.675,
+          "values": {
+            "Actor.x": [
+              6
+            ],
+            "Actor.y": [
+              1.3303570747375488
+            ],
+            "Actor.z": [
+              3.549999952316284
+            ]
+          }
+        },
+        {
+          "beat": 6,
+          "music": 3.925,
+          "values": {
+            "Actor.x": [
+              6
+            ],
+            "Actor.y": [
+              1.4642856121063232
+            ],
+            "Actor.z": [
+              3.799999952316284
+            ]
+          }
+        },
+        {
+          "beat": 7,
+          "music": 4.425,
+          "values": {
+            "Actor.x": [
+              7
+            ],
+            "Actor.y": [
+              1.7321429252624512
+            ],
+            "Actor.z": [
+              4.300000190734863
+            ]
+          }
+        },
+        {
+          "beat": 7.989,
+          "music": 4.92,
+          "values": {
+            "Actor.x": [
+              7.988999843597413
+            ],
+            "Actor.y": [
+              1.9973223209381104
+            ],
+            "Actor.z": [
+              4.795000076293945
+            ]
+          }
+        },
+        {
+          "beat": 7.99,
+          "music": 4.92,
+          "values": {
+            "Actor.x": [
+              7.989999771118165
+            ],
+            "Actor.y": [
+              0.7999999523162842
+            ],
+            "Actor.z": [
+              4.795000076293945
+            ]
+          }
+        },
+        {
+          "beat": 7.999,
+          "music": 4.92,
+          "values": {
+            "Actor.x": [
+              7.999000072479248
+            ],
+            "Actor.y": [
+              0.8000003099441528
+            ],
+            "Actor.z": [
+              4.795000076293945
+            ]
+          }
+        },
+        {
+          "beat": 8,
+          "music": 4.925,
+          "values": {
+            "Actor.x": [
+              8
+            ],
+            "Actor.y": [
+              0.7999999523162842
+            ],
+            "Actor.z": [
+              4.800000190734863
+            ]
+          }
+        },
+        {
+          "beat": 8,
+          "music": 5.325,
+          "values": {
+            "Actor.x": [
+              8
+            ],
+            "Actor.y": [
+              0.800000011920929
+            ],
+            "Actor.z": [
+              5.199999809265137
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "first-beat-ramp",
+      "offset": -2.103,
+      "bpms": "0=146",
+      "speeds": "0=0.3=4=0,4=0.9=3=1,12=1.1=0=0",
+      "delays": "4=0.25",
+      "stops": "",
+      "queries": [
+        [
+          -4,
+          -1
+        ],
+        [
+          -1,
+          2.0
+        ],
+        [
+          0,
+          2.103
+        ],
+        [
+          0.5,
+          2.2
+        ],
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.925
+        ],
+        [
+          3,
+          3.336
+        ],
+        [
+          3.99,
+          3.74
+        ],
+        [
+          4,
+          3.7468357
+        ],
+        [
+          4,
+          3.8718357
+        ],
+        [
+          4,
+          3.9968357
+        ],
+        [
+          6,
+          5.0
+        ],
+        [
+          10,
+          6.7468357
+        ],
+        [
+          12,
+          7.2
+        ]
+      ],
+      "command": [
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass105-native-current-cli-v1.exe",
+        "song-lua-semantic-baseline",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-speed-control\\first-beat-ramp",
+        "--out",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-speed-control\\first-beat-ramp\\traces",
+        "--until-beat",
+        "1",
+        "--max-events",
+        "500000"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.7175676999613643,
+      "request_simfile_sha256": "4bdca3fe587f9cd4d616c5614e2d6f4b220baf969ccd08e0d4959a4bc7b786b6",
+      "request_lua_sha256": "18ddd39c8d9729b21bea873fb88cee92cffe69f2b0440a074034e2fac5bbfb41",
+      "native_trace_sha256": "f2a0a5da4b6017c5ef5c007ff2f1f88f6ef3a80f00aa639e703ee28914de355b",
+      "song_clock": "native-song-timing",
+      "samples": [
+        {
+          "beat": -4,
+          "music": -1,
+          "values": {
+            "Actor.x": [
+              -4
+            ],
+            "Actor.y": [
+              1
+            ],
+            "Actor.z": [
+              -3.1029999256134033
+            ]
+          }
+        },
+        {
+          "beat": -1,
+          "music": 2.0,
+          "values": {
+            "Actor.x": [
+              -1
+            ],
+            "Actor.y": [
+              1
+            ],
+            "Actor.z": [
+              -0.10299992561340332
+            ]
+          }
+        },
+        {
+          "beat": 0,
+          "music": 2.103,
+          "values": {
+            "Actor.x": [
+              0
+            ],
+            "Actor.y": [
+              1
+            ],
+            "Actor.z": [
+              0
+            ]
+          }
+        },
+        {
+          "beat": 0.5,
+          "music": 2.2,
+          "values": {
+            "Actor.x": [
+              0.5
+            ],
+            "Actor.y": [
+              0.9586941003799438
+            ],
+            "Actor.z": [
+              0.0970001220703125
+            ]
+          }
+        },
+        {
+          "beat": 1,
+          "music": 2.5,
+          "values": {
+            "Actor.x": [
+              1
+            ],
+            "Actor.y": [
+              0.8309441208839417
+            ],
+            "Actor.z": [
+              0.3970000743865966
+            ]
+          }
+        },
+        {
+          "beat": 2,
+          "music": 2.925,
+          "values": {
+            "Actor.x": [
+              2
+            ],
+            "Actor.y": [
+              0.6499649286270142
+            ],
+            "Actor.z": [
+              0.8220000267028807
+            ]
+          }
+        },
+        {
+          "beat": 3,
+          "music": 3.336,
+          "values": {
+            "Actor.x": [
+              3
+            ],
+            "Actor.y": [
+              0.474947452545166
+            ],
+            "Actor.z": [
+              1.2330000400543213
+            ]
+          }
+        },
+        {
+          "beat": 3.99,
+          "music": 3.74,
+          "values": {
+            "Actor.x": [
+              3.990000009536743
+            ],
+            "Actor.y": [
+              0.2986328601837158
+            ],
+            "Actor.z": [
+              1.6370000839233398
+            ]
+          }
+        },
+        {
+          "beat": 4,
+          "music": 3.7468357,
+          "values": {
+            "Actor.x": [
+              4
+            ],
+            "Actor.y": [
+              0.30000007152557373
+            ],
+            "Actor.z": [
+              1.6438357830047607
+            ]
+          }
+        },
+        {
+          "beat": 4,
+          "music": 3.8718357,
+          "values": {
+            "Actor.x": [
+              4
+            ],
+            "Actor.y": [
+              0.3250000476837158
+            ],
+            "Actor.z": [
+              1.7688357830047607
+            ]
+          }
+        },
+        {
+          "beat": 4,
+          "music": 3.9968357,
+          "values": {
+            "Actor.x": [
+              4
+            ],
+            "Actor.y": [
+              0.3500000536441803
+            ],
+            "Actor.z": [
+              1.8938357830047607
+            ]
+          }
+        },
+        {
+          "beat": 6,
+          "music": 5.0,
+          "values": {
+            "Actor.x": [
+              6
+            ],
+            "Actor.y": [
+              0.550632894039154
+            ],
+            "Actor.z": [
+              2.8970000743865967
+            ]
+          }
+        },
+        {
+          "beat": 10,
+          "music": 6.7468357,
+          "values": {
+            "Actor.x": [
+              10
+            ],
+            "Actor.y": [
+              0.8999999761581421
+            ],
+            "Actor.z": [
+              4.64383602142334
+            ]
+          }
+        },
+        {
+          "beat": 12,
+          "music": 7.2,
+          "values": {
+            "Actor.x": [
+              12
+            ],
+            "Actor.y": [
+              1.100000023841858
+            ],
+            "Actor.z": [
+              5.0970001220703125
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "measurement": "Actor.y retains native displayed-speed * f32((beat+1)-beat), not an unrounded ratio. Constant SCROLLS:0=1 and power-of-two scale cancellation preserve native float rounding."
+}

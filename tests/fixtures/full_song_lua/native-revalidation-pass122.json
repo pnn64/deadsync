@@ -1,0 +1,108 @@
+{
+  "pass": 122,
+  "previous_record": "native-revalidation-pass121.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "32216ad9ebea5b2b84fd12deed332e7b7fe994ee",
+  "comparator_sha256": "0649cea0c53ef69887c1bf7e4b1d2616ac57445507c6f0b9aa3b660c5f91891b",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    43
+  ],
+  "next_position": 44,
+  "comparisons_passed": 102078,
+  "charts": [
+    {
+      "position": 43,
+      "entry": {
+        "title": "[5800] [11] KENPO SAITO",
+        "source_simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
+        "harness_version": "0.1.52",
+        "archive": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst",
+        "sha256": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c",
+        "compressed_bytes": 119593,
+        "aliases": [
+          "76c0cbd6277e55cee63451b1b79fe6472f96af8dc383c9158eb2b1fee6a733d1.tar.zst"
+        ]
+      },
+      "original_archive_retained": "bd7cd2a1266a6882f7329ec2ec01ce7856112d489155cb0e0a61114aee948339.tar.zst",
+      "native_source_commit": "ecd483a2e2e7530f9a72aae42dcede686c3a62b7",
+      "native_trace_sha256": "1afe821ce3b23320eb2ba808797064ad9ef33b3d097351506a6249586f6a6c2a",
+      "original_source_sha256": {
+        "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-audio.ogg": "865eafa4259d24836e3d48a886e144f6ceb12b65541e43fcf028f92c07962c18",
+        "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-banner.png": "d71a07f8f85a467469363aeb4f03a32951fe62e2f160720e45e66d0cca9992fa",
+        "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc": "5f7cb652fa4362cf45f2000a2224db187c355097377c08d91ea40f3178edcc5d",
+        "[11] KENPO SAITO (DX) [Scrypts]/scr-cdtitle.png": "798e065088e74a69a0f8695ee3a6bca9ed2c54778e601ba124386ffecb1792f7",
+        "[11] KENPO SAITO (DX) [Scrypts]/lua/layout.lua": "488016584662bb6b29924593190499d920eb3b91fd59db7d59b4ff2a6c476730",
+        "[11] KENPO SAITO (DX) [Scrypts]/lua/mods.lua": "31d9c077fe92d5c7681f88d2a075b8f4366095e1cbab5527ec30a652ead101d9",
+        "[11] KENPO SAITO (DX) [Scrypts]/template/compat.lua": "c646000a2775ad42d911b01a961591855c7db6b305e65ca19e532cc1a48e210e",
+        "[11] KENPO SAITO (DX) [Scrypts]/template/ease.lua": "3c041dd429480b4881a7f26703cf9aacce7a0e646f22d88bce5903d0b0a29766",
+        "[11] KENPO SAITO (DX) [Scrypts]/template/main.lua": "c9ebde08844e8e7045e3c4c39e3c94486880ebb84536265ecabc3cd10e6ac226",
+        "[11] KENPO SAITO (DX) [Scrypts]/template/mods-taro.lua": "a6ee20cc28f036f4e031e83304e814af22ba9dd5ae16d8f03545e420ef131b5c",
+        "[11] KENPO SAITO (DX) [Scrypts]/template/plugins.lua": "546bb8f0853c3cd3ee91eff9b19e4f6a58b7cd0e1b27a1475afda7720b0a385c",
+        "[11] KENPO SAITO (DX) [Scrypts]/template/sort.lua": "dcd34ebf61a85da3a4e009509e543710e805c61c6821fd6553a7b61f28a1c2a6",
+        "[11] KENPO SAITO (DX) [Scrypts]/template/std.lua": "7d04cb4d94c25b4c11e9087864fde1ca5455bec415c006ebcc880029e4dc72c1",
+        "[11] KENPO SAITO (DX) [Scrypts]/template/template.lua": "f992636c3cb55f3b012b58da15fc2b09db1016348835cd8775ff09386a1ecd9c"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 9165,
+      "duration_seconds": 152.72727966308594,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 12,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 43,
+      "source_simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
+      "archive": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst",
+      "archive_sha256": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c",
+      "harness_version": "0.1.52",
+      "source_commit": "32216ad9ebea5b2b84fd12deed332e7b7fe994ee",
+      "source_pending_commit": false,
+      "binary_sha256": "0649cea0c53ef69887c1bf7e4b1d2616ac57445507c6f0b9aa3b660c5f91891b",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v2-full_song_lua.exe",
+        "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 10.455842199735343,
+      "comparisons_passed": 102078,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-043-field-committed-v2.log",
+      "log_sha256": "4a519588a39d3c40144fdbc1c9078f4bdf353b017548be07d2b656465afb13e2",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass122-top-043-native-v1.json",
+      "native_receipt_sha256": "bd942652c7da2652ef0279af9a095c0e06250a4c0bd0fcaa3f4b2b866e9ed67f",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "32216ad9ebea5b2b84fd12deed332e7b7fe994ee",
+    "source_pending_commit": false,
+    "binary_sha256": "fe6c8b7e3d0007b416199af149a14c487ea2f47abc18df2784208e0447747c9e",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v2-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 2.067428699694574,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-043-native-pass122.log",
+    "log_sha256": "f0b4c4fab9e24f1cec83937d9a63739e9154a327635369e8cbe5df49c4c79c0f",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 0.34s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

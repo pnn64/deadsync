@@ -1,5 +1,5 @@
 use crate::Command;
-use deadsync_chart::{ChartData, SongData};
+use deadsync_chart::{ChartData, GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
 use log::warn;
@@ -94,6 +94,19 @@ pub fn gameplay_chart_entry_plan(
     }
 }
 
+pub(crate) fn take_player_charts(
+    loaded: Vec<GameplayChartData>,
+) -> [Arc<GameplayChartData>; MAX_PLAYERS] {
+    let mut loaded = loaded.into_iter();
+    std::array::from_fn(|_| {
+        Arc::new(
+            loaded
+                .next()
+                .expect("loaded payload contains both player charts"),
+        )
+    })
+}
+
 pub fn gameplay_last_played_commands(
     song: &SongData,
     plan: &GameplayChartEntryPlan,
@@ -175,7 +188,10 @@ pub(crate) fn prepare_song_lua(
         );
         match std::fs::canonicalize(&path) {
             Ok(path) => player.judgment_texture = Some(path),
-            Err(error) => warn!("Cannot load initial Lua judgment {}: {error}", path.display()),
+            Err(error) => warn!(
+                "Cannot load initial Lua judgment {}: {error}",
+                path.display()
+            ),
         }
     }
     deadsync_song_lua::playback::prepare_song_lua(
@@ -325,3 +341,7 @@ mod tests {
         ));
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/owned_charts.rs"]
+mod owned_pipeline_tests;
