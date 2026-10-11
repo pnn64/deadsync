@@ -2158,16 +2158,21 @@ original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
 
-## Ordered fixture validation, pass 225
+## Choices gameplay reload remains pending
 
-Position 146, Choices, passes all
-587,440 comparisons against committed DeadSync
-`b9d71be17`. The complete native harness 0.1.68 archive
-contains 26,701 updates over 445.00 seconds, with no
-runtime errors or dropped events. Its integrity check passes. Original
-chart, Lua, prior archive, aliases, and all tolerances are retained.
+The newly captured position 146 reference was withdrawn. Its isolated
+comparison passed 587,440 checks, but the foreground requests a chart
+change and a new ScreenGameplay. The harness records that request without
+loading the delayed screen or executing the second foreground load.
+ITGmania's ScreenManager actually queues and loads the new screen.
 
-See `native-revalidation-pass225.json`. Position 147 is next. The
-original 501-source/492-context scope and independent timing and
-framebuffer observations remain open. Explicit Model culling is verified
-in `native-revalidation-model-culling.json`.
+Native scorekeeper totals and judgment progress must also be supplied;
+the current and total possible dance point getters cannot establish stage
+completion from shared placeholder values. The original index entry and
+archive remain historical. The new capture stays private until gameplay
+reload is implemented and verified against native application behavior.
+
+See `native-revalidation-choices-reload-gap.json` for source hashes,
+recorded requests, and the required native controls. Position 146 remains
+the next unresolved chart; successful initial-load comparisons do not
+establish gameplay reload parity.
