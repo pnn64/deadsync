@@ -1760,12 +1760,10 @@
     {
       "title": "Bunny House",
       "source_simfile": "bunny-house/steps.sm",
-      "harness_version": "0.1.0",
-      "archive": "8d8651b4607c3822772db07807805590641dec1bc9c0cd9e25f69b4f81ac02b4.tar.zst",
-      "sha256": "8d8651b4607c3822772db07807805590641dec1bc9c0cd9e25f69b4f81ac02b4",
-      "compressed_bytes": 1048235,
-      "uncompressed_sha256": "2891948d2ea9c6b4bbea350b7bdf2c7f737e7a93d111f27d280bbd9be06da00e",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "0d1d0e4f137de75315352b08ee1a313cc4cc6256a473c190697081faf84fb1ba.tar.zst",
+      "sha256": "0d1d0e4f137de75315352b08ee1a313cc4cc6256a473c190697081faf84fb1ba",
+      "compressed_bytes": 1320256,
       "aliases": [
         "e22c5f9cee6c5f38bdd0ba574f54c56cf2674631062af84e0267a1d3ddb9de01.tar.zst"
       ]

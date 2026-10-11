@@ -1989,3 +1989,17 @@ See `native-revalidation-pass212.json`. Position 134 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 213
+
+Position 134, Bunny House, passes all
+421,837 comparisons against committed DeadSync
+`b9b698186`. The complete native harness 0.1.64 archive
+contains 9,158 updates over 152.61 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass213.json`. Position 135 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
