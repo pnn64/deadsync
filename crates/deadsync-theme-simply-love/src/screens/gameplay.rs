@@ -751,6 +751,10 @@ fn smooth_life_p(value: f32) -> f32 {
 
 pub struct State {
     pub gameplay: GameplayCoreState,
+    /// One initialized song VM owned by the screen, transferred from the load
+    /// worker. Its fixed pose bindings and render plan live until screen exit.
+    pub song_lua: Option<deadsync_song_lua::SongLuaLiveScene>,
+    song_lua_output: deadsync_song_lua::SongLuaLiveOutput,
     judgment_palettes: [deadsync_theme::color::JudgmentPalette; MAX_PLAYERS],
     /// Game-thread, song-lifetime identity for the fixed two HUD slots. Built
     /// during gameplay setup, read immutably thereafter, and dropped with the
@@ -941,6 +945,33 @@ impl GameplayPresentationSkeleton {
 }
 
 impl State {
+    pub fn attach_song_lua(&mut self, mut scene: deadsync_song_lua::SongLuaLiveScene) -> Result<(), String> {
+        scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)?;
+        if let Some(scratch) = &mut self.song_scratch { scratch.enable_live_scene(); }
+        self.song_lua_output = scene.take_startup_output();
+        self.song_lua = Some(scene);
+        Ok(())
+    }
+
+    /// The shell drains sounds and requests once after each gameplay frame.
+    /// Broadcast listeners have already run in the retained Lua scene.
+    pub fn take_song_lua_output(&mut self) -> deadsync_song_lua::SongLuaLiveOutput {
+        std::mem::take(&mut self.song_lua_output)
+    }
+
+    fn advance_song_lua(&mut self, delta: f32) -> Result<(), String> {
+        let Some(scene) = &mut self.song_lua else { return Ok(()); };
+        let frame = deadsync_song_lua::SongLuaLiveFrame::from_gameplay(&self.gameplay, delta);
+        let mut output = scene.advance(frame).map_err(|error| error.to_string())?;
+        // Entry events precede the first real update and must reach the shell
+        // exactly once. The shell drains this buffer every frame.
+        self.song_lua_output.broadcasts.append(&mut output.broadcasts);
+        self.song_lua_output.sounds.append(&mut output.sounds);
+        self.song_lua_output.errors.append(&mut output.errors);
+        if output.request.is_some() { self.song_lua_output.request = output.request; }
+        scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)
+    }
+
     pub const fn machine_font(&self) -> deadsync_config::theme::MachineFont {
         self.runtime_view.policy.machine_font
     }
@@ -1128,6 +1159,8 @@ impl State {
         );
         let state = Self {
             gameplay,
+            song_lua: None,
+            song_lua_output: deadsync_song_lua::SongLuaLiveOutput::default(),
             judgment_palettes,
             hud_snapshot,
             noteskin_assets,
@@ -1574,7 +1607,7 @@ pub fn init(
     course_display_info: Option<CourseDisplayInfo>,
     course_banner_path: Option<PathBuf>,
     combo_carry: [u32; MAX_PLAYERS],
-    song_lua_data: PreparedGameplaySongLua,
+    mut song_lua_data: PreparedGameplaySongLua,
     init_view: GameplayInitView,
 ) -> State {
     let GameplayInitView {
@@ -1588,6 +1621,10 @@ pub fn init(
     let num_players = session.play_style.player_count();
     let runtime_profile_data = gameplay_runtime_profile_data(&player_profiles, &session);
     let startup = song_lua_data.startup();
+    let live_scene = song_lua_data.take_live_scene().unwrap_or_else(|error| {
+        log::warn!("Cannot attach song Lua for '{}': {error}", song.title);
+        None
+    });
     let noteskin_assets = gameplay_noteskin_assets(
         cols_per_player,
         num_players,
@@ -1663,6 +1700,11 @@ pub fn init(
         judgment_palettes,
     );
     state.hide_song_intro = startup.hide_in;
+    if let Some(scene) = live_scene {
+        if let Err(error) = state.attach_song_lua(scene) {
+            log::warn!("Cannot attach prepared song Lua: {error}");
+        }
+    }
     state
 }
 
@@ -2526,6 +2568,9 @@ pub fn update(
     effects: &mut Vec<ThemeEffect>,
 ) {
     let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);
+    if let Err(error) = state.advance_song_lua(delta_time) {
+        state.song_lua_output.errors.push(error);
+    }
     update_life_meter_visuals(state, delta_time);
     match action {
         GameplayAction::None => {

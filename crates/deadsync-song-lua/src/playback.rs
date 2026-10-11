@@ -13034,6 +13034,28 @@ pub struct FrameScratch {
 }
 
 impl FrameScratch {
+    /// Screen-entry-only warmup for a retained Lua scene. Every prepared actor
+    /// may mutate, including ancestors, draw order and camera scope. The exact
+    /// lists are allocated once and reused; frames do not rebuild this plan.
+    pub fn enable_live_scene(&mut self) {
+        for order in std::iter::once(&mut self.song_lua_overlay_order)
+            .chain(&mut self.song_lua_background_visual_layer_orders)
+            .chain(&mut self.song_lua_foreground_visual_layer_orders) {
+            let count = order.last_draw_orders.len();
+            order.dynamic_local_indices = (0..count).collect();
+            order.dynamic_composed_indices = (0..count).collect();
+            order.dynamic_draw_order.fill(true);
+            order.static_root_order = None;
+        }
+        self.song_lua_proxy_request_index.topology.dynamic_camera_scope = true;
+        for topology in &mut self.song_lua_background_overlay_topology_indices {
+            topology.dynamic_camera_scope = true;
+        }
+        for index in &mut self.song_lua_foreground_proxy_request_indices {
+            index.topology.dynamic_camera_scope = true;
+        }
+    }
+
     pub fn new<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot + Clone>(
         gameplay: &GameplayCoreState<P, S>,
     ) -> Self {

@@ -941,6 +941,9 @@ pub fn runtime_broadcast_captures(lua: &Lua) -> Vec<(f32, String, bool)> {
 }
 
 pub(crate) fn take_runtime_broadcasts(lua: &Lua) -> Vec<(f32, String, bool)> {
+    if let Some(mut events) = lua.app_data_mut::<LiveBroadcasts>() {
+        return std::mem::take(&mut events.0);
+    }
     lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
         .map(|mut capture| std::mem::take(&mut capture.runtime_broadcasts))
         .unwrap_or_default()
@@ -2943,7 +2946,11 @@ pub fn broadcast_song_lua_message(
     // Queued startup commands run after this scope, on the first update.
     let on_startup = lua.app_data_ref::<SongLuaStartupQueues>().is_some()
         && lua.app_data_ref::<SongLuaZeroUpdate>().is_none();
-    if !on_startup && let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
+    if let Some(mut events) = lua.app_data_mut::<LiveBroadcasts>() {
+        // A live session has no baked startup-message snapshot. Retain every
+        // actual Init/On/update event, even before overlay capture is installed.
+        events.0.push((beat, message.to_string(), params.is_some()));
+    } else if !on_startup && let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
         capture
             .runtime_broadcasts
             .push((beat, message.to_string(), params.is_some()));
@@ -10544,7 +10551,10 @@ struct ActorTweenStep {
 
 struct ActorTweenReplays(FxHashMap<usize, ActorTweenReplay>);
 
+struct LiveBroadcasts(Vec<(f32, String, bool)>);
+
 pub(crate) fn begin_live_runtime(lua: &Lua) -> mlua::Result<()> {
+    lua.set_app_data(LiveBroadcasts(Vec::new()));
     lua.set_app_data(crate::live::LiveMode);
     lua.set_app_data(ActorTweenReplays(FxHashMap::default()));
     set_compile_frames(lua, [(0.0, 0.0)].into_iter())?;
@@ -11549,10 +11559,7 @@ pub(crate) fn run_actor_startup_commands(
             actor.raw_set("__songlua_startup_text", actor.raw_get::<Value>("Text")?)?;
         }
     }
-    let broadcasts = lua
-        .app_data_mut::<SongLuaOverlayUpdateCapture>()
-        .map(|mut capture| std::mem::take(&mut capture.runtime_broadcasts))
-        .unwrap_or_default();
+    let broadcasts = take_runtime_broadcasts(lua);
     collect_wrapper_initials(root, &mut initial_states)?;
     let queued = lua
         .remove_app_data::<SongLuaStartupQueues>()

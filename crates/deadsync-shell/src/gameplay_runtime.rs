@@ -620,7 +620,7 @@ pub(crate) fn enter(
     drain(state, audio, sounds, music_clock);
 }
 
-pub(crate) const MAX_UPDATE_EFFECTS: usize = 4;
+pub(crate) const MAX_UPDATE_EFFECTS: usize = 5;
 const MAX_INPUT_EFFECTS: usize = 1;
 
 pub(crate) fn update(
@@ -654,6 +654,26 @@ pub(crate) fn update(
         deadlib_platform::host_time::now_nanos,
         effects,
     );
+    let output = state.take_song_lua_output();
+    for error in output.errors { log::warn!("Song Lua: {error}"); }
+    for event in output.sounds {
+        if let Some(sound) = sounds.resolve_path(&event.path) {
+            audio.play_sfx(sound);
+        } else {
+            log::warn!("Song Lua sound was not prewarmed: {}", event.path.display());
+        }
+    }
+    if let Some(request) = output.request {
+        match request {
+            deadsync_song_lua::SongLuaLiveRequest::Transition(message) if message == "SM_DoNextScreen" => {
+                // ScreenGameplay handles this after the normal 0.5s + 1s SL
+                // out transition. Do not stop music or judge future rows here.
+                state.gameplay.progress.stage.song_completed_naturally = true;
+                effects.push(ThemeEffect::Navigate(deadsync_theme_simply_love::screens::SimplyLoveScreen::Evaluation));
+            }
+            request => log::warn!("Unsupported live song Lua screen request: {request:?}"),
+        }
+    }
     score_cursor.sync_if_dirty(state);
     drain(state, audio, sounds, music_clock);
     let current_song_lua_time = state.current_music_time_display();

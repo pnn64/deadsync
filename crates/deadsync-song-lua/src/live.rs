@@ -78,6 +78,13 @@ pub enum SongLuaLiveRequest {
 
 pub(crate) struct TransitionRequest(pub String);
 
+#[derive(Clone, Copy)]
+pub enum SongLuaLiveTarget {
+    Root(usize),
+    Background(usize, usize),
+    Foreground(usize, usize),
+}
+
 #[derive(Debug, Default)]
 pub struct SongLuaLiveOutput {
     pub request: Option<SongLuaLiveRequest>,
@@ -102,6 +109,7 @@ pub struct SongLuaLiveScene {
     pub(crate) states: Vec<SongLuaOverlayState>,
     pub(crate) tracked: Vec<(SongLuaTrackedActorTarget, Table, SongLuaOverlayState)>,
     pub(crate) registry: Vec<Table>,
+    targets: Vec<(usize, SongLuaLiveTarget)>,
     context: SongLuaCompileContext,
     last_beat: f64,
     startup_output: SongLuaLiveOutput,
@@ -141,7 +149,7 @@ impl SongLuaLiveScene {
         startup_output.broadcasts = startup_broadcasts;
         let last_beat = f64::from(crate::compile_song_runtime_values(&lua)?.0);
         Ok(Self { lua, root, stage, players, actors, states, tracked, registry,
-            context, last_beat, startup_output })
+            targets: Vec::new(), context, last_beat, startup_output })
     }
 
     pub fn advance(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {
@@ -187,6 +195,48 @@ impl SongLuaLiveScene {
     }
 
     pub fn context(&self) -> &SongLuaCompileContext { &self.context }
+
+    /// Screen-entry binding from shared Lua actor positions to prepared visual
+    /// slots. Ownership remains in this scene; the runtime only receives poses.
+    pub fn bind_targets(&mut self, targets: Vec<(usize, SongLuaLiveTarget)>) -> Result<(), String> {
+        if targets.iter().any(|(global, _)| *global >= self.states.len()) {
+            return Err("live Lua binding index is outside its scene".into());
+        }
+        self.targets = targets;
+        Ok(())
+    }
+
+    /// Apply current local poses. The screen marks these actors dynamic in
+    /// FrameScratch at entry, before rendering starts; baked timelines stay empty.
+    pub fn write_visuals<S>(
+        &self,
+        visuals: &mut deadsync_gameplay::SongLuaRuntimeVisuals<
+            crate::SongLuaOverlayActor<S>, crate::SongLuaCapturedActor,
+            crate::gameplay::SongLuaRuntimeOverlayStateDelta>,
+    ) -> Result<(), String> {
+        for &(global, target) in &self.targets {
+            let actor = match target {
+                SongLuaLiveTarget::Root(local) => visuals.overlays.get_mut(local),
+                SongLuaLiveTarget::Background(layer, local) => visuals.background_visual_layers.get_mut(layer)
+                    .and_then(|layer| layer.overlays.get_mut(local)),
+                SongLuaLiveTarget::Foreground(layer, local) => visuals.foreground_visual_layers.get_mut(layer)
+                    .and_then(|layer| layer.overlays.get_mut(local)),
+            }.ok_or_else(|| "live Lua actor has no prepared visual slot".to_owned())?;
+            actor.initial_state = self.states[global];
+        }
+        for (target, state) in self.tracked_states() {
+            use crate::SongLuaTrackedActorTarget as T;
+            match target {
+                T::Player(p) => visuals.player_actors[p].initial_state = state,
+                T::PlayerJudgment(p) => visuals.player_actors[p].judgment.initial_state = state,
+                T::PlayerCombo(p) => visuals.player_actors[p].combo.initial_state = state,
+                T::SongForeground => visuals.song_foreground.initial_state = state,
+                T::ScreenLayer(layer) => visuals.screen_layers[layer].initial_state = state,
+            }
+        }
+        visuals.hidden_players = std::array::from_fn(|p| !visuals.player_actors[p].initial_state.visible);
+        Ok(())
+    }
 
     pub fn states(&self) -> &[SongLuaOverlayState] { &self.states }
 

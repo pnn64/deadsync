@@ -1073,6 +1073,166 @@ L000
     }
 
     #[test]
+    fn live_lua_screen_frames() {
+        use deadsync_gameplay::SongLuaRuntimeBuilder;
+
+        with_session(profile_data::PlayStyle::Single, profile_data::PlayerSide::P1,
+            true, false, || {
+            let simfile = write_fixture("live-screen", r#"
+#TITLE:Live screen bridge;
+#MUSIC:music.wav;
+#BPMS:0=120;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DIFFICULTY:Easy;
+#METER:1;
+#NOTES:
+1000
+0000
+0010
+0000
+;
+"#);
+            let metrics = space::Metrics::centered(640.0, 480.0);
+            space::set_current_metrics(metrics);
+            space::set_current_window_px(640, 480);
+            let mut state = build_test_state(&simfile, GameplayViewport::new(640.0, 480.0),
+                GameplaySession::default(), std::array::from_fn(|_| profile_data::Profile::default()));
+            let dir = simfile.parent().expect("fixture directory");
+            fs::write(dir.join("background.lua"), r#"
+LIVE_TICKS = 0
+return Def.ActorFrame { Name = 'Background',
+    OnCommand = function(self)
+        self:SetUpdateFunction(function(self, delta)
+            if delta > 0 then LIVE_TICKS = LIVE_TICKS + 1; self:x(80 * LIVE_TICKS) end
+        end)
+    end,
+    Def.Quad { InitCommand = function(self)
+        self:xy(10, 100):zoomto(8, 8):diffuse({0.37, 0.19, 0.63, 1})
+    end },
+}
+"#).expect("background script");
+            fs::write(dir.join("primary.lua"), r#"
+local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
+local requested = false
+return Def.ActorFrame { Name = 'Primary',
+    OffCommand = function(self) MESSAGEMAN:Broadcast('LiveOff') end,
+    OnCommand = function(self)
+        MESSAGEMAN:Broadcast('LiveEntry')
+        self:SetUpdateFunction(function(self, delta)
+            if delta > 0 then
+                self:x(10 * stats:GetCurrentPossibleDancePoints())
+                self:aux(stats:GetActualDancePoints())
+                MESSAGEMAN:Broadcast('LiveFrame')
+                if not requested and stats:GetCurrentPossibleDancePoints() > 0 then
+                    requested = true
+                    SCREENMAN:GetTopScreen():StartTransitioningScreen('SM_DoNextScreen')
+                end
+            end
+        end)
+    end,
+    Def.Quad { InitCommand = function(self)
+        MESSAGEMAN:Broadcast('LiveInit')
+        self:xy(10, 120):zoomto(8, 8):diffuse({0.81, 0.17, 0.29, 1})
+    end },
+}
+"#).expect("primary script");
+            fs::write(dir.join("foreground.lua"), r#"
+return Def.ActorFrame { Name = 'Foreground',
+    OnCommand = function(self)
+        self:SetUpdateFunction(function(self, delta)
+            if delta > 0 then self:x(20 * LIVE_TICKS) end
+        end)
+    end,
+    Def.Quad { InitCommand = function(self)
+        self:xy(10, 140):zoomto(8, 8):diffuse({0.23, 0.71, 0.41, 1})
+    end },
+}
+"#).expect("foreground script");
+            let mut song = (*state.source.song).clone();
+            song.background_lua_changes = vec![deadsync_chart::SongBackgroundLuaChange {
+                start_beat: 0.0, path: dir.join("background.lua"),
+            }];
+            song.foreground_lua_changes = vec![
+                deadsync_chart::SongForegroundLuaChange { start_beat: 0.0, path: dir.join("primary.lua") },
+                deadsync_chart::SongForegroundLuaChange { start_beat: 0.01, path: dir.join("foreground.lua") },
+            ];
+            let mut context = deadsync_song_lua::SongLuaCompileContext::new(dir, &song.title);
+            context.live = true;
+            context.screen_width = 640.0;
+            context.screen_height = 480.0;
+            context.music_length_seconds = 10.0;
+            context.song_steps = song.charts.iter().map(deadsync_song_lua::SongLuaStep::from).collect();
+            context.player_step_indices[0] = Some(0);
+            let mut prepared = deadsync_song_lua::playback::prepare_song_lua(&song, &context,
+                compile_song_lua, deadsync_assets::song_lua::compile_song_lua_layers);
+            let scene = prepared.take_live_scene().expect("single shared session").expect("owned scene");
+            assert!(prepared.take_live_scene().expect("second transfer").is_none());
+            let (_, _, visuals) = prepared.build_song_lua_runtime(deadsync_gameplay::SongLuaRuntimeWindowBuild {
+                song_title: &song.title, timing_players: std::array::from_fn(|p| &state.source.gameplay_charts[p].timing),
+                num_players: 1, machine_global_offset_seconds: 0.0,
+                player_global_offset_shift_seconds: &[0.0; MAX_PLAYERS], screen_width: 640.0, screen_height: 480.0,
+                player_actor_defaults: [deadsync_gameplay::SongLuaPlayerActorDefault { x: 0.0, y: 0.0 }; MAX_PLAYERS],
+            });
+            state.mods.song_lua_visuals = visuals;
+            state.song_scratch = Some(Box::new(deadsync_song_lua::playback::FrameScratch::new(&state.gameplay)));
+            state.attach_song_lua(scene).expect("screen ownership");
+            let startup = state.take_song_lua_output();
+            assert!(startup.errors.is_empty(), "{:?}", startup.errors);
+            assert_eq!(startup.broadcasts.iter().filter(|event| event.1 == "LiveEntry").count(), 1);
+            assert_eq!(startup.broadcasts.iter().filter(|event| event.1 == "LiveInit").count(), 1);
+            assert!(state.take_song_lua_output().broadcasts.is_empty());
+
+            let assets = fixture_assets();
+            let mut actors = Vec::new();
+            let mut text = compose::TextLayoutCache::default();
+            let mut compose_scratch = compose::ComposeScratch::default();
+            // Miss promotion follows judged-row processing. A subsequent real
+            // frame scores that row; Lua sees the resulting domain progress.
+            state.boundary.total_elapsed_in_screen = 10.0;
+            let late = deadsync_core::song_time::song_time_ns_to_seconds(state.timing_runtime.step_resolution_distance_ns) + 0.05;
+            assert!(late < 0.9, "the first overdue row must precede the second note");
+            for (tick, now, progress) in [(1, late, 0), (2, late + 0.05, 5), (3, 1.05 + late, 10)] {
+                let nanos = deadsync_core::song_time::song_time_ns_from_seconds(now);
+                let snapshot = deadsync_gameplay::GameplayAudioSnapshot {
+                    stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
+                        music_nanos: nanos, has_music_mapping: true,
+                        valid_at_host_nanos: 1_000_000, ..Default::default()
+                    }, ..Default::default()
+                };
+                let mut effects = Vec::new();
+                screen_gameplay::update(&mut state, 0.1, snapshot, || 1_000_000, &mut effects);
+                let output = state.take_song_lua_output();
+                assert!(output.errors.is_empty(), "{:?}", output.errors);
+                assert_eq!(output.broadcasts.iter().filter(|event| event.1 == "LiveFrame").count(), 1);
+                let transition = (tick == 2).then(|| deadsync_song_lua::SongLuaLiveRequest::Transition("SM_DoNextScreen".into()));
+                assert_eq!(output.request, transition, "tick={tick}, progress={}", state.players_runtime.players[0].current_possible_points);
+                assert_eq!(output.broadcasts.iter().filter(|event| event.1 == "LiveOff").count(), usize::from(tick == 2));
+                assert!(state.take_song_lua_output().broadcasts.is_empty());
+                assert_eq!(state.players_runtime.players[0].current_possible_points, progress,
+                    "clock={}, autoplay={}, notes={:?}, counts={:?}", state.current_music_time_seconds(),
+                    state.live_autoplay_enabled(), state.chart_runtime.notes.iter().map(|note| note.beat).collect::<Vec<_>>(),
+                    state.players_runtime.players[0].judgment_counts);
+                assert_eq!(state.players_runtime.players[0].judgment_counts[5], (progress / 5) as u32);
+                let root = state.mods.song_lua_visuals.overlays.iter().find(|actor|
+                    actor.name.as_deref() == Some("Primary")).expect("primary binding");
+                assert_eq!(root.initial_state.aux, state.players_runtime.players[0].earned_grade_points as f32);
+                let frame = compose_fixture_frame_with_textures(&mut state, &assets, &metrics,
+                    &mut actors, &mut text, &mut compose_scratch, &compose::NullTextureContext);
+                for (color, x) in [([0.37, 0.19, 0.63, 1.0], 80.0 * tick as f32 + 10.0),
+                    ([0.81, 0.17, 0.29, 1.0], 10.0 * progress as f32 + 10.0),
+                    ([0.23, 0.71, 0.41, 1.0], 20.0 * tick as f32 + 10.0)] {
+                    let markers: Vec<_> = frame.sprite_instances.iter().filter(|instance|
+                        (0..4).all(|axis| (instance.tint[axis] - color[axis]).abs() < 1e-5)).collect();
+                    assert_eq!(markers.len(), 1, "live marker {color:?} at {now}");
+                    // Renderer instances use the centered world coordinate system.
+                    assert!((markers[0].center[0] + 320.0 - x).abs() < 1e-4, "rendered parent pose at {now}: {:?}", markers[0].center);
+                }
+            }
+        });
+    }
+
+    #[test]
     fn hidden_gameplay_intro_keeps_transition_timing() {
         let simfile = write_fixture("hidden-intro", generated_sprite_core_simfile());
         with_session(

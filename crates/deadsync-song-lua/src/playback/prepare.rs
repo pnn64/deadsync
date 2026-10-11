@@ -26,6 +26,39 @@ pub struct PreparedGameplaySongLua<S> {
 }
 
 impl<S> PreparedGameplaySongLua<S> {
+    /// Transfer the shared VM to the screen before the domain consumes the
+    /// prepared visual windows. Bind global actor positions to their final
+    /// root/background/foreground slots without cloning the VM.
+    pub fn take_live_scene(&mut self) -> Result<Option<crate::SongLuaLiveScene>, String> {
+        use crate::SongLuaLiveTarget as LiveTarget;
+        let count = self.primary.iter().map(|p| &p.compiled)
+            .chain(self.background_layers.iter().map(|p| &p.compiled))
+            .chain(self.foreground_layers.iter().map(|p| &p.compiled))
+            .filter(|compiled| compiled.live_scene.is_some()).count();
+        if count == 0 { return Ok(None); }
+        if count != 1 { return Err("live gameplay requires one shared Lua session".into()); }
+        let mut scene = None;
+        let mut targets = Vec::new();
+        if let Some(primary) = &mut self.primary {
+            scene = primary.compiled.live_scene.take();
+            targets.extend(primary.compiled.live_actor_indices().iter().enumerate()
+                .map(|(local, &global)| (global, LiveTarget::Root(local))));
+        }
+        for (layer, data) in self.background_layers.iter_mut().enumerate() {
+            if let Some(owned) = data.compiled.live_scene.take() { scene = Some(owned); }
+            targets.extend(data.compiled.live_actor_indices().iter().enumerate()
+                .map(|(local, &global)| (global, LiveTarget::Background(layer, local))));
+        }
+        for (layer, data) in self.foreground_layers.iter_mut().enumerate() {
+            if let Some(owned) = data.compiled.live_scene.take() { scene = Some(owned); }
+            targets.extend(data.compiled.live_actor_indices().iter().enumerate()
+                .map(|(local, &global)| (global, LiveTarget::Foreground(layer, local))));
+        }
+        let mut scene = scene.expect("one scene counted before transferring ownership");
+        scene.bind_targets(targets)?;
+        Ok(Some(scene))
+    }
+
     /// A shared session reports the note fields constructed by its final scene.
     pub fn loaded_steps(&self) -> Option<[Option<usize>; crate::LUA_PLAYERS]> {
         self.primary.iter().map(|primary| &primary.compiled)
@@ -62,6 +95,7 @@ impl<S> PreparedGameplaySongLua<S> {
         startup
     }
 }
+
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct SongLuaSoundEvent {
