@@ -780,6 +780,8 @@ fn hidden_actor_tweens_drive_modifiers_without_probe_state() {
         (2.0, 7.0 / 12.0),
         (2.25, 2.0 / 3.0),
     ] {
+        // Each sample is an independent target probe, not a skipped frame.
+        runtime.reset_window_times();
         let _ = runtime.refresh_player(
             0,
             second,
@@ -1174,6 +1176,8 @@ end}
         (0.5, [200.0, 1.5, 0.75, -1.0, -1.0, -0.5, -0.5]),
         (1.0, [0.0; 7]),
     ] {
+        // Each sample is an independent target probe, not a skipped frame.
+        runtime.reset_window_times();
         runtime.refresh_player(
             0,
             second,
@@ -1242,6 +1246,8 @@ end}
         (0.5, [0.75, 0.0, 0.0, 0.0], false),
         (1.0, [0.0, 0.5, 0.0, 0.0], false),
     ] {
+        // Each sample is an independent target probe, not a skipped frame.
+        runtime.reset_window_times();
         runtime.refresh_player(
             0,
             second,
