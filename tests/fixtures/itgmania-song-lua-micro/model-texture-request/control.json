@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "name": "native-model-texture-request",
+  "screen": {
+    "width": 854,
+    "height": 480
+  },
+  "samples": [
+    0.0
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "camera": {
+      "fov": 0
+    },
+    "children": [
+      {
+        "kind": "model",
+        "name": "Requested",
+        "model_paths": [
+          "model.txt",
+          "model.txt",
+          "model.txt"
+        ],
+        "state": {
+          "position": [
+            100,
+            200,
+            0
+          ],
+          "glow": [
+            1,
+            0,
+            0,
+            0.25
+          ],
+          "texture_filtering": false,
+          "texture_wrapping": true
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "pass": 207,
+  "previous_record": "native-revalidation-pass206.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+  "comparator_sha256": "332064e9b8c045c4441cde0d86a3ee0268483aa0114e839969ec94cd34ad962d",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    128
+  ],
+  "next_position": 129,
+  "comparisons_passed": 174878,
+  "charts": [
+    {
+      "position": 128,
+      "entry": {
+        "title": "Brain Implosion Energy Drink (Null)",
+        "source_simfile": "Brain Implosion Energy Drink/Brain Implosion Energy Drink.ssc",
+        "harness_version": "0.1.64",
+        "archive": "d59a4f7e545dc6bc1ac3f83653c035cdecbac50e2d98d4fae4f831ec1925e70d.tar.zst",
+        "sha256": "d59a4f7e545dc6bc1ac3f83653c035cdecbac50e2d98d4fae4f831ec1925e70d",
+        "compressed_bytes": 2192191,
+        "aliases": [
+          "9975443f5dcfc7a5403aeff2fac03c7aac8ecc4da92e65e5a6e6a6cdb9b5af84.tar.zst"
+        ]
+      },
+      "original_archive_retained": "1839cd0ea609440b738da54e895e57c17cb8fec51036a80348826f0980387e28.tar.zst",
+      "native_source_commit": "cc0ea0c0ab70e962785eff8681a6867a3f8689ee",
+      "native_trace_sha256": "4f1ab209422b169606e5e10b69a74c9756bb4ae26ea3973fde807ab4bb0dd9b7",
+      "original_source_sha256": {
+        "Brain Implosion Energy Drink/beep1.lua": "1f8f913f838b5cdb7e03274bc689b9c55b3745ab1476fc59b54731fc5f346b34",
+        "Brain Implosion Energy Drink/beep2.lua": "d9f1029a172a42dc7df716423d3d9624f6e2afa0e558e10ef624a4298adc4be0",
+        "Brain Implosion Energy Drink/Brain Implosion Energy Drink-bg.png": "2bfd9aa49393be1053cd3cef1156a34e0b992a094f1d931b51831d6cce67dfbd",
+        "Brain Implosion Energy Drink/Brain Implosion Energy Drink-jacket.png": "5181d2121b793ad8620e445d259507fe95baef288b04d6c37d4dba864719b564",
+        "Brain Implosion Energy Drink/Brain Implosion Energy Drink.avi": "9a472a6f949999c953d31b59a9b98bce68f578769cdb2fd105cd7627dcd26c0c",
+        "Brain Implosion Energy Drink/Brain Implosion Energy Drink.ogg": "c9d3319754bbbbef59f983470dc618a11da5ff16cf029fce7a0ab019df11aac3",
+        "Brain Implosion Energy Drink/Brain Implosion Energy Drink.png": "e9144903c7501862eee7fbcf8eafae0aeefbe6c2913696c4de563a90e6fc807a",
+        "Brain Implosion Energy Drink/Brain Implosion Energy Drink.ssc": "954a83ca6533a8940e09ee14c0472bceab05e73eab535aab647affda39c47ffe",
+        "Brain Implosion Energy Drink/Brain Implosion Energy Drink.ssc.old": "7e93923b51841ef9326ac54c8a88b8a394b8cf98a569ffacc5ddea1a7b09d3eb",
+        "Brain Implosion Energy Drink/cdtitle.png": "3b62d1a640cbe10b4b1390b7609148bc356c528cc2b798207d8afdf462e0322d",
+        "Brain Implosion Energy Drink/technical-difficulties.png": "12e2ac35bdf52d2e1a3d8e6fcf520e654dfd235ab29e0d85e05c915cda4c6dc7"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 7945,
+      "duration_seconds": 132.38485717773438,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 5,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 128,
+      "source_simfile": "Brain Implosion Energy Drink/Brain Implosion Energy Drink.ssc",
+      "archive": "d59a4f7e545dc6bc1ac3f83653c035cdecbac50e2d98d4fae4f831ec1925e70d.tar.zst",
+      "archive_sha256": "d59a4f7e545dc6bc1ac3f83653c035cdecbac50e2d98d4fae4f831ec1925e70d",
+      "harness_version": "0.1.64",
+      "source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+      "source_pending_commit": false,
+      "binary_sha256": "332064e9b8c045c4441cde0d86a3ee0268483aa0114e839969ec94cd34ad962d",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-checkpoint-v1-full_song_lua.exe",
+        "d59a4f7e545dc6bc1ac3f83653c035cdecbac50e2d98d4fae4f831ec1925e70d.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.5003488999791443,
+      "comparisons_passed": 174878,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-128-user-merge-checkpoint-v1.log",
+      "log_sha256": "9e17edfd70bed3f46e7a8e84f4a64de864fc661f759cedbe78f598fc05708146",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass255-top-128-rage-file-v1.json",
+      "native_receipt_sha256": "cf83475a7a2be6fc6896f394dea090d020ad406c57788c2ab016f14cc65175d1",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+    "source_pending_commit": false,
+    "binary_sha256": "b0e8f5223fb6f054e64146ce459f958d7ac216ea083b4697424cf01f58d2b0ac",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-checkpoint-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.1013545002788305,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-128-native-pass207.log",
+    "log_sha256": "7ac98e7a097aef4686ffa330757457dbd1c9f35c40e90ecf65e63f2bd3e30399",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.54s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

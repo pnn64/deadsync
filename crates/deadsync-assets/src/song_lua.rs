@@ -91,7 +91,7 @@ fn song_lua_noteskin_resolver() -> SongLuaNoteskinResolver {
     }
 }
 
-fn model_layer_from_slot(slot: &crate::noteskin::SpriteSlot) -> Option<SongLuaOverlayModelLayer> {
+pub fn model_layer_from_slot(slot: &crate::noteskin::SpriteSlot) -> Option<SongLuaOverlayModelLayer> {
     model_layer_from_slot_frame(slot, 0)
 }
 

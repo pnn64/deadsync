@@ -564,3 +564,6 @@ fn run_import_cleans_up_canceled_profile() {
     assert_eq!(summary.scores_imported, 0);
     assert_eq!(deleted_profile.as_deref(), Some("profile-1"));
 }
+
+#[path = "import_perf.rs"]
+mod perf;

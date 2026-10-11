@@ -1,0 +1,7 @@
+local piece = GAMESTATE:GetCurrentSong():GetSongDir() .. "model.txt"
+return Def.ActorFrame { Name="Root", FOV=0,
+    Def.Model { Name="Requested", Meshes=piece, Materials=piece, Bones=piece,
+        InitCommand=function(self)
+            self:xy(100,200):glow(1,0,0,0.25):SetTextureFiltering(false):texturewrapping(true)
+        end }
+}

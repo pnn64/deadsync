@@ -1,7 +1,7 @@
 use crate::{
     AssetError, FontStore, TextureDecodeJob, TextureStore, black_texture_image,
     decode::{TextureDecodeResult, decode_texture_jobs_with},
-    decode_texture_image, fallback_texture_image, generated_texture, register_texture_dims,
+    decode_texture, fallback_texture_image, generated_texture, register_texture_dims,
     upload::{TextureUploadBudget, TextureUploadImage},
     white_texture_image,
 };
@@ -148,6 +148,9 @@ impl AssetManager {
             && !Backend::texture_is_yuv420(texture)
         {
             backend.update_texture(texture, rgba)?;
+            let handle = self.texture_store.texture_handle(key);
+            self.texture_store.clear_source_dims(handle);
+            register_texture_dims(key, rgba.width(), rgba.height());
             return Ok(());
         }
 
@@ -245,11 +248,13 @@ impl AssetManager {
     ) -> Result<(), AssetError> {
         self.texture_store
             .reserve_initial_textures(jobs.len().saturating_add(2));
-        let mut load = |key: String, image: &RgbaImage, sampler: SamplerDesc| {
+        let mut load = |key: String, image: &RgbaImage, source_size: [u32; 2], sampler: SamplerDesc| {
             let texture = backend.create_texture(image, sampler)?;
-            register_texture_dims(&key, image.width(), image.height());
+            register_texture_dims(&key, source_size[0], source_size[1]);
             debug!("Loaded texture: {key}");
-            if let Some(old) = self.insert_texture(key, texture, image.width(), image.height()) {
+            let (handle, old) = self.texture_store.set_texture_for_key(key, texture, image.width(), image.height());
+            self.texture_store.set_source_dims(handle, source_size);
+            if let Some(old) = old {
                 backend.retire_texture(old);
             }
             Ok::<_, AssetError>(())
@@ -258,6 +263,7 @@ impl AssetManager {
             load(
                 built_in.key.to_owned(),
                 &built_in.image,
+                [built_in.image.width(), built_in.image.height()],
                 SamplerDesc::default(),
             )?;
         }
@@ -267,16 +273,16 @@ impl AssetManager {
             |TextureDecodeResult {
                  key,
                  sampler,
-                 image,
+                 decoded,
              }| {
-                let image = match &image {
-                    Ok(image) => image,
+                let (image, source_size) = match &decoded {
+                    Ok(decoded) => (&decoded.image, decoded.source_size),
                     Err(error) => {
                         warn!("Failed to load texture for key '{key}': {error}. Using fallback.");
-                        &fallback
+                        (&fallback, [fallback.width(), fallback.height()])
                     }
                 };
-                load(key, image, sampler)
+                load(key, image, source_size, sampler)
             },
         )
     }
@@ -287,8 +293,12 @@ impl AssetManager {
         backend: &mut Backend,
         job: &TextureDecodeJob,
     ) -> Result<(), AssetError> {
-        let image = decode_texture_image(&job.path, &job.hints)?;
-        self.update_texture_for_key_with_sampler(backend, &job.key, &image, job.sampler)
+        let decoded = decode_texture(&job.path, &job.hints)?;
+        self.update_texture_for_key_with_sampler(backend, &job.key, &decoded.image, job.sampler)?;
+        let handle = self.texture_store.texture_handle(&job.key);
+        self.texture_store.set_source_dims(handle, decoded.source_size);
+        register_texture_dims(&job.key, decoded.source_size[0], decoded.source_size[1]);
+        Ok(())
     }
 
     pub fn load_generated_texture(
@@ -443,6 +453,35 @@ mod tests {
             software_image(&assets, "missing.png"),
             &fallback_texture_image()
         );
+
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation");
+        for (file, native_source) in [("tiny.png", (3, 2)), ("source (res 53x12).png", (53, 12))] {
+            let path = root.join("bitmap-sprite-preparation").join(file);
+            let key = path.to_string_lossy().into_owned();
+            let job = TextureDecodeJob { key: key.clone(), path,
+                sampler: SamplerDesc::default(), hints: crate::TextureHints {
+                    min_size: Some(8), max_size: Some(2048), ..Default::default()
+                }};
+            assets.load_texture(&mut backend, &job).expect("native tiny upload");
+            let bound = assets.texture_context().bind_texture(&key).expect("native source binding");
+            let dimensions = bound.dimensions.expect("logical source size");
+            assert_eq!((dimensions.w, dimensions.h), native_source);
+            assert_eq!(software_image(&assets, &key).dimensions(), (8, 8));
+            let expected = std::fs::read(root.join("tiny.rgba")).expect("native prepared tiny pixels");
+            assert_eq!(software_image(&assets, &key).as_raw(), &expected);
+        }
+
+        // Parallel startup workers retain original sizing too.
+        let key = "native-startup-tiny.png";
+        assets.load_textures(&mut backend, vec![TextureDecodeJob {
+            key: key.into(), path: root.join("bitmap-sprite-preparation/tiny.png"),
+            sampler: SamplerDesc::default(), hints: crate::TextureHints {
+                min_size: Some(8), max_size: Some(2048), ..Default::default()
+            }}]).expect("startup native tiny upload");
+        let dims = assets.texture_context().bind_texture(key).expect("startup binding").dimensions.expect("source");
+        assert_eq!((dims.w, dims.h), (3, 2));
+        assert_eq!(software_image(&assets, key).as_raw(), &std::fs::read(root.join("tiny.rgba")).expect("native pixels"));
 
         let budget = TextureUploadBudget {
             max_uploads: 1,

@@ -1,9 +1,3 @@
-#[inline(always)]
-#[must_use]
-pub const fn player_life_is_dead(life: f32, is_failing: bool) -> bool {
-    is_failing || life <= 0.0
-}
-
 const SURVIVAL_FULL_LIFE_SECONDS: f32 = 90.0;
 const SURVIVAL_MIN_GAIN_SECONDS: f32 = 15.0;
 
@@ -160,13 +154,23 @@ fn record_player_life_change(player: &mut PlayerRuntime, current_music_time: f32
     );
 }
 
-fn fail_course_life(player: &mut PlayerRuntime, current_music_time: f32) {
-    if player.life > 0.0 {
-        return;
+pub fn update_player_failure(
+    player: &mut PlayerRuntime,
+    current_music_time: f32,
+    song_ended: bool,
+) -> bool {
+    // ScreenGameplay marks stage failure separately from LifeMeter::IsFailing.
+    // Off never fails; EndOfSong permits recovery until SM_NotesEnded.
+    if player.is_failing || player.life > 0.0
+        || (!player.fail_type.fails_during_play()
+            && !(song_ended && player.fail_type != GameplayFailType::Off))
+    {
+        return false;
     }
     player.life = 0.0;
     player.is_failing = true;
-    player.fail_time.get_or_insert(current_music_time);
+    player.fail_time = Some(current_music_time);
+    true
 }
 
 pub fn update_course_life_time(
@@ -186,7 +190,7 @@ pub fn update_course_life_time(
     }
     player.life = survival_life(*remaining_seconds);
     record_player_life_change(player, current_music_time, old_life);
-    fail_course_life(player, current_music_time);
+    update_player_failure(player, current_music_time, false);
 }
 
 pub fn apply_course_life_event(
@@ -202,7 +206,10 @@ pub fn apply_course_life_event(
 
     if let Some(submit_life) = player.course_submit_life.as_mut() {
         let _ =
-            deadsync_rules::life::apply_life_delta(submit_life, current_music_time, normal_delta);
+            deadsync_rules::life::apply_life_delta_mode(
+                submit_life, current_music_time, normal_delta,
+                player.fail_type.fails_during_play(),
+            );
     }
     if player.is_failing {
         return;
@@ -228,35 +235,7 @@ pub fn apply_course_life_event(
         }
     }
     record_player_life_change(player, current_music_time, old_life);
-    fail_course_life(player, current_music_time);
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct PlayerLifeStatus {
-    pub life: f32,
-    pub is_failing: bool,
-}
-
-#[must_use]
-pub fn all_joined_players_failed(
-    players: &[PlayerLifeStatus; MAX_PLAYERS],
-    num_players: usize,
-) -> bool {
-    let active_players = num_players.min(MAX_PLAYERS);
-    active_players > 0
-        && players
-            .iter()
-            .take(active_players)
-            .all(|player| player_life_is_dead(player.life, player.is_failing))
-}
-
-#[inline(always)]
-#[must_use]
-pub const fn player_life_status(player: &PlayerRuntime) -> PlayerLifeStatus {
-    PlayerLifeStatus {
-        life: player.life,
-        is_failing: player.is_failing,
-    }
+    update_player_failure(player, current_music_time, false);
 }
 
 #[must_use]
@@ -264,8 +243,8 @@ pub fn all_joined_player_runtimes_failed(
     players: &[PlayerRuntime; MAX_PLAYERS],
     num_players: usize,
 ) -> bool {
-    let statuses = std::array::from_fn(|player| player_life_status(&players[player]));
-    all_joined_players_failed(&statuses, num_players)
+    let count = num_players.min(MAX_PLAYERS);
+    count > 0 && players.iter().take(count).all(player_runtime_is_dead)
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -321,11 +300,12 @@ pub fn apply_gameplay_life_delta(
     course_submit_life: Option<&mut deadsync_rules::life::LifeMeter>,
     current_music_time: f32,
     delta: f32,
+    fail_at_zero: bool,
 ) -> GameplayLifeDeltaUpdate {
     if let Some(meter) = course_submit_life {
-        let _ = deadsync_rules::life::apply_life_delta(meter, current_music_time, delta);
+        let _ = deadsync_rules::life::apply_life_delta_mode(meter, current_music_time, delta, fail_at_zero);
     }
-    if player_life_is_dead(meter.life, meter.is_failing) {
+    if meter.is_failing || (fail_at_zero && meter.life <= 0.0) {
         meter.life = 0.0;
         meter.is_failing = true;
         return GameplayLifeDeltaUpdate {
@@ -334,7 +314,7 @@ pub fn apply_gameplay_life_delta(
         };
     }
 
-    let result = deadsync_rules::life::apply_life_delta(meter, current_music_time, delta);
+    let result = deadsync_rules::life::apply_life_delta_mode(meter, current_music_time, delta, fail_at_zero);
     if (result.new_life - result.old_life).abs() > 0.000_001_f32 {
         deadsync_rules::life::record_life_change(
             life_history,
@@ -382,6 +362,7 @@ pub fn apply_player_runtime_life_delta(
         player.course_submit_life.as_mut(),
         current_music_time,
         delta,
+        player.fail_type.fails_during_play(),
     );
     write_player_runtime_life_meter(player, meter);
     update
@@ -398,5 +379,5 @@ pub fn apply_life_change(player: &mut PlayerRuntime, current_music_time: f32, de
 #[inline(always)]
 #[must_use]
 pub const fn player_runtime_is_dead(player: &PlayerRuntime) -> bool {
-    player_life_is_dead(player.life, player.is_failing)
+    player.is_failing || (player.fail_type.fails_during_play() && player.life <= 0.0)
 }

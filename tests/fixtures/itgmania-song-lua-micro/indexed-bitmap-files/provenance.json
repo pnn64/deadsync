@@ -1,0 +1,101 @@
+{
+  "harness_commit": "2ea017def6b963471102d07dcc3c1e3d170ffc68",
+  "harness_version": "0.1.48",
+  "source_pending_commit": false,
+  "harness_executable_sha256": "5a5e22f078f426803ede703aabe27fbb80be1a3b6fcc51aa895a9bf51c27345b",
+  "harness_test_log_sha256": "556da33e312cf98208082c576998102bc122c53fcd3532e6fce6f8d2d63570d2",
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "codec_commits": {
+    "libpng": "ea127968204cc5d10f3fc9250c306b9e8cbd9b80",
+    "zlib": "51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+    "libjpeg-turbo": "20ade4dea9589515a69793e447a6c6220b464535"
+  },
+  "source_audit": {
+    "ModelTypes.cpp": {
+      "pinned_sha256": "938ac06f5ba8a57e7db916d2a91c8aea972d0b72240d1b3527ddb5ac86524e9e",
+      "local_sha256": "938ac06f5ba8a57e7db916d2a91c8aea972d0b72240d1b3527ddb5ac86524e9e",
+      "equal_after_lf_normalization": true
+    },
+    "RageTextureManager.cpp": {
+      "pinned_sha256": "bd7665ebe12533a5e7ce3ed45a8a71bcc25d0a602dd316a9bd601e8e67bdda50",
+      "local_sha256": "bd7665ebe12533a5e7ce3ed45a8a71bcc25d0a602dd316a9bd601e8e67bdda50",
+      "equal_after_lf_normalization": true
+    },
+    "RageTextureID.cpp": {
+      "pinned_sha256": "04d3eec5174fa7a6e0631ca9a8f5da54181d9ef9a95b7e63cb666c21ae30dbdd",
+      "local_sha256": "04d3eec5174fa7a6e0631ca9a8f5da54181d9ef9a95b7e63cb666c21ae30dbdd",
+      "equal_after_lf_normalization": true
+    },
+    "RageBitmapTexture.cpp": {
+      "pinned_sha256": "44fd19bbdccc2147b12becaf43c6339099cf8b1d9946b8ca278c41eafa14278e",
+      "local_sha256": "44fd19bbdccc2147b12becaf43c6339099cf8b1d9946b8ca278c41eafa14278e",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurface_Load.cpp": {
+      "pinned_sha256": "360a998709a2bf9878f22740db865c0774917cd56fa992d4cde17be236bf4b03",
+      "local_sha256": "360a998709a2bf9878f22740db865c0774917cd56fa992d4cde17be236bf4b03",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurface_Load_PNG.cpp": {
+      "pinned_sha256": "910082a3a8059798addcbbe54d2eff15825e9d80e0db6c475b49f341b24fc59d",
+      "local_sha256": "910082a3a8059798addcbbe54d2eff15825e9d80e0db6c475b49f341b24fc59d",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurface_Load_GIF.cpp": {
+      "pinned_sha256": "1cb385d61e88a80a08198d96a094b98c2c1838c5a8905e1549add5124c06cd0b",
+      "local_sha256": "1cb385d61e88a80a08198d96a094b98c2c1838c5a8905e1549add5124c06cd0b",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurface_Load_BMP.cpp": {
+      "pinned_sha256": "9dd70d9cd6890765ea8d47a9e6b0fdfa6142a3960acb7c4d8b38a8ab156bb17a",
+      "local_sha256": "9dd70d9cd6890765ea8d47a9e6b0fdfa6142a3960acb7c4d8b38a8ab156bb17a",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurface_Load_JPEG.cpp": {
+      "pinned_sha256": "4fc5a2b6ad119b7cb6c76d10a3facf9e6dc055202e39378c2fed12a634124da3",
+      "local_sha256": "4fc5a2b6ad119b7cb6c76d10a3facf9e6dc055202e39378c2fed12a634124da3",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurfaceUtils.cpp": {
+      "pinned_sha256": "d1ac3e0449a359f7f216313d2bef95e311dbb5c30c5172e56b3a03b9dbbae4ed",
+      "local_sha256": "d1ac3e0449a359f7f216313d2bef95e311dbb5c30c5172e56b3a03b9dbbae4ed",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurfaceUtils_Zoom.cpp": {
+      "pinned_sha256": "b083a5df92f7cb92c7ea800cccaac216c3ecd1c802637861e3458e65b7275473",
+      "local_sha256": "b083a5df92f7cb92c7ea800cccaac216c3ecd1c802637861e3458e65b7275473",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurfaceUtils_Dither.cpp": {
+      "pinned_sha256": "c5aed43838d79b4e264a716141e3c3c0348e6acb5641c4fb8e7f0b40e0c89d9e",
+      "local_sha256": "c5aed43838d79b4e264a716141e3c3c0348e6acb5641c4fb8e7f0b40e0c89d9e",
+      "equal_after_lf_normalization": true
+    },
+    "RageDisplay_OGL.cpp": {
+      "pinned_sha256": "06300e9bbb3ccdc31707084ea6f0f57144f485db4387e38b0163856baab45758",
+      "local_sha256": "06300e9bbb3ccdc31707084ea6f0f57144f485db4387e38b0163856baab45758",
+      "equal_after_lf_normalization": true
+    },
+    "PrefsManager.cpp": {
+      "pinned_sha256": "a522c490a5db7ebc994fdcf918c5eed729c7821322c55f7528e85ff25d25285b",
+      "local_sha256": "a522c490a5db7ebc994fdcf918c5eed729c7821322c55f7528e85ff25d25285b",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurface.h": {
+      "pinned_sha256": "45bd028f191c476c0a0d3dea96cf8ff550543bd3ec19b792cddbf7f4812539ce",
+      "local_sha256": "45bd028f191c476c0a0d3dea96cf8ff550543bd3ec19b792cddbf7f4812539ce",
+      "equal_after_lf_normalization": true
+    }
+  },
+  "oracle": "actual native file loader and CPU upload preparation",
+  "framebuffer_verified": false,
+  "successful_file_controls": 33,
+  "native_rejected_controls": 2,
+  "compared_rgba_bytes": 8704,
+  "cases_json_sha256": "a158d15e5c188d57b7b7baf3c97a2f8f01e3837b60703275fb56ac7beda7321e",
+  "native_json_sha256": "e9f145fc201b7838db7475d9b9cc3abc0a55b5d65ee70e2cf0c34bfdc036800e",
+  "positive_control_json_sha256": "04ab6d8d7c4b2b016bcdbc8b8f66cb7ce4a070c067756fe67f92d025da53d935",
+  "control_json_sha256": "9471092fef2f5d80d2a75f4b366123dd5a2a7a5c5b5e280c7393d114cb98c6a9",
+  "rejection_parity_verified_in_deadsync": true,
+  "rejection_parity_scope": "production decoder and raw source-dimension probing"
+}

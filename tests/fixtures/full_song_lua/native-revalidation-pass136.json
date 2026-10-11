@@ -1,0 +1,105 @@
+{
+  "pass": 136,
+  "previous_record": "native-revalidation-pass135.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+  "comparator_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    57
+  ],
+  "next_position": 58,
+  "comparisons_passed": 343432,
+  "charts": [
+    {
+      "position": 57,
+      "entry": {
+        "title": "[14] I'm For You",
+        "source_simfile": "[14] [Zaia] I_m For You/I_m For You.ssc",
+        "harness_version": "0.1.54",
+        "archive": "9a018586445bdc137a61cf898ebe569b88b9c72c5d1d60f809345e166a30b08f.tar.zst",
+        "sha256": "9a018586445bdc137a61cf898ebe569b88b9c72c5d1d60f809345e166a30b08f",
+        "compressed_bytes": 4781537,
+        "aliases": [
+          "fd294bafdca8e7144add86049b19cc21aec5f575a88ae7f2e5bbd81d82df1a2e.tar.zst"
+        ]
+      },
+      "original_archive_retained": "70e9def6c6bd9e11df1f9c063dc213e032b57472b4ea9655d76fba3f3dd797ad.tar.zst",
+      "native_source_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+      "native_trace_sha256": "87f552b0f5422d99e7e8aa828b14d49133bd455b3da3b9a8b25b9f163837e48c",
+      "original_source_sha256": {
+        "[14] [Zaia] I_m For You/bg-169.png": "eaa06ebc1e940ae163656844b11a46faba864002dca1164402ff8e6aae6c4f2c",
+        "[14] [Zaia] I_m For You/bn.png": "89541a05b8709a8a16d5264e4997e1adf533bcaa9162b07ba22a34b4d31d8feb",
+        "[14] [Zaia] I_m For You/cdtitle_ZAiA_2021.png": "2987191207e10c92b1ce8aa3a06694bacdf4a3dc670b91f1e58fe34a1650cfa8",
+        "[14] [Zaia] I_m For You/desktop.ini": "1b30ce6a4e7254728bf0a3dd52b535e9e6782c097bb89d277d498555e2c070a6",
+        "[14] [Zaia] I_m For You/I_m For You.ssc": "88885622ea78840bf6f18fd3ff35fa669ffd9790969a7fe4289dea9b66fa4d7e",
+        "[14] [Zaia] I_m For You/MAGNETUDE - I_m For You.ogg": "12d57ceb02c8a9fc61cadf9632671d3c388e4a4283026ce1fe1fceccae79b494",
+        "[14] [Zaia] I_m For You/lua/default.lua": "6055605bdb720aabed62a75b25258a81ba973322ac4b0ef014bac5c39105ee99",
+        "[14] [Zaia] I_m For You/lua/desktop.ini": "1b30ce6a4e7254728bf0a3dd52b535e9e6782c097bb89d277d498555e2c070a6",
+        "[14] [Zaia] I_m For You/lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "[14] [Zaia] I_m For You/lua/modhelpers.lua": "3cfa9489d4ff586f21a7d28fa6accbdb7a2c4891e2a6617fc310c5aef850a1ff",
+        "[14] [Zaia] I_m For You/lua/mods.lua": "95c4fa4ae31002e4d8cd4d2d838eb174fff6a8932ccc404267c9f3bc33cbec5e"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 13326,
+      "duration_seconds": 222.06900024414065,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 57,
+      "source_simfile": "[14] [Zaia] I_m For You/I_m For You.ssc",
+      "archive": "9a018586445bdc137a61cf898ebe569b88b9c72c5d1d60f809345e166a30b08f.tar.zst",
+      "archive_sha256": "9a018586445bdc137a61cf898ebe569b88b9c72c5d1d60f809345e166a30b08f",
+      "harness_version": "0.1.54",
+      "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+      "source_pending_commit": false,
+      "binary_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-full_song_lua.exe",
+        "9a018586445bdc137a61cf898ebe569b88b9c72c5d1d60f809345e166a30b08f.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 96.80078560020775,
+      "comparisons_passed": 343432,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-057-native-column-xy-v6.log",
+      "log_sha256": "666faa94920135550f9850a284b0d9fd80e2738eaff29d5f8ab2f9520194a70c",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass136-top-057-native-v3.json",
+      "native_receipt_sha256": "07131f2e2fb587e0eef11026e113df613509ea9b16441acff690fca9b75cf822",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+    "source_pending_commit": false,
+    "binary_sha256": "9f550263a9682a2386ebb04ff72a66926eca035a0e4f8e18e2def03b2ca1baa7",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.7111626998521388,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-057-native-pass136.log",
+    "log_sha256": "33e2c88c233939e631e7b1db2b2ec46f8c96a6f922f7b2d9ce72e376a0106f7c",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 262 filtered out; finished in 1.32s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

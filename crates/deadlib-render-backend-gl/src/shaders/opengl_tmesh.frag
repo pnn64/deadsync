@@ -2,7 +2,7 @@
 in vec2 v_uv;
 in vec4 v_color;
 in float v_texture_mask;
-in float v_cull_back;
+in float v_cull_mode;
 in vec2 v_additive_uv;
 in float v_additive;
 uniform sampler2D u_texture;
@@ -10,7 +10,7 @@ uniform sampler2D u_additive;
 out vec4 out_color;
 
 void main() {
-    if (v_cull_back > 0.5 && !gl_FrontFacing) discard;
+    if ((v_cull_mode > 0.5 && v_cull_mode < 1.5 && !gl_FrontFacing) || (v_cull_mode > 1.5 && gl_FrontFacing)) discard;
     vec4 texel = texture(u_texture, v_uv);
     vec4 color = texel * v_color;
     if (v_texture_mask > 0.5) {

@@ -1,0 +1,118 @@
+{
+  "pass": 214,
+  "previous_record": "native-revalidation-pass213.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "ae36c5c9096d2b03149f17858a23a637b73f31ab",
+  "comparator_sha256": "69e71da1079247b3f0e168af126de3ca30270c659aef7156fbd6afe5659e534c",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    135
+  ],
+  "next_position": 136,
+  "comparisons_passed": 654514,
+  "charts": [
+    {
+      "position": 135,
+      "entry": {
+        "title": "Butterfly",
+        "source_simfile": "Butterfly by DDR/buttchew.ssc",
+        "harness_version": "0.1.67",
+        "archive": "e3f0dfc77208659c4ba049914802f6a185cfca5287188f8ccc81a5decbbbe57e.tar.zst",
+        "sha256": "e3f0dfc77208659c4ba049914802f6a185cfca5287188f8ccc81a5decbbbe57e",
+        "compressed_bytes": 7313404,
+        "aliases": [
+          "1ddc405a3a96f38ff7b105b0669947c6ed0fd16b06a6792fdec914c61126da6b.tar.zst"
+        ]
+      },
+      "original_archive_retained": "a9b42b71686c8e3a66566da256fb6ee9f02c0807fa3bd256df2a75a2a336d39e.tar.zst",
+      "native_source_commit": "7a75d74081a4e0e944e1babde8d8d64363ad625a",
+      "native_trace_sha256": "192acdb626734030486cf25a00479abd9fd4877cf9790505b9962f8bd1351268",
+      "original_source_sha256": {
+        "Butterfly by DDR/buttchew-bn.png": "205715f5f7cd9471a8e5c69a23685dbf61acf607bc4144cb634c1988edcb0e4d",
+        "Butterfly by DDR/buttchew-bq-fs.png": "f4aee631d21ae5655a7146c7ff82cd01cfa5691d26c0bb1c859d04709dcb0d2a",
+        "Butterfly by DDR/buttchew-bq-ws.png": "e3f89df3f3e0235bab9d8c7efeb846ef597e2cf2379fd4c5317beac94af4d925",
+        "Butterfly by DDR/buttchew-jk.png": "d1a5e67f92854a1277c2c3016ae0e344e6a3dccf9dfa8b30f55f3f4b58b5d922",
+        "Butterfly by DDR/buttchew.ogg": "a7a304ad1571d8fc0417d4cc6bab2c556c76e36ecd13ecbfe5eef605d32a9842",
+        "Butterfly by DDR/buttchew.ssc": "57d7e44a5d92bc2dde04eefc9fde4f1df82a42ceda2cd237fee6e450664186b0",
+        "Butterfly by DDR/lua/butt.lua": "f0f0caddcc9e9fa06c83842ddcb6c37756a2c5545b124632e77243b9d360c248",
+        "Butterfly by DDR/lua/default.lua": "57858af92803cc57be4f05056f0861acff3a553b142b2bc377239a23411eb77d",
+        "Butterfly by DDR/lua/diagnostic.lua": "dad7273927bbaf76bb1c8ca387043e6bdddf25a6cb7512dd826b3f244eae58cb",
+        "Butterfly by DDR/lua/easing.lua": "5b3d7c1e014172daec8a8be699c59fdab02146ddabc4180edccb59021f1efee5",
+        "Butterfly by DDR/lua/hudreducer.lua": "04fc633bd5e09eed31801bd4a958abb63b6a3771d07a7d6353104e00eff34079",
+        "Butterfly by DDR/lua/modsHQ.lua": "71df47178ef5ceccaab26920b6b1c4adbd42ac5edd9ae30abc63d5ec4ffabcf0",
+        "Butterfly by DDR/lua/telpers.lua": "25d6d50b46723294405b41aae97685cf53b3755341dee8e52e84ccc07624603a",
+        "Butterfly by DDR/lua/butts/butt-A.png": "f7a9260f467ec4e2b5d35746415bf4b85c76f2dee895836ce8fe6376864a6333",
+        "Butterfly by DDR/lua/butts/butt-B.png": "78f221a017a50196adfce0fd2ec2f9c911ef8eb888f3d5fec44b3e3697d2bf20",
+        "Butterfly by DDR/lua/butts/butt-C.png": "b1552155b97e0c1703cd83be076eb86b9d568e712df8cf0e358ebaae50de66fb",
+        "Butterfly by DDR/lua/butts/butt-D.png": "8e41ca1ac444d9841acd9211891fae25bd5ef1160baf837dd28019178c6573d1",
+        "Butterfly by DDR/lua/butts/butt-E.png": "4f5ca45257ba669f7b23e61783024743d074e39dd2552151d56b689cd930bc9a",
+        "Butterfly by DDR/lua/butts/butt-F.png": "d21ff10b79567843d55a81ddd957e3f01c3540370cfdeb61a39552141ccfbe3c",
+        "Butterfly by DDR/lua/butts/butt-G.png": "24fca756f7d757230c25ead8fb2758c2780fc435a85ffc54e6555c2230e80ede",
+        "Butterfly by DDR/lua/butts/butt-H.png": "3927ba5954067df0e1b443a3cccda55a863498726a9be57158fc95ea64483547",
+        "Butterfly by DDR/lua/butts/butt-I.png": "a17f507578290b46e1dbcd63b51af4472d5faa22f7035dbf2d7352eae2185c30",
+        "Butterfly by DDR/lua/butts/butt-J.png": "60d986458b46a4a2ee15f20452e6a0aec58009b2d77b2b127c9cd24f1afbe33e",
+        "Butterfly by DDR/lua/butts/gull 13x1.png": "b1c50b744eccc983bcb813d7c5acdd83400592dc668b9cb35e9efe397d14a8b8"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8493,
+      "duration_seconds": 141.51724243164062,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 19,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 135,
+      "source_simfile": "Butterfly by DDR/buttchew.ssc",
+      "archive": "e3f0dfc77208659c4ba049914802f6a185cfca5287188f8ccc81a5decbbbe57e.tar.zst",
+      "archive_sha256": "e3f0dfc77208659c4ba049914802f6a185cfca5287188f8ccc81a5decbbbe57e",
+      "harness_version": "0.1.67",
+      "source_commit": "ae36c5c9096d2b03149f17858a23a637b73f31ab",
+      "source_pending_commit": false,
+      "binary_sha256": "69e71da1079247b3f0e168af126de3ca30270c659aef7156fbd6afe5659e534c",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\fail-setting-v4-full_song_lua.exe",
+        "e3f0dfc77208659c4ba049914802f6a185cfca5287188f8ccc81a5decbbbe57e.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 292.92576649971306,
+      "comparisons_passed": 654514,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fail-setting-v4-135.log",
+      "log_sha256": "d73e3f0461dae23d7c56330dea4cf09b215c6534f5e5bc051abdbcac3b67b4d5",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass270-top-135-native-commands-v1.json",
+      "native_receipt_sha256": "1b1c6998fb0427787c52cb1f2cb80700822ab825127a236032611044ef911cde",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "ae36c5c9096d2b03149f17858a23a637b73f31ab",
+    "source_pending_commit": false,
+    "binary_sha256": "b34b098c2e820ae54a43b0af286df77f02c3a9a5e222dfd1ffc33c450f30fd24",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\fail-setting-v4-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 6.517316699959338,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-135-native-pass214.log",
+    "log_sha256": "63bcee461a4a818e32de5ffead6dd4e344d09ae35773b7b111023f598ac43274",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 299 filtered out; finished in 5.73s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

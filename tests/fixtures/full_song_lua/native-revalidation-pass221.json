@@ -1,0 +1,100 @@
+{
+  "pass": 221,
+  "previous_record": "native-revalidation-pass220.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "1acb67574b8e32ddda9dca530a3bba724a3a4790",
+  "comparator_sha256": "3a7535528445f0814bccb8190ef550e108c403d2c026ad27cfadbe5b59359dc5",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    142
+  ],
+  "next_position": 143,
+  "comparisons_passed": 243967,
+  "charts": [
+    {
+      "position": 142,
+      "entry": {
+        "title": "Cat Hacks",
+        "source_simfile": "Cat Hack/Cat Hacks.ssc",
+        "harness_version": "0.1.67",
+        "archive": "1d4a702b6025efa60c460f96dd7b8b4941c0cd12819fec4968dd5cfe170967c5.tar.zst",
+        "sha256": "1d4a702b6025efa60c460f96dd7b8b4941c0cd12819fec4968dd5cfe170967c5",
+        "compressed_bytes": 64572,
+        "aliases": [
+          "a59eef141ee63b60385a65a36b1bd237a7bc15defc9f1c86303e06beade4942d.tar.zst"
+        ]
+      },
+      "original_archive_retained": "39381492de80e9fde9b112bf301817468a8b948f20a9c2371fe65b44b4ecdd43.tar.zst",
+      "native_source_commit": "7a75d74081a4e0e944e1babde8d8d64363ad625a",
+      "native_trace_sha256": "b181e139accb7d50ebd9ab474d60f527379f7df1c4cf3192bf8e0959e544b96a",
+      "original_source_sha256": {
+        "Cat Hack/bg.png": "cc1730033a7a0e32cb0c58192ef39fd3b5609c347f42c9bec94f60d90c89d664",
+        "Cat Hack/bn.png": "e23df2f87310d687939ed894c005ee5f047dc45243d30132e3cf1d1d1bf50cc3",
+        "Cat Hack/Cat Hacks.ogg": "fea7e04a2e226e6d1f52da2021c97c1c78890be60cb5b234c97cb698c4f84f39",
+        "Cat Hack/Cat Hacks.sm": "3e9cab56fdcfca001a72f3510b37a0f65909795f2f5d4bc8bb689e3722ad1a91",
+        "Cat Hack/Cat Hacks.ssc": "e495b4783e1d6c21954bc0ae1b52c2ce50b26ed8a2b8f943a866fa5f4444c0fd",
+        "Cat Hack/mods.lua": "95305eb8cb8f7f62b064b2c2f3e0a2e134f97511b933ff0886682a4081603c1e"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 11089,
+      "duration_seconds": 184.7947540283203,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 3,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 142,
+      "source_simfile": "Cat Hack/Cat Hacks.ssc",
+      "archive": "1d4a702b6025efa60c460f96dd7b8b4941c0cd12819fec4968dd5cfe170967c5.tar.zst",
+      "archive_sha256": "1d4a702b6025efa60c460f96dd7b8b4941c0cd12819fec4968dd5cfe170967c5",
+      "harness_version": "0.1.67",
+      "source_commit": "1acb67574b8e32ddda9dca530a3bba724a3a4790",
+      "source_pending_commit": false,
+      "binary_sha256": "3a7535528445f0814bccb8190ef550e108c403d2c026ad27cfadbe5b59359dc5",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\song-metadata-v5-full_song_lua.exe",
+        "1d4a702b6025efa60c460f96dd7b8b4941c0cd12819fec4968dd5cfe170967c5.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.291140400338918,
+      "comparisons_passed": 243967,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\song-metadata-v5-142.log",
+      "log_sha256": "a66cee3012f6abe246f385499074b6b2a0c2540b3742ff4cb6241f9daf16ba76",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass277-top-142-native-v1.json",
+      "native_receipt_sha256": "b0c4048cad23c9c6d2a7d4ab8af6ea92e20b644470976e54fabc05bbbe410c8b",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "1acb67574b8e32ddda9dca530a3bba724a3a4790",
+    "source_pending_commit": false,
+    "binary_sha256": "ce0641dbc2b256f22f731c35079242399b92f65ae12e4714f1164b1b60d345b8",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\song-metadata-v5-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.0936829997226596,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-142-native-pass221.log",
+    "log_sha256": "14dbcf062386ff1a2c243e9c9e5be1bfdfbd94a019687f3a04310361dd75ea38",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 299 filtered out; finished in 0.50s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

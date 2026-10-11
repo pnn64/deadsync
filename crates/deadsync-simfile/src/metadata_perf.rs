@@ -150,6 +150,7 @@ fn batch(count: usize, work: &mut impl FnMut()) -> u128 {
     }
     start.elapsed().as_nanos().max(1)
 }
+
 /// Prepare owned inputs outside timing; consume inputs and outputs inside it.
 pub fn compare_owned<T: Clone>(
     label: &str,

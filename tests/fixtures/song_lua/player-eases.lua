@@ -1,3 +1,4 @@
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local player = nil
 prefix_globals = {}
 

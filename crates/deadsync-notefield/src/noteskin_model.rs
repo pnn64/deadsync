@@ -472,8 +472,22 @@ fn model_affine_transform(
         scale * draw.zoom[2],
     );
     let align_y = (0.5 - draw.vert_align) * size[1];
-    Matrix4::from_translation(Vector3::new(draw.pos[0], draw.pos[1], draw.pos[2]))
-        * sm_rotation_xyz(draw.rot[0], draw.rot[1], draw.rot[2] + rotation_deg)
+    let rotation = sm_rotation_xyz(draw.rot[0], draw.rot[1], draw.rot[2] + rotation_deg);
+    let position = Vector3::from_array(draw.pos);
+    // Scale rotation columns and translate the aligned origin directly.
+    let affine = Matrix4::from_cols(
+        rotation.x_axis * local_scale.x,
+        rotation.y_axis * local_scale.y,
+        rotation.z_axis * local_scale.z,
+        (position + rotation.y_axis.truncate() * align_y).extend(1.0),
+    );
+    if affine.is_finite() {
+        return affine;
+    }
+    // General multiplication retains propagation through zero coefficients
+    // for nonfinite authoring values and finite inputs that overflow.
+    Matrix4::from_translation(position)
+        * rotation
         * Matrix4::from_translation(Vector3::new(0.0, align_y, 0.0))
         * Matrix4::from_scale(local_scale)
 }
@@ -570,7 +584,11 @@ fn actor_from_vertices<S: NoteskinSlot>(
         depth_test,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: slot.model_cull_back(),
+        cull_mode: if slot.model_cull_back() {
+            deadlib_render_core::CullMode::Back
+        } else {
+            deadlib_render_core::CullMode::None
+        },
         visible: true,
         blend,
         z,
@@ -609,7 +627,11 @@ fn flat_from_vertices<S: NoteskinSlot>(
         depth_test: false,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: slot.model_cull_back(),
+        cull_mode: if slot.model_cull_back() {
+            deadlib_render_core::CullMode::Back
+        } else {
+            deadlib_render_core::CullMode::None
+        },
         blend,
         z,
     }
@@ -1237,7 +1259,7 @@ mod tests {
             uv_offset,
             uv_tex_shift,
             depth_test,
-            cull_back,
+            cull_mode,
             visible,
             blend,
             z,
@@ -1281,7 +1303,7 @@ mod tests {
         assert_eq!(uv_offset, [0.1, 0.2]);
         assert_eq!(uv_tex_shift, [0.125, 0.25]);
         assert!(!depth_test);
-        assert!(cull_back);
+        assert_eq!(cull_mode, deadlib_render_core::CullMode::Back);
         assert!(visible);
         assert_eq!(blend, BlendMode::Add);
         assert_eq!(z, 47);
@@ -1477,3 +1499,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "model_affine_performance.rs"]
+mod affine_performance;

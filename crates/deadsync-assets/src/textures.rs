@@ -47,21 +47,62 @@ pub fn held_miss_texture_choices() -> &'static [TextureChoice] {
 
 pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
     let dirs = crate::paths();
-    canonical_texture_key_with_asset_roots(p.as_ref(), &dirs.texture_roots)
+    let raw = p.as_ref().to_string_lossy();
+    let source = texture_source_key(&raw);
+    let key = canonical_texture_key_with_asset_roots(Path::new(source), &dirs.texture_roots);
+    if source.len() != raw.len() {
+        model_texture_key(&key)
+    } else {
+        key
+    }
+}
+
+const MODEL_TEXTURE_SUFFIX: &str = "#itg-model";
+
+/// A native Model load requests a distinct RageTextureID from a Sprite load.
+/// Keep its prepared image resident separately; source lookup strips this tag.
+#[must_use]
+pub fn model_texture_key(key: &str) -> String {
+    if key.starts_with("__") || key.ends_with(MODEL_TEXTURE_SUFFIX) {
+        key.to_owned()
+    } else {
+        format!("{key}{MODEL_TEXTURE_SUFFIX}")
+    }
+}
+
+#[must_use]
+pub fn texture_source_key(key: &str) -> &str {
+    key.strip_suffix(MODEL_TEXTURE_SUFFIX).unwrap_or(key)
+}
+
+fn decode_texture_hints(key: &str) -> TextureHints {
+    let source = texture_source_key(key);
+    let mut hints = parse_texture_hints(source);
+    // The native game profile caps images to 2048; allocations below 8 force
+    // both axes to stretch. Logical Sprite sizes retain their original source.
+    hints.max_size = Some(2048);
+    hints.min_size = Some(8);
+    if source.len() != key.len() {
+        hints.non_default = true;
+        hints.stretch = true;
+        hints.hot_pink_color_key = true;
+        hints.max_size = Some(2048); // Native RageTextureID::Init default.
+    }
+    hints
 }
 
 #[must_use]
 pub fn model_texture_sampler(key: &str) -> SamplerDesc {
     SamplerDesc {
         wrap: SamplerWrap::Repeat,
-        ..deadlib_assets::parse_texture_hints(key).sampler_desc()
+        ..parse_texture_hints(texture_source_key(key)).sampler_desc()
     }
 }
 
 /// Resolve a native source for a worker without decoding or uploading it.
 pub fn texture_decode_job(key: &str, model: bool) -> TextureDecodeJob {
     let path = texture_key_source_path(key, key, |path| crate::paths().resolve_asset_path(path));
-    let hints = parse_texture_hints(key);
+    let hints = decode_texture_hints(key);
     TextureDecodeJob {
         key: key.to_owned(),
         path,
@@ -124,10 +165,9 @@ pub fn initial_texture_jobs(
     textures
         .map(|(key, path)| TextureDecodeJob {
             sampler: initial_texture_sampler(&key, needs_repeat(&key)),
+            hints: decode_texture_hints(&key),
             key,
             path,
-            // Startup historically uses raw pixels; on-demand loads apply filename effects.
-            hints: TextureHints::default(),
         })
         .collect()
 }
@@ -183,7 +223,7 @@ fn load_texture_key(
         warn!("Failed to resolve texture key '{key}' for preload.");
         return;
     }
-    let hints = parse_texture_hints(&key);
+    let hints = decode_texture_hints(&key);
     let sampler =
         sampler_override.unwrap_or_else(|| texture_key_sampler(&hints, needs_repeat(&key)));
     let job = TextureDecodeJob {
@@ -438,6 +478,8 @@ pub fn texture_key_source_path(
     key: &str,
     resolve_asset_path: impl Fn(&str) -> PathBuf,
 ) -> PathBuf {
+    let raw = texture_source_key(raw);
+    let key = texture_source_key(key);
     if let Some(path) = deadlib_assets::direct_texture_key_path(raw, key) {
         return path;
     }
@@ -482,6 +524,248 @@ pub fn resolve_texture_choice_entry<'a>(
 mod tests {
     use super::*;
     use deadlib_render_core::SamplerFilter;
+
+    #[test]
+    fn native_sprite_prepared_pixels() {
+        crate::init_asset_paths();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation");
+        let control: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("control.json")).expect("native Sprite controls"),
+        ).expect("Sprite control JSON");
+        let native: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("native.json")).expect("native Sprite pixels"),
+        ).expect("native Sprite JSON");
+        let mut failures = Vec::new();
+        let mut checked = 0;
+        for (spec, case) in control["texture_files"].as_array().expect("controls").iter()
+            .zip(native["cases"].as_array().expect("native cases")) {
+            // The production headless profile resolves high-resolution textures on.
+            if spec["high_resolution"] == false { continue; }
+            let name = case["name"].as_str().expect("case name");
+            let source = root.join(spec["file"].as_str().expect("source file"));
+            let key = canonical_texture_key(&source);
+            let job = texture_decode_job(&key, false);
+            let image = deadlib_assets::decode_texture_image(&job.path, &job.hints)
+                .unwrap_or_else(|error| panic!("{name}: {error}"));
+            checked += 1;
+            if serde_json::json!([image.width(), image.height()]) != case["dimensions"]["image"] {
+                failures.push(format!("{name}: actual {:?}, native {}", image.dimensions(), case["dimensions"]["image"]));
+                continue;
+            }
+            if case["upload"]["pixels_captured"] == true {
+                let expected: Vec<u8> = case["upload"]["pixels"].as_array().expect("native pixels").iter()
+                    .flat_map(|pixel| pixel.as_array().expect("RGBA").iter().map(|byte| byte.as_u64().expect("byte") as u8)).collect();
+                if image.as_raw() != &expected {
+                    let difference = image.as_raw().iter().zip(&expected).position(|(actual, expected)| actual != expected);
+                    failures.push(format!("{name}: native pixel difference at {difference:?}"));
+                }
+            }
+        }
+        assert_eq!(checked, 9);
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[test]
+    fn native_indexed_bitmap_pixels() {
+        crate::init_asset_paths();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files");
+        let cases: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("cases.json")).expect("native indexed manifest"),
+        )
+        .expect("native indexed case JSON");
+        let cases = cases.as_array().expect("native indexed cases");
+        assert_eq!(cases.len(), 33);
+        let mut failures = Vec::new();
+        for case in cases {
+            let name = case["name"].as_str().expect("case name");
+            let source = root.join(case["file"].as_str().expect("source file"));
+            let (width, height) =
+                deadlib_assets::texture_source_size(&source).expect("native source dimensions");
+            assert_eq!(
+                serde_json::json!([width, height]),
+                case["source"],
+                "{name}: source metadata"
+            );
+            let model = case["kind"] == "model";
+            let key = canonical_texture_key(&source);
+            let key = if model { model_texture_key(&key) } else { key };
+            let job = texture_decode_job(&key, model);
+            let image = match deadlib_assets::decode_texture_image(&job.path, &job.hints) {
+                Ok(image) => image,
+                Err(error) => {
+                    failures.push(format!("{name}: {error}"));
+                    continue;
+                }
+            };
+            if serde_json::json!([image.width(), image.height()]) != case["output"] {
+                failures.push(format!(
+                    "{name}: dimensions {:?}, native {}",
+                    image.dimensions(),
+                    case["output"]
+                ));
+                continue;
+            }
+            let native = fs::read(root.join(format!("{name}.rgba"))).expect("native upload bytes");
+            if let Some((index, (actual, expected))) = image
+                .as_raw()
+                .iter()
+                .zip(&native)
+                .enumerate()
+                .find(|(_, (actual, expected))| actual != expected)
+            {
+                failures.push(format!(
+                    "{name}: byte {index}, actual={actual}, native={expected}"
+                ));
+            }
+            assert_eq!(image.as_raw().len(), native.len(), "{name}: byte count");
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[test]
+    fn native_indexed_bitmap_rejections() {
+        crate::init_asset_paths();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files");
+        let cases: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("native-rejections.json")).expect("native rejection manifest"),
+        )
+        .expect("native rejection cases");
+        let cases = cases.as_array().expect("rejection array");
+        assert_eq!(cases.len(), 2);
+        for case in cases {
+            let name = case["name"].as_str().expect("rejection name");
+            let source = root.join(case["file"].as_str().expect("native rejected source"));
+            let model = case["kind"] == "model";
+            let key = canonical_texture_key(&source);
+            let key = if model { model_texture_key(&key) } else { key };
+            let job = texture_decode_job(&key, model);
+            assert!(
+                deadlib_assets::decode_texture_image(&job.path, &job.hints).is_err(),
+                "{name}: native rejected this source"
+            );
+            assert!(
+                deadlib_assets::texture_source_size(&source).is_err(),
+                "{name}: native rejected its source dimensions"
+            );
+        }
+    }
+
+    #[test]
+    fn native_indexed_model_dimensions() {
+        crate::init_asset_paths();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files");
+        let piece = root.join("model.txt");
+        let slots = crate::noteskin::load_itg_model_slots(&piece, &piece, &piece)
+            .expect("native first-frame GIF Model material");
+        let key = slots[0].texture_key();
+        assert_eq!(
+            deadlib_assets::texture_dims(key).map(|meta| (meta.w, meta.h)),
+            Some((8, 8))
+        );
+        let job = texture_decode_job(key, true);
+        let image = deadlib_assets::decode_texture_image(&job.path, &job.hints)
+            .expect("prepared GIF Model image");
+        let native =
+            fs::read(root.join("gif-offset-model.rgba")).expect("native GIF upload pixels");
+        assert_eq!(image.dimensions(), (8, 8));
+        assert_eq!(image.as_raw(), &native);
+    }
+
+    #[test]
+    fn native_prepared_pixels() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/model-texture-preparation");
+        let cases: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("cases.json")).expect("native preparation controls"),
+        )
+        .expect("valid native case manifest");
+        let cases = cases.as_array().expect("native case array");
+        assert_eq!(cases.len(), 21);
+        for case in cases {
+            let name = case["name"].as_str().expect("case name");
+            let hints = TextureHints {
+                non_default: true,
+                hot_pink_color_key: case["hot_pink_color_key"].as_bool().expect("key policy"),
+                stretch: case["stretch"].as_bool().expect("resize policy"),
+                max_size: case["max_size"].as_u64().map(|size| size as u32),
+                ..Default::default()
+            };
+            let image =
+                deadlib_assets::decode_texture_image(&root.join(format!("{name}.png")), &hints)
+                    .unwrap_or_else(|error| panic!("{name}: {error}"));
+            let size = [image.width(), image.height()];
+            assert_eq!(
+                serde_json::json!(size),
+                case["output"],
+                "{name}: native dimensions"
+            );
+            let native =
+                fs::read(root.join(format!("{name}.rgba"))).expect("compiled native bytes");
+            assert_eq!(
+                image.as_raw().len(),
+                native.len(),
+                "{name}: native pixel count"
+            );
+            if let Some((index, (actual, expected))) = image
+                .as_raw()
+                .iter()
+                .zip(&native)
+                .enumerate()
+                .find(|(_, (actual, expected))| actual != expected)
+            {
+                panic!("{name}: native byte {index}, actual={actual}, expected={expected}");
+            }
+        }
+    }
+
+    #[test]
+    fn native_model_pixels() {
+        crate::init_asset_paths();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/model-texture-request");
+        let piece = root.join("model.txt");
+        let slots = crate::noteskin::load_itg_model_slots(&piece, &piece, &piece)
+            .expect("native Model material control");
+        let job = texture_decode_job(slots[0].texture_key(), true);
+        let image = deadlib_assets::decode_texture_image(&job.path, &job.hints)
+            .expect("decode actual Model source");
+        let native = fs::read(root.join("native.rgba")).expect("compiled native surface bytes");
+        assert_eq!(image.dimensions(), (8, 16));
+        assert_eq!(image.as_raw(), &native);
+    }
+
+    #[test]
+    fn model_views_keep_sprites() {
+        crate::init_asset_paths();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/model-texture-request");
+        let piece = root.join("model.txt");
+        let slots = crate::noteskin::load_itg_model_slots(&piece, &piece, &piece)
+            .expect("shared native Model material");
+        let model = texture_decode_job(slots[0].texture_key(), true);
+        let sprite = texture_decode_job(&canonical_texture_key(root.join("npot.png")), false);
+        assert_eq!(canonical_texture_key(&model.key), model.key);
+        assert_eq!(model_texture_key(&model.key), model.key);
+        assert!(model.hints.stretch && model.hints.hot_pink_color_key);
+        assert_eq!(model.hints.max_size, Some(2048));
+        assert_eq!(
+            deadlib_assets::texture_dims(&model.key).map(|meta| (meta.w, meta.h)),
+            Some((8, 16))
+        );
+        assert_ne!(
+            model.key, sprite.key,
+            "native RageTextureID separates these requests"
+        );
+        assert_eq!(model.path, sprite.path);
+        let image = deadlib_assets::decode_texture_image(&sprite.path, &sprite.hints)
+            .expect("decode independent Sprite view");
+        assert_eq!(image.dimensions(), (5, 9));
+        assert_eq!(image.get_pixel(0, 0).0, [255, 0, 255, 255]);
+    }
 
     #[test]
     fn initial_sampler_keeps_startup_policy() {
@@ -558,7 +842,9 @@ mod tests {
         assert_eq!(skin_jobs.len(), 1);
         assert_eq!(skin_jobs[0].path, dirs.data_dir.join("assets").join(key));
         assert_eq!(skin_jobs[0].sampler.filter, SamplerFilter::Nearest);
-        assert_eq!(skin_jobs[0].hints, TextureHints::default());
+        assert!(skin_jobs[0].hints.grayscale);
+        assert_eq!(skin_jobs[0].hints.min_size, Some(8));
+        assert_eq!(skin_jobs[0].hints.max_size, Some(2048));
         assert!(!jobs.iter().any(|job| job.key.ends_with("ignored.txt")));
         let manifest_job = &jobs[0];
         assert_eq!(manifest_job.key, "boundary (nearest).png");

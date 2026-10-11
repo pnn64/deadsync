@@ -76,7 +76,7 @@ fn push_fact_table(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo, left
     let table_w = left_w - 2.0 * (lo::DET_TAB_X - lo::LIST_X);
     let facts = facts(state, pack);
 
-    for (row, (label, value)) in facts.iter().enumerate() {
+    for (row, (label, value)) in facts.into_iter().enumerate() {
         if row.is_multiple_of(2) {
             actors.push(act!(quad:
                 align(0.0, 0.0): xy(lo::DET_TAB_X - 6.0, lo::DET_TAB_Y + row as f32 * lo::DET_TAB_H):
@@ -86,7 +86,7 @@ fn push_fact_table(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo, left
         }
         let y = lo::det_tab_y(row);
         actors.push(act!(text:
-            font("miso"): settext((*label).to_owned()):
+            font("miso"): settext(label):
             align(0.0, 0.5): xy(lo::DET_TAB_X, y): zoom(0.46): horizalign(left):
             maxwidth(lo::DET_TAB_VX - lo::DET_TAB_X - 6.0):
             diffuse(0.52, 0.52, 0.52, 1.0): z(Z_TEXT)
@@ -105,7 +105,7 @@ fn push_fact_table(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo, left
             continue;
         }
         actors.push(act!(text:
-            font("miso"): settext(value.clone()):
+            font("miso"): settext(value):
             align(0.0, 0.5): xy(lo::DET_TAB_VX, y): zoom(0.5): horizalign(left):
             maxwidth(table_w - (lo::DET_TAB_VX - lo::DET_TAB_X) - 4.0):
             diffuse(0.86, 0.86, 0.86, 1.0): z(Z_TEXT)
@@ -166,6 +166,7 @@ fn facts(state: &State, pack: &PackInfo) -> [(&'static str, String); 8] {
             let shown = page.authors.len().min(2);
             let mut names = page.authors[..shown].join(", ");
             if page.authors.len() > shown {
+                names.reserve_exact(" and more".len());
                 names.push_str(" and more");
             }
             names
@@ -905,3 +906,11 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "detail_facts_original.rs"]
+mod detail_facts_original;
+
+#[cfg(test)]
+#[path = "detail_facts_perf.rs"]
+mod detail_facts_perf_tests;

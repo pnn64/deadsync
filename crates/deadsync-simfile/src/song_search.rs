@@ -483,7 +483,7 @@ mod tests {
             ("A", "B", "ab", false),
             ("AB", "CD", "b c", true),
             ("A", "B", "a b extra", false),
-            ("Î±", "Î²", "Î± Î²", true),
+            ("α", "β", "α β", true),
         ] {
             assert_eq!(
                 joined_contains_ignore_ascii_case(left, right, needle),
@@ -709,9 +709,9 @@ mod tests {
         assert_eq!(filter.difficulty, Some(12));
         assert_eq!(filter.bpm_tier, Some(180));
 
-        let malformed = parse_song_search_filter("Pack/[x]Ã„BC");
+        let malformed = parse_song_search_filter("Pack/[x]ÄBC");
         assert_eq!(malformed.pack_term(), Some("pack"));
-        assert_eq!(malformed.song_term(), Some("[x]Ã„bc"));
+        assert_eq!(malformed.song_term(), Some("[x]Äbc"));
         assert_eq!(malformed.difficulty, None);
         assert_eq!(malformed.bpm_tier, None);
 

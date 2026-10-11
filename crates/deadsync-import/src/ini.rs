@@ -35,6 +35,11 @@ impl SimpleIni {
             .map(String::as_str)
     }
 
+    pub fn take_section(&mut self, section: &str) -> Option<IniSection<FxBuildHasher>> {
+        self.sections.remove(section)
+    }
+
+    #[cfg(test)]
     pub fn get_section(&self, section: &str) -> Option<&IniSection<FxBuildHasher>> {
         self.sections.get(section)
     }

@@ -1,0 +1,137 @@
+{
+  "problem": "ParabolaY had no gameplay or note-travel target, and combined accelerations deformed the distance sequentially instead of adding native adjustments from the original distance",
+  "change": "Carry signed ParabolaY and approach speeds through gameplay into composed note travel; sum native acceleration adjustments before boomerang and scroll speed",
+  "removed_renderer_paths": [
+    "BoostBrakeOnly",
+    "BoostBrakeExpandOnly"
+  ],
+  "source_parent": "86b63bc7a8e270431ed1caefd649555506acb6b5",
+  "reference_file": "itgmania/src/ArrowEffects.cpp",
+  "reference_sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+  "reference_lines": [
+    607,
+    655
+  ],
+  "native_capture": {
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass188-native-parabola-y-v1\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "f6477419c3046a18a7ee5e8697651d3bfb70c324f0f4e58447a3106669b69567",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "capture_exit_code": 0,
+    "binary_sha256": "6b6b477653effd6a50106c3baab3382ef4d2fa65bc3f0cf945689fa81f030ceb",
+    "control_sha256": "bf6aca4ff145211561513ddc0aab6921997c2b2553f4fdd1f3680f9e9058d4fe",
+    "update_frames": 241,
+    "source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+    "source_pending_commit": false,
+    "capture_complete": true,
+    "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass188-native-parabola-y-v1\\archives\\703a646da4389c9d932409c8b085badaae9a341b4a83fa94511b545fc08d906f.tar.zst",
+    "archive_sha256": "703a646da4389c9d932409c8b085badaae9a341b4a83fa94511b545fc08d906f",
+    "archive_entry": {
+      "title": "Native parabola-y control",
+      "source_simfile": "control/control.ssc",
+      "harness_version": "0.1.61",
+      "archive": "703a646da4389c9d932409c8b085badaae9a341b4a83fa94511b545fc08d906f.tar.zst",
+      "sha256": "703a646da4389c9d932409c8b085badaae9a341b4a83fa94511b545fc08d906f",
+      "compressed_bytes": 12561
+    }
+  },
+  "before_control": {
+    "exit_code": 1,
+    "comparisons_passed": 5350,
+    "comparisons_failed": 10,
+    "elapsed_seconds": 0.8773775999434292,
+    "archive_sha256": "703a646da4389c9d932409c8b085badaae9a341b4a83fa94511b545fc08d906f",
+    "binary_sha256": "532dfb1df368d30a0e9905a6be6db4736b146b47e15269a07cad04f91bd9f595",
+    "source_commit": "86b63bc7a8e270431ed1caefd649555506acb6b5",
+    "source_pending_commit": false,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass162\\parabola-y-before-v1.log",
+    "log_sha256": "46aab8b043e29b6005594b82746bbd8bfe4f1d1c8e47412b9b37b34fef5cb402",
+    "control_complete": true,
+    "current_worktree_used": false
+  },
+  "after_control": {
+    "exit_code": 0,
+    "comparisons_passed": 5360,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 2.2876447001472116,
+    "archive_sha256": "703a646da4389c9d932409c8b085badaae9a341b4a83fa94511b545fc08d906f",
+    "binary_sha256": "cad5ccc967a28fac1572f856231e46c3aa169843697fc48c4b9b5ac48fe635e1",
+    "source_commit": "86b63bc7a8e270431ed1caefd649555506acb6b5",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\parabola-y-after-v3.log",
+    "log_sha256": "79fff0296c1753ef2747913a074db0c13232c8c304ca97cb33ee5ddd29d8b986",
+    "control_complete": true
+  },
+  "runtime_tests": {
+    "source_commit": "86b63bc7a8e270431ed1caefd649555506acb6b5",
+    "source_pending_commit": true,
+    "binary_sha256": "1381cddc6535e9e6bc3eaf28dedde39bf0ae4b2fdf9c6cf806489b78a1cde790",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\parabola-y-v7-song_lua_itgmania_semantic_parity.exe",
+      "runtime_modifiers",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 101,
+    "elapsed_seconds": 33.59213489992544,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\parabola-y-regressions-v3.log",
+    "log_sha256": "f7a6b6cc57b7fba0419adf37ae55362bc50554d3b3b9798db281a8c34b32db94",
+    "result_lines": [
+      "test result: FAILED. 39 passed; 3 failed; 2 ignored; 0 measured; 233 filtered out; finished in 31.81s"
+    ]
+  },
+  "renderer_tests": {
+    "source_commit": "86b63bc7a8e270431ed1caefd649555506acb6b5",
+    "source_pending_commit": true,
+    "binary_sha256": "4ecb28da3b48fe0c02ef7f9b52a964d04694433ebd907a07554989c05eb9dbfa",
+    "binary_path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass161\\parabola-y-notefield-v3.exe",
+    "exit_code": 0,
+    "elapsed_seconds": 2.3980585001409054,
+    "log_sha256": "29bdd6b43253dd57f20f07f6067ef15f9eb3d8dc8d0dfa0f323cdc1c8367021d",
+    "result_lines": [
+      "test result: ok. 456 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s"
+    ]
+  },
+  "independent_motion_cpp": "parabola-y-motion.cpp",
+  "independent_motion_cpp_sha256": "85621ba192a18305988ad3a45692411cb7302eda7f32df3ce037363adfe81418",
+  "independent_motion_vectors": "parabola-y-motion.json",
+  "independent_motion_vectors_sha256": "c6429d88ed36792e9987ce58eb3332f64710c64e2e4f9eaed83713dd5a57843d",
+  "motion_samples": 78,
+  "motion_uses_semantic_host_or_deadsync": false,
+  "composed_taps_and_mines_checked_both_scroll_directions": true,
+  "composed_checks": 260,
+  "native_zero_gates_replace_positive_epsilon_acceleration_gates": true,
+  "speed_comparison_uses_production_base_setting_resolver": true,
+  "original_archive_result": {
+    "position": 90,
+    "source_simfile": "Among Us In Real Life - Single/Official Among Us In Real Life Official Simulation File - Rebecca Zamolo Shorts.ssc",
+    "archive": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143.tar.zst",
+    "archive_sha256": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143",
+    "harness_version": "0.1.61",
+    "source_commit": "86b63bc7a8e270431ed1caefd649555506acb6b5",
+    "source_pending_commit": true,
+    "binary_sha256": "cad5ccc967a28fac1572f856231e46c3aa169843697fc48c4b9b5ac48fe635e1",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\parabola-y-v7-full_song_lua.exe",
+      "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143.tar.zst"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 19.997058300301433,
+    "comparisons_passed": 207790,
+    "comparisons_failed": 72,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-090-parabola-y-v3.log",
+    "log_sha256": "36eacb1c4d27b16592f19103312286ca04dbd16ec837217581edc8393c27c00b",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass187-top-090-speed-audit-v1.json",
+    "native_receipt_sha256": "f9b76091285be6e00d4f1160c6295f4175a177c1860eba674ceff98c649c1d25",
+    "full_corpus_complete": false
+  },
+  "original_archive_still_pending": true,
+  "unresolved_original_other_modifier_failures": 68,
+  "unresolved_original_speed_failures": 4,
+  "lua51_vs_lua54_reset_iteration_order_still_pending": true,
+  "reset_iteration_can_change_final_playback": true,
+  "existing_three_modifier_failures_retained": true,
+  "whole_native_gameplay_or_framebuffer_capture_claimed": false,
+  "original_corpus_or_tolerances_changed": false,
+  "full_corpus_complete": false
+}

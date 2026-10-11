@@ -324,12 +324,9 @@ fn read_simply_love(dir: &Path) -> HashMap<String, String> {
     let mut ini = SimpleIni::new();
     if let Some(path) = find_case_insensitive(dir, "Simply Love UserPrefs.ini")
         && ini.load(&path).is_ok()
-        && let Some(section) = ini.get_section("Simply Love")
+        && let Some(section) = ini.take_section("Simply Love")
     {
-        return section
-            .iter()
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect();
+        return section.into_iter().collect();
     }
     HashMap::new()
 }
@@ -1162,3 +1159,7 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 }
+
+#[cfg(test)]
+#[path = "settings_perf.rs"]
+mod perf;

@@ -1,0 +1,24 @@
+{
+  "native_frames_compared": 648,
+  "max_alpha_error": 0.0,
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "harness_source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+  "cli_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+  "native_trace_sha256": "a8bbb2aaf4f6145f1b03109db33eb3e411009d4ba8f2a348b02e538b97ded5b0",
+  "independent_native_sha256": "6f595c4fb1bb3c96da5e0488c4274281b2a6f24cf67463f0682c32fab069d8e1",
+  "dispatches": [
+    {
+      "name": "LightsOff",
+      "seconds": 5.4
+    },
+    {
+      "name": "LightsOn",
+      "seconds": 5.783333333333333
+    },
+    {
+      "name": "Reveal",
+      "seconds": 6.25
+    }
+  ],
+  "native_source": "Actor.h DestTweenState, Actor.cpp UpdateTweening and ActorFrame.cpp UpdateInternal. Dispatcher runs after Fade, matching an ActorFrame update callback."
+}

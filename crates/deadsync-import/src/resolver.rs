@@ -150,14 +150,31 @@ impl<'a> ChartResolver<'a> {
     }
 
     fn song_for_dir(&self, song_dir: &str) -> Option<&'a SongData> {
-        let (pack, folder) = nested_song_dir_parts(song_dir)?;
-        self.by_song
-            .get(&SongKeyRef { pack, folder })
-            .copied()
-            .or_else(|| {
-                let (pack, folder) = song_dir_parts(song_dir)?;
-                self.by_song.get(&SongKeyRef { pack, folder }).copied()
-            })
+        let mut parts = song_dir
+            .trim()
+            .split(['/', '\\'])
+            .map(str::trim)
+            .filter(|part| !part.is_empty());
+        let folder = parts.next_back()?;
+        let nested_pack = parts.next_back()?;
+        if let Some(song) = self.by_song.get(&SongKeyRef {
+            pack: nested_pack,
+            folder,
+        }) {
+            return Some(*song);
+        }
+        let first = parts.next()?;
+        let pack = if first.eq_ignore_ascii_case("Songs")
+            || first.eq_ignore_ascii_case("AdditionalSongs")
+        {
+            parts.next()?
+        } else {
+            first
+        };
+        if pack.eq_ignore_ascii_case(nested_pack) {
+            return None;
+        }
+        self.by_song.get(&SongKeyRef { pack, folder }).copied()
     }
 }
 
@@ -251,18 +268,6 @@ fn song_dir_parts(dir: &str) -> Option<(&str, &str)> {
     Some((pack, song))
 }
 
-fn nested_song_dir_parts(dir: &str) -> Option<(&str, &str)> {
-    let mut parts = dir
-        .trim()
-        .split(['/', '\\'])
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .rev();
-    let song = parts.next()?;
-    let pack = parts.next()?;
-    Some((pack, song))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -348,9 +353,32 @@ mod tests {
             normalize_song_dir("AdditionalSongs\\Pack / Nested\\Final Song"),
             Some(("pack".into(), "final song".into()))
         );
+        let packs = [
+            pack(
+                "Pack",
+                "Songs/Pack",
+                vec![song_at("Songs/Pack/Song/a.ssc", "Nested")],
+            ),
+            pack(
+                "Series",
+                "Songs/Series",
+                vec![song_at("Songs/Series/Song/a.ssc", "Outer")],
+            ),
+        ];
+        let resolver = ChartResolver::build(&packs);
         assert_eq!(
-            nested_song_dir_parts("Songs/Series/Pack/Song"),
-            Some(("Pack", "Song"))
+            resolver
+                .resolve_song("Songs/Series/Pack/Song")
+                .unwrap()
+                .title,
+            "Nested"
+        );
+        assert_eq!(
+            resolver
+                .resolve_song("Songs/Series/Unknown/Song")
+                .unwrap()
+                .title,
+            "Outer"
         );
     }
 
