@@ -219,3 +219,7 @@ mod buffers_support;
 #[cfg(test)]
 #[path = "../../../tests/perf/ui_pipelines_support.rs"]
 mod ui_pipelines_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/view_buffers_support.rs"]
+mod view_buffers_support;
