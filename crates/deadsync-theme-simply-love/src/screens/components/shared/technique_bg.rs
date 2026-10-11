@@ -500,6 +500,7 @@ mod tests {
             .expect("hidden Technique window");
         let backend_kind = match std::env::var("DEADSYNC_TECHNIQUE_BACKEND").as_deref() {
             Ok("vulkan") => BackendType::Vulkan,
+            Ok("vulkan-wgpu") => BackendType::VulkanWgpu,
             Ok("opengl") | Err(_) => BackendType::OpenGL,
             Ok(name) => panic!("unknown Technique test backend: {name}"),
         };
