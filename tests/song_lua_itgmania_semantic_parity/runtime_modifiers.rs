@@ -1212,8 +1212,8 @@ return Def.ActorFrame{OnCommand=function(self)
     self:SetUpdateFunction(function()
         local beat = GAMESTATE:GetSongBeat()
         if phase == 1 and beat >= 1 then
-            options:DrunkOffset(200):DrunkSpeed(1.5):DrunkPeriod(0.75)
-            options:TipsyOffset(-1):TipsySpeed(-1)
+            options:DrunkOffset(200, nil, true):DrunkSpeed(1.5, nil, true):DrunkPeriod(0.75)
+            options:TipsyOffset(-1, nil, true):TipsySpeed(-1)
             options:HiddenOffset(-0.5)
             options:BeatPeriod(-0.5)
             phase = 2
@@ -1283,7 +1283,7 @@ return Def.ActorFrame{OnCommand=function(self)
     self:SetUpdateFunction(function()
         local beat = GAMESTATE:GetSongBeat()
         if phase == 1 and beat >= 1 then
-            options:Stealth1(0.75, 2):Stealth4(0):StealthPastReceptors(false)
+            options:Stealth1(0.75, 2, true):Stealth4(0, nil, true):StealthPastReceptors(false)
             phase = 2
         elseif phase == 2 and beat >= 2 then
             player:SetPlayerOptions('ModsLevel_Song', '50% stealth2')
