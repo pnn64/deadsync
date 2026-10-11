@@ -215,3 +215,7 @@ mod pipelines_support;
 #[cfg(test)]
 #[path = "../../../tests/perf/transient_buffers_support.rs"]
 mod buffers_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/ui_pipelines_support.rs"]
+mod ui_pipelines_support;
