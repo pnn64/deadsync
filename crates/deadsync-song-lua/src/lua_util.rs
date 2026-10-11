@@ -13253,6 +13253,11 @@ pub fn create_top_screen_table(
     let players = context.players.clone();
     let top_screen = create_dummy_actor(lua, "TopScreen")?;
     top_screen.set("Name", "ScreenGameplay")?;
+    // ScreenGameplay::GetScreenType returns gameplay; LunaScreen pushes its Lua enum.
+    top_screen.set(
+        "GetScreenType",
+        lua.create_function(|_, _args: MultiValue| Ok("ScreenType_Gameplay"))?,
+    )?;
     top_screen.set("__songlua_main_title", context.main_title.as_str())?;
     top_screen.set(
         "__songlua_bpm_text",

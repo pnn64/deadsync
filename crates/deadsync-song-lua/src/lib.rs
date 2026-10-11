@@ -19247,6 +19247,8 @@ return Def.ActorFrame{
     InitCommand=function(self)
         local top = SCREENMAN:GetTopScreen()
         local bpm = top:GetChild("BPMDisplay")
+        assert(top:GetScreenType() == "ScreenType_Gameplay")
+        assert(self.GetScreenType == nil)
         local title = top:GetChild("SongTitle")
         local steps = top:GetChild("StepsDisplayP1")
         local underlay = top:GetChild("Underlay")
