@@ -11472,6 +11472,9 @@ pub(crate) fn run_actor_startup_commands(
     if lua.app_data_ref::<SongLuaStartupQueues>().is_none() {
         lua.set_app_data(SongLuaStartupQueues(Vec::new()));
     }
+    // Screen::BeginScreen propagates Begin before Foreground::Update sends On.
+    // This root is the session loader list, so dispatch to its actor children.
+    run_named_command_on_children_recursively(lua, root, "BeginCommand", None)?;
     run_actor_startup_commands_for_table(lua, root)?;
     // Wrappers created by Init/On begin at the default ActorFrame state.
     collect_wrapper_initials(root, &mut initial_states)?;

@@ -20829,6 +20829,25 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_binds_begin_proxies() {
+        let song_dir = test_dir("begin-player-proxy");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, include_str!("../../../tests/fixtures/song-lua/begin-player-proxy.lua"))
+            .expect("write root Begin player binding");
+        let compiled = test_compile_song_lua(
+            &entry, &SongLuaCompileContext::new(&song_dir, "Begin Player Proxy"),
+        ).expect("compile root and proxy Begin commands");
+        for player_index in 0..2 {
+            let name = format!("ProxyP{}", player_index + 1);
+            let proxy = compiled.overlays.iter().find(|actor| actor.name.as_deref() == Some(&name))
+                .expect("retain player proxy");
+            assert!(matches!(proxy.kind, SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::Player { player_index: target },
+            } if target == player_index), "{name}: {:?}", proxy.kind);
+        }
+    }
+
+    #[test]
     fn compile_song_lua_extracts_player_judgment_and_combo_proxy_targets() {
         let song_dir = test_dir("player-judgment-combo-proxy");
         let entry = song_dir.join("default.lua");
