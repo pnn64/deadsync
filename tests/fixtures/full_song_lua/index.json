@@ -1815,12 +1815,10 @@
     {
       "title": "Cardstone",
       "source_simfile": "cards/sm.sm",
-      "harness_version": "0.1.0",
-      "archive": "408c6833719b22916e1d118a866dbd16b1f726df0070ac146a9fc93a8213bb90.tar.zst",
-      "sha256": "408c6833719b22916e1d118a866dbd16b1f726df0070ac146a9fc93a8213bb90",
-      "compressed_bytes": 64531,
-      "uncompressed_sha256": "d2c6365e53beb2fb2e0f1c9ec6e4cd3627142504b8d0cd9bfee7b298dc6c246e",
-      "compression_level": 22,
+      "harness_version": "0.1.67",
+      "archive": "bc49b78df2ac37878f512689bc65ede287386ae29d08313dd1e4e6396b2b1f80.tar.zst",
+      "sha256": "bc49b78df2ac37878f512689bc65ede287386ae29d08313dd1e4e6396b2b1f80",
+      "compressed_bytes": 74398,
       "aliases": [
         "9f085f3ac7cc6381e283918e3b19d8bcaec55c2791f462b05824edf4a9ea9218.tar.zst"
       ]
