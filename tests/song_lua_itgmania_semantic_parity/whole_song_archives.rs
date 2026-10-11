@@ -1200,12 +1200,16 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
     }
     // Capture candidates can be checked without publishing them in the fixture store.
     if args.first().is_some_and(|arg| arg == "--archive") {
-        if !(args.len() == 4 || args.len() == 5 && args[4] == "--entry") || args[2] != "--report" {
-            eprintln!("expected --archive <path.tar.zst> --report <report.json> [--entry]");
+        if !(args.len() == 4 || args.len() == 5 && matches!(args[4].as_str(), "--entry" | "--first-query")) || args[2] != "--report" {
+            eprintln!("expected --archive <path.tar.zst> --report <report.json> [--entry|--first-query]");
             return ExitCode::FAILURE;
         }
         let path = Path::new(&args[1]);
-        let scope = if args.len() == 5 { native_gameplay::Scope::Entry } else { native_gameplay::Scope::Full };
+        let scope = match args.get(4).map(String::as_str) {
+            Some("--entry") => native_gameplay::Scope::Entry,
+            Some("--first-query") => native_gameplay::Scope::FirstQuery,
+            _ => native_gameplay::Scope::Full,
+        };
         let outcome = std::panic::catch_unwind(|| {
             let decoder = zstd::stream::read::Decoder::new(File::open(path).expect("open capture candidate"))
                 .expect("decode capture candidate");
@@ -1414,8 +1418,11 @@ fn replay_native_archive(
     if archive.manifest.runtime.display.width == 0.0 || archive.manifest.runtime.display.height == 0.0 {
         assert_eq!(trace["display"]["video_renderers"], "null", "zero pixel dimensions require the native null renderer");
     }
-    progress.stage(if scope == native_gameplay::Scope::Entry { "replaying native entry and reload" }
-        else { "replaying every native gameplay frame" });
+    progress.stage(match scope {
+        native_gameplay::Scope::Entry => "replaying native entry and reload",
+        native_gameplay::Scope::FirstQuery => "replaying through the first native point query",
+        native_gameplay::Scope::Full => "replaying every native gameplay frame",
+    });
     let report = native_gameplay::replay(&trace_path, &archive.root.join(&archive.manifest.chart.simfile),
         scope, |frame, frames| {
             progress.frame.store(frame, Ordering::Relaxed);

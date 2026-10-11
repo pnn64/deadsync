@@ -8,7 +8,159 @@ use deadsync_gameplay::{
 };
 use deadsync_theme_simply_love::screens::gameplay;
 use serde_json::{Value, json};
-use std::{path::Path, sync::Arc};
+use std::{
+    path::Path,
+    sync::atomic::{AtomicUsize, Ordering},
+    sync::{Arc, Mutex, OnceLock},
+};
+
+struct CallLog {
+    events: Mutex<Vec<Value>>,
+    dropped: AtomicUsize,
+}
+static CALL_LOG: CallLog = CallLog {
+    events: Mutex::new(Vec::new()),
+    dropped: AtomicUsize::new(0),
+};
+
+impl log::Log for CallLog {
+    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+        metadata.target() == "deadsync_song_lua::trace"
+    }
+    fn log(&self, record: &log::Record<'_>) {
+        if !self.enabled(record.metadata()) {
+            return;
+        }
+        let mut events = self.events.lock().expect("diagnostic call log");
+        if events.len() == 250_000 {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        events.push(
+            serde_json::from_str(&record.args().to_string())
+                .unwrap_or_else(|error| json!({"kind":"trace-error","error":error.to_string()})),
+        );
+    }
+    fn flush(&self) {}
+}
+
+fn start_call_log() -> Result<(), String> {
+    static INSTALLED: OnceLock<Result<(), String>> = OnceLock::new();
+    INSTALLED
+        .get_or_init(|| log::set_logger(&CALL_LOG).map_err(|error| error.to_string()))
+        .clone()?;
+    CALL_LOG
+        .events
+        .lock()
+        .map_err(|error| error.to_string())?
+        .clear();
+    CALL_LOG.dropped.store(0, Ordering::Relaxed);
+    log::set_max_level(log::LevelFilter::Trace);
+    Ok(())
+}
+
+fn compare_calls(
+    trace: &Value,
+    simfile: &Path,
+    scene: u64,
+    seconds: f64,
+    scope: Scope,
+    mismatches: &mut Vec<Value>,
+) -> Result<Value, String> {
+    let song_dir = format!(
+        "{}/",
+        simfile
+            .parent()
+            .ok_or("missing song directory")?
+            .to_string_lossy()
+            .replace('\\', "/")
+    );
+    let actual: Vec<Value> = CALL_LOG
+        .events
+        .lock()
+        .map_err(|error| error.to_string())?
+        .iter()
+        .filter_map(|event| {
+            let source = event["source"].as_str()?.replace('\\', "/");
+            let source = source
+                .split_once(&song_dir)
+                .map(|(_, path)| format!("song:/{path}"))
+                .or_else(|| source.starts_with("song:/").then(|| source.clone()))?;
+            let mut event = event.clone();
+            event["source"] = json!(source);
+            Some(event)
+        })
+        .collect();
+    let dropped = CALL_LOG.dropped.load(Ordering::Relaxed);
+    if dropped != 0 {
+        mismatches.push(json!({"field":"dropped_call_trace","deadsync":dropped}));
+    }
+    if trace["capabilities"]["native_event_scenes"] != true {
+        return Ok(
+            json!({"compared":false,"reason":"native command/query events have no scene epochs","actual":actual}),
+        );
+    }
+    let native: Vec<Value> = trace["events"]
+        .as_array()
+        .ok_or("missing native events")?
+        .iter()
+        .filter(|event| {
+            event["source"]
+                .as_str()
+                .is_some_and(|source| source.starts_with("song:/"))
+        })
+        .filter(|event| {
+            matches!(
+                event["operation"].as_str(),
+                Some(
+                    "command.begin"
+                        | "command.end"
+                        | "PlayerStageStats.GetCurrentPossibleDancePoints"
+                        | "PlayerStageStats.GetPossibleDancePoints"
+                )
+            )
+        })
+        .filter(|event| {
+            scope == Scope::Full
+                || event["scene"].as_u64().is_some_and(|at| {
+                    at < scene
+                        || at == scene
+                            && event["seconds"]
+                                .as_f64()
+                                .is_some_and(|time| time <= seconds + 1e-6)
+                })
+        })
+        .map(|event| {
+            let mut value = event.clone();
+            if event["kind"] == "query" {
+                value["results"] = event["detail"]["results"].clone();
+            }
+            value
+        })
+        .collect();
+    if actual.len() != native.len() {
+        mismatches.push(
+            json!({"field":"command_query_count","native":native.len(),"deadsync":actual.len()}),
+        );
+    }
+    for (native, actual) in native.iter().zip(&actual) {
+        let keys: &[&str] = if native["kind"] == "query" {
+            &["scene", "kind", "operation", "source", "line", "results"]
+        } else {
+            &["scene", "kind", "operation", "source", "line", "command"]
+        };
+        if keys.iter().any(|key| native[*key] != actual[*key])
+            || (number(native, "seconds")? - number(actual, "seconds")?).abs() > 1e-6
+            || (number(native, "beat")? - number(actual, "beat")?).abs() > 1e-6
+        {
+            mismatches
+                .push(json!({"field":"command_query_event","native":native,"deadsync":actual}));
+        }
+    }
+    Ok(
+        json!({"compared":true,"native_count":native.len(),"actual_count":actual.len(),"actual":actual,"native":native}),
+    )
+}
 
 fn read_json(path: &Path) -> Result<Value, String> {
     serde_json::from_slice(&std::fs::read(path).map_err(|error| error.to_string())?)
@@ -137,6 +289,7 @@ fn native_fail_type(trace: &Value) -> Result<deadsync_gameplay::GameplayFailType
 pub(crate) enum Scope {
     Full,
     Entry,
+    FirstQuery,
 }
 
 pub(crate) fn replay(
@@ -177,7 +330,36 @@ pub(crate) fn replay(
         .ok_or("missing final scene")?;
     // Stop just after the first reload, or at the first nonnegative input
     // clock for a song that does not reload. Every preceding frame is retained.
-    let frame_count = if scope == Scope::Entry {
+    let frame_count = if scope == Scope::FirstQuery {
+        let query = trace["events"]
+            .as_array()
+            .ok_or("missing native events")?
+            .iter()
+            .find(|event| {
+                matches!(
+                    event["operation"].as_str(),
+                    Some(
+                        "PlayerStageStats.GetCurrentPossibleDancePoints"
+                            | "PlayerStageStats.GetPossibleDancePoints"
+                    )
+                )
+            })
+            .ok_or("native capture has no authored point queries")?;
+        let query_scene = query["scene"]
+            .as_u64()
+            .ok_or("native point query has no scene epoch")?;
+        let at = number(query, "seconds")?;
+        frames
+            .iter()
+            .position(|frame| {
+                frame["scene"].as_u64() == Some(query_scene)
+                    && frame["seconds"]
+                        .as_f64()
+                        .is_some_and(|seconds| seconds >= at - 1e-6)
+            })
+            .ok_or("native point query has no matching gameplay frame")?
+            + 1
+    } else if scope == Scope::Entry {
         frames
             .iter()
             .position(|frame| frame["scene"].as_u64().is_some_and(|scene| scene > 1))
@@ -209,6 +391,7 @@ pub(crate) fn replay(
         machine_pack_ini_offsets: true,
         ..Default::default()
     };
+    start_call_log()?;
     paths::init();
     let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(
         simfile,
@@ -518,14 +701,23 @@ pub(crate) fn replay(
             );
         }
     }
-    if scope == Scope::Entry {
+    if scope != Scope::Full {
+        let calls = compare_calls(
+            &trace,
+            simfile,
+            scene_count,
+            number(&frames[used_frames - 1], "seconds")?,
+            scope,
+            &mut mismatches,
+        )?;
         return Ok(
             json!({"diagnostic_only":true,"whole_song_parity_proven":false,"archive_accepted":false,
-            "scope":"entry","native_trace":trace_path,"source_simfile":simfile,
+            "scope":if scope == Scope::Entry { "entry" } else { "first-point-query" },"native_trace":trace_path,"source_simfile":simfile,
             "native_frames":frames.len(),"replayed_frames":used_frames,"replayed_scenes":scene_count,
             "checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,
             "mismatches":mismatches,"errors":errors,"lua_requests":requests,
             "stage_observations":observations,
+            "command_queries":calls,
             "pending_coverage":["complete song replay", "overlay-init observations",
                 "command/query timing", "complete stage statistics", "actor/render/resource state"]}),
         );
@@ -599,6 +791,14 @@ pub(crate) fn replay(
             mismatches.push(json!({"field":"source_broadcast","native":native,"deadsync":actual}));
         }
     }
+    let calls = compare_calls(
+        &trace,
+        simfile,
+        scene_count,
+        number(&frames[used_frames - 1], "seconds")?,
+        scope,
+        &mut mismatches,
+    )?;
     let report = json!({"diagnostic_only":true,"whole_song_parity_proven":false,"archive_accepted":false,
         "source_simfile":simfile,"native_trace":trace_path,"native_frames":frames.len(),"replayed_frames":used_frames,
         "startup_scenes":startup_scenes,"replayed_scenes":scene_count,"selected_description":state.source.charts[0].description,
@@ -609,6 +809,7 @@ pub(crate) fn replay(
         "frames_after_domain_navigation":frames_after_navigation,
         "stage_observations":observations,
         "broadcast_params_compared":true,
+        "command_queries":calls,
         "pending_coverage":["overlay-init lifecycle observations", "native command/query delivery timing", "complex or truncated broadcast values",
             "full theme stage commitment and history", "score/alive-time getters", "all actor/render/resource state",
             "additional game/style/input/course contexts"]});

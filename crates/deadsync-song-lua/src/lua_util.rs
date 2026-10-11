@@ -3531,6 +3531,7 @@ fn run_guarded_actor_command(
     let prior_update = lua
         .app_data_mut::<SongLuaOverlayUpdateCapture>()
         .map(|mut capture| std::mem::replace(&mut capture.update_command, name == "UpdateCommand"));
+    crate::live::trace_command(lua, command, name, "begin");
     let result = call_actor_function(lua, actor, command, params).map_err(|err| {
         mlua::Error::external(format!(
             "{} failed for {}: {err}",
@@ -3538,6 +3539,7 @@ fn run_guarded_actor_command(
             actor_debug_label(actor)
         ))
     });
+    crate::live::trace_command(lua, command, name, "end");
     #[cfg(feature = "test-support")]
     if let Some(prior) = prior_update {
         lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
@@ -10651,7 +10653,8 @@ pub(crate) fn begin_live_runtime(lua: &Lua) -> mlua::Result<()> {
     invalidate_compile_update_plan(lua);
     lua.set_app_data(LiveBroadcasts(Vec::new()));
     lua.set_app_data(LiveSourceBroadcasts(Vec::new()));
-    lua.set_app_data(crate::live::LiveMode);
+    let scene = lua.app_data_ref::<crate::live::LiveMode>().map_or(1, |mode| mode.0 + 1);
+    lua.set_app_data(crate::live::LiveMode(scene));
     lua.set_app_data(ActorTweenReplays(FxHashMap::default()));
     set_compile_frames(lua, [(0.0, 0.0)].into_iter())?;
     if let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>() {

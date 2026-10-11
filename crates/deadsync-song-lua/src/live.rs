@@ -8,7 +8,7 @@ pub(crate) const TAP_SCORES: [&str; 11] = [
     "W4", "W3", "W2", "W1", "CheckpointHit",
 ];
 
-pub(crate) struct LiveMode;
+pub(crate) struct LiveMode(pub u64);
 
 struct LiveForeground {
     actor: Table,
@@ -20,6 +20,37 @@ struct LiveForeground {
 
 pub(crate) fn active(lua: &Lua) -> bool {
     lua.app_data_ref::<LiveMode>().is_some()
+}
+
+// Trace logging observes the live VM without replacing callbacks or query results.
+pub(crate) fn trace_command(lua: &Lua, command: &Function, name: &str, phase: &str) {
+    if !active(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return; }
+    let info = command.info();
+    let Some(source) = info.source else { return; };
+    if let Ok((beat, seconds)) = crate::compile_song_runtime_values(lua) {
+        let scene = lua.app_data_ref::<LiveMode>().map_or(0, |mode| mode.0);
+        log::trace!(target: "deadsync_song_lua::trace", "{}", serde_json::json!({
+            "scene":scene,"kind":"command","operation":format!("command.{phase}"),
+            "command":name,"source":source,"line":info.line_defined,"beat":beat,"seconds":seconds
+        }));
+    }
+}
+
+pub(crate) fn trace_stage_query(lua: &Lua, operation: &str, points: i64) {
+    if !active(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return; }
+    let source = lua.inspect_stack(1, |debug| {
+        let info = debug.source();
+        (info.source.map(|source| source.into_owned()), info.line_defined)
+    });
+    if let (Some((Some(source), line)), Ok((beat, seconds))) =
+        (source, crate::compile_song_runtime_values(lua))
+    {
+        let scene = lua.app_data_ref::<LiveMode>().map_or(0, |mode| mode.0);
+        log::trace!(target: "deadsync_song_lua::trace", "{}", serde_json::json!({
+            "scene":scene,"kind":"query","operation":operation,"source":source,"line":line,
+            "beat":beat,"seconds":seconds,"results":[points]
+        }));
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

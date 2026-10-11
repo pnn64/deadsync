@@ -8,7 +8,10 @@ use std::{path::Path, process::ExitCode};
 
 fn main() -> ExitCode {
     let mut args: Vec<_> = std::env::args_os().skip(1).collect();
-    let scope = if args.last().is_some_and(|arg| arg == "--entry") {
+    let scope = if args.last().is_some_and(|arg| arg == "--first-query") {
+        args.pop();
+        native_gameplay::Scope::FirstQuery
+    } else if args.last().is_some_and(|arg| arg == "--entry") {
         args.pop();
         native_gameplay::Scope::Entry
     } else {
@@ -16,7 +19,7 @@ fn main() -> ExitCode {
     };
     if args.is_empty() {
         eprintln!(
-            "cargo test --test live_song_lua -- <trace.json> <simfile> <report.json> [--entry]"
+            "cargo test --test live_song_lua -- <trace.json> <simfile> <report.json> [--entry|--first-query]"
         );
         return ExitCode::SUCCESS;
     }

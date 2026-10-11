@@ -1530,10 +1530,12 @@ fn create_player_stage_stats_table(
         "GetPossibleDancePoints",
         lua.create_function({
             let stats = stats.clone();
-            move |_, _args: MultiValue| {
-                Ok(stats
+            move |lua, _args: MultiValue| {
+                let points = stats
                     .get::<Option<i64>>("__songlua_possible_dance_points")?
-                    .unwrap_or(0))
+                    .unwrap_or(0);
+                crate::live::trace_stage_query(lua, "PlayerStageStats.GetPossibleDancePoints", points);
+                Ok(points)
             }
         })?,
     )?;
@@ -1541,10 +1543,12 @@ fn create_player_stage_stats_table(
         "GetCurrentPossibleDancePoints",
         lua.create_function({
             let stats = stats.clone();
-            move |_, _args: MultiValue| {
-                Ok(stats
+            move |lua, _args: MultiValue| {
+                let points = stats
                     .get::<Option<i64>>("__songlua_current_possible_dance_points")?
-                    .unwrap_or(0))
+                    .unwrap_or(0);
+                crate::live::trace_stage_query(lua, "PlayerStageStats.GetCurrentPossibleDancePoints", points);
+                Ok(points)
             }
         })?,
     )?;
