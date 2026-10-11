@@ -10572,6 +10572,9 @@ struct LiveBroadcasts(Vec<(f32, String, bool)>);
 struct LiveSourceBroadcasts(Vec<(f32, String, bool)>);
 
 pub(crate) fn begin_live_runtime(lua: &Lua) -> mlua::Result<()> {
+    // The process VM survives ScreenGameplay reentry; the actor execution
+    // plan belongs to the outgoing screen and must release its old tables.
+    invalidate_compile_update_plan(lua);
     lua.set_app_data(LiveBroadcasts(Vec::new()));
     lua.set_app_data(LiveSourceBroadcasts(Vec::new()));
     lua.set_app_data(crate::live::LiveMode);

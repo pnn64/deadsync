@@ -667,6 +667,59 @@ end }
     }
 
     #[test]
+    fn live_reload_updates() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-reload-updates-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("reload directory");
+        let entry = dir.join("default.lua");
+        fs::write(&entry, r#"
+            RELOAD_PASS = (RELOAD_PASS or 0) + 1
+            local pass = RELOAD_PASS
+            UPDATES = UPDATES or {0, 0}
+            return Def.ActorFrame {
+                InitCommand=function(self)
+                    -- Installing a new callback invalidates the update plan.
+                    -- Leave scene 2 without one so the test cannot hide a
+                    -- stale plan by replacing it through SetUpdateFunction.
+                    if pass == 1 then
+                        self:SetUpdateFunction(function() UPDATES[pass] = UPDATES[pass] + 1 end)
+                    end
+                end,
+                OnCommand=function(self)
+                    self:sleep(2)
+                    if pass == 1 then SCREENMAN:SetNewScreen('ScreenGameplay') end
+                end,
+                Def.ActorFrame {
+                    OnCommand=function(self) self:sleep(0.05):queuecommand('Tick') end,
+                    TickCommand=function(self)
+                        TICK_PASS = pass
+                        SCREENMAN:GetTopScreen():StartTransitioningScreen('SM_DoNextScreen')
+                    end,
+                },
+            }
+        "#).expect("reload source");
+        let mut context = SongLuaCompileContext::new(&dir, "reload updates");
+        context.live = true;
+        context.layer_start_beats = vec![0.0];
+        let mut compiled = crate::compile_song_lua_with_default_host(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])),
+            |_| None::<crate::SongLuaOverlayModelLayer<()>>, |_, _| None).expect("first screen");
+        let mut scene = compiled.live_scene.take().expect("first VM scene");
+        let output = scene.advance(SongLuaLiveFrame::default()).expect("first foreground On");
+        assert_eq!(output.request, Some(SongLuaLiveRequest::NewScreen("ScreenGameplay".into())));
+        let mut layers = crate::reload_song_lua_with_default_host(scene,
+            |_, _, _| Ok(Arc::<[()]>::from([])),
+            |_| None::<crate::SongLuaOverlayModelLayer<()>>, |_, _| None).expect("replacement screen");
+        let mut scene = layers[0].live_scene.take().expect("replacement scene");
+        let output = scene.advance(SongLuaLiveFrame { music_seconds: 0.1, beat: 0.1,
+            screen_seconds: 0.1, delta_seconds: 0.1, ..Default::default() }).expect("replacement update");
+        assert_eq!(output.request, Some(SongLuaLiveRequest::Transition("SM_DoNextScreen".into())));
+        let updates = scene.lua.globals().get::<Table>("UPDATES").expect("scene updates");
+        assert_eq!(updates.get::<u32>(1).expect("retired updates"), 1);
+        assert_eq!(updates.get::<u32>(2).expect("replacement has no callback"), 0);
+        assert_eq!(scene.lua.globals().get::<u32>("TICK_PASS").expect("new child queue"), 2);
+    }
+
+    #[test]
     fn live_source_broadcasts() {
         let mut compiled = compile("broadcast-origin", r#"
             return Def.ActorFrame {
