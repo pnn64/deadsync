@@ -2217,3 +2217,28 @@ The Technique arrow repair and its previous Vulkan proof remain intact.
 See `native-revalidation-native-step-selection.json` for source identities,
 controls, the private capture receipt and remaining requirements. Position 146
 remains the next unresolved chart.
+
+## DeadSync chart selection validation
+
+Harness 0.1.74 executes native duplicate-step normalization before Lua and
+selects a game before routine statistics query the current style. All 240
+harness tests pass; five remain ignored. DeadSync preserves authored chart
+MUSIC through cache version 62 and matches native selection, nil/errors/self
+returns, compatible-player music/shared-side synchronization, repeated-pointer
+messages and reentrant delivery. Both controls match all 16 state/message
+snapshots and 22 explicit selection calls. The routine control supplies Steps
+metadata through the Lua compile context; RSSP routine simfile loading remains
+unsupported. These controls do not certify complete gameplay or style mutation.
+
+DeadSync's Lua library has 514 passes and its two previously recorded failures.
+All 195 playback tests pass, with three ignored; the simfile library has 238
+passes and twelve ignored. All affected project targets compile. Broader
+workspace test compilation still fails in unchanged noteskin allocator and
+WASAPI COM mock tests. Technique's six catalog checks and hidden-window Vulkan
+arrow visibility/rotation check pass; the installed game binary is unchanged.
+
+Original Choices remains partial at the required delayed ScreenGameplay reload.
+The archive command rejects it, no whole-archive comparison ran, and the
+483-entry index is unchanged. Position 146 remains next, followed by 147. See
+`native-revalidation-deadsync-step-selection.json` for source identities, exact
+receipts and the retained gameplay, parser, style and corpus requirements.
