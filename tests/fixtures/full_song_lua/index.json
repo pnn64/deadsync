@@ -1749,12 +1749,10 @@
     {
       "title": "BroGamer",
       "source_simfile": "BroGamer/BroGamer.ssc",
-      "harness_version": "0.1.0",
-      "archive": "ca3e5874567f651d8e6393262de8b973d10442f582414a976d613c9578adf198.tar.zst",
-      "sha256": "ca3e5874567f651d8e6393262de8b973d10442f582414a976d613c9578adf198",
-      "compressed_bytes": 253628,
-      "uncompressed_sha256": "c7822a0df79b54c98463c5b8df3b3faa3fd3dcfdfa79e6ca5a49f88fb338daed",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "dd354f14a68ae506d29f7ebd651c66444f451aa871503feeebae5c6375f21722.tar.zst",
+      "sha256": "dd354f14a68ae506d29f7ebd651c66444f451aa871503feeebae5c6375f21722",
+      "compressed_bytes": 426856,
       "aliases": [
         "440d1cf060906520b3158d53f4e612d705bb788498d6e40d9914a25030a84fca.tar.zst"
       ]
