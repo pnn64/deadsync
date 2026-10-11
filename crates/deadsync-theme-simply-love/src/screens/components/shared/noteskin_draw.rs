@@ -88,10 +88,10 @@ pub(crate) fn preview_note_slots(
 /// geometry built -- before it draws a field, and nothing a field never draws
 /// (hold bodies, other judgments' explosions). A slot two pieces share is
 /// visited once for each; callers dedupe.
-pub(crate) fn for_each_field_slot(
-    skin: &Noteskin,
+pub(crate) fn for_each_field_slot<'a>(
+    skin: &'a Noteskin,
     cols: usize,
-    mut visit: impl FnMut(&SpriteSlot),
+    mut visit: impl FnMut(&'a SpriteSlot),
 ) {
     for col in 0..cols {
         let col = skin_col(skin, col);

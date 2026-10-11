@@ -1217,7 +1217,7 @@ fn push_catalog(
             z(Z + 5)
         ));
         out.push(act!(text:
-            font(bold_font): settext(pack.name.clone()):
+            font(bold_font): settext(inline_or_owned_text(pack.name.as_str())):
             align(0.0, 0.5): xy(PANE_W.mul_add(-0.5, list_x) + 9.0, y - 5.0):
             zoom(0.25): maxwidth(258.0):
             diffuse(1.0, 1.0, 1.0, if active { 1.0 } else { 0.75 }):
@@ -1254,7 +1254,7 @@ fn push_pack_detail(
         diffuse(0.0, 0.0, 0.0, 0.76): z(Z + 4)
     ));
     out.push(act!(text:
-        font(bold_font): settext(pack.name.clone()):
+        font(bold_font): settext(inline_or_owned_text(pack.name.as_str())):
         align(0.0, 0.5): xy(x + 9.0, cy - 69.0): zoom(0.34): maxwidth(262.0):
         diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 6): horizalign(left)
     ));
@@ -1349,22 +1349,22 @@ fn push_meta_pair(
     bold_font: &'static str,
 ) {
     out.push(act!(text:
-        font(bold_font): settext(left_label.to_owned()):
+        font(bold_font): settext(inline_or_owned_text(left_label)):
         align(0.0, 0.5): xy(x, y): zoom(0.21): maxwidth(124.0):
         diffuse(accent[0], accent[1], accent[2], 0.92): z(Z + 6): horizalign(left)
     ));
     out.push(act!(text:
-        font("miso"): settext(left_value.to_owned()): align(0.0, 0.5):
+        font("miso"): settext(inline_or_owned_text(left_value)): align(0.0, 0.5):
         xy(x, y + 15.0): zoom(0.72): maxwidth(124.0):
         diffuse(0.94, 0.94, 0.96, 1.0): z(Z + 6): horizalign(left)
     ));
     out.push(act!(text:
-        font(bold_font): settext(right_label.to_owned()):
+        font(bold_font): settext(inline_or_owned_text(right_label)):
         align(0.0, 0.5): xy(x + 137.0, y): zoom(0.21): maxwidth(124.0):
         diffuse(accent[0], accent[1], accent[2], 0.92): z(Z + 6): horizalign(left)
     ));
     out.push(act!(text:
-        font("miso"): settext(right_value.to_owned()): align(0.0, 0.5):
+        font("miso"): settext(inline_or_owned_text(right_value)): align(0.0, 0.5):
         xy(x + 137.0, y + 15.0): zoom(0.72): maxwidth(124.0):
         diffuse(0.94, 0.94, 0.96, 1.0): z(Z + 6): horizalign(left)
     ));
@@ -1404,7 +1404,7 @@ fn push_status(
         diffuse(0.0, 0.0, 0.0, 0.82): z(Z + 5)
     ));
     out.push(act!(text:
-        font(bold_font): settext(message.to_owned()):
+        font(bold_font): settext(inline_or_owned_text(message)):
         align(0.5, 0.5): xy(cx, cy + 10.0): zoom(0.34):
         wrapwidthpixels(1050.0): maxwidth(510.0):
         diffuse(rgba[0], rgba[1], rgba[2], rgba[3]): z(Z + 6): horizalign(center)
@@ -2023,3 +2023,10 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "download_packs_buffers_original.rs"]
+mod buffers_original;
+#[cfg(test)]
+#[path = "download_packs_buffers_perf.rs"]
+mod buffers_perf;

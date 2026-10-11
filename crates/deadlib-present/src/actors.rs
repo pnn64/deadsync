@@ -556,6 +556,13 @@ pub enum Actor {
         children: Vec<Self>,
     },
 
+    /// Replays a retained draw in its recorded absolute coordinate space.
+    /// Parent layout and camera remapping do not alter the recorded matrices.
+    SharedCamera {
+        view_proj: Matrix4,
+        children: Arc<[Self]>,
+    },
+
     /// Begin a flat camera scope for subsequent sibling actors.
     CameraPush { view_proj: Matrix4 },
 
@@ -856,7 +863,8 @@ impl Actor {
             Self::Frame { children, .. } | Self::Camera { children, .. } => {
                 children.iter().all(Self::retained_static)
             }
-            Self::SharedFrame { children, .. } | Self::SharedTransform { children, .. } => {
+            Self::SharedFrame { children, .. } | Self::SharedTransform { children, .. }
+            | Self::SharedCamera { children, .. } => {
                 children.iter().all(Self::retained_static)
             }
             Self::Shadow { child, .. } => child.retained_static(),
@@ -921,6 +929,11 @@ impl Actor {
             Self::SharedTransform { tint, .. } => tint[3] *= alpha,
             Self::Camera { children, .. } => {
                 for child in children {
+                    child.mul_alpha(alpha);
+                }
+            }
+            Self::SharedCamera { children, .. } => {
+                for child in Arc::make_mut(children) {
                     child.mul_alpha(alpha);
                 }
             }
@@ -1003,6 +1016,12 @@ pub fn actor_tree_stats(actors: &[Actor]) -> ActorTreeStats {
             Actor::Camera { children, .. } => {
                 stats.cameras = stats.cameras.saturating_add(1);
                 for child in children {
+                    visit(stats, child);
+                }
+            }
+            Actor::SharedCamera { children, .. } => {
+                stats.cameras = stats.cameras.saturating_add(1);
+                for child in children.iter() {
                     visit(stats, child);
                 }
             }

@@ -48,6 +48,7 @@ pub fn compare(label: &str, mut original: impl FnMut(), mut current: impl FnMut(
     );
     println!(
         "{label}: peak added live bytes {} -> {}",
-        before.peak_added_bytes, after.peak_added_bytes
+        crate::traversal_peak_bytes(before),
+        crate::traversal_peak_bytes(after)
     );
 }

@@ -119,7 +119,7 @@ fn lobby_song_text_uses_one_output_allocation() {
         assert_eq!(after.allocs, 1);
         assert_eq!(after.reallocs, 0);
         assert!(before.allocs >= 4);
-        assert!(after.peak_added_bytes < before.peak_added_bytes);
+        assert!(crate::traversal_peak_bytes(after) < crate::traversal_peak_bytes(before));
     }
 }
 

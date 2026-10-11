@@ -89,12 +89,18 @@ pub fn set_pack_sync_pref(group_name: &str, sync_pref: SyncPref) -> bool {
 }
 
 fn set_sync_pref_in_packs(packs: &mut [SongPack], group_name: &str, sync_pref: SyncPref) -> bool {
+    if packs.is_empty() {
+        return false;
+    }
     let wanted = group_name.to_lowercase();
     let mut changed = false;
-    for pack in packs
-        .iter_mut()
-        .filter(|pack| pack.group_name.to_lowercase() == wanted)
-    {
+    for pack in packs.iter_mut().filter(|pack| {
+        if pack.group_name.is_ascii() {
+            pack.group_name.eq_ignore_ascii_case(&wanted)
+        } else {
+            pack.group_name.to_lowercase() == wanted
+        }
+    }) {
         changed |= pack.sync_pref != sync_pref;
         pack.sync_pref = sync_pref;
     }
@@ -347,6 +353,7 @@ mod tests {
             chart_name: String::new(),
             meter: 9,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: hash.to_string(),
             stats: ArrowStats::default(),
@@ -551,5 +558,9 @@ mod tests {
             ),
             ["new-hard".to_string(), "new-challenge".to_string()],
         );
+    }
+
+    mod ownership_perf {
+        include!("runtime_cache_ownership_perf.rs");
     }
 }

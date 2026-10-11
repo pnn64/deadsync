@@ -1,3 +1,4 @@
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local function set_column_y(column, value)
     local field = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
     local handler = field:GetColumnActors()[column]:GetPosHandler()

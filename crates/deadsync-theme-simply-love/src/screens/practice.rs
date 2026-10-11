@@ -2425,7 +2425,7 @@ fn build_practice_density_graph(gameplay: &gameplay_screen::State) -> PracticeDe
             1.0,
         );
         rotate_practice_density_mesh(&mut vertices, geom.thickness);
-        (!vertices.is_empty()).then(|| Arc::from(vertices.into_boxed_slice()))
+        (!vertices.is_empty()).then(|| Arc::from(vertices))
     });
     PracticeDensityGraph {
         mesh,

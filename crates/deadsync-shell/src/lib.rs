@@ -99,8 +99,17 @@ mod tests {
 mod gameplay_regression_tests;
 
 #[cfg(test)]
-#[path = "../../../tests/perf/traversal_alloc.rs"]
+#[path = "../../../tests/perf/owned_support.rs"]
+mod owned_perf;
+#[cfg(test)]
+#[path = "../../../tests/perf/owned_alloc.rs"]
 mod perf;
+
 #[cfg(test)]
 #[path = "../../../tests/perf/traversal_support.rs"]
 mod traversal_perf;
+
+#[cfg(test)]
+fn traversal_peak_bytes(churn: perf::Churn) -> usize {
+    churn.peak_added_bytes
+}

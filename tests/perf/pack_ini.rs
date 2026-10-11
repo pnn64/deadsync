@@ -144,7 +144,7 @@ fn pack_ini_line_count_does_not_multiply_allocations() {
     assert_eq!(after.allocs, 2);
     assert_eq!(after.reallocs, 0);
     assert!(before.allocs > 1000);
-    assert!(after.peak_added_bytes < before.peak_added_bytes);
+    assert!(crate::traversal_peak_bytes(after) < crate::traversal_peak_bytes(before));
 }
 
 #[test]
