@@ -1881,12 +1881,10 @@
     {
       "title": "Chipsqueak",
       "source_simfile": "Chipsqueak/chipsqueak.ssc",
-      "harness_version": "0.1.0",
-      "archive": "766b229adef82bfcb45c7503e244510d31f5ea6b4df5f84af335398f574fa037.tar.zst",
-      "sha256": "766b229adef82bfcb45c7503e244510d31f5ea6b4df5f84af335398f574fa037",
-      "compressed_bytes": 943482,
-      "uncompressed_sha256": "80f58e9dd6513d7ba7adbca6d7b6e6b1f40bd86e73000351e86eec37474bcd3d",
-      "compression_level": 22,
+      "harness_version": "0.1.68",
+      "archive": "aa9d64c40269e3f89848f6160e66659a372b2fccdb7e7c9ec3321460914ca19a.tar.zst",
+      "sha256": "aa9d64c40269e3f89848f6160e66659a372b2fccdb7e7c9ec3321460914ca19a",
+      "compressed_bytes": 1217513,
       "aliases": [
         "d54fe69d84382ec2568825be3e0e05e3ae643bc9bd9c67b9a4e6fcaeb473b882.tar.zst"
       ]
