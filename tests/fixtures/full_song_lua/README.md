@@ -2195,3 +2195,25 @@ arrow repair retains its passing catalog and Vulkan rendering checks.
 See `native-revalidation-native-scorekeeper-load.json` for source hashes,
 committed executable identity, controls and the remaining requirements.
 Position 146 is still the next unresolved chart.
+
+
+## Native chart selection validation
+
+Harness 0.1.72, commit `64f7cfaca`, executes native Steps, GameState and
+compatible-style selection. Different authored chart music synchronizes the
+other player; equal music retains independent difficulties. A chart selection
+changes GameState pointers and does not reload Player note data or score totals.
+Canonical captures use the native versus style for two single players. The
+native Lua userdata table now belongs to each VM registry, preventing the
+cross-registry reference that crashed Actor teardown.
+
+All 238 harness tests pass; five remain ignored. Original Choices now makes
+one explicit selection because the engine synchronizes the other player.
+Its required delayed ScreenGameplay reload remains unavailable, so the capture
+is partial, the archive command excludes it, and the 483-entry index is unchanged.
+DeadSync's compatible-player selection and live stage progress still need fixes.
+The Technique arrow repair and its previous Vulkan proof remain intact.
+
+See `native-revalidation-native-step-selection.json` for source identities,
+controls, the private capture receipt and remaining requirements. Position 146
+remains the next unresolved chart.
