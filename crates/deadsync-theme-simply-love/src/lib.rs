@@ -203,3 +203,7 @@ mod resource_perf_support;
 #[cfg(test)]
 #[path = "../../../tests/perf/ui_borrowed_state_support.rs"]
 mod ui_borrowed_state_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_data_support.rs"]
+mod course_data_support;
