@@ -1837,12 +1837,10 @@
     {
       "title": "Cat Hacks",
       "source_simfile": "Cat Hack/Cat Hacks.sm",
-      "harness_version": "0.1.0",
-      "archive": "62caf7f45ecc8e88b16f0e8aff2859000c93b33c8c0ac32e0087f9874027509f.tar.zst",
-      "sha256": "62caf7f45ecc8e88b16f0e8aff2859000c93b33c8c0ac32e0087f9874027509f",
-      "compressed_bytes": 50420,
-      "uncompressed_sha256": "a36a13db715d55774e77e0b4df62ecf0dbad018e77c27ae63cb0c49c490cd36d",
-      "compression_level": 22,
+      "harness_version": "0.1.67",
+      "archive": "a6bdb8044e7cb16503705055d209c6dcc0f61a16a0b1db1fdd6ed1913d83a42c.tar.zst",
+      "sha256": "a6bdb8044e7cb16503705055d209c6dcc0f61a16a0b1db1fdd6ed1913d83a42c",
+      "compressed_bytes": 64367,
       "aliases": [
         "24829772a25eed0147767c616d3a419e355e119406bcf7998c824a5724406b52.tar.zst"
       ]
