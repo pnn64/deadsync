@@ -1140,7 +1140,7 @@ end}
 }
 
 #[test]
-fn move_z_keeps_lane_method_string_and_reset_values() {
+fn move_z_lane_options() {
     crate::paths::init();
     let directory = tempfile::tempdir().expect("create MoveZ fixture directory");
     let entry = directory.path().join("default.lua");

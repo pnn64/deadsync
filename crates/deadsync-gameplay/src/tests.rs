@@ -4374,7 +4374,7 @@ mod tests {
     }
 
     #[test]
-    fn move_z_approach_matches_native() {
+    fn move_z_approach() {
         // Verified by the native PlayerOptions control in move-z-provenance.json.
         let target = parse_song_lua_runtime_mods("*2 150% movez1,*2 -50% movez4");
         let mut current = VisualOverrides::default();

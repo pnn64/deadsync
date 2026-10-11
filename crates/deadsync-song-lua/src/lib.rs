@@ -20829,7 +20829,7 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn compile_song_lua_binds_begin_proxies() {
+    fn compile_begin_proxies() {
         let song_dir = test_dir("begin-player-proxy");
         let entry = song_dir.join("default.lua");
         fs::write(&entry, include_str!("../../../tests/fixtures/song-lua/begin-player-proxy.lua"))
