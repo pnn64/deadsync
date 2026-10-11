@@ -199,3 +199,7 @@ mod preview_dataflows_support;
 #[path = "../../../tests/perf/resource_support.rs"]
 #[allow(dead_code)]
 mod resource_perf_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/ui_borrowed_state_support.rs"]
+mod ui_borrowed_state_support;
