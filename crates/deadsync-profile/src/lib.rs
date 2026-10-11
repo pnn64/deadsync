@@ -7742,16 +7742,20 @@ where
     options.background_filter = get("BackgroundFilter")
         .and_then(|s| BackgroundFilter::from_str(&s).ok())
         .unwrap_or(options.background_filter);
-    options.hold_judgment_graphic = get("HoldJudgmentGraphic")
-        .and_then(|s| HoldJudgmentGraphic::from_str(&s).ok())
-        .unwrap_or_else(|| options.hold_judgment_graphic.clone());
-    options.held_miss_graphic = get("HeldGraphic")
+    if let Some(value) =
+        get("HoldJudgmentGraphic").and_then(|s| HoldJudgmentGraphic::from_str(&s).ok())
+    {
+        options.hold_judgment_graphic = value;
+    }
+    if let Some(value) = get("HeldGraphic")
         .or_else(|| get("HeldMissGraphic"))
         .and_then(|s| HeldMissGraphic::from_str(&s).ok())
-        .unwrap_or_else(|| options.held_miss_graphic.clone());
-    options.judgment_graphic = get("JudgmentGraphic")
-        .and_then(|s| JudgmentGraphic::from_str(&s).ok())
-        .unwrap_or_else(|| options.judgment_graphic.clone());
+    {
+        options.held_miss_graphic = value;
+    }
+    if let Some(value) = get("JudgmentGraphic").and_then(|s| JudgmentGraphic::from_str(&s).ok()) {
+        options.judgment_graphic = value;
+    }
     options.combo_font = get("ComboFont")
         .and_then(|s| ComboFont::from_str(&s).ok())
         .unwrap_or(options.combo_font);
@@ -7765,9 +7769,9 @@ where
         .or_else(|| get("ComboContinuesBetweenSongs"))
         .and_then(|s| s.parse::<u8>().ok())
         .map_or(options.carry_combo_between_songs, |v| v != 0);
-    options.noteskin = get("NoteSkin")
-        .and_then(|s| NoteSkin::from_str(&s).ok())
-        .unwrap_or_else(|| options.noteskin.clone());
+    if let Some(value) = get("NoteSkin").and_then(|s| NoteSkin::from_str(&s).ok()) {
+        options.noteskin = value;
+    }
     options.mine_noteskin = get("MineSkin").and_then(|s| NoteSkin::from_str(&s).ok());
     options.receptor_noteskin = get("ReceptorSkin").and_then(|s| NoteSkin::from_str(&s).ok());
     options.tap_explosion_noteskin =
@@ -15520,3 +15524,19 @@ mod performance_profile_regressions {
         }
     }
 }
+
+#[cfg(test)]
+use perf_tests::allocations as perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/profile_dataflow_support.rs"]
+mod dataflow_perf;
+
+#[cfg(test)]
+fn dataflow_peak_bytes(churn: perf::Churn) -> usize {
+    churn.peak_bytes
+}
+
+#[cfg(test)]
+#[path = "../../../tests/perf/visual_options.rs"]
+mod visual_options_perf;

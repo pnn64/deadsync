@@ -240,3 +240,12 @@ mod traversal_perf;
 fn traversal_peak_bytes(churn: perf::Churn) -> usize {
     churn.peak_bytes
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/profile_dataflow_support.rs"]
+mod dataflow_perf;
+
+#[cfg(test)]
+fn dataflow_peak_bytes(churn: perf::Churn) -> usize {
+    churn.peak_bytes
+}

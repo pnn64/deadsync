@@ -8,7 +8,7 @@ use original::*;
 
 #[path = "../../../tests/support/perf.rs"]
 #[allow(dead_code)]
-mod allocations;
+pub(super) mod allocations;
 #[path = "../../../tests/support/paired_bench.rs"]
 mod paired;
 
