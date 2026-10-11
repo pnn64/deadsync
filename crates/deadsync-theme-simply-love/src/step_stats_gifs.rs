@@ -2,11 +2,9 @@ use deadlib_present::anim::EffectClock;
 use deadsync_profile::{PlayerSide, StepStatsExtra};
 use log::{info, warn};
 use mlua::{HookTriggers, Lua, LuaOptions, MultiValue, StdLib, Table, Value, VmState};
-use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use std::rc::Rc;
 use std::sync::LazyLock;
 use std::{fmt, ptr};
 
@@ -522,13 +520,14 @@ fn capture_script(
     let lua = Lua::new_with(libs, LuaOptions::default()).map_err(|error| error.to_string())?;
     lua.set_memory_limit(MAX_LUA_MEMORY)
         .map_err(|error| format!("failed to limit Lua memory: {error}"))?;
-    let instructions = Rc::new(Cell::new(0));
-    let hook_instructions = Rc::clone(&instructions);
+    lua.set_app_data(0_u32);
     lua.set_hook(
         HookTriggers::new().every_nth_instruction(LUA_HOOK_INTERVAL),
-        move |_, _| {
-            let next = hook_instructions.get() + LUA_HOOK_INTERVAL;
-            hook_instructions.set(next);
+        |lua, _| {
+            let mut instructions = lua.app_data_mut::<u32>()
+                .ok_or_else(|| mlua::Error::runtime("missing GIF instruction count"))?;
+            *instructions += LUA_HOOK_INTERVAL;
+            let next = *instructions;
             if next > MAX_LUA_INSTRUCTIONS {
                 return Err(mlua::Error::runtime(
                     "Step Stats GIF script exceeded its instruction limit",
@@ -614,16 +613,16 @@ fn collect_sprite_tables(value: Value, out: &mut Vec<Table>) -> mlua::Result<()>
 fn capture_sprite(lua: &Lua, sprite: Table) -> mlua::Result<CapturedGif> {
     let texture = sprite.get::<String>("Texture")?;
     let (frames, delays) = capture_frames(&sprite)?;
-    let state = Rc::new(RefCell::new(GifStyle::default()));
+    let state = lua.create_any_userdata(GifStyle::default())?;
     let actor = lua.create_table()?;
     let metatable = lua.create_table()?;
-    let method_state = Rc::clone(&state);
+    let method_state = state.clone();
     metatable.set(
         "__index",
         lua.create_function(move |lua, (_actor, method): (Table, String)| {
-            let method_state = Rc::clone(&method_state);
+            let method_state = method_state.clone();
             lua.create_function(move |_, (actor, args): (Table, MultiValue)| {
-                apply_actor_command(&mut method_state.borrow_mut(), &method, &args);
+                apply_actor_command(&mut *method_state.borrow_mut::<GifStyle>()?, &method, &args);
                 Ok(actor)
             })
         })?,
@@ -634,7 +633,7 @@ fn capture_sprite(lua: &Lua, sprite: Table) -> mlua::Result<CapturedGif> {
             command.call::<()>(actor.clone())?;
         }
     }
-    let style = *state.borrow();
+    let style = *state.borrow::<GifStyle>()?;
     Ok(CapturedGif {
         texture,
         frames,
@@ -1069,6 +1068,7 @@ return Def.Sprite {
 
     #[test]
     fn resolved_gif_keeps_precompiled_catalog_entry() {
+        crate::tests::init_paths();
         let resolved = resolve_extra(&StepStatsExtra::gif("AmongUs"));
         let ResolvedStepStatsExtra::Gif(gif) = resolved else {
             panic!("AmongUs should resolve to a GIF");
@@ -1098,6 +1098,7 @@ return Def.Sprite { Texture="safe 1x1.png" }
 
     #[test]
     fn catalog_contains_all_bundled_gifs() {
+        crate::tests::init_paths();
         let roots = catalog_roots();
         assert!(
             !roots.is_empty(),
@@ -1127,6 +1128,7 @@ return Def.Sprite { Texture="safe 1x1.png" }
 
     #[test]
     fn options_include_special_values_and_every_catalog_entry() {
+        crate::tests::init_paths();
         assert_eq!(option_settings().len(), catalog().len() + 3);
         assert_eq!(option_settings()[0], StepStatsExtra::None);
         assert_eq!(option_settings()[1], StepStatsExtra::ErrorStats);
@@ -1142,6 +1144,7 @@ return Def.Sprite { Texture="safe 1x1.png" }
 
     #[test]
     fn render_layout_applies_compiled_child_transform() {
+        crate::tests::init_paths();
         let brody = resolve_extra(&StepStatsExtra::gif("BrodyQuest"));
         let p1 = gif_render_layout(
             brody,

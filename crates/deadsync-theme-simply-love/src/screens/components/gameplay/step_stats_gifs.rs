@@ -104,6 +104,7 @@ mod tests {
 
     #[test]
     fn static_actor_uses_layout_without_owned_texture_key() {
+        crate::tests::init_paths();
         let extra = resolve_extra(&StepStatsExtra::gif("AmongUs"));
         let layout = gif_render_layout(
             extra,

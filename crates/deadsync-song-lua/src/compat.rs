@@ -1,7 +1,5 @@
 use mlua::{Function, Lua, MultiValue, Table, Value};
-use std::cell::RefCell;
 use std::path::Path;
-use std::rc::Rc;
 
 use crate::{
     SONG_LUA_NOTE_COLUMNS, SONG_LUA_PRODUCT_VERSION, SONG_LUA_THEME_NAME,
@@ -691,32 +689,34 @@ fn random_int_arg(lua: &Lua, args: &MultiValue, index: usize) -> mlua::Result<i3
     Ok(value as i32)
 }
 
-struct SongLuaRandomState(Rc<RefCell<SongLuaRandom>>);
+struct SongLuaRandomState(SongLuaRandom);
 
 pub(crate) struct RandomSnapshot {
-    state: Rc<RefCell<SongLuaRandom>>,
+    lua: Lua,
     previous: SongLuaRandom,
 }
 
 impl Drop for RandomSnapshot {
     fn drop(&mut self) {
-        *self.state.borrow_mut() = self.previous.clone();
+        if let Some(mut state) = self.lua.app_data_mut::<SongLuaRandomState>() {
+            state.0 = self.previous.clone();
+        }
     }
 }
 
 pub(crate) fn preserve_random(lua: &Lua) -> Option<RandomSnapshot> {
     let state = lua.app_data_ref::<SongLuaRandomState>()?;
     Some(RandomSnapshot {
-        previous: state.0.borrow().clone(),
-        state: Rc::clone(&state.0),
+        previous: state.0.clone(),
+        lua: lua.clone(),
     })
 }
 
 fn install_random_compat(lua: &Lua) -> mlua::Result<()> {
-    let state = Rc::new(RefCell::new(SongLuaRandom::seeded(1)));
-    lua.set_app_data(SongLuaRandomState(Rc::clone(&state)));
-    let seed_state = state.clone();
-    let seed = lua.create_function(move |lua, args: MultiValue| {
+    // VM-owned state moves with Lua and is accessed under mlua's VM lock.
+    // No separately shared mutable cell or application mutex is needed.
+    lua.set_app_data(SongLuaRandomState(SongLuaRandom::seeded(1)));
+    let seed = lua.create_function(|lua, args: MultiValue| {
         let seed = random_int_arg(lua, &args, 0)?;
         // Native MersenneTwister treats an explicit zero seed as wall time.
         let seed = if seed == 0 {
@@ -724,28 +724,33 @@ fn install_random_compat(lua: &Lua) -> mlua::Result<()> {
         } else {
             seed as u32
         };
-        *seed_state.borrow_mut() = SongLuaRandom::seeded(seed);
+        lua.app_data_mut::<SongLuaRandomState>()
+            .ok_or_else(|| mlua::Error::runtime("missing Lua random state"))?.0 = SongLuaRandom::seeded(seed);
         Ok(())
     })?;
-    let random = lua.create_function(move |lua, args: MultiValue| match args.len() {
-        0 => Ok(state.borrow_mut().real()),
-        1 | 2 => {
-            let (lower, upper) = if args.len() == 1 {
-                (1, random_int_arg(lua, &args, 0)?)
-            } else {
-                (
-                    random_int_arg(lua, &args, 0)?,
-                    random_int_arg(lua, &args, 1)?,
-                )
-            };
-            if lower > upper || (args.len() == 2 && lower == upper) {
-                return Err(mlua::Error::RuntimeError("interval is empty".into()));
+    let random = lua.create_function(|lua, args: MultiValue| {
+        let mut state = lua.app_data_mut::<SongLuaRandomState>()
+            .ok_or_else(|| mlua::Error::runtime("missing Lua random state"))?;
+        match args.len() {
+            0 => Ok(state.0.real()),
+            1 | 2 => {
+                let (lower, upper) = if args.len() == 1 {
+                    (1, random_int_arg(lua, &args, 0)?)
+                } else {
+                    (
+                        random_int_arg(lua, &args, 0)?,
+                        random_int_arg(lua, &args, 1)?,
+                    )
+                };
+                if lower > upper || (args.len() == 2 && lower == upper) {
+                    return Err(mlua::Error::RuntimeError("interval is empty".into()));
+                }
+                Ok(state.0.integer(lower, upper))
             }
-            Ok(state.borrow_mut().integer(lower, upper))
+            _ => Err(mlua::Error::RuntimeError(
+                "wrong number of arguments".into(),
+            )),
         }
-        _ => Err(mlua::Error::RuntimeError(
-            "wrong number of arguments".into(),
-        )),
     })?;
     let namespace = lua.create_table()?;
     namespace.set("Seed", seed.clone())?;

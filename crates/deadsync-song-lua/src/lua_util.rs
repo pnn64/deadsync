@@ -6,7 +6,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::c_int;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::{
@@ -11661,7 +11660,7 @@ enum SongLuaCompileUpdateJob {
 }
 
 struct SongLuaCompileUpdatePlan {
-    jobs: Rc<[SongLuaCompileUpdateJob]>,
+    jobs: Arc<[SongLuaCompileUpdateJob]>,
 }
 
 pub(crate) fn invalidate_compile_update_plan(lua: &Lua) {
@@ -11747,7 +11746,7 @@ fn collect_compile_update_jobs(
     Ok(())
 }
 
-fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Rc<[SongLuaCompileUpdateJob]>> {
+fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaCompileUpdateJob]>> {
     if lua.app_data_ref::<SongLuaCompileUpdatePlan>().is_none() {
         let mut jobs = Vec::new();
         let mut order = 0;

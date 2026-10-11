@@ -8948,6 +8948,62 @@ return Def.ActorFrame{
     }
 
     #[test]
+    #[cfg(target_os = "windows")]
+    fn lua_session_moves_from_worker_with_its_state() {
+        let dir = test_dir("live-lua-worker-transfer");
+        fs::write(dir.join("input.bin"), b"abcdef").expect("file cursor input");
+        let lua_path = dir.join("default.lua");
+        fs::write(&lua_path, r#"
+local steps = GAMESTATE:GetCurrentSteps(PLAYER_1)
+local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
+local source_file = RageFileUtil:CreateRageFile()
+assert(source_file:Open("input.bin", 1))
+assert(source_file:ReadBytes(2) == "ab")
+local counter = 0
+NEXT_FILE_BYTES = function() return source_file:ReadBytes(2) end
+return Def.ActorFrame {
+    OnCommand = function(self)
+        math.randomseed(1)
+        assert(math.random(-10, 10) == -2) -- Independent native random control.
+        self:SetUpdateFunction(function(actor, dt)
+            assert(GAMESTATE:GetCurrentSteps(PLAYER_1) == steps)
+            assert(STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1) == stats)
+            counter = counter + 1
+            actor:aux(counter)
+        end)
+    end,
+}
+"#).expect("live session source");
+        let (lua, root) = std::thread::spawn(move || {
+            let lua = Lua::new();
+            let context = SongLuaCompileContext::new(&dir, "Transferred Lua session");
+            crate::install_compile_host(&lua, &context, SongLuaNoteskinResolver::default(),
+                test_create_dummy_actor, test_create_named_child_actor, test_install_actor_methods)
+                .expect("worker-owned Lua host");
+            let root = crate::execute_script_file(&lua, &lua_path, &dir).expect("worker loads source");
+            crate::run_actor_init_commands(&lua, &root).expect("worker initializes scene");
+            crate::lua_util::run_actor_startup_commands(&lua, &root,
+                std::collections::HashMap::new(), &context).expect("worker starts scene");
+            // A compile probe must rewind the same VM's RNG before handoff.
+            let snapshot = crate::compat::preserve_random(&lua).expect("random snapshot");
+            lua.load("return math.random()").eval::<f64>().expect("random probe");
+            drop(snapshot);
+            (lua, root)
+        }).join().expect("worker returns its initialized VM and actors");
+        assert_eq!(lua.load("return math.random()").eval::<f64>().expect("continued random stream"),
+            0.7203244895202072); // Same next value as the native seeded control.
+        assert_eq!(lua.load("return NEXT_FILE_BYTES()").eval::<String>().expect("continued cursor"), "cd");
+        crate::set_compile_song_runtime_values(&lua, 1.0 / 60.0, 1.0 / 60.0)
+            .expect("advance live clock");
+        crate::run_actor_update_functions_with_delta(&lua, &root, 1.0 / 60.0)
+            .expect("same callback runs on the receiving thread");
+        let Value::Table(root) = root else { panic!("control returns an ActorFrame"); };
+        assert_eq!(root.get::<Function>("getaux").expect("aux getter")
+            .call::<i32>(root.clone()).expect("retained callback locals"), 2);
+        assert_eq!(lua.load("return NEXT_FILE_BYTES()").eval::<String>().expect("same handle"), "ef");
+    }
+
+    #[test]
     fn compile_song_lua_retargets_player_tween_destinations() {
         let song_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/song-lua")

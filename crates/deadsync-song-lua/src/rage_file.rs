@@ -1,7 +1,5 @@
 use mlua::{Function, Lua, MultiValue, Table, Value};
-use std::cell::RefCell;
 use std::path::{Component, Path, PathBuf};
-use std::rc::Rc;
 
 use crate::runtime::note_song_lua_side_effect;
 
@@ -155,13 +153,13 @@ pub fn create_rage_file_util_table(lua: &Lua, song_dir: &Path) -> mlua::Result<T
 
 fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     let file = lua.create_table()?;
-    let state = Rc::new(RefCell::new(RageFile::default()));
+    let state = lua.create_any_userdata(RageFile::default())?;
     let handle = state.clone();
     let song_dir = song_dir.to_path_buf();
     file.set(
         "Open",
-        lua.create_function(move |lua, (_file, raw, mode): (Table, mlua::String, i32)| {
-            let mut state = handle.borrow_mut();
+        lua.create_function(move |lua, (_file, raw, mode): (Table, mlua::LuaString, i32)| {
+            let mut state = handle.borrow_mut::<RageFile>()?;
             if state.destroyed {
                 return state.check(0).map(|()| false);
             }
@@ -210,8 +208,8 @@ fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
         let handle = state.clone();
         file.set(
             name,
-            lua.create_function(move |lua, (_file, text): (Table, mlua::String)| {
-                let mut state = handle.borrow_mut();
+            lua.create_function(move |lua, (_file, text): (Table, mlua::LuaString)| {
+                let mut state = handle.borrow_mut::<RageFile>()?;
                 state.check(2)?;
                 note_song_lua_side_effect(lua)?;
                 let bytes = text.as_bytes();
@@ -232,7 +230,7 @@ fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
         file.set(
             name,
             lua.create_function(move |lua, _file: Table| {
-                let mut state = handle.borrow_mut();
+                let mut state = handle.borrow_mut::<RageFile>()?;
                 let bytes = if name == "Read" {
                     state.read(-1)?
                 } else {
@@ -246,14 +244,14 @@ fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     file.set(
         "ReadBytes",
         lua.create_function(move |lua, (_file, count): (Table, i32)| {
-            lua.create_string(handle.borrow_mut().read(count)?)
+            lua.create_string(handle.borrow_mut::<RageFile>()?.read(count)?)
         })?,
     )?;
     let handle = state.clone();
     file.set(
         "Seek",
         lua.create_function(move |_, (_file, pos): (Table, i32)| {
-            let mut state = handle.borrow_mut();
+            let mut state = handle.borrow_mut::<RageFile>()?;
             state.check(1)?;
             if pos >= 0 && state.pos == pos as usize {
                 return Ok(pos);
@@ -270,7 +268,7 @@ fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     file.set(
         "Tell",
         lua.create_function(move |_, _file: Table| {
-            let state = handle.borrow();
+            let state = handle.borrow::<RageFile>()?;
             state.check(1)?;
             Ok(state.pos)
         })?,
@@ -279,7 +277,7 @@ fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     file.set(
         "AtEOF",
         lua.create_function(move |_, _file: Table| {
-            let state = handle.borrow();
+            let state = handle.borrow::<RageFile>()?;
             state.check(1)?;
             Ok(state.eof)
         })?,
@@ -288,7 +286,7 @@ fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     file.set(
         "GetError",
         lua.create_function(move |_, _file: Table| {
-            let state = handle.borrow();
+            let state = handle.borrow::<RageFile>()?;
             if state.destroyed {
                 state.check(0)?;
             }
@@ -299,7 +297,7 @@ fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     file.set(
         "Flush",
         lua.create_function(move |lua, file: Table| {
-            let mut state = handle.borrow_mut();
+            let mut state = handle.borrow_mut::<RageFile>()?;
             if state.destroyed {
                 state.check(0)?;
             }
@@ -318,7 +316,7 @@ fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
                 let Some(Value::Table(file)) = args.front() else {
                     return Err(mlua::Error::RuntimeError("RageFile self expected".into()));
                 };
-                let mut state = handle.borrow_mut();
+                let mut state = handle.borrow_mut::<RageFile>()?;
                 if state.destroyed {
                     state.check(0)?;
                 }

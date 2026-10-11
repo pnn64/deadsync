@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::path::Path;
-use std::rc::Rc;
 
 use chrono::{Datelike, Local, Timelike};
+use std::sync::Arc;
+
 use mlua::{Function, Lua, MultiValue, Table, Value};
 
 use crate::{
@@ -236,7 +237,7 @@ pub fn create_chunk_env_proxy(lua: &Lua, target: Table) -> mlua::Result<Table> {
         lua.create_string("mod_actions")?,
     ]
     .map(|key| {
-        let identity = key.to_pointer();
+        let identity = key.to_pointer() as usize;
         (key, identity)
     });
     let proxy_for_newindex = proxy.clone();
@@ -247,7 +248,7 @@ pub fn create_chunk_env_proxy(lua: &Lua, target: Table) -> mlua::Result<Table> {
             let target: Table = proxy_for_newindex.get("__songlua_env_target")?;
             target.set(&key, &value)?;
             if let Value::String(name) = &key {
-                let identity = name.to_pointer();
+                let identity = name.to_pointer() as usize;
                 if compile_keys.iter().any(|(_, key)| *key == identity) {
                     globals_for_newindex.set(&key, &value)?;
                 }
@@ -1252,7 +1253,7 @@ pub struct SongLuaGameStateGlobals {
     pub current_sort_order: Table,
     pub current_song: Table,
     pub(super) current_steps: Table,
-    step_objects: Rc<Vec<(Table, crate::SongLuaStep)>>,
+    step_objects: Arc<Vec<(Table, crate::SongLuaStep)>>,
 }
 
 pub fn install_core_globals(
@@ -1341,7 +1342,7 @@ pub fn install_game_state_globals(
             possible_grade_points: 0,
         }));
     }
-    let step_objects = Rc::new(step_objects);
+    let step_objects = Arc::new(step_objects);
     for (key, options) in SONG_LUA_PLAYER_OPTIONS_KEYS
         .iter()
         .zip(players.player_options.iter())
@@ -1640,7 +1641,7 @@ pub fn install_game_state_globals(
         "GetEasiestStepsDifficulty",
         lua.create_function({
             let current_steps = current_steps.clone();
-            let step_objects = Rc::clone(&step_objects);
+            let step_objects = Arc::clone(&step_objects);
             let enabled = context.players.clone();
             move |lua, _args: MultiValue| {
                 let mut easiest = None;
@@ -1666,7 +1667,7 @@ pub fn install_game_state_globals(
         lua.create_function({
             let current_steps = current_steps.clone();
             let current_style = current_style.clone();
-            let step_objects = Rc::clone(&step_objects);
+            let step_objects = Arc::clone(&step_objects);
             let enabled = context.players.clone();
             let owner = gamestate.clone();
             move |lua, args: MultiValue| {
