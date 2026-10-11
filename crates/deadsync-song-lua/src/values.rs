@@ -179,19 +179,20 @@ pub fn player_index_from_value(value: &Value) -> Option<usize> {
     match value {
         Value::Integer(value) => usize::try_from(*value).ok().filter(|v| *v < LUA_PLAYERS),
         Value::Number(value) => {
-            if *value >= 0.0 && *value < LUA_PLAYERS as f64 {
+            if *value >= 0.0 && *value < LUA_PLAYERS as f64 && value.fract() == 0.0 {
                 Some(*value as usize)
             } else {
                 None
             }
         }
-        Value::String(text) => match text.to_str().ok()?.as_ref() {
-            "P1" => Some(0),
-            "P2" => Some(1),
-            "PlayerNumber_P1" => Some(0),
-            "PlayerNumber_P2" => Some(1),
-            _ => None,
-        },
+        Value::String(text) => {
+            let text = text.to_str().ok()?;
+            if text.eq_ignore_ascii_case("P1") || text.eq_ignore_ascii_case("PlayerNumber_P1") {
+                Some(0)
+            } else if text.eq_ignore_ascii_case("P2") || text.eq_ignore_ascii_case("PlayerNumber_P2") {
+                Some(1)
+            } else { None }
+        }
         _ => None,
     }
 }

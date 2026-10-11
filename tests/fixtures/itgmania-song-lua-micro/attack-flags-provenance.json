@@ -1,0 +1,346 @@
+{
+  "problem": "NoAttack and RandAttack had no gameplay runtime values. FromString NoAttacks and RandomAttacks used separate Lua state keys from their methods, leaving Current reads incorrect.",
+  "change": "Preserve signed numeric targets, approach speeds, Current values, easing, clearall and profile bases in the attack runtime. Make the native FromString aliases address the same Lua option fields as NoAttack and RandAttack.",
+  "replaced_behavior": "Replace the separate alias state entries with the underlying float fields; unsupported runtime option handling is replaced by explicit retained attack flags.",
+  "source_parent": "a8c7c5f23170c5b86344cd166a858fb50275c3c6",
+  "reference_sources": {
+    "src/PlayerOptions.cpp": {
+      "sha256": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+      "lines": [
+        [
+          120,
+          123
+        ],
+        [
+          218,
+          219
+        ],
+        [
+          1396,
+          1399
+        ],
+        [
+          2401,
+          2402
+        ],
+        [
+          2731,
+          2735
+        ]
+      ]
+    },
+    "src/ScreenGameplay.cpp": {
+      "sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+      "lines": [
+        [
+          969,
+          977
+        ],
+        [
+          1874,
+          1888
+        ]
+      ]
+    },
+    "src/Player.cpp": {
+      "sha256": "fb9fbc6ead8073b26cc8ff9097068ed2c33b8d8c2bea58b43eb61e0384ae1935",
+      "lines": [
+        [
+          939,
+          958
+        ],
+        [
+          3636,
+          3644
+        ]
+      ]
+    },
+    "src/PlayerState.cpp": {
+      "sha256": "d54ad94985f1917627af53a55d96986777c9c0b3949768d7822074b09b796280",
+      "lines": [
+        [
+          65,
+          99
+        ],
+        [
+          118,
+          139
+        ],
+        [
+          167,
+          181
+        ]
+      ]
+    },
+    "Data/RandomAttacks.txt": {
+      "sha256": "84b35b4110208e0486823bcc9b59f74ee05ade1159f51b0eea1f3a8298fc46ab",
+      "lines": [
+        [
+          1,
+          64
+        ]
+      ]
+    }
+  },
+  "native_capture": {
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass202-native-attack-flags-v1\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "a148440796f0e101240d14167e9f36d0e91d59b4aa29b4e777c2217425a21756",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "capture_exit_code": 0,
+    "binary_sha256": "6b6b477653effd6a50106c3baab3382ef4d2fa65bc3f0cf945689fa81f030ceb",
+    "control_sha256": "8ab67018cc25fe403e5ac07ccfdcdf28c2e11303dd0c97d8d760655525baaf29",
+    "update_frames": 241,
+    "source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+    "source_pending_commit": false,
+    "capture_complete": true,
+    "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass202-native-attack-flags-v1\\archives\\307bd8e17459245e51beb9a6e587e93a4f0d8b3dc19bad860efbd96a09449eb4.tar.zst",
+    "archive_sha256": "307bd8e17459245e51beb9a6e587e93a4f0d8b3dc19bad860efbd96a09449eb4",
+    "archive_entry": {
+      "title": "Native attack-flags control",
+      "source_simfile": "control/control.ssc",
+      "harness_version": "0.1.61",
+      "archive": "307bd8e17459245e51beb9a6e587e93a4f0d8b3dc19bad860efbd96a09449eb4.tar.zst",
+      "sha256": "307bd8e17459245e51beb9a6e587e93a4f0d8b3dc19bad860efbd96a09449eb4",
+      "compressed_bytes": 15586
+    }
+  },
+  "before_control": {
+    "exit_code": 1,
+    "comparisons_passed": 5953,
+    "comparisons_failed": 36,
+    "elapsed_seconds": 1.222363299690187,
+    "archive_sha256": "307bd8e17459245e51beb9a6e587e93a4f0d8b3dc19bad860efbd96a09449eb4",
+    "binary_sha256": "3cb562ca862e7fc01feebc73363095bdf28d33b5c8e019466548f02dc5b019f9",
+    "source_commit": "a8c7c5f23170c5b86344cd166a858fb50275c3c6",
+    "source_pending_commit": false,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attack-flags-before-v1.log",
+    "log_sha256": "ca70bde6629154543ecfb5dd0a01c42f3387fc28b447374fc7390b3731eec73d",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "after_control": {
+    "exit_code": 0,
+    "comparisons_passed": 5989,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 3.5128769003786147,
+    "archive_sha256": "307bd8e17459245e51beb9a6e587e93a4f0d8b3dc19bad860efbd96a09449eb4",
+    "binary_sha256": "a1f11c3a1f22616e14c6fe9501acce672fc9d659bd9abea91cab6fc3b9774136",
+    "source_commit": "a8c7c5f23170c5b86344cd166a858fb50275c3c6",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attack-flags-v2-control.log",
+    "log_sha256": "99020b37e8cbe2caf8c339b4c0f670c7308548132e97b06c45e97f33362905ac",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "intermediate_control": {
+    "exit_code": 1,
+    "comparisons_passed": 5973,
+    "comparisons_failed": 16,
+    "elapsed_seconds": 2.1995516000315547,
+    "archive_sha256": "307bd8e17459245e51beb9a6e587e93a4f0d8b3dc19bad860efbd96a09449eb4",
+    "binary_sha256": "0231fdd0d70b8187f29ba287f0b3dc763ef0e89a4ecdd7ff8ad16d571897a53e",
+    "source_commit": "a8c7c5f23170c5b86344cd166a858fb50275c3c6",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attack-flags-v1-control.log",
+    "log_sha256": "60b4e433f7d113640c175f480bb5f0483d7484ed9970625fd3dd4b26a941d059",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "native_current_values_compared": 108,
+  "consecutive_native_update_frames": 241,
+  "current_probe_fields": [
+    "NoAttack",
+    "RandAttack",
+    "GetStepAttacks"
+  ],
+  "native_gameplay_approach_samples": 4,
+  "actual_gameplay_proof": "Native .0/.25/.5/.75 Current samples through run_pre_notes_phase with music time held fixed; separately verify approaching NoAttack from the disabled-attacks profile base.",
+  "lua_current_proof": "Native Current values drive actual Quad position and GetStepAttacks drives Quad depth in the healthy complete control. The full control passes 5989 comparisons after the alias fix.",
+  "regression_results": {
+    "gameplay-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "a8c7c5f23170c5b86344cd166a858fb50275c3c6",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "c74f5f9cd31c3b98beffe4ceb6cc9783278e8805e7c4e054b1f2667eb79655a6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass173\\attack-flags-v2-deadsync_gameplay.exe",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.1636242996901274,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attack-flags-v2-gameplay-tests.log",
+      "log_sha256": "b93422076a0f00e8c752df72cd1ecfa2478074e36f527fea29b2757e2d46df87",
+      "result_lines": [
+        "test result: ok. 797 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s"
+      ]
+    },
+    "notefield-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "a8c7c5f23170c5b86344cd166a858fb50275c3c6",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "c78a86209ad3b63ba5b6be8d03145ef2fe36e746947223cad3940693601a1319",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass173\\attack-flags-v2-deadsync_notefield.exe",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 127.97820860007778,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attack-flags-v2-notefield-tests.log",
+      "log_sha256": "fe74e79d530b5afcaeba0769d3dce6b56a84ffeabdc896d1650863ac9a1019e1",
+      "result_lines": [
+        "test result: ok. 470 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 126.24s"
+      ]
+    },
+    "runtime-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "a8c7c5f23170c5b86344cd166a858fb50275c3c6",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "392cdd34304500dbcb80a09454dd6389f0030eb8ca9bcafb2f2fa6283ccb4d36",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass173\\attack-flags-v2-song_lua_itgmania_semantic_parity.exe",
+        "runtime_modifiers",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 14.051196299958974,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attack-flags-v2-runtime-tests.log",
+      "log_sha256": "d103a1dd6c7b40035daf002a419c7089b47a9434c2f24551fa7b210580f65a9f",
+      "result_lines": [
+        "test result: FAILED. 55 passed; 3 failed; 2 ignored; 0 measured; 233 filtered out; finished in 12.13s"
+      ]
+    },
+    "song-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "a8c7c5f23170c5b86344cd166a858fb50275c3c6",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "7df55f03b6afac315f722ad19c37f66ee86676d00c1bf5ee55239c3d40f787ee",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass173\\attack-flags-v2-deadsync_song_lua.exe",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 25.024693199899048,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attack-flags-v2-song-tests.log",
+      "log_sha256": "b781fb19cf37323cf744cb2f714c72ca0891db0fd40cc3eb1f6dc3a5dbdfb3bc",
+      "result_lines": [
+        "test result: FAILED. 500 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.28s"
+      ]
+    },
+    "theme-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "a8c7c5f23170c5b86344cd166a858fb50275c3c6",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "5bbf0c65f9f79666c23513a54766c8ce5539b7e29148cd69bef8df7f9833416e",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass173\\attack-flags-v2-deadsync_theme_simply_love.exe",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 8.848450699821115,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attack-flags-v2-theme-tests.log",
+      "log_sha256": "eb4f22a71bc53bdb68f0d77d40911eeed1bdf3c6d29437243e65c7491fc34da9",
+      "result_lines": [
+        "test result: FAILED. 1269 passed; 1 failed; 6 ignored; 0 measured; 0 filtered out; finished in 5.52s"
+      ]
+    },
+    "technique-arrow": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "a8c7c5f23170c5b86344cd166a858fb50275c3c6",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "5bbf0c65f9f79666c23513a54766c8ce5539b7e29148cd69bef8df7f9833416e",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass173\\attack-flags-v2-deadsync_theme_simply_love.exe",
+        "screens::components::shared::technique_bg::tests::technique_arrow_renders_and_rotates",
+        "--exact",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 13.730446100234985,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attack-flags-v2-technique-arrow.log",
+      "log_sha256": "af85dba21ea74c3cab7f3dac57fcbce8b83a4d9b119c285300bab4d2b5c181c8",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1275 filtered out; finished in 10.42s"
+      ]
+    },
+    "control": {
+      "exit_code": 0,
+      "comparisons_passed": 5989,
+      "comparisons_failed": 0,
+      "elapsed_seconds": 3.5128769003786147,
+      "archive_sha256": "307bd8e17459245e51beb9a6e587e93a4f0d8b3dc19bad860efbd96a09449eb4",
+      "binary_sha256": "a1f11c3a1f22616e14c6fe9501acce672fc9d659bd9abea91cab6fc3b9774136",
+      "source_commit": "a8c7c5f23170c5b86344cd166a858fb50275c3c6",
+      "source_pending_commit": true,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\attack-flags-v2-control.log",
+      "log_sha256": "99020b37e8cbe2caf8c339b4c0f670c7308548132e97b06c45e97f33362905ac",
+      "control_complete": true,
+      "main_worktree_used": true,
+      "source_root": "C:\\GitHub\\deadsync"
+    }
+  },
+  "existing_failures_retained": {
+    "runtime-tests": [
+      "runtime_modifiers::hidden_actor_tweens_drive_modifiers_without_probe_state",
+      "runtime_modifiers::lane_stealth_survives_lua_writes_and_fresh_options",
+      "runtime_modifiers::motion_suboptions_survive_lua_writes_and_reset"
+    ],
+    "song-tests": [
+      "multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod",
+      "tests::compile_song_lua_accepts_skewy_probe_calls"
+    ],
+    "theme-tests": [
+      "screens::components::gameplay::notefield::tests::cyber_model_tap_scale_uses_model_height_not_logical_height"
+    ]
+  },
+  "original_position90_before": {
+    "exit_code": 1,
+    "comparisons_passed": 207858,
+    "comparisons_failed": 4,
+    "elapsed_seconds": 21.889308199752122,
+    "archive_sha256": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143",
+    "binary_sha256": "3cb562ca862e7fc01feebc73363095bdf28d33b5c8e019466548f02dc5b019f9",
+    "source_commit": "dbcdc267e3a43f2d9ae4b92f4a7088cf1bf9c43b",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\fresh-090-expand-family-v5.log",
+    "log_sha256": "6f8d579a47aaabfc11d858af1e2549317d973e7c60b626c532aae5b629f23b1f",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "original_position90_after": {
+    "exit_code": 0,
+    "comparisons_passed": 207862,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 22.32515599997714,
+    "archive_sha256": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143",
+    "binary_sha256": "a1f11c3a1f22616e14c6fe9501acce672fc9d659bd9abea91cab6fc3b9774136",
+    "source_commit": "a8c7c5f23170c5b86344cd166a858fb50275c3c6",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\fresh-090-attack-flags-v2.log",
+    "log_sha256": "7752373bb78a63c7101b816029a835c1a5330a701d6666b0fbcf427211053caa",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "original_position90_index_promoted": false,
+  "original_tolerances_retained": true,
+  "original_corpus_scope_unchanged": true,
+  "native_behavior_distinction": "ScreenGameplay selects chart attacks once at load only when both float fields equal zero. Player schedules random attacks for any nonzero Current RandAttack. GetStepAttacks checks positivity, so its result must not be substituted for the engine load or scheduler gate.",
+  "remaining_native_gameplay_scope": "This commit closes option storage, approaches and alias reads. DeadSync still precomputes random attack windows from music time and a 29-entry pool, while native Player uses an unscaled gameplay clock, strict thresholds, a full configurable pool and live launches. Correct that production consumer and verify its effects before claiming attack gameplay parity. Nonzero profile bases in the native VM, native runtime RNG/transform effects and nonfinite option values still require coverage.",
+  "full_native_gameplay_proven": false,
+  "harness_arroweffects_helper_is_full_native_gameplay": false,
+  "semantic_host_geometry_used": false,
+  "build_pin": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass173\\attack-flags-v2-pin.json",
+  "build_pin_sha256": "7433b746785be02152d3831b3afd767c2397234f31ce76c7e85e7103f1ef611a"
+}

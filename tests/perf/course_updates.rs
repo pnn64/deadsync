@@ -23,6 +23,7 @@ fn song(measures: usize) -> Arc<SongData> {
             meter: 6 + i as u32,
             step_artist: "Course test author".into(),
             music_path: Some("test/music.ogg".into()),
+            music_file: "music.ogg".into(),
             short_hash: format!("course-update-chart-{i}"),
             stats: ArrowStats {
                 total_steps: 100 + i as u32,

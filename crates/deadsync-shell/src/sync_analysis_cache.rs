@@ -69,7 +69,7 @@ struct CachedResult {
     applied: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub(crate) struct CachedPlot {
     #[serde(default)]
     pub(crate) freq_rows: usize,
@@ -198,6 +198,10 @@ impl TargetPreparation {
 
     pub(crate) const fn cached_analysis(&self) -> Option<&CachedAnalysis> {
         self.cached.as_ref()
+    }
+
+    pub(crate) fn take_cached_analysis(&mut self) -> Option<CachedAnalysis> {
+        self.cached.take()
     }
 
     pub(crate) fn into_prepared(self) -> Option<PreparedTarget> {
@@ -660,7 +664,8 @@ fn write_cache_file(path: &Path, mut payload: CacheFile) -> Result<(), String> {
             "Null-or-die cached visuals exceeded {} MiB; dropping the oldest plot.",
             MAX_CACHE_BYTES / (1024 * 1024)
         );
-        bytes = serde_json::to_vec(&payload).map_err(|error| error.to_string())?;
+        bytes.clear();
+        serde_json::to_writer(&mut bytes, &payload).map_err(|error| error.to_string())?;
     }
     if bytes.len() as u64 > MAX_CACHE_BYTES {
         return Err(format!(
@@ -977,3 +982,7 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/owned_cache.rs"]
+mod owned_pipeline_tests;

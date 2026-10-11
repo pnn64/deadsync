@@ -355,7 +355,7 @@ impl DensityGraphRenderState {
             if verts.is_empty() {
                 None
             } else {
-                Some(Arc::from(verts.into_boxed_slice()))
+                Some(Arc::from(verts))
             }
         });
 

@@ -444,6 +444,12 @@ pub fn song_lua_compile_context(
             .unwrap_or_default(),
         song.title.clone(),
     );
+    context.song_steps = song.charts.iter().map(deadsync_song_lua::SongLuaStep::from).collect();
+    context.player_step_indices = std::array::from_fn(|player| {
+        song.charts.iter().position(|chart| chart.chart_type == charts[player].chart_type
+            && chart.difficulty == charts[player].difficulty
+            && chart.description == charts[player].description)
+    });
     context.song_display_bpms = song.display_bpm_pair_or(
         charts.first().map(std::convert::AsRef::as_ref),
         [60.0, 60.0],
@@ -782,6 +788,10 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
 
     fn appearance_mask_bits(&self) -> u8 {
         self.appearance_effects_active_mask.bits()
+    }
+
+    fn accel_mask_bits(&self) -> u8 {
+        self.accel_effects_active_mask.bits()
     }
 
     fn visual_mask_bits(&self) -> u16 {

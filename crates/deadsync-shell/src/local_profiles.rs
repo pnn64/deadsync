@@ -36,67 +36,67 @@ pub fn picker_view() -> ProfilePickerView {
     let profiles = profile::scan_local_profiles()
         .into_iter()
         .map(|summary| {
-            let mut speed_mod = default_speed_mod.clone();
-            let mut scroll_option = default_scroll_option;
-            let mut mini_indicator = default_options.mini_indicator;
-            let mut noteskin = default_options.noteskin.clone();
-            let mut judgment = default_options.judgment_graphic.clone();
             let ini_path = profile::local_profile_dir_for_id(&summary.id).join("profile.ini");
-            let mut ini = deadsync_config::ini::SimpleIni::new();
-            if ini.load(&ini_path).is_ok() {
-                let get_player_option = |key: &str| ini.get(player_options_section, key);
-                if let Some(raw) = get_player_option("ScrollSpeed") {
+            let content = std::fs::read_to_string(&ini_path).ok();
+            let ini = content
+                .as_deref()
+                .map(deadsync_config::ini::borrowed_ini_sections)
+                .unwrap_or_default();
+            let section = ini.get(player_options_section);
+            let get_player_option = |key: &str| section.and_then(|values| values.get(key).copied());
+            let speed_mod = get_player_option("ScrollSpeed")
+                .map(|raw| {
                     let trimmed = raw.trim();
-                    speed_mod = ScrollSpeedSetting::from_str(trimmed)
+                    ScrollSpeedSetting::from_str(trimmed)
                         .map(|setting| format!("{setting}"))
-                        .unwrap_or_else(|_| trimmed.to_owned());
-                }
-                scroll_option = get_player_option("Scroll")
-                    .and_then(|value| value.parse().ok())
-                    .unwrap_or_else(|| {
-                        let reverse = get_player_option("ReverseScroll")
-                            .and_then(|value| value.parse::<u8>().ok())
-                            .is_some_and(|value| value != 0);
-                        if reverse {
-                            deadsync_profile::ScrollOption::Reverse
-                        } else {
-                            default_scroll_option
-                        }
-                    });
-                mini_indicator = get_player_option("MiniIndicator")
-                    .and_then(|value| value.parse().ok())
-                    .unwrap_or_else(|| {
-                        let subtractive = get_player_option("SubtractiveScoring")
-                            .and_then(parse_ini_bool)
-                            .unwrap_or(false);
-                        let pacemaker = get_player_option("Pacemaker")
-                            .and_then(parse_ini_bool)
-                            .unwrap_or(false);
-                        if subtractive {
-                            deadsync_profile::MiniIndicator::SubtractiveScoring
-                        } else if pacemaker {
-                            deadsync_profile::MiniIndicator::Pacemaker
-                        } else {
-                            default_options.mini_indicator
-                        }
-                    });
-                noteskin = get_player_option("NoteSkin")
-                    .and_then(|value| value.parse().ok())
-                    .unwrap_or_else(|| default_options.noteskin.clone());
-                judgment = get_player_option("JudgmentGraphic")
-                    .and_then(|value| value.parse().ok())
-                    .unwrap_or_else(|| default_options.judgment_graphic.clone());
-            }
+                        .unwrap_or_else(|_| trimmed.to_owned())
+                })
+                .unwrap_or_else(|| default_speed_mod.clone());
+            let scroll_option = get_player_option("Scroll")
+                .and_then(|value| value.parse().ok())
+                .unwrap_or_else(|| {
+                    let reverse = get_player_option("ReverseScroll")
+                        .and_then(|value| value.parse::<u8>().ok())
+                        .is_some_and(|value| value != 0);
+                    if reverse {
+                        deadsync_profile::ScrollOption::Reverse
+                    } else {
+                        default_scroll_option
+                    }
+                });
+            let mini_indicator = get_player_option("MiniIndicator")
+                .and_then(|value| value.parse().ok())
+                .unwrap_or_else(|| {
+                    let subtractive = get_player_option("SubtractiveScoring")
+                        .and_then(parse_ini_bool)
+                        .unwrap_or(false);
+                    let pacemaker = get_player_option("Pacemaker")
+                        .and_then(parse_ini_bool)
+                        .unwrap_or(false);
+                    if subtractive {
+                        deadsync_profile::MiniIndicator::SubtractiveScoring
+                    } else if pacemaker {
+                        deadsync_profile::MiniIndicator::Pacemaker
+                    } else {
+                        default_options.mini_indicator
+                    }
+                });
+            let noteskin = get_player_option("NoteSkin")
+                .and_then(|value| value.parse().ok())
+                .unwrap_or_else(|| default_options.noteskin.clone());
+            let judgment = get_player_option("JudgmentGraphic")
+                .and_then(|value| value.parse().ok())
+                .unwrap_or_else(|| default_options.judgment_graphic.clone());
+            let total_songs_played =
+                deadsync_online::score_compat::total_songs_played_for_profile(&summary.id);
             ProfilePickerEntryView {
-                id: summary.id.clone(),
+                id: summary.id,
                 display_name: summary.display_name,
                 speed_mod,
                 avatar_key: summary
                     .avatar_path
                     .map(|path| path.to_string_lossy().into_owned()),
-                total_songs_played: deadsync_online::score_compat::total_songs_played_for_profile(
-                    &summary.id,
-                ),
+                total_songs_played,
                 scroll_option,
                 mini_indicator,
                 noteskin,
@@ -169,3 +169,7 @@ pub fn delete(profile_id: &str) -> SimplyLoveLocalProfileEvent {
         view: view(),
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/profile_picker.rs"]
+mod dataflow_tests;

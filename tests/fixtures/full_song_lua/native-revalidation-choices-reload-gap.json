@@ -1,0 +1,141 @@
+{
+  "position": 146,
+  "source_simfile": "Choices - [Aoreo]/Choices.ssc",
+  "status": "pending-gameplay-reload",
+  "previous_record": "native-revalidation-pass224.json",
+  "new_capture_accepted": false,
+  "new_capture_archive": "d97cabc5f3cfb659a8cabd4e13a534af7b5d6227d653a02e332df4d3b7d36c3c.tar.zst",
+  "new_capture_kept_private": true,
+  "original_index_entry_retained": true,
+  "isolated_comparison": {
+    "passed": 587440,
+    "failed": 0,
+    "whole_gameplay_parity_established": false
+  },
+  "recorded_requests": [
+    {
+      "kind": "call",
+      "operation": "GameState.SetCurrentSteps",
+      "samples": [
+        [
+          1,
+          0,
+          0,
+          [
+            0,
+            "StepsType_Dance_Single",
+            "Difficulty_Easy",
+            "Je Veux Te Voir"
+          ],
+          null
+        ],
+        [
+          2,
+          0,
+          0,
+          [
+            1,
+            "StepsType_Dance_Single",
+            "Difficulty_Easy",
+            "Je Veux Te Voir"
+          ],
+          null
+        ]
+      ]
+    },
+    {
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "call",
+      "line": 24,
+      "operation": "ScreenManager.SetNewScreen",
+      "samples": [
+        [
+          4,
+          0,
+          0,
+          [
+            "ScreenGameplay"
+          ],
+          null
+        ]
+      ],
+      "source": "song:/lua/choices.lua"
+    }
+  ],
+  "source_evidence": {
+    "itgmania_screen_manager": {
+      "path": "C:\\GitHub\\rework\\itgmania\\src\\ScreenManager.cpp",
+      "sha256": "6c4edf63e2536ec63caa32cef582bbd41678423f87a9f4f45ab4ccd3a6e16e1e",
+      "lines": [
+        658,
+        718,
+        749
+      ]
+    },
+    "itgmania_steps_setter": {
+      "path": "C:\\GitHub\\rework\\itgmania\\src\\GameState.cpp",
+      "sha256": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+      "lines": [
+        2765
+      ]
+    },
+    "itgmania_possible_points": {
+      "path": "C:\\GitHub\\rework\\itgmania\\src\\ScoreKeeperNormal.cpp",
+      "sha256": "645e68bfa7b8f603c17944b8a4cca7df3df3753dac529dc26d53e8a485978573",
+      "lines": [
+        123,
+        130,
+        465,
+        637
+      ]
+    },
+    "harness_screen_request": {
+      "path": "C:\\GitHub\\itgmania-harness\\semantic_host.lua",
+      "sha256": "62fdfe17e9ac4e5c4391cc53a2f6d3f773f483636db204446e7306029a039945",
+      "lines": [
+        1970,
+        2031
+      ]
+    },
+    "deadsync_screen_request": {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\host.rs",
+      "sha256": "c4d0d0c382b3abd492c0651c840a04bed733633e0510249d38827ff6a7ca869f",
+      "lines": [
+        815,
+        1567
+      ]
+    },
+    "deadsync_stage_points": {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\tables.rs",
+      "sha256": "1348771a44bdaddc3eafeddf3265f3a08f6a8a90da0a04f3aea9bcda365d70f3",
+      "lines": [
+        1450,
+        1461
+      ]
+    },
+    "original_choices_lua": {
+      "path": "C:\\GitHub\\rework\\lua-songs\\Choices - [Aoreo]\\lua\\choices.lua",
+      "sha256": "f45df1ada96f8dd229ac6b508b4a8abec5f9d43405201cc3d747f9662151829e",
+      "lines": [
+        4,
+        24,
+        44
+      ]
+    }
+  },
+  "remaining_faults": [
+    "The harness records SetNewScreen without loading the delayed screen or re-running the foreground Lua.",
+    "DeadSync records the screen request; chart replacement and gameplay reload integration remain open.",
+    "The harness initializes native stage stats but does not load scorekeeper totals or advance judgment points.",
+    "DeadSync current and total possible dance point getters read the same field; progress must be supplied separately."
+  ],
+  "required_verification": [
+    "Native application control: Challenge initial selection changes to Easy and a new ScreenGameplay begins.",
+    "Lua globals persist across the reload; CHOICES_CHART_INDEX advances only in the second foreground load.",
+    "The reloaded chart timing, notes, stage totals and live possible points agree with native gameplay.",
+    "The CheckEnd loop remains active until the stage point progress reaches the total."
+  ],
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false
+}
