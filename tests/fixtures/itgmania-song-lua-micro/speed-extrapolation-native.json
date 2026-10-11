@@ -1,0 +1,45 @@
+{
+  "events": [
+    {
+      "command": "InitCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 1,
+      "operation": "MessageManager.Broadcast",
+      "samples": [
+        [
+          2,
+          0,
+          0,
+          [
+            "NativeSpeedPositive",
+            {
+              "origin": -0.11500000208616255,
+              "value": -35.154998779296875
+            }
+          ],
+          null
+        ]
+      ],
+      "source": "song:/control.lua"
+    }
+  ],
+  "runtime_errors": [],
+  "trace_sha256": "70d81b821de652baa438f1767dfa1af52e09972783d8e314057340382c14972d",
+  "native_float_value": -35.154998779296875,
+  "native_float_bits": 3255606968,
+  "source_harness_commit": "cc4e9f835c9b0189af5251c84282a0dadf1c55de",
+  "binary_sha256": "65d2a9c89360a53c2ff01f61579f68f7aaaa73d1b78998bb5e51e9205e940a1b",
+  "song_offset": 0.115,
+  "beat": 4.0,
+  "music_seconds": -10.0,
+  "delay": 0.5,
+  "note": "Native parser rejects negative delays. This valid positive-delay control demonstrates extrapolation before the second segment start.",
+  "controls": {
+    "control.ssc": "4f02a1f138aa5939f228c5ad5224fe41a500db0fb0256b7207df1487baed589a",
+    "control.lua": "5d5a32d2fdcfbba2b17c06a099a9eb787e6a392cc98964b694a25cb087dd774d"
+  },
+  "native_reference": "itgmania/src/TimingData.cpp:1028 GetDisplayedSpeedPercent",
+  "native_reference_sha256": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1",
+  "scope": "pure native speed query; does not certify gameplay or full archives"
+}

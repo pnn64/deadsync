@@ -1,0 +1,22 @@
+{
+  "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass286-timing-row-v1\\receipt.json",
+  "native_receipt_sha256": "85c2b5673339873f964454b47e94a6d56bfaf8bec155837e719e54179f8328a8",
+  "harness_commit": "5c64fbfe8ddd7d95352c9492befa853148346dcf",
+  "harness_version": "0.1.68",
+  "binary_sha256": "0bb93b9af31c782d0a7d16e822db04b488bc42724d9c2f5c36e907b133f3ce12",
+  "trace_sha256": "fc8f1ec15178ba93f415afe3f38a6fd1532b70ac6827edf560a6fddf005e6638",
+  "source": "Native LunaTimingData getters on ITGmania song and Steps owners",
+  "native_sources": {
+    "C:\\GitHub\\rework\\itgmania\\src\\TimingData.cpp": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1",
+    "C:\\GitHub\\rework\\itgmania\\src\\TimingData.h": "e0100a782b144335c60fabd680fe91e6831c0e387e6bf51cc9d272de1345cd37",
+    "C:\\GitHub\\rework\\itgmania\\src\\Song.cpp": "2fa0405d315ae467c49e138819552c4785f0e7f44b0211f39c2aa5422723d592",
+    "C:\\GitHub\\rework\\itgmania\\src\\Steps.cpp": "eb1685023c27de6f4095d53439b318edca85301c11db053189e5b1eca8d43c2c"
+  },
+  "input_sha256": "dd306782b16ae5df342834cea72018dc0ba9519940e4761a31a4d49d8b3fadc9",
+  "lua_input_sha256": "e0673900f9d4b260616788144c49f466e722a1449209932d3c7db67ca8bed43c",
+  "values_sha256": "46c369d12c8c3ea110b4eb7ef1612504132145827e1851e6d91bed56ab9e3833",
+  "row_boundary": "GetBPMAtBeat(3.995) rounds to note row 192, selecting the segment at beat 4",
+  "limits": [
+    "Direct getter regression; full unselected Steps timing ownership remains to be verified in the gameplay loader"
+  ]
+}

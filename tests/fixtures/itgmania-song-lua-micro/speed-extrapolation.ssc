@@ -1,0 +1,14 @@
+#VERSION:0.83;
+#TITLE:Native positive speed delay;
+#OFFSET:0.115;
+#BPMS:0=120,4=180;
+#SPEEDS:2=0.5=0.5=1,4=2=0.5=1;
+#FGCHANGES:0=control.lua=1=0=0=0;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DESCRIPTION:;
+#DIFFICULTY:Challenge;
+#METER:1;
+#NOTES:
+1000
+;

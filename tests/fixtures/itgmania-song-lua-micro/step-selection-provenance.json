@@ -1,0 +1,30 @@
+{
+  "harness_commit": "cc4e9f835c9b0189af5251c84282a0dadf1c55de",
+  "harness_version": "0.1.74",
+  "binary_sha256": "65d2a9c89360a53c2ff01f61579f68f7aaaa73d1b78998bb5e51e9205e940a1b",
+  "native_receipt": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\selection-native-receipt-v4.json",
+  "native_receipt_sha256": "8d28415d03f9e0a208b5aec9469c92b0cba5f6586d69d68627b8c39255f71a78",
+  "reference_source_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "values_sha256": "96510cf13adbb80e10c969fac7ee4a194905bd39f23e665ce2b5b86d440e9878",
+  "inputs_sha256": {
+    "step-selection.lua": "2fea23fba91e33721073ab74dba3d84325529657f94cbf2cf3b1414152af7657",
+    "step-selection-single.ssc": "f8d93e78b4717a535b7e64425495915b8570f16c31e15ef3c626f37a8cb04da1",
+    "step-selection-routine.ssc": "3865e30760c866db5e0626ebe8f69b5ab26c87cd7b6001bd8171f66d9d380f27"
+  },
+  "native_sources_sha256": {
+    "GameState.cpp": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+    "Steps.cpp": "eb1685023c27de6f4095d53439b318edca85301c11db053189e5b1eca8d43c2c",
+    "Style.cpp": "ea669af3a0ec3d535c944b085f6d92a0e64ce84aca8bfef396d42f737b8a4a03",
+    "GameManager.cpp": "2eee53b9f0088acac643bb0e7f04a29933fc9913cb194f75bdbedb5fea7df1cc",
+    "MessageManager.h": "074508d5de2bb2255137a7dec8995d7a82ecb1d8872fbdcbd1a4195a85a4c41b",
+    "NoteDataUtil.cpp": "c4a4fcf5a846751968312b03c8b3025bb40205b08284429fc215d75d01918d8f",
+    "SongUtil.cpp": "24c7f4110fffbe66eaa47f966d07b550791d90293f6bd102faad3ad50f98cc39",
+    "StepsUtil.cpp": "2b5525673d1f45b4041be8f408971042905df00aae90975a30bec43b571d4014",
+    "Song.cpp": "2fa0405d315ae467c49e138819552c4785f0e7f44b0211f39c2aa5422723d592"
+  },
+  "scope": "Chart pointer identity, authored music compatibility, nil/errors/self returns, synchronous change messages and reentrant selection",
+  "limits": [
+    "DeadSync's routine API control supplies Steps metadata through SongLuaCompileContext; RSSP routine simfile loading remains unsupported.",
+    "Controls end at beat 1 and do not certify whole-song gameplay, note judgments or delayed screen reloads."
+  ]
+}

@@ -38,7 +38,7 @@ glam = "0.34.1"
 image = "0.25.10"
 log = "0.4.34"
 memchr = "2.8.3"
-mlua = { version = "0.12.2", features = ["lua54", "vendored"] }
+mlua = { version = "0.12.2", features = ["lua51", "vendored"] }
 qrcodegen = "1.8.0"
 rand = "0.10.3"
 rustc-hash = "2.1.3"

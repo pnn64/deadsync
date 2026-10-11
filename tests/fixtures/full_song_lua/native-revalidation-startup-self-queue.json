@@ -100,10 +100,34 @@
   },
   "native_alpha_control_movement_and_visibility_passed": true,
   "remaining_native_alpha_control": "One independent Model pass-count mismatch at the 3-second fade endpoint remains pending.",
-  "fixture_76_comparison": null,
-  "fixture_76_compare_running": true,
+  "fixture_76_comparison": {
+    "position": 76,
+    "source_simfile": "A Dramatic Irony/A Dramatic Irony.ssc",
+    "archive": "8bf349890c97255dee312834932bb9d4fbbaf1680211025ae3108fd0c4f40db9.tar.zst",
+    "archive_sha256": "8bf349890c97255dee312834932bb9d4fbbaf1680211025ae3108fd0c4f40db9",
+    "harness_version": "0.1.54",
+    "source_commit": "a9e3f71fd45f02cfe9e38d500e0cfd60f7172f5b",
+    "source_pending_commit": true,
+    "binary_sha256": "29a6566dd48c07e7c8dc31cef5d70923004f1d39ae9934d488a57b1c913e2fc2",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\startup-self-queue-v1-full_song_lua.exe",
+      "8bf349890c97255dee312834932bb9d4fbbaf1680211025ae3108fd0c4f40db9.tar.zst"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 525.7950228000991,
+    "comparisons_passed": 705035,
+    "comparisons_failed": 52716,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-076-native-startup-self-queue-v1.log",
+    "log_sha256": "7d7d210df1aca9298a93e5b6ff42e247e4e9797052bc18285aaf3223ffd4665e",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass155-top-076-native-v4.json",
+    "native_receipt_sha256": "378d6739dc2a5c75b59b669ad769da72502389e78e33d83d5bff5016b91ddc65",
+    "full_corpus_complete": false
+  },
+  "fixture_76_compare_running": false,
   "fixture_76_accepted": false,
   "original_inputs_unchanged": true,
   "original_tolerances_retained": true,
-  "full_corpus_complete": false
+  "full_corpus_complete": false,
+  "native_alpha_control_resolved": true,
+  "native_alpha_control_resolution": "native-revalidation-model-alpha.json"
 }

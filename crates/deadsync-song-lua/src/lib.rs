@@ -38,11 +38,12 @@ mod noteskin;
 mod option_rows;
 mod perframe;
 mod player_options;
+mod rage_file;
+pub use rage_file::create_rage_file_util_table;
 mod runtime;
 mod runtime_mod;
 mod sl;
 mod song_tables;
-mod syntax;
 mod tables;
 mod theme_colors;
 mod timing;
@@ -81,7 +82,7 @@ pub use host::{
     SONG_LUA_STARTUP_MESSAGE, SongLuaCompileGlobals, SongLuaDateGlobals, SongLuaGameStateGlobals,
     SongLuaHostState, clone_lua_value, create_arrow_effects_table, create_chunk_env_proxy,
     initial_chunk_environment, install_basic_globals, install_cmd_helpers, install_compile_host,
-    install_core_globals, install_date_globals, install_ease_table, install_game_state_globals,
+    install_core_globals, install_date_globals, install_game_state_globals,
     install_late_globals, install_manager_globals, install_message_manager_globals,
     install_screen_manager_globals, install_screen_string_globals, install_screen_utility_globals,
     install_sound_globals, is_compile_global_name, register_loaded_easing_names,
@@ -264,7 +265,7 @@ pub use tables::{
     create_gameplay_layout, create_hooks_table, create_index_array, create_ini_file_table,
     create_life_record_table, create_memcardman_table, create_network_response_table,
     create_other_player_table, create_player_number_table, create_prefsmgr_table,
-    create_profileman_table, create_radar_values_table, create_rage_file_util_table,
+    create_profileman_table, create_radar_values_table,
     create_range_table, create_screen_system_layer_helpers_table, create_screen_table,
     create_single_value_array, create_song_group_table, create_split_table, create_statsman_table,
     create_string_enum_table, create_style_table, create_theme_table, create_timing_table,
@@ -389,6 +390,8 @@ pub const SONG_LUA_EASING_NAMES: &[&str] = &[
 const SONG_LUA_COLUMN_X: [f32; SONG_LUA_NOTE_COLUMNS] = [-96.0, -32.0, 32.0, 96.0];
 const SONG_LUA_DOUBLE_COLUMN_X: [f32; SONG_LUA_DOUBLE_NOTE_COLUMNS] =
     [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0];
+const SONG_LUA_PUMP_COLUMN_X: [f32; 5] = [-96.0, -48.0, 0.0, 48.0, 96.0];
+const SONG_LUA_PUMP_DOUBLE_X: [f32; 10] = [-220.0, -172.0, -124.0, -76.0, -28.0, 28.0, 76.0, 124.0, 172.0, 220.0];
 const SONG_LUA_COLUMN_NAMES: [&str; SONG_LUA_NOTE_COLUMNS] = ["Left", "Down", "Up", "Right"];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -436,37 +439,28 @@ pub fn song_lua_style_info(style_name: &str) -> SongLuaStyleInfo {
 }
 
 fn song_lua_style_info_normalized(normalized: &str) -> SongLuaStyleInfo {
-    if matches!(
-        normalized,
-        "double" | "dancedouble" | "stepstypedancedouble"
-    ) {
-        SongLuaStyleInfo {
-            name: "double",
-            steps_type: "StepsType_Dance_Double",
-            style_type: "StyleType_OnePlayerTwoSides",
-            columns: SONG_LUA_DOUBLE_NOTE_COLUMNS,
-            width: 512.0,
-            x_offsets: &SONG_LUA_DOUBLE_COLUMN_X,
-        }
-    } else if normalized == "versus" {
-        SongLuaStyleInfo {
-            name: "versus",
-            steps_type: "StepsType_Dance_Single",
-            style_type: "StyleType_TwoPlayersTwoSides",
-            columns: SONG_LUA_NOTE_COLUMNS,
-            width: 256.0,
-            x_offsets: &SONG_LUA_COLUMN_X,
-        }
-    } else {
-        SongLuaStyleInfo {
-            name: "single",
-            steps_type: "StepsType_Dance_Single",
-            style_type: "StyleType_OnePlayerOneSide",
-            columns: SONG_LUA_NOTE_COLUMNS,
-            width: 256.0,
-            x_offsets: &SONG_LUA_COLUMN_X,
-        }
-    }
+    // GameManager.cpp dance/pump style metadata; Style::GetWidth uses the
+    // span plus average column spacing, including the pump center gap.
+    let (name, steps_type, style_type, x_offsets): (_, _, _, &'static [f32]) = match normalized {
+        "double" | "dancedouble" | "stepstypedancedouble" =>
+            ("double", "StepsType_Dance_Double", "StyleType_OnePlayerTwoSides", &SONG_LUA_DOUBLE_COLUMN_X),
+        "versus" => ("versus", "StepsType_Dance_Single", "StyleType_TwoPlayersTwoSides", &SONG_LUA_COLUMN_X),
+        "couple" | "dancecouple" | "stepstypedancecouple" =>
+            ("couple", "StepsType_Dance_Couple", "StyleType_TwoPlayersTwoSides", &SONG_LUA_COLUMN_X),
+        "routine" | "danceroutine" | "stepstypedanceroutine" =>
+            ("routine", "StepsType_Dance_Routine", "StyleType_TwoPlayersSharedSides", &SONG_LUA_DOUBLE_COLUMN_X),
+        "pumpsingle" | "stepstypepumpsingle" =>
+            ("single", "StepsType_Pump_Single", "StyleType_OnePlayerOneSide", &SONG_LUA_PUMP_COLUMN_X),
+        "pumpversus" => ("versus", "StepsType_Pump_Single", "StyleType_TwoPlayersTwoSides", &SONG_LUA_PUMP_COLUMN_X),
+        "pumpdouble" | "stepstypepumpdouble" =>
+            ("double", "StepsType_Pump_Double", "StyleType_OnePlayerTwoSides", &SONG_LUA_PUMP_DOUBLE_X),
+        "pumproutine" | "stepstypepumproutine" =>
+            ("routine", "StepsType_Pump_Routine", "StyleType_TwoPlayersSharedSides", &SONG_LUA_PUMP_DOUBLE_X),
+        _ => ("single", "StepsType_Dance_Single", "StyleType_OnePlayerOneSide", &SONG_LUA_COLUMN_X),
+    };
+    let span = x_offsets[x_offsets.len() - 1] - x_offsets[0];
+    SongLuaStyleInfo { name, steps_type, style_type, columns: x_offsets.len(),
+        width: span + span / (x_offsets.len() - 1) as f32, x_offsets }
 }
 
 #[inline(always)]
@@ -1362,6 +1356,39 @@ impl SongLuaNoteskinResolver {
 }
 
 #[derive(Debug, Clone)]
+pub struct SongLuaStep {
+    pub steps_type: String,
+    pub difficulty: SongLuaDifficulty,
+    pub description: String,
+    pub chart_name: String,
+    pub credit: String,
+    pub meter: u32,
+    pub music_file: String,
+}
+
+impl From<&deadsync_chart::ChartData> for SongLuaStep {
+    fn from(chart: &deadsync_chart::ChartData) -> Self {
+        let steps_type = chart.chart_type.split('-').map(|part| {
+            let mut chars = part.chars();
+            chars.next().map_or_else(String::new, |first| {
+                format!("{}{rest}", first.to_ascii_uppercase(), rest = chars.as_str())
+            })
+        }).collect::<Vec<_>>().join("_");
+        Self {
+            steps_type: format!("StepsType_{steps_type}"),
+            difficulty: with_compact_ascii_lowercase_song_key(
+                &chart.difficulty, song_lua_difficulty_from_normalized,
+            ).unwrap_or(SongLuaDifficulty::Edit),
+            description: chart.description.clone(),
+            chart_name: chart.chart_name.clone(),
+            credit: chart.step_artist.clone(),
+            meter: chart.meter,
+            music_file: chart.music_file.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SongLuaCompileContext {
     /// Session entry paths list backgrounds first, then foregrounds.
     /// A single-entry compile defaults to the foreground layer.
@@ -1374,6 +1401,9 @@ pub struct SongLuaCompileContext {
     pub song_timing: Option<deadsync_rules::timing::TimingData>,
     /// Selected chart timing, shared with gameplay; populated before Lua compilation.
     pub player_timing: [Option<deadsync_rules::timing::TimingData>; LUA_PLAYERS],
+    /// Timing for every chart in `song_steps` order, loaded before compilation.
+    /// Song-local ownership keeps unselected SSC timing out of the library cache.
+    pub song_step_timing: Vec<deadsync_rules::timing::TimingData>,
     pub song_music_rate: f32,
     /// Initial ITGmania PRNG seed; fixed per compilation for repeatable playback.
     /// Scripts may reseed it through math.randomseed or MersenneTwister.Seed.
@@ -1385,6 +1415,10 @@ pub struct SongLuaCompileContext {
     pub message_actor_order: Vec<(String, usize)>,
     pub music_length_seconds: f32,
     pub style_name: String,
+    /// Song charts in simfile load order; never synthesize missing difficulties.
+    pub song_steps: Vec<SongLuaStep>,
+    pub player_step_indices: [Option<usize>; LUA_PLAYERS],
+    pub event_mode: bool,
     pub global_offset_seconds: f32,
     /// Theme coordinate space exposed through `SCREEN_WIDTH/SCREEN_HEIGHT`.
     pub screen_width: f32,
@@ -1409,12 +1443,17 @@ impl SongLuaCompileContext {
             song_timing_bpms: Vec::new(),
             song_timing: None,
             player_timing: std::array::from_fn(|_| None),
+            song_step_timing: Vec::new(),
             song_music_rate: 1.0,
             random_seed: 1,
             #[cfg(feature = "test-support")]
             message_actor_order: Vec::new(),
             music_length_seconds: 0.0,
             style_name: "single".to_string(),
+            song_steps: Vec::new(),
+            player_step_indices: [None; LUA_PLAYERS],
+            // PrefsManager defaults EventMode to true in ITGmania.
+            event_mode: true,
             global_offset_seconds: 0.0,
             screen_width: 640.0,
             screen_height: 480.0,
@@ -1753,6 +1792,20 @@ pub struct SongLuaBoolWrite {
     pub chained: bool,
 }
 
+/// Native speed fields in TimeSpacing, ScrollSpeed, ScrollBPM, MaxScrollBPM order.
+#[cfg(feature = "test-support")]
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaSpeedWrite {
+    pub player: usize,
+    pub key: String,
+    pub beat: f64,
+    pub second: f64,
+    pub previous: [[f32; 2]; 4],
+    pub current: [[f32; 2]; 4],
+    pub failed: bool,
+    pub chained: bool,
+}
+
 #[cfg(feature = "test-support")]
 #[derive(Debug, Clone)]
 pub struct SongLuaSkinWrite {
@@ -1762,6 +1815,15 @@ pub struct SongLuaSkinWrite {
     pub second: f64,
     pub previous: String,
     pub current: String,
+}
+
+#[cfg(feature = "test-support")]
+#[derive(Debug, Clone)]
+pub struct SongLuaStateCall {
+    pub operation: &'static str,
+    pub beat: f32,
+    pub second: f32,
+    pub args: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -1789,6 +1851,10 @@ pub struct CompiledSongLua<OverlayActor> {
     pub overlay_writes: Vec<SongLuaOverlayUpdateTrack>,
     #[cfg(feature = "test-support")]
     pub boolean_writes: Vec<SongLuaBoolWrite>,
+    #[cfg(feature = "test-support")]
+    pub speed_writes: Vec<SongLuaSpeedWrite>,
+    #[cfg(feature = "test-support")]
+    pub state_calls: Vec<SongLuaStateCall>,
     #[cfg(feature = "test-support")]
     pub noteskin_writes: Vec<SongLuaSkinWrite>,
     pub stateful_message_captures: Vec<SongLuaStatefulMessageCapture>,
@@ -1826,6 +1892,10 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             overlay_writes: Vec::new(),
             #[cfg(feature = "test-support")]
             boolean_writes: Vec::new(),
+            #[cfg(feature = "test-support")]
+            speed_writes: Vec::new(),
+            #[cfg(feature = "test-support")]
+            state_calls: Vec::new(),
             #[cfg(feature = "test-support")]
             noteskin_writes: Vec::new(),
             stateful_message_captures: Vec::new(),
@@ -5557,6 +5627,13 @@ mod tests {
         (root, entry)
     }
 
+    fn write_easing_lib(song_dir: &Path) {
+        fs::write(
+            song_dir.join("easing.lua"),
+            include_str!("../../../tests/fixtures/song_lua/easing.lua"),
+        ).expect("write chart owned easing library");
+    }
+
     fn test_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
             "deadsync-song-lua-crate-{name}-{}",
@@ -5565,6 +5642,51 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn native_lua51_runtime_uses_native_bytecode_and_coercion() {
+        let lua = Lua::new();
+        let function = lua.load("return 1").into_function().expect("native chunk");
+        assert_eq!(&function.dump(false)[..5], b"\x1bLua\x51");
+        lua.load(
+            r#"
+            assert(tostring(1.0) == '1')
+            assert(not pcall(string.format, '%s', true))
+            assert(#setmetatable({1}, {__len=function() return 99 end}) == 1)
+        "#,
+        )
+        .exec()
+        .expect("native Lua 5.1 language rules");
+        assert!(lua.load("return 1 | 2").into_function().is_err());
+    }
+
+    #[test]
+    fn native_concat_preserves_numbers_and_expressions() {
+        let lua = Lua::new();
+        let source = r#"
+            local function many() return 5.0, 99 end
+            assert(5.0 .. ' centered' == '5 centered')
+            assert('x' .. -5.0 == 'x-5')
+            assert(1.25 .. 5.0 == '1.255')
+            assert('x' .. 2 + 3 == 'x5')
+            assert('x' .. many() == 'x5')
+            assert('x' .. (function(...) return ... end)(5.0) == 'x5')
+            assert('x' .. -- keep this comment and newline
+                5.0 == 'x5')
+            assert('..' .. [=[...]=] == '.....')
+            local values = {5.0, 'dark'}
+            assert(values[1] .. ' ' .. values[2] == '5 dark')
+            assert('x' .. ({5.0})[1] == 'x5')
+            local object = setmetatable({}, {__concat = function(a,b)
+                return type(a) .. ':' .. type(b)
+            end})
+            assert(5.0 .. object == 'number:table')
+            assert(object .. 5.0 == 'table:number')
+            assert(not pcall(function() return true .. 'x' end))
+            assert(1 .. 2 .. object == '1number:table')
+        "#;
+        lua.load(source).exec().expect("native Lua 5.1 concatenation");
     }
 
     #[test]
@@ -5764,10 +5886,12 @@ mod tests {
     #[test]
     fn compile_song_lua_reads_mod_tables() {
         let song_dir = test_dir("direct");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 mods = {
     {1, 2, "*100 no invert", "len", 2},
 }
@@ -6053,12 +6177,45 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn frame_init_follows_child() {
+        let song_dir = test_dir("frame-init-order");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+local order = 0
+return Def.ActorFrame{
+    InitCommand=function(self)
+        assert(order == 2, 'frame Init must follow both child Init commands')
+        self:GetChild('First'):x(10)
+    end,
+    Def.Quad{
+        Name='First',
+        InitCommand=function(self) order = order + 1; self:x(order) end
+    },
+    Def.Quad{
+        Name='Second',
+        InitCommand=function(self) order = order + 1; self:x(order) end
+    }
+}
+"#).expect("write frame Init control");
+        let compiled = test_compile_song_lua(
+            &entry, &SongLuaCompileContext::new(&song_dir, "Frame Init Order"),
+        ).expect("compile frame Init control");
+        for (name, x) in [("First", 10.0), ("Second", 2.0)] {
+            let actor = compiled.overlays.iter().find(|actor| actor.name.as_deref() == Some(name))
+                .expect("initialized child");
+            assert_eq!(actor.initial_state.x, x, "{name} Init order");
+        }
+    }
+
+    #[test]
     fn compile_song_lua_runs_actor_init_commands() {
         let song_dir = test_dir("init-command");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 return Def.ActorFrame{
     InitCommand=function(self)
         prefix_globals = {
@@ -6335,7 +6492,7 @@ return Def.ActorFrame{OnCommand=function(self)
     assert(not state:GetPlayerOptionsString('ModsLevel_Song'):find('Cel', 1, true))
     po:NoteSkin('CYBER')
     state:SetPlayerOptions('ModsLevel_Song', '')
-    assert(po:NoteSkin() == 'cel', 'fresh assignment clears prior raw skin')
+    assert(po:NoteSkin() == 'CYBER', 'assignment without a skin retains prior raw skin')
     po:FromString('CyBeR')
     po:FromString('clearall')
     assert(po:NoteSkin() == 'cel', 'clearall uses theme default')
@@ -6432,7 +6589,7 @@ return Def.ActorFrame{}
         fs::write(
             &entry,
             r#"
-local po = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Preferred")
+local po = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
 local top = SCREENMAN:GetTopScreen()
 top:SetMinSecondsToMusic(6.01)
 top:GetChild("In"):visible(false)
@@ -7622,6 +7779,14 @@ return Def.ActorFrame{}
             &entry,
             r#"
 local values = {10, 20, 30}
+assert(_VERSION == 'Lua 5.1')
+assert(type(unpack) == 'function' and table.unpack == nil)
+local a, b, c = unpack(values)
+assert(a == 10 and b == 20 and c == 30)
+local first, missing, last = unpack({[1]=10, [3]=30}, 1, 3)
+assert(first == 10 and missing == nil and last == 30)
+assert(select('#', unpack(values, 3, 2)) == 0)
+assert(not pcall(table.getn, false))
 mod_actions = {
     {1, string.format("%d:%d", math.mod(5, 2), table.getn(values)), true},
 }
@@ -7945,7 +8110,7 @@ return Def.ActorFrame{}
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "false:false:PlayerNumber_P1:dance:1:1:CoinMode_Free:Premium_Off:Challenge:true:Common:true:Player 1:0"
+            "false:true:PlayerNumber_P1:dance:1:1:CoinMode_Free:Premium_Off:Challenge:true:Common:true:Player 1:0"
         );
     }
 
@@ -7987,10 +8152,9 @@ return Def.ActorFrame{}
         )
         .unwrap();
 
-        let compiled = test_compile_song_lua(
-            &entry,
-            &SongLuaCompileContext::new(&song_dir, "Theme Enum SongUtil"),
-        )
+        let mut context = SongLuaCompileContext::new(&song_dir, "Theme Enum SongUtil");
+        context.song_steps = test_song_steps();
+        let compiled = test_compile_song_lua(&entry, &context)
         .unwrap();
 
         assert_eq!(compiled.messages.len(), 1);
@@ -9679,6 +9843,36 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_keeps_static_column_rotation() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/song-lua");
+        let mut context = SongLuaCompileContext::new(&dir, "Static column rotation");
+        context.music_length_seconds = 4.0;
+        context.song_timing_bpms = vec![(0.0, 60.0)];
+        let compiled = test_compile_song_lua(&dir.join("static-column-rotation.lua"), &context)
+            .expect("static rotation control");
+        let timing = deadsync_rules::timing::TimingData::from_segments(
+            0.0, 0.0, &deadsync_rules::timing::TimingSegments {
+                bpms: vec![(0.0, 60.0)], ..Default::default()
+            }, &[],
+        );
+        for player in 0..2 {
+            let windows = crate::gameplay::build_song_lua_column_offset_windows_for_player(
+                &compiled, &timing, player, 0.0,
+            );
+            for second in [0.0, 0.5, 2.0, 4.0] {
+                let (transforms, _) = deadsync_gameplay::song_lua_column_transforms(
+                    &windows, 4, second,
+                );
+                for rotation in &transforms[3][..4] {
+                    assert!((*rotation - 180.0).abs() < 1e-5,
+                        "player {player} at {second}: {transforms:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn compile_song_lua_keeps_position_splines_separate_from_reverse() {
         let song_dir = test_dir("update-position-spline-reverse");
         let entry = song_dir.join("default.lua");
@@ -9810,12 +10004,26 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_keeps_chart_easing_globals() {
+        let song_dir = test_dir("chart-easing-global");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            include_str!("../../../tests/fixtures/song-lua/easing-global.lua"),
+        ).expect("write chart easing guard");
+        test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Chart Easing"))
+            .expect("chart must load its own guarded nonlinear easing functions");
+    }
+
+    #[test]
     fn compile_song_lua_replays_runtime_mod_tables() {
         let song_dir = test_dir("exact-runtime-mod-tables");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 mods = {
     {2, 2, "*100 50 flip", "len"},
 }
@@ -9871,6 +10079,8 @@ return Def.ActorFrame{
             [windows, Vec::new()],
         );
         for (second, mini) in [(1.0, 0.0), (2.5, 50.0), (3.5, 100.0)] {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             let _ = runtime.refresh_player(
                 0,
                 second,
@@ -9887,10 +10097,12 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_replays_mixed_runtime_mod_eases() {
         let song_dir = test_dir("mixed-exact-runtime-mod-eases");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 mods = {
     {0, 9999, "*1000 no dizzy", "end"},
 }
@@ -9960,6 +10172,8 @@ return Def.ActorFrame{
             (3.5, 0.0, 45.0),
             (4.5, 0.0, 90.0),
         ] {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             if let Some(next) = runtime.refresh_player(
                 0,
                 second,
@@ -10238,6 +10452,22 @@ return Def.ActorFrame{
                 assert_eq!(texture.path, song_dir.join(format!("{expected} 2x6.png")));
             }
             assert!(crate::judgment_texture_at(child, -0.01).is_none());
+        }
+    }
+
+    #[test]
+    fn compile_song_lua_keeps_combo_child_callback() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/song-lua");
+        let entry = root.join("combo-child.lua");
+        let mut context = SongLuaCompileContext::new(&root, "Combo Child Callback");
+        context.music_length_seconds = 2.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.info.unsupported_perframes, 0, "{:?}", compiled.info);
+        for (player, expected) in [(1, 300.0), (2, 400.0)] {
+            let movement = compiled.eases.iter().rev()
+                .find(|ease| ease.player == Some(player) && ease.target == SongLuaEaseTarget::PlayerX)
+                .expect("player movement after Combo child lookup");
+            assert_eq!(movement.to, expected);
         }
     }
 
@@ -11026,10 +11256,12 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_classifies_player_transform_function_eases() {
         let song_dir = test_dir("function-ease");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local target = nil
 prefix_globals = {}
 
@@ -12006,7 +12238,8 @@ local ps = GAMESTATE:GetPlayerState(PLAYER_1)
 local po = ps:GetPlayerOptions("ModsLevel_Song")
 po:Mini(0.425, 0.05)
 assert(ps:GetPlayerOptionsString("ModsLevel_Song") == "NoHideLights, 42% Mini, Overhead")
-assert(GetPlayerOptionsString(PLAYER_1) == ps:GetPlayerOptionsString("ModsLevel_Song"))
+assert(GetPlayerOptionsString(PLAYER_1) == ps:GetPlayerOptionsString("ModsLevel_Preferred"))
+assert(GetPlayerOptionsString(PLAYER_1) ~= ps:GetPlayerOptionsString("ModsLevel_Song"))
 ps:SetPlayerOptions("ModsLevel_Song", ps:GetPlayerOptionsString("ModsLevel_Song") .. ", *5 50% Digital")
 assert(math.abs(po:Mini() - 0.42) < 0.00001)
 assert(po:Digital() == 0.5)
@@ -12516,10 +12749,176 @@ return Def.ActorFrame{}
 
         let mut context = SongLuaCompileContext::new(&song_dir, "Timing BPM Segments");
         context.song_display_bpms = [120.0, 180.0];
+        context.song_timing_bpms = vec![(0.0, 120.0), (4.0, 180.0)];
         context.players[0].display_bpms = [150.0, 150.0];
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "true:2:180:false:1:150");
+    }
+
+    fn test_song_steps() -> Vec<crate::SongLuaStep> {
+        use crate::SongLuaStep;
+        [SongLuaDifficulty::Beginner, SongLuaDifficulty::Easy, SongLuaDifficulty::Medium,
+            SongLuaDifficulty::Hard, SongLuaDifficulty::Challenge, SongLuaDifficulty::Edit]
+            .into_iter().map(|difficulty| SongLuaStep {
+                steps_type: "StepsType_Dance_Single".into(), difficulty,
+                description: String::new(), chart_name: String::new(), credit: String::new(),
+                meter: difficulty.meter().max(0) as u32,
+                music_file: String::new(),
+            }).collect()
+    }
+
+    #[test]
+    #[cfg(feature = "test-support")]
+    fn step_selection_matches_native() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro");
+        let expected: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(root.join("step-selection-native.json"))
+                .expect("read native selection capture"),
+        ).expect("native selection JSON");
+        for native in expected["controls"].as_array().expect("native controls") {
+            let kind = native["kind"].as_str().expect("control name");
+            // RSSP currently loads single/double simfiles only. The routine
+            // API control supplies the same chart metadata through the public
+            // compile context; it does not certify routine simfile loading.
+            let song = deadsync_simfile::song::parse_song_meta_file(
+                &root.join("step-selection-single.ssc"),
+                &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+                0.0, |_| 0.0,
+            ).expect("parse native selection control");
+            let mut context = SongLuaCompileContext::new(&root, "Native step selection");
+            context.song_steps = song.charts.iter().map(crate::SongLuaStep::from).collect();
+            if kind == "routine" {
+                for steps in &mut context.song_steps {
+                    steps.steps_type = "StepsType_Dance_Routine".into();
+                }
+            }
+            context.style_name = native["style"].as_str().expect("native style").into();
+            let selected = native["initial_step_index"].as_u64().expect("native initial selection") as usize;
+            context.player_step_indices = [Some(selected); crate::LUA_PLAYERS];
+            for player in &mut context.players {
+                player.difficulty = context.song_steps[selected].difficulty;
+            }
+            context.music_length_seconds = 1.0;
+            let compiled = test_compile_song_lua(&root.join("step-selection.lua"), &context)
+                .expect("native selection script");
+            // On broadcasts are absorbed into the startup snapshot. Audit the
+            // calls themselves rather than looking for scheduled messages.
+            let snapshots: Vec<_> = compiled.state_calls.iter()
+                .filter(|call| call.operation == "MessageManager.Broadcast")
+                .filter_map(|call| call.args.first().and_then(serde_json::Value::as_str))
+                .filter(|message| message.contains(':')).collect();
+            let native_snapshots: Vec<_> = native["snapshots"].as_array().expect("native snapshots")
+                .iter().map(|value| value.as_str().expect("native message")).collect();
+            assert_eq!(snapshots, native_snapshots, "{kind} native state and synchronous messages: {:?}", compiled.info);
+            #[cfg(feature = "test-support")]
+            assert_eq!(compiled.state_calls.iter().filter(|call| call.operation == "GameState.SetCurrentSteps")
+                .map(|call| &call.args).collect::<Vec<_>>(),
+                native["calls"].as_array().expect("native calls").iter()
+                    .map(|call| call.as_array().expect("native arguments")).collect::<Vec<_>>(),
+                "{kind} native call order");
+        }
+    }
+
+    #[test]
+    fn song_steps_match_native() {
+        use crate::{LUA_PLAYERS, SongLuaStep};
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/itgmania-song-lua-micro");
+        let song = deadsync_simfile::song::parse_song_meta_file(
+            &root.join("song-steps.sm"),
+            &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+            0.0, |_| 0.0,
+        ).expect("parse native metadata control");
+        let expected: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(root.join("song-steps-native.json")).expect("read native values"),
+        ).expect("native values JSON");
+        let steps: Vec<SongLuaStep> = song.charts.iter().map(SongLuaStep::from).collect();
+        let native = expected["charts"].as_array().expect("native chart list");
+        assert_eq!(steps.len(), native.len());
+        for (actual, expected) in steps.iter().zip(native) {
+            assert_eq!(u64::from(actual.difficulty.sort_key()), expected["difficulty_code"]);
+            assert_eq!(actual.description, expected["description"]);
+            assert_eq!(actual.credit, expected["credit"]);
+            assert_eq!(actual.meter, expected["meter"]);
+        }
+        let dir = test_dir("cardstone-native-branch");
+        let entry = dir.join("default.lua");
+        fs::write(&entry, r#"
+            assert(GAMESTATE:IsEventMode())
+            local all = GAMESTATE:GetCurrentSong():GetStepsByStepsType('StepsType_Dance_Single')
+            assert(#all == 8 and all[1] == GAMESTATE:GetCurrentSteps(PLAYER_1))
+            return Def.ActorFrame{OnCommand=function(self)
+                local r1 = math.random(1, #all)
+                local r2 = math.random(1, #all - 1)
+                if r2 >= r1 then r2 = r2 + 1 end
+                GAMESTATE:SetCurrentSteps(PLAYER_1, all[r1])
+                GAMESTATE:SetCurrentSteps(PLAYER_2, all[r2])
+                SCREENMAN:SetNewScreen("ScreenGameplay")
+                mod_actions={{1, GAMESTATE:GetCurrentSteps(PLAYER_1):GetDifficulty() .. ':' ..
+                    GAMESTATE:GetCurrentSteps(PLAYER_2):GetDifficulty(), true}}
+            end}
+        "#).expect("write native branch control");
+        let mut context = SongLuaCompileContext::new(&dir, "native selected charts");
+        context.song_steps = steps;
+        context.player_step_indices = [Some(0); LUA_PLAYERS];
+        let compiled = test_compile_song_lua(&entry, &context).expect("native event-mode branch");
+        assert_eq!(compiled.messages[0].message, "Difficulty_Easy:Difficulty_Edit");
+        #[cfg(feature = "test-support")]
+        assert_eq!(compiled.state_calls.iter().filter(|call| call.operation != "MessageManager.Broadcast")
+            .map(|call| &call.args).collect::<Vec<_>>(),
+            expected["seeded_calls"].as_array().expect("native state calls").iter()
+                .map(|call| call.as_array().expect("native call arguments")).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn song_steps_use_metadata() {
+        use crate::{create_player_tables, create_song_table};
+        let lua = Lua::new();
+        let mut context = SongLuaCompileContext::new(".", "real chart order");
+        let mut steps = test_song_steps();
+        context.song_steps = vec![steps.remove(4), steps.remove(0), steps.remove(3)];
+        context.song_steps[2].description = "Mirror".into();
+        context.song_steps[2].meter = 17;
+        context.player_step_indices = [Some(2), Some(0)];
+        let runtime = create_song_runtime_table(&lua, &context).expect("song clock");
+        let song = create_song_table(&lua, &context).expect("song metadata");
+        let players = create_player_tables(&lua, &context, &runtime, &song).expect("players");
+        lua.globals().set("song", song).expect("install song");
+        lua.globals().set("p1", players.steps[0].clone()).expect("install selected Steps");
+        lua.load(r#"
+            local a = song:GetAllSteps()
+            assert(#a == 3 and a[1]:GetDifficulty() == 'Difficulty_Challenge')
+            assert(a[2]:GetDifficulty() == 'Difficulty_Beginner')
+            assert(a[3] == p1 and p1:GetDescription() == 'Mirror' and p1:GetMeter() == 17)
+            a[1] = nil
+            assert(#song:GetAllSteps() == 3)
+            assert(#song:GetStepsByStepsType('StepsType_Dance_Single') == 3)
+            assert(#song:GetStepsByStepsType('StepsType_Pump_Single') == 0)
+            assert(song:GetOneSteps('StepsType_Dance_Single', 'Difficulty_Hard') == nil)
+            assert(not song:HasStepsTypeAndDifficulty('StepsType_Dance_Single', 'Difficulty_Hard'))
+            assert(song:HasEdits('StepsType_Dance_Single'))
+            assert(song:GetOneSteps('StepsType_Dance_Single', 'Difficulty_Edit') == p1)
+        "#).exec().expect("metadata, presence and identity");
+    }
+
+    #[test]
+    fn event_mode_uses_preference() {
+        let song_dir = test_dir("event-mode-native-default");
+        let entry = song_dir.join("default.lua");
+        let source = r#"
+            assert(GAMESTATE:IsEventMode() == PREFSMAN:GetPreference('EventMode'))
+            assert(GAMESTATE:IsEventMode() == expected)
+            PREFSMAN:SetPreference('EventMode', not expected)
+            assert(GAMESTATE:IsEventMode() == not expected)
+            return Def.ActorFrame{}
+        "#;
+        for event_mode in [true, false] {
+            let mut context = SongLuaCompileContext::new(&song_dir, "event mode");
+            context.event_mode = event_mode;
+            fs::write(&entry, format!("expected = {event_mode}\n{source}")).expect("write probe input");
+            test_compile_song_lua(&entry, &context).expect("live EventMode preference");
+        }
     }
 
     #[test]
@@ -12560,10 +12959,9 @@ return Def.ActorFrame{}
         )
         .unwrap();
 
-        let compiled = test_compile_song_lua(
-            &entry,
-            &SongLuaCompileContext::new(&song_dir, "Song Steps Type Selectors"),
-        )
+        let mut context = SongLuaCompileContext::new(&song_dir, "Song Steps Type Selectors");
+        context.song_steps = test_song_steps();
+        let compiled = test_compile_song_lua(&entry, &context)
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
@@ -12810,6 +13208,27 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn screen_request_keeps_current_name() {
+        let song_dir = test_dir("queued-screen-name");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+return Def.Quad{OnCommand=function(self)
+    local screen = SCREENMAN:GetTopScreen()
+    local name = screen:GetName()
+    SCREENMAN:SetNewScreen("LastRequestMustReplaceThis")
+    assert(SCREENMAN:GetTopScreen() == screen and screen:GetName() == name)
+    SCREENMAN:SetNewScreen("ScreenGameplay")
+    assert(SCREENMAN:GetTopScreen() == screen and screen:GetName() == name)
+    self:x(31)
+end}
+"#).expect("write screen request control");
+        let compiled = test_compile_song_lua(&entry,
+            &SongLuaCompileContext::new(&song_dir, "Queued Screen Name"))
+            .expect("compile native screen request control");
+        assert!(compiled.overlays.iter().any(|actor| actor.initial_state.x == 31.0));
+    }
+
+    #[test]
     fn compile_song_lua_exposes_save_your_tears_compat_helpers() {
         let song_dir = test_dir("save-your-tears-compat");
         let entry = song_dir.join("default.lua");
@@ -12838,10 +13257,9 @@ return Def.ActorFrame{
         )
         .unwrap();
 
-        let compiled = test_compile_song_lua(
-            &entry,
-            &SongLuaCompileContext::new(&song_dir, "Save Your Tears Compat"),
-        )
+        let mut context = SongLuaCompileContext::new(&song_dir, "Save Your Tears Compat");
+        context.song_steps = test_song_steps();
+        let compiled = test_compile_song_lua(&entry, &context)
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "6:NoHideLights, 1x, Overhead");
@@ -13440,6 +13858,7 @@ return Def.ActorFrame{
         .unwrap();
 
         let mut context = SongLuaCompileContext::new(&song_dir, "Set Current Steps");
+        context.song_steps = test_song_steps();
         context.song_display_bpms = [120.0, 180.0];
         context.players[0].difficulty = SongLuaDifficulty::Challenge;
         context.players[0].display_bpms = [200.0, 240.0];
@@ -15093,7 +15512,7 @@ local function note(name, sprite)
         string.format(
             "%s:%s:%d:%d:%s",
             name,
-            texture:GetPath():match(name == "background" and "background%.png$" or "banner%.png$") ~= nil,
+            tostring(texture:GetPath():match(name == "background" and "background%.png$" or "banner%.png$") ~= nil),
             sprite:GetWidth(),
             sprite:GetHeight(),
             tostring(Banner.LoadFromSong ~= nil and Banner.LoadFromCourse ~= nil and Banner.LoadFromSongGroup ~= nil
@@ -17496,10 +17915,12 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_accepts_skewy_probe_calls() {
         let song_dir = test_dir("skewy-probe");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local target = nil
 
 mods_ease = {
@@ -17676,6 +18097,8 @@ return Def.ActorFrame {{
     Name="{name}",
     InitCommand=function(self)
         assert(self:GetParent():GetName() == "{parent}")
+        assert(self:GetParent():GetChildren()[self:GetName()] == nil,
+            "layer must attach the root after Init")
     end,
     OnCommand=function(self)
         local screen = SCREENMAN:GetTopScreen()
@@ -18342,7 +18765,7 @@ return Def.ActorFrame{
             spline:SetPoint(1, {0, 0, 0})
             spline:SetPoint(2, {-1, -1, -1})
             spline:Solve()
-            local po = ps:GetPlayerOptions("ModsLevel_Song")
+            local po = ps:GetCurrentPlayerOptions()
             if po:Mirror() ~= false or po:Left() ~= false or po:Right() ~= false then
                 error("unexpected lane permutation")
             end
@@ -18392,10 +18815,12 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_captures_column_position_function_eases() {
         let song_dir = test_dir("column-position-function-eases");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local function bounce_col(v)
     local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
     local ca = nf:GetColumnActors()[2]
@@ -18514,10 +18939,12 @@ end}
     #[test]
     fn compile_song_lua_captures_column_rotation_function_eases() {
         let song_dir = test_dir("column-rotation-function-eases");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local function spin_col(v)
     local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
     for _, column in ipairs(nf:GetColumnActors()) do
@@ -18731,7 +19158,7 @@ return Def.ActorFrame{
         local after_x = string.format("%.2f:%s:%.2f", po:XMod(), tostring(po:Overhead()), po:Mini())
         po:CMod(650, 1)
         local after_c = string.format("%s:%.0f:%s", tostring(po:XMod()), po:CMod(), tostring(po:MMod()))
-        po:CMod(nil, 1):MMod(700, 1)
+        po:CMod(nil, 1, true):MMod(700, 1)
         local after_m = string.format("%s:%s:%.0f", tostring(po:XMod()), tostring(po:CMod()), po:MMod())
         mod_actions = {
             {1, table.concat({initial, after_x, after_c, after_m}, "|"), true},
@@ -18748,7 +19175,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "2.25:nil:false|3.50:true:0.15|nil:650:nil|nil:nil:700"
+            "2.25:nil:false|3.50:true:0.15|nil:650:nil|1:nil:700"
         );
     }
 
@@ -18921,9 +19348,9 @@ return Def.ActorFrame{
     InitCommand=function(self)
         local ps = GAMESTATE:GetPlayerState(PLAYER_1)
         local po = ps:GetPlayerOptions("ModsLevel_Preferred")
-        po:DisableTimingWindow("TimingWindow_W5")
-            :DisableTimingWindow("W3")
-            :DisableTimingWindow(2)
+        po:DisableTimingWindow("TimingWindow_W5", true)
+            :DisableTimingWindow("W3", true)
+            :DisableTimingWindow(1, true)
             :DisableTimingWindow("TimingWindow_W5")
         local before = po:GetDisabledTimingWindows()
         po:ResetDisabledTimingWindows()
@@ -18988,9 +19415,8 @@ return Def.ActorFrame{
         local current_options = ps:GetCurrentPlayerOptions()
         local requested_options = ps:GetPlayerOptions("ModsLevel_Preferred")
         current_options:NoteSkin("metal")
-        if requested_options:NoteSkin() ~= "metal" then
-            error("expected current and requested player options to share state")
-        end
+        assert(current_options:NoteSkin() == "metal")
+        assert(requested_options:NoteSkin() ~= "metal", "direct Current writes stay independent")
         local life = top:GetLifeMeter(ps:GetPlayerNumber())
         local child_life = top:GetChild("Life"..ToEnumShortString(ps:GetPlayerNumber()))
         local generic_life = top:GetChild("LifeMeter")
@@ -19092,6 +19518,8 @@ return Def.ActorFrame{
     InitCommand=function(self)
         local top = SCREENMAN:GetTopScreen()
         local bpm = top:GetChild("BPMDisplay")
+        assert(top:GetScreenType() == "ScreenType_Gameplay")
+        assert(self.GetScreenType == nil)
         local title = top:GetChild("SongTitle")
         local steps = top:GetChild("StepsDisplayP1")
         local underlay = top:GetChild("Underlay")
@@ -19804,12 +20232,12 @@ assert(ws:Send(JsonEncode({uuid=CRYPTMAN:GenerateRandomUUID()})) == nil)
 assert(ws:Close() == nil)
 local file = RageFileUtil:CreateRageFile()
 assert(file:Open("Save/Offline.json", 2))
-assert(file:Write(encoded))
-assert(file:Read() == "")
-assert(file:Close() == nil)
-assert(file:destroy() == nil)
+assert(file:Write(encoded) == #encoded)
+assert(not pcall(function() file:Read() end))
+assert(file:Close() == file.Close)
+assert(file:destroy() == file.destroy)
 local dot_file = RageFileUtil.CreateRageFile()
-assert(dot_file:Read() == "")
+assert(not pcall(function() dot_file:Read() end))
 assert(FILEMAN:Unzip("archive.zip", "Songs/Pack") == false)
 assert(GetTimingWindow(2) > GetTimingWindow(1))
 assert(GetWorstJudgment({{0, GetTimingWindow(3)}}) == 3)
@@ -20013,6 +20441,43 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn stage_points_match_native() {
+        let native_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/stage-points-native.json");
+        let fixture: serde_json::Value = serde_json::from_slice(
+            &fs::read(native_path).expect("captured native stage point control"),
+        ).expect("native stage point JSON");
+        let assertions = fixture["lua_assertions"].as_str().expect("native assertions");
+        let song_dir = test_dir("native-stage-points");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, format!(
+            "local function _ITG_STAGE_STATS(player)\n\
+             return STATSMAN:GetCurStageStats():GetPlayerStageStats(player)\nend\n\
+             {assertions}\nreturn Def.ActorFrame{{}}\n",
+        )).expect("stage point control script");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Native stage points");
+        context.players[1].enabled = true;
+        test_compile_song_lua(&entry, &context).expect("same stage point assertions as native");
+    }
+
+    #[test]
+    fn stage_grade_matches_native() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/stage-grade-native.json",
+        )).expect("native stage grade control");
+        let assertions = fixture["lua_assertions"].as_str().expect("native grade assertions");
+        let song_dir = test_dir("native-stage-grade");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, format!(
+            "local function _ITG_STAGE_STATS(player)\n\
+             return STATSMAN:GetCurStageStats():GetPlayerStageStats(player)\nend\n\
+             {assertions}\nreturn Def.ActorFrame{{}}\n",
+        )).expect("stage grade control script");
+        test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Native grade"))
+            .expect("same empty and failed stage grades as native");
+    }
+
+    #[test]
     fn compile_song_lua_accepts_stage_stat_and_high_score_helpers() {
         let song_dir = test_dir("stage-stat-high-score-helpers");
         let entry = song_dir.join("default.lua");
@@ -20051,7 +20516,7 @@ assert(pss:IsDisqualified() == false)
 assert(pss:FullComboOfScore(0) == false)
 assert(pss:FullCombo() == false)
 assert(pss:MaxCombo() == 0)
-assert(pss:GetCurrentPossibleDancePoints() == 1)
+assert(pss:GetCurrentPossibleDancePoints() == 0)
 assert(pss:GetCurrentCombo() == 0)
 assert(pss:GetCurrentMissCombo() == 0)
 assert(pss:GetCurrentScoreMultiplier() == 1)
@@ -20124,16 +20589,16 @@ return Def.ActorFrame{}
             &entry,
             r#"
 assert(PREFSMAN:PreferenceExists("EventMode"))
-assert(PREFSMAN:GetPreference("EventMode") == false)
+assert(PREFSMAN:GetPreference("EventMode") == true)
 assert(PREFSMAN:GetPreference("MaxHighScoresPerListForMachine") == 10)
 assert(PREFSMAN:GetPreference("LongVerSongSeconds") == 150)
 assert(PREFSMAN:GetPreference("EditorNoteSkinP1") == "default")
 assert(PREFSMAN:PreferenceExists("MissingPreference") == false)
 assert(PREFSMAN:GetPreference("MissingPreference") == nil)
-assert(PREFSMAN:SetPreference("EventMode", true) == PREFSMAN)
-assert(PREFSMAN:GetPreference("EventMode") == true)
-assert(PREFSMAN:SetPreferenceToDefault("EventMode") == PREFSMAN)
+assert(PREFSMAN:SetPreference("EventMode", false) == PREFSMAN)
 assert(PREFSMAN:GetPreference("EventMode") == false)
+assert(PREFSMAN:SetPreferenceToDefault("EventMode") == PREFSMAN)
+assert(PREFSMAN:GetPreference("EventMode") == true)
 assert(PREFSMAN:SetPreference("ShowNativeLanguage", true) == PREFSMAN)
 assert(PREFSMAN:GetPreference("ShowNativeLanguage") == true)
 assert(PREFSMAN:SetPreference("MissingPreference", "ignored") == PREFSMAN)
@@ -20634,6 +21099,25 @@ return Def.ActorFrame{
             }
         ));
         assert!(compiled.hidden_players[0]);
+    }
+
+    #[test]
+    fn compile_begin_proxies() {
+        let song_dir = test_dir("begin-player-proxy");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, include_str!("../../../tests/fixtures/song-lua/begin-player-proxy.lua"))
+            .expect("write root Begin player binding");
+        let compiled = test_compile_song_lua(
+            &entry, &SongLuaCompileContext::new(&song_dir, "Begin Player Proxy"),
+        ).expect("compile root and proxy Begin commands");
+        for player_index in 0..2 {
+            let name = format!("ProxyP{}", player_index + 1);
+            let proxy = compiled.overlays.iter().find(|actor| actor.name.as_deref() == Some(&name))
+                .expect("retain player proxy");
+            assert!(matches!(proxy.kind, SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::Player { player_index: target },
+            } if target == player_index), "{name}: {:?}", proxy.kind);
+        }
     }
 
     #[test]
@@ -21430,10 +21914,12 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_extracts_overlay_function_actions_and_eases() {
         let song_dir = test_dir("overlay-functions");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local target = nil
 
 mod_actions = {
@@ -21700,10 +22186,12 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_scopes_unprobed_overlay_function_eases() {
         let song_dir = test_dir("unprobed-overlay-function-ease");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local target = nil
 
 mods_ease = {
@@ -21739,10 +22227,12 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_keeps_overlay_rotation_eases_out_of_player_transforms() {
         let song_dir = test_dir("overlay-rotation-ease");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local target = nil
 
 mods_ease = {
@@ -21821,10 +22311,12 @@ return Def.ActorFrame {
     #[test]
     fn compile_song_lua_extracts_xero_aux_overlay_node_eases() {
         let song_dir = test_dir("xero-aux-overlay-node");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 xero = {}
 local eases = {}
 local nodes = {}
@@ -22450,11 +22942,28 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_keeps_current_options_distinct() {
+        let song_dir = test_dir("current-options-native");
+        let entry = song_dir.join("default.lua");
+        // Run the unchanged normal-API control also captured with native C++
+        // getters. Its callbacks check approach, freeze and level propagation.
+        fs::write(&entry, include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/current-options/default.lua"
+        )).expect("native control Lua");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Current options");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context)
+            .expect("normal callback option-level assertions");
+        assert!(compiled.info.skipped_message_command_captures.is_empty());
+    }
+
+    #[test]
     fn compile_song_lua_queries_modifiers_without_changing_them() {
         let song_dir = test_dir("modifier-queries");
         let entry = song_dir.join("default.lua");
         fs::write(&entry, r#"
-local p = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song')
+local p = GAMESTATE:GetPlayerState(PLAYER_1):GetCurrentPlayerOptions()
 local function uses(text, player) return GAMESTATE:PlayerIsUsingModifier(player or PLAYER_1, text) end
 assert(uses('1x', 0) and uses('1x', 1))
 assert(not uses('0x') and not uses('2x'))
@@ -22481,7 +22990,7 @@ p:CMod(500)
 assert(uses('C500') and not uses('2x'))
 p:XMod(2)
 assert(uses('2x') and not uses('C500'))
-GAMESTATE:GetSongOptionsObject('ModsLevel_Song'):MusicRate(1.5)
+GAMESTATE:GetSongOptionsObject('ModsLevel_Current'):MusicRate(1.5)
 assert(uses('1.5xmusic') and not uses('1xmusic'))
 assert(p:Reverse() == 0.5 and p:XMod() == 2)
 return Def.ActorFrame{}
@@ -22744,10 +23253,12 @@ return root
     #[test]
     fn compile_song_lua_preserves_overlay_color_for_diffusealpha_eases() {
         let song_dir = test_dir("overlay-diffusealpha-color");
+        write_easing_lib(&song_dir);
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local target = nil
 
 mods_ease = {
@@ -23415,7 +23926,7 @@ return Def.ActorFrame{}
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "2:Simply Love:Simply Love:0:false:1:1:1:1:1:Theme Manager Compat:true:0:1:0:Grade_Tier07:Player:1"
+            "2:Simply Love:Simply Love:0:false:1:1:1:1:1:Theme Manager Compat:true:0:0:0:Grade_Tier17:Player:1"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
     }
@@ -23812,7 +24323,9 @@ return Def.ActorFrame{}
         .unwrap();
 
         let mut context = SongLuaCompileContext::new(&song_dir, "Song Metadata");
+        context.song_steps = test_song_steps();
         context.song_display_bpms = [90.0, 180.0];
+        context.song_timing_bpms = vec![(0.0, 90.0), (4.0, 180.0)];
         context.players[0].difficulty = SongLuaDifficulty::Hard;
         context.players[0].display_bpms = [150.0, 210.0];
         context.music_length_seconds = 123.4;
@@ -23827,6 +24340,8 @@ return Def.ActorFrame{}
 
     fn generated_runtime_mod_lua() -> &'static str {
         r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
+
 mods = {
     {0, 9999, "*1000 no beat, *1000 no drunk, *1000 no tipsy, *1000 no invert, *1000 no flip, *1000 no dizzy", "end"},
 }
@@ -24446,6 +24961,7 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_supports_generated_runtime_modchart() {
         let root = test_dir("generated-runtime-modchart");
+        write_easing_lib(&root);
         let entry = root.join("default.lua");
         fs::write(&entry, generated_runtime_mod_lua()).unwrap();
 

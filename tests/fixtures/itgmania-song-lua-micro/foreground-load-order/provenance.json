@@ -1,0 +1,111 @@
+{
+  "problem": "The semantic loader executed later foreground scripts before earlier Init commands, changing shared globals and native RNG consumption.",
+  "change": "Initialize each loaded root before the next file, set its screen parent before Init, and attach it after Init. Remove the delayed batch initialization and layer attachment.",
+  "harness_version": "0.1.55",
+  "tested_source_parent_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+  "binary_sha256": "8b2b7f0f7efa66c9454c15f6df08c4d7d3fc08a04c50fc95f4b13f1e37e242e5",
+  "tested_source_sha256": {
+    "Cargo.lock": "32f6e2a49f71ad8dbdaa2d310bfd163cbcd24d67a36c5e515960ef04522b4261",
+    "Cargo.toml": "0d9e83626b3cb397123481bbd1bd8a64a0720458e48bc0216856cfdd84a7ed93",
+    "semantic_host.lua": "623ab16d11a489a05c907df5508d6ae3ddb0aaeaecc5d3e4d20f61a786d0ed53",
+    "src/song_lua_headless.rs": "c7bde18d8918ff55258d8cf448193205220db20900441cc8d30d80889f222db3"
+  },
+  "reference_source_sha256": {
+    "Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+    "ActorUtil.cpp": "282b2acd5b45b27ff6c55a4ca1b0189f9405818205fd747316f9f82800c56475",
+    "Foreground.cpp": "04655fe3db304e08f8d424ac6a928858b74182f74ba14ceb658b709324153847",
+    "XmlFileUtil.cpp": "16a9f026afe47a19c6d963c62169007651b07e9c4f2a297c4b1c00caafc03b49"
+  },
+  "source_contract": {
+    "Foreground.cpp": "36-62: MakeActor loads and runs Init before AddChild and the next file",
+    "ActorUtil.cpp": "177-245: set parent before LoadFromNode",
+    "ActorFrame.cpp": "89-94: children initialize before the frame"
+  },
+  "pre_fix_control": {
+    "source_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+    "binary_sha256": "cbd9ab9b64070f68ce44156aa3c4247b184ae5eed10bc5ee29f7887d6288b4f6",
+    "exit_code": 0,
+    "source_pending_commit": false,
+    "historical_frozen_binary": true,
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass156-load-order-baseline-v4\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": null,
+    "runtime_errors": [
+      "ITGmania Lua host failed: C:/GitHub/itgmania-harness/target/song-lua-repair/pass156-load-order-baseline-v4/songs/control/second.lua:1: script1"
+    ],
+    "dropped_events": null,
+    "reference_source_sha256": {
+      "Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+      "ActorUtil.cpp": "282b2acd5b45b27ff6c55a4ca1b0189f9405818205fd747316f9f82800c56475",
+      "Foreground.cpp": "04655fe3db304e08f8d424ac6a928858b74182f74ba14ceb658b709324153847",
+      "XmlFileUtil.cpp": "16a9f026afe47a19c6d963c62169007651b07e9c4f2a297c4b1c00caafc03b49"
+    },
+    "semantic_loader_under_test": true,
+    "native_cpp_loader_used": false
+  },
+  "post_fix_control": {
+    "source_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+    "binary_sha256": "8b2b7f0f7efa66c9454c15f6df08c4d7d3fc08a04c50fc95f4b13f1e37e242e5",
+    "exit_code": 0,
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass156-load-order-after-v1\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "91e5f4b8a75b2e01ff818c646ad34e2f3c3cb7b0b98d72408e1aabfdb94db3f3",
+    "runtime_errors": [],
+    "dropped_events": 0,
+    "reference_source_sha256": {
+      "Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+      "ActorUtil.cpp": "282b2acd5b45b27ff6c55a4ca1b0189f9405818205fd747316f9f82800c56475",
+      "Foreground.cpp": "04655fe3db304e08f8d424ac6a928858b74182f74ba14ceb658b709324153847",
+      "XmlFileUtil.cpp": "16a9f026afe47a19c6d963c62169007651b07e9c4f2a297c4b1c00caafc03b49"
+    },
+    "semantic_loader_under_test": true,
+    "native_cpp_loader_used": false
+  },
+  "unit_tests": {
+    "binary": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass156-load-order-tests-v2.exe",
+    "binary_sha256": "5f5e629e5fa12040d6ea3458b963794fac9640d3a1b30cd31614f87b7491fb1e",
+    "exit_code": 0,
+    "seconds": 174.7890543001704,
+    "log": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass156-load-order-all-units-v1.log",
+    "log_sha256": "d80b7fc9d964c7514fdc7f46c6a3ed2eb9178ca0f5eb067fe9514a1277596cad",
+    "result_lines": [
+      "test result: ok. 173 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 174.46s"
+    ]
+  },
+  "semantic_loader_under_test": true,
+  "native_cpp_loader_used_for_control": false,
+  "full_corpus_complete": false,
+  "pending_contracts": [
+    "Incremental sibling construction during child Init",
+    "Native command subscription timing",
+    "Original fixture 76 must be recaptured and compared"
+  ],
+  "complete_control_archive": {
+    "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass156-load-order-after-v1\\archives\\084f9b867318c1382af23e1ee8aaf5fe02241905b5f3e226ad3ddfe74bc759ab.tar.zst",
+    "archive_sha256": "084f9b867318c1382af23e1ee8aaf5fe02241905b5f3e226ad3ddfe74bc759ab",
+    "archive_entry": {
+      "title": "Foreground load order",
+      "source_simfile": "control/control.ssc",
+      "harness_version": "0.1.55",
+      "archive": "084f9b867318c1382af23e1ee8aaf5fe02241905b5f3e226ad3ddfe74bc759ab.tar.zst",
+      "sha256": "084f9b867318c1382af23e1ee8aaf5fe02241905b5f3e226ad3ddfe74bc759ab",
+      "compressed_bytes": 13011
+    },
+    "harness_commit": "5e225ab9e6ffdcb3bdaacc4617a3d231fed219be",
+    "binary_sha256": "8b2b7f0f7efa66c9454c15f6df08c4d7d3fc08a04c50fc95f4b13f1e37e242e5",
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass156-load-order-after-v1\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "91e5f4b8a75b2e01ff818c646ad34e2f3c3cb7b0b98d72408e1aabfdb94db3f3",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "update_frames": 241,
+    "semantic_loader_under_test": true,
+    "native_cpp_loader_used": false
+  },
+  "input_sha256": {
+    "first.lua": "d03dd0fb3b839dbd27b1cab2067c9479931659287090efdaa6fc54f62e41a243",
+    "second.lua": "376f7f160c221c9732a82e36c8ce6f1f3f7cce9ef064dbb97b9a7483e2079b21",
+    "control.ssc": "a1d227184978880029ca453c7fb6d11c0f4bd1b3305e9151523b6e2481eddfac",
+    "native.json": "91e5f4b8a75b2e01ff818c646ad34e2f3c3cb7b0b98d72408e1aabfdb94db3f3"
+  }
+}

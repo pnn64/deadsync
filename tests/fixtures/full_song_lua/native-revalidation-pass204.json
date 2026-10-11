@@ -1,0 +1,99 @@
+{
+  "pass": 204,
+  "previous_record": "native-revalidation-pass203.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+  "comparator_sha256": "332064e9b8c045c4441cde0d86a3ee0268483aa0114e839969ec94cd34ad962d",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    125
+  ],
+  "next_position": 126,
+  "comparisons_passed": 158515,
+  "charts": [
+    {
+      "position": 125,
+      "entry": {
+        "title": "Blacksphere",
+        "source_simfile": "Blacksphere/music.ssc",
+        "harness_version": "0.1.64",
+        "archive": "3e5565742fd22b7b8fe0877ca1536b818215318dfb0e19ddfc86d0c5f3ac0df3.tar.zst",
+        "sha256": "3e5565742fd22b7b8fe0877ca1536b818215318dfb0e19ddfc86d0c5f3ac0df3",
+        "compressed_bytes": 102976,
+        "aliases": [
+          "88ac8213859be35360ed8050f804ac9969c84d3a8274af6ca46c9f978c64eb7d.tar.zst"
+        ]
+      },
+      "original_archive_retained": "ff63ea99da9a8ecf68671e3805934bfbac83ff446af63bdc0a624dc0c50d74a3.tar.zst",
+      "native_source_commit": "cc0ea0c0ab70e962785eff8681a6867a3f8689ee",
+      "native_trace_sha256": "441b10e40d3626ce018a93b223f4cbe7fcc30fbb019df88141a4d28dd084b8ab",
+      "original_source_sha256": {
+        "Blacksphere/music.ogg": "362541ad85d36a2fa0de0db534ae4416e55f0784ca070eafbbeccf8cea089e0b",
+        "Blacksphere/music.ssc": "af7dca994258986d556773d1e3cb2889c0989698b129ea6d9701b0b8e4cd601c",
+        "Blacksphere/lua/default.lua": "c65d521d2b9b0b816d92c7e948e88496fe9f4cfcb38692959aedb1cfdacb03e0",
+        "Blacksphere/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "Blacksphere/lua/mods.lua": "78ce399e3ac91f556f26d59fa2b15ab17154246821ab53db8c62120b5034a293"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 7178,
+      "duration_seconds": 119.60784912109376,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 5,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 125,
+      "source_simfile": "Blacksphere/music.ssc",
+      "archive": "3e5565742fd22b7b8fe0877ca1536b818215318dfb0e19ddfc86d0c5f3ac0df3.tar.zst",
+      "archive_sha256": "3e5565742fd22b7b8fe0877ca1536b818215318dfb0e19ddfc86d0c5f3ac0df3",
+      "harness_version": "0.1.64",
+      "source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+      "source_pending_commit": false,
+      "binary_sha256": "332064e9b8c045c4441cde0d86a3ee0268483aa0114e839969ec94cd34ad962d",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-checkpoint-v1-full_song_lua.exe",
+        "3e5565742fd22b7b8fe0877ca1536b818215318dfb0e19ddfc86d0c5f3ac0df3.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 6.766050499863923,
+      "comparisons_passed": 158515,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-125-user-merge-checkpoint-v1.log",
+      "log_sha256": "f5b621adcfa9707b5557d3f8333f112697c481da41c9bb955f24aef4898215fa",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass252-top-125-rage-file-v1.json",
+      "native_receipt_sha256": "edc423d2e57775520d0e93e5a296db611a9a49a0a6cfb172659644ba007017d4",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+    "source_pending_commit": false,
+    "binary_sha256": "b0e8f5223fb6f054e64146ce459f958d7ac216ea083b4697424cf01f58d2b0ac",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-checkpoint-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.1100698001682758,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-125-native-pass204.log",
+    "log_sha256": "7ac98e7a097aef4686ffa330757457dbd1c9f35c40e90ecf65e63f2bd3e30399",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.54s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

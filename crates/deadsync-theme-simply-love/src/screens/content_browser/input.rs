@@ -165,9 +165,10 @@ fn focus_search(state: &mut State) {
 /// The list answers from the catalogue's own names immediately; the two
 /// network passes wait for the typing to stop -- see `SEARCH_DEBOUNCE`.
 fn edit_query(state: &mut State, edit: impl FnOnce(&mut String)) -> bool {
-    let before = state.query.clone();
+    // All callers only append, pop, or clear; an edit changes the byte length.
+    let before = state.query.len();
     edit(&mut state.query);
-    if state.query == before {
+    if state.query.len() == before {
         return false;
     }
     state.query_idle = 0.0;
@@ -1207,8 +1208,8 @@ pub fn handle_raw_key_event(
     let Some(text) = text else {
         return false;
     };
-    let printable: String = text.chars().filter(|ch| !ch.is_control()).collect();
-    if printable.is_empty() {
+    let mut printable = text.chars().filter(|ch| !ch.is_control()).peekable();
+    if printable.peek().is_none() {
         return false;
     }
     // Reading a pack is not searching for one.
@@ -1224,12 +1225,8 @@ pub fn handle_raw_key_event(
         focus_search(state);
     }
     if edit_query(state, |query| {
-        for ch in printable.chars() {
-            if query.chars().count() >= QUERY_MAX_CHARS {
-                break;
-            }
-            query.push(ch);
-        }
+        let remaining = QUERY_MAX_CHARS.saturating_sub(query.chars().count());
+        query.extend(printable.take(remaining));
     }) {
         effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
     }
@@ -2322,3 +2319,7 @@ mod tests {
         assert_eq!(state.zone, Zone::List);
     }
 }
+
+#[cfg(test)]
+#[path = "input/menu_buffers_perf.rs"]
+mod menu_buffers_perf;
