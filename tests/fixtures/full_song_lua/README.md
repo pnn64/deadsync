@@ -2017,3 +2017,17 @@ See `native-revalidation-pass214.json`. Position 136 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 215
+
+Position 136, Bzrp Music Sessions, Vol. 53, passes all
+733,744 comparisons against committed DeadSync
+`ae36c5c90`. The complete native harness 0.1.67 archive
+contains 8,716 updates over 145.24 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass215.json`. Position 137 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.

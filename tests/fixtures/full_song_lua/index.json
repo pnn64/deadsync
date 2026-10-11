@@ -1782,12 +1782,10 @@
     {
       "title": "Bzrp Music Sessions, Vol. 53",
       "source_simfile": "Bzrp Music Sessions, Volume 53/bzrp53-fakemines.sm",
-      "harness_version": "0.1.0",
-      "archive": "78430bb1fe88f8eebc105c43f68eea71a0d904c7609fd1d14ed055d07e1622f4.tar.zst",
-      "sha256": "78430bb1fe88f8eebc105c43f68eea71a0d904c7609fd1d14ed055d07e1622f4",
-      "compressed_bytes": 110740,
-      "uncompressed_sha256": "0322b7d1f9ca95848d2353cd1044ef8ff448fccb523c62fb19e586c138a2f42c",
-      "compression_level": 22,
+      "harness_version": "0.1.67",
+      "archive": "295e9b16ec07f89056d66834ed4e01f8ac19703087917e1af3082fb57a75c286.tar.zst",
+      "sha256": "295e9b16ec07f89056d66834ed4e01f8ac19703087917e1af3082fb57a75c286",
+      "compressed_bytes": 391789,
       "aliases": [
         "6ad9a7a936dbf4b62272b38f26871de11b2818b513cfa4ecedc6888e266f906d.tar.zst"
       ]
