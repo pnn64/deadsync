@@ -489,12 +489,13 @@ impl PlaybackPosMap {
         if let Some(last) = self.queue.back_mut() {
             let contiguous_stream = last.stream_frame_start + last.frames == seg.stream_frame_start;
             let ratio_match = (last.music_sec_per_frame - seg.music_sec_per_frame).abs() <= 1e-9;
-            let expected_music_start = last
-                .music_sec_per_frame
-                .mul_add(last.frames as f64, last.music_start_sec);
-            let music_contiguous = (expected_music_start - seg.music_start_sec).abs()
-                <= seg.music_sec_per_frame.abs().max(1e-9);
-            if contiguous_stream && ratio_match && music_contiguous {
+            if contiguous_stream && ratio_match && {
+                let expected_music_start = last
+                    .music_sec_per_frame
+                    .mul_add(last.frames as f64, last.music_start_sec);
+                (expected_music_start - seg.music_start_sec).abs()
+                    <= seg.music_sec_per_frame.abs().max(1e-9)
+            } {
                 last.frames += seg.frames;
                 self.backlog_frames = self.backlog_frames.saturating_add(seg.frames);
                 self.cleanup();
@@ -884,3 +885,7 @@ mod tests {
         assert!((map.search(frame).unwrap().0 - 1.0).abs() <= 1e-9);
     }
 }
+
+#[cfg(test)]
+#[path = "position_perf.rs"]
+mod perf;
