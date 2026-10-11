@@ -1703,7 +1703,6 @@ impl TimingData {
         if seg.delay <= 0.0 {
             return seg.ratio;
         }
-        let time_ns = time_ns();
         // Construction and every offset update build one runtime per speed.
         let rt = self.speed_runtime[i];
 
