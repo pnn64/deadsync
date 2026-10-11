@@ -763,6 +763,7 @@ pub enum SongLuaEaseMaskTarget {
     VisualTinyColumn(usize),
     VisualMoveXColumn(usize),
     VisualMoveYColumn(usize),
+    VisualMoveZColumn(usize),
     VisualPulseInner,
     VisualPulseOuter,
     VisualPulsePeriod,
@@ -2334,6 +2335,14 @@ fn append_song_lua_ease_targets_key(
         );
         return true;
     }
+    if let Some(col) = mod_column_suffix(key, "movez") {
+        push(
+            SongLuaEaseMaskTarget::VisualMoveZColumn(col),
+            pct_from,
+            pct_to,
+        );
+        return true;
+    }
     if let Some(col) = mod_column_suffix(key, "confusionoffset") {
         push(
             SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col),
@@ -3259,6 +3268,11 @@ pub fn song_lua_apply_eased_target(
                 visual.move_y_cols[col] = Some(value);
             }
         }
+        SongLuaEaseMaskTarget::VisualMoveZColumn(col) => {
+            if col < MAX_COLS {
+                visual.move_z_cols[col] = Some(value);
+            }
+        }
         SongLuaEaseMaskTarget::VisualPulseInner => visual.pulse_inner = Some(value),
         SongLuaEaseMaskTarget::VisualPulseOuter => visual.pulse_outer = Some(value),
         SongLuaEaseMaskTarget::VisualPulsePeriod => visual.pulse_period = Some(value),
@@ -3559,6 +3573,11 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualMoveYColumn(col) => window
             .visual
             .move_y_cols
+            .get(col)
+            .is_some_and(Option::is_some),
+        SongLuaEaseMaskTarget::VisualMoveZColumn(col) => window
+            .visual
+            .move_z_cols
             .get(col)
             .is_some_and(Option::is_some),
         SongLuaEaseMaskTarget::VisualPulseInner => window.visual.pulse_inner.is_some(),
@@ -4983,6 +5002,9 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     for (target, value) in targets.move_y_cols.iter_mut().zip(visual.move_y_cols) {
         mark_active_target(target, value);
     }
+    for (target, value) in targets.move_z_cols.iter_mut().zip(visual.move_z_cols) {
+        mark_active_target(target, value);
+    }
     mark_active_target(&mut targets.pulse_inner, visual.pulse_inner);
     mark_active_target(&mut targets.pulse_outer, visual.pulse_outer);
     mark_active_target(&mut targets.pulse_period, visual.pulse_period);
@@ -6121,6 +6143,9 @@ fn apply_song_lua_approach_targets(
             }
             SongLuaEaseMaskTarget::VisualMoveYColumn(col) if col < MAX_COLS => {
                 attack.visual_speed.move_y_cols[col] = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualMoveZColumn(col) if col < MAX_COLS => {
+                attack.visual_speed.move_z_cols[col] = Some(speed)
             }
             SongLuaEaseMaskTarget::MiniPercent => attack.mini_speed = Some(speed),
             _ => {}
@@ -7307,6 +7332,15 @@ fn apply_active_visual_window(
         active_clear_all,
         persisted,
     );
+    apply_active_visual_cols(
+        &mut values.visual.move_z_cols,
+        &mut values.visual_speed.move_z_cols,
+        window.visual.move_z_cols,
+        window.visual_speed.move_z_cols,
+        active_targets.visual.move_z_cols,
+        active_clear_all,
+        persisted,
+    );
     apply_active_visual_target(
         &mut values.visual.pulse_inner,
         &mut values.visual_speed.pulse_inner,
@@ -7930,6 +7964,15 @@ fn apply_runtime_mod(
         set_approached_mod(
             &mut out.visual.move_y_cols[col],
             &mut out.visual_speed.move_y_cols[col],
+            attack_level(percent_value),
+            approach_speed,
+        );
+        return;
+    }
+    if let Some(col) = mod_column_suffix(key, "movez") {
+        set_approached_mod(
+            &mut out.visual.move_z_cols[col],
+            &mut out.visual_speed.move_z_cols[col],
             attack_level(percent_value),
             approach_speed,
         );
@@ -9066,6 +9109,7 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
     let mut tiny_cols = base.tiny_cols;
     let mut move_x_cols = base.move_x_cols;
     let mut move_y_cols = base.move_y_cols;
+    let mut move_z_cols = base.move_z_cols;
     for i in 0..MAX_COLS {
         if let Some(v) = attack.confusion_offset_cols[i].filter(|v| v.is_finite()) {
             confusion_offset_cols[i] = v;
@@ -9081,6 +9125,9 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         }
         if let Some(v) = attack.move_y_cols[i].filter(|v| v.is_finite()) {
             move_y_cols[i] = v;
+        }
+        if let Some(v) = attack.move_z_cols[i].filter(|v| v.is_finite()) {
+            move_z_cols[i] = v;
         }
     }
     VisualEffects {
@@ -9170,6 +9217,7 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         tiny_cols,
         move_x_cols,
         move_y_cols,
+        move_z_cols,
         pulse_inner: merge_attack_value(base.pulse_inner, attack.pulse_inner),
         pulse_outer: merge_attack_value(base.pulse_outer, attack.pulse_outer),
         pulse_period: merge_attack_value(base.pulse_period, attack.pulse_period),

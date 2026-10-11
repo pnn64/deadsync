@@ -1,3 +1,4 @@
+use crate::transforms::move_col_extra;
 use crate::explosions::{ExplosionComposeRequest, ExplosionRotation, compose_explosion_layers};
 use crate::{
     ColumnFeedbackRequest, ModelMeshCache, NoteXParams, NotefieldComposeRequest, PreparedNotefield,
@@ -259,8 +260,8 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         let transform_cache = crate::lane_note_transform_cache(current_beat, effect);
         lane_rotations_x[local_col] = transform_cache.confusion_rotation_x_deg;
         lane_rotations_y[local_col] = transform_cache.confusion_rotation_y_deg;
-        lane_depths[local_col] =
-            crate::note_world_z_cached(0.0, notes.note_depth_frame_cache, transform_cache);
+        lane_depths[local_col] = move_col_extra(&visual.move_z_cols, local_col)
+            + crate::note_world_z_cached(0.0, notes.note_depth_frame_cache, transform_cache);
         let spline = prepared.column_position_splines[local_col];
         let spline_z = prepared.column_spline_receptors[local_col][2] * field_zoom;
         lane_depths[local_col] = if spline.enabled && spline.absolute {
@@ -3323,7 +3324,8 @@ mod tests {
             let notes = [n];
             for placement in [FieldPlacement::P1, FieldPlacement::P2] {
                 for direction in [-1.0, 1.0] {
-                    for zoom in [0.5, 1.0, 1.5] {
+                    for (zoom, move_z) in [(0.5, 0.0), (1.0, 0.0), (1.5, 0.0),
+                        (0.5, 0.5), (1.0, -0.25), (1.5, 1.5)] {
                         let mut request =
                             request(&ns, &timing, &notes, &hides, placement, 0, 1, 2, 2);
                         request.chart.lane_note_row_indices = &lanes;
@@ -3331,6 +3333,8 @@ mod tests {
                         request.chart.note_itg_rows = &[96];
                         request.geometry.column_dirs.fill(direction);
                         request.geometry.field_zoom = zoom;
+                        request.visual.visual.move_z_cols[0] = move_z;
+                        let lane_depth = 64.0 * move_z;
                         let before = render(&request);
                         request.song_lua.column_offsets = &windows;
                         let after = render(&request);
@@ -3347,6 +3351,10 @@ mod tests {
                                 })
                                 .expect("composed sprite")
                         };
+                        for key in ["note", "target0"] {
+                            // ArrowEffects depth is raw; the prepared spline supplies its own scaled Z.
+                            assert_eq!(sprite(&before, key)[2], lane_depth);
+                        }
                         // Native t=(2-1)/8 gives (-6,81,.025); receptor t=0
                         // gives (-12,108,0). Reverse affects only ArrowEffects.
                         for (key, delta) in [
@@ -3387,14 +3395,14 @@ mod tests {
                                 assert!(
                                     vertices
                                         .iter()
-                                        .all(|vertex| (vertex.pos[2] - depth * zoom).abs() < 0.001
-                                            || (vertex.pos[2] - depth * zoom - step_z).abs()
+                                        .all(|vertex| (vertex.pos[2] - lane_depth - depth * zoom).abs() < 0.001
+                                            || (vertex.pos[2] - lane_depth - depth * zoom - step_z).abs()
                                                 < 0.001),
                                     "{part} constant beat"
                                 );
                                 assert!(
                                     vertices.iter().any(|vertex| (vertex.pos[2]
-                                        - depth * zoom
+                                        - lane_depth - depth * zoom
                                         - step_z)
                                         .abs()
                                         < 0.001)

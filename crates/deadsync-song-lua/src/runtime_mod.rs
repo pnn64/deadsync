@@ -889,6 +889,7 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         || runtime_mod_column_key(key, "tiny")
         || runtime_mod_column_key(key, "movex")
         || runtime_mod_column_key(key, "movey")
+        || runtime_mod_column_key(key, "movez")
         || runtime_mod_column_key(key, "confusionoffset")
     {
         return Some(SongLuaEaseTarget::Mod(original.to_string()));

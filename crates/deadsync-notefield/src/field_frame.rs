@@ -1,5 +1,5 @@
 use crate::transforms::{
-    attenuate_offset, beat_wave_offset, visual_note_rotation_x, visual_note_rotation_y,
+    attenuate_offset, beat_wave_offset, move_col_extra, visual_note_rotation_x, visual_note_rotation_y,
 };
 use crate::{
     CapturedActorScratch, CapturedActorSource, HoldBodyCapRequest, HoldEntryPlanRequest,
@@ -369,11 +369,13 @@ fn compose_field_contents<S, F>(
         )
     };
     let world_z_for_adjusted_travel = |local_col: usize, travel_offset: f32| -> f32 {
-        note_world_z_cached(
-            travel_offset,
-            note_inputs.note_depth_frame_cache,
-            lane_transform_caches[local_col],
-        )
+        // ArrowEffects::GetXYZPos adds the lane move before GetZPos.
+        move_col_extra(&visual.move_z_cols, local_col)
+            + note_world_z_cached(
+                travel_offset,
+                note_inputs.note_depth_frame_cache,
+                lane_transform_caches[local_col],
+            )
     };
     let visible_row_range = if field_zoom > 0.0 {
         crate::note_placement::expand_range(travel.visible_row_range())
@@ -1221,11 +1223,12 @@ fn compose_visible_notes<S, F>(
                         visual.beat_y_period,
                     );
                 let transform_cache = lane_transform_caches[local_col];
-                let mut world_z = note_world_z_cached(
-                    adjusted_travel,
-                    notes.note_depth_frame_cache,
-                    transform_cache,
-                ) + spline_offset[2];
+                let mut world_z = move_col_extra(&visual.move_z_cols, local_col)
+                    + note_world_z_cached(
+                        adjusted_travel,
+                        notes.note_depth_frame_cache,
+                        transform_cache,
+                    ) + spline_offset[2];
                 if prepared.column_position_splines[local_col].absolute {
                     [column_center_x, y_pos, world_z] = prepared.spline_position(
                         local_col,

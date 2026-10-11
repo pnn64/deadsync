@@ -272,6 +272,7 @@ pub struct VisualOverrides {
     pub tiny_cols: [Option<f32>; MAX_COLS],
     pub move_x_cols: [Option<f32>; MAX_COLS],
     pub move_y_cols: [Option<f32>; MAX_COLS],
+    pub move_z_cols: [Option<f32>; MAX_COLS],
     pub pulse_inner: Option<f32>,
     pub pulse_outer: Option<f32>,
     pub pulse_period: Option<f32>,
@@ -395,6 +396,7 @@ impl Default for VisualOverrides {
             tiny_cols: [None; MAX_COLS],
             move_x_cols: [None; MAX_COLS],
             move_y_cols: [None; MAX_COLS],
+            move_z_cols: [None; MAX_COLS],
             pulse_inner: None,
             pulse_outer: None,
             pulse_period: None,
@@ -520,6 +522,7 @@ impl VisualOverrides {
             || self.tiny_cols.iter().any(Option::is_some)
             || self.move_x_cols.iter().any(Option::is_some)
             || self.move_y_cols.iter().any(Option::is_some)
+            || self.move_z_cols.iter().any(Option::is_some)
             || self.pulse_inner.is_some()
             || self.pulse_outer.is_some()
             || self.pulse_period.is_some()
@@ -756,6 +759,7 @@ pub struct VisualEffects {
     pub tiny_cols: [f32; MAX_COLS],
     pub move_x_cols: [f32; MAX_COLS],
     pub move_y_cols: [f32; MAX_COLS],
+    pub move_z_cols: [f32; MAX_COLS],
     pub pulse_inner: f32,
     pub pulse_outer: f32,
     pub pulse_period: f32,
@@ -887,6 +891,7 @@ impl VisualEffects {
             tiny_cols: [0.0; MAX_COLS],
             move_x_cols: [0.0; MAX_COLS],
             move_y_cols: [0.0; MAX_COLS],
+            move_z_cols: [0.0; MAX_COLS],
             pulse_inner: 0.0,
             pulse_outer: 0.0,
             pulse_period: 0.0,
@@ -1103,6 +1108,7 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual_cols(&mut visual.tiny_cols, base.tiny_cols, step);
     approach_optional_visual_cols(&mut visual.move_x_cols, base.move_x_cols, step);
     approach_optional_visual_cols(&mut visual.move_y_cols, base.move_y_cols, step);
+    approach_optional_visual_cols(&mut visual.move_z_cols, base.move_z_cols, step);
     approach_optional_visual(&mut visual.pulse_inner, base.pulse_inner, step);
     approach_optional_visual(&mut visual.pulse_outer, base.pulse_outer, step);
     approach_optional_visual(&mut visual.pulse_period, base.pulse_period, step);
@@ -1786,6 +1792,13 @@ pub fn approach_visual_overrides_to_target(
         target.move_y_cols,
         base.move_y_cols,
         speed.move_y_cols,
+        delta_time,
+    );
+    approach_attack_cols(
+        &mut current.move_z_cols,
+        target.move_z_cols,
+        base.move_z_cols,
+        speed.move_z_cols,
         delta_time,
     );
     approach_attack_value(

@@ -433,6 +433,7 @@ fn runtime_mod_value(
         ("confusionoffset", visual.confusion_offset_cols),
         ("movex", visual.move_x_cols),
         ("movey", visual.move_y_cols),
+        ("movez", visual.move_z_cols),
         ("tiny", visual.tiny_cols),
         ("bumpy", visual.bumpy_cols),
         ("dark", runtime.visibility[player].dark_cols),
@@ -1136,6 +1137,49 @@ end}
         !rejected.gaps.is_empty(),
         "incorrect reset values must fail the audit"
     );
+}
+
+#[test]
+fn move_z_keeps_lane_method_string_and_reset_values() {
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("create MoveZ fixture directory");
+    let entry = directory.path().join("default.lua");
+    fs::write(&entry, r#"
+local player = GAMESTATE:GetPlayerState(PLAYER_1)
+local options = player:GetPlayerOptions('ModsLevel_Song')
+local phase = 1
+return Def.ActorFrame{OnCommand=function(self)
+    options:FromString('*2 150% movez1,*2 -50% movez4')
+    self:SetUpdateFunction(function()
+        if phase == 1 and GAMESTATE:GetSongBeat() >= 1 then
+            options:MoveZ2(-0.25, 1000)
+            phase = 2
+        elseif phase == 2 and GAMESTATE:GetSongBeat() >= 2 then
+            player:SetPlayerOptions('ModsLevel_Song', '')
+            phase = 3
+        end
+    end)
+end}
+"#).expect("write MoveZ fixture");
+    let mut context = SongLuaCompileContext::new(directory.path(), "Lane MoveZ");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 2.0;
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile lane MoveZ");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, expected) in [(0.25, [1.5, 0.0, 0.0, -0.5]),
+        (0.75, [1.5, -0.25, 0.0, -0.5]), (1.0, [0.0; 4])] {
+        runtime.reset_window_times();
+        runtime.refresh_player(0, second, 1_000_000.0,
+            deadsync_gameplay::AppearanceEffects::default(), AttackBaseEffects::default,
+            SongLuaPlayerTransform::default());
+        for (column, value) in expected.into_iter().enumerate() {
+            let key = format!("movez{}", column + 1);
+            assert_eq!(runtime_mod_value(&runtime, 0, &key), Some(value), "{key} at {second}");
+            assert_eq!(runtime_mod_value(&runtime, 1, &key), Some(0.0));
+        }
+    }
 }
 
 #[test]

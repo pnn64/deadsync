@@ -4374,6 +4374,27 @@ mod tests {
     }
 
     #[test]
+    fn move_z_approach_matches_native() {
+        // Verified by the native PlayerOptions control in move-z-provenance.json.
+        let target = parse_song_lua_runtime_mods("*2 150% movez1,*2 -50% movez4");
+        let mut current = VisualOverrides::default();
+        let base = VisualEffects::default();
+        approach_visual_overrides_to_target(
+            &mut current, target.visual, target.visual_speed, base, 0.5,
+        );
+        assert_eq!(current.move_z_cols[0], Some(1.0));
+        assert_eq!(current.move_z_cols[3], Some(-0.5));
+        assert_eq!(current.move_z_cols[2], None);
+        approach_visual_overrides_to_target(
+            &mut current, target.visual, target.visual_speed, base, 0.5,
+        );
+        assert_eq!(current.move_z_cols[0], Some(1.5));
+        assert_eq!(merge_attack_visual_effects(base, current).move_z_cols[3], -0.5);
+        approach_visual_overrides_to_base(&mut current, base, 10.0);
+        assert!(current.move_z_cols.iter().all(Option::is_none));
+    }
+
+    #[test]
     // These expected decimals come from percentage-form mod strings, not constants.
     #[allow(clippy::approx_constant)]
     fn song_lua_runtime_mod_parser_scales_column_moves() {
