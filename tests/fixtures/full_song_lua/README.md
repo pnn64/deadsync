@@ -2242,3 +2242,19 @@ The archive command rejects it, no whole-archive comparison ran, and the
 483-entry index is unchanged. Position 146 remains next, followed by 147. See
 `native-revalidation-deadsync-step-selection.json` for source identities, exact
 receipts and the retained gameplay, parser, style and corpus requirements.
+
+The subsequent upstream merge is preserved. `native-revalidation-merged-selection.json`
+records its build repairs and validation: 245 simfile, 195 playback and seven
+Technique checks pass; the Lua library retains 514 passes and its two known
+failures. The seven Technique checks include hidden-window Vulkan arrow
+visibility and rotation. The installed game binary remains unchanged.
+
+The merged speed benchmark compared finite native float queries with a frozen
+nanosecond implementation that clamps. Its corrected comparisons preserve all
+integer cases and invalid float fallbacks; the native positive-delay control
+also verifies extrapolation before a later transition starts, bit for bit.
+All 120 rules tests pass, with two ignored. These test changes preserve the
+production timing calculation. Interrupted checks whose build files disappeared
+remain recorded separately from successful isolated reruns. No original archive
+was added, no whole-archive comparison ran, and Choices at position 146 remains
+next. The original 501-simfile scope and its historical pending items are retained.

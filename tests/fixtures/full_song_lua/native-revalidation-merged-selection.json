@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "status": "merged-source-verified-with-two-known-lua-test-failures",
+  "deadsync_code_commit": "0779e9b8cb6f7f9d22ec7019c2f72c642ccd74fe",
+  "production_code_commit": "b27b7a1ee3836ed4bd17f1e4505c005087eac54e",
+  "concurrent_merge_commit": "89db110cc65c6f634d0579d29be9f064838c24c1",
+  "preceding_selection_proof": "native-revalidation-deadsync-step-selection.json",
+  "preserved_native_harness_commit": "cc4e9f835c9b0189af5251c84282a0dadf1c55de",
+  "build_repairs": [
+    "Remove the stale invocation of an integer timestamp.",
+    "Initialize authored chart MUSIC in the incoming metadata test.",
+    "Reuse the shared test allocator and delete the duplicate filename allocator."
+  ],
+  "checks": {
+    "isolated-merged-lua-v3": {
+      "receipt": {
+        "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\isolated-merged-lua-v3.json",
+        "sha256": "446abacd5274580a1d369853a65125922c4be2ab517a0b07b39ecd0b0ce749a6"
+      },
+      "exit_code": 101,
+      "results": [
+        "test result: FAILED. 514 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 62.88s"
+      ],
+      "failures": [
+        "test multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod ... FAILED",
+        "test tests::compile_song_lua_accepts_skewy_probe_calls ... FAILED",
+        "thread 'multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod' (54740) panicked at crates\\deadsync-song-lua\\src\\multitap.rs:1471:13:",
+        "thread 'tests::compile_song_lua_accepts_skewy_probe_calls' (53812) panicked at crates\\deadsync-song-lua\\src\\lib.rs:17929:9:",
+        "test result: FAILED. 514 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 62.88s",
+        "error: test failed, to rerun pass `-p deadsync-song-lua --lib`"
+      ]
+    },
+    "isolated-merged-playback-v3": {
+      "receipt": {
+        "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\isolated-merged-playback-v3.json",
+        "sha256": "9937aaa9b10b2ef507b26c691212363e6f7e79fe99cee4eff3d1412d1e0ce34a"
+      },
+      "exit_code": 0,
+      "results": [
+        "test result: ok. 195 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 20.44s"
+      ],
+      "failures": []
+    },
+    "isolated-merged-technique-v3": {
+      "receipt": {
+        "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\isolated-merged-technique-v3.json",
+        "sha256": "b4d901888a60bfd8965cc30af228e843128744f49432050db2cdbd356054ce53"
+      },
+      "exit_code": 0,
+      "results": [
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 1322 filtered out; finished in 7.44s"
+      ],
+      "failures": []
+    },
+    "isolated-merged-rules-v3": {
+      "receipt": {
+        "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\isolated-merged-rules-v3.json",
+        "sha256": "20ecabd183f51fcb8c6a610e38cf28ca890708b37d4bb2bd3cf0282fb3ee32bb"
+      },
+      "exit_code": 101,
+      "results": [
+        "test result: FAILED. 118 passed; 1 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.10s"
+      ],
+      "failures": [
+        "test timing::lookup_perf::speed_lookup_matches_original_bitwise_including_nonfinite_values ... FAILED",
+        "thread 'timing::lookup_perf::speed_lookup_matches_original_bitwise_including_nonfinite_values' (45172) panicked at crates\\deadsync-rules\\src\\timing_lookup_perf.rs:286:21:",
+        "test result: FAILED. 118 passed; 1 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.10s",
+        "error: test failed, to rerun pass `-p deadsync-rules --lib`"
+      ]
+    },
+    "speed-native-benchmark-v5": {
+      "receipt": {
+        "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\speed-native-benchmark-v5.json",
+        "sha256": "de324cdcd64c964cdad3ea62a806d68d2c7bf3109807553915ac4eefa1cf8167"
+      },
+      "exit_code": 0,
+      "results": [
+        "test result: ok. 120 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.03s"
+      ],
+      "failures": []
+    },
+    "merged-simfile": {
+      "receipt": {
+        "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\merged-lua-simfile-v2.json",
+        "sha256": "a4c13042fb6efa32c65b79aa7ad6a7ef61c2f4d8943ea10e77185f37e21602d0"
+      },
+      "results": [
+        "test result: ok. 245 passed; 0 failed; 16 ignored"
+      ],
+      "lua_test_executable_removed_before_execution": true
+    },
+    "affected-targets": {
+      "receipt": {
+        "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\merged-targets-check-v5.json",
+        "sha256": "0d8a581480205497c900afd8091bdf7555ed9355ef04e9e5ee0549499317239c"
+      },
+      "source_pending_at_check": true,
+      "exit_code": 0
+    }
+  },
+  "lua_known_failures": [
+    "multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod",
+    "tests::compile_song_lua_accepts_skewy_probe_calls"
+  ],
+  "timing_test_correction": {
+    "previous_failure": "timing::lookup_perf::speed_lookup_matches_original_bitwise_including_nonfinite_values",
+    "classification": "frozen-nanosecond-comparison-of-native-float-api",
+    "reference": "itgmania/src/TimingData.cpp:1028 GetDisplayedSpeedPercent",
+    "historical_failure_receipt_retained": true,
+    "production_float_behavior_changed": false,
+    "corrected_test_commit": "0779e9b8cb6f7f9d22ec7019c2f72c642ccd74fe",
+    "native_control": "itgmania-song-lua-micro/speed-extrapolation-native.json",
+    "native_float_bits": 3255606968,
+    "deadsync_float_bits": 3255606968,
+    "rules_passed": 120,
+    "rules_failed": 0,
+    "rules_ignored": 2
+  },
+  "interrupted_builds": [
+    "merged-lua-simfile-v2: Lua executable disappeared before execution",
+    "merged-playback-v2: object and fingerprint files disappeared",
+    "merged-technique-v2: image dependency disappeared",
+    "merged-rules-v2: dependency-info directory disappeared"
+  ],
+  "isolated_build_directory": "C:/GitHub/itgmania-harness/target/deadsync-pass188",
+  "technique": {
+    "hidden_vulkan_checked": true,
+    "installed_game_unchanged": true,
+    "installed_game_sha256": "01dbbbdeb4ab368dd9b99e3b22a670efa7e15c33c753f18992ba32fed86e73e3"
+  },
+  "post_validation_changes_scope": "Only timing tests, benchmark comparison and native control artifacts changed after the merged Lua/playback/Technique checks.",
+  "full_archive_index_sha256": "fa63d80f464ee431430a8042305034404903510d6805a2438ecef7a80ce55de7",
+  "next_position": 146,
+  "next_source_simfile": "Choices - [Aoreo]/Choices.ssc",
+  "new_original_archives": 0,
+  "whole_archive_comparison_run": false,
+  "complete_gameplay_parity": false,
+  "complete_corpus": false
+}
