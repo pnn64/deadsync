@@ -1,0 +1,35 @@
+{
+  "oracle": "itgmania_native_actor_conformance",
+  "harness_version": "0.1.54",
+  "harness_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+  "binary_sha256": "cbd9ab9b64070f68ce44156aa3c4247b184ae5eed10bc5ee29f7887d6288b4f6",
+  "input_sha256": "1c3e9317a3c33de9a8ae668e3e320c5fe1709556a4f96e023b4d6ea0ecc2a41e",
+  "native_sha256": "19499cc344a322f595bcd4ef60a28414a7f7eefdc2130b9f897807fb14fff2af",
+  "model_sha256": "dc912e2602feef0ca850486060f5d9d992de7c272d96993294ff660403d32baf",
+  "semantic_host_used": false,
+  "expected_mesh_passes": {
+    "Zero": 0,
+    "Below": 0,
+    "Equal": 1,
+    "Above": 1,
+    "BothBelow": 0,
+    "GlowBelow": 0,
+    "GlowEqual": 1,
+    "GlowAbove": 1,
+    "DiffuseBelowGlowEqual": 2,
+    "DiffuseEqualGlowBelow": 2,
+    "TinyDiffuseGlowEqual": 2
+  },
+  "reference_sources": {
+    "Actor.cpp": {
+      "latest_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "compiled_vendor_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "identical": true
+    },
+    "Model.cpp": {
+      "latest_sha256": "f1f1e78b1400d38ec5836678946fe1914716cf26249d0a37699fbad5b6305081",
+      "compiled_vendor_sha256": "f1f1e78b1400d38ec5836678946fe1914716cf26249d0a37699fbad5b6305081",
+      "identical": true
+    }
+  }
+}

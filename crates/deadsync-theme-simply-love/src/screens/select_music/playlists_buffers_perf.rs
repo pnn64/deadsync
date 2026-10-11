@@ -1,6 +1,6 @@
 use super::*;
-use crate::buffers_support::compare;
 use crate::perf::measure;
+use crate::view_buffers_support::compare;
 use std::hint::black_box;
 
 fn fixture(count: usize, long: bool) -> Vec<SelectMusicPlaylistView> {

@@ -1,6 +1,6 @@
 use super::*;
-use crate::buffers_support::compare;
 use crate::perf::measure;
+use crate::view_buffers_support::compare;
 use std::hint::black_box;
 
 fn fixture(text: &str) -> ApplyReplayGainUiState {
@@ -41,7 +41,7 @@ fn replaygain_render_preserves_details_cancellation_and_progress() {
                     &mut old, &state, 3,
                 );
                 push_apply_replaygain_overlay_actors_unreserved(&mut new, &state, 3);
-                crate::buffers_support::assert_actors_equal(old, new);
+                crate::view_buffers_support::assert_actors_equal(old, new);
             }
         }
     }

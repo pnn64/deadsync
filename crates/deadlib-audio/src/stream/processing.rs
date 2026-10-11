@@ -11,7 +11,6 @@ use rubato::{Adjustable, Async, ResampleError, Resampler, ResamplerConstructionE
 struct RateConverter {
     resampler: Async<f32>,
     input: PlanarAccum,
-    padded: Vec<Vec<f32>>,
     output: Vec<Vec<f32>>,
     ratio: f64,
     lead_frames: usize,
@@ -22,7 +21,6 @@ impl RateConverter {
     fn new(channels: usize, ratio: f64) -> Result<Self, ResamplerConstructionError> {
         let resampler = new_resampler(ratio, RESAMPLE_MAX_RELATIVE_RATIO, channels)?;
         Ok(Self {
-            padded: vec![vec![0.0; resampler.input_frames_max()]; channels],
             output: vec![vec![0.0; resampler.output_frames_max()]; channels],
             input: PlanarAccum::new(channels, PLANAR_INPUT_CAP_FRAMES),
             resampler,
@@ -184,29 +182,26 @@ impl MusicStages {
             return Ok(None);
         }
         let consumed = available.min(need);
-        let frames = if consumed == need {
-            process_resampler(
-                &mut converter.resampler,
-                &converter.input.channels,
-                converter.input.start_frame,
-                &mut converter.output,
-            )?
-            .1
-        } else {
-            let start = converter.input.start_frame;
-            for (dst, source) in converter.padded.iter_mut().zip(&converter.input.channels) {
-                dst[consumed..need].fill(0.0);
-                dst[..consumed].copy_from_slice(&source[start..start + consumed]);
-            }
+        let start = converter.input.start_frame;
+        if consumed < need {
             converter.drained = consumed == 0;
-            process_resampler(
-                &mut converter.resampler,
-                &converter.padded,
-                0,
-                &mut converter.output,
-            )?
-            .1
-        };
+            for channel in &mut converter.input.channels {
+                channel.resize(start + need, 0.0);
+            }
+        }
+        let result = process_resampler(
+            &mut converter.resampler,
+            &converter.input.channels,
+            start,
+            &mut converter.output,
+        );
+        // Padding is temporary: retain only real input, including after errors.
+        if consumed < need {
+            for channel in &mut converter.input.channels {
+                channel.truncate(start + consumed);
+            }
+        }
+        let frames = result?.1;
         converter.input.consume_frames(consumed);
         write_resampler_output(&converter.output, frames, channels, output);
         trim_resampler_lead(output, channels, &mut converter.lead_frames);

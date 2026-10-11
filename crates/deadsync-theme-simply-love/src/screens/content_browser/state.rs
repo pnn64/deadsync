@@ -2055,13 +2055,13 @@ pub fn wanted_banners(state: &State) -> Vec<(u64, String)> {
 
     // The grid is the first thing anyone sees, so its artwork is asked for
     // whether or not the grid is currently showing.
-    for index in state.featured.clone() {
+    for &index in &state.featured {
         want(state, index);
     }
 
     let start = window_start(state).saturating_sub(LOOKAHEAD);
     let end = (window_start(state) + visible_rows() + LOOKAHEAD).min(state.results.len());
-    for index in state.results.get(start..end).unwrap_or_default().to_vec() {
+    for &index in state.results.get(start..end).unwrap_or_default() {
         want(state, index);
     }
 
@@ -2070,7 +2070,7 @@ pub fn wanted_banners(state: &State) -> Vec<(u64, String)> {
         let list = doubles_column(state, column);
         let first = state.doubles_window[column].saturating_sub(2);
         let last = (state.doubles_window[column] + lo::DBL_ROWS + 2).min(list.len());
-        for index in list.get(first..last).unwrap_or_default().to_vec() {
+        for &index in list.get(first..last).unwrap_or_default() {
             want(state, index);
         }
     }
@@ -3766,3 +3766,11 @@ mod tests {
         assert_eq!(super::super::preview::songs_added(&state), 1);
     }
 }
+
+#[cfg(test)]
+#[path = "banner_requests_original.rs"]
+mod banner_requests_original;
+
+#[cfg(test)]
+#[path = "banner_requests_perf.rs"]
+mod banner_requests_perf_tests;

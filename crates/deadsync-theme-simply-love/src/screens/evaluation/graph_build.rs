@@ -86,7 +86,7 @@ pub(super) fn build_course_density_graph_mesh(
 
     // The final immutable copy only needs the assembled vertices.
     drop(scratch);
-    (!out.is_empty()).then(|| Arc::from(out.into_boxed_slice()))
+    (!out.is_empty()).then(|| Arc::from(out))
 }
 
 /// A borrowed, batch-local view of the same upper-bound interpolation as the

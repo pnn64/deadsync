@@ -476,7 +476,7 @@ mod tests {
 
     #[cfg(target_os = "windows")]
     #[test]
-    #[ignore = "requires an OpenGL display; run alongside Technique's catalog regression"]
+    #[ignore = "requires a GPU display; run alongside Technique's catalog regression"]
     #[allow(deprecated)] // A hidden window exercises the real startup/upload/draw path.
     fn technique_arrow_renders_and_rotates() {
         use deadlib_present::{compose::build_screen_with_texture_context, space};
@@ -498,8 +498,13 @@ mod tests {
                     .with_inner_size(winit::dpi::PhysicalSize::new(854, 480)),
             )
             .expect("hidden Technique window");
+        let backend_kind = match std::env::var("DEADSYNC_TECHNIQUE_BACKEND").as_deref() {
+            Ok("vulkan") => BackendType::Vulkan,
+            Ok("opengl") | Err(_) => BackendType::OpenGL,
+            Ok(name) => panic!("unknown Technique test backend: {name}"),
+        };
         let mut backend = deadlib_render::create_backend(
-            BackendType::OpenGL,
+            backend_kind,
             Arc::new(window),
             metrics.projection(),
             false,
@@ -507,7 +512,7 @@ mod tests {
             false,
             false,
         )
-        .expect("OpenGL renderer");
+        .expect("Technique graphics renderer");
         let mut assets = deadlib_assets::AssetManager::new();
         deadsync_assets::load_initial_assets(
             &mut assets,

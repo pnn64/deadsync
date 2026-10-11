@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "name": "actual native Actor and ActorFrame update function scope",
+  "lua_assertions": "assert(native_target.SetUpdateFunction == nil)\nassert(not pcall(function() native_target:SetUpdateFunction(function() end) end))\nassert(type(frozen.SetUpdateFunction) == \"function\")\nassert(frozen:SetUpdateFunction(function() end) == frozen)\nassert(frozen:SetUpdateFunction(nil) == frozen)\n"
+}

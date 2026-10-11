@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "status": "native-step-selection-verified-gameplay-reload-pending",
+  "harness_version": "0.1.72",
+  "native_harness_commit": "64f7cfaca27ac1dad208c9295711f8769c39ed09",
+  "native_reference_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_cli_sha256": "9ef023bfe68356cbf6d0e428a3ae6659b9cdd5418a12da556670fb1a8b1542be",
+  "native_pin": {
+    "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass296-native-chart-selection-committed-cli-v1.json",
+    "sha256": "121846597373823ab091e98b15feed2d1ef38ec982ded53caa68fb35be58f360"
+  },
+  "native_test_receipt": {
+    "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass296-native-chart-selection-all-checks-v2.json",
+    "sha256": "3e19e807cde1121e8273d576866e55535a9bae3c8544fd3186316681b6b9f9af"
+  },
+  "native_tests": {
+    "passed": 238,
+    "failed": 0,
+    "ignored": 5,
+    "results": [
+      "test result: ok. 183 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 111.46s",
+      "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.11s",
+      "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s",
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+      "test result: ok. 21 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 15.89s"
+    ]
+  },
+  "native_source_sha256": {
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\GameState.cpp": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\GameManager.cpp": "2eee53b9f0088acac643bb0e7f04a29933fc9913cb194f75bdbedb5fea7df1cc",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Steps.cpp": "eb1685023c27de6f4095d53439b318edca85301c11db053189e5b1eca8d43c2c",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Style.cpp": "ea669af3a0ec3d535c944b085f6d92a0e64ce84aca8bfef396d42f737b8a4a03",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\LuaBinding.cpp": "46f156ae2b334d7139a4d03f84a190dcb5542d024ae66c5ebb4c9d589dc2c1c7",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\LuaReference.cpp": "345fbb1763c14bf26c12c042b2c0533c2006059bd746bfedf0bffc0cf98c1572",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\LuaManager.cpp": "7c222e45f0b02bc3f30828aed5a682402297000e6d253652ff39504887e8158a",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ScreenGameplay.cpp": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+    "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ScreenManager.cpp": "6c4edf63e2536ec63caa32cef582bbd41678423f87a9f4f45ab4ccd3a6e16e1e",
+    "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\metrics.ini": "221b449c94e5ed38bbdfb4cee157582f20c85ffa8e234398309768945b370a80",
+    "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\Scripts\\99 SL-ThemePrefs.lua": "45f36bf71a79a06f5b10d5554f4cb5fa6f7ae3c6b21393fae38341a6a888e7e3"
+  },
+  "implementation_provenance": {
+    "path": "C:\\GitHub\\itgmania-harness\\native\\PROVENANCE.md",
+    "sha256": "6e2a12941a2f579c3b9c2a94d1a9b662950dfe36a92bf46d579479fa723c1069"
+  },
+  "cli_control": {
+    "path": "C:\\GitHub\\itgmania-harness\\tests\\oracle_cli.rs",
+    "sha256": "2412a53ce928a8b665c3992eed7595792ac19b5095df1df3aaa41288f8eb4ed0"
+  },
+  "closed_harness_faults": [
+    "Parsed charts use the native Steps binding and native GameState selection instead of translated pointer tables.",
+    "Native compatible-player selection synchronizes charts with different authored music and retains independent difficulties for equal music.",
+    "Nil selection clears only its target; invalid player/chart objects and incompatible styles retain native errors.",
+    "Canonical joined sides select native versus for two singles and double for one double player.",
+    "Native Style objects, case-insensitive style names, width, player enumeration and easiest difficulty execute source.",
+    "The VM-local userdata mapping replaces a static cross-registry LuaReference that crashed native Actor teardown.",
+    "The obsolete first-same-type style helper and compatible-style null/no-op stubs are deleted."
+  ],
+  "controls_verified": [
+    "The complete harness suite passes, including native actor assertions followed by an independent song VM.",
+    "An authored four-chart SSC control verifies pointer identity, matching/different music, nil, invalid enums/objects and native style errors.",
+    "Changing selected Steps does not silently replace Player note data or reload stage score totals.",
+    "Original Choices calls SetCurrentSteps once, because native code synchronizes the other player automatically.",
+    "AutoSetStyle evaluates the Simply Love source expression with its PreferredStyle default of none."
+  ],
+  "next_original_position": 146,
+  "next_source_simfile": "Choices - [Aoreo]/Choices.ssc",
+  "next_private_capture": {
+    "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass297-choices-native-selection-v1\\receipt.json",
+    "sha256": "d404c8ece0af818ead9776915de5794212fa230e3ea5bfb7953418a9aa8d7f58"
+  },
+  "next_capture_status": "partial",
+  "next_capture_runtime_errors": 1,
+  "next_capture_dropped_events": 0,
+  "native_step_selection_calls": [
+    [
+      1,
+      0,
+      0,
+      [
+        0,
+        "StepsType_Dance_Single",
+        "Difficulty_Easy",
+        "Je Veux Te Voir"
+      ],
+      null
+    ]
+  ],
+  "complete_archives_produced": 0,
+  "promoted_to_deadsync": false,
+  "full_archive_index_count": 483,
+  "full_archive_index_sha256": "fa63d80f464ee431430a8042305034404903510d6805a2438ecef7a80ce55de7",
+  "source_song_files_unchanged": true,
+  "deadsync_runtime_commit": "c8f3fa9d1f55ac98d8e2e6bd64ec37d46228af24",
+  "deadsync_runtime_modified": false,
+  "technique_verification": {
+    "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass186-technique-confirmation\\verification.json",
+    "sha256": "178097efb0943b24af653e87ab1c294c9067d11e935cf1b0ad0594929b110012"
+  },
+  "technique_checks": {
+    "catalog_passed": 6,
+    "vulkan_arrow_passed": 1,
+    "failed": 0,
+    "rerun_this_turn": false,
+    "limits": "Production renderer and rotation checked in a hidden window; live menu session not observed."
+  },
+  "open_requirements": [
+    "Native delayed ScreenGameplay loading must replace the old scene and retain Lua globals.",
+    "DeadSync SetCurrentSteps must retain authored per-chart music and implement native compatible-player selection, nil, errors and return values.",
+    "Native gameplay input, tap/hold judgment timing and life changes must drive live stage progress.",
+    "DeadSync stage totals and live counters still require integration with gameplay chart/state data.",
+    "Song grade queries, complete theme initialization, user preference changes and courses remain unsupported in this capture.",
+    "No whole-song parity comparison or native framebuffer pixel comparison was established by these controls."
+  ],
+  "deadsync_source_head": "44558fd2daeab6919df3a213f9a933820debfc11",
+  "deadsync_source_changed_since_runtime_build": true,
+  "concurrent_deadsync_change": "Input dataflow merge 44558fd2d; preserved. Technique and song Lua sources unchanged. No current-head DeadSync rebuild or retest in this turn."
+}

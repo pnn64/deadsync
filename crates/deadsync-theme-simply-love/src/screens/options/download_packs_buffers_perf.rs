@@ -1,6 +1,6 @@
 use super::*;
-use crate::buffers_support::compare;
 use crate::perf::measure;
+use crate::view_buffers_support::compare;
 use std::hint::black_box;
 
 fn fixture(count: usize, text: &str) -> (Box<DownloadPacksOverlayData>, Snapshot) {
@@ -75,7 +75,7 @@ fn pack_catalog_preserves_every_actor_and_selection_boundary() {
                     let mut new = Vec::new();
                     render(true, &data, &snapshot, &mut old);
                     render(false, &data, &snapshot, &mut new);
-                    crate::buffers_support::assert_actors_equal(old, new);
+                    crate::view_buffers_support::assert_actors_equal(old, new);
                 }
             }
         }
@@ -85,7 +85,7 @@ fn pack_catalog_preserves_every_actor_and_selection_boundary() {
         let mut new = Vec::new();
         buffers_original::push_status(&mut old, message, [1.0; 4], 320.0, 240.0, "wendy");
         push_status(&mut new, message, [1.0; 4], 320.0, 240.0, "wendy");
-        crate::buffers_support::assert_actors_equal(old, new);
+        crate::view_buffers_support::assert_actors_equal(old, new);
     }
 }
 

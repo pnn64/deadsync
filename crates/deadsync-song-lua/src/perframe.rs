@@ -584,6 +584,7 @@ pub fn actor_perframe_player_state(actor: &Table) -> Result<SongLuaPerframePlaye
 }
 
 pub fn current_perframe_player_states(
+    lua: &Lua,
     player_tables: &[Option<Table>; LUA_PLAYERS],
 ) -> Result<[SongLuaPerframePlayerState; LUA_PLAYERS], String> {
     let mut out = [SongLuaPerframePlayerState::default(); LUA_PLAYERS];
@@ -592,8 +593,37 @@ pub fn current_perframe_player_states(
             continue;
         };
         out[player] = actor_perframe_player_state(actor)?;
+        let mut state = SongLuaOverlayState::default();
+        if crate::lua_util::replay_tween_pose(lua, actor, &mut state) {
+            sample_player_pose(&mut out[player], &state, None);
+        }
     }
     Ok(out)
+}
+
+fn sample_player_pose(
+    output: &mut SongLuaPerframePlayerState,
+    state: &SongLuaOverlayState,
+    mask: Option<u16>,
+) {
+    macro_rules! sample {
+        ($bit:literal, $out:ident, $field:ident) => {
+            if mask.map_or(output.$out.is_some(), |mask| mask & (1 << $bit) != 0) {
+                output.$out = Some(state.$field);
+            }
+        };
+    }
+    sample!(0, x, x);
+    sample!(1, y, y);
+    sample!(2, z, z);
+    sample!(3, rotation_x, rot_x_deg);
+    sample!(4, rotation_z, rot_z_deg);
+    sample!(5, rotation_y, rot_y_deg);
+    sample!(6, zoom_x, zoom_x);
+    sample!(7, zoom_y, zoom_y);
+    sample!(8, zoom_z, zoom_z);
+    sample!(9, skew_x, skew_x);
+    sample!(10, skew_y, skew_y);
 }
 
 fn capture_transform_mask(block: &Table) -> Result<u16, String> {
@@ -1252,7 +1282,7 @@ fn push_update_mod_targets_with_key<S: ModState>(
             if speed.is_some()
                 || matches!(
                     key,
-                    "cosecant" | "dizzyholds" | "stealthtype" | "zbuffer" | "modtimersetting"
+                    "cosecant" | "dizzyholds" | "stealthtype" | "zbuffer" | "modtimersetting" | "failsetting"
                 )
             {
                 if !from.is_finite() || speed.is_some_and(|speed| !speed.is_finite()) {
@@ -2778,6 +2808,7 @@ pub fn call_update_functions_at(
             .set("__songlua_delay", position.is_in_delay)
             .map_err(|err| err.to_string())?;
     }
+    crate::song_tables::advance_option_levels(lua, seconds).map_err(|err| err.to_string())?;
     let result =
         crate::lua_util::run_actor_compile_update_functions_with_delta(lua, root, delta_seconds)
             .and_then(|()| {
@@ -3084,28 +3115,48 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
     let mut overlay_ms = 0.0;
     let mut spline_capture = ColumnSplineCapture::default();
     spline_capture.capture(lua, 0.0)?;
-    if !actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())?
-        && !crate::model_texture::active(lua)
-    {
-        spline_capture.finish(column_splines);
-        return Ok((
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-        ));
-    }
     let start = song_beat_at_elapsed_seconds(0.0, context);
     let end = update_function_end_beat(context);
-    if end <= start {
+    if (!actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())?
+        && !crate::model_texture::active(lua)) || end <= start
+    {
+        // Native Song options persist even when the foreground never updates.
+        // Bake the startup targets using the same approach speeds and clock as
+        // chronological capture, without replaying a static tree every frame.
+        let tables = update_player_option_tables(lua)?;
+        let mut scratch = ModSnapshotScratch::default();
+        let states = scratch.states(&tables)?;
+        let speeds = scratch.player_speeds(lua, &tables)?;
+        let origin = context.song_timing.as_ref()
+            .map_or(0.0, |timing| timing.get_time_for_beat_exact(0.0));
+        let limit = origin + song_elapsed_seconds_at(end, context) * song_music_rate(context);
+        let unit = if context.song_timing.is_some() {
+            SongLuaTimeUnit::Second
+        } else {
+            SongLuaTimeUnit::BeatClock
+        };
+        let mut eases = Vec::new();
+        push_update_mod_targets_with_key(&mut eases, origin, limit.max(origin.next_up()),
+            &states, &states, &states, &speeds, &mut BTreeMap::new(),
+            &mut (0, String::new()), unit);
+        // Column handlers retain startup writes too. A one-knot native
+        // rotation spline needs neither Solve nor an update callback.
+        let columns = read_note_column_transform_samples(lua)?;
+        let mut column_transforms = Vec::new();
+        append_column_transform_windows_from_samples(
+            &mut column_transforms, &columns, &columns,
+            SongLuaColumnOffsetBuildParams {
+                unit, start: origin, limit: limit.max(origin).next_up() - origin,
+                span_mode: SongLuaSpanMode::Len, easing: None, sustain: None,
+                opt1: None, opt2: None,
+            },
+        );
         spline_capture.finish(column_splines);
         return Ok((
+            eases,
             Vec::new(),
             Vec::new(),
-            Vec::new(),
-            Vec::new(),
+            column_transforms,
             Vec::new(),
             Vec::new(),
         ));
@@ -3159,7 +3210,11 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
         if let Some(actor) = actor {
             player_capture_indices[player] = Some(capture_actors.len());
             capture_actors.push(actor.clone());
-            baseline_overlays.push(actor_overlay_initial_state(actor)?);
+            // A startup queue retains its destination in the Lua table.
+            // Frame zero still renders the current pose before positive delta.
+            let mut state = actor_overlay_initial_state(actor)?;
+            crate::lua_util::replay_tween_pose(lua, actor, &mut state);
+            baseline_overlays.push(state);
         }
     }
     // Screen layers sit outside the returned song tree but queued callbacks
@@ -3190,14 +3245,32 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
     #[cfg(feature = "test-support")]
     lua.set_app_data(crate::song_tables::SongLuaBoolWrites::default());
     #[cfg(feature = "test-support")]
+    lua.set_app_data(crate::song_tables::SongLuaSpeedWrites::default());
+    #[cfg(feature = "test-support")]
+    lua.set_app_data(crate::host::SongLuaStateCalls::default());
+    #[cfg(feature = "test-support")]
     lua.set_app_data(crate::song_tables::SongLuaSkinWrites::default());
     let mut replay_overlays = baseline_overlays.clone();
     let started = message_replay.advance(lua, context, overlays, &mut replay_overlays, start)?;
     restore_started_message_states(lua, overlays, &replay_overlays, started)?;
     crate::lua_util::append_wrapper_actors(lua, &mut capture_actors,
         &mut [&mut baseline_overlays, &mut replay_overlays]);
+    // Message discovery leaves player destinations in Lua. Frame zero uses
+    // their current pose, including immediate writes and unadvanced queues.
+    for tracked in tracked_actors.iter_mut() {
+        if let SongLuaTrackedActorTarget::Player(player) = tracked.target
+            && let Some(index) = player_capture_indices[player]
+        {
+            let mut state = replay_overlays[index];
+            crate::lua_util::replay_tween_pose(lua, &tracked.table, &mut state);
+            set_actor_overlay_getter_state(lua, &tracked.table, state)?;
+            baseline_overlays[index] = state;
+            replay_overlays[index] = state;
+            tracked.actor.initial_state = state;
+        }
+    }
     let mut update_overlays = replay_overlays.clone();
-    let baseline_players = current_perframe_player_states(&player_tables)?;
+    let baseline_players = current_perframe_player_states(lua, &player_tables)?;
     let mut mod_scratch = ModSnapshotScratch::default();
     let baseline_mods = mod_scratch.states(&option_tables)?;
     let baseline_columns = read_note_column_transform_samples(lua)?;
@@ -3515,31 +3588,14 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
                 }
             }
         }
-        let mut next_players = current_perframe_player_states(&player_tables)?;
+        let mut next_players = current_perframe_player_states(lua, &player_tables)?;
         for player in 0..LUA_PLAYERS {
             player_capture_masks[player] |= next_masks[player];
             if let Some(index) = player_capture_indices[player] {
                 let state = &replay_overlays[index];
                 let mask = player_capture_masks[player];
                 let output = &mut next_players[player];
-                macro_rules! sample {
-                    ($bit:literal, $out:ident, $field:ident) => {
-                        if mask & (1 << $bit) != 0 {
-                            output.$out = Some(state.$field);
-                        }
-                    };
-                }
-                sample!(0, x, x);
-                sample!(1, y, y);
-                sample!(2, z, z);
-                sample!(3, rotation_x, rot_x_deg);
-                sample!(4, rotation_z, rot_z_deg);
-                sample!(5, rotation_y, rot_y_deg);
-                sample!(6, zoom_x, zoom_x);
-                sample!(7, zoom_y, zoom_y);
-                sample!(8, zoom_z, zoom_z);
-                sample!(9, skew_x, skew_x);
-                sample!(10, skew_y, skew_y);
+                sample_player_pose(output, state, Some(mask));
             }
         }
         sample_beats.push(next_beat);
@@ -4029,12 +4085,13 @@ struct PerframeSnapshot {
 impl PerframeSnapshot {
     fn capture<Kind>(
         &mut self,
+        lua: &Lua,
         beat: f32,
         players: &[Option<Table>; LUA_PLAYERS],
         overlays: &[SongLuaOverlayCompileActor<Kind>],
     ) -> Result<(), String> {
         self.beat = beat;
-        self.players = current_perframe_player_states(players)?;
+        self.players = current_perframe_player_states(lua, players)?;
         self.overlays.clear();
         self.overlays.reserve_exact(overlays.len());
         for overlay in overlays {
@@ -4105,7 +4162,7 @@ pub fn compile_perframes<Kind>(
     }
 
     let player_tables = tracked_player_tables(tracked_actors);
-    let baseline_players = current_perframe_player_states(&player_tables)?;
+    let baseline_players = current_perframe_player_states(lua, &player_tables)?;
     let baseline_overlays = current_overlay_compile_actor_states(overlays)?;
     let mut out_eases = Vec::new();
     let mut out_overlay_eases = Vec::new();
@@ -4122,7 +4179,7 @@ pub fn compile_perframes<Kind>(
         }
         let active = active_perframe_entries(&entries, start, end);
         if active.is_empty() {
-            current.capture(start, &player_tables, overlays)?;
+            current.capture(lua, start, &player_tables, overlays)?;
             message_states.clone_from(&current.overlays);
             push_perframe_static_targets(
                 &mut out_eases,
@@ -4162,7 +4219,7 @@ pub fn compile_perframes<Kind>(
                     delta_seconds,
                 )?;
             }
-            current.capture(sample.beat, &player_tables, overlays)?;
+            current.capture(lua, sample.beat, &player_tables, overlays)?;
             message_states.clone_from(&current.overlays);
             if has_previous {
                 previous.push_segment(
