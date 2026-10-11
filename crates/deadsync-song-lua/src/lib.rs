@@ -20366,6 +20366,26 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn stage_points_match_native() {
+        let native_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/stage-points-native.json");
+        let fixture: serde_json::Value = serde_json::from_slice(
+            &fs::read(native_path).expect("captured native stage point control"),
+        ).expect("native stage point JSON");
+        let assertions = fixture["lua_assertions"].as_str().expect("native assertions");
+        let song_dir = test_dir("native-stage-points");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, format!(
+            "local function _ITG_STAGE_STATS(player)\n\
+             return STATSMAN:GetCurStageStats():GetPlayerStageStats(player)\nend\n\
+             {assertions}\nreturn Def.ActorFrame{{}}\n",
+        )).expect("stage point control script");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Native stage points");
+        context.players[1].enabled = true;
+        test_compile_song_lua(&entry, &context).expect("same stage point assertions as native");
+    }
+
+    #[test]
     fn compile_song_lua_accepts_stage_stat_and_high_score_helpers() {
         let song_dir = test_dir("stage-stat-high-score-helpers");
         let entry = song_dir.join("default.lua");
@@ -20404,7 +20424,7 @@ assert(pss:IsDisqualified() == false)
 assert(pss:FullComboOfScore(0) == false)
 assert(pss:FullCombo() == false)
 assert(pss:MaxCombo() == 0)
-assert(pss:GetCurrentPossibleDancePoints() == 1)
+assert(pss:GetCurrentPossibleDancePoints() == 0)
 assert(pss:GetCurrentCombo() == 0)
 assert(pss:GetCurrentMissCombo() == 0)
 assert(pss:GetCurrentScoreMultiplier() == 1)
@@ -23814,7 +23834,7 @@ return Def.ActorFrame{}
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "2:Simply Love:Simply Love:0:false:1:1:1:1:1:Theme Manager Compat:true:0:1:0:Grade_Tier07:Player:1"
+            "2:Simply Love:Simply Love:0:false:1:1:1:1:1:Theme Manager Compat:true:0:0:0:Grade_Tier07:Player:1"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
     }

@@ -1290,7 +1290,8 @@ fn create_player_stage_stats_table(
     stats.set("__songlua_score", 0_i64)?;
     stats.set("__songlua_cur_max_score", 0_i64)?;
     stats.set("__songlua_actual_dance_points", 0_i64)?;
-    stats.set("__songlua_possible_dance_points", 1_i64)?;
+    stats.set("__songlua_possible_dance_points", 0_i64)?;
+    stats.set("__songlua_current_possible_dance_points", 0_i64)?;
     let high_score = create_high_score_table(lua, high_score_name)?;
     let played_steps = lua.create_table()?;
     let possible_steps = lua.create_table()?;
@@ -1398,24 +1399,21 @@ fn create_player_stage_stats_table(
         lua.create_function({
             let stats = stats.clone();
             move |lua, args: MultiValue| {
-                let actual = i64::from(
-                    method_arg(&args, 0)
-                        .cloned()
-                        .and_then(read_i32_value)
-                        .unwrap_or(0)
-                        .max(0),
-                );
-                let possible = i64::from(
-                    method_arg(&args, 1)
-                        .cloned()
-                        .and_then(read_i32_value)
-                        .unwrap_or(1)
-                        .max(1),
-                );
+                let point_arg = |index| {
+                    lua.coerce_number(method_arg(&args, index).cloned().unwrap_or(Value::Nil))?
+                        .map(|value| i64::from(value as i32))
+                        .ok_or_else(|| mlua::Error::runtime("SetDancePointLimits requires two numbers"))
+                };
+                let actual = point_arg(0)?;
+                let possible = point_arg(1)?;
+                if actual < 0 || possible <= 0 {
+                    return Ok(Value::Table(stats.clone()));
+                }
                 stats.set("__songlua_possible_dance_points", possible)?;
                 stats.set("__songlua_actual_dance_points", actual.min(possible))?;
                 note_song_lua_side_effect(lua)?;
-                Ok(stats.clone())
+                // LunaPlayerStageStats returns the last Lua argument on success.
+                Ok(args.back().cloned().unwrap_or(Value::Nil))
             }
         })?,
     )?;
@@ -1453,7 +1451,7 @@ fn create_player_stage_stats_table(
             move |_, _args: MultiValue| {
                 Ok(stats
                     .get::<Option<i64>>("__songlua_possible_dance_points")?
-                    .unwrap_or(1))
+                    .unwrap_or(0))
             }
         })?,
     )?;
@@ -1463,8 +1461,8 @@ fn create_player_stage_stats_table(
             let stats = stats.clone();
             move |_, _args: MultiValue| {
                 Ok(stats
-                    .get::<Option<i64>>("__songlua_possible_dance_points")?
-                    .unwrap_or(1))
+                    .get::<Option<i64>>("__songlua_current_possible_dance_points")?
+                    .unwrap_or(0))
             }
         })?,
     )?;
