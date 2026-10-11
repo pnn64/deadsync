@@ -622,6 +622,7 @@ mod tests {
                     ..
                 } => max_render_target_sprite_z(frame.children(), base_z.saturating_add(*z)),
                 Actor::Camera { children, .. } => max_render_target_sprite_z(children, base_z),
+                Actor::SharedCamera { children, .. } => max_render_target_sprite_z(children, base_z),
                 Actor::Shadow { child, .. } => {
                     max_render_target_sprite_z(std::slice::from_ref(child.as_ref()), base_z)
                 }
