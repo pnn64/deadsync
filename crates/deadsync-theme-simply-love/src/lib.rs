@@ -227,3 +227,7 @@ mod view_buffers_support;
 #[cfg(test)]
 #[path = "../../../tests/perf/overlay_support.rs"]
 mod overlay_support;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/option_support.rs"]
+mod option_perf;
