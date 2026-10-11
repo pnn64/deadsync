@@ -267,6 +267,26 @@ pub fn load_sync_analysis_chart(
         .ok_or_else(|| format!("Chart index {chart_ix} out of range"))
 }
 
+/// Called during song preparation, before the gameplay Lua VM is compiled.
+pub fn load_chart_timings(
+    song: &SongData,
+    global_offset_seconds: f32,
+) -> Result<Vec<deadsync_rules::timing::TimingData>, String> {
+    let parse_options = parse_song_options();
+    let options = crate::runtime::gameplay_chart_load_options(
+        song, &paths().song_cache, &parse_options,
+        RuntimeSongConfig { global_offset_seconds, ..runtime_song_config() },
+        deadsync_config::runtime::group_is_never_cached,
+    );
+    let started = std::time::Instant::now();
+    let timings = crate::cache::load_chart_timings(
+        song, &options, |_| song.music_length_seconds,
+    )?;
+    debug!("Song Lua chart timing: song='{}' charts={} elapsed_ms={:.3}",
+        song.title, timings.len(), started.elapsed().as_secs_f64() * 1000.0);
+    Ok(timings)
+}
+
 fn log_gameplay_chart_load(song: &SongData, report: &GameplayChartLoadReport) {
     for entry in gameplay_chart_load_log_entries_from_report(song, report) {
         emit_gameplay_chart_load_log(entry);

@@ -1,0 +1,106 @@
+{
+  "pass": 213,
+  "previous_record": "native-revalidation-pass212.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "b9b6981861d46ab12ee59c7cc7e08600b35ab334",
+  "comparator_sha256": "88e5cbd344010f0db5fe3f8f87ca46d800bb398f465f7cb374ffd5405366cf36",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    134
+  ],
+  "next_position": 135,
+  "comparisons_passed": 421837,
+  "charts": [
+    {
+      "position": 134,
+      "entry": {
+        "title": "Bunny House",
+        "source_simfile": "bunny-house/steps.sm",
+        "harness_version": "0.1.64",
+        "archive": "0d1d0e4f137de75315352b08ee1a313cc4cc6256a473c190697081faf84fb1ba.tar.zst",
+        "sha256": "0d1d0e4f137de75315352b08ee1a313cc4cc6256a473c190697081faf84fb1ba",
+        "compressed_bytes": 1320256,
+        "aliases": [
+          "e22c5f9cee6c5f38bdd0ba574f54c56cf2674631062af84e0267a1d3ddb9de01.tar.zst"
+        ]
+      },
+      "original_archive_retained": "8d8651b4607c3822772db07807805590641dec1bc9c0cd9e25f69b4f81ac02b4.tar.zst",
+      "native_source_commit": "cc0ea0c0ab70e962785eff8681a6867a3f8689ee",
+      "native_trace_sha256": "81b8708e0cdc330fed41a6ec9b211d53e3b0a4e2391d2b2bc89dd8e6b4717393",
+      "original_source_sha256": {
+        "bunny-house/bg.png": "796c7a9998fa7a02f7b6a72ce74c7cf7c0cf60ae9225ef247408ad36eca62270",
+        "bunny-house/bn.png": "3480afc9876e020d58af80e9f39c632022000ea8dc371da98cfaa1e17e0ddc82",
+        "bunny-house/bunny_house_cut.ogg": "0882ae20f4b6b79e157baa526e1c0504fc31f82f43997ad4e78c27054619902d",
+        "bunny-house/steps.sm": "71b42cf49c19f771e75b19fd53ed7dbe57f94b46159d96a6ad7b93ba9e0198a9",
+        "bunny-house/lua/default.lua": "331d57fa4351dd2d8c14ee457ab190a7fc7f1f2d468bbee4afacd3a62af596eb",
+        "bunny-house/lua/default.xml": "cd2f138e1ee0d0af536516650e19520af79e67782960f9cdcf5ef2d85d87a51d",
+        "bunny-house/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "bunny-house/lua/easing.xml": "7c837cba7f448a43995feee284b1502fa5aa32bdc9441efd9279c89ae5a76b25",
+        "bunny-house/lua/ligma_fast 1x4.png": "5727a9abc54bd3699159f6c882aca4eda9d75d5ac51fd17368186f1a0518c06a",
+        "bunny-house/lua/modhelpers.lua": "258028293c99b2f1b757b20d584b069524ffd3ee141be6499adc31b312bef482",
+        "bunny-house/lua/modhelpers.xml": "b4b7e6dcddac030d31ecbcaf2c94a63ad7cae8a5a08e54e27b8e2b8964c197a4",
+        "bunny-house/lua/mods.lua": "bf3858e9900b0f2adc806a7d7141f6548e068b0a0517e75393ab779f2631372d"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 9158,
+      "duration_seconds": 152.61363220214844,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 134,
+      "source_simfile": "bunny-house/steps.sm",
+      "archive": "0d1d0e4f137de75315352b08ee1a313cc4cc6256a473c190697081faf84fb1ba.tar.zst",
+      "archive_sha256": "0d1d0e4f137de75315352b08ee1a313cc4cc6256a473c190697081faf84fb1ba",
+      "harness_version": "0.1.64",
+      "source_commit": "b9b6981861d46ab12ee59c7cc7e08600b35ab334",
+      "source_pending_commit": false,
+      "binary_sha256": "88e5cbd344010f0db5fe3f8f87ca46d800bb398f465f7cb374ffd5405366cf36",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-target-probes-v1-full_song_lua.exe",
+        "0d1d0e4f137de75315352b08ee1a313cc4cc6256a473c190697081faf84fb1ba.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 73.37682719994336,
+      "comparisons_passed": 421837,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\user-merge-probes-v1-134.log",
+      "log_sha256": "3a7f02d8332d8732dccc474501d6fc4498732277fed410a1d7e8b056c317fd7b",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass261-top-134-native-v1.json",
+      "native_receipt_sha256": "57c1c57d9020012f22fd6157691d61d1ac19c0137341dc9e0116964bb140bc91",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "b9b6981861d46ab12ee59c7cc7e08600b35ab334",
+    "source_pending_commit": false,
+    "binary_sha256": "7f066c1befc4c5ce0dd9f41c99359d4d7eef679fedae5844d3e0502eaea173ea",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-target-probes-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 2.085471299942583,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-134-native-pass213.log",
+    "log_sha256": "36cf2db0ad30d01d55124e4d8f5ad6e1a43ba8458e59456327822e5b50e22740",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.50s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

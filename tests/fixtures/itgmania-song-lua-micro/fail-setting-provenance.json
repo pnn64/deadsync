@@ -1,0 +1,39 @@
+{
+  "native_harness_commit": "7a75d74081a4e0e944e1babde8d8d64363ad625a",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_binary_sha256": "b4038da817427703f3bc30c8aea16117e7c3ffa39c93356243d455e1dd694c3d",
+  "request": "fail-setting-control.json",
+  "request_sha256": "af1a50bae98e850329cb52be8ff7683f32796c2a6dc8c7400a0f443d49f85de6",
+  "native_result": {
+    "allocations": [],
+    "diagnostics": [],
+    "provenance": {
+      "execution": "embedded_native_sources",
+      "git_dirty": "false",
+      "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+    },
+    "script_errors": []
+  },
+  "result_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+  "receipt_sha256": "9731e6ddb18ba2cf22cbf0c6378c9aca7b22e96e42cecdce49c90a6586ca51c2",
+  "source_contracts": {
+    "GameConstantsAndTypes.h": {
+      "sha256": "fc8fa11e346b42cab44f53bc86583f7140b9b33a1fd33e545e3315ccee244879",
+      "contract": "FailType ordinals 0..3: Immediate, ImmediateContinue, EndOfSong, Off"
+    },
+    "OptionsBinding.h": {
+      "sha256": "6b43a20161b019f9e64c85d54a78220a27c6d6118f69879ed06d08ae58cb9e00",
+      "contract": "ENUM_INTERFACE returns previous enum and supports optional chaining"
+    },
+    "PlayerOptions.cpp": {
+      "sha256": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+      "contract": "Approach copies FailType immediately; GetMods emits FailAtEnd; failendofsong is the ImmediateContinue alias"
+    },
+    "ScreenGameplay.cpp": {
+      "sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+      "contract": "Off and EndOfSong skip stage failure during play; all players must be Immediate for an early failure exit; NotesEnded marks zero-life failure for every mode except Off"
+    }
+  },
+  "limits": "Native control executes real PlayerOptions and ModsGroup, independently of the semantic host. ScreenGameplay life/stage failure policy is established by local source and DeadSync gameplay regressions; the control does not construct a live gameplay screen."
+}

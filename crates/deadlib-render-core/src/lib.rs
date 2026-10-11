@@ -297,6 +297,10 @@ impl Default for TexturedMeshVertex {
 
 /// Fixed-function GL_SPHERE_MAP, evaluated per vertex before interpolation.
 pub fn sphere_texture_uv(pos: [f32; 3], normal: [f32; 3], rows: [[f32; 4]; 3]) -> [f32; 2] {
+    sphere_texture_mapper(rows)(pos, normal)
+}
+
+fn sphere_texture_mapper(rows: [[f32; 4]; 3]) -> impl Fn([f32; 3], [f32; 3]) -> [f32; 2] {
     let matrix = glam::Mat3::from_cols(
         glam::Vec3::new(rows[0][0], rows[1][0], rows[2][0]),
         glam::Vec3::new(rows[0][1], rows[1][1], rows[2][1]),
@@ -307,21 +311,23 @@ pub fn sphere_texture_uv(pos: [f32; 3], normal: [f32; 3], rows: [[f32; 4]; 3]) -
         matrix.z_axis.cross(matrix.x_axis),
         matrix.x_axis.cross(matrix.y_axis),
     );
-    let n =
-        (cofactor * glam::Vec3::from(normal) * matrix.determinant().signum()).normalize_or_zero();
-    let p = glam::Vec4::new(pos[0], pos[1], pos[2], 1.0);
-    let eye = glam::Vec3::new(
-        glam::Vec4::from(rows[0]).dot(p),
-        glam::Vec4::from(rows[1]).dot(p),
-        glam::Vec4::from(rows[2]).dot(p),
-    )
-    .normalize_or_zero();
-    let reflection = eye - 2.0 * n * eye.dot(n);
-    let denominator = (2.0 * (reflection + glam::Vec3::Z).length()).max(1e-20);
-    [
-        reflection.x / denominator + 0.5,
-        reflection.y / denominator + 0.5,
-    ]
+    let sign = matrix.determinant().signum();
+    move |pos, normal| {
+        let n = (cofactor * glam::Vec3::from(normal) * sign).normalize_or_zero();
+        let p = glam::Vec4::new(pos[0], pos[1], pos[2], 1.0);
+        let eye = glam::Vec3::new(
+            glam::Vec4::from(rows[0]).dot(p),
+            glam::Vec4::from(rows[1]).dot(p),
+            glam::Vec4::from(rows[2]).dot(p),
+        )
+        .normalize_or_zero();
+        let reflection = eye - 2.0 * n * eye.dot(n);
+        let denominator = (2.0 * (reflection + glam::Vec3::Z).length()).max(1e-20);
+        [
+            reflection.x / denominator + 0.5,
+            reflection.y / denominator + 0.5,
+        ]
+    }
 }
 
 /// The two independent coordinate-generation modes share the diffuse matrix.
@@ -329,20 +335,43 @@ pub fn textured_mesh_uvs(
     vertex: TexturedMeshVertex,
     instance: TexturedMeshInstanceRaw,
 ) -> [[f32; 2]; 2] {
-    let mode = if instance.texture_mask > 0.5 {
-        0
-    } else {
-        vertex.normal[3] as u8
-    };
-    let sphere = if mode & 3 != 0 {
+    textured_mesh_uvs_with_sphere(vertex, instance, || {
         sphere_texture_uv(
             vertex.pos,
             [vertex.normal[0], vertex.normal[1], vertex.normal[2]],
             instance.sphere_rows,
         )
+    })
+}
+
+/// Prepares CPU texture-coordinate generation once for an instance's vertices.
+/// The cofactor matrix and determinant sign are shared by all sphere-map samples.
+pub fn textured_mesh_uv_mapper(
+    instance: TexturedMeshInstanceRaw,
+) -> impl Fn(TexturedMeshVertex) -> [[f32; 2]; 2] {
+    let sphere = sphere_texture_mapper(instance.sphere_rows);
+    move |vertex| {
+        textured_mesh_uvs_with_sphere(vertex, instance, || {
+            sphere(
+                vertex.pos,
+                [vertex.normal[0], vertex.normal[1], vertex.normal[2]],
+            )
+        })
+    }
+}
+
+#[inline]
+fn textured_mesh_uvs_with_sphere(
+    vertex: TexturedMeshVertex,
+    instance: TexturedMeshInstanceRaw,
+    sphere: impl FnOnce() -> [f32; 2],
+) -> [[f32; 2]; 2] {
+    let mode = if instance.texture_mask > 0.5 {
+        0
     } else {
-        vertex.uv
+        vertex.normal[3] as u8
     };
+    let sphere = if mode & 3 != 0 { sphere() } else { vertex.uv };
     let uv = if mode & 1 != 0 { sphere } else { vertex.uv };
     let additive = if mode & 2 != 0 { sphere } else { vertex.uv };
     [

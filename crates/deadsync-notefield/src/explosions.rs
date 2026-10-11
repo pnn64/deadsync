@@ -25,6 +25,7 @@ pub(crate) struct ExplosionComposeRequest<'a, S> {
     pub field_zoom: f32,
     pub effect_zoom: f32,
     pub rotation_x_deg: f32,
+    pub rotation_y_deg: f32,
     pub rotation: ExplosionRotation,
     pub z: i16,
 }
@@ -97,7 +98,7 @@ pub(crate) fn compose_explosion_layers<S, F>(
             tint: visual.diffuse,
             glow: visual.glow,
             rotation_x_deg: request.rotation_x_deg,
-            rotation_y_deg,
+            rotation_y_deg: rotation_y_deg + request.rotation_y_deg,
             rotation_z_deg,
             blend,
             z: request.z,
@@ -282,6 +283,7 @@ mod tests {
                     field_zoom: 1.0,
                     effect_zoom: 1.0,
                     rotation_x_deg: 0.0,
+                    rotation_y_deg: 0.0,
                     rotation: ExplosionRotation::Mine,
                     z: 0,
                 },
@@ -319,6 +321,7 @@ mod tests {
                     field_zoom: 1.0,
                     effect_zoom: 1.0,
                     rotation_x_deg: 0.0,
+                    rotation_y_deg: 0.0,
                     rotation: ExplosionRotation::Tap {
                         rotation_y_deg: 0.0,
                         extra_z_deg: 0.0,
@@ -363,6 +366,7 @@ mod tests {
                 field_zoom: 2.0,
                 effect_zoom: 1.5,
                 rotation_x_deg: 0.0,
+                rotation_y_deg: 0.0,
                 rotation: ExplosionRotation::Tap {
                     rotation_y_deg: 7.0,
                     extra_z_deg: 3.0,
@@ -425,6 +429,7 @@ mod tests {
                 field_zoom: 1.0,
                 effect_zoom: 1.0,
                 rotation_x_deg: 0.0,
+                rotation_y_deg: 0.0,
                 rotation: ExplosionRotation::Mine,
                 z: 146,
             },
@@ -468,6 +473,7 @@ mod tests {
                 field_zoom: 1.0,
                 effect_zoom: 1.0,
                 rotation_x_deg: 0.0,
+                rotation_y_deg: 0.0,
                 rotation: ExplosionRotation::Tap {
                     rotation_y_deg: 0.0,
                     extra_z_deg: 0.0,

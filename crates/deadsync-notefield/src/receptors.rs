@@ -266,7 +266,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                     zoom: [1.0, 1.0],
                     tint: color,
                     rotation_x_deg: request.rotation_x_deg,
-                    rotation_y_deg: 0.0,
+                    rotation_y_deg: request.rotation_y_deg,
                     rotation_z_deg: -final_rotation,
                     uv,
                     blend,
@@ -1137,7 +1137,8 @@ mod tests {
                     assert_eq!(sprite.uv_rect, [0.1, 0.2, 0.8, 0.9]);
                     assert_eq!((sprite.flip_x, sprite.flip_y), (false, false));
                     assert_eq!(sprite.fade, [0.0; 4]);
-                    assert_eq!(sprite.rot_y_deg, 0.0);
+                    // GhostArrowRow uses the same native receptor X/Y rotation.
+                    assert_eq!(sprite.rot_y_deg, 19.0);
                     assert_eq!(sprite.rot_z_deg, -175.0);
                 }
             }

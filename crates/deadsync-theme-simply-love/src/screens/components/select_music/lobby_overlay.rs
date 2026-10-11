@@ -10,6 +10,7 @@ use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_theme::FontRole;
 use std::cell::RefCell;
+use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -1060,33 +1061,29 @@ fn push_joined_overlay<const STAGE_NESTED: bool>(
 
 fn joined_song_info_text(joined: &lobby_data::JoinedLobby) -> Option<String> {
     let song_info = joined.song_info.as_ref()?;
-    let title = song_info
-        .title
-        .as_deref()
-        .unwrap_or(song_info.song_path.as_str());
-    let title = truncate_text(title, 38);
-
-    let mut detail = String::new();
-    if let Some(chart_label) = song_info.chart_label.as_deref()
-        && !chart_label.trim().is_empty()
-    {
-        detail.push_str(chart_label.trim());
-    }
-    if let Some(rate) = song_info
+    let title = song_info.title.as_deref().unwrap_or(&song_info.song_path);
+    let chart_label = song_info.chart_label.as_deref().unwrap_or("").trim();
+    let rate = song_info
         .rate
-        .filter(|rate| rate.is_finite() && *rate > 0.0)
-    {
-        if !detail.is_empty() {
-            detail.push_str("  ");
-        }
-        detail.push_str(format!("{rate:.2}x").as_str());
+        .filter(|rate| rate.is_finite() && *rate > 0.0);
+    // At most 38 UTF-8 scalars for the title, plus the optional detail line.
+    let mut text = String::with_capacity(
+        14 + title.len().min(38 * 4)
+            + chart_label.len()
+            + usize::from(!chart_label.is_empty())
+            + if rate.is_some() { 8 } else { 0 },
+    );
+    text.push_str("Selected Song\n");
+    push_truncated_text(&mut text, title, 38);
+    if !chart_label.is_empty() {
+        text.push('\n');
+        text.push_str(chart_label);
     }
-
-    if detail.is_empty() {
-        Some(format!("Selected Song\n{title}"))
-    } else {
-        Some(format!("Selected Song\n{title}\n{detail}"))
+    if let Some(rate) = rate {
+        text.push_str(if chart_label.is_empty() { "\n" } else { "  " });
+        write!(text, "{rate:.2}x").expect("writing to a String cannot fail");
     }
+    Some(text)
 }
 
 fn lobby_player_screen_suffix(player: &lobby_data::LobbyPlayer) -> String {
@@ -1098,20 +1095,19 @@ fn lobby_player_screen_suffix(player: &lobby_data::LobbyPlayer) -> String {
     format!("  [{screen}]")
 }
 
-fn truncate_text(text: &str, max_chars: usize) -> String {
+fn push_truncated_text(out: &mut String, text: &str, max_chars: usize) {
     // Byte length is an upper bound on the number of characters.
-    if text.len() <= max_chars || text.chars().count() <= max_chars {
-        return text.to_string();
+    if text.len() <= max_chars || text.char_indices().nth(max_chars).is_none() {
+        out.push_str(text);
+        return;
     }
     let keep = max_chars.saturating_sub(3);
     let end = text
         .char_indices()
         .nth(keep)
         .map_or(text.len(), |(end, _)| end);
-    let mut out = String::with_capacity(end + 3);
     out.push_str(&text[..end]);
     out.push_str("...");
-    out
 }
 
 fn append_password_prompt<const STAGE_NESTED: bool>(
@@ -1720,7 +1716,9 @@ mod tests {
             ("e\u{301}abc", 4, "e..."),
             ("unchanged", usize::MAX, "unchanged"),
         ] {
-            assert_eq!(truncate_text(text, limit), expected, "{text:?}, {limit}");
+            let mut out = String::from("prefix:");
+            push_truncated_text(&mut out, text, limit);
+            assert_eq!(out, format!("prefix:{expected}"), "{text:?}, {limit}");
         }
     }
 
@@ -1741,4 +1739,12 @@ mod tests {
         assert_eq!(SoundCue::Change.asset_path(), "assets/sounds/change.ogg");
         assert_eq!(SoundCue::Boom.asset_path(), "assets/sounds/boom.ogg");
     }
+}
+
+#[cfg(test)]
+mod perf_traversal {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/perf/lobby_text.rs"
+    ));
 }

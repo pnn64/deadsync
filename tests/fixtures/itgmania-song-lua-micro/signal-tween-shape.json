@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "name": "native hidden signal tween shape",
+  "samples": [
+    0,
+    0.5,
+    1,
+    1.25,
+    1.5,
+    1.75,
+    2,
+    2.25
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "root",
+    "children": [
+      {
+        "kind": "frame",
+        "name": "signal",
+        "state": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "tweens": [
+          {
+            "duration": 1,
+            "curve": "sleep"
+          },
+          {
+            "duration": 0.5,
+            "curve": "decelerate",
+            "state": {
+              "position": [
+                0.3333333333333333,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "duration": 0.25,
+            "curve": "sleep"
+          },
+          {
+            "duration": 0.5,
+            "curve": "decelerate",
+            "state": {
+              "position": [
+                0.6666666666666666,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "children": []
+      }
+    ]
+  }
+}

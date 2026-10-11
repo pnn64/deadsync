@@ -290,6 +290,7 @@ pub(super) mod tests {
             chart_name: String::new(),
             meter: 9,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             short_hash: "player-options-test".to_string(),
             stats: deadsync_chart::ArrowStats::default(),
@@ -1907,12 +1908,7 @@ pub(super) mod tests {
         state.pack_menu = pack_options::PackMenu::new(&packs);
         for pane in &mut state.panes {
             if let Some(row) = pane.row_map.get_mut(RowId::NoteSkin) {
-                row.replace_choices(vec![
-                    "default".into(),
-                    "cel".into(),
-                    "sample-cel".into(),
-                    "sample-metal".into(),
-                ]);
+                row.replace_choices(["default", "cel", "sample-cel", "sample-metal"]);
             }
         }
         state.pack_menu.add_rows(
@@ -2772,7 +2768,7 @@ pub(super) mod tests {
             let rows = &mut state.panes[OptionsPane::Display.index()].row_map;
             rows.get_mut(RowId::NoteSkin)
                 .unwrap()
-                .replace_choices(vec![name.into()]);
+                .replace_choices([name]);
             state.pack_menu.add_rows(rows, &state.player_options);
             for player in [P1, P2] {
                 pack_options::sync_player(&mut state, player);
@@ -3006,7 +3002,7 @@ pub(super) mod tests {
             let rows = &mut state.panes[OptionsPane::Display.index()].row_map;
             rows.get_mut(RowId::NoteSkin)
                 .unwrap()
-                .replace_choices(vec![family.into()]);
+                .replace_choices([family]);
             state.pack_menu.add_rows(rows, &state.player_options);
             pack_options::sync_player(&mut state, P1);
             state.active = [true, false];
@@ -6902,4 +6898,9 @@ pub(super) mod tests {
             super::search::close(&mut state);
         }
     }
+
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/perf/player_option_changes.rs"
+    ));
 }

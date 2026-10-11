@@ -26,9 +26,8 @@ use crate::song::{
     ParseSongOptions, SongAnalyzer, SongParseScratch, parse_song_data_file, parse_song_data_file_in,
 };
 
-// Recompile song Lua after matching native value iterator lookups;
-// older captures ignore table metamethods during iteration.
-pub const SONG_CACHE_VERSION: u8 = 61;
+// Cache authored chart MUSIC separately from the resolved gameplay path.
+pub const SONG_CACHE_VERSION: u8 = 62;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
@@ -321,6 +320,51 @@ impl From<&SongBackgroundChange> for SerializableSongBackgroundChange {
     }
 }
 
+impl From<SongBackgroundChange> for SerializableSongBackgroundChange {
+    fn from(change: SongBackgroundChange) -> Self {
+        let target = match change.target {
+            SongBackgroundChangeTarget::File(path) => {
+                SerializableSongBackgroundChangeTarget::File(owned_path_string(path))
+            }
+            SongBackgroundChangeTarget::Animation(name) => {
+                SerializableSongBackgroundChangeTarget::Animation(name)
+            }
+            SongBackgroundChangeTarget::NoSongBg => {
+                SerializableSongBackgroundChangeTarget::NoSongBg
+            }
+            SongBackgroundChangeTarget::Random => SerializableSongBackgroundChangeTarget::Random,
+        };
+        Self {
+            start_beat: change.start_beat,
+            target,
+            rate: change.rate,
+            effect: change.effect,
+            file2: change.file2.map(owned_path_string),
+            transition: change.transition,
+            color1: change.color1,
+            color2: change.color2,
+        }
+    }
+}
+
+pub(crate) fn cache_background_changes(
+    changes: Vec<SongBackgroundChange>,
+) -> Vec<SerializableSongBackgroundChange> {
+    if changes.is_empty() {
+        return Vec::new();
+    }
+    changes
+        .into_iter()
+        .map(SerializableSongBackgroundChange::from)
+        .collect()
+}
+
+fn owned_path_string(path: PathBuf) -> String {
+    path.into_os_string()
+        .into_string()
+        .unwrap_or_else(|path| path.to_string_lossy().into_owned())
+}
+
 impl From<SerializableSongBackgroundChange> for SongBackgroundChange {
     fn from(change: SerializableSongBackgroundChange) -> Self {
         let target = match change.target {
@@ -456,7 +500,7 @@ impl From<CachedSpeedSegment> for SpeedSegment {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+#[derive(Serialize, Deserialize, Clone, Default, Encode, Decode)]
 pub struct CachedTimingSegments {
     beat0_offset_adjust: f32,
     bpms: Vec<(f32, f32)>,
@@ -824,6 +868,7 @@ pub struct SerializableChartData {
     pub chart_name: String,
     pub meter: u32,
     pub step_artist: String,
+    pub music_file: String,
     pub music_path: Option<String>,
     pub offset: f32,
     pub notes: Vec<u8>,
@@ -966,6 +1011,7 @@ pub struct CachedChartMeta {
     pub chart_name: String,
     pub meter: u32,
     pub step_artist: String,
+    pub music_file: String,
     pub music_path: Option<String>,
     pub short_hash: String,
     pub stats: CachedArrowStats,
@@ -1051,6 +1097,7 @@ struct BorrowedCachedChartMeta<'a> {
     chart_name: &'a str,
     meter: u32,
     step_artist: &'a str,
+    music_file: &'a str,
     music_path: Option<&'a str>,
     short_hash: &'a str,
     stats: &'a CachedArrowStats,
@@ -1080,6 +1127,25 @@ struct BorrowedCachedChartMeta<'a> {
     display_bpm: Option<&'a CachedChartDisplayBpm>,
     min_bpm: f64,
     max_bpm: f64,
+}
+
+struct BorrowedCachedCharts<'a> {
+    charts: &'a [SerializableChartData],
+    global_offset_seconds: f32,
+}
+
+impl Encode for BorrowedCachedCharts<'_> {
+    fn encode<E: bincode::enc::Encoder>(
+        &self,
+        encoder: &mut E,
+    ) -> Result<(), bincode::error::EncodeError> {
+        // Match Vec's length prefix and order without retaining computed metadata.
+        (self.charts.len() as u64).encode(encoder)?;
+        for chart in self.charts {
+            BorrowedCachedChartMeta::new(chart, self.global_offset_seconds).encode(encoder)?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Encode)]
@@ -1115,7 +1181,7 @@ struct BorrowedCachedSongMeta<'a> {
     total_length_seconds: i32,
     precise_last_second_seconds: f32,
     last_second_hint: f32,
-    charts: Vec<BorrowedCachedChartMeta<'a>>,
+    charts: BorrowedCachedCharts<'a>,
 }
 
 #[derive(Encode)]
@@ -1327,6 +1393,7 @@ pub fn build_chart_meta(chart: SerializableChartData, global_offset_seconds: f32
         chart_name: chart.chart_name,
         meter: chart.meter,
         step_artist: chart.step_artist,
+        music_file: chart.music_file,
         music_path: chart.music_path.map(PathBuf::from),
         short_hash: chart.short_hash,
         stats: chart.stats.into(),
@@ -1372,6 +1439,7 @@ pub fn build_cached_chart_meta(
         chart_name: chart.chart_name.clone(),
         meter: chart.meter,
         step_artist: chart.step_artist.clone(),
+        music_file: chart.music_file.clone(),
         music_path: chart.music_path.clone(),
         short_hash: chart.short_hash.clone(),
         stats: chart.stats.clone(),
@@ -1459,6 +1527,7 @@ impl<'a> BorrowedCachedChartMeta<'a> {
             chart_name: &chart.chart_name,
             meter: chart.meter,
             step_artist: &chart.step_artist,
+            music_file: &chart.music_file,
             music_path: chart.music_path.as_deref(),
             short_hash: &chart.short_hash,
             stats: &chart.stats,
@@ -1500,6 +1569,7 @@ pub fn build_chart_meta_from_cache(chart: CachedChartMeta) -> ChartData {
         chart_name: chart.chart_name,
         meter: chart.meter,
         step_artist: chart.step_artist,
+        music_file: chart.music_file,
         music_path: chart.music_path.map(PathBuf::from),
         short_hash: chart.short_hash,
         stats: chart.stats.into(),
@@ -1573,6 +1643,38 @@ pub fn build_requested_gameplay_charts(
             Ok(build_gameplay_chart_from_ref(chart, global_offset_seconds))
         })
         .collect()
+}
+
+// Cache writing has already finished when the parse fallback reaches here.
+// Move each unique chart's buffers; duplicate requests still own independent data.
+fn take_requested_gameplay_charts(
+    song: &mut SerializableSongData,
+    requested_chart_ixs: &[usize],
+    global_offset_seconds: f32,
+) -> Result<Vec<GameplayChartData>, String> {
+    if let Some(&chart_ix) = requested_chart_ixs
+        .iter()
+        .find(|&&ix| ix >= song.charts.len())
+    {
+        return Err(format!("Chart index {chart_ix} out of range"));
+    }
+    Ok(
+        collect_requested_cached_charts(requested_chart_ixs, |chart_ix| {
+            let chart = &mut song.charts[chart_ix];
+            Some(build_gameplay_chart_from_payload(
+                CachedChartPayload {
+                    offset: chart.offset,
+                    notes: std::mem::take(&mut chart.notes),
+                    parsed_notes: std::mem::take(&mut chart.parsed_notes),
+                    row_to_beat: std::mem::take(&mut chart.row_to_beat),
+                    timing_segments: std::mem::take(&mut chart.timing_segments),
+                    chart_attacks: chart.chart_attacks.take(),
+                },
+                global_offset_seconds,
+            ))
+        })
+        .expect("requested chart indices were validated"),
+    )
 }
 
 pub fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -> SongData {
@@ -1717,11 +1819,10 @@ impl<'a> BorrowedCachedSongMeta<'a> {
             total_length_seconds: song.total_length_seconds,
             precise_last_second_seconds: song.precise_last_second_seconds,
             last_second_hint: song.last_second_hint,
-            charts: song
-                .charts
-                .iter()
-                .map(|chart| BorrowedCachedChartMeta::new(chart, global_offset_seconds))
-                .collect(),
+            charts: BorrowedCachedCharts {
+                charts: &song.charts,
+                global_offset_seconds,
+            },
         }
     }
 }
@@ -2324,6 +2425,48 @@ fn gameplay_chart_payload_load_log_entry(
     }
 }
 
+/// Load song-local chart timing before compiling Lua. Decode cached payloads
+/// one at a time; never retain unselected notes or expand their gameplay data.
+/// Cache misses parse at song load, never during gameplay updates.
+pub fn load_chart_timings(
+    song: &SongData,
+    options: &GameplayChartLoadOptions<'_>,
+    music_len: impl FnOnce(Option<&Path>) -> f32,
+) -> Result<Vec<TimingData>, String> {
+    if options.allow_cache_read {
+        let cached = (|| {
+            let cache_path = song_cache_path(options.cache_dir, &song.simfile_path).ok()?;
+            let (cached_song, payload_start) = load_cached_song_for_gameplay(
+                &song.simfile_path, &cache_path, options.verify_cache_freshness,
+            )?;
+            if cached_song.chart_payloads.len() != song.charts.len() {
+                return None;
+            }
+            cached_song.chart_payloads.into_iter().map(|entry| {
+                let payload = load_cached_chart_payload(&cache_path, payload_start, entry)?;
+                Some(TimingData::from_segments(
+                    -payload.offset, options.global_offset_seconds,
+                    &payload.timing_segments.into(), &[],
+                ))
+            }).collect::<Option<Vec<_>>>()
+        })();
+        if let Some(timings) = cached {
+            return Ok(timings);
+        }
+    }
+    let data = parse_song_data_file(
+        &song.simfile_path, options.parse_options, options.global_offset_seconds, music_len,
+    )?;
+    if data.charts.len() != song.charts.len() {
+        return Err("song charts changed before loading Lua timing".into());
+    }
+    Ok(data.charts.into_iter().map(|chart| {
+        TimingData::from_segments(
+            -chart.offset, options.global_offset_seconds, &chart.timing_segments.into(), &[],
+        )
+    }).collect())
+}
+
 pub fn load_gameplay_charts_with_options<F>(
     song: &SongData,
     requested_chart_ixs: &[usize],
@@ -2357,7 +2500,7 @@ where
         });
     }
 
-    let (song_data, song_data_load) = load_gameplay_song_data_with_options(
+    let (mut song_data, song_data_load) = load_gameplay_song_data_with_options(
         &song.simfile_path,
         options,
         &mut warnings,
@@ -2365,8 +2508,8 @@ where
     )?;
     let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
     let build_started = Instant::now();
-    let charts = build_requested_gameplay_charts(
-        &song_data,
+    let charts = take_requested_gameplay_charts(
+        &mut song_data,
         requested_chart_ixs,
         options.global_offset_seconds,
     )?;
@@ -2539,8 +2682,7 @@ fn cached_path_exists(path_opt: Option<&str>) -> bool {
 
 fn cached_song_paths_exist(song: &CachedSong) -> bool {
     let data = &song.data;
-    let bgchange_paths_ok = data
-        .background_changes
+    data.background_changes
         .iter()
         .chain(data.background_layer2_changes.iter())
         .all(|change| {
@@ -2553,30 +2695,25 @@ fn cached_song_paths_exist(song: &CachedSong) -> bool {
                 | SerializableSongBackgroundChangeTarget::Random => true,
             };
             target_ok && cached_path_exists(change.file2.as_deref())
-        });
-    let foreground_paths_ok = data
-        .foreground_changes
-        .iter()
-        .all(|change| cached_path_exists(Some(&change.path)));
-    let foreground_lua_paths_ok = data
-        .foreground_lua_changes
-        .iter()
-        .all(|change| cached_path_exists(Some(&change.path)));
-    let background_lua_paths_ok = data
-        .background_lua_changes
-        .iter()
-        .all(|change| cached_path_exists(Some(&change.path)));
-    let chart_music_paths_ok = data
-        .charts
-        .iter()
-        .all(|chart| cached_path_exists(chart.music_path.as_deref()));
-    cached_path_exists(data.banner_path.as_deref())
+        })
+        && data
+            .foreground_changes
+            .iter()
+            .all(|change| cached_path_exists(Some(&change.path)))
+        && data
+            .foreground_lua_changes
+            .iter()
+            .all(|change| cached_path_exists(Some(&change.path)))
+        && data
+            .background_lua_changes
+            .iter()
+            .all(|change| cached_path_exists(Some(&change.path)))
+        && data
+            .charts
+            .iter()
+            .all(|chart| cached_path_exists(chart.music_path.as_deref()))
+        && cached_path_exists(data.banner_path.as_deref())
         && cached_path_exists(data.background_path.as_deref())
-        && bgchange_paths_ok
-        && foreground_paths_ok
-        && background_lua_paths_ok
-        && foreground_lua_paths_ok
-        && chart_music_paths_ok
         && cached_path_exists(data.cdtitle_path.as_deref())
         && cached_path_exists(data.music_path.as_deref())
 }
@@ -2703,6 +2840,9 @@ fn load_cached_chart_payload(
 
 #[cfg(test)]
 mod tests {
+    mod data_churn {
+        include!("cache_perf.rs");
+    }
     use super::*;
     use deadsync_rules::timing::{
         FakeSegment, SpeedUnit, TimeSignatureSegment, TimingData, TimingSegments,
@@ -3264,6 +3404,34 @@ mod tests {
     }
 
     #[test]
+    fn authored_music_survives_parse_and_cache() {
+        let root = test_dir("authored-music");
+        let simfile = root.join("song.ssc");
+        let music = root.join("song.ogg");
+        let cache_path = root.join("cache.bin");
+        fs::write(&music, b"").unwrap();
+        let mut text = String::from("#VERSION:0.83;\n#TITLE:Authored music;\n#MUSIC:song.ogg;\n#BPMS:0=120;\n");
+        for (difficulty, tag) in [("Easy", ""), ("Medium", "#MUSIC:song.ogg;\n"),
+            ("Challenge", "#MUSIC:./song.ogg;\n")] {
+            text.push_str(&format!("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DIFFICULTY:{difficulty};\n#METER:1;\n{tag}#NOTES:\n1000\n;\n"));
+        }
+        fs::write(&simfile, text).unwrap();
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let data = crate::song::parse_song_file(&simfile, &options, |_| 0.0).unwrap();
+        let expected = ["", "song.ogg", "./song.ogg"];
+        assert_eq!(data.charts.iter().map(|chart| chart.music_file.as_str()).collect::<Vec<_>>(), expected);
+        assert!(data.charts.iter().all(|chart| chart.music_path.as_deref().map(Path::new) == Some(music.as_path())));
+        let uncached = build_song_meta(data.clone(), 0.0);
+        write_song_cache_file(&cache_path, &data, 0.0).unwrap();
+        let cached = load_cached_song(&simfile, &cache_path, false).unwrap();
+        let restored = build_song_meta_from_cache(cached.data);
+        for song in [uncached, restored] {
+            assert_eq!(song.charts.iter().map(|chart| chart.music_file.as_str()).collect::<Vec<_>>(), expected);
+            assert!(song.charts.iter().all(|chart| chart.music_path.as_deref() == Some(music.as_path())));
+        }
+    }
+
+    #[test]
     fn borrowed_cache_header_matches_owned_wire_format_and_reuses_storage() {
         let mut data = cached_song(Path::new("songs/pack/song/song.ssc"));
         data.subtitle = "Cache subtitle".to_string();
@@ -3277,6 +3445,7 @@ mod tests {
         chart.description = "Wire-compatible chart".to_string();
         chart.chart_name = "Borrowed header".to_string();
         chart.step_artist = "DeadSync".to_string();
+        chart.music_file = "./chart.ogg".to_string();
         chart.music_path = Some("chart.ogg".to_string());
         chart.short_hash = "0123456789abcdef".to_string();
         chart.matrix_profile = Box::new([CachedMatrixInput {
@@ -3597,6 +3766,7 @@ mod tests {
             chart_name: String::new(),
             meter: 1,
             step_artist: String::new(),
+            music_file: String::new(),
             music_path: None,
             offset: 0.0,
             notes: Vec::new(),
@@ -3671,5 +3841,9 @@ mod tests {
             min_bpm: 60.0,
             max_bpm: 60.0,
         }
+    }
+
+    mod library_perf {
+        include!("cache_library_perf.rs");
     }
 }

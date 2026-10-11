@@ -1,0 +1,23 @@
+{
+  "request": "chained-options-control.json",
+  "request_sha256": "c81499b2b612a95a03dcbdb05410f3525be9b998d38696965efedfed0f7ca5f1",
+  "native_harness_commit": "7a75d74081a4e0e944e1babde8d8d64363ad625a",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_binary_sha256": "b4038da817427703f3bc30c8aea16117e7c3ffa39c93356243d455e1dd694c3d",
+  "result": {
+    "allocations": [],
+    "diagnostics": [],
+    "provenance": {
+      "execution": "embedded_native_sources",
+      "git_dirty": "false",
+      "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+    },
+    "script_errors": []
+  },
+  "result_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+  "receipt_sha256": "5742219eafd78b725b9c31af0d0daabddb9a8066e1b416d7333682b39ef089da",
+  "options_binding_sha256": "6b43a20161b019f9e64c85d54a78220a27c6d6118f69879ed06d08ae58cb9e00",
+  "contract": "FLOAT_INTERFACE returns the original amount and approach speed. Explicit trailing true requests the owner. Without true a chained Lua call raises after the first setter, which is retained. Correcting authored test calls preserves every expected numeric value and tolerance.",
+  "limits": "Executes actual native PlayerOptions Lua methods and userdata, independently of the semantic host; this control does not construct a gameplay screen."
+}

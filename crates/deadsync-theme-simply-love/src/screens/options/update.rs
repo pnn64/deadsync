@@ -13,14 +13,7 @@ pub(super) fn sync_i18n_cache(state: &mut State) {
     state.software_thread_labels = software_thread_choice_labels(&state.software_thread_choices);
     state.sound_device_options = build_sound_device_options(&state.audio_options);
     state.score_import_pack_options = score_import_pack_options(state);
-    let new_groups_lc: HashSet<String> = state
-        .score_import_pack_options
-        .iter()
-        .map(|opt| opt.group_key.to_string())
-        .collect();
-    state
-        .score_import_pack_selected
-        .retain(|key| new_groups_lc.contains(key));
+    retain_score_import_pack_selection(state);
     sync_pack_picker_summary(state);
     let (sp_packs, sp_filters) = sync_pack_options(state);
     state.sync_pack_choices = sp_packs;

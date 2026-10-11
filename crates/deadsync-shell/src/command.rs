@@ -37,7 +37,7 @@ pub fn build_density_graph_mesh(
             None,
             1.0,
         );
-        (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+        (!verts.is_empty()).then(|| Arc::from(verts))
     })
 }
 
