@@ -1,5 +1,12 @@
-fn dataflow_select(state: &mut super::State, pane: OptionsPane, id: RowId, player: usize) {
+fn dataflow_select(
+    state: &mut super::State,
+    assets: &AssetManager,
+    pane: OptionsPane,
+    id: RowId,
+    player: usize,
+) {
     super::super::choice::apply_pane(state, pane);
+    super::super::inline_nav::prepare_choice_layouts(state, assets);
     state.pane_mut().selected_row[player] = state
         .pane()
         .row_map
@@ -40,13 +47,13 @@ fn option_dispatch_preserves_updates_noops_and_mirrored_choices() {
         (OptionsPane::Main, RowId::Mini),
         (OptionsPane::Advanced, RowId::Hide),
     ] {
-        let (mut old, _) = setup_versus_state();
-        let (mut new, _) = setup_versus_state();
+        let (mut old, old_assets) = setup_versus_state();
+        let (mut new, new_assets) = setup_versus_state();
         for p in [P1, P2] {
             old.heart_rate_device_ids[p] = Some(format!("device-{p}"));
             new.heart_rate_device_ids[p] = old.heart_rate_device_ids[p].clone();
-            dataflow_select(&mut old, pane, id, p);
-            dataflow_select(&mut new, pane, id, p);
+            dataflow_select(&mut old, &old_assets, pane, id, p);
+            dataflow_select(&mut new, &new_assets, pane, id, p);
             for (delta, wrap) in [
                 (1, NavWrap::Wrap),
                 (0, NavWrap::Clamp),
@@ -69,13 +76,13 @@ fn option_dispatch_preserves_updates_noops_and_mirrored_choices() {
 fn bitmask_toggle_preserves_projection_visibility_and_effects() {
     use super::super::choice;
     ensure_i18n();
-    let (mut old, _) = setup_versus_state();
-    let (mut new, _) = setup_versus_state();
+    let (mut old, old_assets) = setup_versus_state();
+    let (mut new, new_assets) = setup_versus_state();
     for p in [P1, P2] {
         old.heart_rate_device_ids[p] = Some(format!("device-{p}"));
         new.heart_rate_device_ids[p] = old.heart_rate_device_ids[p].clone();
-        dataflow_select(&mut old, OptionsPane::Advanced, RowId::Hide, p);
-        dataflow_select(&mut new, OptionsPane::Advanced, RowId::Hide, p);
+        dataflow_select(&mut old, &old_assets, OptionsPane::Advanced, RowId::Hide, p);
+        dataflow_select(&mut new, &new_assets, OptionsPane::Advanced, RowId::Hide, p);
         for index in [0, 1, 0, usize::MAX] {
             old.pane_mut()
                 .row_map
@@ -119,10 +126,10 @@ fn benchmark_profile_dataflow_option_input() {
         ),
         ("input/bitmask", OptionsPane::Advanced, RowId::Hide, 1, true),
     ] {
-        let (mut old, _) = setup_versus_state();
-        let (mut new, _) = setup_versus_state();
-        dataflow_select(&mut old, pane, id, P1);
-        dataflow_select(&mut new, pane, id, P1);
+        let (mut old, old_assets) = setup_versus_state();
+        let (mut new, new_assets) = setup_versus_state();
+        dataflow_select(&mut old, &old_assets, pane, id, P1);
+        dataflow_select(&mut new, &new_assets, pane, id, P1);
         old.heart_rate_device_ids[P1] = Some("device-one".into());
         new.heart_rate_device_ids[P1] = old.heart_rate_device_ids[P1].clone();
         crate::dataflow_perf::compare(

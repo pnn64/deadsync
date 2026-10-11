@@ -331,6 +331,11 @@ pub(crate) fn entries_with_local_self_state<'a>(
             && local_is_fail
             && score_data::same_score_10000(entry.score, local_score_10000)
         {
+            if entry.is_fail
+                && (entry.machine_tag.is_some() || view.player_initials.trim().is_empty())
+            {
+                return Cow::Borrowed(pane.entries.as_slice());
+            }
             let mut entries = pane.entries.clone();
             let entry = &mut entries[index];
             entry.is_fail = true;
@@ -1514,3 +1519,11 @@ mod tests {
         assert_eq!(panes[0].mode_text.as_str(), "H.EX");
     }
 }
+
+#[cfg(test)]
+#[path = "gs_scorebox/select_data_original.rs"]
+mod select_data_original;
+
+#[cfg(test)]
+#[path = "gs_scorebox/select_data_perf.rs"]
+mod select_data_perf;

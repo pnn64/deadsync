@@ -1217,3 +1217,1044 @@ normal Lua capture has 241 frames with no errors or dropped events.
 DeadSync still fails that control at the distinct-level identity assertion;
 this chart result does not close general Current/Song option parity.
 The pending control is recorded in the pass JSON.
+
+## Ordered fixture validation, pass 158
+
+Position 79, Accelerator, passes all
+445,655 comparisons against committed DeadSync
+`cc6bc40b7`. The complete native harness 0.1.58 archive
+contains 6,156 updates over 102.58 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass158.json`. Position 80 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 159
+
+Position 80, Accelerator, passes all
+445,655 comparisons against committed DeadSync
+`cc6bc40b7`. The complete native harness 0.1.58 archive
+contains 6,156 updates over 102.58 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass159.json`. Position 81 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 160
+
+Position 81, Accendio, passes all
+492,633 comparisons against committed DeadSync
+`cc6bc40b7`. The complete native harness 0.1.58 archive
+contains 6,829 updates over 113.79 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass160.json`. Position 82 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 161
+
+Position 82, Accendio, passes all
+492,633 comparisons against committed DeadSync
+`f9e210bf0`. The complete native harness 0.1.58 archive
+contains 6,829 updates over 113.79 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass161.json`. Position 83 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 162
+
+Position 83, Actin' Up, passes all
+442,107 comparisons against committed DeadSync
+`73cbeaba1`. The complete native harness 0.1.58 archive
+contains 5,950 updates over 99.14 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass162.json`. Position 84 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 163
+
+Position 84, Actin' Up, passes all
+442,107 comparisons against committed DeadSync
+`73cbeaba1`. The complete native harness 0.1.58 archive
+contains 5,950 updates over 99.14 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass163.json`. Position 85 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 164
+
+Position 85, Aegleseeker, passes all
+196,634 comparisons against committed DeadSync
+`73cbeaba1`. The complete native harness 0.1.58 archive
+contains 8,802 updates over 146.67 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass164.json`. Position 86 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 165
+
+Position 86, After Dark, passes all
+491,861 comparisons against committed DeadSync
+`1121d63d1`. The complete native harness 0.1.58 archive
+contains 16,666 updates over 277.75 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass165.json`. Position 87 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 166
+
+Position 87, Afterburn, passes all
+645,515 comparisons against committed DeadSync
+`1121d63d1`. The complete native harness 0.1.58 archive
+contains 8,950 updates over 149.14 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass166.json`. Position 88 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 167
+
+Position 88, 合縁事変, passes all
+333,777 comparisons against committed DeadSync
+`1121d63d1`. The complete native harness 0.1.58 archive
+contains 15,149 updates over 252.46 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass167.json`. Position 89 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 168
+
+Position 89, Airman First Class, passes all
+275,803 comparisons against committed DeadSync
+`1121d63d1`. The complete native harness 0.1.59 archive
+contains 12,535 updates over 208.89 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass168.json`. Position 90 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 169
+
+Position 90, Among Us in Real Life - Single, passes all
+207,862 comparisons against committed DeadSync
+`571515e29`. The complete native harness 0.1.61 archive
+contains 9,428 updates over 157.11 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass169.json`. Position 91 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+The native original writes `NoAttack` and `RandAttack` only as zero, and its chart attacks are empty. Live nonzero random-attack scheduling, RNG and note-transform parity remain open separately.
+
+## Ordered fixture validation, pass 170
+
+Position 91, And Drugs↑↑, passes all
+182,791 comparisons against committed DeadSync
+`571515e29`. The complete native harness 0.1.61 archive
+contains 7,634 updates over 127.20 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass170.json`. Position 92 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 171
+
+Position 92, And Drugs↑↑, passes all
+182,791 comparisons against committed DeadSync
+`4910a6925`. The complete native harness 0.1.61 archive
+contains 7,634 updates over 127.20 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass171.json`. Position 93 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 172
+
+Position 93, Answers, passes all
+800,958 comparisons against committed DeadSync
+`4910a6925`. The complete native harness 0.1.61 archive
+contains 9,601 updates over 160.00 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass172.json`. Position 94 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 173
+
+Position 94, Answers, passes all
+800,958 comparisons against committed DeadSync
+`4910a6925`. The complete native harness 0.1.61 archive
+contains 9,601 updates over 160.00 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass173.json`. Position 95 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 174
+
+Position 95, Episode 04, passes all
+291,292 comparisons against committed DeadSync
+`eb8e7d2c2`. The complete native harness 0.1.61 archive
+contains 12,348 updates over 205.77 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass174.json`. Position 96 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 175
+
+Position 96, Episode 04, passes all
+291,292 comparisons against committed DeadSync
+`eb8e7d2c2`. The complete native harness 0.1.61 archive
+contains 12,348 updates over 205.77 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass175.json`. Position 97 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 176
+
+Position 97, あんずのうた, passes all
+531,072 comparisons against committed DeadSync
+`1dccb63aa`. The complete native harness 0.1.61 archive
+contains 8,235 updates over 137.23 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass176.json`. Position 98 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 177
+
+Position 98, ao no lie, passes all
+628,260 comparisons against committed DeadSync
+`1dccb63aa`. The complete native harness 0.1.61 archive
+contains 7,642 updates over 127.33 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass177.json`. Position 99 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 178
+
+Position 99, ao no lie, passes all
+628,260 comparisons against committed DeadSync
+`1dccb63aa`. The complete native harness 0.1.61 archive
+contains 7,642 updates over 127.33 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass178.json`. Position 100 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 179
+
+Position 100, Apollo, passes all
+208,388 comparisons against committed DeadSync
+`1dccb63aa`. The complete native harness 0.1.61 archive
+contains 9,207 updates over 153.43 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass179.json`. Position 101 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 180
+
+Position 101, Apollo, passes all
+208,388 comparisons against committed DeadSync
+`1dccb63aa`. The complete native harness 0.1.61 archive
+contains 9,207 updates over 153.43 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass180.json`. Position 102 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 181
+
+Position 102, ASGORE, passes all
+250,715 comparisons against committed DeadSync
+`1dccb63aa`. The complete native harness 0.1.61 archive
+contains 11,396 updates over 189.90 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass181.json`. Position 103 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 182
+
+Position 103, ASGORE, passes all
+8,692,691 comparisons against committed DeadSync
+`1dccb63aa`. The complete native harness 0.1.61 archive
+contains 11,396 updates over 189.90 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass182.json`. Position 104 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 183
+
+Position 104, Astrogirl, passes all
+171,965 comparisons against committed DeadSync
+`1dccb63aa`. The complete native harness 0.1.61 archive
+contains 6,897 updates over 114.92 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass183.json`. Position 105 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 184
+
+Position 105, Atmosphere, passes all
+666,848 comparisons against committed DeadSync
+`0e52cbbcf`. The complete native harness 0.1.62 archive
+contains 8,053 updates over 134.19 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass184.json`. Position 106 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 185
+
+Position 106, Atmosphere, passes all
+666,848 comparisons against committed DeadSync
+`0e52cbbcf`. The complete native harness 0.1.62 archive
+contains 8,053 updates over 134.19 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass185.json`. Position 107 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 186
+
+Position 107, Backwards, passes all
+129,771 comparisons against committed DeadSync
+`e18273152`. The complete native harness 0.1.62 archive
+contains 5,898 updates over 98.27 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass186.json`. Position 108 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 187
+
+Position 108, Bad Apple!!, passes all
+275,847 comparisons against committed DeadSync
+`61d3d16fb`. The complete native harness 0.1.63 archive
+contains 12,523 updates over 208.70 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass187.json`. Position 109 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 188
+
+Position 109, Bad Intentions, passes all
+320,478 comparisons against committed DeadSync
+`61d3d16fb`. The complete native harness 0.1.63 archive
+contains 9,403 updates over 156.69 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass188.json`. Position 110 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 189
+
+Position 110, Bad Trails, passes all
+227,372 comparisons against committed DeadSync
+`d240231aa`. The complete native harness 0.1.64 archive
+contains 9,549 updates over 159.12 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass189.json`. Position 111 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 190
+
+Position 111, Bad Trails, passes all
+227,372 comparisons against committed DeadSync
+`d240231aa`. The complete native harness 0.1.64 archive
+contains 9,549 updates over 159.12 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass190.json`. Position 112 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 191
+
+Position 112, Badlands, passes all
+699,483 comparisons against committed DeadSync
+`d240231aa`. The complete native harness 0.1.64 archive
+contains 8,395 updates over 139.89 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass191.json`. Position 113 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 192
+
+Position 113, 竹, passes all
+209,141 comparisons against committed DeadSync
+`d240231aa`. The complete native harness 0.1.64 archive
+contains 8,480 updates over 141.31 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass192.json`. Position 114 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 193
+
+Position 114, Bank Account, passes all
+116,603 comparisons against committed DeadSync
+`d240231aa`. The complete native harness 0.1.64 archive
+contains 5,300 updates over 88.31 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass193.json`. Position 115 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 194
+
+Position 115, Bank Account, passes all
+118,381 comparisons against committed DeadSync
+`68c832d93`. The complete native harness 0.1.64 archive
+contains 5,300 updates over 88.31 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass194.json`. Position 116 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 195
+
+Position 116, B.B.K.K.B.K.K., passes all
+188,062 comparisons against committed DeadSync
+`68c832d93`. The complete native harness 0.1.64 archive
+contains 7,625 updates over 127.06 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass195.json`. Position 117 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 196
+
+Position 117, B.B.K.K.B.K.K., passes all
+167,783 comparisons against committed DeadSync
+`68c832d93`. The complete native harness 0.1.64 archive
+contains 7,625 updates over 127.06 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass196.json`. Position 118 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 197
+
+Position 118, B.B.K.K.B.K.K., passes all
+167,783 comparisons against committed DeadSync
+`68c832d93`. The complete native harness 0.1.64 archive
+contains 7,625 updates over 127.06 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass197.json`. Position 119 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 198
+
+Position 119, B.B.K.K.B.K.K., passes all
+167,783 comparisons against committed DeadSync
+`68c832d93`. The complete native harness 0.1.64 archive
+contains 7,625 updates over 127.06 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass198.json`. Position 120 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 199
+
+Position 120, Beauty in Chaos, passes all
+1,346,918 comparisons against committed DeadSync
+`e26bc17dd`. The complete native harness 0.1.64 archive
+contains 15,751 updates over 262.50 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass199.json`. Position 121 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 200
+
+Position 121, Beauty in Chaos, passes all
+1,346,918 comparisons against committed DeadSync
+`e26bc17dd`. The complete native harness 0.1.64 archive
+contains 15,751 updates over 262.50 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass200.json`. Position 122 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 201
+
+Position 122, Biggie Boom Boom, passes all
+571,998 comparisons against committed DeadSync
+`e26bc17dd`. The complete native harness 0.1.64 archive
+contains 6,871 updates over 114.49 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass201.json`. Position 123 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 202
+
+Position 123, Biggie Boom Boom, passes all
+571,998 comparisons against committed DeadSync
+`e26bc17dd`. The complete native harness 0.1.64 archive
+contains 6,871 updates over 114.49 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass202.json`. Position 124 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 203
+
+Position 124, Black Out, passes all
+157,387 comparisons against committed DeadSync
+`e26bc17dd`. The complete native harness 0.1.64 archive
+contains 6,553 updates over 109.20 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass203.json`. Position 125 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 204
+
+Position 125, Blacksphere, passes all
+158,515 comparisons against committed DeadSync
+`e26bc17dd`. The complete native harness 0.1.64 archive
+contains 7,178 updates over 119.61 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass204.json`. Position 126 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 205
+
+Position 126, Bodies, passes all
+167,565 comparisons against committed DeadSync
+`e26bc17dd`. The complete native harness 0.1.64 archive
+contains 7,496 updates over 124.91 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass205.json`. Position 127 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 206
+
+Position 127, Boys, passes all
+172,057 comparisons against committed DeadSync
+`e26bc17dd`. The complete native harness 0.1.64 archive
+contains 7,819 updates over 130.29 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass206.json`. Position 128 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 207
+
+Position 128, Brain Implosion Energy Drink (Null), passes all
+174,878 comparisons against committed DeadSync
+`e26bc17dd`. The complete native harness 0.1.64 archive
+contains 7,945 updates over 132.38 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass207.json`. Position 129 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 208
+
+Position 129, Brain Power, passes all
+642,834 comparisons against committed DeadSync
+`e26bc17dd`. The complete native harness 0.1.64 archive
+contains 7,092 updates over 118.18 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass208.json`. Position 130 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 209
+
+Position 130, Brain Power, passes all
+161,369 comparisons against committed DeadSync
+`3ab88a592`. The complete native harness 0.1.64 archive
+contains 7,314 updates over 121.88 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass209.json`. Position 131 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 210
+
+Position 131, Brain Power, passes all
+161,369 comparisons against committed DeadSync
+`3ab88a592`. The complete native harness 0.1.64 archive
+contains 7,314 updates over 121.88 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass210.json`. Position 132 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 211
+
+Position 132, 放送, passes all
+144,575 comparisons against committed DeadSync
+`b9b698186`. The complete native harness 0.1.64 archive
+contains 6,313 updates over 105.19 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass211.json`. Position 133 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 212
+
+Position 133, BroGamer, passes all
+198,090 comparisons against committed DeadSync
+`b9b698186`. The complete native harness 0.1.64 archive
+contains 7,654 updates over 127.54 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass212.json`. Position 134 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 213
+
+Position 134, Bunny House, passes all
+421,837 comparisons against committed DeadSync
+`b9b698186`. The complete native harness 0.1.64 archive
+contains 9,158 updates over 152.61 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass213.json`. Position 135 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 214
+
+Position 135, Butterfly, passes all
+654,514 comparisons against committed DeadSync
+`ae36c5c90`. The complete native harness 0.1.67 archive
+contains 8,493 updates over 141.52 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass214.json`. Position 136 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 215
+
+Position 136, Bzrp Music Sessions, Vol. 53, passes all
+733,744 comparisons against committed DeadSync
+`ae36c5c90`. The complete native harness 0.1.67 archive
+contains 8,716 updates over 145.24 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass215.json`. Position 137 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 216
+
+Position 137, Bzrp Music Sessions, Vol. 53, passes all
+733,744 comparisons against committed DeadSync
+`9eae06eb2`. The complete native harness 0.1.67 archive
+contains 8,716 updates over 145.24 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass216.json`. Position 138 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 217
+
+Position 138, c'est business, passes all
+30,932 comparisons against committed DeadSync
+`9eae06eb2`. The complete native harness 0.1.67 archive
+contains 1,395 updates over 23.23 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass217.json`. Position 139 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 218
+
+Position 139, Cardstone, passes all
+268,528 comparisons against committed DeadSync
+`1acb67574`. The complete native harness 0.1.67 archive
+contains 12,205 updates over 203.39 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass218.json`. Position 140 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 219
+
+Position 140, Cardstone, passes all
+268,528 comparisons against committed DeadSync
+`1acb67574`. The complete native harness 0.1.67 archive
+contains 12,205 updates over 203.39 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass219.json`. Position 141 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 220
+
+Position 141, Cat Hacks, passes all
+243,967 comparisons against committed DeadSync
+`1acb67574`. The complete native harness 0.1.67 archive
+contains 11,089 updates over 184.79 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass220.json`. Position 142 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 221
+
+Position 142, Cat Hacks, passes all
+243,967 comparisons against committed DeadSync
+`1acb67574`. The complete native harness 0.1.67 archive
+contains 11,089 updates over 184.79 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass221.json`. Position 143 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 222
+
+Position 143, Chewingood!!!, passes all
+173,695 comparisons against committed DeadSync
+`1acb67574`. The complete native harness 0.1.67 archive
+contains 6,974 updates over 116.21 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass222.json`. Position 144 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 223
+
+Position 144, Chipsqueak, passes all
+587,788 comparisons against committed DeadSync
+`b9d71be17`. The complete native harness 0.1.68 archive
+contains 6,002 updates over 100.00 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass223.json`. Position 145 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 224
+
+Position 145, Chipsqueak, passes all
+587,788 comparisons against committed DeadSync
+`b9d71be17`. The complete native harness 0.1.68 archive
+contains 6,002 updates over 100.00 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass224.json`. Position 146 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+## Choices gameplay reload remains pending
+
+The newly captured position 146 reference was withdrawn. Its isolated
+comparison passed 587,440 checks, but the foreground requests a chart
+change and a new ScreenGameplay. The harness records that request without
+loading the delayed screen or executing the second foreground load.
+ITGmania's ScreenManager actually queues and loads the new screen.
+
+Native scorekeeper totals and judgment progress must also be supplied;
+the current and total possible dance point getters cannot establish stage
+completion from shared placeholder values. The original index entry and
+archive remain historical. The new capture stays private until gameplay
+reload is implemented and verified against native application behavior.
+
+See `native-revalidation-choices-reload-gap.json` for source hashes,
+recorded requests, and the required native controls. Position 146 remains
+the next unresolved chart; successful initial-load comparisons do not
+establish gameplay reload parity.
+
+
+## Native scorekeeper startup validation
+
+Harness 0.1.71, commit `ddfd43485`, now loads the complete native
+ScoreKeeperNormal before foreground Lua. Selected Steps, Stage modifiers,
+scoring preferences and stage reset behavior come from the pinned source.
+Reentrant scoring uses the native Lua coroutine pool, with registry ownership
+isolated per song. All 237 harness tests pass; five tests remain ignored.
+
+The fresh Choices capture loads real stage totals but remains partial at its
+required delayed ScreenGameplay reload. The archive command excludes it;
+no new archive was added and the 483-entry index is unchanged. Native gameplay
+judgments and DeadSync's stage totals/live counters remain open. The Technique
+arrow repair retains its passing catalog and Vulkan rendering checks.
+
+See `native-revalidation-native-scorekeeper-load.json` for source hashes,
+committed executable identity, controls and the remaining requirements.
+Position 146 is still the next unresolved chart.
+
+
+## Native chart selection validation
+
+Harness 0.1.72, commit `64f7cfaca`, executes native Steps, GameState and
+compatible-style selection. Different authored chart music synchronizes the
+other player; equal music retains independent difficulties. A chart selection
+changes GameState pointers and does not reload Player note data or score totals.
+Canonical captures use the native versus style for two single players. The
+native Lua userdata table now belongs to each VM registry, preventing the
+cross-registry reference that crashed Actor teardown.
+
+All 238 harness tests pass; five remain ignored. Original Choices now makes
+one explicit selection because the engine synchronizes the other player.
+Its required delayed ScreenGameplay reload remains unavailable, so the capture
+is partial, the archive command excludes it, and the 483-entry index is unchanged.
+DeadSync's compatible-player selection and live stage progress still need fixes.
+The Technique arrow repair and its previous Vulkan proof remain intact.
+
+See `native-revalidation-native-step-selection.json` for source identities,
+controls, the private capture receipt and remaining requirements. Position 146
+remains the next unresolved chart.
+
+## DeadSync chart selection validation
+
+Harness 0.1.74 executes native duplicate-step normalization before Lua and
+selects a game before routine statistics query the current style. All 240
+harness tests pass; five remain ignored. DeadSync preserves authored chart
+MUSIC through cache version 62 and matches native selection, nil/errors/self
+returns, compatible-player music/shared-side synchronization, repeated-pointer
+messages and reentrant delivery. Both controls match all 16 state/message
+snapshots and 22 explicit selection calls. The routine control supplies Steps
+metadata through the Lua compile context; RSSP routine simfile loading remains
+unsupported. These controls do not certify complete gameplay or style mutation.
+
+DeadSync's Lua library has 514 passes and its two previously recorded failures.
+All 195 playback tests pass, with three ignored; the simfile library has 238
+passes and twelve ignored. All affected project targets compile. Broader
+workspace test compilation still fails in unchanged noteskin allocator and
+WASAPI COM mock tests. Technique's six catalog checks and hidden-window Vulkan
+arrow visibility/rotation check pass; the installed game binary is unchanged.
+
+Original Choices remains partial at the required delayed ScreenGameplay reload.
+The archive command rejects it, no whole-archive comparison ran, and the
+483-entry index is unchanged. Position 146 remains next, followed by 147. See
+`native-revalidation-deadsync-step-selection.json` for source identities, exact
+receipts and the retained gameplay, parser, style and corpus requirements.
+
+The subsequent upstream merge is preserved. `native-revalidation-merged-selection.json`
+records its build repairs and validation: 245 simfile, 195 playback and seven
+Technique checks pass; the Lua library retains 514 passes and its two known
+failures. The seven Technique checks include hidden-window Vulkan arrow
+visibility and rotation. The installed game binary remains unchanged.
+
+The merged speed benchmark compared finite native float queries with a frozen
+nanosecond implementation that clamps. Its corrected comparisons preserve all
+integer cases and invalid float fallbacks; the native positive-delay control
+also verifies extrapolation before a later transition starts, bit for bit.
+All 120 rules tests pass, with two ignored. These test changes preserve the
+production timing calculation. Interrupted checks whose build files disappeared
+remain recorded separately from successful isolated reruns. No original archive
+was added, no whole-archive comparison ran, and Choices at position 146 remains
+next. The original 501-simfile scope and its historical pending items are retained.

@@ -1,0 +1,110 @@
+{
+  "pass": 212,
+  "previous_record": "native-revalidation-pass211.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "b9b6981861d46ab12ee59c7cc7e08600b35ab334",
+  "comparator_sha256": "88e5cbd344010f0db5fe3f8f87ca46d800bb398f465f7cb374ffd5405366cf36",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    133
+  ],
+  "next_position": 134,
+  "comparisons_passed": 198090,
+  "charts": [
+    {
+      "position": 133,
+      "entry": {
+        "title": "BroGamer",
+        "source_simfile": "BroGamer/BroGamer.ssc",
+        "harness_version": "0.1.64",
+        "archive": "dd354f14a68ae506d29f7ebd651c66444f451aa871503feeebae5c6375f21722.tar.zst",
+        "sha256": "dd354f14a68ae506d29f7ebd651c66444f451aa871503feeebae5c6375f21722",
+        "compressed_bytes": 426856,
+        "aliases": [
+          "440d1cf060906520b3158d53f4e612d705bb788498d6e40d9914a25030a84fca.tar.zst"
+        ]
+      },
+      "original_archive_retained": "ca3e5874567f651d8e6393262de8b973d10442f582414a976d613c9578adf198.tar.zst",
+      "native_source_commit": "cc0ea0c0ab70e962785eff8681a6867a3f8689ee",
+      "native_trace_sha256": "7711fc69a7781377df12e8a699194146a6a431a7e787756a9074c54921d3ffdc",
+      "original_source_sha256": {
+        "BroGamer/Brogamer - bg.png": "1da6a508add977bda0424d416c338afb0975d4eb62a89ed82467bd42f6a4ff8c",
+        "BroGamer/Brogamer - bn.png": "109ae02f54239836aa8107ce03cff0095934059c2f7ec9575683d0e20570c277",
+        "BroGamer/BroGamer - jacket.png": "8eaebfba89a87d93a503a3f411a4a91200fdfd9e23e4b4bda87316073296cd49",
+        "BroGamer/Brogamer.avi": "13c855eec6a214ab57cb982cbd948e131828176a3d4239035bbadc4ac4f764b9",
+        "BroGamer/BroGamer.ogg": "018f9da8fd8c5dc4a0d9086600a607d0ab224362188e420039f52747846024b7",
+        "BroGamer/BroGamer.ssc": "f2c3a62fa57ea6fba97a087f45c6536d28f0dff1638025df9d1fdbcdcde37223",
+        "BroGamer/gpopcdtitle.png": "93e71211552d268b52eae46f6a8e4af3c7cf216cd1bb04e847299981c5827583",
+        "BroGamer/lua/default.lua": "13eeee524a1f19ad6617fd7d4415870e275af4b2058c890e02b8dff0a5913f7c",
+        "BroGamer/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "BroGamer/lua/modhelpers.lua": "0f5910705fadd3d043fe182348e93f0b327a0d14b2ad9a7c442638c2adf573cc",
+        "BroGamer/lua/mods.lua": "78ce399e3ac91f556f26d59fa2b15ab17154246821ab53db8c62120b5034a293",
+        "BroGamer/lua/gfx/gg.png": "ce3dcd65e0811d028ca267821d6d7ab2c44558dab99264e8a6b572f20baa7428",
+        "BroGamer/lua/gfx/head.png": "82b78abfc0f5d4a53beef29a37b7537d0772f7d8b4bd09955d450d2fd2c15dbb",
+        "BroGamer/lua/gfx/noob.png": "97405e09d6d78a1973abffe7135a1bc13689c3c4cb0842ec37c35a9ef51d1b48",
+        "BroGamer/lua/gfx/shot.png": "8e0eb3062cb9acfaafeca910f0f36c752999ba54dba5cd3b2206470d6f54989b",
+        "BroGamer/lua/gfx/target.png": "b8c5ad4c3cb35f2c3ed2ebde8ffce5b1aa501015c6b123c674756e0fc812713c"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 7654,
+      "duration_seconds": 127.53623199462892,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 11,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 133,
+      "source_simfile": "BroGamer/BroGamer.ssc",
+      "archive": "dd354f14a68ae506d29f7ebd651c66444f451aa871503feeebae5c6375f21722.tar.zst",
+      "archive_sha256": "dd354f14a68ae506d29f7ebd651c66444f451aa871503feeebae5c6375f21722",
+      "harness_version": "0.1.64",
+      "source_commit": "b9b6981861d46ab12ee59c7cc7e08600b35ab334",
+      "source_pending_commit": false,
+      "binary_sha256": "88e5cbd344010f0db5fe3f8f87ca46d800bb398f465f7cb374ffd5405366cf36",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-target-probes-v1-full_song_lua.exe",
+        "dd354f14a68ae506d29f7ebd651c66444f451aa871503feeebae5c6375f21722.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 61.794327499810606,
+      "comparisons_passed": 198090,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\user-merge-probes-v1-133.log",
+      "log_sha256": "3225e87097d80763d2a9d0004a86567a04edc93606f3fd6d6d327347a44db806",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass260-top-133-native-v1.json",
+      "native_receipt_sha256": "83fb40a36dbef12b3167a5b51c74ef2c5f2abe1435bb9dedbe586dbfe78341be",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "b9b6981861d46ab12ee59c7cc7e08600b35ab334",
+    "source_pending_commit": false,
+    "binary_sha256": "7f066c1befc4c5ce0dd9f41c99359d4d7eef679fedae5844d3e0502eaea173ea",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-target-probes-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.271289899945259,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-133-native-pass212.log",
+    "log_sha256": "e5cdc87377341a0f08d9e0bcc6d193163f37e7fbcab69ac7ee9bf08f1514e813",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.71s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

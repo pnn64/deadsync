@@ -97,3 +97,12 @@ mod tests {
         assert_eq!(timeout.to_string(), "request timed out");
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/support/paired_bench.rs"]
+mod paired_bench;
+
+#[cfg(test)]
+#[path = "../../../tests/support/perf.rs"]
+#[allow(dead_code)]
+mod perf;

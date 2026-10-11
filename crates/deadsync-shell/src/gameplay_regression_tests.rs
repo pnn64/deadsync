@@ -518,7 +518,8 @@ mod tests {
             Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
                 actor_tree_has_text(children, expected)
             }
-            Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. } => {
+            Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. }
+            | Actor::SharedCamera { children, .. } => {
                 actor_tree_has_text(children, expected)
             }
             Actor::RetainedFrame { frame, .. } => actor_tree_has_text(frame.children(), expected),
@@ -576,6 +577,9 @@ mod tests {
             Actor::Camera { children, .. } => {
                 top_screen_text_draw(children, expected, base_z, alpha)
             }
+            Actor::SharedCamera { children, .. } => {
+                top_screen_text_draw(children, expected, base_z, alpha)
+            }
             Actor::Shadow { child, .. } => top_screen_text_draw(
                 std::slice::from_ref(child.as_ref()),
                 expected,
@@ -618,6 +622,7 @@ mod tests {
                     ..
                 } => max_render_target_sprite_z(frame.children(), base_z.saturating_add(*z)),
                 Actor::Camera { children, .. } => max_render_target_sprite_z(children, base_z),
+                Actor::SharedCamera { children, .. } => max_render_target_sprite_z(children, base_z),
                 Actor::Shadow { child, .. } => {
                     max_render_target_sprite_z(std::slice::from_ref(child.as_ref()), base_z)
                 }

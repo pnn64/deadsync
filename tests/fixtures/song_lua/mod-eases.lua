@@ -1,3 +1,4 @@
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 mod_time = {
     {0, 1, "*100 no dark", "len", 1},
 }

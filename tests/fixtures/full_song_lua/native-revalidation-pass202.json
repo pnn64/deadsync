@@ -1,0 +1,104 @@
+{
+  "pass": 202,
+  "previous_record": "native-revalidation-pass201.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+  "comparator_sha256": "332064e9b8c045c4441cde0d86a3ee0268483aa0114e839969ec94cd34ad962d",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    123
+  ],
+  "next_position": 124,
+  "comparisons_passed": 571998,
+  "charts": [
+    {
+      "position": 123,
+      "entry": {
+        "title": "Biggie Boom Boom",
+        "source_simfile": "Biggie Boom Boom/biggie.ssc",
+        "harness_version": "0.1.64",
+        "archive": "b76e31c5386e666b53c9c4256effa4ac05f3ad983b595fa78d4503d2e0ee3ffd.tar.zst",
+        "sha256": "b76e31c5386e666b53c9c4256effa4ac05f3ad983b595fa78d4503d2e0ee3ffd",
+        "compressed_bytes": 325028,
+        "aliases": [
+          "b9a2f58f93f69d3b8d05755e6ece03789fb4d975939bd90bd851cb961b21a70a.tar.zst"
+        ]
+      },
+      "original_archive_retained": "d5e0c0363c607f269bf0f7f51649537defcab2c230b7436f07d5c0e6861298a2.tar.zst",
+      "native_source_commit": "cc0ea0c0ab70e962785eff8681a6867a3f8689ee",
+      "native_trace_sha256": "0c5a7fa5216f81ad8fa080e359369917996a73fd6911c6770cc4722b81ae339e",
+      "original_source_sha256": {
+        "Biggie Boom Boom/biggie.sm": "7b72a01c99ffd09d8b2563863cbf16f6d182cb9c6501bf785365675e2082f72e",
+        "Biggie Boom Boom/biggie.ssc": "b7a9e73efd1486759517444ea45b930e2f69f14024bf45fa495136e92cb9a2f4",
+        "Biggie Boom Boom/biggie2.ogg": "4ff63d27fa3a96d1301573218dc197286166cdcdbb74d971e9b19b5031299253",
+        "Biggie Boom Boom/boom.png": "552003b3bc7d1749a3a1567723fcafa03ee6ec314ba3c98ed29a6e25893f6a3b",
+        "Biggie Boom Boom/cdtitle-r.png": "a05685756618f505bc6d95bdcdfbb265b39793c206decebd6995df245abaf3c2",
+        "Biggie Boom Boom/lua/default.lua": "8a89fe7559a5b755efdda07bbc971a77e60f2f979e8be1b9563e7df490eca72b",
+        "Biggie Boom Boom/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "Biggie Boom Boom/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "Biggie Boom Boom/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46",
+        "Biggie Boom Boom/lua/_script.lua": "d2827dafa46f9b3fae93761b7ecbfd4ea1fe0cea2de663691a72f8afa76e24e4"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 6871,
+      "duration_seconds": 114.48529815673828,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 123,
+      "source_simfile": "Biggie Boom Boom/biggie.ssc",
+      "archive": "b76e31c5386e666b53c9c4256effa4ac05f3ad983b595fa78d4503d2e0ee3ffd.tar.zst",
+      "archive_sha256": "b76e31c5386e666b53c9c4256effa4ac05f3ad983b595fa78d4503d2e0ee3ffd",
+      "harness_version": "0.1.64",
+      "source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+      "source_pending_commit": false,
+      "binary_sha256": "332064e9b8c045c4441cde0d86a3ee0268483aa0114e839969ec94cd34ad962d",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-checkpoint-v1-full_song_lua.exe",
+        "b76e31c5386e666b53c9c4256effa4ac05f3ad983b595fa78d4503d2e0ee3ffd.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 16.126306700054556,
+      "comparisons_passed": 571998,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-123-user-merge-checkpoint-v1.log",
+      "log_sha256": "04f217a2b3813f56218ff0480f4aa8bf316621ab8de237d32428ddcb669e8221",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass250-top-123-rage-file-v1.json",
+      "native_receipt_sha256": "3a105674d0001084367d6019d10e91003ffc29dea953b717c8414ffa541cc028",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+    "source_pending_commit": false,
+    "binary_sha256": "b0e8f5223fb6f054e64146ce459f958d7ac216ea083b4697424cf01f58d2b0ac",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-checkpoint-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 2.2586662997491658,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-123-native-pass202.log",
+    "log_sha256": "7bc2a92c9f9862420d4f61fb93c3a33942f0aea8fc3f6a286a77da8ec63b98f0",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.66s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}
