@@ -762,6 +762,12 @@ pub(super) mod tests {
                 &["10ms", "11ms"],
                 [0, 0],
             ),
+            test_row(
+                RowId::TextErrorBarPosition,
+                lookup_key("PlayerOptions", "TextErrorBarPosition"),
+                &["Split", "Centered"],
+                [0, 0],
+            ),
         ]);
         let visibility = row_visibility(
             &window_row_map,
@@ -775,6 +781,7 @@ pub(super) mod tests {
             ],
             false,
         );
+        assert!(!is_row_visible(&window_row_map, 3, visibility));
         assert!(!is_row_visible(&window_row_map, 1, visibility));
         assert!(!is_row_visible(&window_row_map, 2, visibility));
 
@@ -790,6 +797,7 @@ pub(super) mod tests {
             ],
             false,
         );
+        assert!(is_row_visible(&window_row_map, 3, visibility));
         assert!(is_row_visible(&window_row_map, 1, visibility));
         assert!(!is_row_visible(&window_row_map, 2, visibility));
 
@@ -812,6 +820,12 @@ pub(super) mod tests {
                 &["10ms", "11ms"],
                 [0, 0],
             ),
+            test_row(
+                RowId::TextErrorBarPosition,
+                lookup_key("PlayerOptions", "TextErrorBarPosition"),
+                &["Split", "Centered"],
+                [0, 0],
+            ),
         ]);
         let visibility = row_visibility(
             &scalable_row_map,
@@ -825,8 +839,62 @@ pub(super) mod tests {
             ],
             false,
         );
+        assert!(is_row_visible(&scalable_row_map, 3, visibility));
         assert!(is_row_visible(&scalable_row_map, 1, visibility));
         assert!(is_row_visible(&scalable_row_map, 2, visibility));
+    }
+
+    #[test]
+    fn text_error_bar_position_restores_and_persists_each_players_choice() {
+        ensure_i18n();
+        let view = test_init_view_for(PlayStyle::Versus, PlayerSide::P1, [true, true]);
+        let (mut state, _) = setup_state_with(view);
+        state.player_options[P1].error_bar_active_mask = ErrorBarMask::TEXT;
+        state.player_options[P2].error_bar_active_mask = ErrorBarMask::TEXT;
+        state.player_options[P1].text_error_bar_centered = true;
+        super::super::apply_pane(&mut state, OptionsPane::Advanced);
+
+        let row_index = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::TextErrorBarPosition)
+            .expect("Text Position row present");
+        assert_eq!(
+            state
+                .pane()
+                .row_map
+                .get(RowId::TextErrorBarPosition)
+                .unwrap()
+                .selected_choice_index,
+            [1, 0]
+        );
+
+        for (player, side, delta, centered) in [
+            (P1, PlayerSide::P1, -1, false),
+            (P2, PlayerSide::P2, 1, true),
+        ] {
+            state.pane_mut().selected_row[player] = row_index;
+            state.pending_effects.clear();
+            super::change_choice_for_player(&mut state, player, delta, super::NavWrap::Wrap);
+            assert_eq!(
+                state.player_options[player].text_error_bar_centered,
+                centered
+            );
+            assert!(state.pending_effects.iter().any(|effect| matches!(
+                effect,
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                    crate::SimplyLoveProfileRequest::UpdatePlayerOptions {
+                        side: effect_side,
+                        options,
+                        ..
+                    }
+                )) if *effect_side == side && options.text_error_bar_centered == centered
+            )));
+        }
+        assert!(!state.player_options[P1].text_error_bar_centered);
+        assert!(state.player_options[P2].text_error_bar_centered);
     }
 
     #[test]
@@ -5789,6 +5857,7 @@ pub(super) mod tests {
         p.error_bar_offset_x = -25;
         p.error_bar_offset_y = 30;
         p.text_error_bar_scalable = true;
+        p.text_error_bar_centered = true;
         p.text_error_bar_threshold_ms = 17;
         p.center_tick = true;
         p.short_average_error_bar_enabled = false;
@@ -5942,6 +6011,7 @@ pub(super) mod tests {
             RowId::JudgmentBehindArrows,
             RowId::OffsetIndicator,
             RowId::TextErrorBarMode,
+            RowId::TextErrorBarPosition,
             RowId::CenterTick,
             RowId::RescoreEarlyHits,
             RowId::CustomBlueFantasticWindow,
@@ -5958,6 +6028,7 @@ pub(super) mod tests {
         assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetX, "-25");
         assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetY, "30");
         assert_choice_at_cursor(&row_map, RowId::TextErrorBarMode, "Scalable");
+        assert_choice_at_cursor(&row_map, RowId::TextErrorBarPosition, "Centered");
         assert_choice_at_cursor(&row_map, RowId::TextErrorBarThreshold, "17ms");
         assert_choice_at_cursor(&row_map, RowId::CenterTick, "On");
         assert_choice_at_cursor(&row_map, RowId::ShortAverageErrorBar, "Off");

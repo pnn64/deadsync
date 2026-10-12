@@ -534,6 +534,7 @@ pub(crate) fn gameplay_notefield_plan(
         error_bar_max_window_ix: error_bar_trim_max_window_ix(profile.error_bar_trim),
         monochrome_background: profile.background_filter.is_off(),
         error_bar_multi_tick: profile.error_bar_multi_tick,
+        text_error_bar_centered: profile.text_error_bar_centered,
         short_average_error_bar: profile.short_average_error_bar_enabled,
         center_tick: profile.center_tick,
         error_ms_display: profile.error_ms_display,

@@ -7367,6 +7367,8 @@ pub struct PlayerOptionsData {
     pub error_bar: ErrorBarStyle,
     pub error_bar_text: bool,
     pub text_error_bar_scalable: bool,
+    /// Keep early/late (and FAST/SLOW) text at the error bar center.
+    pub text_error_bar_centered: bool,
     pub text_error_bar_threshold_ms: u32,
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
@@ -7513,6 +7515,7 @@ fn default_player_options() -> PlayerOptionsData {
         error_bar: ErrorBarStyle::default(),
         error_bar_text: false,
         text_error_bar_scalable: false,
+        text_error_bar_centered: false,
         text_error_bar_threshold_ms: TEXT_ERROR_BAR_THRESHOLD_MS_DEFAULT,
         error_bar_up: false,
         error_bar_multi_tick: false,
@@ -7965,6 +7968,9 @@ where
         .and_then(|s| parse_profile_bool(&s))
         .or_else(|| get("TextErrorBar10ms").and_then(|s| parse_profile_bool(&s)))
         .unwrap_or(options.text_error_bar_scalable);
+    options.text_error_bar_centered = get("TextErrorBarCentered")
+        .and_then(|s| parse_profile_bool(&s))
+        .unwrap_or(options.text_error_bar_centered);
     options.text_error_bar_threshold_ms = get("TextErrorBarThresholdMs")
         .and_then(|s| s.trim().trim_end_matches("ms").trim().parse::<u32>().ok())
         .map(clamp_text_error_bar_threshold_ms)
@@ -8606,6 +8612,11 @@ pub fn append_player_options_section(
         "TextErrorBar10ms={}\n",
         i32::from(options.text_error_bar_scalable)
     );
+    let _ = writeln!(
+        content,
+        "TextErrorBarCentered={}",
+        i32::from(options.text_error_bar_centered)
+    );
     let _ = write!(
         content,
         "TextErrorBarThresholdMs={}\n",
@@ -9237,6 +9248,8 @@ pub struct Profile {
     // Optional Text error bar mode that surfaces hits beyond a configured
     // threshold independently of the active judgment windows.
     pub text_error_bar_scalable: bool,
+    /// Keep early/late (and FAST/SLOW) text at the error bar center.
+    pub text_error_bar_centered: bool,
     pub text_error_bar_threshold_ms: u32,
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
@@ -9435,6 +9448,7 @@ impl Default for Profile {
             error_bar_active_mask: player_options.error_bar_active_mask,
             error_bar_text: player_options.error_bar_text,
             text_error_bar_scalable: player_options.text_error_bar_scalable,
+            text_error_bar_centered: player_options.text_error_bar_centered,
             text_error_bar_threshold_ms: player_options.text_error_bar_threshold_ms,
             error_bar_up: player_options.error_bar_up,
             error_bar_multi_tick: player_options.error_bar_multi_tick,
@@ -10033,6 +10047,10 @@ impl Profile {
         set_value_if_changed(&mut self.text_error_bar_scalable, enabled)
     }
 
+    pub fn set_text_error_bar_centered(&mut self, enabled: bool) -> bool {
+        set_value_if_changed(&mut self.text_error_bar_centered, enabled)
+    }
+
     pub fn set_note_field_offset_x(&mut self, offset: i32) -> bool {
         set_i32_if_changed(
             &mut self.note_field_offset_x,
@@ -10402,6 +10420,7 @@ impl Profile {
             error_bar: self.error_bar,
             error_bar_text: self.error_bar_text,
             text_error_bar_scalable: self.text_error_bar_scalable,
+            text_error_bar_centered: self.text_error_bar_centered,
             text_error_bar_threshold_ms: self.text_error_bar_threshold_ms,
             error_bar_up: self.error_bar_up,
             error_bar_multi_tick: self.error_bar_multi_tick,
@@ -10548,6 +10567,7 @@ impl Profile {
         self.error_bar = options.error_bar;
         self.error_bar_text = options.error_bar_text;
         self.text_error_bar_scalable = options.text_error_bar_scalable;
+        self.text_error_bar_centered = options.text_error_bar_centered;
         self.text_error_bar_threshold_ms = options.text_error_bar_threshold_ms;
         self.error_bar_up = options.error_bar_up;
         self.error_bar_multi_tick = options.error_bar_multi_tick;
@@ -10818,6 +10838,7 @@ mod tests {
         assert!(options.short_average_error_bar_enabled);
         assert!(options.long_error_bar_enabled);
         assert!(!options.text_error_bar_scalable);
+        assert!(!options.text_error_bar_centered);
         assert_eq!(
             options.text_error_bar_threshold_ms,
             TEXT_ERROR_BAR_THRESHOLD_MS_DEFAULT
@@ -13136,6 +13157,7 @@ mod tests {
             average_error_bar_intensity: 1.13,
             long_error_bar_intensity: 1.95,
             text_error_bar_scalable: true,
+            text_error_bar_centered: true,
             text_error_bar_threshold_ms: 17,
             tap_explosion_active_mask: TapExplosionMask::FANTASTIC | TapExplosionMask::MISS,
             score_position: ScorePosition::StepStatistics,
@@ -13158,6 +13180,7 @@ mod tests {
         assert!(content.contains("Colorful=1\n"));
         assert!(content.contains("Text=1\n"));
         assert!(content.contains("TextErrorBarScalable=1\n"));
+        assert!(content.contains("TextErrorBarCentered=1\n"));
         assert!(content.contains("TextErrorBar10ms=1\n"));
         assert!(content.contains("TextErrorBarThresholdMs=17\n"));
         assert!(content.contains("AverageErrorBarIntensity=1.25\n"));
@@ -13179,6 +13202,62 @@ mod tests {
         assert!(content.contains("MiniPercent=42\n"));
         assert!(content.contains("GlobalOffsetShiftMs=-9\n"));
         assert!(content.contains("DimPostFailScatter=1\n"));
+    }
+
+    #[test]
+    fn text_error_bar_position_round_trips_and_preserves_missing_key_defaults() {
+        let split = PlayerOptionsData::default();
+        let old_profile = load_player_options_section(true, |_| None, &split).unwrap();
+        assert!(!old_profile.text_error_bar_centered);
+
+        for centered in [false, true] {
+            let options = PlayerOptionsData {
+                text_error_bar_centered: centered,
+                ..split.clone()
+            };
+            let fallback = PlayerOptionsData {
+                text_error_bar_centered: !centered,
+                ..split.clone()
+            };
+            let mut content = String::new();
+            append_player_options_section(&mut content, "PlayerOptionsSingles", &options);
+            let ini = ProfileIni::parse(&content);
+            let loaded = load_player_options_section(
+                true,
+                |key| ini.get("PlayerOptionsSingles", key),
+                &fallback,
+            )
+            .unwrap();
+            assert_eq!(loaded.text_error_bar_centered, centered);
+
+            let mut profile = Profile::default();
+            profile.set_current_player_options(loaded);
+            assert_eq!(profile.text_error_bar_centered, centered);
+            assert_eq!(
+                profile.current_player_options().text_error_bar_centered,
+                centered
+            );
+        }
+
+        let centered = PlayerOptionsData {
+            text_error_bar_centered: true,
+            ..split
+        };
+        for value in [None, Some("invalid")] {
+            let inherited = load_player_options_section(
+                true,
+                |key| {
+                    if key == "TextErrorBarCentered" {
+                        value.map(str::to_owned)
+                    } else {
+                        None
+                    }
+                },
+                &centered,
+            )
+            .unwrap();
+            assert!(inherited.text_error_bar_centered);
+        }
     }
 
     #[test]

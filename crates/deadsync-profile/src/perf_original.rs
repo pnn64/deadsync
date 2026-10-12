@@ -215,6 +215,7 @@ impl Profile {
         self.error_bar = options.error_bar;
         self.error_bar_text = options.error_bar_text;
         self.text_error_bar_scalable = options.text_error_bar_scalable;
+        self.text_error_bar_centered = options.text_error_bar_centered;
         self.text_error_bar_threshold_ms = options.text_error_bar_threshold_ms;
         self.error_bar_up = options.error_bar_up;
         self.error_bar_multi_tick = options.error_bar_multi_tick;

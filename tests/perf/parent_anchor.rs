@@ -97,7 +97,7 @@ fn benchmark_direct_scans() {
     for (label, count, hidden) in [
         ("anchor/visible_8", 8, false),
         ("anchor/visible_64", 64, false),
-        ("anchor/visible_118", ROW_IDS.len(), false),
+        ("anchor/visible_all", ROW_IDS.len(), false),
         ("anchor/hidden_64", 64, true),
     ] {
         let parent = if hidden {

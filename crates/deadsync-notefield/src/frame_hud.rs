@@ -423,6 +423,7 @@ fn compose_error<S>(
                 && show
                 && request.options.frame_features.error_bar_text,
             text_label: frame.text_label,
+            text_centered: request.options.text_error_bar_centered,
         },
     );
 }

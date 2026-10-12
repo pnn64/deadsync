@@ -379,6 +379,15 @@ const TEXT_ERROR_BAR_MODE: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         from_profile: |p| if p.text_error_bar_scalable { 1 } else { 0 },
     }),
 };
+const TEXT_ERROR_BAR_POSITION: ChoiceBinding<bool> = ChoiceBinding::<bool> {
+    apply: |p, v| {
+        p.text_error_bar_centered = v;
+        Outcome::persisted()
+    },
+    init: Some(CycleInit {
+        from_profile: |p| if p.text_error_bar_centered { 1 } else { 0 },
+    }),
+};
 const JUDGMENT_TILT: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
         p.judgment_tilt = v;
@@ -1710,6 +1719,16 @@ pub(super) fn build_advanced_rows(return_screen: Screen, scorebox_available: boo
         lookup_key("PlayerOptionsHelp", "TextErrorBarThresholdHelp"),
         TEXT_ERROR_BAR_THRESHOLD,
         text_error_bar_threshold_choices(),
+    ));
+    b.push(Row::cycle(
+        RowId::TextErrorBarPosition,
+        lookup_key("PlayerOptions", "TextErrorBarPosition"),
+        lookup_key("PlayerOptionsHelp", "TextErrorBarPositionHelp"),
+        CycleBinding::Bool(TEXT_ERROR_BAR_POSITION),
+        vec![
+            tr("PlayerOptions", "TextErrorBarPositionSplit").to_string(),
+            tr("PlayerOptions", "TextErrorBarPositionCentered").to_string(),
+        ],
     ));
     b.push(Row::cycle(
         RowId::ShortAverageErrorBar,

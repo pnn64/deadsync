@@ -550,6 +550,10 @@ pub fn update_text_error_bar_scalable_for_side(side: PlayerSide, enabled: bool) 
     profile_ini_update(side, |profile| profile.set_text_error_bar_scalable(enabled));
 }
 
+pub fn update_text_error_bar_centered_for_side(side: PlayerSide, enabled: bool) {
+    profile_ini_update(side, |profile| profile.set_text_error_bar_centered(enabled));
+}
+
 pub fn update_text_error_bar_threshold_ms_for_side(side: PlayerSide, ms: u32) {
     profile_ini_update(side, |profile| profile.set_text_error_bar_threshold_ms(ms));
 }
