@@ -2232,15 +2232,12 @@
     {
       "title": "Distraction",
       "source_simfile": "Distraction/sm.sm",
-      "harness_version": "0.1.0",
-      "archive": "7f0919619c7e55ef325d6851297fe03fd7465468b9f5de828ab83702ca857f83.tar.zst",
-      "sha256": "7f0919619c7e55ef325d6851297fe03fd7465468b9f5de828ab83702ca857f83",
-      "compressed_bytes": 250706,
-      "uncompressed_sha256": "0bb552b514d6edbcde56bc773dad8dd9bb1dfc1001793c4a361d7dbe62d6af79",
-      "compression_level": 22,
-      "aliases": [
-        "2c45e3ccad7f48727e032986890c56b0e9403bf68a964dcf93a55e00b07e82b7.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "f382963e4969af4c983b5a6f09a4fa88a8088e940c00be1e8006ed931bdf1b6a.tar.zst",
+      "sha256": "f382963e4969af4c983b5a6f09a4fa88a8088e940c00be1e8006ed931bdf1b6a",
+      "compressed_bytes": 3808477,
+      "uncompressed_sha256": "a431d20a5e0b4e4b65fedf2d7ffdc9530704f3c730c837dd3b15532dc794b463",
+      "aliases": []
     },
     {
       "title": "Do the mario",

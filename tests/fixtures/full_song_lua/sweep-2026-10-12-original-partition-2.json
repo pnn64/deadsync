@@ -657,6 +657,57 @@
         }
       ],
       "report_sha256": "64653db05346d1fd63952291e0f154ba7ebbd8dfb59242b108b6e2e04c2ca93c"
+    },
+    {
+      "position": 175,
+      "source_simfile": "Distraction/sm.sm",
+      "simfile_sha256": "8c139f67d730148473c2ef10a11c4be48b47f813118df80c153607c1d27c9f24",
+      "retained_original_archive": "7f0919619c7e55ef325d6851297fe03fd7465468b9f5de828ab83702ca857f83.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "3888b1e92b5612b70edc19e66d3cf040cfd5169a6dd5f61bc2a0eeeead4acbd3",
+      "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+      "fix_commit": "375a96e85 / harness 55299c5",
+      "build_proof": "/home/parity/jobs/background-activation-build-v1/proof.json",
+      "capture_seconds": 124.55028297400713,
+      "trace_sha256": "067e6f3e1e0f090ed95c5374abf868e5cc48a48bea11e2a910cd4bcd86f6a4e5",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-175/candidates/a431d20a5e0b4e4b65fedf2d7ffdc9530704f3c730c837dd3b15532dc794b463.tar",
+      "replay_exit": 0,
+      "replay_seconds": 848.5063299350004,
+      "candidate_sha256": "a431d20a5e0b4e4b65fedf2d7ffdc9530704f3c730c837dd3b15532dc794b463",
+      "native_frames": 111447,
+      "replayed_frames": 111447,
+      "compared_stage_fields": 1353,
+      "pending_coverage": [
+        "uncompared song operations: Actor.addrotationz, Actor.setsize, Actor.xy, BitmapText.settext, Screen.AddInputCallback, ScreenManager.SystemMessage",
+        "native drawable state/resources: BitmapText, Sound, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "6de99c7fbbabcfb55e458c735aa1a6f102b5c5be889339fc42f08ec7eb7744ae",
+      "archive": "f382963e4969af4c983b5a6f09a4fa88a8088e940c00be1e8006ed931bdf1b6a.tar.zst",
+      "archive_sha256": "f382963e4969af4c983b5a6f09a4fa88a8088e940c00be1e8006ed931bdf1b6a",
+      "compressed_bytes": 3808477,
+      "pack_seconds": 1.7140508329976,
+      "harness_version": "0.1.80",
+      "title": "Distraction",
+      "retained_original_entry": {
+        "title": "Distraction",
+        "source_simfile": "Distraction/sm.sm",
+        "harness_version": "0.1.0",
+        "archive": "7f0919619c7e55ef325d6851297fe03fd7465468b9f5de828ab83702ca857f83.tar.zst",
+        "sha256": "7f0919619c7e55ef325d6851297fe03fd7465468b9f5de828ab83702ca857f83",
+        "compressed_bytes": 250706,
+        "uncompressed_sha256": "0bb552b514d6edbcde56bc773dad8dd9bb1dfc1001793c4a361d7dbe62d6af79",
+        "compression_level": 22,
+        "aliases": [
+          "2c45e3ccad7f48727e032986890c56b0e9403bf68a964dcf93a55e00b07e82b7.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -667,8 +718,8 @@
     "assigned_source_count": 111
   },
   "binary_sha256": "3888b1e92b5612b70edc19e66d3cf040cfd5169a6dd5f61bc2a0eeeead4acbd3",
-  "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
-  "passed_fixtures": 1,
+  "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+  "passed_fixtures": 2,
   "pending_charts": 1,
-  "processed_charts": 2
+  "processed_charts": 3
 }
