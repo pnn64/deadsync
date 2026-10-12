@@ -1,4 +1,4 @@
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct JudgmentRenderInfo {
     pub judgment: Judgment,
     pub started_at_screen_s: f32,

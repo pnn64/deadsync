@@ -276,6 +276,63 @@ pub struct SongLuaLivePlayer {
     /// Native TapNoteScore order: None, HitMine, AvoidMine, CheckpointMiss,
     /// Miss, W5, W4, W3, W2, W1, CheckpointHit.
     pub tap_scores: [u32; 11],
+    /// Actual gameplay feedback survives the native autoplay scoring bypass.
+    pub last_judgment: Option<deadsync_gameplay::JudgmentRenderInfo>,
+    pub autoplay: bool,
+}
+
+pub(crate) struct LivePlayers([SongLuaLivePlayer; LUA_PLAYERS]);
+
+pub(crate) fn update_player_judgment(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let Some(player) = actor.raw_get::<Option<usize>>("__songlua_player_index")? else { return Ok(()); };
+    let Some(value) = lua.app_data_ref::<LivePlayers>()
+        .and_then(|values| values.0.get(player).copied()) else { return Ok(()); };
+    let Some(render) = value.last_judgment else { return Ok(()); };
+    if actor.raw_get::<Option<f32>>("__songlua_last_judgment_seconds")? == Some(render.started_at_screen_s) {
+        return Ok(());
+    }
+    actor.raw_set("__songlua_last_judgment_seconds", render.started_at_screen_s)?;
+    let children = crate::lua_util::actor_children(lua, actor)?;
+    let Some(frame) = children.raw_get::<Option<Table>>("Judgment")? else { return Ok(()); };
+    let children = crate::lua_util::actor_children(lua, &frame)?;
+    let Some(sprite) = children.raw_get::<Option<Table>>("JudgmentWithOffsets")? else { return Ok(()); };
+    crate::lua_util::ensure_tween_replay(lua, &sprite)?;
+    let sl: Table = lua.globals().raw_get("SL")?;
+    let mods: Table = sl.raw_get::<Table>(if player == 0 { "P1" } else { "P2" })?.raw_get("ActiveModifiers")?;
+    let states = sprite.get::<Function>("GetNumStates")?.call::<usize>(sprite.clone())?;
+    let mut index = deadsync_rules::judgment::judge_grade_ix(render.judgment.grade);
+    if states == 7 || states == 14 {
+        if index == 0 {
+            if mods.raw_get::<Option<bool>>("ShowFaPlusWindow")?.unwrap_or(false)
+                && render.judgment.window != Some(deadsync_rules::judgment::TimingWindow::W0)
+                && !value.autoplay {
+                index = 1;
+            }
+        } else { index += 1; }
+    }
+    if states == 12 || states == 14 {
+        index = index * 2 + usize::from(render.judgment.time_error_ms >= 0.0);
+    }
+    // Simply Love Graphics/Player judgment.lua: Reset, show the earned
+    // frame, and run the actual Sprite tween queue. No native observation
+    // supplies the result or the duration of a gameplay judgment.
+    for method in ["finishtweening", "stopeffect"] {
+        sprite.get::<Function>(method)?.call::<()>(sprite.clone())?;
+    }
+    sprite.get::<Function>("visible")?.call::<()>((sprite.clone(), true))?;
+    sprite.get::<Function>("setstate")?.call::<()>((sprite.clone(), index))?;
+    if mods.raw_get::<Option<bool>>("JudgmentTilt")?.unwrap_or(false) {
+        let offset = render.judgment.time_error_ms;
+        let rotation = if render.judgment.grade == deadsync_rules::judgment::JudgeGrade::Miss { 0.0 }
+            else { offset.signum() * (offset.abs() / 1000.0).min(0.050) * 300.0
+                * mods.raw_get::<Option<f32>>("TiltMultiplier")?.unwrap_or(1.0) };
+        sprite.get::<Function>("rotationz")?.call::<()>((sprite.clone(), rotation))?;
+    }
+    for (method, value) in [("zoom", 0.8), ("decelerate", 0.1), ("zoom", 0.75),
+                            ("sleep", 0.6), ("accelerate", 0.2), ("zoom", 0.0)] {
+        sprite.get::<Function>(method)?.call::<()>((sprite.clone(), value))?;
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -297,6 +354,8 @@ impl SongLuaLivePlayer {
             combo: player.combo, miss_combo: player.miss_combo,
             tap_scores: [0, player.mines_hit, player.mines_avoided, player.checkpoints_missed,
                 miss, w5, w4, w3, w2, w1, player.checkpoints_hit],
+            last_judgment: player.last_judgment,
+            autoplay: false,
         }
     }
 }
@@ -314,8 +373,12 @@ impl SongLuaLiveFrame {
             screen_seconds: f64::from(game.boundary.total_elapsed_in_screen),
             delta_seconds: f64::from(delta_seconds),
             players: std::array::from_fn(|player| game.stage_itg_score_inputs(player).map_or_else(
-                SongLuaLivePlayer::default, |score| SongLuaLivePlayer::from_player(
-                    &game.players_runtime.players[player], score.possible_grade_points))),
+                SongLuaLivePlayer::default, |score| {
+                    let mut value = SongLuaLivePlayer::from_player(
+                        &game.players_runtime.players[player], score.possible_grade_points);
+                    value.autoplay = game.live_autoplay_enabled();
+                    value
+                })),
         }
     }
 }
@@ -462,6 +525,7 @@ impl SongLuaLiveScene {
             (beat - self.last_beat) as f32, frame.delta_seconds as f32)?;
         self.last_beat = beat;
         crate::lua_util::set_live_frame(&self.lua, frame.screen_seconds, beat, frame.delta_seconds);
+        self.lua.set_app_data(LivePlayers(frame.players));
         crate::song_tables::advance_option_levels(&self.lua, frame.screen_seconds)?;
         self.advance_foregrounds(beat as f32, frame.music_seconds as f32)?;
         crate::lua_util::run_actor_compile_update_functions_with_delta(
@@ -680,6 +744,93 @@ mod tests {
         context.music_length_seconds = 60.0;
         crate::compile_song_lua_with_default_host(&entry, &context, SongLuaNoteskinResolver::default(),
             |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).expect("live preparation")
+    }
+
+    #[test]
+    fn live_player_judgment_tree() {
+        let mut compiled = compile("player-judgment-tree", r#"
+local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+local frame = player:GetChild('Judgment')
+local sprite = frame:GetChild('JudgmentWithOffsets')
+assert(frame == player:GetChild('Judgment'))
+assert(sprite == frame:GetChildren().JudgmentWithOffsets)
+return Def.ActorFrame {
+    OnCommand = function(self)
+        self:SetUpdateFunction(function(self) self:aux(player:GetTweenTimeLeft()) end)
+    end,
+}
+"#);
+        let mut scene = compiled.live_scene.take().expect("owned scene");
+        let player: Table = scene.lua.globals().get("__songlua_top_screen_player_1").expect("P1");
+        let frame: Table = player.get::<Function>("GetChild").expect("child getter")
+            .call((player.clone(), "Judgment")).expect("judgment frame");
+        let sprite: Table = frame.get::<Function>("GetChild").expect("sprite getter")
+            .call((frame.clone(), "JudgmentWithOffsets")).expect("judgment sprite");
+        let mut runtime = deadsync_gameplay::init_player_runtime();
+        let judgment = deadsync_rules::judgment::Judgment {
+            grade: deadsync_rules::judgment::JudgeGrade::Fantastic, window: Some(deadsync_rules::judgment::TimingWindow::W0),
+            time_error_ms: 0.0, time_error_music_ns: 0, miss_because_held: false,
+        };
+        deadsync_gameplay::set_player_last_judgment(&mut runtime, judgment, 0.125);
+        let mut input = SongLuaLiveFrame { screen_seconds: 0.125, music_seconds: 0.125,
+            beat: 0.25, delta_seconds: 0.125, ..Default::default() };
+        input.players[0] = SongLuaLivePlayer::from_player(&runtime, 100);
+        assert_eq!(input.players[0].tap_scores, [0; 11], "autoplay feedback does not require scoring");
+        scene.advance(input).expect("first judgment");
+        let left = |actor: &Table| crate::lua_util::actor_tween_time_left(&scene.lua, actor).expect("tween time");
+        assert!((left(&sprite) - 0.9).abs() < 1e-6);
+        assert!((left(&player) - 0.9).abs() < 1e-6);
+        assert!((scene.states()[0].aux - 0.9).abs() < 1e-6, "authored callback sees the new queue");
+        let mut pose = SongLuaOverlayState::default();
+        assert!(crate::lua_util::replay_tween_pose(&scene.lua, &sprite, &mut pose));
+        assert!((pose.zoom_x - 0.8).abs() < 1e-6, "new queue has not consumed this frame's delta");
+        let other: Table = scene.lua.globals().get("__songlua_top_screen_player_2").expect("P2");
+        assert_eq!(left(&other), 0.0, "a P1 judgment does not animate P2");
+
+        input.screen_seconds += 0.0625;
+        input.delta_seconds = 0.0625;
+        scene.advance(input).expect("existing judgment advances");
+        assert!((crate::lua_util::actor_tween_time_left(&scene.lua, &player).expect("P1 time") - 0.8375).abs() < 1e-6,
+            "the named child advances once and the unchanged snapshot does not restart it");
+        deadsync_gameplay::set_player_last_judgment(&mut runtime,
+            deadsync_rules::judgment::Judgment { grade: deadsync_rules::judgment::JudgeGrade::Miss, window: None, ..judgment }, 0.25);
+        input.players[0] = SongLuaLivePlayer::from_player(&runtime, 100);
+        input.screen_seconds = 0.25;
+        scene.advance(input).expect("replacement judgment");
+        assert!((crate::lua_util::actor_tween_time_left(&scene.lua, &sprite).expect("sprite time") - 0.9).abs() < 1e-6);
+        assert_eq!(sprite.get::<Function>("GetState").expect("state getter").call::<usize>(sprite.clone()).expect("miss frame"), 5);
+
+        player.get::<Function>("hibernate").expect("hibernate").call::<()>((player.clone(), 0.125)).expect("pause player");
+        input.screen_seconds += 0.0625;
+        scene.advance(input).expect("hibernating player");
+        assert!((crate::lua_util::actor_tween_time_left(&scene.lua, &sprite).expect("paused child") - 0.9).abs() < 1e-6);
+        assert!((crate::lua_util::actor_tween_time_left(&scene.lua, &player).expect("paused parent") - 0.9625).abs() < 1e-6);
+        input.screen_seconds += 0.125;
+        input.delta_seconds = 0.125;
+        scene.advance(input).expect("wake remainder");
+        assert!((crate::lua_util::actor_tween_time_left(&scene.lua, &sprite).expect("wake child") - 0.8375).abs() < 1e-6);
+        player.get::<Function>("SetUpdateRate").expect("update rate").call::<()>((player.clone(), 2.0)).expect("double rate");
+        input.screen_seconds += 0.0625;
+        input.delta_seconds = 0.0625;
+        scene.advance(input).expect("rated child update");
+        assert!((crate::lua_util::actor_tween_time_left(&scene.lua, &sprite).expect("rated child") - 0.7125).abs() < 1e-6);
+    }
+
+    #[test]
+    fn live_named_notefield_advances_once() {
+        let mut compiled = compile("named-notefield-once", r#"
+local field = SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField')
+return Def.ActorFrame {
+    OnCommand = function(self)
+        field:sleep(0.5)
+        self:SetUpdateFunction(function(self) self:aux(field:GetTweenTimeLeft()) end)
+    end,
+}
+"#);
+        let mut scene = compiled.live_scene.take().expect("owned scene");
+        scene.advance(SongLuaLiveFrame { screen_seconds: 0.125, delta_seconds: 0.125,
+            ..Default::default() }).expect("one native child update");
+        assert!((scene.states()[0].aux - 0.375).abs() < 1e-6, "NoteField does not receive an extra special update");
     }
 
     #[test]
@@ -985,12 +1136,24 @@ end }
             SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])),
             |_| None::<crate::SongLuaOverlayModelLayer<()>>, |_, _| None).expect("first screen");
         let mut scene = compiled.live_scene.take().expect("first VM scene");
-        let output = scene.advance(SongLuaLiveFrame::default()).expect("first foreground On");
+        let mut frame = SongLuaLiveFrame::default();
+        frame.players[0].last_judgment = Some(deadsync_gameplay::JudgmentRenderInfo {
+            started_at_screen_s: 0.0,
+            judgment: deadsync_rules::judgment::Judgment {
+                grade: deadsync_rules::judgment::JudgeGrade::Fantastic,
+                window: Some(deadsync_rules::judgment::TimingWindow::W0),
+                time_error_ms: 0.0, time_error_music_ns: 0, miss_because_held: false,
+            },
+        });
+        let output = scene.advance(frame).expect("first foreground On");
         assert_eq!(output.request, Some(SongLuaLiveRequest::NewScreen("ScreenGameplay".into())));
         let mut layers = crate::reload_song_lua_with_default_host(scene,
             |_, _, _| Ok(Arc::<[()]>::from([])),
             |_| None::<crate::SongLuaOverlayModelLayer<()>>, |_, _| None).expect("replacement screen");
         let mut scene = layers[0].live_scene.take().expect("replacement scene");
+        let player: Table = scene.lua.globals().get("__songlua_top_screen_player_1").expect("replacement player");
+        assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &player).expect("new player queue"),
+            0.0, "a retired screen's judgment must not animate the replacement during startup");
         let output = scene.advance(SongLuaLiveFrame { music_seconds: 0.1, beat: 0.1,
             screen_seconds: 0.1, delta_seconds: 0.1, ..Default::default() }).expect("replacement update");
         assert_eq!(output.request, Some(SongLuaLiveRequest::Transition("SM_DoNextScreen".into())));

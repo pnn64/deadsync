@@ -1,0 +1,66 @@
+{
+  "problem": "Native Player tween queries include its Simply Love judgment sprite; DeadSync omitted the advancing child and its actual gameplay judgment",
+  "source_base": "7df79a1ab0a1f31e9c2b2aee831c48830f519c4c",
+  "tested_sources": {
+    "crates/deadsync-gameplay/src/player.rs": "9fd903cd53eb186b12811deaf77297cd7ef048d8c699eebe6b40a9bf52b8e901",
+    "crates/deadsync-song-lua/src/live.rs": "10daf65321e7d8a45e6f17a5950b0f0fa99808986473560a301338907c4a7dca",
+    "crates/deadsync-song-lua/src/lua_util.rs": "3b7fb1d37ba9385fb369f212ba596a0667f508de2be76f63133cc878000c7f57"
+  },
+  "native_observation": {
+    "receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass357\\top147-native-tween-owner-v1-receipt.json",
+    "sha256": "211f4e949ab850dba578cf5475dfb054d68fe3d047df15848283ac491533e8c0",
+    "source_commit": "f82567a3f4c831c1b09f284bc7521d2bf0e31e35",
+    "trace_sha256": "239b7f26c390a72198ba2f4ab0b7aebf65db4aeb3243e5acced64f869c0265ec",
+    "owners": [
+      {
+        "seconds": 74.09904479980469,
+        "operation": "Actor.zoomx",
+        "actor": "external-0009",
+        "tree": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "name": "JudgmentWithOffsets",
+                  "time_left": 0.8907819986343384
+                }
+              ],
+              "name": "Judgment",
+              "time_left": 0.8907819986343384
+            }
+          ],
+          "name": "PlayerP1",
+          "time_left": 0.8907819986343384
+        }
+      }
+    ],
+    "diagnostic_only": true,
+    "archive_accepted": false
+  },
+  "controls": {
+    "receipt": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\top147-judgment-tree-live-v2.json",
+    "sha256": "a293d6b6b1aa81175691a37921daa1bb0b9db385381eff6d32a93163c587cbaa",
+    "exit_code": 0,
+    "results": [
+      "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 524 filtered out; finished in 2.73s"
+    ],
+    "log_sha256": "af341ea0c707f469f3def7ed8515e85fefe61aad6e92dc713af77093c62de4a7",
+    "checks": [
+      "actual gameplay judgment with zero scored counts",
+      "owned named child identity",
+      "children advance once",
+      "new judgment starts after Player child update",
+      "replacement judgment resets the queue",
+      "P1 judgment leaves P2 alone",
+      "parent hibernation and wake remainder",
+      "parent update rate",
+      "same-VM reload retires old judgment"
+    ]
+  },
+  "implementation": "Retain native Player children in the actor tree; run the existing Sprite tween machinery from actual gameplay feedback after Player ActorFrame advancement; remove the separate NoteField advancement path",
+  "strict_timing_comparison_unchanged": true,
+  "full_chronic_replay_pending": true,
+  "whole_corpus_complete": false,
+  "whole_render_parity_proven": false
+}

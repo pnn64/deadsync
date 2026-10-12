@@ -10663,6 +10663,7 @@ pub(crate) fn begin_live_runtime(lua: &Lua) -> mlua::Result<()> {
     lua.set_app_data(LiveSourceBroadcasts(Vec::new()));
     let scene = lua.app_data_ref::<crate::live::LiveMode>().map_or(1, |mode| mode.0 + 1);
     lua.set_app_data(crate::live::LiveMode(scene));
+    lua.remove_app_data::<crate::live::LivePlayers>();
     lua.set_app_data(ActorTweenReplays(FxHashMap::default()));
     set_compile_frames(lua, [(0.0, 0.0)].into_iter())?;
     if let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>() {
@@ -11802,6 +11803,9 @@ pub fn run_actor_update_functions_with_delta(
 
 #[derive(Clone)]
 enum SongLuaCompileUpdateJob {
+    PlayerJudgment {
+        actor: Table,
+    },
     Enter {
         actor: Table,
         parent: Option<Table>,
@@ -11884,13 +11888,6 @@ fn collect_compile_update_jobs(
         child.set("__songlua_parent", actor.clone())?;
         collect_compile_update_jobs(lua, &child, Some(actor), false, jobs, order)?;
     }
-    // Player owns NoteField outside the returned song Lua array. Its wrappers
-    // still receive Actor::Update time, including Player hibernation and rate.
-    if actor_type_is(actor, "PlayerActor")?
-        && let Some(children) = actor.raw_get::<Option<Table>>("__songlua_children")?
-        && let Some(field) = children.raw_get::<Option<Table>>("NoteField")? {
-        collect_compile_update_jobs(lua, &field, Some(actor), false, jobs, order)?;
-    }
     if let Some(stream) = song_meter_stream_child(lua, actor)? {
         collect_compile_update_jobs(lua, &stream, Some(actor), false, jobs, order)?;
     }
@@ -11920,6 +11917,11 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
             // Player actors advance native time even without NoteField wrappers.
             if let Some(player) = lua.globals().raw_get::<Option<Table>>(key)? {
                 collect_compile_update_jobs(lua, &player, None, false, &mut jobs, &mut order)?;
+                // Player::Update runs ActorFrame::Update first, then emits
+                // Judgment while processing rows. Song callbacks follow it.
+                if crate::live::active(lua) {
+                    jobs.push(SongLuaCompileUpdateJob::PlayerJudgment { actor: player });
+                }
             }
         }
         collect_compile_update_jobs(lua, root, None, false, &mut jobs, &mut order)?;
@@ -11959,7 +11961,7 @@ pub(crate) fn actor_tree_update_only(lua: &Lua, root: &Value, name: &str) -> mlu
         !matches!(
             job,
             SongLuaCompileUpdateJob::Advance { .. } | SongLuaCompileUpdateJob::Enter { .. }
-                | SongLuaCompileUpdateJob::Texture { .. }
+                | SongLuaCompileUpdateJob::Texture { .. } | SongLuaCompileUpdateJob::PlayerJudgment { .. }
         )
     });
     match (jobs.next(), jobs.next()) {
@@ -12295,6 +12297,10 @@ pub fn run_actor_compile_update_functions_with_delta(
         .expect("phase installed");
     let result = (|| {
         for job in jobs.iter() {
+            if let SongLuaCompileUpdateJob::PlayerJudgment { actor } = job {
+                crate::live::update_player_judgment(lua, actor)?;
+                continue;
+            }
             if let SongLuaCompileUpdateJob::Texture { actor } = job {
                 crate::model_texture::update(lua, actor);
                 continue;
@@ -12352,7 +12358,7 @@ pub fn run_actor_compile_update_functions_with_delta(
                 SongLuaCompileUpdateJob::Advance { actor, order, .. }
                 | SongLuaCompileUpdateJob::Recurring { actor, order, .. }
                 | SongLuaCompileUpdateJob::Callback { actor, order, .. } => (actor, *order),
-                SongLuaCompileUpdateJob::Texture { .. } => unreachable!("texture jobs handled above"),
+                SongLuaCompileUpdateJob::Texture { .. } | SongLuaCompileUpdateJob::PlayerJudgment { .. } => unreachable!("host jobs handled above"),
             };
             let delta = if matches!(job, SongLuaCompileUpdateJob::Advance { .. }) {
                 // A wrapper callback can change the owner's update rate. Native
@@ -12447,7 +12453,8 @@ pub fn run_actor_compile_update_functions_with_delta(
                 SongLuaCompileUpdateJob::Callback { actor, .. } => {
                     run_update_callback(lua, actor, delta_seconds)?
                 }
-                SongLuaCompileUpdateJob::Enter { .. } | SongLuaCompileUpdateJob::Texture { .. } => unreachable!("actor entry handled above"),
+                SongLuaCompileUpdateJob::Enter { .. } | SongLuaCompileUpdateJob::Texture { .. }
+                | SongLuaCompileUpdateJob::PlayerJudgment { .. } => unreachable!("actor entry handled above"),
             }
         }
         Ok(())
@@ -12927,6 +12934,7 @@ pub fn create_named_child_actor(
             if let Some(path) = parent.get::<Option<String>>("__songlua_judgment_texture")? {
                 set_actor_texture_from_path(&sprite, &path)?;
             }
+            push_sequence_child_once(&frame, sprite.clone())?;
             actor_children(lua, &frame)?.set("JudgmentWithOffsets", sprite)?;
             frame
         } else if name.eq_ignore_ascii_case("Combo") {
@@ -12935,6 +12943,7 @@ pub fn create_named_child_actor(
             let frame = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
             let number = create_named_actor(lua, "BitmapText", "Number", create_dummy_actor)?;
             number.set("__songlua_parent", frame.clone())?;
+            push_sequence_child_once(&frame, number.clone())?;
             actor_children(lua, &frame)?.set("Number", number)?;
             frame
         } else {
@@ -12990,6 +12999,12 @@ pub fn create_named_child_actor(
         .is_some_and(|kind| kind.eq_ignore_ascii_case("PlayerActor"))
     {
         child.set("__songlua_player_child_name", name)?;
+        // Native Player::Init owns these actors in m_SubActors. The named
+        // lookup is an alias of that tree, not a separate unadvanced actor.
+        actor_children(lua, parent)?.set(name, child.clone())?;
+        if push_sequence_child_once(parent, child.clone())? {
+            invalidate_compile_update_plan(lua);
+        }
     } else if parent_type
         .as_deref()
         .is_some_and(|kind| kind.eq_ignore_ascii_case("TopScreen"))
@@ -13515,6 +13530,8 @@ pub fn create_top_screen_table(
     ];
     for player_actor in &player_actors {
         player_actor.set("__songlua_parent", top_screen.clone())?;
+        install_named_theme_children(lua, player_actor, &["Combo", "Judgment", "NoteField"],
+            create_named_child_actor)?;
     }
     for (player_index, life_meter) in life_meters.iter().enumerate() {
         life_meter.set("__songlua_parent", top_screen.clone())?;
