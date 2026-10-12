@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-12T22:29:44Z",
+  "updated_utc": "2026-10-12T22:32:59Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -12,8 +12,8 @@
   ],
   "counts": {
     "passed": 154,
-    "pending": 11,
-    "unprocessed": 336
+    "pending": 12,
+    "unprocessed": 335
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1503,7 +1503,9 @@
       "position": 168,
       "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
       "simfile_sha256": "bf410851d8e4baf4478713fd48967877c33e1f7a0310b33917d42ac0dfac79be",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 169,

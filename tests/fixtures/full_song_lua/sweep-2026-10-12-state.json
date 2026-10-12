@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-12T22:29:44Z",
-  "previous_goal_turn": "progress: both Dance Robot fixtures and repaired crew saved and committed; Cuphead final attempt pending at limit; RUNWAY initial replay has six background startup clock mismatches and bounded repair uses its retained capture; original 501 sources audited separately from additions",
+  "updated_utc": "2026-10-12T22:32:59Z",
+  "previous_goal_turn": "progress: Dance Robot SSC and Data Loss full fixtures saved; background activation fixed and committed, Windows regression plus 21 live tests and 15 native replay controls passed; RUNWAY capture reused and full 55467-frame pass saved; three disjoint original queues launched while retaining Datura capture; Cuphead pending at two-attempt limit; Cursed actual Cancel/PlayerP1 inventory mismatch diagnosed; Datamania and Deceive concrete failures recorded",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "e76d421ab48e7f62e7deb3f82085973c6498a80b",
+      "deadsync": "849da9fc16d8ff9449166fd526ed809cf4994101",
       "itgmania_harness": "78d4a1ef5778b76a29d3d55ff42e0216edfb1a38"
     }
   },
@@ -42,13 +42,17 @@
       "status": "running",
       "current": "Datura -paroxysm-/Datura -paroxysm-.ssc",
       "position": 166,
-      "phase": "capture",
-      "pid": 355053,
+      "phase": "replay",
+      "pid": 368364,
       "process_matches": true,
       "passed": 4,
       "pending": 13,
       "processed": 17,
-      "last_log_lines": [],
+      "last_log_lines": [
+        "[26.0s] replaying every native gameplay frame: frame 1943/51588 (3.8%)",
+        "[28.0s] replaying every native gameplay frame: frame 2273/51588 (4.4%)",
+        "[30.0s] replaying every native gameplay frame: frame 2630/51588 (5.1%)"
+      ],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -56,6 +60,7 @@
     "parallel_queue_receipt": "tests/fixtures/full_song_lua/sweep-2026-10-12-parallel-queues.json",
     "build_transition": "tests/fixtures/full_song_lua/sweep-2026-10-12-build-transition.json",
     "source_scope_audit": "tests/fixtures/full_song_lua/sweep-2026-10-12-original-scope.json",
+    "cursed_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-cursed-screen-children-diagnosis.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
       {
@@ -160,26 +165,26 @@
       },
       {
         "job": "background-activation-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "RUNWAY/RUNWAY.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "chart-sweep-parallel-v4-1",
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
-        "pending": 0,
-        "processed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "capture",
-        "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
+        "source_simfile": "Delightful Day/Delightful Day.sm",
         "child_running": true,
-        "position": 168
+        "position": 171
       },
       {
         "job": "chart-sweep-parallel-v4-2",
@@ -188,7 +193,7 @@
         "passed": 0,
         "pending": 0,
         "processed": 0,
-        "last_phase": "capture",
+        "last_phase": "replay",
         "source_simfile": "Delayed Friend Request/Delayed Friend Request.sm",
         "child_running": true,
         "position": 169
@@ -290,18 +295,18 @@
   },
   "counts_at_checkpoint": {
     "new_passed_fixtures": 7,
-    "new_pending_charts": 10,
-    "new_processed_sources": 17,
+    "new_pending_charts": 11,
+    "new_processed_sources": 18,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 336,
+    "unprocessed_sources": 335,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
   "additional_sources_outside_original_scope": [
     {
       "source_simfile": "RUNWAY/RUNWAY.ssc",
-      "status": "pending",
-      "repair_attempts": 0
+      "status": "passed",
+      "repair_attempts": 1
     }
   ],
   "additional_source_inventory": [
@@ -595,6 +600,14 @@
           }
         }
       ]
+    },
+    {
+      "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: native definition instance has no observed creation identity; retained run directory /tmp/itgmania-harness-rs/song-lua-355312-1791844077654862665-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
     }
   ],
   "historical_concrete_failures": [
