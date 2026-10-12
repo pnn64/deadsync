@@ -1,0 +1,43 @@
+{
+  "source_simfile": "Crazy Crazy/Crazy Crazy.ssc",
+  "status": "pending",
+  "retained_native_trace": "/tmp/itgmania-harness-rs/song-lua-138502-1791837397902414281-0/Save/itgmania-harness/song-lua-trace.json",
+  "trace_sha256": "1b6d87dd6a676c1a606a8dea136b025dbff68e45dad2497bebe0f98a99880c3a",
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "capture_limits": {
+    "max_events": 8000000
+  },
+  "dropped": {
+    "dropped_events": 0,
+    "dropped_update_frames": 0,
+    "dropped_stage_samples": 0,
+    "dropped_random_reseeds": 0
+  },
+  "native_error_count": 1,
+  "native_errors": [
+    {
+      "actor": "def-0125",
+      "args": [],
+      "beat": 0.0009240856161341071,
+      "command": "UpdateCommand",
+      "definition_id": "def-0125",
+      "detail": {
+        "message": "/Songs/Harness/Probe/lua/default.lua:485: attempt to call method 'GetChild' (a nil value)",
+        "name": "UpdateCommand"
+      },
+      "kind": "error",
+      "line": 445,
+      "operation": "command.error",
+      "scene": 1,
+      "seconds": 0.6793877482414246,
+      "seq": 1521,
+      "source": "song:/lua/default.lua"
+    }
+  ]
+}
