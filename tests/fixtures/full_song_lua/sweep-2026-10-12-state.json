@@ -1,6 +1,6 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-12T20:05:51Z",
+  "updated_utc": "2026-10-12T20:33:30Z",
   "previous_goal_turn": "progress: parity repairs were committed; no abandoned live capture was found",
   "scope": {
     "original_simfiles": 501,
@@ -14,8 +14,8 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "5e8d689e0e3f3098d1460a2bb4a0b892ec2cfef1",
-      "itgmania_harness": "f24b8969c59171096159a5ecd688e6be87921136"
+      "deadsync": "e619760b0a5083eae268af9f74908c069095834b",
+      "itgmania_harness": "7dd2fabb5247be67d6442265e4d84c7f2cebd1fd"
     }
   },
   "validation": {
@@ -34,18 +34,16 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Circles/Circles.ssc",
-      "position": 149,
+      "current": "copter/copter.ssc",
+      "position": 153,
       "phase": "replay",
-      "pid": 126231,
+      "pid": 137034,
       "process_matches": true,
       "passed": 0,
-      "pending": 0,
-      "processed": 0,
+      "pending": 4,
+      "processed": 4,
       "last_log_lines": [
-        "[252.0s] replaying every native gameplay frame: frame 32010/112467 (28.5%)",
-        "[254.0s] replaying every native gameplay frame: frame 32268/112467 (28.7%)",
-        "[256.0s] replaying every native gameplay frame: frame 32540/112467 (28.9%)"
+        "[0.1s] replaying every native gameplay frame"
       ]
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -54,7 +52,7 @@
   },
   "counts_at_checkpoint": {
     "new_passed_fixtures": 0,
-    "new_pending_charts": 0,
+    "new_pending_charts": 4,
     "charts_in_remaining_queue": 353
   },
   "historical_concrete_failures": [
