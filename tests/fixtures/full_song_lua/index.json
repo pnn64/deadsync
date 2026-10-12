@@ -2064,15 +2064,12 @@
     {
       "title": "Cursed Metamorph",
       "source_simfile": "Cursed Metamorph - [Zaia]/Cursed Metamorph.ssc",
-      "harness_version": "0.1.0",
-      "archive": "043e08fdc8eccbc7afd5c8e4595cad0d3e3b8e3523fa61c9b4353821ca4b47b7.tar.zst",
-      "sha256": "043e08fdc8eccbc7afd5c8e4595cad0d3e3b8e3523fa61c9b4353821ca4b47b7",
-      "compressed_bytes": 3563581,
-      "uncompressed_sha256": "69701806be6e634e9a790fb1c39782c316824add9aeab13120383d13df0d840e",
-      "compression_level": 22,
-      "aliases": [
-        "153d0b192381ab90e42219bfc881532de37a163d6c8735df6cbed1fbe04200d2.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "25ea5cf4cfa0897e4b3da4bda0c295827045a62b984a32b8209cc5e45f16fd12.tar.zst",
+      "sha256": "25ea5cf4cfa0897e4b3da4bda0c295827045a62b984a32b8209cc5e45f16fd12",
+      "compressed_bytes": 12345940,
+      "uncompressed_sha256": "14fbe75f1357f3f391fba0953eef19ad836f6444b243bbb90ae8d57dc5543cc3",
+      "aliases": []
     },
     {
       "title": "Cyberpunk 2077",

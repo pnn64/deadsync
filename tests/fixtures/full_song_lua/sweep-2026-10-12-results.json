@@ -1851,6 +1851,53 @@
         }
       ],
       "report_sha256": "3fa26ed03df424ab4add6aebd2e29016308053fc4d18aff9eb70bea4121544eb"
+    },
+    {
+      "position": 160,
+      "source_simfile": "Cursed Metamorph - [Zaia]/Cursed Metamorph.ssc",
+      "simfile_sha256": "6ecc8277910384a2358c5a178fb3a83474e01c4997beea5f6fe23a0d1bc35d4d",
+      "retained_original_archive": "043e08fdc8eccbc7afd5c8e4595cad0d3e3b8e3523fa61c9b4353821ca4b47b7.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "capture_seconds": 152.56435165199946,
+      "trace_sha256": "60df581e79d10740448024e8de45730c4be6da3128db5daef338ac1591fc03b3",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-160/candidates/14fbe75f1357f3f391fba0953eef19ad836f6444b243bbb90ae8d57dc5543cc3.tar",
+      "replay_exit": 0,
+      "replay_seconds": 688.0210156100002,
+      "candidate_sha256": "14fbe75f1357f3f391fba0953eef19ad836f6444b243bbb90ae8d57dc5543cc3",
+      "native_frames": 88404,
+      "replayed_frames": 88404,
+      "compared_stage_fields": 1551,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.SetHeight, Actor.SetTextureFiltering, Actor.SetWidth, Actor.bob, Actor.effectoffset, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.SetTextureName, PlayerOptions.CMod, PlayerOptions.Cover, PlayerOptions.FromString",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "0c5b811d76ee9ef3dcb44515b97027a0672bf12937b5573fdddd2438d34ed256",
+      "archive": "25ea5cf4cfa0897e4b3da4bda0c295827045a62b984a32b8209cc5e45f16fd12.tar.zst",
+      "archive_sha256": "25ea5cf4cfa0897e4b3da4bda0c295827045a62b984a32b8209cc5e45f16fd12",
+      "compressed_bytes": 12345940,
+      "pack_seconds": 5.807151503999194,
+      "harness_version": "0.1.80",
+      "title": "Cursed Metamorph",
+      "retained_original_entry": {
+        "title": "Cursed Metamorph",
+        "source_simfile": "Cursed Metamorph - [Zaia]/Cursed Metamorph.ssc",
+        "harness_version": "0.1.0",
+        "archive": "043e08fdc8eccbc7afd5c8e4595cad0d3e3b8e3523fa61c9b4353821ca4b47b7.tar.zst",
+        "sha256": "043e08fdc8eccbc7afd5c8e4595cad0d3e3b8e3523fa61c9b4353821ca4b47b7",
+        "compressed_bytes": 3563581,
+        "uncompressed_sha256": "69701806be6e634e9a790fb1c39782c316824add9aeab13120383d13df0d840e",
+        "compression_level": 22,
+        "aliases": [
+          "153d0b192381ab90e42219bfc881532de37a163d6c8735df6cbed1fbe04200d2.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -1876,7 +1923,7 @@
   },
   "binary_sha256": "d515e94becf9b644c522e453045a5f07d1e149cc18765469d78b2384164539ad",
   "harness_sha256": "41bfe13b815a4a9695c2271e375611ff2e0efc017c4c4bc1ee304cb89bf69a54",
-  "passed_fixtures": 0,
+  "passed_fixtures": 1,
   "pending_charts": 11,
-  "processed_charts": 11
+  "processed_charts": 12
 }
