@@ -69,6 +69,7 @@ pub const TOP_SCREEN_THEME_CHILD_NAMES: &[&str] = &[
     "SongBackground",
     "SongForeground",
     "In",
+    "Debug",
     "ScoreP1",
     "ScoreP2",
     "StepsDisplayP1",

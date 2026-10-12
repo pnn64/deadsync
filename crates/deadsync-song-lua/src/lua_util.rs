@@ -11964,7 +11964,7 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
             let children = actor_children(lua, &screen)?;
             // SongBackground's entries are already visited through the song
             // root below; traversing its child aliases would update them twice.
-            for name in ["Underlay", "Overlay", "In"] {
+            for name in ["Underlay", "Overlay", "In", "Debug"] {
                 if let Some(actor) = children.raw_get::<Option<Table>>(name)? {
                     collect_compile_update_jobs(lua, &actor, None, false, &mut jobs, &mut order)?;
                 }
@@ -13079,6 +13079,19 @@ pub fn create_top_screen_theme_actor(
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
 ) -> mlua::Result<Option<Table>> {
+    if name.eq_ignore_ascii_case("Debug") {
+        // ScreenGameplay::Init owns this BitmapText. Simply Love inherits
+        // these Debug metrics from _fallback, including OnCommand's zoom.
+        let actor = create_named_text_actor(lua, "BitmapText", name, String::new(), create_dummy_actor)?;
+        for (method, value) in [
+            ("x", lua.globals().get::<f32>("SCREEN_CENTER_X")?),
+            ("y", lua.globals().get::<f32>("SCREEN_BOTTOM")? - 116.0),
+            ("zoom", 0.75),
+        ] {
+            actor.get::<Function>(method)?.call::<()>((actor.clone(), value))?;
+        }
+        return Ok(Some(actor));
+    }
     if name.eq_ignore_ascii_case("Underlay")
         || name.eq_ignore_ascii_case("Overlay")
         || name.eq_ignore_ascii_case("In")

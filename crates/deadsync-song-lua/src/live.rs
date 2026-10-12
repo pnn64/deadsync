@@ -926,6 +926,38 @@ return setmetatable({__songlua_actor_type='ActorFrame',Name='Declared',
     }
 
     #[test]
+    fn live_screen_debug_owns_its_native_tween_clock() {
+        let mut compiled = compile("screen-debug", r#"
+local top = SCREENMAN:GetTopScreen()
+local text = top:GetChild('Debug')
+assert(text == top:GetChildren().Debug)
+assert(text:GetParent() == top)
+assert(tostring(text):find('^BitmapText'))
+assert(text:GetText() == '')
+assert(text:GetX() == SCREEN_CENTER_X)
+assert(text:GetY() == SCREEN_BOTTOM - 116)
+assert(text:GetZoom() == 0.75)
+LEFT = {}
+return Def.ActorFrame { OnCommand = function(self)
+    text:linear(1):y(SCREEN_CENTER_Y-60)
+    self:SetUpdateFunction(function(_, delta)
+        if delta > 0 then LEFT[#LEFT+1] = text:GetTweenTimeLeft() end
+    end)
+end }
+"#);
+        let mut scene = compiled.live_scene.take().expect("owned scene");
+        for seconds in [0.25, 0.5, 0.75, 1.0] {
+            let output = scene.advance(SongLuaLiveFrame { screen_seconds: seconds,
+                delta_seconds: 0.25, ..Default::default() }).expect("screen frame");
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+        }
+        let left = scene.lua.globals().get::<Table>("LEFT").expect("authored tween queries");
+        for (index, expected) in [(1, 0.75), (2, 0.5), (3, 0.25), (4, 0.0)] {
+            assert_eq!(left.raw_get::<f32>(index).expect("tween left"), expected);
+        }
+    }
+
+    #[test]
     fn live_screen_layer_consumes_earlier_tween_before_later_message() {
         let mut compiled = compile("screen-layer-tweens", r#"
 local underlay = SCREENMAN:GetTopScreen():GetChild('Underlay')
