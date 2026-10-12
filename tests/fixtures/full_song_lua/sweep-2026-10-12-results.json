@@ -756,6 +756,41 @@
         }
       ],
       "report_sha256": "fe5d5eb9cd12751fa6e44cc70b920dce8d8d505e523c0c74832c3a6c700acc36"
+    },
+    {
+      "position": 153,
+      "source_simfile": "copter/copter.ssc",
+      "simfile_sha256": "307ff1f519ca729b0fdf0a6c49e87a4d4e2264f45de24378aa50a3cc3c05a50c",
+      "retained_original_archive": "a37fc45b363b62925514d65a5e2e7029298d4e24f393c882468b58220d1b98d2.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "capture_seconds": 18.88062778499443,
+      "trace_sha256": "1e996ac64cec1f1b18cc2f8c3cff3bdbaac43e7adf7841ad91565bcf7d1b601f",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-153/candidates/97fdb7b257614ba583c2bc28012cf80380a9392bb05a69ee3e9fbc1a773cd171.tar",
+      "replay_exit": 2,
+      "replay_seconds": 71.23588243599806,
+      "candidate_sha256": "97fdb7b257614ba583c2bc28012cf80380a9392bb05a69ee3e9fbc1a773cd171",
+      "native_frames": 17869,
+      "replayed_frames": 17869,
+      "compared_stage_fields": 220,
+      "pending_coverage": [
+        "uncompared song operations: Actor.zoomy, GameState.ApplyStageModifiers",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [
+        "OnCommand failed for ActorFrame 'copter': runtime error: [string \"/tmp/.tmpKLPjVb/song/copter/default.lua\"]:20: attempt to call method 'ApplyStageModifiers' (a nil value)\nstack traceback:\n\t[C]: in method 'ApplyStageModifiers'\n\t[string \"/tmp/.tmpKLPjVb/song/copter/default.lua\"]:20: in function <[string \"/tmp/.tmpKLPjVb/song/copter/default.lua\"]:18>"
+      ],
+      "mismatch_count": 1,
+      "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 3573,
+          "deadsync": 2
+        }
+      ],
+      "report_sha256": "e816a9734d20b638e09bd5b95344b505c5d645ae98bfce7f3a0f2b9dd9da8976"
     }
   ],
   "historical_pending": [
@@ -782,6 +817,6 @@
   "binary_sha256": "d515e94becf9b644c522e453045a5f07d1e149cc18765469d78b2384164539ad",
   "harness_sha256": "41bfe13b815a4a9695c2271e375611ff2e0efc017c4c4bc1ee304cb89bf69a54",
   "passed_fixtures": 0,
-  "pending_charts": 4,
-  "processed_charts": 4
+  "pending_charts": 5,
+  "processed_charts": 5
 }
