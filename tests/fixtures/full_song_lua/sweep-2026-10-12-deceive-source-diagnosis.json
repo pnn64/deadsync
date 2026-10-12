@@ -1,0 +1,175 @@
+{
+  "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
+  "position": 168,
+  "completed_repair_attempts": 1,
+  "remaining_repair_attempts": 1,
+  "reused_candidate_sha256": "325042dfeb464d207fec435da60df268909abd0a727b1a6feae48a82fa149626",
+  "native_frames": 43460,
+  "replayed_frames": 43460,
+  "errors": 0,
+  "original_mismatch_count": 127283,
+  "alignment_diagnosis": {
+    "native_count": 295137,
+    "actual_count": 295134,
+    "line_only_differences": 575,
+    "other_alignment_evidence": [
+      {
+        "kind": "missing-native-events",
+        "native_index": 774,
+        "actual_index": 774,
+        "events": [
+          {
+            "actor": "external-0141",
+            "args": [
+              "Debug"
+            ],
+            "beat": 0.24455145001411438,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 562,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              },
+              "results": [
+                {
+                  "actor": "external-0150",
+                  "name": "Debug",
+                  "path": "ScreenGameplay/Debug"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 562,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.3202267587184906,
+            "seq": 1527,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "actor": 6,
+                "name": "Debug",
+                "path": "ScreenGameplay/Debug"
+              }
+            ]
+          },
+          {
+            "actor": "external-0150",
+            "args": [
+              180
+            ],
+            "beat": 0.24455145001411438,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 562,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 562,
+            "operation": "Actor.y",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.3202267587184906,
+            "seq": 1528,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          }
+        ]
+      },
+      {
+        "kind": "missing-native-events",
+        "native_index": 777,
+        "actual_index": 775,
+        "events": [
+          {
+            "args": [],
+            "beat": 0.24455145001411438,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 562,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "results": [
+                {
+                  "actor": "external-0141",
+                  "name": "ScreenGameplay",
+                  "path": "ScreenGameplay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 562,
+            "operation": "ScreenManager.GetTopScreen",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.3202267587184906,
+            "seq": 1531,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "diagnostic_only": "Line metadata omitted solely to locate additional actual failures; existing replay comparisons remain unchanged"
+  },
+  "source_confirmed_causes": [
+    {
+      "behavior": "Native cmd parser retains the original function definition line at the opening parenthesis and all following source line positions",
+      "reference": "../itgmania-harness/vendor/itgmania/extern/lua-5.1/src/lparser.c:596",
+      "trace_reference": "../itgmania-harness/probe_theme/SongLuaTrace.lua:739",
+      "fix_commit": "b1160be8c"
+    },
+    {
+      "behavior": "ScreenGameplay owns a BitmapText named Debug, with inherited fallback X, Y and On zoom metrics; its same object is returned by screen child lookups",
+      "references": [
+        "../itgmania-harness/vendor/itgmania/src/ScreenGameplay.cpp:811",
+        "../itgmania-harness/vendor/itgmania/Themes/_fallback/metrics.ini:3659"
+      ],
+      "authored_use": "lua/default.lua:562 checks Debug and then moves it to SCREEN_CENTER_Y - 60",
+      "fix_commit": "3cdcfeb3a"
+    }
+  ],
+  "windows_validation": [
+    {
+      "filter": "preprocess_lua_cmd",
+      "passed": 9,
+      "failed": 0
+    },
+    {
+      "filter": "live_",
+      "passed": 25,
+      "failed": 0
+    }
+  ],
+  "final_repair": {
+    "job": "/home/parity/jobs/debug-source-lines-repair-v1",
+    "attempt": 2,
+    "build_proof": "/home/parity/jobs/debug-source-lines-build-v1/proof.json",
+    "reuse": "Existing uncompressed capture; no recapture; replay waits for validated immutable helper"
+  },
+  "acceptance": "Unchanged existing full_song_lua complete replay comparisons; coverage recorded separately"
+}
