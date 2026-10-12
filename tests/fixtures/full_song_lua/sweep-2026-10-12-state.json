@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-12T21:04:14Z",
-  "previous_goal_turn": "progress: stage modifiers, metric command chunk names and empty song tree repairs committed; both copter fixtures saved after complete passing replays",
+  "updated_utc": "2026-10-12T21:18:10Z",
+  "previous_goal_turn": "progress: stage modifiers, metric chunk names, empty song trees and inactive underlay player repairs committed; both copter fixtures saved; Cursed 2 bounded retries reuse captures",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "93c63eb0ec8a52e65011ef834bb3c02968ea4c8f",
+      "deadsync": "bd393aac50fac5caf1540dd3bbcacd0f07606695",
       "itgmania_harness": "78d4a1ef5778b76a29d3d55ff42e0216edfb1a38"
     }
   },
@@ -22,6 +22,7 @@
     "native_replay_controls": "15 passed on the stage modifier Linux build; stage modifier regression passed on Windows and Linux",
     "native_metric_caller": "regression passed on Windows; all 12 runtime controls passed on Linux",
     "empty_song_tree": "all 15 replay controls passed on Windows and Linux; second bounded Crab replay reuses the original capture",
+    "enabled_underlay": "P1-only, P2-only and two-player underlay regression passed on Linux; Windows rerun uses smaller debug output after a full local disk interrupted linking",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved"
   },
   "corpus_transfer": {
@@ -36,15 +37,19 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Cursed 2/Cursed 2.ssc",
-      "position": 159,
-      "phase": "capture",
-      "pid": 161176,
+      "current": "Cursed Metamorph - [Zaia]/Cursed Metamorph.ssc",
+      "position": 160,
+      "phase": "replay",
+      "pid": 185265,
       "process_matches": true,
       "passed": 0,
-      "pending": 10,
-      "processed": 10,
-      "last_log_lines": [],
+      "pending": 11,
+      "processed": 11,
+      "last_log_lines": [
+        "[28.0s] replaying every native gameplay frame: frame 3449/88404 (3.9%)",
+        "[30.0s] replaying every native gameplay frame: frame 3714/88404 (4.2%)",
+        "[32.0s] replaying every native gameplay frame: frame 3954/88404 (4.5%)"
+      ],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -94,6 +99,14 @@
         "last_phase": "replay",
         "source_simfile": "Crab Nicholson Extreme Sleepover/Crab Nicholson Extreme Sleepover.sm",
         "child_running": false
+      },
+      {
+        "job": "enabled-underlay-repair-v3",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0
       }
     ],
     "publisher_streams": [
@@ -131,15 +144,21 @@
         "record": "sweep-2026-10-12-empty-actor-second-repair.json",
         "fix_commit": "1b9cf5c9b",
         "finish_status": "bounded empty actor second repair replay complete"
+      },
+      {
+        "name": "enabled-underlay-repair",
+        "remote": "/home/parity/jobs/enabled-underlay-repair-v3",
+        "record": "sweep-2026-10-12-enabled-underlay-repairs.json",
+        "finish_status": "bounded enabled underlay repair replay complete"
       }
     ]
   },
   "counts_at_checkpoint": {
     "new_passed_fixtures": 2,
-    "new_pending_charts": 8,
-    "new_processed_sources": 10,
+    "new_pending_charts": 9,
+    "new_processed_sources": 11,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 343,
+    "unprocessed_sources": 342,
     "historical_pending_sources": 2,
     "historical_passed_sources": 146
   },
@@ -313,6 +332,20 @@
           "field": "command_query_count",
           "native": 210430,
           "deadsync": 210426
+        }
+      ]
+    },
+    {
+      "source_simfile": "Cursed 2/Cursed 2.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 206614,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 206658,
+          "deadsync": 206654
         }
       ]
     }
