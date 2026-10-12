@@ -1,0 +1,2570 @@
+{
+  "diagnostic_only": false,
+  "whole_song_parity_proven": true,
+  "archive_accepted": true,
+  "source_simfile": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\.tmp29xDIo\\song/chronic latecomer.ssc",
+  "native_trace": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\.tmp29xDIo\\trace/semantic.json",
+  "native_frames": 113771,
+  "replayed_frames": 113771,
+  "startup_scenes": 1,
+  "replayed_scenes": 1,
+  "selected_description": "DS FS",
+  "checked_stage_samples": 124,
+  "compared_stage_fields": 1364,
+  "mismatches": [],
+  "errors": [],
+  "lua_requests": [],
+  "native_transition_requests": [],
+  "lua_broadcasts": [],
+  "native_broadcasts": [],
+  "first_domain_navigation_seconds": 117.03385162353516,
+  "continued_after_domain_navigation": true,
+  "frames_after_domain_navigation": 2214,
+  "stage_observations": [
+    {
+      "phase": "screen-active",
+      "scene": 1,
+      "seconds": -1.9999773502349854,
+      "beat": -5.440439224243164,
+      "screen_seconds": 0.0,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": -1.9999773502349854,
+      "beat": -5.440439224243164,
+      "screen_seconds": 0.0,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": -0.9995691776275635,
+      "beat": -2.7393367290496826,
+      "screen_seconds": 1.0982166528701782,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 0.0002040816325461492,
+      "beat": -0.039948977530002594,
+      "screen_seconds": 2.0979864597320557,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 1.000861644744873,
+      "beat": 2.6618266105651855,
+      "screen_seconds": 3.098660707473755,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 2.0002946853637695,
+      "beat": 5.36029577255249,
+      "screen_seconds": 4.098099231719971,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 3.0004987716674805,
+      "beat": 8.060846328735352,
+      "screen_seconds": 5.098284721374512,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 4.00024938583374,
+      "beat": 10.760172843933105,
+      "screen_seconds": 6.0980610847473145,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 5.000226974487305,
+      "beat": 13.460113525390625,
+      "screen_seconds": 7.098038673400879,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 6.000135898590088,
+      "beat": 16.159868240356445,
+      "screen_seconds": 8.097947120666504,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 7.000181198120117,
+      "beat": 18.859989166259766,
+      "screen_seconds": 9.097968101501465,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 8.000385284423828,
+      "beat": 21.5605411529541,
+      "screen_seconds": 10.098136901855469,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 9.00045394897461,
+      "beat": 24.260725021362305,
+      "screen_seconds": 11.098223686218262,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 10.00065803527832,
+      "beat": 26.96127700805664,
+      "screen_seconds": 12.09840202331543,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 11.000022888183594,
+      "beat": 29.659561157226562,
+      "screen_seconds": 13.097797393798828,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 12.000589370727539,
+      "beat": 32.36109161376953,
+      "screen_seconds": 14.098343849182129,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 13.000067710876465,
+      "beat": 35.0596809387207,
+      "screen_seconds": 15.097810745239258,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 14.00045394897461,
+      "beat": 37.76072692871094,
+      "screen_seconds": 16.098180770874023,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 15.000113487243652,
+      "beat": 40.45980453491211,
+      "screen_seconds": 17.09779167175293,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 16.00033950805664,
+      "beat": 43.16041564941406,
+      "screen_seconds": 18.0980224609375,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 17.00020408630371,
+      "beat": 45.86005401611328,
+      "screen_seconds": 19.097919464111328,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 18.000022888183594,
+      "beat": 48.55956268310547,
+      "screen_seconds": 20.09771728515625,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 19.00013542175293,
+      "beat": 51.25986862182617,
+      "screen_seconds": 21.09769630432129,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 20.000431060791016,
+      "beat": 53.96066665649414,
+      "screen_seconds": 22.098188400268555,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 21.000022888183594,
+      "beat": 56.65956497192383,
+      "screen_seconds": 23.097742080688477,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 22.000295639038086,
+      "beat": 59.36030197143555,
+      "screen_seconds": 24.098024368286133,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 23.00013542175293,
+      "beat": 62.05986785888672,
+      "screen_seconds": 25.097898483276367,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 24.001497268676758,
+      "beat": 64.76354217529297,
+      "screen_seconds": 26.09925079345703,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 25.000022888183594,
+      "beat": 67.45956420898438,
+      "screen_seconds": 27.097787857055664,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 26.00006866455078,
+      "beat": 70.1596908569336,
+      "screen_seconds": 28.097837448120117,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 27.000431060791016,
+      "beat": 72.86066436767578,
+      "screen_seconds": 29.09819221496582,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 28.000158309936523,
+      "beat": 75.55992889404297,
+      "screen_seconds": 30.097923278808594,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 29.000181198120117,
+      "beat": 78.25999450683594,
+      "screen_seconds": 31.09795379638672,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 30.00006866455078,
+      "beat": 80.95968627929688,
+      "screen_seconds": 32.09782028198242,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 31.000295639038086,
+      "beat": 83.6603012084961,
+      "screen_seconds": 33.098045349121094,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 32.000545501708984,
+      "beat": 86.36097717285156,
+      "screen_seconds": 34.09828567504883,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 33.000022888183594,
+      "beat": 89.05956268310547,
+      "screen_seconds": 35.09776306152344,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 34.000362396240234,
+      "beat": 91.76048278808594,
+      "screen_seconds": 36.09804916381836,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 35.000247955322266,
+      "beat": 94.46017456054688,
+      "screen_seconds": 37.09790802001953,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 36.0004768371582,
+      "beat": 97.1607894897461,
+      "screen_seconds": 38.09813690185547,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 37.000633239746094,
+      "beat": 99.86121368408203,
+      "screen_seconds": 39.09829330444336,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 38.000160217285156,
+      "beat": 102.5599365234375,
+      "screen_seconds": 40.09775161743164,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 39.00033950805664,
+      "beat": 105.26042175292969,
+      "screen_seconds": 41.0980224609375,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 40.000160217285156,
+      "beat": 107.9599380493164,
+      "screen_seconds": 42.09772872924805,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 41.00271987915039,
+      "beat": 110.6668472290039,
+      "screen_seconds": 43.10026550292969,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 42.00033950805664,
+      "beat": 113.36042022705078,
+      "screen_seconds": 44.09790802001953,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 43.000633239746094,
+      "beat": 116.06121063232422,
+      "screen_seconds": 45.09816360473633,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 44.00052261352539,
+      "beat": 118.76091766357422,
+      "screen_seconds": 46.097965240478516,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 45.00004577636719,
+      "beat": 121.45962524414062,
+      "screen_seconds": 47.0975341796875,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 46.00238037109375,
+      "beat": 124.16593170166016,
+      "screen_seconds": 48.09986877441406,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 47.00056838989258,
+      "beat": 126.86103820800781,
+      "screen_seconds": 49.098052978515625,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 48.0004768371582,
+      "beat": 129.560791015625,
+      "screen_seconds": 50.097984313964844,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 49.00059127807617,
+      "beat": 132.26109313964844,
+      "screen_seconds": 51.09809494018555,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 50.00052261352539,
+      "beat": 134.96092224121094,
+      "screen_seconds": 52.0980110168457,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 51.00033950805664,
+      "beat": 137.66041564941406,
+      "screen_seconds": 53.0977897644043,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 52.00027084350586,
+      "beat": 140.3602294921875,
+      "screen_seconds": 54.09761428833008,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 53.000247955322266,
+      "beat": 143.0601806640625,
+      "screen_seconds": 55.09760665893555,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 54.000091552734375,
+      "beat": 145.75975036621094,
+      "screen_seconds": 56.09743118286133,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 55.00027084350586,
+      "beat": 148.46023559570312,
+      "screen_seconds": 57.097618103027344,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 56.000091552734375,
+      "beat": 151.1597442626953,
+      "screen_seconds": 58.09749221801758,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 57.00006866455078,
+      "beat": 153.8596954345703,
+      "screen_seconds": 59.097434997558594,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 58.00217819213867,
+      "beat": 156.5653839111328,
+      "screen_seconds": 60.09959030151367,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 59.00033950805664,
+      "beat": 159.2604217529297,
+      "screen_seconds": 61.09773635864258,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 60.00022506713867,
+      "beat": 161.96011352539062,
+      "screen_seconds": 62.097599029541016,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 61.00011444091797,
+      "beat": 164.65982055664062,
+      "screen_seconds": 63.09752655029297,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 62.0006103515625,
+      "beat": 167.36114501953125,
+      "screen_seconds": 64.09794616699219,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 63.00251770019531,
+      "beat": 170.06629943847656,
+      "screen_seconds": 65.09981536865234,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 64.00244903564453,
+      "beat": 172.76611328125,
+      "screen_seconds": 66.09976196289062,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 65.00337982177734,
+      "beat": 175.4686279296875,
+      "screen_seconds": 67.10073852539062,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 66.00480651855469,
+      "beat": 178.1724853515625,
+      "screen_seconds": 68.1021957397461,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 67.00067901611328,
+      "beat": 180.86134338378906,
+      "screen_seconds": 69.09807586669922,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 68.00308227539062,
+      "beat": 183.5678253173828,
+      "screen_seconds": 70.10050964355469,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 69.00072479248047,
+      "beat": 186.26145935058594,
+      "screen_seconds": 71.09818267822266,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 70.0003890991211,
+      "beat": 188.96055603027344,
+      "screen_seconds": 72.0977783203125,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 71.00349426269531,
+      "beat": 191.6689453125,
+      "screen_seconds": 73.10086059570312,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 72.00077056884766,
+      "beat": 194.36158752441406,
+      "screen_seconds": 74.09807586669922,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 73.00385284423828,
+      "beat": 197.0699005126953,
+      "screen_seconds": 75.1011734008789,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 74.00011444091797,
+      "beat": 199.7598114013672,
+      "screen_seconds": 76.09749603271484,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 75.00177001953125,
+      "beat": 202.4642791748047,
+      "screen_seconds": 77.09912109375,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 76.00360870361328,
+      "beat": 205.16925048828125,
+      "screen_seconds": 78.10087585449219,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 77.00183868408203,
+      "beat": 207.86447143554688,
+      "screen_seconds": 79.09915161132812,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 78.00086212158203,
+      "beat": 210.56182861328125,
+      "screen_seconds": 80.09811401367188,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 79.00210571289062,
+      "beat": 213.26519775390625,
+      "screen_seconds": 81.09937286376953,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 80.00244903564453,
+      "beat": 215.9661102294922,
+      "screen_seconds": 82.09964752197266,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 81.00240325927734,
+      "beat": 218.66600036621094,
+      "screen_seconds": 83.09957122802734,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 82.002197265625,
+      "beat": 221.3654327392578,
+      "screen_seconds": 84.09935760498047,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 83.00070190429688,
+      "beat": 224.0614013671875,
+      "screen_seconds": 85.09786224365234,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 84.00072479248047,
+      "beat": 226.76145935058594,
+      "screen_seconds": 86.09784698486328,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 85.00203704833984,
+      "beat": 229.4650115966797,
+      "screen_seconds": 87.09918212890625,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 86.00049591064453,
+      "beat": 232.1608428955078,
+      "screen_seconds": 88.09764862060547,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 87.00627899169922,
+      "beat": 234.87646484375,
+      "screen_seconds": 89.1034164428711,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 88.00016021728516,
+      "beat": 237.5599365234375,
+      "screen_seconds": 90.09730529785156,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 89.0000228881836,
+      "beat": 240.2595672607422,
+      "screen_seconds": 91.09709930419922,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 90.00118255615234,
+      "beat": 242.9626922607422,
+      "screen_seconds": 92.09827423095703,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 91.0006103515625,
+      "beat": 245.66114807128906,
+      "screen_seconds": 93.0976791381836,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 92.00029754638672,
+      "beat": 248.3603057861328,
+      "screen_seconds": 94.0973129272461,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 93.0019760131836,
+      "beat": 251.06483459472656,
+      "screen_seconds": 95.09895324707031,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 94.00154113769531,
+      "beat": 253.763671875,
+      "screen_seconds": 96.09854125976562,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 95.00042724609375,
+      "beat": 256.4606628417969,
+      "screen_seconds": 97.0974349975586,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 96.00247192382812,
+      "beat": 259.1661682128906,
+      "screen_seconds": 98.09951782226562,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 97.00079345703125,
+      "beat": 261.8616638183594,
+      "screen_seconds": 99.09783172607422,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 98.0025863647461,
+      "beat": 264.5664978027344,
+      "screen_seconds": 100.09955596923828,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 99.00212860107422,
+      "beat": 267.2652587890625,
+      "screen_seconds": 101.09910583496094,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 100.00009155273438,
+      "beat": 269.9597473144531,
+      "screen_seconds": 102.09712219238281,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 101.00029754638672,
+      "beat": 272.6603088378906,
+      "screen_seconds": 103.09738159179688,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 102.0003433227539,
+      "beat": 275.3604431152344,
+      "screen_seconds": 104.09745025634766,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 103.00086212158203,
+      "beat": 278.06182861328125,
+      "screen_seconds": 105.09799194335938,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 104.00174713134766,
+      "beat": 280.76422119140625,
+      "screen_seconds": 106.098876953125,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 105.00083923339844,
+      "beat": 283.4617614746094,
+      "screen_seconds": 107.09795379638672,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 106.00215148925781,
+      "beat": 286.1653137207031,
+      "screen_seconds": 108.09927368164062,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 107.00238037109375,
+      "beat": 288.8659362792969,
+      "screen_seconds": 109.09957885742188,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 108.0000228881836,
+      "beat": 291.5595703125,
+      "screen_seconds": 110.09716033935547,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 109.00294494628906,
+      "beat": 294.2674560546875,
+      "screen_seconds": 111.10011291503906,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 110.00163269042969,
+      "beat": 296.96392822265625,
+      "screen_seconds": 112.0987548828125,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 111.00144958496094,
+      "beat": 299.6634216308594,
+      "screen_seconds": 113.09855651855469,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 112.00163269042969,
+      "beat": 302.3639221191406,
+      "screen_seconds": 114.09872436523438,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 113.00144958496094,
+      "beat": 305.06341552734375,
+      "screen_seconds": 115.09849548339844,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 114.00133514404297,
+      "beat": 307.76312255859375,
+      "screen_seconds": 116.09837341308594,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 115.0003890991211,
+      "beat": 310.4605712890625,
+      "screen_seconds": 117.09744262695312,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 116.00088500976562,
+      "beat": 313.1618957519531,
+      "screen_seconds": 118.09794616699219,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 117.0003662109375,
+      "beat": 315.8605041503906,
+      "screen_seconds": 119.09740447998047,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": false,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": 118.00186157226562,
+      "beat": 318.5645446777344,
+      "screen_seconds": 120.09901428222656,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": true,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "screen-end",
+      "scene": 1,
+      "seconds": 118.53535461425781,
+      "beat": 320.0049743652344,
+      "screen_seconds": 120.63250732421875,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": true,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    },
+    {
+      "phase": "gameplay-exit",
+      "scene": 1,
+      "seconds": 118.53535461425781,
+      "beat": 320.0049743652344,
+      "screen_seconds": 120.63250732421875,
+      "player": {
+        "possible": 3915,
+        "current_possible": 0,
+        "actual": 0,
+        "misses": 0,
+        "w1": 0,
+        "w2": 0,
+        "failed": true,
+        "life_latest": 0.5,
+        "difficulty": "Difficulty_Challenge",
+        "description": "DS FS",
+        "meter": 12
+      }
+    }
+  ],
+  "broadcast_params_compared": true,
+  "command_queries": {
+    "compared": true,
+    "native_count": 65193,
+    "actual_count": 65193
+  },
+  "pending_coverage": [],
+  "coverage": {
+    "scope": "captured-song-lua-context",
+    "observed_song_operations": [
+      "Actor.GetName",
+      "Actor.effectmagnitude",
+      "Actor.queuecommand",
+      "Actor.sleep",
+      "Actor.vibrate",
+      "Actor.x",
+      "Actor.y",
+      "Actor.zoomx",
+      "ActorFrame.GetChild",
+      "GameState.GetCurrentSong",
+      "GameState.GetCurrentSteps",
+      "GameState.GetCurrentStyle",
+      "GameState.GetPlayerState",
+      "GameState.GetSongBeat",
+      "GameState.IsPlayerEnabled",
+      "PlayerOptions.Boost",
+      "PlayerOptions.ConfusionOffset",
+      "PlayerOptions.Reverse",
+      "PlayerOptions.Tiny1",
+      "PlayerOptions.Tiny2",
+      "PlayerOptions.Tiny3",
+      "PlayerOptions.Tiny4",
+      "PlayerState.GetPlayerOptions",
+      "PrefsManager.GetPreference",
+      "RageDisplay.SupportsRenderToTexture",
+      "ScreenManager.GetTopScreen",
+      "Song.GetSongDir",
+      "Steps.GetStepsType",
+      "Style.GetName",
+      "command.begin",
+      "command.end"
+    ],
+    "uncompared_song_operations": [],
+    "nested_theme_operations": [
+      "GameState.GetSongPosition"
+    ],
+    "pending": [],
+    "global_pending": [
+      "full theme stage commitment and history",
+      "unqueried score/alive-time observer fields",
+      "additional game/style/input/course contexts",
+      "production live mode activation"
+    ]
+  },
+  "summary_only": true,
+  "full_report": {
+    "path": "save/song-lua-validation/pass208/top147-judgment-tree-full-v1.json",
+    "sha256": "a6ef3c3eb8a56a51e138aa2c03b3f9e64e0011d6e98ffb5f4bcaa1a3514543a6",
+    "bytes": 67802768,
+    "omitted_call_arrays": {
+      "actual": 65193,
+      "native": 65193
+    }
+  },
+  "whole_render_parity_proven": false
+}

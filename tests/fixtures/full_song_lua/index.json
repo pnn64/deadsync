@@ -1903,12 +1903,10 @@
     {
       "title": "遅刻魔",
       "source_simfile": "chronic latecomer/chronic latecomer.ssc",
-      "harness_version": "0.1.0",
-      "archive": "48f79d02f239cb0e183a7dbe47877bbf10bbbcf0178354896b35d428ec7b96ce.tar.zst",
-      "sha256": "48f79d02f239cb0e183a7dbe47877bbf10bbbcf0178354896b35d428ec7b96ce",
-      "compressed_bytes": 82679,
-      "uncompressed_sha256": "f7a55047bc34291b618de7cae4926455febd4a1a9cfa27dd4dcd7121b880c3e9",
-      "compression_level": 22,
+      "harness_version": "0.1.80",
+      "archive": "cbfe9d3319b3bb86aaacf56961ba890ba6fc6d245fb7e8a7b832c316a5ee9150.tar.zst",
+      "sha256": "cbfe9d3319b3bb86aaacf56961ba890ba6fc6d245fb7e8a7b832c316a5ee9150",
+      "compressed_bytes": 8076988,
       "aliases": [
         "88b21a12ab1cb76e3a791287b2c4f9b6cd4d4385bbef0253e9cf5a8d9102d28f.tar.zst"
       ]

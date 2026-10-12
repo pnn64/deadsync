@@ -245,7 +245,7 @@
   "tests/fixtures/itgmania-song-archives/8681a0e953f63cf695cdfa18766f9e15d63e75a018b4d8ce0e0d55cbe5b24e24.tar.zst": "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305.tar.zst",
   "tests/fixtures/itgmania-song-archives/86d3bf35224f188e4d69eb82660cb69f8c98034820914c381e818fb4905976f0.tar.zst": "8a0eeda7135a95a5d2527d948106a15420b8510a4f709d21d2888e83cfcc87f1.tar.zst",
   "tests/fixtures/itgmania-song-archives/88ac8213859be35360ed8050f804ac9969c84d3a8274af6ca46c9f978c64eb7d.tar.zst": "ff63ea99da9a8ecf68671e3805934bfbac83ff446af63bdc0a624dc0c50d74a3.tar.zst",
-  "tests/fixtures/itgmania-song-archives/88b21a12ab1cb76e3a791287b2c4f9b6cd4d4385bbef0253e9cf5a8d9102d28f.tar.zst": "48f79d02f239cb0e183a7dbe47877bbf10bbbcf0178354896b35d428ec7b96ce.tar.zst",
+  "tests/fixtures/itgmania-song-archives/88b21a12ab1cb76e3a791287b2c4f9b6cd4d4385bbef0253e9cf5a8d9102d28f.tar.zst": "cbfe9d3319b3bb86aaacf56961ba890ba6fc6d245fb7e8a7b832c316a5ee9150.tar.zst",
   "tests/fixtures/itgmania-song-archives/88b3886c8a9ad27b1355491af6fa15ddd0f2ef2d447f84d73c83f011a5f4b907.tar.zst": "ec6585b656c257900d6681251dab8a34659cb18d5ab5e8332b2aba51a11f4554.tar.zst",
   "tests/fixtures/itgmania-song-archives/89d2b5a1e0a3941f641d4b944721b985f130121c460b1bdba19032dc1d124406.tar.zst": "a6ff684844f24363390393b8107b2b8ea06089966c8e1c5e00c4188920cbadd4.tar.zst",
   "tests/fixtures/itgmania-song-archives/8a164d5918672941a2eb26014f683a98975b55be8aad1b7c37ee293f93493418.tar.zst": "f5b651e7284a4fe72f527a7a9cc3d221454203dde7aeb33ed2b087322dc92e87.tar.zst",
@@ -656,5 +656,7 @@
   "tests/fixtures/itgmania-song-lua-micro/zero-fov.json.zst": "8188195117862e8f68a03c77e19dd4b234ec99900a96399c6cc356d7436a94ff.json.zst",
   "tests/fixtures/itgmania-song-lua-micro/zero-fov.provenance.json.zst": "1f9409d2b4c8610cb5ce97ec630248f9a3b6c0e60bb1be201c1db0ed6c23a78e.json.zst",
   "tests/fixtures/full_song_lua/22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738.tar.zst": "22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738.tar.zst",
-  "tests/fixtures/full_song_lua/4cb5c12a32d6dec3aaff34052491970ef7857c9f6caacbe1ead0bc858d4a9ac4.tar.zst": "4cb5c12a32d6dec3aaff34052491970ef7857c9f6caacbe1ead0bc858d4a9ac4.tar.zst"
+  "tests/fixtures/full_song_lua/4cb5c12a32d6dec3aaff34052491970ef7857c9f6caacbe1ead0bc858d4a9ac4.tar.zst": "4cb5c12a32d6dec3aaff34052491970ef7857c9f6caacbe1ead0bc858d4a9ac4.tar.zst",
+  "tests/fixtures/full_song_lua/48f79d02f239cb0e183a7dbe47877bbf10bbbcf0178354896b35d428ec7b96ce.tar.zst": "48f79d02f239cb0e183a7dbe47877bbf10bbbcf0178354896b35d428ec7b96ce.tar.zst",
+  "tests/fixtures/full_song_lua/cbfe9d3319b3bb86aaacf56961ba890ba6fc6d245fb7e8a7b832c316a5ee9150.tar.zst": "cbfe9d3319b3bb86aaacf56961ba890ba6fc6d245fb7e8a7b832c316a5ee9150.tar.zst"
 }

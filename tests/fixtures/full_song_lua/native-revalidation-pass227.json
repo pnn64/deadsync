@@ -1,0 +1,177 @@
+{
+  "pass": 227,
+  "previous_record": "native-revalidation-pass226.json",
+  "previous_record_sha256": "36efcbfac7d80d9830efe0c57a27644c90ddc9276a44a6fc85162838fd92cc7a",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "canonical_positions_passed": [
+    147
+  ],
+  "next_position": 148,
+  "source_simfile": "chronic latecomer/chronic latecomer.ssc",
+  "archive": "cbfe9d3319b3bb86aaacf56961ba890ba6fc6d245fb7e8a7b832c316a5ee9150.tar.zst",
+  "archive_sha256": "cbfe9d3319b3bb86aaacf56961ba890ba6fc6d245fb7e8a7b832c316a5ee9150",
+  "compressed_bytes": 8076988,
+  "acceptance": "complete captured native full-song autoplay gameplay context",
+  "full_song_timeline_coverage": true,
+  "autoplay_context_pending": false,
+  "retained_original_archive": {
+    "title": "遅刻魔",
+    "source_simfile": "chronic latecomer/chronic latecomer.ssc",
+    "harness_version": "0.1.0",
+    "archive": "48f79d02f239cb0e183a7dbe47877bbf10bbbcf0178354896b35d428ec7b96ce.tar.zst",
+    "sha256": "48f79d02f239cb0e183a7dbe47877bbf10bbbcf0178354896b35d428ec7b96ce",
+    "compressed_bytes": 82679,
+    "uncompressed_sha256": "f7a55047bc34291b618de7cae4926455febd4a1a9cfa27dd4dcd7121b880c3e9",
+    "compression_level": 22,
+    "aliases": [
+      "88b21a12ab1cb76e3a791287b2c4f9b6cd4d4385bbef0253e9cf5a8d9102d28f.tar.zst"
+    ]
+  },
+  "retained_failure_context": "4cb5c12a32d6dec3aaff34052491970ef7857c9f6caacbe1ead0bc858d4a9ac4.tar.zst",
+  "updated_legacy_aliases": [
+    "tests/fixtures/itgmania-song-archives/88b21a12ab1cb76e3a791287b2c4f9b6cd4d4385bbef0253e9cf5a8d9102d28f.tar.zst"
+  ],
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_simply_love_revision": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+  "replay_receipt": {
+    "pid": 9936,
+    "source_commit": "53e9126ddde199917c9f7a9e0eb6bbdbbabaece7",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass208\\top147-judgment-tree-replay-v1.exe",
+      "--archive",
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass357\\top147-native-c-hooks-autoplay-v2-relative-v3-archive\\cbfe9d3319b3bb86aaacf56961ba890ba6fc6d245fb7e8a7b832c316a5ee9150.tar.zst",
+      "--report",
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass208\\top147-judgment-tree-full-v1.json"
+    ],
+    "build_receipt": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\top147-judgment-tree-replay-build-v1.json",
+    "build_receipt_sha256": "aebd93938f94f97a5da5a02a418bbc664b7ff9406f385b8c767e9b1c9d35b6eb",
+    "binary_sha256": "20a35a4c19406c4b96d510dd11c33ed18f22853b364d14f7fbd9bc45dd7ec103",
+    "archive_sha256": "cbfe9d3319b3bb86aaacf56961ba890ba6fc6d245fb7e8a7b832c316a5ee9150",
+    "started_utc": "2026-10-12T05:52:17.615192+00:00",
+    "exit_code": 0,
+    "seconds": 377.58427649969235,
+    "artifact_query_stdout_sha256": "e59dc7767c0529910aca4ecd00dcd3edf75b9d496a4cc337d5f6f2e820a2d347",
+    "archive_proof": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass357\\top147-native-c-hooks-autoplay-v2-archive-proof-v3.json",
+    "archive_proof_sha256": "15cb3574ba1036d6287ebc44ebad74f0ae92bae90f01d7540dfea7007b3eb6d5",
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass208\\top147-judgment-tree-full-v1.log",
+    "log_sha256": "102d5409cc359cdf85fbf7131bec5e85674a251ef3c4d4129af3713a6aa947e9",
+    "report": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass208\\top147-judgment-tree-full-v1.json",
+    "report_sha256": "a6ef3c3eb8a56a51e138aa2c03b3f9e64e0011d6e98ffb5f4bcaa1a3514543a6",
+    "source_unchanged": true,
+    "scope": "complete captured full-song autoplay context",
+    "summary": {
+      "native_frames": 113771,
+      "replayed_frames": 113771,
+      "compared_stage_fields": 1364,
+      "checked_stage_samples": 124,
+      "errors": [],
+      "pending_coverage": [],
+      "archive_accepted": true
+    },
+    "mismatch_count": 0,
+    "first_mismatches": [],
+    "ordered_calls": {
+      "compared": true,
+      "native_count": 65193,
+      "actual_count": 65193
+    }
+  },
+  "replay_receipt_sha256": "f4832f1a374bbccac88317787aedde519330c4ca71df7d05bd810e058e49cad7",
+  "replay_report": "native-revalidation-chronic-autoplay-replay.json",
+  "replay_report_sha256": "6c754e8fcd7ae3be24001fcea56f3659b66a488910746b0f62fc1b0e7dc2f1de",
+  "full_replay_report_sha256": "a6ef3c3eb8a56a51e138aa2c03b3f9e64e0011d6e98ffb5f4bcaa1a3514543a6",
+  "coverage": {
+    "scope": "captured-song-lua-context",
+    "observed_song_operations": [
+      "Actor.GetName",
+      "Actor.effectmagnitude",
+      "Actor.queuecommand",
+      "Actor.sleep",
+      "Actor.vibrate",
+      "Actor.x",
+      "Actor.y",
+      "Actor.zoomx",
+      "ActorFrame.GetChild",
+      "GameState.GetCurrentSong",
+      "GameState.GetCurrentSteps",
+      "GameState.GetCurrentStyle",
+      "GameState.GetPlayerState",
+      "GameState.GetSongBeat",
+      "GameState.IsPlayerEnabled",
+      "PlayerOptions.Boost",
+      "PlayerOptions.ConfusionOffset",
+      "PlayerOptions.Reverse",
+      "PlayerOptions.Tiny1",
+      "PlayerOptions.Tiny2",
+      "PlayerOptions.Tiny3",
+      "PlayerOptions.Tiny4",
+      "PlayerState.GetPlayerOptions",
+      "PrefsManager.GetPreference",
+      "RageDisplay.SupportsRenderToTexture",
+      "ScreenManager.GetTopScreen",
+      "Song.GetSongDir",
+      "Steps.GetStepsType",
+      "Style.GetName",
+      "command.begin",
+      "command.end"
+    ],
+    "uncompared_song_operations": [],
+    "nested_theme_operations": [
+      "GameState.GetSongPosition"
+    ],
+    "pending": [],
+    "global_pending": [
+      "full theme stage commitment and history",
+      "unqueried score/alive-time observer fields",
+      "additional game/style/input/course contexts",
+      "production live mode activation"
+    ]
+  },
+  "archive_integrity_regression": {
+    "status": "passed for accepted native full-song autoplay archive",
+    "receipt": "save/song-lua-validation/pass188/top147-autoplay-accepted-integrity-v1.json",
+    "receipt_sha256": "5d2361b4e0b16f5ba8d0b049916ed890478fda0aea89d0034a4f1a43d1f55486",
+    "source_commit": "53e9126ddde199917c9f7a9e0eb6bbdbbabaece7",
+    "source_pending_commit": true,
+    "command": [
+      "cargo",
+      "test",
+      "--test",
+      "song_lua_itgmania_semantic_parity",
+      "--config",
+      "profile.dev.package.deadsync-gameplay.opt-level=2",
+      "--config",
+      "profile.dev.package.deadsync-theme-simply-love.opt-level=2",
+      "--config",
+      "profile.dev.package.deadsync-song-lua.opt-level=2",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--target-dir",
+      "C:\\GitHub\\itgmania-harness\\target\\deadsync-pass188",
+      "--config",
+      "profile.dev.debug=0",
+      "--config",
+      "profile.dev.incremental=false",
+      "--",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "seconds": 32.36116970004514,
+    "results": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 309 filtered out; finished in 6.57s"
+    ],
+    "log_sha256": "4579035ae9301cbcba6826aa79d0fadaa2acb9e13793349fa6cc689dbfdf5fa4",
+    "environment": {
+      "DEADSYNC_SONG_ARCHIVE": "cbfe9d3319b3bb86aaacf56961ba890ba6fc6d245fb7e8a7b832c316a5ee9150"
+    }
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "remaining_scope": "Every original and historical corpus context, all broader parity gates, render/resources, and the two baseline evaluator failures remain active."
+}
