@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-12T23:16:55Z",
+  "updated_utc": "2026-10-12T23:38:26Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -11,9 +11,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 158,
-    "pending": 17,
-    "unprocessed": 326
+    "passed": 161,
+    "pending": 20,
+    "unprocessed": 320
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1491,9 +1491,9 @@
       "position": 166,
       "source_simfile": "Datura -paroxysm-/Datura -paroxysm-.ssc",
       "simfile_sha256": "a63214b25003d7318bca31d85335900b3c0ff6d0eb7567d42a23de22f66bbee4",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-screen-layer-tweens-repairs.json"
     },
     {
       "position": 167,
@@ -1508,8 +1508,8 @@
       "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
       "simfile_sha256": "bf410851d8e4baf4478713fd48967877c33e1f7a0310b33917d42ac0dfac79be",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-definition-concat-repairs.json"
     },
     {
       "position": 169,
@@ -1547,27 +1547,33 @@
       "position": 173,
       "source_simfile": "Dig Dug Theme/Dig Dug Theme.ssc",
       "simfile_sha256": "fe5887b2e78aeb3fa19e3e47b35571af105eec363e0c06e56999f4ef9eacac1b",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 174,
       "source_simfile": "Dimmadome/doug dimmadome owner of the dimmsdale dimmadome.sm",
       "simfile_sha256": "e7ad12886de72b1939cb18e6dd586a14d0807977dd428abe5b0347be6b5dcf41",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-background-effect-owner-repairs.json"
     },
     {
       "position": 175,
       "source_simfile": "Distraction/sm.sm",
       "simfile_sha256": "8c139f67d730148473c2ef10a11c4be48b47f813118df80c153607c1d27c9f24",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 176,
       "source_simfile": "Do the Mario/DoTheMario.ssc",
       "simfile_sha256": "ace2cdc3c9f05db78b6fc00695724a97a41f26ea393ad1a8e17aa6df6dafbe00",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 177,
@@ -1587,7 +1593,9 @@
       "position": 179,
       "source_simfile": "Dreams Bloom After School/Dreams Bloom After School.ssc",
       "simfile_sha256": "2004c1803ec2d989574fd554ab8cf755f58b8b66dd44ebaad4aa85a6f516cd8a",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 180,
@@ -1613,7 +1621,9 @@
       "position": 183,
       "source_simfile": "edamame (except bbno$ produced it under C&A)/edamame.ssc",
       "simfile_sha256": "656fcee452061709ccc30f9cc61384e93fdd4e46db4b3b7b7ec395e3aa6172d3",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 184,
@@ -1631,7 +1641,9 @@
       "position": 186,
       "source_simfile": "Fiji (Lange Remix)/Fiji (Lange Remix).ssc",
       "simfile_sha256": "0f350ad4c25182026fab6a7dccd41351859949cd35dbd69ca98a0e0e163b9ebd",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 187,
