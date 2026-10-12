@@ -2094,15 +2094,12 @@
     {
       "title": "Dance Robot",
       "source_simfile": "Dance Robot/dancerobot-fakemines.ssc",
-      "harness_version": "0.1.0",
-      "archive": "1822a0b03f7477c39834e3ba0ae850cd25e0de3339c3a58baed178f086d0897e.tar.zst",
-      "sha256": "1822a0b03f7477c39834e3ba0ae850cd25e0de3339c3a58baed178f086d0897e",
-      "compressed_bytes": 86344,
-      "uncompressed_sha256": "f9c7121fb8622f8a0418c698ee69033c99838395926e081a78485933466671d4",
-      "compression_level": 22,
-      "aliases": [
-        "9014b3c43470b91e606f2cfe75109084bcc1fad5a3df5e073e4dd6e0a97b932c.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "eb3c5f293f8811925e9030fd4df4fb71aab2e29b1fcac5820158594e4a525d0f.tar.zst",
+      "sha256": "eb3c5f293f8811925e9030fd4df4fb71aab2e29b1fcac5820158594e4a525d0f",
+      "compressed_bytes": 18518045,
+      "uncompressed_sha256": "845e34f7336ce85325b3f24854544c8cb09ce2a43e7ce0fa10b909f676d556b6",
+      "aliases": []
     },
     {
       "title": "Data Loss",

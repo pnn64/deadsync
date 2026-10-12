@@ -1993,6 +1993,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 163,
+      "source_simfile": "Dance Robot/dancerobot-fakemines.ssc",
+      "simfile_sha256": "bdbb20dc6f518c00cf27a912b69919c7e556edf52731eaed9962a7b2f7754252",
+      "retained_original_archive": "1822a0b03f7477c39834e3ba0ae850cd25e0de3339c3a58baed178f086d0897e.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "534b4cd67215ac2b122d6b2bd2434917922c26a7cc2be5e1891dbd0132ccd3d8",
+      "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
+      "fix_commit": "c325377bd / harness 78d4a1e",
+      "build_proof": "/home/parity/jobs/background-entry-ownership-build-v1/proof.json",
+      "capture_seconds": 204.74765163999837,
+      "trace_sha256": "6624b049f4dd199c86f80991d3605b7f8e6ed9180f7d8f3fde52e62db015bbae",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-163/candidates/845e34f7336ce85325b3f24854544c8cb09ce2a43e7ce0fa10b909f676d556b6.tar",
+      "replay_exit": 0,
+      "replay_seconds": 485.2314128009966,
+      "candidate_sha256": "845e34f7336ce85325b3f24854544c8cb09ce2a43e7ce0fa10b909f676d556b6",
+      "native_frames": 65583,
+      "replayed_frames": 65583,
+      "compared_stage_fields": 1617,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "655e0f928993b60478e8dce6ec43dc377480c3d53249b98d6cc708171e8446b2",
+      "archive": "eb3c5f293f8811925e9030fd4df4fb71aab2e29b1fcac5820158594e4a525d0f.tar.zst",
+      "archive_sha256": "eb3c5f293f8811925e9030fd4df4fb71aab2e29b1fcac5820158594e4a525d0f",
+      "compressed_bytes": 18518045,
+      "pack_seconds": 20.44931363899377,
+      "harness_version": "0.1.80",
+      "title": "Dance Robot",
+      "retained_original_entry": {
+        "title": "Dance Robot",
+        "source_simfile": "Dance Robot/dancerobot-fakemines.ssc",
+        "harness_version": "0.1.0",
+        "archive": "1822a0b03f7477c39834e3ba0ae850cd25e0de3339c3a58baed178f086d0897e.tar.zst",
+        "sha256": "1822a0b03f7477c39834e3ba0ae850cd25e0de3339c3a58baed178f086d0897e",
+        "compressed_bytes": 86344,
+        "uncompressed_sha256": "f9c7121fb8622f8a0418c698ee69033c99838395926e081a78485933466671d4",
+        "compression_level": 22,
+        "aliases": [
+          "9014b3c43470b91e606f2cfe75109084bcc1fad5a3df5e073e4dd6e0a97b932c.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -2016,9 +2066,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "d725d08e09cf2645e39e539bc84f17e7dcdc282d024a53d064647aacacc96ed7",
+  "binary_sha256": "534b4cd67215ac2b122d6b2bd2434917922c26a7cc2be5e1891dbd0132ccd3d8",
   "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
-  "passed_fixtures": 2,
+  "passed_fixtures": 3,
   "pending_charts": 12,
-  "processed_charts": 14
+  "processed_charts": 15
 }
