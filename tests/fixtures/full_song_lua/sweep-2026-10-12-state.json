@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-12T23:06:48Z",
-  "previous_goal_turn": "progress: Delayed Friend Request SM and Daywalker full fixtures saved and committed; harness ActorDef concatenation tracing fixed and committed, 12 Windows and Linux runtime tests plus three native lifecycle controls passed; Deceive repair attempt 1 running; outro option rebuild fixed and committed, Windows regression plus 22 Linux live tests and 15 native replay controls passed; Datamania attempt 1 reuses its uncompressed capture; screen-owned layer tween advancement fixed and committed, Windows regression passed and Linux controls building; Datura attempt 1 waits for that verified build and reuses its capture; all three original queues and the single publisher remain active",
+  "updated_utc": "2026-10-12T23:16:53Z",
+  "previous_goal_turn": "progress: Daywalker, Delayed Friend Request SSC and Datamania full fixtures saved and committed; Datamania attempt 1 reused its byte-identical capture and passed all 65013 frames with zero mismatches/errors; harness ActorDef concatenation tracing fixed and committed, 12 Windows and Linux runtime tests plus three native lifecycle controls passed; Deceive repair attempt 1 running; outro option rebuild fixed and committed, Windows regression plus 22 Linux live tests and 15 native replay controls passed; screen-owned layer tween advancement fixed and committed with a correction retaining the single background update path, all 23 Windows and Linux live tests plus 15 native replay controls passed; Datura attempt 1 now replays its byte-identical capture; Dimmadome instantiated effect-wrapper failure diagnosed from local sources and neutral factory data; all three original queues and the single publisher remain active",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "b6fb4bff28491dfb433c6da9f765213749e5f6ea",
+      "deadsync": "5e6a9136d5dce032fcbcb62ebb10f074d74b3e8f",
       "itgmania_harness": "55299c5cb59cc4bc0d3fb106b9e21bfebcebe308"
     }
   },
@@ -27,8 +27,8 @@
     "background_entry_ownership": "native background child containers and foreground entry offset regression passed; all 15 Linux replay controls passed; Cuphead attempt 2 reuses its original capture and skips if attempt 1 passed",
     "background_activation": "startup clock regression passed on Windows; 21 live-scene tests and 15 native replay controls passed on Linux; RUNWAY attempt 1 reuses its uncompressed capture; committed as 375a96e85",
     "definition_concat_capture": "committed as harness 55299c5; 12 runtime tests passed on Windows and Linux; composed definition, foreground and reload native controls passed; Deceive capture repair attempt 1 running; sweep-2026-10-12-definition-concat-build.json",
-    "outro_option_rebuild": "committed as df8437373; Windows regression passed; 22 Linux live tests and 15 native replay controls passed; Datamania attempt 1 reuses its uncompressed capture; sweep-2026-10-12-outro-options-build.json",
-    "screen_layer_tweens": "committed as 25908229a; Windows regression passed; Linux controls building; Datura attempt 1 waits for a verified build and reuses its uncompressed capture",
+    "outro_option_rebuild": "committed as df8437373; Windows regression passed; 22 Linux live tests and 15 native replay controls passed; Datamania attempt 1 passed all 65013 frames and was saved as 41602de40; sweep-2026-10-12-outro-options-build.json",
+    "screen_layer_tweens": "committed as 25908229a plus d236f305c; first build caught and retained two duplicate background update control failures before any chart replay; corrected build passed all 23 Windows and Linux live tests plus 15 native replay controls; Datura attempt 1 now replays its unchanged capture; sweep-2026-10-12-screen-layer-tweens-build.json",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved"
   },
   "corpus_transfer": {
@@ -45,13 +45,17 @@
       "status": "running",
       "current": "Dig Dug Theme/Dig Dug Theme.ssc",
       "position": 173,
-      "phase": "capture",
-      "pid": 467842,
+      "phase": "replay",
+      "pid": 478024,
       "process_matches": true,
       "passed": 6,
       "pending": 14,
       "processed": 20,
-      "last_log_lines": [],
+      "last_log_lines": [
+        "[562.1s] replaying every native gameplay frame: frame 96461/149043 (64.7%)",
+        "[564.1s] replaying every native gameplay frame: frame 96784/149043 (64.9%)",
+        "[566.1s] replaying every native gameplay frame: frame 97135/149043 (65.2%)"
+      ],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -60,6 +64,7 @@
     "build_transition": "tests/fixtures/full_song_lua/sweep-2026-10-12-build-transition.json",
     "source_scope_audit": "tests/fixtures/full_song_lua/sweep-2026-10-12-original-scope.json",
     "cursed_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-cursed-screen-children-diagnosis.json",
+    "dimmadome_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-dimmadome-background-diagnosis.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
       {
@@ -178,12 +183,12 @@
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
-        "pending": 4,
-        "processed": 4,
-        "last_phase": "replay",
-        "source_simfile": "E2/E.sm",
+        "pending": 5,
+        "processed": 5,
+        "last_phase": "capture",
+        "source_simfile": "edamame (except bbno$ produced it under C&A)/edamame.ssc",
         "child_running": true,
-        "position": 180
+        "position": 183
       },
       {
         "job": "chart-sweep-parallel-v4-2",
@@ -211,14 +216,14 @@
       },
       {
         "job": "outro-options-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "Datamania (tpz Overheat Remix)/Datamania (tpz Overheat Remix).ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "screen-layer-tweens-repair-v1",
@@ -226,7 +231,10 @@
         "supervisor_running": true,
         "passed": 0,
         "pending": 0,
-        "processed": 0
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Datura -paroxysm-/Datura -paroxysm-.ssc",
+        "child_running": true
       }
     ],
     "publisher_streams": [
@@ -345,11 +353,11 @@
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 10,
+    "new_passed_fixtures": 11,
     "new_pending_charts": 16,
-    "new_processed_sources": 26,
+    "new_processed_sources": 27,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 327,
+    "unprocessed_sources": 326,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -590,69 +598,6 @@
       "first_mismatch": []
     },
     {
-      "source_simfile": "Datamania (tpz Overheat Remix)/Datamania (tpz Overheat Remix).ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 1,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "player-state:PlayerNumber_P1/options:ModsLevel_Song",
-            "args": [
-              0,
-              1000
-            ],
-            "beat": 368.5520324707031,
-            "caller": {
-              "line": 105,
-              "source": "song:/lua/mods.lua",
-              "tail_call": false
-            },
-            "command": "UpdateCommand",
-            "definition_id": "def-0003",
-            "detail": {
-              "results": [
-                0,
-                1
-              ]
-            },
-            "kind": "modifier",
-            "line": 105,
-            "operation": "PlayerOptions.Reverse",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 132.05398559570312,
-            "seq": 232840,
-            "source": "song:/lua/mods.lua",
-            "results": [
-              0,
-              1
-            ]
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "modifier",
-            "operation": "PlayerOptions.Reverse",
-            "source": "song:/lua/mods.lua",
-            "line": 105,
-            "phase": "callback",
-            "beat": 368.5520324707031,
-            "seconds": 132.05398559570312,
-            "args": [
-              0,
-              1000
-            ],
-            "results": [
-              0,
-              1000
-            ]
-          }
-        }
-      ]
-    },
-    {
       "source_simfile": "Datura -paroxysm-/Datura -paroxysm-.ssc",
       "repair_attempts": 0,
       "failure": null,
@@ -748,6 +693,20 @@
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
+    },
+    {
+      "source_simfile": "E2/E.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 269809,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 269932,
+          "deadsync": 359826
+        }
+      ]
     },
     {
       "source_simfile": "Delightful Day/Delightful Day.ssc",

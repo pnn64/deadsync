@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-12T23:06:15Z",
+  "updated_utc": "2026-10-12T23:16:55Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -11,9 +11,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 157,
+    "passed": 158,
     "pending": 17,
-    "unprocessed": 327
+    "unprocessed": 326
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1483,9 +1483,9 @@
       "position": 165,
       "source_simfile": "Datamania (tpz Overheat Remix)/Datamania (tpz Overheat Remix).ssc",
       "simfile_sha256": "f00a488fe36e5b9ce8987d9dcbc462311008ad02f8d70b860138a5523f6fa7e3",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-outro-options-repairs.json"
     },
     {
       "position": 166,
@@ -1593,7 +1593,9 @@
       "position": 180,
       "source_simfile": "E2/E.sm",
       "simfile_sha256": "b2e21515ee37ecb1864d13ce2b81681163e3e2b50b74ba25b1f41e0674c2af1b",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 181,
