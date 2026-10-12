@@ -2317,15 +2317,12 @@
     {
       "title": "edamame",
       "source_simfile": "edamame (except bbno$ produced it under C&A)/edamame.sm",
-      "harness_version": "0.1.0",
-      "archive": "9073628b2d1a9448d1df8d493d812feb8746f17cdb0dbef7ff60deb0c1d3054d.tar.zst",
-      "sha256": "9073628b2d1a9448d1df8d493d812feb8746f17cdb0dbef7ff60deb0c1d3054d",
-      "compressed_bytes": 242023,
-      "uncompressed_sha256": "877544f3760d1b6e8a43a4e20a20a2bb27cb9d3b5be2fb879b47fb85e5e9efe4",
-      "compression_level": 22,
-      "aliases": [
-        "dae5a01ce34145b0fd61d70c6b2b5d46d1bb375d96843d11c4a1e141f30a09df.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "2c8a1b1385d1bbcea905993d261e0942e241b334ab55438515235d5987e6fb5f.tar.zst",
+      "sha256": "2c8a1b1385d1bbcea905993d261e0942e241b334ab55438515235d5987e6fb5f",
+      "compressed_bytes": 13356794,
+      "uncompressed_sha256": "d9a347896ee01c9204040def5d6aabd02759cdca0b0566a7e4698d4dee048f02",
+      "aliases": []
     },
     {
       "title": "edamame",

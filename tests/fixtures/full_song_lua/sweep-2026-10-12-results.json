@@ -3104,6 +3104,57 @@
       "replay_seconds": 14.275209694002115,
       "candidate_sha256": "75710c4b9caa056a2c10cc8eb00c29fa08c19d70730c7773cbec584377ebc302",
       "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[5.5s] replaying every native gameplay frame\n[6.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n\nthread 'main' (548291) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[8.0s] replaying every native gameplay frame: frame 0/120488 (0.0%)\n"
+    },
+    {
+      "position": 182,
+      "source_simfile": "edamame (except bbno$ produced it under C&A)/edamame.sm",
+      "simfile_sha256": "81d33740c66727043e3ba36b3029d4c7021c8925ca4a1ee3aa791e2980b613d1",
+      "retained_original_archive": "9073628b2d1a9448d1df8d493d812feb8746f17cdb0dbef7ff60deb0c1d3054d.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "fb0ae8b99391809080b072426dee35d2efe0e64d479b0dff9833bb6e5370848d",
+      "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+      "fix_commit": "e2b01b99a / harness 55299c5",
+      "build_proof": "/home/parity/jobs/background-effect-owner-build-v1/proof.json",
+      "capture_seconds": 157.94883176999429,
+      "trace_sha256": "10aa35ba1f4d3cc7bed99c86a2c96532eeaa5755bc98001f1fc56a33a0f32b01",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-182/candidates/d9a347896ee01c9204040def5d6aabd02759cdca0b0566a7e4698d4dee048f02.tar",
+      "replay_exit": 0,
+      "replay_seconds": 712.6948180140025,
+      "candidate_sha256": "d9a347896ee01c9204040def5d6aabd02759cdca0b0566a7e4698d4dee048f02",
+      "native_frames": 124536,
+      "replayed_frames": 124536,
+      "compared_stage_fields": 1716,
+      "pending_coverage": [
+        "uncompared song operations: ActorSound.play",
+        "native drawable state/resources: Sound, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "6d582ca49748f7c0117edf48518d299c5648b871b2d33274a3be13172fed9178",
+      "archive": "2c8a1b1385d1bbcea905993d261e0942e241b334ab55438515235d5987e6fb5f.tar.zst",
+      "archive_sha256": "2c8a1b1385d1bbcea905993d261e0942e241b334ab55438515235d5987e6fb5f",
+      "compressed_bytes": 13356794,
+      "pack_seconds": 2.2150533879976138,
+      "harness_version": "0.1.80",
+      "title": "edamame",
+      "retained_original_entry": {
+        "title": "edamame",
+        "source_simfile": "edamame (except bbno$ produced it under C&A)/edamame.sm",
+        "harness_version": "0.1.0",
+        "archive": "9073628b2d1a9448d1df8d493d812feb8746f17cdb0dbef7ff60deb0c1d3054d.tar.zst",
+        "sha256": "9073628b2d1a9448d1df8d493d812feb8746f17cdb0dbef7ff60deb0c1d3054d",
+        "compressed_bytes": 242023,
+        "uncompressed_sha256": "877544f3760d1b6e8a43a4e20a20a2bb27cb9d3b5be2fb879b47fb85e5e9efe4",
+        "compression_level": 22,
+        "aliases": [
+          "dae5a01ce34145b0fd61d70c6b2b5d46d1bb375d96843d11c4a1e141f30a09df.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -3127,9 +3178,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "6b1716655f37b60bc06441b4ec78450362363ab00ff2ddfb9aa9a6360ddf2aa6",
+  "binary_sha256": "fb0ae8b99391809080b072426dee35d2efe0e64d479b0dff9833bb6e5370848d",
   "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
-  "passed_fixtures": 6,
+  "passed_fixtures": 7,
   "pending_charts": 17,
-  "processed_charts": 23
+  "processed_charts": 24
 }
