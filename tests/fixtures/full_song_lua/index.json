@@ -2203,15 +2203,12 @@
     {
       "title": "Dig Dug Theme",
       "source_simfile": "Dig Dug Theme/Dig Dug Theme.ssc",
-      "harness_version": "0.1.0",
-      "archive": "4a4e4cded6338b3b1de9d84b6620f7af1de3f49d75d8943481ce53a578a0170c.tar.zst",
-      "sha256": "4a4e4cded6338b3b1de9d84b6620f7af1de3f49d75d8943481ce53a578a0170c",
-      "compressed_bytes": 81900,
-      "uncompressed_sha256": "a041960060139fae4843e68c7de6ed6c217d01046775b64aabe3f5ae0e251ed4",
-      "compression_level": 22,
-      "aliases": [
-        "c355b0d8211b30953f3e6cd1d420a1c82c23f3afc71400d17b680afa2184b5ee.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b5b80f9debd5dcfd521ea77bc31f2af748b5890615d7417452b57b0c7536b3b1.tar.zst",
+      "sha256": "b5b80f9debd5dcfd521ea77bc31f2af748b5890615d7417452b57b0c7536b3b1",
+      "compressed_bytes": 8262810,
+      "uncompressed_sha256": "6b897f37a9e11cd374caaebbbb319c2be3f71a19a85bd174f8b2faaf147319cd",
+      "aliases": []
     },
     {
       "title": "You Reposted in the Wrong Dimmadome",

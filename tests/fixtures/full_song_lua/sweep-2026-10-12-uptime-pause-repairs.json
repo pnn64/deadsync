@@ -1,0 +1,89 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "4bd354261 / harness 55299c5",
+  "results": [
+    {
+      "position": 173,
+      "source_simfile": "Dig Dug Theme/Dig Dug Theme.ssc",
+      "status": "passed",
+      "repair_attempts": 1,
+      "previous_failure": [],
+      "binary_sha256": "874046de12e1da317673ca0da4c84ed09627d58dc6c5595893b0504289560554",
+      "candidate_sha256": "6b897f37a9e11cd374caaebbbb319c2be3f71a19a85bd174f8b2faaf147319cd",
+      "simfile_sha256": "fe5887b2e78aeb3fa19e3e47b35571af105eec363e0c06e56999f4ef9eacac1b",
+      "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+      "fix_commit": "4bd354261 / harness 55299c5",
+      "build_proof": "/home/parity/jobs/uptime-pause-build-v2/proof.json",
+      "previous_concrete_failures": [
+        {
+          "field": "stage_sample_clock",
+          "native": 20.97836685180664,
+          "deadsync": 21.00007438659668
+        },
+        {
+          "field": "stage_sample_clock",
+          "native": 21.0,
+          "deadsync": 21.00007438659668
+        },
+        {
+          "field": "stage_sample_clock",
+          "native": 69.96607971191406,
+          "deadsync": 70.000244140625
+        },
+        {
+          "field": "stage_sample_clock",
+          "native": 70.00009155273438,
+          "deadsync": 70.000244140625
+        },
+        {
+          "field": "stage_sample_coverage",
+          "native": 152,
+          "deadsync": 148
+        }
+      ],
+      "capture_reuse": "byte-identical original uncompressed candidate",
+      "replay_exit": 0,
+      "replay_seconds": 858.5733898670005,
+      "native_frames": 149043,
+      "replayed_frames": 149043,
+      "compared_stage_fields": 1672,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, ScreenGameplay.PauseGame",
+        "native drawable state/resources: Quad"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "26a864167cc572830ff58288040719bc23b67bbbdefd5d476abcb6ede0a9988a",
+      "archive": "b5b80f9debd5dcfd521ea77bc31f2af748b5890615d7417452b57b0c7536b3b1.tar.zst",
+      "archive_sha256": "b5b80f9debd5dcfd521ea77bc31f2af748b5890615d7417452b57b0c7536b3b1",
+      "compressed_bytes": 8262810,
+      "harness_version": "0.1.80",
+      "title": "Dig Dug Theme",
+      "pack_seconds": 3.5603268179984298,
+      "retained_original_entry": {
+        "title": "Dig Dug Theme",
+        "source_simfile": "Dig Dug Theme/Dig Dug Theme.ssc",
+        "harness_version": "0.1.0",
+        "archive": "4a4e4cded6338b3b1de9d84b6620f7af1de3f49d75d8943481ce53a578a0170c.tar.zst",
+        "sha256": "4a4e4cded6338b3b1de9d84b6620f7af1de3f49d75d8943481ce53a578a0170c",
+        "compressed_bytes": 81900,
+        "uncompressed_sha256": "a041960060139fae4843e68c7de6ed6c217d01046775b64aabe3f5ae0e251ed4",
+        "compression_level": 22,
+        "aliases": [
+          "c355b0d8211b30953f3e6cd1d420a1c82c23f3afc71400d17b680afa2184b5ee.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "874046de12e1da317673ca0da4c84ed09627d58dc6c5595893b0504289560554",
+  "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+  "repair": "independent process uptime and chronological progress observers across music rewind",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
