@@ -1943,6 +1943,56 @@
       "capture_exit": 1,
       "capture_seconds": 655.0862876989995,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-208238-1791840553549479340-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-208238-1791840553549479340-0\n"
+    },
+    {
+      "position": 162,
+      "source_simfile": "Dance Robot/dancerobot-fakemines.sm",
+      "simfile_sha256": "e6fc845530da15ce8e1f1726e9f5c1f0881aa8eec31732328909d4ecf358ffd6",
+      "retained_original_archive": "c26acfd17bcd2e7c502fb1d08995893c411cc8e2e0e20780b424c17c32205109.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "d725d08e09cf2645e39e539bc84f17e7dcdc282d024a53d064647aacacc96ed7",
+      "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
+      "fix_commit": "8a49e8598 / harness 78d4a1e",
+      "build_proof": "/home/parity/jobs/foreground-ownership-build-v1/proof.json",
+      "capture_seconds": 203.65341188699676,
+      "trace_sha256": "13327a75a3ed36724e08b68d4ad4873b4de4c7bc96823b63f99f5905e3d9c1cf",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-162/candidates/b87c9bf0ddff843f9b0baf9e1a02d0a0cf11a2d7816ba554c5547403642d2d88.tar",
+      "replay_exit": 0,
+      "replay_seconds": 540.8165557130051,
+      "candidate_sha256": "b87c9bf0ddff843f9b0baf9e1a02d0a0cf11a2d7816ba554c5547403642d2d88",
+      "native_frames": 65939,
+      "replayed_frames": 65939,
+      "compared_stage_fields": 1617,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "74c69e90d15aa4c770f229cd67de7ff62857c495c6f57a374672cdac3d7431d9",
+      "archive": "a4986f037268965a7ac3765d642c50e1053bbc44f859773fd8102d6f536314b3.tar.zst",
+      "archive_sha256": "a4986f037268965a7ac3765d642c50e1053bbc44f859773fd8102d6f536314b3",
+      "compressed_bytes": 18569215,
+      "pack_seconds": 21.3442499590019,
+      "harness_version": "0.1.80",
+      "title": "Dance Robot",
+      "retained_original_entry": {
+        "title": "Dance Robot",
+        "source_simfile": "Dance Robot/dancerobot-fakemines.sm",
+        "harness_version": "0.1.0",
+        "archive": "c26acfd17bcd2e7c502fb1d08995893c411cc8e2e0e20780b424c17c32205109.tar.zst",
+        "sha256": "c26acfd17bcd2e7c502fb1d08995893c411cc8e2e0e20780b424c17c32205109",
+        "compressed_bytes": 85212,
+        "uncompressed_sha256": "808e3ab77f50fd284ba4e508472ae039dee4deb97358d2bf0af24f2240738310",
+        "compression_level": 22,
+        "aliases": [
+          "0ea0947bc0b63bb5c87a64b37e9b040585f0a013656a060d80bff7acb6da3746.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -1966,9 +2016,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "a2e465639dac28b51f86ca1658a1c70d9163db63815e54d7c362cdee30b9eddf",
+  "binary_sha256": "d725d08e09cf2645e39e539bc84f17e7dcdc282d024a53d064647aacacc96ed7",
   "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
-  "passed_fixtures": 1,
+  "passed_fixtures": 2,
   "pending_charts": 12,
-  "processed_charts": 13
+  "processed_charts": 14
 }

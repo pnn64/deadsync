@@ -2087,15 +2087,12 @@
     {
       "title": "Dance Robot",
       "source_simfile": "Dance Robot/dancerobot-fakemines.sm",
-      "harness_version": "0.1.0",
-      "archive": "c26acfd17bcd2e7c502fb1d08995893c411cc8e2e0e20780b424c17c32205109.tar.zst",
-      "sha256": "c26acfd17bcd2e7c502fb1d08995893c411cc8e2e0e20780b424c17c32205109",
-      "compressed_bytes": 85212,
-      "uncompressed_sha256": "808e3ab77f50fd284ba4e508472ae039dee4deb97358d2bf0af24f2240738310",
-      "compression_level": 22,
-      "aliases": [
-        "0ea0947bc0b63bb5c87a64b37e9b040585f0a013656a060d80bff7acb6da3746.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "a4986f037268965a7ac3765d642c50e1053bbc44f859773fd8102d6f536314b3.tar.zst",
+      "sha256": "a4986f037268965a7ac3765d642c50e1053bbc44f859773fd8102d6f536314b3",
+      "compressed_bytes": 18569215,
+      "uncompressed_sha256": "b87c9bf0ddff843f9b0baf9e1a02d0a0cf11a2d7816ba554c5547403642d2d88",
+      "aliases": []
     },
     {
       "title": "Dance Robot",
