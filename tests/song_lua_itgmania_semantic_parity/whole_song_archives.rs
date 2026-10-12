@@ -1249,15 +1249,9 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
                 "candidate replay requires a native gameplay archive");
             crate::paths::init();
             let reporter = progress::Reporter::start();
-            let passed = replay_native_archive(&archive, scope, Path::new(&args[3]), &reporter.progress);
+            let passed = replay_native_archive(&archive, scope, Path::new(&args[3]),
+                &reporter.progress, (path, &fixture_hash));
             assert_eq!(hash_file(path), fixture_hash, "candidate changed during replay");
-            let report_path = Path::new(&args[3]);
-            let mut report: Value = serde_json::from_slice(&fs::read(report_path).expect("read replay report"))
-                .expect("parse replay report");
-            report["fixture_sha256"] = Value::String(fixture_hash);
-            report["fixture_path"] = Value::String(path.to_string_lossy().into_owned());
-            fs::write(report_path, serde_json::to_vec_pretty(&report).expect("serialize bound replay report"))
-                .expect("write bound replay report");
             passed
         });
         return match outcome {
@@ -1328,12 +1322,13 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
         let progress = &reporter.progress;
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             progress.stage("extracting archive and verifying SHA-256");
-            let archive = extract_archive(entry, &archive_root().join(&entry.archive));
+            let fixture_path = archive_root().join(&entry.archive);
+            let archive = extract_archive(entry, &fixture_path);
             progress.stage("validating archive members");
             validate_archive(entry, &archive);
             if archive.manifest.itgmania.execution == "native_gameplay" {
                 return replay_native_archive(&archive, native_gameplay::Scope::Full,
-                    &archive.root.join("native-report.json"), progress);
+                    &archive.root.join("native-report.json"), progress, (&fixture_path, &entry.sha256));
             }
             progress.stage("reading native trace");
             let trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
@@ -1426,7 +1421,9 @@ fn replay_native_archive(
     scope: native_gameplay::Scope,
     report_path: &Path,
     progress: &progress::Progress,
+    fixture: (&Path, &str),
 ) -> bool {
+    use std::io::Write as _;
     use std::sync::atomic::Ordering;
     let trace_path = archive.root.join(&archive.manifest.chart.trace);
     let trace: Value = serde_json::from_slice(&fs::read(&trace_path).expect("read native gameplay trace"))
@@ -1449,11 +1446,13 @@ fn replay_native_archive(
         native_gameplay::Scope::FirstQuery => "replaying through the first native point query",
         native_gameplay::Scope::Full => "replaying every native gameplay frame",
     });
-    let report = native_gameplay::replay(&trace, &trace_path, &archive.root.join(&archive.manifest.chart.simfile),
+    let mut report = native_gameplay::replay(&trace, &trace_path, &archive.root.join(&archive.manifest.chart.simfile),
         scope, |frame, frames| {
             progress.frame.store(frame, Ordering::Relaxed);
             progress.frames.store(frames, Ordering::Relaxed);
         }).unwrap_or_else(|error| panic!("native gameplay replay failed: {error}"));
+    report["fixture_sha256"] = Value::String(fixture.1.into());
+    report["fixture_path"] = Value::String(fixture.0.to_string_lossy().into_owned());
     let mismatches = report["mismatches"].as_array().expect("native comparison failures");
     let errors = report["errors"].as_array().expect("Lua callback failures");
     let coverage = report["pending_coverage"].as_array().expect("explicit pending coverage");
@@ -1461,8 +1460,12 @@ fn replay_native_archive(
     progress.failed.fetch_add(mismatches.iter().filter(|item|
         matches!(item["field"].as_str(), Some("possible" | "current_possible" | "actual" | "misses" |
             "w1" | "w2" | "failed" | "life_latest" | "difficulty" | "description" | "meter"))).count(), Ordering::Relaxed);
-    fs::write(report_path, serde_json::to_vec_pretty(&report).expect("serialize native report"))
-        .expect("write native report");
+    // Keep the full observations, but bind metadata before streaming once.
+    // Reopening a large report to add two fields doubled serialization and I/O.
+    let mut output = std::io::BufWriter::with_capacity(64 * 1024,
+        File::create(report_path).expect("create native report"));
+    serde_json::to_writer_pretty(&mut output, &report).expect("serialize native report");
+    output.flush().expect("write native report");
     eprintln!("{} native frames replayed; {} stage fields compared; {} mismatches; {} callback errors",
         report["replayed_frames"], report["compared_stage_fields"], mismatches.len(), errors.len());
     for mismatch in mismatches.iter().take(20) { eprintln!("  {mismatch}"); }
