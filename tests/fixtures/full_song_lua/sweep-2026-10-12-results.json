@@ -2510,6 +2510,56 @@
         }
       ],
       "report_sha256": "87eeeb8421b52fa2155b1cd5c4f3aeb4bba67a72597896256b33915cc1cf5658"
+    },
+    {
+      "position": 167,
+      "source_simfile": "Daywalker/Daywalker.ssc",
+      "simfile_sha256": "332214ce4abd4af402064b8039af7912b7d8e10bf31a585df995879d503189ff",
+      "retained_original_archive": "a931c25ab28801b721043e60535bc006a2d2f3219d6ae3150918152604145201.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "3888b1e92b5612b70edc19e66d3cf040cfd5169a6dd5f61bc2a0eeeead4acbd3",
+      "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
+      "fix_commit": "375a96e85 / harness 78d4a1e",
+      "build_proof": "/home/parity/jobs/background-activation-build-v1/proof.json",
+      "capture_seconds": 161.78520231699804,
+      "trace_sha256": "331681b10933246ee5bcd6651798b67e5242565430a3d5ead563478247156f26",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-167/candidates/31dba30845be13420256d0ebb1fd3cf49b2620f56560a8931bf35858288cca02.tar",
+      "replay_exit": 0,
+      "replay_seconds": 637.7261556890007,
+      "candidate_sha256": "31dba30845be13420256d0ebb1fd3cf49b2620f56560a8931bf35858288cca02",
+      "native_frames": 110754,
+      "replayed_frames": 110754,
+      "compared_stage_fields": 1595,
+      "pending_coverage": [
+        "native drawable state/resources: Quad"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "871c06b91be16e0f9bd2a8f21da47802005bee6c3bb0217db5a607117a36b4f3",
+      "archive": "afcf6539a97c01a1d76cefd4e4c4aea1794d52840df86540d7b4e2d834ba3ffd.tar.zst",
+      "archive_sha256": "afcf6539a97c01a1d76cefd4e4c4aea1794d52840df86540d7b4e2d834ba3ffd",
+      "compressed_bytes": 9344018,
+      "pack_seconds": 5.361586209997768,
+      "harness_version": "0.1.80",
+      "title": "DAYWALKER!",
+      "retained_original_entry": {
+        "title": "DAYWALKER!",
+        "source_simfile": "Daywalker/Daywalker.ssc",
+        "harness_version": "0.1.0",
+        "archive": "a931c25ab28801b721043e60535bc006a2d2f3219d6ae3150918152604145201.tar.zst",
+        "sha256": "a931c25ab28801b721043e60535bc006a2d2f3219d6ae3150918152604145201",
+        "compressed_bytes": 71272,
+        "uncompressed_sha256": "024a58477271c3b5a91bd4896c6f19ce9af93b767bb5a04bf327699ce61216bf",
+        "compression_level": 22,
+        "aliases": [
+          "a2290f6064b8514ae9f74ec811d07bf0e7465a68ffc53c1a9c42f8bfd5830bef.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -2535,7 +2585,7 @@
   },
   "binary_sha256": "3888b1e92b5612b70edc19e66d3cf040cfd5169a6dd5f61bc2a0eeeead4acbd3",
   "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
-  "passed_fixtures": 4,
+  "passed_fixtures": 5,
   "pending_charts": 14,
-  "processed_charts": 18
+  "processed_charts": 19
 }

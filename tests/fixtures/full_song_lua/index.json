@@ -2140,15 +2140,12 @@
     {
       "title": "DAYWALKER!",
       "source_simfile": "Daywalker/Daywalker.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a931c25ab28801b721043e60535bc006a2d2f3219d6ae3150918152604145201.tar.zst",
-      "sha256": "a931c25ab28801b721043e60535bc006a2d2f3219d6ae3150918152604145201",
-      "compressed_bytes": 71272,
-      "uncompressed_sha256": "024a58477271c3b5a91bd4896c6f19ce9af93b767bb5a04bf327699ce61216bf",
-      "compression_level": 22,
-      "aliases": [
-        "a2290f6064b8514ae9f74ec811d07bf0e7465a68ffc53c1a9c42f8bfd5830bef.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "afcf6539a97c01a1d76cefd4e4c4aea1794d52840df86540d7b4e2d834ba3ffd.tar.zst",
+      "sha256": "afcf6539a97c01a1d76cefd4e4c4aea1794d52840df86540d7b4e2d834ba3ffd",
+      "compressed_bytes": 9344018,
+      "uncompressed_sha256": "31dba30845be13420256d0ebb1fd3cf49b2620f56560a8931bf35858288cca02",
+      "aliases": []
     },
     {
       "title": "Deceive Your Insight",
