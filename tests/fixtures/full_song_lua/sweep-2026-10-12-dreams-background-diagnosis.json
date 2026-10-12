@@ -1,0 +1,407 @@
+{
+  "position": 179,
+  "source_simfile": "Dreams Bloom After School/Dreams Bloom After School.ssc",
+  "simfile_sha256": "2004c1803ec2d989574fd554ab8cf755f58b8b66dd44ebaad4aa85a6f516cd8a",
+  "candidate_sha256": "75710c4b9caa056a2c10cc8eb00c29fa08c19d70730c7773cbec584377ebc302",
+  "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[5.5s] replaying every native gameplay frame\n[6.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n\nthread 'main' (548291) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[8.0s] replaying every native gameplay frame: frame 0/120488 (0.0%)\n",
+  "top_level_factory_ownership": [
+    {
+      "creation": {
+        "actor": "def-0004",
+        "before_seq": 5,
+        "definition_id": "def-0004",
+        "ordinal": 1,
+        "pointer_hex": "63cceb9ac660",
+        "provenance": "native-ActorUtil-before-LoadFromNode",
+        "scene": 1
+      },
+      "definition": {
+        "class": "ActorFrame",
+        "source": "@/BackgroundEffects/UpperLeft.lua",
+        "children": [
+          {
+            "definition_id": "def-0003",
+            "layer_index": 1
+          }
+        ]
+      },
+      "children": [
+        {
+          "creation": {
+            "actor": "def-0003",
+            "before_seq": 5,
+            "definition_id": "def-0003",
+            "ordinal": 2,
+            "parent": "def-0004",
+            "pointer_hex": "63ccec5d2a20",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "@/BackgroundEffects/UpperLeft.lua"
+        }
+      ]
+    },
+    {
+      "creation": {
+        "actor": "def-0005",
+        "before_seq": 12,
+        "definition_id": "def-0005",
+        "ordinal": 4,
+        "parent": "external-0008",
+        "pointer_hex": "63cced465bc0",
+        "provenance": "native-ActorUtil-before-LoadFromNode",
+        "scene": 1
+      },
+      "definition": {
+        "class": "ActorFrame",
+        "source": "song:/lua/default.lua",
+        "children": []
+      },
+      "children": [
+        {
+          "creation": {
+            "actor": "def-0006",
+            "before_seq": 12,
+            "definition_id": "def-0006",
+            "ordinal": 5,
+            "parent": "def-0005",
+            "pointer_hex": "63ccec75c920",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0010",
+            "before_seq": 12,
+            "definition_id": "def-0010",
+            "ordinal": 6,
+            "parent": "def-0005",
+            "pointer_hex": "63cced4677a0",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0011",
+            "before_seq": 12,
+            "definition_id": "def-0011",
+            "ordinal": 9,
+            "parent": "def-0005",
+            "pointer_hex": "63cced47e990",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0012",
+            "before_seq": 12,
+            "definition_id": "def-0012",
+            "ordinal": 10,
+            "parent": "def-0005",
+            "pointer_hex": "63cced498400",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0013",
+            "before_seq": 12,
+            "definition_id": "def-0013",
+            "ordinal": 11,
+            "parent": "def-0005",
+            "pointer_hex": "63cced4a5af0",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0014",
+            "before_seq": 12,
+            "definition_id": "def-0014",
+            "ordinal": 12,
+            "parent": "def-0005",
+            "pointer_hex": "63cced4a4fc0",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0015",
+            "before_seq": 12,
+            "definition_id": "def-0015",
+            "ordinal": 13,
+            "parent": "def-0005",
+            "pointer_hex": "63cced49e670",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0016",
+            "before_seq": 12,
+            "definition_id": "def-0016",
+            "ordinal": 14,
+            "parent": "def-0005",
+            "pointer_hex": "63cced4957d0",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0017",
+            "before_seq": 12,
+            "definition_id": "def-0017",
+            "ordinal": 15,
+            "parent": "def-0005",
+            "pointer_hex": "63cced486120",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0018",
+            "before_seq": 12,
+            "definition_id": "def-0018",
+            "ordinal": 16,
+            "parent": "def-0005",
+            "pointer_hex": "63cced483d20",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0019",
+            "before_seq": 12,
+            "definition_id": "def-0019",
+            "ordinal": 17,
+            "parent": "def-0005",
+            "pointer_hex": "63cced49d5c0",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0020",
+            "before_seq": 12,
+            "definition_id": "def-0020",
+            "ordinal": 18,
+            "parent": "def-0005",
+            "pointer_hex": "63ccec669090",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0021",
+            "before_seq": 12,
+            "definition_id": "def-0021",
+            "ordinal": 19,
+            "parent": "def-0005",
+            "pointer_hex": "63cced47fc30",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0101",
+            "before_seq": 12,
+            "definition_id": "def-0101",
+            "ordinal": 20,
+            "parent": "def-0005",
+            "pointer_hex": "63cced482a00",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/instructions.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0713",
+            "before_seq": 21,
+            "definition_id": "def-0713",
+            "ordinal": 82,
+            "parent": "def-0005",
+            "pointer_hex": "63cced4e2660",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0714",
+            "before_seq": 144,
+            "definition_id": "def-0714",
+            "ordinal": 614,
+            "parent": "def-0005",
+            "pointer_hex": "63ccecaa60d0",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0729",
+            "before_seq": 144,
+            "definition_id": "def-0729",
+            "ordinal": 615,
+            "parent": "def-0005",
+            "pointer_hex": "63ccecad2c00",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/header.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0736",
+            "before_seq": 147,
+            "definition_id": "def-0736",
+            "ordinal": 627,
+            "parent": "def-0005",
+            "pointer_hex": "63ccecb77800",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0751",
+            "before_seq": 147,
+            "definition_id": "def-0751",
+            "ordinal": 634,
+            "parent": "def-0005",
+            "pointer_hex": "63ccec772e30",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/header.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0786",
+            "before_seq": 150,
+            "definition_id": "def-0786",
+            "ordinal": 646,
+            "parent": "def-0005",
+            "pointer_hex": "63ccec843290",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "creation": {
+            "actor": "def-0818",
+            "before_seq": 153,
+            "definition_id": "def-0818",
+            "ordinal": 676,
+            "parent": "def-0005",
+            "pointer_hex": "63ccec6ee070",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 1
+          },
+          "source": "song:/lua/default.lua"
+        }
+      ]
+    },
+    {
+      "creation": {
+        "actor": "def-0822",
+        "before_seq": 336689,
+        "definition_id": "def-0822",
+        "ordinal": 703,
+        "pointer_hex": "63ccee14fff0",
+        "provenance": "native-ActorUtil-before-LoadFromNode",
+        "scene": 2
+      },
+      "definition": {
+        "class": "ActorFrame",
+        "source": "@/BackgroundEffects/UpperLeft.lua",
+        "children": [
+          {
+            "definition_id": "def-0821",
+            "layer_index": 1
+          }
+        ]
+      },
+      "children": [
+        {
+          "creation": {
+            "actor": "def-0821",
+            "before_seq": 336689,
+            "definition_id": "def-0821",
+            "ordinal": 704,
+            "parent": "def-0822",
+            "pointer_hex": "63ccee150f30",
+            "provenance": "native-ActorUtil-before-LoadFromNode",
+            "scene": 2
+          },
+          "source": "@/BackgroundEffects/UpperLeft.lua"
+        }
+      ]
+    }
+  ],
+  "roots": [
+    "def-0004",
+    "def-0005",
+    "def-0006",
+    "def-0010",
+    "def-0011",
+    "def-0012",
+    "def-0013",
+    "def-0014",
+    "def-0015",
+    "def-0016",
+    "def-0017",
+    "def-0018",
+    "def-0019",
+    "def-0020",
+    "def-0021",
+    "def-0101",
+    "def-0713",
+    "def-0714",
+    "def-0729",
+    "def-0736",
+    "def-0751",
+    "def-0786",
+    "def-0818",
+    "def-0822"
+  ],
+  "diagnosis": "The source BGCHANGE loads one Lua background. Both captured scenes instantiate the pinned UpperLeft effect and its one authored child, matching the independently validated e2b01b99a ownership repair.",
+  "reference_sources": [
+    "../itgmania-harness/vendor/itgmania/BackgroundEffects/UpperLeft.lua:4",
+    "../itgmania-harness/vendor/itgmania/src/Background.cpp:296"
+  ],
+  "repair_attempts_started": 1,
+  "bounded_repair_job": "/home/parity/jobs/background-effect-owner-repair-v2",
+  "capture_reuse": "byte-identical original uncompressed candidate"
+}
