@@ -1898,6 +1898,51 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 161,
+      "source_simfile": "Cyberpunk 2077/Cyberpunk 2077.ssc",
+      "simfile_sha256": "160be0cdbe9f8b0863ab41865a2f9d7a6a75a5e9771f524a96fb81e6e6d35012",
+      "retained_original_archive": "1da1984b3b8fa6c85257b5cade2db84ac94626d202ba6e6d5ad9792a4fb76ca2.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "a2e465639dac28b51f86ca1658a1c70d9163db63815e54d7c362cdee30b9eddf",
+      "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
+      "fix_commit": "71ef0ade1 / harness 78d4a1e",
+      "build_proof": "/home/parity/jobs/factory-ownership-build-v1/proof.json",
+      "reused_capture": {
+        "pid": 208238,
+        "command": [
+          "/home/parity/jobs/chart-sweep-pack-build-v1/harness",
+          "song-lua-trace",
+          "/home/parity/workspace/lua-songs/Cyberpunk 2077/Cyberpunk 2077.ssc",
+          "--itgmania-bin",
+          "/home/parity/native/source-v1/ITGmania-harness-trace-creation-v1",
+          "--fallback-theme",
+          "Harness Simply Love",
+          "--difficulty",
+          "Challenge",
+          "--autoplay",
+          "1",
+          "--headless",
+          "--keep-run-dir",
+          "--timeout",
+          "900",
+          "--max-events",
+          "8000000",
+          "--random-seed",
+          "1",
+          "--out",
+          "/home/parity/jobs/chart-sweep-20261012-v2/chart-161/trace.json",
+          "--until-gameplay-end"
+        ],
+        "label": "capture",
+        "source_simfile": "Cyberpunk 2077/Cyberpunk 2077.ssc"
+      },
+      "handoff_capture_wait_seconds": 655.0789791770003,
+      "capture_exit": 1,
+      "capture_seconds": 655.0862876989995,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-208238-1791840553549479340-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-208238-1791840553549479340-0\n"
     }
   ],
   "historical_pending": [
@@ -1921,9 +1966,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "d515e94becf9b644c522e453045a5f07d1e149cc18765469d78b2384164539ad",
-  "harness_sha256": "41bfe13b815a4a9695c2271e375611ff2e0efc017c4c4bc1ee304cb89bf69a54",
+  "binary_sha256": "a2e465639dac28b51f86ca1658a1c70d9163db63815e54d7c362cdee30b9eddf",
+  "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
   "passed_fixtures": 1,
-  "pending_charts": 11,
-  "processed_charts": 12
+  "pending_charts": 12,
+  "processed_charts": 13
 }
