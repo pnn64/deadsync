@@ -339,10 +339,14 @@ where
                     "SongForeground"
                 };
                 let parent = children.get::<Table>(name).map_err(|err| err.to_string())?;
-                if context.live && index >= context.background_layer_count
-                    && let Some(&beat) = context.layer_start_beats.get(index)
+                if context.live && let Some(&beat) = context.layer_start_beats.get(index)
                 {
-                    actor.raw_set("__songlua_foreground_start_beat", beat).map_err(|err| err.to_string())?;
+                    let key = if index < context.background_layer_count {
+                        "__songlua_background_start_beat"
+                    } else {
+                        "__songlua_foreground_start_beat"
+                    };
+                    actor.raw_set(key, beat).map_err(|err| err.to_string())?;
                     actor.raw_set("__songlua_defer_on", true).map_err(|err| err.to_string())?;
                     actor.raw_set("__songlua_live_inactive", true).map_err(|err| err.to_string())?;
                 }

@@ -18,6 +18,12 @@ struct LiveForeground {
     finished: bool,
 }
 
+struct LiveBackground {
+    actor: Table,
+    start_beat: f32,
+    started: bool,
+}
+
 pub(crate) fn active(lua: &Lua) -> bool {
     lua.app_data_ref::<LiveMode>().is_some()
 }
@@ -533,6 +539,7 @@ pub struct SongLuaLiveScene {
     pub(crate) primary_index: usize,
     last_beat: f64,
     last_music_seconds: f32,
+    backgrounds: Vec<LiveBackground>,
     foregrounds: Vec<LiveForeground>,
     pub(crate) startup_output: SongLuaLiveOutput,
     ended: bool,
@@ -573,10 +580,14 @@ impl SongLuaLiveScene {
         startup_broadcasts.append(&mut startup_output.broadcasts);
         startup_output.broadcasts = startup_broadcasts;
         let last_beat = f64::from(crate::compile_song_runtime_values(&lua)?.0);
+        let mut backgrounds = Vec::new();
         let mut foregrounds = Vec::new();
         if let Value::Table(roots) = &root {
             for actor in roots.sequence_values::<Value>() {
                 let Value::Table(actor) = actor? else { continue; };
+                if let Some(start_beat) = actor.raw_get::<Option<f32>>("__songlua_background_start_beat")? {
+                    backgrounds.push(LiveBackground { actor: actor.clone(), start_beat, started: false });
+                }
                 if let Some(start_beat) = actor.raw_get::<Option<f32>>("__songlua_foreground_start_beat")? {
                     foregrounds.push(LiveForeground { actor, start_beat, stop_beat: 0.0, started: false, finished: false });
                 }
@@ -584,7 +595,7 @@ impl SongLuaLiveScene {
         }
         Ok(Self { lua, root, stage, players, actors, states, tracked, registry,
             targets: Vec::new(), context, entry_paths, primary_index, last_beat,
-            last_music_seconds: -9999.0, foregrounds, startup_output, ended: false })
+            last_music_seconds: -9999.0, backgrounds, foregrounds, startup_output, ended: false })
     }
 
     pub fn advance(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {
@@ -609,6 +620,7 @@ impl SongLuaLiveScene {
         crate::lua_util::set_live_frame(&self.lua, frame.screen_seconds, beat, frame.delta_seconds);
         self.lua.set_app_data(LivePlayers(frame.players));
         crate::song_tables::advance_option_levels(&self.lua, frame.screen_seconds)?;
+        self.advance_backgrounds(beat as f32, frame.music_seconds as f32)?;
         self.advance_foregrounds(beat as f32, frame.music_seconds as f32)?;
         crate::lua_util::run_actor_compile_update_functions_with_delta(
             &self.lua, &self.root, frame.delta_seconds)?;
@@ -632,6 +644,40 @@ impl SongLuaLiveScene {
             crate::reset_actor_capture(&self.lua, actor)?;
         }
         take_output(&self.lua)
+    }
+
+    fn advance_backgrounds(&mut self, beat: f32, music_seconds: f32) -> mlua::Result<()> {
+        if self.backgrounds.is_empty() { return Ok(()); }
+        let prefs = self.lua.globals().get::<Table>("PREFSMAN")?;
+        let rate_tweens = prefs.get::<Function>("GetPreference")?
+            .call::<Option<bool>>((prefs, "RateModsAffectFGChanges"))?.unwrap_or(false);
+        let game = self.lua.globals().get::<Table>("GAMESTATE")?;
+        let options = game.get::<Function>("GetSongOptionsObject")?
+            .call::<Table>((game, "ModsLevel_Current"))?;
+        let rate = if rate_tweens { 1.0 } else { options.get::<Function>("MusicRate")?.call::<f32>(options)? };
+        for background in &mut self.backgrounds {
+            let inactive = beat < background.start_beat;
+            background.actor.raw_set("__songlua_live_inactive", inactive)?;
+            if inactive { continue; }
+            let delta = if !background.started {
+                // BackgroundImpl::Layer::UpdateCurBGChange sends On when the
+                // music clock reaches this change, then consumes the elapsed
+                // music since its authored start before the regular updates.
+                background.actor.raw_set("__songlua_defer_on", false)?;
+                crate::lua_util::run_actor_startup_commands_for_table(&self.lua, &background.actor)?;
+                background.actor.get::<Function>("playcommand")?
+                    .call::<()>((background.actor.clone(), "GainFocus"))?;
+                background.started = true;
+                let start = self.context.song_timing.as_ref().map_or_else(
+                    || crate::song_elapsed_seconds_at(background.start_beat, &self.context) * crate::song_music_rate(&self.context),
+                    |timing| timing.get_time_for_beat_exact(background.start_beat));
+                (music_seconds - start).max(0.0) / rate
+            } else {
+                (music_seconds - self.last_music_seconds).max(0.0) / rate
+            };
+            background.actor.raw_set("__songlua_live_delta", f64::from(delta))?;
+        }
+        Ok(())
     }
 
     fn advance_foregrounds(&mut self, beat: f32, music_seconds: f32) -> mlua::Result<()> {
@@ -1149,6 +1195,47 @@ return Def.ActorFrame {
             assert!(output.errors.is_empty());
             let names = output.broadcasts.iter().map(|(_, name, _)| name.as_str()).collect::<Vec<_>>();
             assert_eq!(names, expected.into_iter().collect::<Vec<_>>(), "music second {music_seconds}");
+        }
+    }
+
+    #[test]
+    fn live_background_starts_at_change_beat() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-background-start-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("test directory");
+        let entry = dir.join("background.lua");
+        fs::write(&entry, r#"
+return Def.ActorFrame {
+    OnCommand = function(self)
+        MESSAGEMAN:Broadcast('On:' .. tostring(GAMESTATE:GetCurMusicSeconds()))
+        self:SetUpdateFunction(function(self, delta)
+            MESSAGEMAN:Broadcast('Delta:' .. tostring(delta))
+        end)
+    end,
+    GainFocusCommand = function() MESSAGEMAN:Broadcast('GainFocus') end,
+    Def.Actor {
+        OnCommand = function(self) self:sleep(0.1):queuecommand('Later') end,
+        LaterCommand = function() MESSAGEMAN:Broadcast('Later') end,
+    },
+}
+"#).expect("background script");
+        let mut context = SongLuaCompileContext::new(&dir, "background start");
+        context.live = true;
+        context.song_display_bpms = [120.0; 2];
+        context.background_layer_count = 1;
+        context.layer_start_beats = vec![2.0];
+        let mut compiled: Compiled = crate::compile_song_lua_with_default_host(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).expect("background preparation");
+        let mut scene = compiled.live_scene.take().expect("owned scene");
+        assert!(scene.take_startup_output().broadcasts.iter().all(|(_, name, _)| name == "ScreenChanged"));
+        let dormant = scene.advance(SongLuaLiveFrame { music_seconds: 0.75, beat: 1.5,
+            screen_seconds: 4.5, delta_seconds: 0.5, ..Default::default() }).expect("dormant frame");
+        assert!(dormant.broadcasts.is_empty());
+        for (music_seconds, expected) in [(1.125, vec!["On:1.125", "GainFocus", "Later", "Delta:0.125"]),
+            (1.25, vec!["Delta:0.125"])] {
+            let output = scene.advance(SongLuaLiveFrame { music_seconds, beat: music_seconds * 2.0,
+                screen_seconds: 5.0, delta_seconds: 0.5, ..Default::default() }).expect("background frame");
+            assert!(output.errors.is_empty());
+            assert_eq!(output.broadcasts.iter().map(|(_, name, _)| name.as_str()).collect::<Vec<_>>(), expected);
         }
     }
 
