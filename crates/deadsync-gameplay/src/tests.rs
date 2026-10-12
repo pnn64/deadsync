@@ -13710,6 +13710,32 @@ mod tests {
     }
 
     #[test]
+    fn active_hold_resolves_at_rounded_tail_row() {
+        let timing = test_timing(192); // The native empty BPM list defaults to 60.
+        for note_type in [NoteType::Hold, NoteType::Roll] {
+            let mut active = test_active_hold(note_type, true, false, MAX_HOLD_LIFE);
+            active.last_update_time_ns = song_time_ns_from_seconds(0.98);
+            let mut hold = test_hold();
+            let before = advance_active_hold_to_time(&mut active, &mut hold, &timing,
+                0, 0.0, song_time_ns_from_seconds(0.9895), 1.0);
+            assert_eq!(before.resolution, None);
+            let reached = advance_active_hold_to_time(&mut active, &mut hold, &timing,
+                0, 0.0, song_time_ns_from_seconds(0.9897), 1.0);
+            assert_eq!(reached.resolution, Some(ActiveHoldResolution::Success { note_index: 42 }));
+            assert!(reached.clear_active);
+            assert!(active.last_update_time_ns < active.end_time_ns,
+                "the rounded row resolves before the exact tail timestamp");
+        }
+        let mut active = test_active_hold(NoteType::Hold, false, false, 0.0);
+        active.last_update_time_ns = song_time_ns_from_seconds(0.9895);
+        let mut hold = test_hold();
+        let depleted = advance_active_hold_to_time(&mut active, &mut hold, &timing,
+            0, 0.0, song_time_ns_from_seconds(0.9897), 1.0);
+        assert!(matches!(depleted.resolution, Some(ActiveHoldResolution::LetGo { .. })),
+            "life depletion still takes precedence at the rounded tail");
+    }
+
+    #[test]
     fn advance_active_hold_to_time_resolves_pre_exhausted_life_at_start() {
         let timing = test_timing(192);
         let mut active = test_active_hold(NoteType::Hold, false, false, 0.0);
@@ -13889,10 +13915,10 @@ mod tests {
         let timing_players = [&timing; MAX_PLAYERS];
         let mut first = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
         first.note_index = 0;
-        first.end_time_ns = 100;
+        first.end_time_ns = song_time_ns_from_seconds(1.0);
         let mut second = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
         second.note_index = 1;
-        second.end_time_ns = 100;
+        second.end_time_ns = song_time_ns_from_seconds(1.0);
         let mut active_holds: [Option<ActiveHold>; MAX_COLS] = std::array::from_fn(|_| None);
         active_holds[1] = Some(first);
         active_holds[6] = Some(second);
@@ -13912,7 +13938,7 @@ mod tests {
             4,
             2,
             &timing_players,
-            100,
+            song_time_ns_from_seconds(1.0),
             1.0,
             false,
             &mut events,
@@ -13961,7 +13987,7 @@ mod tests {
         let mut active = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
         active.note_index = 0;
         active.start_time_ns = 0;
-        active.end_time_ns = 100;
+        active.end_time_ns = song_time_ns_from_seconds(1.0);
         active.last_update_time_ns = 0;
         let mut active_holds = [Some(active)];
         let mut previous_hold = test_hold();
@@ -13977,7 +14003,7 @@ mod tests {
             &mut notes,
             0,
             1,
-            100,
+            song_time_ns_from_seconds(2.0),
             &timing,
             1.0,
         );

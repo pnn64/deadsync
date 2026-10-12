@@ -1186,7 +1186,10 @@ pub fn advance_active_hold_to_time(
         hold.let_go_started_at = None;
         hold.let_go_starting_life = 0.0;
     }
-    if resolution.is_none() && !active.let_go && final_time_ns >= active.end_time_ns {
+    // Player::UpdateHoldNotes resolves at the rounded player timing row,
+    // which can reach the tail up to half a row before its exact timestamp.
+    let current_row = beat_to_note_row(timing.get_beat_for_time(song_time_ns_to_seconds(target_time_ns)));
+    if resolution.is_none() && !active.let_go && current_row >= beat_to_note_row(hold.end_beat) {
         resolution = Some(ActiveHoldResolution::Success { note_index });
     }
 
