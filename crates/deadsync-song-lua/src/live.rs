@@ -176,8 +176,9 @@ fn hook_query(lua: &Lua, table: &Table, class: &'static str, name: &'static str)
         query_phase(lua, false);
         if observed {
             let kind = if name.starts_with("Get") || name.starts_with("Is") || name.starts_with("Supports")
-                || class == "PlayerOptions" && args.len() == 1 { "query" }
-                else if class == "PlayerOptions" { "modifier" } else { "call" };
+                || matches!(class, "PlayerOptions" | "SongOptions") && args.len() == 1 { "query" }
+                else if matches!(class, "PlayerOptions" | "SongOptions")
+                    || class == "PlayerState" && name == "SetPlayerOptions" { "modifier" } else { "call" };
             trace_method(lua, kind, &format!("{class}.{name}"), || {
                 query_details(lua, &args, &result)
                     .unwrap_or_else(|error| serde_json::json!({"kind":"trace-error","error":error.to_string()}))
@@ -231,7 +232,14 @@ pub(crate) fn install_query_trace(lua: &Lua) -> mlua::Result<()> {
                     hook_query(lua, &options, "PlayerOptions", name)?;
                 }
             }
-            hook_query(lua, &state, "PlayerState", "GetPlayerOptions")?;
+            for name in ["GetPlayerOptions", "GetPlayerOptionsString", "SetPlayerOptions"] {
+                hook_query(lua, &state, "PlayerState", name)?;
+            }
+        }
+        for level in ["ModsLevel_Preferred", "ModsLevel_Stage", "ModsLevel_Song", "ModsLevel_Current"] {
+            let options: Table = gamestate.get::<Function>("GetSongOptionsObject")?.call((gamestate.clone(), level))?;
+            objects.push((options.clone(), json!({"type":"SongOptions"})));
+            hook_query(lua, &options, "SongOptions", "MusicRate")?;
         }
         for index in 1..=steps.raw_len() {
             let step: Table = steps.raw_get(index)?;
@@ -248,7 +256,7 @@ pub(crate) fn install_query_trace(lua: &Lua) -> mlua::Result<()> {
                 json!({"type":"PlayerStageStats","path":format!("stage:current/player:P{index}")})));
         }
         if let Some(mut trace) = lua.app_data_mut::<QueryTrace>() { trace.objects = objects; }
-        for name in ["GetCurrentSong", "GetCurrentSteps", "GetCurrentStyle", "GetPlayerState", "GetSongBeat", "IsPlayerEnabled", "SetCurrentSteps"] {
+        for name in ["GetCurrentSong", "GetCurrentSteps", "GetCurrentStyle", "GetPlayerState", "GetSongBeat", "IsPlayerEnabled", "SetCurrentSteps", "GetSongOptionsObject"] {
             hook_query(lua, &gamestate, "GameState", name)?;
         }
         hook_query(lua, &song, "Song", "GetStepsByStepsType")?;

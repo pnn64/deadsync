@@ -40,6 +40,10 @@ const CALL_OPERATIONS: &[&str] = &[
     "PrefsManager.GetPreference",
     "RageDisplay.SupportsRenderToTexture",
     "PlayerState.GetPlayerOptions",
+    "PlayerState.GetPlayerOptionsString",
+    "PlayerState.SetPlayerOptions",
+    "GameState.GetSongOptionsObject",
+    "SongOptions.MusicRate",
     "PlayerOptions.Reverse",
     "PlayerOptions.Boost",
     "PlayerOptions.ConfusionOffset",
@@ -59,10 +63,12 @@ const CALL_OPERATIONS: &[&str] = &[
 struct CallLog {
     events: Mutex<Vec<Value>>,
     dropped: AtomicUsize,
+    limit: AtomicUsize,
 }
 static CALL_LOG: CallLog = CallLog {
     events: Mutex::new(Vec::new()),
     dropped: AtomicUsize::new(0),
+    limit: AtomicUsize::new(250_000),
 };
 
 impl log::Log for CallLog {
@@ -74,7 +80,7 @@ impl log::Log for CallLog {
             return;
         }
         let mut events = self.events.lock().expect("diagnostic call log");
-        if events.len() == 250_000 {
+        if events.len() >= self.limit.load(Ordering::Relaxed) {
             self.dropped.fetch_add(1, Ordering::Relaxed);
             return;
         }
@@ -86,7 +92,8 @@ impl log::Log for CallLog {
     fn flush(&self) {}
 }
 
-fn start_call_log() -> Result<(), String> {
+fn start_call_log(limit: usize) -> Result<(), String> {
+    if limit == 0 { return Err("call trace capacity must be positive".into()); }
     static INSTALLED: OnceLock<Result<(), String>> = OnceLock::new();
     INSTALLED
         .get_or_init(|| log::set_logger(&CALL_LOG).map_err(|error| error.to_string()))
@@ -97,6 +104,7 @@ fn start_call_log() -> Result<(), String> {
         .map_err(|error| error.to_string())?
         .clear();
     CALL_LOG.dropped.store(0, Ordering::Relaxed);
+    CALL_LOG.limit.store(limit, Ordering::Relaxed);
     log::set_max_level(log::LevelFilter::Trace);
     Ok(())
 }
@@ -424,6 +432,67 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
 #[cfg(test)]
 mod tests {
     #[test]
+    fn call_trace_capacity_keeps_overflow_visible() {
+        use log::Log;
+        let logger = super::CallLog { events: std::sync::Mutex::new(Vec::new()),
+            dropped: std::sync::atomic::AtomicUsize::new(0),
+            limit: std::sync::atomic::AtomicUsize::new(2) };
+        let record = log::Record::builder().args(format_args!("{{}}"))
+            .target("deadsync_song_lua::trace").level(log::Level::Trace).build();
+        for _ in 0..3 { logger.log(&record); }
+        assert_eq!(logger.events.lock().expect("local call log").len(), 2);
+        assert_eq!(logger.dropped.load(std::sync::atomic::Ordering::Relaxed), 1);
+        assert!(super::start_call_log(0).is_err());
+    }
+
+    #[test]
+    fn option_trace_keeps_native_returns_and_strings() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver,
+            compile_song_lua_with_default_host};
+        use std::{fs, sync::Arc};
+        super::start_call_log(2_000_000).expect("install option trace");
+        let dir = std::env::temp_dir().join(format!("deadsync-option-call-trace-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("option trace directory");
+        let entry = dir.join("options.lua");
+        fs::write(&entry, r#"
+local options = GAMESTATE:GetSongOptionsObject('ModsLevel_Song')
+local rate, speed = options:MusicRate()
+assert(rate == 1 and speed == 1)
+local before, before_speed = options:MusicRate(1.25, 2)
+assert(before == 1 and before_speed == 1)
+rate, speed = options:MusicRate()
+assert(rate == 1.25 and speed == 2)
+local player = GAMESTATE:GetPlayerState('PlayerNumber_P1')
+assert(select('#', player:SetPlayerOptions('ModsLevel_Song', '*3 75% Reverse')) == 0)
+local text = player:GetPlayerOptionsString('ModsLevel_Song')
+assert(text:find('75%% Reverse'))
+return Def.ActorFrame{}
+"#).expect("write real option calls");
+        let mut context = SongLuaCompileContext::new(&dir, "option trace control");
+        context.live = true;
+        let compiled = compile_song_lua_with_default_host::<(), (), _>(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])),
+            |_| None, |_, _| None).expect("compile real option operations");
+        assert!(compiled.live_scene.is_some());
+        let events = super::CALL_LOG.events.lock().expect("read option observations");
+        assert_eq!(events.iter().map(|e| e["operation"].as_str().expect("operation")).collect::<Vec<_>>(),
+            ["GameState.GetSongOptionsObject", "SongOptions.MusicRate", "SongOptions.MusicRate",
+             "SongOptions.MusicRate", "GameState.GetPlayerState", "PlayerState.SetPlayerOptions",
+             "PlayerState.GetPlayerOptionsString"]);
+        assert_eq!(events[0]["results"], serde_json::json!([{"type":"SongOptions"}]));
+        assert_eq!(events[1]["kind"], "query");
+        assert_eq!(events[2]["kind"], "modifier");
+        assert_eq!(events[2]["args"], serde_json::json!([1.25, 2]));
+        assert_eq!(events[2]["results"], serde_json::json!([1, 1]));
+        assert_eq!(events[3]["results"], serde_json::json!([1.25, 2]));
+        assert_eq!(events[5]["kind"], "modifier");
+        assert_eq!(events[5]["args"], serde_json::json!(["ModsLevel_Song", "*3 75% Reverse"]));
+        assert_eq!(events[5]["results"], serde_json::json!([]));
+        assert!(events[6]["results"][0].as_str().expect("option string").contains("75% Reverse"));
+        assert!(events.iter().all(|e| e["phase"] == "construction" && e["line"] == 0));
+    }
+
+    #[test]
     fn modifier_comparison_keeps_values_speeds_returns_and_clocks() {
         use serde_json::json;
         let trace = json!({"capabilities":{"native_modifier_results":true}});
@@ -534,7 +603,7 @@ mod tests {
             compile_song_lua_with_default_host,
         };
         use std::{fs, sync::Arc};
-        start_call_log().expect("install observational logger");
+        start_call_log(250_000).expect("install observational logger");
         let dir =
             std::env::temp_dir().join(format!("deadsync-actor-call-trace-{}", std::process::id()));
         fs::create_dir_all(&dir).expect("trace test directory");
@@ -628,7 +697,7 @@ mod tests {
         assert_eq!(construction[2]["results"][0]["index"], 2);
         assert_eq!(construction[6]["results"][0]["index"], 1);
         drop(events);
-        start_call_log().expect("reset observations for display and update control");
+        start_call_log(250_000).expect("reset observations for display and update control");
         let entry = dir.join("display-caller.lua");
         fs::write(
             &entry,
@@ -835,11 +904,6 @@ end}
     }
 }
 
-fn read_json(path: &Path) -> Result<Value, String> {
-    serde_json::from_slice(&std::fs::read(path).map_err(|error| error.to_string())?)
-        .map_err(|error| error.to_string())
-}
-
 fn number(value: &Value, key: &str) -> Result<f64, String> {
     value
         .get(key)
@@ -1018,12 +1082,12 @@ fn native_autoplay(trace: &Value) -> Result<bool, String> {
 }
 
 pub(crate) fn replay(
+    trace: &Value,
     trace_path: &Path,
     simfile: &Path,
     scope: Scope,
     mut progress: impl FnMut(usize, usize),
 ) -> Result<Value, String> {
-    let trace = read_json(trace_path)?;
     validate_capture(&trace)?;
     let autoplay = native_autoplay(&trace)?;
     if trace["style"] != "single" {
@@ -1103,7 +1167,10 @@ pub(crate) fn replay(
         machine_pack_ini_offsets: true,
         ..Default::default()
     };
-    start_call_log()?;
+    let limit = u32::try_from(trace.pointer("/capture_limits/max_events")
+        .and_then(Value::as_u64).unwrap_or(250_000))
+        .map_err(|_| "native call trace capacity exceeds u32")?;
+    start_call_log(limit as usize)?;
     paths::init();
     let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(
         simfile,

@@ -1432,7 +1432,7 @@ fn replay_native_archive(
         native_gameplay::Scope::FirstQuery => "replaying through the first native point query",
         native_gameplay::Scope::Full => "replaying every native gameplay frame",
     });
-    let report = native_gameplay::replay(&trace_path, &archive.root.join(&archive.manifest.chart.simfile),
+    let report = native_gameplay::replay(&trace, &trace_path, &archive.root.join(&archive.manifest.chart.simfile),
         scope, |frame, frames| {
             progress.frame.store(frame, Ordering::Relaxed);
             progress.frames.store(frames, Ordering::Relaxed);
