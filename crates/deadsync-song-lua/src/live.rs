@@ -801,6 +801,47 @@ mod tests {
     }
 
     #[test]
+    fn actor_parent_loading() {
+        let mut compiled = compile("parent-loading", r#"
+return Def.ActorFrame{Name='DeclaredRoot',
+ Def.ActorFrame{InitCommand=function(self)
+  local parent=self:GetParent()
+  assert(parent:GetName()=='')
+  parent:name('from-child')
+  assert(parent:GetName()=='from-child')
+ end},
+ InitCommand=function(self) assert(self:GetName()=='DeclaredRoot') end,
+ OnCommand=function(self)
+  local parent=self:GetParent()
+  self:SetUpdateFunction(function(self)
+   assert(self:GetParent()==parent)
+   assert(parent:GetName()=='SongForeground')
+   assert(parent:GetParent()==SCREENMAN:GetTopScreen())
+   assert(parent:GetParent():GetParent()==nil)
+   self:aux(1)
+  end)
+ end,
+}
+"#);
+        let mut scene = compiled.live_scene.take().expect("owned scene");
+        for seconds in [0.0, 0.125] {
+            let output = scene.advance(SongLuaLiveFrame {
+                music_seconds: seconds, screen_seconds: seconds,
+                delta_seconds: 0.125, ..Default::default()
+            }).expect("owned update");
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+        }
+        crate::lua_util::run_actor_update_functions_for_table(
+            &scene.lua, scene.root.as_table().expect("session roots"), 0.0,
+        ).expect("direct update");
+        let output = take_output(&scene.lua).expect("direct output");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        let actor: Table = scene.root.as_table().expect("session roots").raw_get(1).expect("root");
+        assert_eq!(actor.get::<Function>("getaux").expect("aux getter")
+            .call::<f32>(actor.clone()).expect("updated aux"), 1.0);
+    }
+
+    #[test]
     fn explicit_actor_children() {
         let mut compiled = compile("explicit-children", r#"
 return Def.ActorFrame{

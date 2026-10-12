@@ -1914,6 +1914,7 @@ fn clone_actor_def(
                 name,
                 "__songlua_def_owned"
                     | "__songlua_parent"
+                    | "__songlua_load_name"
                     | "__songlua_init_commands_ran"
                     | "__songlua_startup_commands_ran"
                     | "__songlua_startup_command_started"
@@ -9735,6 +9736,9 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
                 let Some(name) = lua.coerce_string(value)? else {
                     return Err(mlua::Error::runtime("name: string expected"));
                 };
+                if !matches!(actor.raw_get::<Value>("__songlua_load_name")?, Value::Nil) {
+                    actor.raw_set("__songlua_load_name", name.clone())?;
+                }
                 actor.raw_set("Name", name)?;
                 Ok(actor.clone())
             }
@@ -9752,9 +9756,11 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
         lua.create_function({
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
-                Ok(Value::String(lua.create_string(
-                    actor.get::<Option<String>>("Name")?.unwrap_or_default(),
-                )?))
+                let name = match actor.raw_get::<Option<String>>("__songlua_load_name")? {
+                    Some(name) => name,
+                    None => actor.get::<Option<String>>("Name")?.unwrap_or_default(),
+                };
+                Ok(Value::String(lua.create_string(name)?))
             }
         })?,
     )?;
@@ -10064,13 +10070,18 @@ pub fn install_actor_parent_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "GetParent",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
-                Ok(actor
-                    .get::<Option<Table>>("__songlua_parent")?
-                    .unwrap_or_else(|| actor.clone()))
-            }
+            move |_, _args: MultiValue| actor.raw_get::<Option<Table>>("__songlua_parent")
         })?,
     )?;
+    Ok(())
+}
+
+fn adopt_actor_child(parent: &Table, child: &Table) -> mlua::Result<()> {
+    // Session root lists group loaders; they are not native ActorFrames and
+    // must not replace a song actor's SongForeground/SongBackground parent.
+    if parent.raw_get::<Option<String>>("__songlua_actor_type")?.is_some() {
+        child.raw_set("__songlua_parent", parent.clone())?;
+    }
     Ok(())
 }
 
@@ -10104,6 +10115,11 @@ pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resu
         return Ok(());
     }
     compact_actor_children(lua, actor)?;
+    // ActorFrame loads its children before Actor::LoadFromNode applies Name.
+    // Keep the authored attribute separate from the observable loading name;
+    // a child's Init may rename its parent before that attribute is applied.
+    let name = actor.raw_get::<Value>("Name")?;
+    actor.raw_set("__songlua_load_name", "")?;
     // Def tables are constructed children first. Native actors subscribe as
     // the definition tree loads, with parents before their children.
     register_song_lua_actor(lua, actor)?;
@@ -10111,7 +10127,7 @@ pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resu
         let Value::Table(child) = child? else {
             continue;
         };
-        child.set("__songlua_parent", actor.clone())?;
+        adopt_actor_child(actor, &child)?;
         #[cfg(feature = "test-support")]
         if let Some(path) = actor.raw_get::<Option<String>>("__songlua_message_path")? {
             child.raw_set("__songlua_message_path", format!("{path}/{}", index + 1))?;
@@ -10119,6 +10135,10 @@ pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resu
         let _ = index;
         run_actor_init_commands_for_table(lua, &child)?;
     }
+    if !matches!(name, Value::Nil) {
+        actor.raw_set("Name", name)?;
+    }
+    actor.raw_set("__songlua_load_name", Value::Nil)?;
     // ActorFrame::LoadFromNode initializes its children before Actor runs Init.
     // Native QueueCommand appends a tween; Init does not advance its queue.
     run_actor_named_command_with_drain(lua, actor, "InitCommand", false)?;
@@ -10146,17 +10166,7 @@ pub fn run_actor_startup_commands_for_table(lua: &Lua, actor: &Table) -> mlua::R
         let Value::Table(child) = child? else {
             continue;
         };
-        // The session's root list is a loader container, not an ActorFrame.
-        // Keep each root's previously installed screen-layer parent.
-        if actor
-            .raw_get::<Option<String>>("__songlua_actor_type")?
-            .is_some()
-            || child
-                .raw_get::<Option<Table>>("__songlua_parent")?
-                .is_none()
-        {
-            child.set("__songlua_parent", actor.clone())?;
-        }
+        adopt_actor_child(actor, &child)?;
         run_actor_startup_commands_for_table(lua, &child)?;
     }
     run_song_meter_stream_startup_command(lua, actor)?;
@@ -11903,7 +11913,7 @@ fn collect_compile_update_jobs(
         let Value::Table(child) = child? else {
             continue;
         };
-        child.set("__songlua_parent", actor.clone())?;
+        adopt_actor_child(actor, &child)?;
         collect_compile_update_jobs(lua, &child, Some(actor), false, jobs, order)?;
     }
     if let Some(stream) = song_meter_stream_child(lua, actor)? {
@@ -12789,7 +12799,7 @@ fn run_actor_update_functions_for_table_inner(
         let Value::Table(child) = child? else {
             continue;
         };
-        child.set("__songlua_parent", actor.clone())?;
+        adopt_actor_child(actor, &child)?;
         run_actor_update_functions_for_table_inner(
             lua,
             &child,
