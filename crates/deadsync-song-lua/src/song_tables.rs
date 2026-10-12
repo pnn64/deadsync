@@ -73,6 +73,26 @@ pub(crate) fn restart_stage_options(lua: &Lua) -> mlua::Result<()> {
     Ok(())
 }
 
+pub(crate) fn clear_active_attack_options(lua: &Lua) -> mlua::Result<()> {
+    let Some(levels) = lua.app_data_ref::<SongLuaOptionLevels>() else { return Ok(()); };
+    let players = levels.players.clone();
+    let songs = levels.songs.clone();
+    drop(levels);
+    // PlayerState::RemoveActiveAttacks rebuilds Song from Stage, even with
+    // no active attacks. ModsGroup::Assign(Song) leaves Current to approach
+    // the new target on the next GameState update. Retain Lua table identity.
+    for player in players {
+        assign_player_options(lua, &player[2], &player[1])?;
+    }
+    for key in SONG_OPTION_SWITCHES.into_iter().chain([
+        "__songlua_music_rate", "__songlua_music_rate_speed",
+        "__songlua_haste", "__songlua_haste_speed",
+    ]) {
+        songs[2].raw_set(key, songs[1].raw_get::<Value>(key)?)?;
+    }
+    Ok(())
+}
+
 fn option_approach(value: f32, target: f32, amount: f32) -> mlua::Result<f32> {
     if !(amount >= 0.0) {
         return Err(mlua::Error::runtime("negative native option approach"));

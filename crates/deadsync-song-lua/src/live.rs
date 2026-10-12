@@ -424,6 +424,8 @@ pub struct SongLuaLiveFrame {
     pub music_seconds: f64,
     pub screen_seconds: f64,
     pub delta_seconds: f64,
+    /// The gameplay core reached its outro and removed active attacks.
+    pub gameplay_outro: bool,
     pub players: [SongLuaLivePlayer; LUA_PLAYERS],
 }
 
@@ -456,6 +458,7 @@ impl SongLuaLiveFrame {
             music_seconds: game.clock.song_position.current_music_time_ns as f64 / 1_000_000_000.0,
             screen_seconds: f64::from(game.boundary.total_elapsed_in_screen),
             delta_seconds: f64::from(delta_seconds),
+            gameplay_outro: game.mods.attacks.cleared_for_outro,
             players: std::array::from_fn(|player| game.stage_itg_score_inputs(player).map_or_else(
                 SongLuaLivePlayer::default, |score| {
                     let mut value = SongLuaLivePlayer::from_player(
@@ -542,6 +545,8 @@ pub struct SongLuaLiveScene {
     backgrounds: Vec<LiveBackground>,
     foregrounds: Vec<LiveForeground>,
     pub(crate) startup_output: SongLuaLiveOutput,
+    outro_started: bool,
+    outro_options_reset: bool,
     ended: bool,
 }
 
@@ -595,7 +600,8 @@ impl SongLuaLiveScene {
         }
         Ok(Self { lua, root, stage, players, actors, states, tracked, registry,
             targets: Vec::new(), context, entry_paths, primary_index, last_beat,
-            last_music_seconds: -9999.0, backgrounds, foregrounds, startup_output, ended: false })
+            last_music_seconds: -9999.0, backgrounds, foregrounds, startup_output,
+            outro_started: false, outro_options_reset: false, ended: false })
     }
 
     pub fn advance(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {
@@ -631,6 +637,15 @@ impl SongLuaLiveScene {
                 foreground.finished = true;
             }
         }
+        // ScreenGameplay posts NotesEnded after its actor Update. Screen
+        // dispatches it after the following actor Update, then LeaveGameplay
+        // removes attacks. Authored callbacks first see the rebuilt options
+        // on the next frame. Use the gameplay boundary, not a trace timestamp.
+        if self.outro_started && !self.outro_options_reset {
+            crate::song_tables::clear_active_attack_options(&self.lua)?;
+            self.outro_options_reset = true;
+        }
+        self.outro_started |= frame.gameplay_outro;
         self.last_music_seconds = frame.music_seconds as f32;
         for (actor, state) in self.actors.iter().zip(&mut self.states) {
             *state = read_state(&self.lua, actor)?;
@@ -900,6 +915,60 @@ return setmetatable({__songlua_actor_type='ActorFrame',Name='Declared',
         context.music_length_seconds = 60.0;
         crate::compile_song_lua_with_default_host(&entry, &context, SongLuaNoteskinResolver::default(),
             |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).expect("live preparation")
+    }
+
+    #[test]
+    fn live_outro_rebuilds_song_options_after_queued_screen_message() {
+        let mut compiled = compile("outro-options", r#"
+local ps = GAMESTATE:GetPlayerState(PLAYER_1)
+PREFERRED = ps:GetPlayerOptions('ModsLevel_Preferred')
+STAGE = ps:GetPlayerOptions('ModsLevel_Stage')
+SONG = ps:GetPlayerOptions('ModsLevel_Song')
+CURRENT = ps:GetPlayerOptions('ModsLevel_Current')
+SPEEDS = {}
+return Def.ActorFrame { OnCommand = function(self)
+    self:SetUpdateFunction(function(self, delta)
+        if delta <= 0 then return end
+        local value, speed = SONG:Reverse(0, 1000)
+        SPEEDS[#SPEEDS + 1] = {value, speed}
+    end)
+end }
+"#);
+        let mut scene = compiled.live_scene.take().expect("owned scene");
+        scene.lua.load(r#"
+            PREFERRED:Reverse(0.2, 0.25)
+            STAGE:Reverse(0.4, 0.5)
+            SONG:Reverse(1, 1000)
+            CURRENT:Reverse(0)
+        "#).exec().expect("distinct option levels");
+        let mut frame = SongLuaLiveFrame { screen_seconds: 0.125, delta_seconds: 0.125,
+            ..Default::default() };
+        for index in 0..4 {
+            frame.gameplay_outro = index > 0;
+            scene.advance(frame).expect("outro frame");
+            if index == 2 {
+                let current = scene.lua.load("return CURRENT:Reverse()")
+                    .eval::<f32>().expect("current retained after Song assignment");
+                assert_eq!(current, 0.0);
+                assert_eq!(scene.lua.load("return SONG:Reverse()")
+                    .eval::<f32>().expect("stage copied after actor callbacks"), 0.4);
+            }
+            frame.screen_seconds += 0.125;
+        }
+        let speeds = scene.lua.globals().get::<Table>("SPEEDS").expect("actual setter returns");
+        for (index, value, speed) in [(1, 1.0, 1000.0), (2, 0.0, 1000.0),
+                                     (3, 0.0, 1000.0), (4, 0.4, 0.5)] {
+            let result = speeds.raw_get::<Table>(index).expect("callback result");
+            assert_eq!(result.raw_get::<f32>(1).expect("previous value"), value);
+            assert_eq!(result.raw_get::<f32>(2).expect("previous approach speed"), speed);
+        }
+        assert_eq!(scene.lua.load("return CURRENT:Reverse()")
+            .eval::<f32>().expect("Current approaches the rebuilt Song target"), 0.0625);
+        scene.advance(frame).expect("continued outro");
+        assert_eq!(speeds.raw_get::<Table>(5).expect("continued setter").raw_get::<f32>(2)
+            .expect("reset occurs once"), 1000.0);
+        assert_eq!(scene.lua.load("return PREFERRED:Reverse(), STAGE:Reverse(), SONG == GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song')")
+            .eval::<(f32, f32, bool)>().expect("retained references"), (0.2, 0.4, true));
     }
 
     #[test]

@@ -890,6 +890,7 @@ end}
                 music_seconds: 0.25,
                 screen_seconds: 0.25,
                 delta_seconds: 0.01,
+                gameplay_outro: false,
                 players: std::array::from_fn(|_| deadsync_song_lua::SongLuaLivePlayer::default()),
             })
             .expect("advance update callback");
