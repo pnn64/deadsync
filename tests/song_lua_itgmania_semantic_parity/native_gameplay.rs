@@ -9,10 +9,10 @@ use deadsync_gameplay::{
 use deadsync_theme_simply_love::screens::gameplay;
 use serde_json::{Value, json};
 use std::{
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet},
     path::Path,
-    sync::atomic::{AtomicUsize, Ordering},
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Arc, OnceLock},
 };
 
 const CALL_OPERATIONS: &[&str] = &[
@@ -60,34 +60,40 @@ const CALL_OPERATIONS: &[&str] = &[
     "Actor.effectmagnitude",
 ];
 
-struct CallLog {
-    events: Mutex<Vec<Value>>,
-    dropped: AtomicUsize,
-    limit: AtomicUsize,
+struct CallLog;
+static CALL_LOG: CallLog = CallLog;
+struct CallEvents {
+    events: Vec<Value>,
+    dropped: usize,
+    limit: usize,
 }
-static CALL_LOG: CallLog = CallLog {
-    events: Mutex::new(Vec::new()),
-    dropped: AtomicUsize::new(0),
-    limit: AtomicUsize::new(250_000),
-};
+thread_local! {
+    // Each owned Lua VM runs on its replay thread. Unrelated test threads
+    // must neither clear its observations nor consume its trace capacity.
+    static CALL_EVENTS: RefCell<CallEvents> = const {
+        RefCell::new(CallEvents { events: Vec::new(), dropped: 0, limit: 0 })
+    };
+}
 
 impl log::Log for CallLog {
     fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
         metadata.target() == "deadsync_song_lua::trace"
+            && CALL_EVENTS.try_with(|capture| capture.borrow().limit > 0).unwrap_or(false)
     }
     fn log(&self, record: &log::Record<'_>) {
         if !self.enabled(record.metadata()) {
             return;
         }
-        let mut events = self.events.lock().expect("diagnostic call log");
-        if events.len() >= self.limit.load(Ordering::Relaxed) {
-            self.dropped.fetch_add(1, Ordering::Relaxed);
-            return;
-        }
-        events.push(
-            serde_json::from_str(&record.args().to_string())
-                .unwrap_or_else(|error| json!({"kind":"trace-error","error":error.to_string()})),
-        );
+        CALL_EVENTS.with_borrow_mut(|capture| {
+            if capture.events.len() >= capture.limit {
+                capture.dropped += 1;
+                return;
+            }
+            capture.events.push(
+                serde_json::from_str(&record.args().to_string())
+                    .unwrap_or_else(|error| json!({"kind":"trace-error","error":error.to_string()})),
+            );
+        });
     }
     fn flush(&self) {}
 }
@@ -98,13 +104,11 @@ fn start_call_log(limit: usize) -> Result<(), String> {
     INSTALLED
         .get_or_init(|| log::set_logger(&CALL_LOG).map_err(|error| error.to_string()))
         .clone()?;
-    CALL_LOG
-        .events
-        .lock()
-        .map_err(|error| error.to_string())?
-        .clear();
-    CALL_LOG.dropped.store(0, Ordering::Relaxed);
-    CALL_LOG.limit.store(limit, Ordering::Relaxed);
+    CALL_EVENTS.with_borrow_mut(|capture| {
+        capture.events.clear();
+        capture.dropped = 0;
+        capture.limit = limit;
+    });
     log::set_max_level(log::LevelFilter::Trace);
     Ok(())
 }
@@ -125,31 +129,31 @@ fn compare_calls(
             .to_string_lossy()
             .replace('\\', "/")
     );
-    let logged = CALL_LOG.events.lock().map_err(|error| error.to_string())?;
-    for event in logged.iter().filter(|event| event["kind"] == "trace-error") {
-        mismatches.push(json!({"field":"call_trace_error","deadsync":event}));
-    }
-    let mut actual_handles = BTreeMap::new();
-    let actual: Vec<Value> = logged
-        .iter()
-        .filter_map(|event| {
-            let source = event["source"].as_str()?.replace('\\', "/");
-            let source = source
-                .split_once(&song_dir)
-                .map(|(_, path)| format!("song:/{path}"))
-                .or_else(|| source.starts_with("song:/").then(|| source.clone()))?;
-            let mut event = event.clone();
-            event["source"] = json!(source);
-            normalize_paths(&mut event, &song_dir);
-            if matches!(event["kind"].as_str(), Some("query" | "modifier")) {
-                let scene = event["scene"].as_u64().unwrap_or(0);
-                normalize_query_handles(&mut event["results"], &mut actual_handles, scene);
-            }
-            Some(event)
-        })
-        .collect();
-    drop(logged);
-    let dropped = CALL_LOG.dropped.load(Ordering::Relaxed);
+    let (actual, dropped) = CALL_EVENTS.with_borrow(|capture| {
+        for event in capture.events.iter().filter(|event| event["kind"] == "trace-error") {
+            mismatches.push(json!({"field":"call_trace_error","deadsync":event}));
+        }
+        let mut actual_handles = BTreeMap::new();
+        let actual: Vec<Value> = capture.events
+            .iter()
+            .filter_map(|event| {
+                let source = event["source"].as_str()?.replace('\\', "/");
+                let source = source
+                    .split_once(&song_dir)
+                    .map(|(_, path)| format!("song:/{path}"))
+                    .or_else(|| source.starts_with("song:/").then(|| source.clone()))?;
+                let mut event = event.clone();
+                event["source"] = json!(source);
+                normalize_paths(&mut event, &song_dir);
+                if matches!(event["kind"].as_str(), Some("query" | "modifier")) {
+                    let scene = event["scene"].as_u64().unwrap_or(0);
+                    normalize_query_handles(&mut event["results"], &mut actual_handles, scene);
+                }
+                Some(event)
+            })
+            .collect();
+        (actual, capture.dropped)
+    });
     if dropped != 0 {
         mismatches.push(json!({"field":"dropped_call_trace","deadsync":dropped}));
     }
@@ -434,15 +438,37 @@ mod tests {
     #[test]
     fn call_trace_capacity_keeps_overflow_visible() {
         use log::Log;
-        let logger = super::CallLog { events: std::sync::Mutex::new(Vec::new()),
-            dropped: std::sync::atomic::AtomicUsize::new(0),
-            limit: std::sync::atomic::AtomicUsize::new(2) };
+        super::start_call_log(2).expect("local call trace");
         let record = log::Record::builder().args(format_args!("{{}}"))
             .target("deadsync_song_lua::trace").level(log::Level::Trace).build();
-        for _ in 0..3 { logger.log(&record); }
-        assert_eq!(logger.events.lock().expect("local call log").len(), 2);
-        assert_eq!(logger.dropped.load(std::sync::atomic::Ordering::Relaxed), 1);
+        for _ in 0..3 { super::CALL_LOG.log(&record); }
+        super::CALL_EVENTS.with_borrow(|capture| {
+            assert_eq!(capture.events.len(), 2);
+            assert_eq!(capture.dropped, 1);
+        });
         assert!(super::start_call_log(0).is_err());
+    }
+
+    #[test]
+    fn concurrent_call_logs_remain_separate() {
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let handles: Vec<_> = (1..=2).map(|owner| {
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                super::start_call_log(3).expect("worker call trace");
+                barrier.wait();
+                for _ in 0..owner + 2 {
+                    log::trace!(target: "deadsync_song_lua::trace", "{{\"owner\":{owner}}}");
+                }
+                barrier.wait();
+                super::CALL_EVENTS.with_borrow(|capture| {
+                    assert_eq!(capture.events.len(), 3);
+                    assert_eq!(capture.dropped, owner - 1);
+                    assert!(capture.events.iter().all(|event| event["owner"] == owner));
+                });
+            })
+        }).collect();
+        for handle in handles { handle.join().expect("isolated worker observations"); }
     }
 
     #[test]
@@ -474,7 +500,7 @@ return Def.ActorFrame{}
             SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])),
             |_| None, |_, _| None).expect("compile real option operations");
         assert!(compiled.live_scene.is_some());
-        let events = super::CALL_LOG.events.lock().expect("read option observations");
+        let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
         assert_eq!(events.iter().map(|e| e["operation"].as_str().expect("operation")).collect::<Vec<_>>(),
             ["GameState.GetSongOptionsObject", "SongOptions.MusicRate", "SongOptions.MusicRate",
              "SongOptions.MusicRate", "GameState.GetPlayerState", "PlayerState.SetPlayerOptions",
@@ -645,7 +671,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn actor_and_query_trace_keep_lua_callers() {
-        use super::{CALL_LOG, start_call_log};
+        use super::start_call_log;
         use deadsync_song_lua::{
             SongLuaCompileContext, SongLuaDifficulty, SongLuaNoteskinResolver, SongLuaStep,
             compile_song_lua_with_default_host,
@@ -693,7 +719,7 @@ return Def.ActorFrame{}
         )
         .expect("compile real live actor");
         assert!(compiled.live_scene.is_some());
-        let events = CALL_LOG.events.lock().expect("read actual observations");
+        let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
         let calls: Vec<_> = events
             .iter()
             .filter(|event| {
@@ -811,10 +837,7 @@ end}
             })
             .expect("advance update callback");
         assert!(output.errors.is_empty(), "{:?}", output.errors);
-        let events = CALL_LOG
-            .events
-            .lock()
-            .expect("actual callback observations");
+        let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
         for (operation, results) in [
             (
                 "RageDisplay.SupportsRenderToTexture",
@@ -1192,6 +1215,47 @@ fn native_profile_inputs(trace: &Value) -> Result<[deadsync_profile::Profile; 2]
     }))
 }
 
+fn compare_stage_sample(
+    state: &gameplay::State,
+    song: &deadsync_chart::song::SongData,
+    sample: &Value,
+    seconds: f64,
+    scene: u64,
+    mismatches: &mut Vec<Value>,
+    observations: &mut Vec<Value>,
+) -> Result<usize, String> {
+    let player = &state.players_runtime.players[0];
+    let score = state.stage_itg_score_inputs(0).ok_or("missing active player score inputs")?;
+    let selected = state.song_lua.as_ref().ok_or("missing Lua metadata")?
+        .selected_context().map_err(|error| error.to_string())?.player_step_indices[0]
+        .ok_or("GAMESTATE has no selected P1 chart")?;
+    let metadata = song.charts.get(selected).ok_or("GAMESTATE selected an absent chart")?;
+    let actual = json!({"possible":score.possible_grade_points, "current_possible":player.current_possible_points,
+        "actual":player.earned_grade_points, "misses":player.judgment_counts[5],
+        "w1":player.judgment_counts[0], "w2":player.judgment_counts[1],
+        "failed":player.stage_failed || player.fail_time.is_some(), "life_latest":player.life,
+        "difficulty":format!("Difficulty_{}", metadata.difficulty),
+        "description":metadata.description, "meter":metadata.meter});
+    let native = &sample["players"][0];
+    let fields = ["possible", "current_possible", "actual", "misses", "w1", "w2",
+        "failed", "life_latest", "difficulty", "description", "meter"];
+    for key in fields {
+        let equal = if key == "life_latest" {
+            (number(native, key)? - number(&actual, key)?).abs() <= 1e-6
+        } else {
+            native[key] == actual[key]
+        };
+        if !equal {
+            mismatches.push(json!({"phase":sample["phase"],"seconds":seconds,
+                "field":key,"native":native[key],"deadsync":actual[key]}));
+        }
+    }
+    observations.push(json!({"phase":sample["phase"],"scene":scene,"seconds":seconds,
+        "beat":state.clock.song_position.current_beat,
+        "screen_seconds":state.boundary.total_elapsed_in_screen,"player":actual}));
+    Ok(fields.len())
+}
+
 pub(crate) fn replay(
     trace: &Value,
     trace_path: &Path,
@@ -1421,6 +1485,7 @@ pub(crate) fn replay(
     let mut sample_cursor = 0;
     let mut previous_wall = None;
     let mut used_frames = 0;
+    let mut starting_scene = true;
     for (index, frame) in frames.iter().take(frame_count).enumerate() {
         if first_navigation.is_some() {
             frames_after_navigation += 1;
@@ -1448,6 +1513,7 @@ pub(crate) fn replay(
                     .map(|event| broadcast_event(event, simfile)),
             );
             scene_count += 1;
+            starting_scene = true;
         }
         if frame["scene"].as_u64() != Some(scene_count) {
             return Err(format!(
@@ -1462,6 +1528,33 @@ pub(crate) fn replay(
             return Err("invalid native input-clock order".into());
         }
         previous_wall = Some(wall);
+        if starting_scene {
+            // ScreenManager::LoadScreen broadcasts ScreenChanged before the
+            // first overlay Update. Its observer clock can precede that frame
+            // while the initialized scores already exist. Replay only this
+            // clock input here; never run an extra frame or import native stats.
+            while let Some(sample) = samples.get(sample_cursor) {
+                if sample["phase"] == "overlay-init"
+                    || sample["scene"].as_u64().is_some_and(|scene| scene < scene_count)
+                {
+                    sample_cursor += 1;
+                    continue;
+                }
+                if sample["phase"] != "screen-active" || sample["scene"].as_u64() != Some(scene_count) {
+                    break;
+                }
+                let at = number(sample, "seconds")?;
+                if at > seconds + 1e-6 {
+                    return Err("native activation clock follows the first gameplay frame".into());
+                }
+                state.set_current_music_time_ns((at * 1e9).round() as i64);
+                compared_fields += compare_stage_sample(&state, &song, sample, at,
+                    scene_count, &mut mismatches, &mut observations)?;
+                checked_samples += 1;
+                sample_cursor += 1;
+            }
+            starting_scene = false;
+        }
         // Preparation already performs the real startup Update(0). Set the
         // input clock without running those callbacks a second time.
         if delta == 0.0 {
@@ -1557,56 +1650,8 @@ pub(crate) fn replay(
                 continue;
             }
             checked_samples += 1;
-            let player = &state.players_runtime.players[0];
-            let score = state
-                .stage_itg_score_inputs(0)
-                .ok_or("missing active player score inputs")?;
-            let selected = state
-                .song_lua
-                .as_ref()
-                .ok_or("missing Lua metadata")?
-                .selected_context()
-                .map_err(|error| error.to_string())?
-                .player_step_indices[0]
-                .ok_or("GAMESTATE has no selected P1 chart")?;
-            let metadata = song
-                .charts
-                .get(selected)
-                .ok_or("GAMESTATE selected an absent chart")?;
-            let actual = json!({"possible":score.possible_grade_points, "current_possible":player.current_possible_points,
-                "actual":player.earned_grade_points, "misses":player.judgment_counts[5],
-                "w1":player.judgment_counts[0], "w2":player.judgment_counts[1],
-                "failed":player.stage_failed || player.fail_time.is_some(), "life_latest":player.life,
-                "difficulty":format!("Difficulty_{}", metadata.difficulty),
-                "description":metadata.description, "meter":metadata.meter});
-            let native = &sample["players"][0];
-            for key in [
-                "possible",
-                "current_possible",
-                "actual",
-                "misses",
-                "w1",
-                "w2",
-                "failed",
-                "life_latest",
-                "difficulty",
-                "description",
-                "meter",
-            ] {
-                compared_fields += 1;
-                let equal = if key == "life_latest" {
-                    (number(native, key)? - number(&actual, key)?).abs() <= 1e-6
-                } else {
-                    native[key] == actual[key]
-                };
-                if !equal {
-                    mismatches.push(json!({"phase":sample["phase"],"seconds":seconds, "field":key,"native":native[key],"deadsync":actual[key]}));
-                }
-            }
-            observations.push(
-                json!({"phase":sample["phase"],"scene":scene_count,"seconds":seconds,"beat":state.clock.song_position.current_beat,
-                "screen_seconds":state.boundary.total_elapsed_in_screen,"player":actual}),
-            );
+            compared_fields += compare_stage_sample(&state, &song, sample, seconds,
+                scene_count, &mut mismatches, &mut observations)?;
         }
     }
     if scope != Scope::Full {
