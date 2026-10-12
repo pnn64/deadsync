@@ -1293,6 +1293,42 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 186,
+      "source_simfile": "Fiji (Lange Remix)/Fiji (Lange Remix).ssc",
+      "simfile_sha256": "0f350ad4c25182026fab6a7dccd41351859949cd35dbd69ca98a0e0e163b9ebd",
+      "retained_original_archive": "9b20d2ab75f6484949300e97d1152c5f747b6c561a8c718b419473704f1c73a8.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "fb0ae8b99391809080b072426dee35d2efe0e64d479b0dff9833bb6e5370848d",
+      "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+      "fix_commit": "e2b01b99a / harness 55299c5",
+      "build_proof": "/home/parity/jobs/background-effect-owner-build-v1/proof.json",
+      "capture_seconds": 105.58422386700113,
+      "trace_sha256": "273a6ad0e66bb484f4873431eb545f7f95e7cd0eae93b4c2064c04ada1730ce9",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-186/candidates/cb85a348b7f848964bf688dad1f7758613100592ac76aae18838e87f48af7942.tar",
+      "replay_exit": 2,
+      "replay_seconds": 444.1581489270029,
+      "candidate_sha256": "cb85a348b7f848964bf688dad1f7758613100592ac76aae18838e87f48af7942",
+      "native_frames": 93015,
+      "replayed_frames": 93015,
+      "compared_stage_fields": 1144,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers, PlayerOptions.CMod, PlayerOptions.MMod, PlayerOptions.XMod, PlayerState.GetCurrentPlayerOptions"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 1,
+      "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 5,
+          "deadsync": 0
+        }
+      ],
+      "report_sha256": "d5d8ca8596715f2457b611383b0c582496d1da9bd7f64e2de2b2f9037f92bcfe"
     }
   ],
   "scope": {
@@ -1302,9 +1338,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "65deadde882c24ff688e78316e3add017f876258ae7209bc32e5a032b106b5c9",
+  "binary_sha256": "fb0ae8b99391809080b072426dee35d2efe0e64d479b0dff9833bb6e5370848d",
   "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
   "passed_fixtures": 1,
-  "pending_charts": 5,
-  "processed_charts": 6
+  "pending_charts": 6,
+  "processed_charts": 7
 }
