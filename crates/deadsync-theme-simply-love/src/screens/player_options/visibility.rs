@@ -67,7 +67,7 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     {
         return visibility.show_error_bar_children;
     }
-    if id == RowId::TextErrorBarMode {
+    if id == RowId::TextErrorBarMode || id == RowId::TextErrorBarPosition {
         return visibility.show_error_bar_children && visibility.show_text_error_bar_children;
     }
     if id == RowId::TextErrorBarThreshold {
@@ -197,6 +197,7 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
         || id == RowId::ErrorBarOffsetX
         || id == RowId::ErrorBarOffsetY
         || id == RowId::TextErrorBarMode
+        || id == RowId::TextErrorBarPosition
         || id == RowId::TextErrorBarThreshold
         || id == RowId::ShortAverageErrorBar
         || id == RowId::CenterTick

@@ -85,6 +85,7 @@ pub enum RowId {
     OffsetIndicator,
     ErrorBar,
     TextErrorBarMode,
+    TextErrorBarPosition,
     TextErrorBarThreshold,
     ShortAverageErrorBar,
     CenterTick,

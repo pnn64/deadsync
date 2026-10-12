@@ -63,6 +63,7 @@ pub(crate) struct ErrorBarComposeRequest<'a> {
     pub text: Option<ErrorBarText>,
     pub frame_text_slot: u8,
     pub text_visible: bool,
+    pub text_centered: bool,
     pub text_label: fn(bool, bool) -> &'static str,
 }
 
@@ -478,7 +479,9 @@ fn append_text_feedback(draws: &mut Vec<FlatDraw>, request: &ErrorBarComposeRequ
     if !(0.0..style.text_duration).contains(&age) {
         return;
     }
-    let x = if feedback.early {
+    let x = if request.text_centered {
+        0.0
+    } else if feedback.early {
         -style.text_x_offset
     } else {
         style.text_x_offset
@@ -910,6 +913,7 @@ mod tests {
             text: None,
             frame_text_slot: 0,
             text_visible: false,
+            text_centered: false,
             text_label,
         }
     }
@@ -1483,7 +1487,7 @@ mod tests {
     }
 
     #[test]
-    fn text_feedback_preserves_normal_and_scaled_early_late_fingerprints() {
+    fn text_feedback_preserves_split_and_centered_early_late_fingerprints() {
         let cases = [
             (
                 true,
@@ -1520,24 +1524,46 @@ mod tests {
         ];
 
         for (early, scaled, content, position, zoom, color) in cases {
-            let mut request = request(ErrorBarModes::default(), empty_state());
-            request.visible = false;
-            request.text_visible = true;
-            request.text = Some(ErrorBarText {
-                started_at: 0.8,
-                early,
-                offset_ms: 12.5,
-                scaled,
-                scale_start_ms: 10.0,
-            });
-            let mut draws = Vec::new();
+            for centered in [false, true] {
+                for judgment_back in [false, true] {
+                    let mut request = request(ErrorBarModes::default(), empty_state());
+                    request.visible = false;
+                    request.text_visible = true;
+                    request.text_centered = centered;
+                    request.judgment_back = judgment_back;
+                    // Model user offsets applied to the error bar's base position.
+                    request.position = [75.0, 230.0];
+                    request.text = Some(ErrorBarText {
+                        started_at: 0.8,
+                        early,
+                        offset_ms: 12.5,
+                        scaled,
+                        scale_start_ms: 10.0,
+                    });
+                    let expected_position = if centered {
+                        request.position
+                    } else {
+                        [position[0] - 25.0, position[1] + 30.0]
+                    };
+                    let z = if judgment_back { 90 } else { 184 };
+                    let mut draws = Vec::new();
 
-            compose_error_bar(&mut draws, request);
+                    compose_error_bar(&mut draws, request);
 
-            assert_eq!(draws.len(), 1);
-            assert_prepared_text(
-                &draws[0], "wendy", content, position, zoom, color, 1.0, 184, 3,
-            );
+                    assert_eq!(draws.len(), 1);
+                    assert_prepared_text(
+                        &draws[0],
+                        "wendy",
+                        content,
+                        expected_position,
+                        zoom,
+                        color,
+                        1.0,
+                        z,
+                        3,
+                    );
+                }
+            }
         }
     }
 

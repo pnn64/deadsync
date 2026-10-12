@@ -77,6 +77,7 @@ const ROW_IDS: &[RowId] = &[
     RowId::OffsetIndicator,
     RowId::ErrorBar,
     RowId::TextErrorBarMode,
+    RowId::TextErrorBarPosition,
     RowId::TextErrorBarThreshold,
     RowId::ShortAverageErrorBar,
     RowId::CenterTick,

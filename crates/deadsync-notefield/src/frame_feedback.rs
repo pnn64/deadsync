@@ -1089,6 +1089,7 @@ mod tests {
             error_bar_max_window_ix: 0,
             monochrome_background: false,
             error_bar_multi_tick: false,
+            text_error_bar_centered: false,
             short_average_error_bar: false,
             center_tick: false,
             error_ms_display: false,

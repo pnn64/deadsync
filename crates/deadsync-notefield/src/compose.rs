@@ -200,6 +200,7 @@ pub struct NotefieldOptions {
     pub error_bar_max_window_ix: usize,
     pub monochrome_background: bool,
     pub error_bar_multi_tick: bool,
+    pub text_error_bar_centered: bool,
     pub short_average_error_bar: bool,
     pub center_tick: bool,
     pub error_ms_display: bool,
