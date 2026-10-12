@@ -710,6 +710,17 @@
         }
       ],
       "report_sha256": "c9b7c040bb133c422b0260bc46f1a65b19cdb4f58ebb90f92cd287c3700757e7"
+    },
+    {
+      "position": 151,
+      "source_simfile": "Cold/Cold.ssc",
+      "simfile_sha256": "0b81c6037cfb2151fd0419d07217dfd72fd373d46ab72f99eddb5867b559f1ca",
+      "retained_original_archive": "186c365bb0dec8d5457769327b6935067bb34717083b668114eb370d9c0b4fc1.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "capture_exit": 1,
+      "capture_seconds": 234.2978513880007,
+      "failure": "error: ITGmania song Lua semantic trace failed: native method event has no valid immediate caller; retained run directory /tmp/itgmania-harness-rs/song-lua-134420-1791836866036822333-0\n"
     }
   ],
   "historical_pending": [
@@ -736,6 +747,6 @@
   "binary_sha256": "d515e94becf9b644c522e453045a5f07d1e149cc18765469d78b2384164539ad",
   "harness_sha256": "41bfe13b815a4a9695c2271e375611ff2e0efc017c4c4bc1ee304cb89bf69a54",
   "passed_fixtures": 0,
-  "pending_charts": 2,
-  "processed_charts": 2
+  "pending_charts": 3,
+  "processed_charts": 3
 }
