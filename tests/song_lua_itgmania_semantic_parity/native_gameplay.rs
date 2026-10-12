@@ -360,6 +360,46 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
 #[cfg(test)]
 mod tests {
     #[test]
+    fn native_capture_rejects_incomplete_or_failed_traces() {
+        let complete = serde_json::json!({
+            "oracle": "itgmania_song_lua_semantic_trace",
+            "capabilities": {"native_stage_statistics": true, "native_machine_preferences": true,
+                "native_update_frames": true, "native_screen_lifecycle": true},
+            "dropped_update_frames": 0, "dropped_events": 0, "dropped_stage_samples": 0,
+            "completion": {"reason": "gameplay-exit", "stage_committed": true},
+            "update_frame_phase": "gameplay-overlay-probe", "input": {"injected_inputs": false},
+            "update_frames": [{"sequence": 1}, {"sequence": 2}],
+            "events": [{"seq": 1, "kind": "call"}], "stage_samples": [{}]
+        });
+        super::validate_capture(&complete).expect("complete executable observations");
+        for (path, replacement) in [
+            (
+                "/capabilities/native_update_frames",
+                serde_json::json!(false),
+            ),
+            ("/dropped_update_frames", serde_json::json!(1)),
+            ("/dropped_events", serde_json::json!(1)),
+            ("/dropped_stage_samples", serde_json::json!(1)),
+            ("/completion/reason", serde_json::json!("until-beat")),
+            ("/completion/stage_committed", serde_json::json!(false)),
+            ("/input/injected_inputs", serde_json::json!(true)),
+            ("/update_frames", serde_json::json!([])),
+            ("/update_frames/1/sequence", serde_json::json!(3)),
+            ("/events", serde_json::json!([])),
+            ("/events/0/seq", serde_json::json!(2)),
+            ("/events/0/kind", serde_json::json!("error")),
+            ("/stage_samples", serde_json::json!([])),
+        ] {
+            let mut incomplete = complete.clone();
+            *incomplete.pointer_mut(path).expect("control field") = replacement;
+            assert!(
+                super::validate_capture(&incomplete).is_err(),
+                "accepted {path}"
+            );
+        }
+    }
+
+    #[test]
     fn actor_and_query_trace_keep_lua_callers() {
         use super::{CALL_LOG, start_call_log};
         use deadsync_song_lua::{
@@ -669,13 +709,7 @@ pub(crate) enum Scope {
     FirstQuery,
 }
 
-pub(crate) fn replay(
-    trace_path: &Path,
-    simfile: &Path,
-    scope: Scope,
-    mut progress: impl FnMut(usize, usize),
-) -> Result<Value, String> {
-    let trace = read_json(trace_path)?;
+pub(crate) fn validate_capture(trace: &Value) -> Result<(), String> {
     if trace["oracle"] != "itgmania_song_lua_semantic_trace"
         || trace["capabilities"]["native_stage_statistics"] != true
         || trace["capabilities"]["native_machine_preferences"] != true
@@ -691,6 +725,42 @@ pub(crate) fn replay(
     {
         return Err("a complete executable capture with actual frame clocks is required".into());
     }
+    for (field, sequence) in [("update_frames", "sequence"), ("events", "seq")] {
+        let values = trace[field]
+            .as_array()
+            .filter(|values| !values.is_empty())
+            .ok_or_else(|| format!("native {field} are empty"))?;
+        if values
+            .iter()
+            .enumerate()
+            .any(|(index, value)| value[sequence].as_u64() != Some(index as u64 + 1))
+        {
+            return Err(format!("native {field} sequence is incomplete"));
+        }
+    }
+    if trace["events"]
+        .as_array()
+        .is_some_and(|events| events.iter().any(|event| event["kind"] == "error"))
+    {
+        return Err("native Lua errors invalidate the reference".into());
+    }
+    if trace["stage_samples"]
+        .as_array()
+        .is_none_or(|samples| samples.is_empty())
+    {
+        return Err("native stage observations are empty".into());
+    }
+    Ok(())
+}
+
+pub(crate) fn replay(
+    trace_path: &Path,
+    simfile: &Path,
+    scope: Scope,
+    mut progress: impl FnMut(usize, usize),
+) -> Result<Value, String> {
+    let trace = read_json(trace_path)?;
+    validate_capture(&trace)?;
     if trace["input"]["autoplay"] != 0 || trace["style"] != "single" {
         return Err(
             "live replay currently supports no-input dance-single; other contexts remain pending"

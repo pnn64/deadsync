@@ -1,0 +1,322 @@
+{
+  "pass": 225,
+  "previous_record": "native-revalidation-pass224.json",
+  "previous_record_sha256": "400271d71d00e0f727e29884f6ae8c59353d8711a30fe4ac74ffa0d1695564f3",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "68fc546231e822f68f8f25022c739d5106d00d01",
+  "comparator_sha256": "b5203071716bdb8c4c25b4bbba83ed3a75bf6d27a16443dcf4b783126b961187",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_simply_love_revision": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+  "canonical_positions_passed": [
+    146
+  ],
+  "next_position": 147,
+  "charts": [
+    {
+      "position": 146,
+      "entry": {
+        "title": "Choices",
+        "source_simfile": "Choices - [Aoreo]/Choices.ssc",
+        "harness_version": "0.1.80",
+        "archive": "2090d88bf827dcba96eccf40c7c4d32e9c27177cd2d350824774333714734659.tar.zst",
+        "sha256": "2090d88bf827dcba96eccf40c7c4d32e9c27177cd2d350824774333714734659",
+        "compressed_bytes": 18550454,
+        "aliases": [
+          "324782de5661b9b5b5817728c1d5420fdf0dd35e08c507aa802a25f262971480.tar.zst"
+        ]
+      },
+      "original_archive_retained": "22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738.tar.zst",
+      "original_entry": {
+        "title": "Choices",
+        "source_simfile": "Choices - [Aoreo]/Choices.ssc",
+        "harness_version": "0.1.0",
+        "archive": "22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738.tar.zst",
+        "sha256": "22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738",
+        "compressed_bytes": 30304,
+        "uncompressed_sha256": "56ed36cb82542b71f0b82e5641c9ad20ebaee09db0a9e8b3bd04a8c06c098f5c",
+        "compression_level": 22,
+        "aliases": [
+          "324782de5661b9b5b5817728c1d5420fdf0dd35e08c507aa802a25f262971480.tar.zst"
+        ]
+      },
+      "native_harness_source_commit": "f62a557cdd2e8cca08466bd404c77d681514f07a",
+      "native_trace_sha256": "c2da4fe71e67b4ea17ceacb6c80bef4620df73658de24e93ac0b96138bfd37a5",
+      "archive_integrity_proof_sha256": "7f88e94351a8199547ffa9ed024b7810258e85984e226361de28cef49f230327",
+      "acceptance": "passed for captured native gameplay/song-lua context",
+      "coverage": {
+        "scope": "captured-song-lua-context",
+        "observed_song_operations": [
+          "Actor.queuecommand",
+          "Actor.sleep",
+          "GameState.GetCurrentSong",
+          "GameState.GetCurrentSteps",
+          "GameState.IsPlayerEnabled",
+          "GameState.SetCurrentSteps",
+          "PlayerStageStats.GetCurrentPossibleDancePoints",
+          "PlayerStageStats.GetPossibleDancePoints",
+          "ScreenManager.GetTopScreen",
+          "ScreenManager.SetNewScreen",
+          "ScreenWithMenuElements.StartTransitioningScreen",
+          "Song.GetStepsByStepsType",
+          "StageStats.GetPlayerStageStats",
+          "StatsManager.GetCurStageStats",
+          "Steps.GetDifficulty",
+          "command.begin",
+          "command.end"
+        ],
+        "uncompared_song_operations": [],
+        "nested_theme_operations": [
+          "Actor.accelerate",
+          "Actor.diffusealpha",
+          "Actor.queuecommand",
+          "GameState.GetCurrentSong",
+          "GameState.GetCurrentStyle",
+          "GameState.GetEnabledPlayers",
+          "GameState.GetHumanPlayers",
+          "GameState.IsCourseMode",
+          "PlayerStageStats.GetTapNoteScores",
+          "PlayerStageStats.SetScore",
+          "StageStats.GaveUp",
+          "StageStats.GetPlayerStageStats",
+          "StatsManager.GetCurStageStats"
+        ],
+        "pending": [],
+        "global_pending": [
+          "full theme stage commitment and history",
+          "unqueried score/alive-time observer fields",
+          "additional game/style/input/course contexts",
+          "production live mode activation"
+        ]
+      }
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "source_commit": "68fc546231e822f68f8f25022c739d5106d00d01",
+      "source_pending_commit": false,
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass208\\choices-float-cutoff-replay-v1.exe",
+        "--archive",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass353\\choices-constructor-archive-v1\\2090d88bf827dcba96eccf40c7c4d32e9c27177cd2d350824774333714734659.tar.zst",
+        "--report",
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass208\\choices-full-float-cutoff-v1.json"
+      ],
+      "binary_sha256": "b5203071716bdb8c4c25b4bbba83ed3a75bf6d27a16443dcf4b783126b961187",
+      "build_receipt": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass188\\choices-float-cutoff-replay-build-v1.json",
+      "build_receipt_sha256": "ca7fc597ccb6d84ca85f8ae6984818e5ffb093f58629bc4216a4b3afb5eec2f5",
+      "archive_proof": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass353\\choices-constructor-archive-proof-v1.json",
+      "archive_proof_sha256": "7f88e94351a8199547ffa9ed024b7810258e85984e226361de28cef49f230327",
+      "archive_sha256": "2090d88bf827dcba96eccf40c7c4d32e9c27177cd2d350824774333714734659",
+      "exit_code": 0,
+      "seconds": 959.3538077999838,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass208\\choices-full-float-cutoff-v1.log",
+      "log_sha256": "231f0358274fb8293e6b3500f4b8c8eec16b738ce9f7798734ef9a9bfbf013a5",
+      "report": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass208\\choices-full-float-cutoff-v1.json",
+      "report_sha256": "203c4b6172394b4f0b6ccf3b6c2afdf664bde16e2d92b3088a671304d6089d1e",
+      "scope": "full",
+      "command_query_count": {
+        "native_count": 1557,
+        "actual_count": 1557,
+        "compared": true
+      },
+      "result": {
+        "replayed_frames": 236724,
+        "replayed_scenes": 2,
+        "checked_stage_samples": 174,
+        "compared_stage_fields": 1914,
+        "mismatches": [],
+        "errors": [],
+        "whole_song_parity_proven": true,
+        "archive_accepted": true,
+        "pending_coverage": []
+      }
+    }
+  ],
+  "replay_report": "native-revalidation-choices-replay.json",
+  "replay_report_sha256": "203c4b6172394b4f0b6ccf3b6c2afdf664bde16e2d92b3088a671304d6089d1e",
+  "comparisons": {
+    "native_frames_replayed": 236724,
+    "ordered_calls_and_queries": 1557,
+    "sampled_stage_fields": 1914,
+    "mismatches": 0,
+    "callback_errors": 0,
+    "coverage_pending": []
+  },
+  "archive_integrity_regression": {
+    "status": "passed for the accepted replacement and existing native-timing legacy format",
+    "accepted_native_capture": {
+      "source_commit": "68fc546231e822f68f8f25022c739d5106d00d01",
+      "source_pending_commit": true,
+      "command": [
+        "cargo",
+        "test",
+        "--test",
+        "song_lua_itgmania_semantic_parity",
+        "--config",
+        "profile.dev.package.deadsync-theme-simply-love.opt-level=2",
+        "--config",
+        "profile.dev.package.deadsync-gameplay.opt-level=2",
+        "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+        "--target-dir",
+        "C:\\GitHub\\itgmania-harness\\target\\deadsync-pass188",
+        "--config",
+        "profile.dev.debug=0",
+        "--config",
+        "profile.dev.incremental=false",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "seconds": 12.593741700053215,
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 305 filtered out; finished in 4.49s"
+      ],
+      "log_sha256": "aaf285ba447e14bea879c71c28704e4d397c3a7acc921bfba9cad334b82d8dac",
+      "receipt": "save/song-lua-validation/pass188/choices-accepted-native-integrity-v3.json",
+      "receipt_sha256": "9d4c57e23b4d5df6740220576f61ab478eda8bac6297ae9cd4b194f6a191bd7f",
+      "tested_reader_source_sha256": {
+        "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "e8fc39951b909dc562964f6da3bf41dfa1e6c468e5fcfeeb57a46c2438bc9486",
+        "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "e838410248d3a48dc43e8558e3511616c484825727e32f8b054f84e18bc9229b"
+      },
+      "environment": {
+        "DEADSYNC_SONG_ARCHIVE": "2090d88bf827dcba96eccf40c7c4d32e9c27177cd2d350824774333714734659"
+      }
+    },
+    "legacy_format_regression": {
+      "source_commit": "68fc546231e822f68f8f25022c739d5106d00d01",
+      "source_pending_commit": true,
+      "command": [
+        "cargo",
+        "test",
+        "--test",
+        "song_lua_itgmania_semantic_parity",
+        "--config",
+        "profile.dev.package.deadsync-theme-simply-love.opt-level=2",
+        "--config",
+        "profile.dev.package.deadsync-gameplay.opt-level=2",
+        "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+        "--target-dir",
+        "C:\\GitHub\\itgmania-harness\\target\\deadsync-pass188",
+        "--config",
+        "profile.dev.debug=0",
+        "--config",
+        "profile.dev.incremental=false",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "seconds": 10.579440500121564,
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 305 filtered out; finished in 2.57s"
+      ],
+      "log_sha256": "0343fd41c21c58acdad0c3044358e4123b87d6204674f319adfef36194138329",
+      "receipt": "save/song-lua-validation/pass188/choices-reader-legacy-regression-v1.json",
+      "receipt_sha256": "88ffb11cd91e4fe54e7ebc803e5773bf35e35845bbf2e72ad0edb1c712d21fff",
+      "tested_reader_source_sha256": {
+        "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "e8fc39951b909dc562964f6da3bf41dfa1e6c468e5fcfeeb57a46c2438bc9486",
+        "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "e838410248d3a48dc43e8558e3511616c484825727e32f8b054f84e18bc9229b"
+      },
+      "environment": {
+        "DEADSYNC_SONG_ARCHIVE": "aa9d64c40269e3f89848f6160e66659a372b2fccdb7e7c9ec3321460914ca19a"
+      }
+    },
+    "incomplete_capture_and_observation_regressions": {
+      "source_commit": "68fc546231e822f68f8f25022c739d5106d00d01",
+      "source_pending_commit": true,
+      "command": [
+        "cargo",
+        "test",
+        "--test",
+        "song_lua_itgmania_semantic_parity",
+        "--config",
+        "profile.dev.package.deadsync-theme-simply-love.opt-level=2",
+        "--config",
+        "profile.dev.package.deadsync-gameplay.opt-level=2",
+        "native_gameplay::tests",
+        "--target-dir",
+        "C:\\GitHub\\itgmania-harness\\target\\deadsync-pass188",
+        "--config",
+        "profile.dev.debug=0",
+        "--config",
+        "profile.dev.incremental=false",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "seconds": 25.067985400091857,
+      "results": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 301 filtered out; finished in 0.08s"
+      ],
+      "log_sha256": "4492725959926f05f4068551ee947157b91a6d9dca91a45d033ed2b55ecc6e3a",
+      "receipt": "save/song-lua-validation/pass188/choices-native-capture-validation-v3.json",
+      "receipt_sha256": "1b82610a37f979efed6e21ac9bfca63e2bf8e16ca3b3465f0192378f6f5a7540",
+      "tested_reader_source_sha256": {
+        "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "e8fc39951b909dc562964f6da3bf41dfa1e6c468e5fcfeeb57a46c2438bc9486",
+        "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "e838410248d3a48dc43e8558e3511616c484825727e32f8b054f84e18bc9229b"
+      }
+    }
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, unselected SSC chart timing ownership and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json.",
+  "global_pending": [
+    "full theme stage commitment and history",
+    "unqueried score/alive-time observer fields",
+    "additional game/style/input/course contexts",
+    "production live mode activation"
+  ],
+  "retained_original_archive_validation": {
+    "archive": "22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738.tar.zst",
+    "accepted": false,
+    "reason": "obsolete continuous-bpm synthetic clock; preserved as historical evidence",
+    "check": {
+      "source_commit": "68fc546231e822f68f8f25022c739d5106d00d01",
+      "source_pending_commit": true,
+      "command": [
+        "cargo",
+        "test",
+        "--test",
+        "song_lua_itgmania_semantic_parity",
+        "--config",
+        "profile.dev.package.deadsync-theme-simply-love.opt-level=2",
+        "--config",
+        "profile.dev.package.deadsync-gameplay.opt-level=2",
+        "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+        "--target-dir",
+        "C:\\GitHub\\itgmania-harness\\target\\deadsync-pass188",
+        "--config",
+        "profile.dev.debug=0",
+        "--config",
+        "profile.dev.incremental=false",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "seconds": 8.586920399684459,
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 305 filtered out; finished in 0.43s"
+      ],
+      "log_sha256": "d69483ceda64c9120bfa5a72ec36f3b55ea1cb2fc4cccd40ce50cdd8baeb3267",
+      "receipt": "save/song-lua-validation/pass188/choices-retained-legacy-integrity-v1.json",
+      "receipt_sha256": "2a12842621906d73efed183b1d64bd1fc58a2764b107eafae4f4b3d43e75d0fd",
+      "tested_reader_source_sha256": {
+        "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "e8fc39951b909dc562964f6da3bf41dfa1e6c468e5fcfeeb57a46c2438bc9486",
+        "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "e838410248d3a48dc43e8558e3511616c484825727e32f8b054f84e18bc9229b"
+      },
+      "environment": {
+        "DEADSYNC_SONG_ARCHIVE": "22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738"
+      }
+    },
+    "existing_native_clock_validation_gate_unchanged": true
+  }
+}

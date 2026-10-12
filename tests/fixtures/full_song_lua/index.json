@@ -1892,12 +1892,10 @@
     {
       "title": "Choices",
       "source_simfile": "Choices - [Aoreo]/Choices.ssc",
-      "harness_version": "0.1.0",
-      "archive": "22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738.tar.zst",
-      "sha256": "22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738",
-      "compressed_bytes": 30304,
-      "uncompressed_sha256": "56ed36cb82542b71f0b82e5641c9ad20ebaee09db0a9e8b3bd04a8c06c098f5c",
-      "compression_level": 22,
+      "harness_version": "0.1.80",
+      "archive": "2090d88bf827dcba96eccf40c7c4d32e9c27177cd2d350824774333714734659.tar.zst",
+      "sha256": "2090d88bf827dcba96eccf40c7c4d32e9c27177cd2d350824774333714734659",
+      "compressed_bytes": 18550454,
       "aliases": [
         "324782de5661b9b5b5817728c1d5420fdf0dd35e08c507aa802a25f262971480.tar.zst"
       ]

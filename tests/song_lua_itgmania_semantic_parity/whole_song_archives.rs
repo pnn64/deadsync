@@ -872,8 +872,17 @@ fn whole_song_archive_index_and_streamed_members_are_valid() {
         assert!(names.insert(&entry.archive), "duplicate indexed archive");
         let archive = extract_archive(entry, &archive_root().join(&entry.archive));
         validate_archive(entry, &archive);
-        let trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
-        validate_native_trace(&trace, &archive.manifest);
+        let trace_path = archive.root.join(&archive.manifest.chart.trace);
+        if archive.manifest.itgmania.execution == "native_gameplay" {
+            let trace: serde_json::Value = serde_json::from_slice(
+                &fs::read(&trace_path).expect("native executable trace"),
+            ).expect("native executable trace JSON");
+            assert_eq!(trace["harness_version"], archive.manifest.harness_version);
+            native_gameplay::validate_capture(&trace).expect("complete native executable capture");
+        } else {
+            let trace = read_trace_file(&trace_path);
+            validate_native_trace(&trace, &archive.manifest);
+        }
         if !entry.retained_version
             && entry
                 .source_simfile

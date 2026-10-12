@@ -2495,6 +2495,15 @@
       "archive": "f80142e41e9782af1b5034937794705e2a8e4367d51cc9a71876a2ea56010cf3.tar.zst",
       "harness_version": "0.1.33",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "revalidation_pass": 225,
+      "source_simfile": "Choices - [Aoreo]/Choices.ssc",
+      "superseded_archive": "22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738.tar.zst",
+      "superseded_archive_retained": true,
+      "archive": "2090d88bf827dcba96eccf40c7c4d32e9c27177cd2d350824774333714734659.tar.zst",
+      "harness_version": "0.1.80",
+      "reason": "Capture native constructor queries and actual owned-VM chart reload, then verify every native frame with native float overdue-note cutoffs."
     }
   ],
   "parity_verifications": [
@@ -8315,6 +8324,67 @@
       "revalidation_only": true,
       "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
       "native_model_geometry_coverage_gap": false
+    },
+    {
+      "revalidation_pass": 225,
+      "index": 146,
+      "source_simfile": "Choices - [Aoreo]/Choices.ssc",
+      "archive": "2090d88bf827dcba96eccf40c7c4d32e9c27177cd2d350824774333714734659.tar.zst",
+      "verifier_source_commit": "68fc546231e822f68f8f25022c739d5106d00d01",
+      "executable_sha256": "b5203071716bdb8c4c25b4bbba83ed3a75bf6d27a16443dcf4b783126b961187",
+      "verification_report": "native-revalidation-choices-replay.json",
+      "verification_report_sha256": "203c4b6172394b4f0b6ccf3b6c2afdf664bde16e2d92b3088a671304d6089d1e",
+      "mismatches": 0,
+      "runtime_errors": 0,
+      "native_frames": 236724,
+      "ordered_calls_queries": 1557,
+      "stage_fields": 1914,
+      "coverage": {
+        "scope": "captured-song-lua-context",
+        "observed_song_operations": [
+          "Actor.queuecommand",
+          "Actor.sleep",
+          "GameState.GetCurrentSong",
+          "GameState.GetCurrentSteps",
+          "GameState.IsPlayerEnabled",
+          "GameState.SetCurrentSteps",
+          "PlayerStageStats.GetCurrentPossibleDancePoints",
+          "PlayerStageStats.GetPossibleDancePoints",
+          "ScreenManager.GetTopScreen",
+          "ScreenManager.SetNewScreen",
+          "ScreenWithMenuElements.StartTransitioningScreen",
+          "Song.GetStepsByStepsType",
+          "StageStats.GetPlayerStageStats",
+          "StatsManager.GetCurStageStats",
+          "Steps.GetDifficulty",
+          "command.begin",
+          "command.end"
+        ],
+        "uncompared_song_operations": [],
+        "nested_theme_operations": [
+          "Actor.accelerate",
+          "Actor.diffusealpha",
+          "Actor.queuecommand",
+          "GameState.GetCurrentSong",
+          "GameState.GetCurrentStyle",
+          "GameState.GetEnabledPlayers",
+          "GameState.GetHumanPlayers",
+          "GameState.IsCourseMode",
+          "PlayerStageStats.GetTapNoteScores",
+          "PlayerStageStats.SetScore",
+          "StageStats.GaveUp",
+          "StageStats.GetPlayerStageStats",
+          "StatsManager.GetCurStageStats"
+        ],
+        "pending": [],
+        "global_pending": [
+          "full theme stage commitment and history",
+          "unqueried score/alive-time observer fields",
+          "additional game/style/input/course contexts",
+          "production live mode activation"
+        ]
+      },
+      "full_corpus_complete": false
     }
   ],
   "reference_coverage_audits": [

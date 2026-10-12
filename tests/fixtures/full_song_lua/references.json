@@ -97,7 +97,7 @@
   "tests/fixtures/itgmania-song-archives/2fff5ba3f967fec410a1dbc12a0375091fd1f9dd02a4f0ea19faddb651f72bb6.tar.zst": "bd9d4d8cde193f9127448117fc02f4f17930ace7fdff9fdfbc36bc65de8de56b.tar.zst",
   "tests/fixtures/itgmania-song-archives/30cc26242a36e124c0d12b97a40d33fe4e72273b40eb73617e19db338477e440.tar.zst": "9e43102ba43ae63247587005a24a064559f4f5b78d243522aa3dc160436c3617.tar.zst",
   "tests/fixtures/itgmania-song-archives/310fbf4f158deb3307abeed4364762dba03e0c8a805628b42c2867516a113c9c.tar.zst": "25f515a5eac4b6c349f3cf992859f5d6842c03abf32f2f71bd62ca84008b68a0.tar.zst",
-  "tests/fixtures/itgmania-song-archives/324782de5661b9b5b5817728c1d5420fdf0dd35e08c507aa802a25f262971480.tar.zst": "22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738.tar.zst",
+  "tests/fixtures/itgmania-song-archives/324782de5661b9b5b5817728c1d5420fdf0dd35e08c507aa802a25f262971480.tar.zst": "2090d88bf827dcba96eccf40c7c4d32e9c27177cd2d350824774333714734659.tar.zst",
   "tests/fixtures/itgmania-song-archives/324bf818a49877a75ea00d0524500b6430bbc97ea4bceafe1717830556760587.tar.zst": "ceca039cfa27d42846a6f5ddfa7ff49a2639a5c00e35d2093dc5eb177554e605.tar.zst",
   "tests/fixtures/itgmania-song-archives/32be2d612493e6e58b314257c775bb066e3b51384475a0cf095aaadeff070057.tar.zst": "b05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b.tar.zst",
   "tests/fixtures/itgmania-song-archives/3342097268a17aaa1164a9ad5f7b550371a4acb1e4e868c7b43024e3ced1755b.tar.zst": "6be680fedffec89b430e572a9566ab2c0a891c640bc72663e4bde18fb830e350.tar.zst",
@@ -654,5 +654,6 @@
   "tests/fixtures/itgmania-song-lua-micro/igaku-whole-song.legacy-synthetic-clock.json.zst": "faff9c975146cfc2d7bb18528de3e9a55dc967d837c66c8d50562e593a62b5cd.json.zst",
   "tests/fixtures/itgmania-song-lua-micro/igaku-whole-song-provenance.legacy-synthetic-clock.json.zst": "5186d6c2c62af188b5bd2954c33c1d58080fe6bb304ec05a5e645942f5ad910f.json.zst",
   "tests/fixtures/itgmania-song-lua-micro/zero-fov.json.zst": "8188195117862e8f68a03c77e19dd4b234ec99900a96399c6cc356d7436a94ff.json.zst",
-  "tests/fixtures/itgmania-song-lua-micro/zero-fov.provenance.json.zst": "1f9409d2b4c8610cb5ce97ec630248f9a3b6c0e60bb1be201c1db0ed6c23a78e.json.zst"
+  "tests/fixtures/itgmania-song-lua-micro/zero-fov.provenance.json.zst": "1f9409d2b4c8610cb5ce97ec630248f9a3b6c0e60bb1be201c1db0ed6c23a78e.json.zst",
+  "tests/fixtures/full_song_lua/22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738.tar.zst": "22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738.tar.zst"
 }
