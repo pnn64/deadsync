@@ -2093,6 +2093,91 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 165,
+      "source_simfile": "Datamania (tpz Overheat Remix)/Datamania (tpz Overheat Remix).ssc",
+      "simfile_sha256": "f00a488fe36e5b9ce8987d9dcbc462311008ad02f8d70b860138a5523f6fa7e3",
+      "retained_original_archive": "0e8fcd8061d0b024af6b30aa841ef3e805447cf97ae6f74e61f151ac346ac969.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "534b4cd67215ac2b122d6b2bd2434917922c26a7cc2be5e1891dbd0132ccd3d8",
+      "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
+      "fix_commit": "c325377bd / harness 78d4a1e",
+      "build_proof": "/home/parity/jobs/background-entry-ownership-build-v1/proof.json",
+      "capture_seconds": 156.8173794989998,
+      "trace_sha256": "a611fe9043f59bbc3c13aa963401c8d88e3c66ded9695c7fcd50089d52546994",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-165/candidates/8c77c60472340a089cf1e600d61c1c15d4edea58499c3e117adb95fd8aa44127.tar",
+      "replay_exit": 2,
+      "replay_seconds": 376.6975892909977,
+      "candidate_sha256": "8c77c60472340a089cf1e600d61c1c15d4edea58499c3e117adb95fd8aa44127",
+      "native_frames": 65013,
+      "replayed_frames": 65013,
+      "compared_stage_fields": 1529,
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 1,
+      "concrete_failures": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "player-state:PlayerNumber_P1/options:ModsLevel_Song",
+            "args": [
+              0,
+              1000
+            ],
+            "beat": 368.5520324707031,
+            "caller": {
+              "line": 105,
+              "source": "song:/lua/mods.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "results": [
+                0,
+                1
+              ]
+            },
+            "kind": "modifier",
+            "line": 105,
+            "operation": "PlayerOptions.Reverse",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 132.05398559570312,
+            "seq": 232840,
+            "source": "song:/lua/mods.lua",
+            "results": [
+              0,
+              1
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "modifier",
+            "operation": "PlayerOptions.Reverse",
+            "source": "song:/lua/mods.lua",
+            "line": 105,
+            "phase": "callback",
+            "beat": 368.5520324707031,
+            "seconds": 132.05398559570312,
+            "args": [
+              0,
+              1000
+            ],
+            "results": [
+              0,
+              1000
+            ]
+          }
+        }
+      ],
+      "report_sha256": "9db8c5195bf173c4821d297b36fc01b496cc1c56a7a08fda47baa7bb1c307b1b"
     }
   ],
   "historical_pending": [
@@ -2119,6 +2204,6 @@
   "binary_sha256": "534b4cd67215ac2b122d6b2bd2434917922c26a7cc2be5e1891dbd0132ccd3d8",
   "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
   "passed_fixtures": 4,
-  "pending_charts": 12,
-  "processed_charts": 16
+  "pending_charts": 13,
+  "processed_charts": 17
 }
