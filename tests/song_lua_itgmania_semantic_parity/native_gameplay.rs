@@ -577,6 +577,29 @@ return Def.ActorFrame{}
             "events": [{"seq": 1, "kind": "call"}], "stage_samples": [{}]
         });
         super::validate_capture(&complete).expect("complete executable observations");
+        let mut initial = complete.clone();
+        initial["capabilities"]["native_display_preference"] = serde_json::json!(true);
+        initial["capabilities"]["native_initial_player_options"] = serde_json::json!(true);
+        initial["input"]["preferences"] = serde_json::json!({"display_aspect_ratio": 16.0 / 9.0});
+        initial["input"]["gameplay_preferences"] = serde_json::json!({"players": [
+            {"player": "PlayerNumber_P1", "options_string": "NoHideLights, PlayerAutoPlay, Overhead"}
+        ]});
+        super::validate_capture(&initial).expect("recorded native startup inputs");
+        for ratio in [serde_json::json!(0), serde_json::json!(4.0 / 3.0)] {
+            initial["input"]["preferences"]["display_aspect_ratio"] = ratio;
+            super::validate_capture(&initial).expect("native configured display ratio");
+        }
+        for (path, replacement) in [
+            ("/input/preferences/display_aspect_ratio", serde_json::json!(null)),
+            ("/input/preferences/display_aspect_ratio", serde_json::json!(-1)),
+            ("/input/preferences/display_aspect_ratio", serde_json::json!(1e308)),
+            ("/input/gameplay_preferences/players", serde_json::json!([])),
+            ("/input/gameplay_preferences/players/0/options_string", serde_json::json!(null)),
+        ] {
+            let mut incomplete = initial.clone();
+            *incomplete.pointer_mut(path).expect("recorded initial input") = replacement;
+            assert!(super::validate_capture(&incomplete).is_err(), "accepted {path}");
+        }
         for (path, replacement) in [
             (
                 "/capabilities/native_update_frames",
@@ -1053,6 +1076,22 @@ pub(crate) fn validate_capture(trace: &Value) -> Result<(), String> {
         || trace["input"]["injected_inputs"] != false
     {
         return Err("a complete executable capture with actual frame clocks is required".into());
+    }
+    if trace["capabilities"]["native_display_preference"] == true
+        && !trace["input"]["preferences"]["display_aspect_ratio"].as_f64()
+            .is_some_and(|value| value >= 0.0 && value <= f64::from(f32::MAX))
+    {
+        return Err("declared native display preference is missing or invalid".into());
+    }
+    if trace["capabilities"]["native_initial_player_options"] == true
+        && !trace["input"]["gameplay_preferences"]["players"].as_array().is_some_and(|players| {
+            !players.is_empty() && players.len() <= 2 && players.iter().all(|player| {
+                matches!(player["player"].as_str(), Some("PlayerNumber_P1" | "PlayerNumber_P2"))
+                    && player["options_string"].as_str().is_some()
+            })
+        })
+    {
+        return Err("declared native initial player options are incomplete".into());
     }
     for (field, sequence) in [("update_frames", "sequence"), ("events", "seq")] {
         let values = trace[field]
