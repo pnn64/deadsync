@@ -1,0 +1,65 @@
+{
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/live.rs": "56703215637a6b2c35146716170f290d9162393005fd1da7ef0a822635c1634b",
+    "crates/deadsync-song-lua/src/song_tables.rs": "3af70eef6c3e9b53eae43811a8a641dc1d8e3e9648a053ca8678302463732e19",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9eaafcf0d7301f957597ceb1abb9e48ec43f00dc68ae2cc6d4de201862e7215a"
+  },
+  "checks": [
+    {
+      "label": "stage-test",
+      "exit_code": 0,
+      "seconds": 137.5524129309997,
+      "results": [
+        "test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 529 filtered out; finished in 0.45s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 171.18448960899696,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.0483531299978495,
+      "results": [
+        "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.22s"
+      ]
+    }
+  ],
+  "binary": "/home/parity/jobs/outro-options-build-v1/full-song-lua-stage-modifier-v1",
+  "binary_sha256": "65deadde882c24ff688e78316e3add017f876258ae7209bc32e5a032b106b5c9",
+  "fix_commit": "df84373736fb1424d2b5842b73b0f7792d4bed29",
+  "windows_validation": "live_outro_rebuilds_song_options_after_queued_screen_message: 1 passed, 0 failed",
+  "local_references": [
+    "../itgmania-harness/vendor/itgmania/src/Screen.cpp:123",
+    "../itgmania-harness/vendor/itgmania/src/ScreenGameplay.cpp:1927",
+    "../itgmania-harness/vendor/itgmania/src/ScreenGameplay.cpp:2828",
+    "../itgmania-harness/vendor/itgmania/src/PlayerState.cpp:136",
+    "../itgmania-harness/vendor/itgmania/src/ModsGroup.h:85"
+  ],
+  "behavior": "Use the independent gameplay outro boundary; dispatch the option reset after the following actor update; copy Stage into Song in place once and let Current approach on its normal clock",
+  "concrete_failures": [
+    {
+      "source_simfile": "Datamania (tpz Overheat Remix)/Datamania (tpz Overheat Remix).ssc",
+      "initial_mismatch_count": 1,
+      "operation": "PlayerOptions.Reverse",
+      "native_previous_approach_speed": 1,
+      "deadsync_previous_approach_speed": 1000
+    },
+    {
+      "source_simfile": "Datura -paroxysm-/Datura -paroxysm-.ssc",
+      "initial_mismatch_count": 5,
+      "outro_option_mismatches": 4,
+      "separate_failure": "Underlay tween 1.6 seconds native versus 3.2 seconds DeadSync"
+    }
+  ],
+  "bounded_repair": {
+    "job": "/home/parity/jobs/outro-options-repair-v1",
+    "attempt": 1,
+    "source_simfile": "Datamania (tpz Overheat Remix)/Datamania (tpz Overheat Remix).ssc",
+    "reused_uncompressed_candidate_sha256": "8c77c60472340a089cf1e600d61c1c15d4edea58499c3e117adb95fd8aa44127"
+  },
+  "acceptance": "Existing complete full_song_lua replay comparisons; coverage recorded separately"
+}
