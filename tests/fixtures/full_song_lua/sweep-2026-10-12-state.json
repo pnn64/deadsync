@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-12T20:56:28Z",
-  "previous_goal_turn": "progress: native stage modifiers and metric command chunk-name repairs committed; both copter fixtures saved after complete passing replays",
+  "updated_utc": "2026-10-12T21:03:54Z",
+  "previous_goal_turn": "progress: stage modifiers, metric command chunk names and empty song tree repairs committed; both copter fixtures saved after complete passing replays",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,13 +14,14 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "11f4e5d4cef9df59d0135866baa064557c7d5cff",
+      "deadsync": "1d392db0eb034044e649513aafc747ac572ad547",
       "itgmania_harness": "78d4a1ef5778b76a29d3d55ff42e0216edfb1a38"
     }
   },
   "validation": {
     "native_replay_controls": "15 passed on the stage modifier Linux build; stage modifier regression passed on Windows and Linux",
     "native_metric_caller": "regression passed on Windows; all 12 runtime controls passed on Linux",
+    "empty_song_tree": "all 15 replay controls passed on Windows and Linux; second bounded Crab replay reuses the original capture",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved"
   },
   "corpus_transfer": {
@@ -35,19 +36,16 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Cursed 2/Cursed 2.sm",
-      "position": 158,
-      "phase": "replay",
-      "pid": 148668,
+      "current": "Cursed 2/Cursed 2.ssc",
+      "position": 159,
+      "phase": "capture",
+      "pid": 161176,
       "process_matches": true,
       "passed": 0,
-      "pending": 9,
-      "processed": 9,
-      "last_log_lines": [
-        "[102.0s] replaying every native gameplay frame: frame 17122/82996 (20.6%)",
-        "[104.0s] replaying every native gameplay frame: frame 17446/82996 (21.0%)",
-        "[106.0s] replaying every native gameplay frame: frame 17794/82996 (21.4%)"
-      ]
+      "pending": 10,
+      "processed": 10,
+      "last_log_lines": [],
+      "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
     "runner": "../itgmania-harness/target/server-parity/run_chart_sweep_v1.py",
@@ -69,11 +67,33 @@
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
-        "pending": 0,
-        "processed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "replay",
         "source_simfile": "Cold/Cold.ssc",
-        "child_running": true
+        "child_running": false
+      },
+      {
+        "job": "empty-actor-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 0,
+        "pending": 1,
+        "processed": 1,
+        "last_phase": "replay",
+        "source_simfile": "Crab Nicholson Extreme Sleepover/Crab Nicholson Extreme Sleepover.sm",
+        "child_running": false
+      },
+      {
+        "job": "empty-actor-repair-v2",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 0,
+        "pending": 1,
+        "processed": 1,
+        "last_phase": "replay",
+        "source_simfile": "Crab Nicholson Extreme Sleepover/Crab Nicholson Extreme Sleepover.sm",
+        "child_running": false
       }
     ],
     "publisher_streams": [
@@ -97,18 +117,206 @@
         "record": "sweep-2026-10-12-known-failure-repairs.json",
         "fix_commit": "a3fac0d8b / harness 78d4a1e",
         "finish_status": "bounded known failure recovery complete"
+      },
+      {
+        "name": "empty-actor-repair",
+        "remote": "/home/parity/jobs/empty-actor-repair-v1",
+        "record": "sweep-2026-10-12-empty-actor-repairs.json",
+        "fix_commit": "b6423dafd",
+        "finish_status": "bounded empty actor repair replay complete"
+      },
+      {
+        "name": "empty-actor-second-repair",
+        "remote": "/home/parity/jobs/empty-actor-repair-v2",
+        "record": "sweep-2026-10-12-empty-actor-second-repair.json",
+        "fix_commit": "1b9cf5c9b",
+        "finish_status": "bounded empty actor second repair replay complete"
       }
     ]
   },
   "counts_at_checkpoint": {
     "new_passed_fixtures": 2,
-    "new_pending_charts": 7,
-    "new_processed_sources": 9,
+    "new_pending_charts": 8,
+    "new_processed_sources": 10,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 344,
+    "unprocessed_sources": 343,
     "historical_pending_sources": 2,
     "historical_passed_sources": 146
   },
+  "pending_replay_failures": [
+    {
+      "source_simfile": "Circles/Circles.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 1,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0033",
+            "args": [
+              false
+            ],
+            "beat": 0.0009795725345611572,
+            "caller": {
+              "line": 112,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0018",
+            "detail": {
+              "native_tween_time_left": 6.409533977508545
+            },
+            "kind": "call",
+            "line": 112,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.13448978960514069,
+            "seq": 25,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 6.409533977508545
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/lua/default.lua",
+            "line": 112,
+            "phase": "callback",
+            "beat": 0.0009795725345611572,
+            "seconds": 0.13448978960514069,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x620589e108a0",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 22,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0151",
+            "args": [
+              false
+            ],
+            "beat": 0.0005225837230682373,
+            "caller": {
+              "line": 177,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0134",
+            "detail": {
+              "native_tween_time_left": 10.87824535369873
+            },
+            "kind": "call",
+            "line": 177,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.5011791586875916,
+            "seq": 1300,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 10.87824535369873
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/lua/default.lua",
+            "line": 177,
+            "phase": "callback",
+            "beat": 0.0005225837230682373,
+            "seconds": 0.5011791586875916,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x5b036fc31070",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "source_simfile": "Cold/Cold.ssc",
+      "repair_attempts": 1,
+      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.0s] : 0 checks completed, 0 failed\n[16.0s] : 0 checks completed, 0 failed\n[18.0s] : 0 checks completed, 0 failed\n[20.0s] : 0 checks completed, 0 failed\n[21.0s] replaying every native gameplay frame\n[22.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n\nthread 'main' (150340) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native subscriber ownership needs a single observed root\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[24.0s] replaying every native gameplay frame: frame 0/13470 (0.0%)\n[26.0s] replaying every native gameplay frame: frame 0/13470 (0.0%)\n[28.0s] replaying every native gameplay frame: frame 0/13470 (0.0%)\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Crab Nicholson Extreme Sleepover/Crab Nicholson Extreme Sleepover.sm",
+      "repair_attempts": 2,
+      "failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (159515) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Crazy Crazy/Crazy Crazy.ssc",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-138502-1791837397902414281-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "crew -All Hands on the Deck-/crew.ssc",
+      "repair_attempts": 0,
+      "failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (140633) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native subscriber ownership needs a single observed root\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Cuphead [TaroNuke]/botanic.sm",
+      "repair_attempts": 0,
+      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.0s] : 0 checks completed, 0 failed\n[16.0s] : 0 checks completed, 0 failed\n[18.0s] : 0 checks completed, 0 failed\n[20.0s] : 0 checks completed, 0 failed\n[22.0s] : 0 checks completed, 0 failed\n[24.0s] : 0 checks completed, 0 failed\n[26.0s] : 0 checks completed, 0 failed\n[28.0s] : 0 checks completed, 0 failed\n[30.0s] : 0 checks completed, 0 failed\n[32.0s] : 0 checks completed, 0 failed\n[34.0s] : 0 checks completed, 0 failed\n[36.0s] : 0 checks completed, 0 failed\n[36.8s] replaying every native gameplay frame\n[38.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[40.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n\nthread 'main' (145288) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native subscriber ownership needs a single observed root\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[42.0s] replaying every native gameplay frame: frame 0/8024 (0.0%)\n[44.0s] replaying every native gameplay frame: frame 0/8024 (0.0%)\n[46.0s] replaying every native gameplay frame: frame 0/8024 (0.0%)\n[48.0s] replaying every native gameplay frame: frame 0/8024 (0.0%)\n[50.0s] replaying every native gameplay frame: frame 0/8024 (0.0%)\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Cursed 2/Cursed 2.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 210386,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 210430,
+          "deadsync": 210426
+        }
+      ]
+    }
+  ],
   "historical_concrete_failures": [
     {
       "position": 148,
