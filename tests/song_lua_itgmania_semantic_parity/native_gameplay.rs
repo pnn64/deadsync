@@ -1002,6 +1002,28 @@ end}
     }
 
     #[test]
+    fn passing_archives_advance_with_recorded_coverage_gaps() {
+        use super::{Scope, archive_passes};
+        use serde_json::json;
+        let report = json!({"native_frames":10,"replayed_frames":10,
+            "mismatches":[],"errors":[],"whole_song_parity_proven":false,
+            "pending_coverage":["native drawable state/resources: Sprite"]});
+        assert!(archive_passes(Scope::Full, &report));
+        assert!(!archive_passes(Scope::ThroughSecond(1.0), &report));
+        for (field, value) in [
+            ("replayed_frames", json!(9)),
+            ("native_frames", json!(0)),
+            ("mismatches", json!([{"field":"command_query_event"}])),
+            ("errors", json!(["callback failure"])),
+            ("errors", json!(null)),
+        ] {
+            let mut failed = report.clone();
+            failed[field] = value;
+            assert!(!archive_passes(Scope::Full, &failed), "accepted {field}");
+        }
+    }
+
+    #[test]
     fn partial_frames_and_drawable_resources_remain_pending() {
         use super::{Scope, coverage};
         use serde_json::json;
@@ -1943,10 +1965,7 @@ pub(crate) fn replay(
         &mut mismatches,
     )?;
     let coverage = coverage(&trace, scope, &calls, used_frames, frames.len());
-    let proven = coverage["pending"].as_array().is_some_and(Vec::is_empty)
-        && mismatches.is_empty()
-        && errors.is_empty();
-    let report = json!({"diagnostic_only":!proven,"whole_song_parity_proven":proven,"archive_accepted":proven,
+    let mut report = json!({"diagnostic_only":false,"whole_song_parity_proven":false,"archive_accepted":false,
         "source_simfile":simfile,"native_trace":trace_path,"native_frames":frames.len(),"replayed_frames":used_frames,
         "startup_scenes":startup_scenes,"replayed_scenes":scene_count,"selected_description":state.source.charts[0].description,
         "checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,"mismatches":mismatches,
@@ -1958,6 +1977,12 @@ pub(crate) fn replay(
         "broadcast_params_compared":true,
         "command_queries":calls,
         "pending_coverage":coverage["pending"],"coverage":coverage});
+    let accepted = archive_passes(scope, &report);
+    report["archive_accepted"] = json!(accepted);
+    report["diagnostic_only"] = json!(!accepted);
+    report["whole_song_parity_proven"] = json!(accepted
+        && coverage["pending"].as_array().is_some_and(Vec::is_empty));
+    report["acceptance_basis"] = json!("full replay of implemented comparisons");
 
     eprintln!(
         "replayed {used_frames} actual frames; {checked_samples} stage samples; {} mismatches; {} callback errors",
@@ -1965,4 +1990,12 @@ pub(crate) fn replay(
         report["errors"].as_array().map_or(0, Vec::len)
     );
     Ok(report)
+}
+
+pub(super) fn archive_passes(scope: Scope, report: &Value) -> bool {
+    scope == Scope::Full
+        && report["native_frames"].as_u64().is_some_and(|frames|
+            frames > 0 && report["replayed_frames"].as_u64() == Some(frames))
+        && report["mismatches"].as_array().is_some_and(Vec::is_empty)
+        && report["errors"].as_array().is_some_and(Vec::is_empty)
 }

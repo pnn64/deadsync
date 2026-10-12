@@ -1268,7 +1268,7 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
         });
         return match outcome {
             Ok(true) => ExitCode::SUCCESS,
-            Ok(false) => ExitCode::from(2), // Explicitly incomplete; never a certified fixture.
+            Ok(false) => ExitCode::from(2), // A partial replay or failed comparison.
             Err(_) => ExitCode::FAILURE,
         };
     }
@@ -1484,8 +1484,7 @@ fn replay_native_archive(
     for mismatch in mismatches.iter().take(20) { eprintln!("  {mismatch}"); }
     for pending in coverage { eprintln!("  pending: {pending}"); }
     eprintln!("report: {}", report_path.display());
-    scope == native_gameplay::Scope::Full && mismatches.is_empty() && errors.is_empty()
-        && coverage.is_empty() && report["whole_song_parity_proven"] == true
+    native_gameplay::archive_passes(scope, &report)
 }
 
 #[test]
