@@ -832,6 +832,21 @@
       "replay_seconds": 1.331744814000558,
       "candidate_sha256": "e4f11bf99138ca805fe15004ef6d729d22477f0fc35602e67736e8901269c4de",
       "failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (140633) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native subscriber ownership needs a single observed root\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 157,
+      "source_simfile": "Cuphead [TaroNuke]/botanic.sm",
+      "simfile_sha256": "6d4f35389c80992011e7b143c5959d32fb5887dfc189975153fbab4885aacd96",
+      "retained_original_archive": "2c35a614d4d02167e14c74984f911f573b2c07d2dea7dddae4f9cb69d422ea7d.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "capture_seconds": 406.4503690069978,
+      "trace_sha256": "a6cfc779c2142085ebae71b36cf7b838ae74d189dcd758c608232462e4332d96",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-157/candidates/b116f88732fcdf3f7d307c2740012b74802703bde8ca5df034a4a36e792e6e73.tar",
+      "replay_exit": 1,
+      "replay_seconds": 85.95237133499904,
+      "candidate_sha256": "b116f88732fcdf3f7d307c2740012b74802703bde8ca5df034a4a36e792e6e73",
+      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.0s] : 0 checks completed, 0 failed\n[16.0s] : 0 checks completed, 0 failed\n[18.0s] : 0 checks completed, 0 failed\n[20.0s] : 0 checks completed, 0 failed\n[22.0s] : 0 checks completed, 0 failed\n[24.0s] : 0 checks completed, 0 failed\n[26.0s] : 0 checks completed, 0 failed\n[28.0s] : 0 checks completed, 0 failed\n[30.0s] : 0 checks completed, 0 failed\n[32.0s] : 0 checks completed, 0 failed\n[34.0s] : 0 checks completed, 0 failed\n[36.0s] : 0 checks completed, 0 failed\n[36.8s] replaying every native gameplay frame\n[38.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[40.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n\nthread 'main' (145288) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native subscriber ownership needs a single observed root\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[42.0s] replaying every native gameplay frame: frame 0/8024 (0.0%)\n[44.0s] replaying every native gameplay frame: frame 0/8024 (0.0%)\n[46.0s] replaying every native gameplay frame: frame 0/8024 (0.0%)\n[48.0s] replaying every native gameplay frame: frame 0/8024 (0.0%)\n[50.0s] replaying every native gameplay frame: frame 0/8024 (0.0%)\n"
     }
   ],
   "historical_pending": [
@@ -858,6 +873,6 @@
   "binary_sha256": "d515e94becf9b644c522e453045a5f07d1e149cc18765469d78b2384164539ad",
   "harness_sha256": "41bfe13b815a4a9695c2271e375611ff2e0efc017c4c4bc1ee304cb89bf69a54",
   "passed_fixtures": 0,
-  "pending_charts": 8,
-  "processed_charts": 8
+  "pending_charts": 9,
+  "processed_charts": 9
 }
