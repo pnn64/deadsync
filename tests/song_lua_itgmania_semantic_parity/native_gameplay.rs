@@ -577,6 +577,22 @@ return Def.ActorFrame{}
             "events": [{"seq": 1, "kind": "call"}], "stage_samples": [{}]
         });
         super::validate_capture(&complete).expect("complete executable observations");
+        assert_eq!(super::native_random_seed(&complete).expect("legacy seed"), 1);
+        let mut seeded = complete.clone();
+        seeded["capabilities"]["native_random_seed"] = serde_json::json!(true);
+        assert!(super::validate_capture(&seeded).is_err());
+        seeded["random_seed"] = serde_json::json!(73);
+        seeded["random_reseeds"] = serde_json::json!([]);
+        seeded["dropped_random_reseeds"] = serde_json::json!(0);
+        super::validate_capture(&seeded).expect("declared native random input");
+        assert_eq!(super::native_random_seed(&seeded).expect("recorded seed"), 73);
+        for value in [serde_json::json!(0), serde_json::json!(2147483648_u64), serde_json::json!(-1), serde_json::json!(null)] {
+            seeded["random_seed"] = value;
+            assert!(super::validate_capture(&seeded).is_err());
+        }
+        seeded["random_seed"] = serde_json::json!(1);
+        seeded["dropped_random_reseeds"] = serde_json::json!(1);
+        assert!(super::validate_capture(&seeded).is_err());
         let mut initial = complete.clone();
         initial["capabilities"]["native_display_preference"] = serde_json::json!(true);
         initial["capabilities"]["native_initial_player_options"] = serde_json::json!(true);
@@ -1062,6 +1078,12 @@ pub(crate) enum Scope {
 }
 
 pub(crate) fn validate_capture(trace: &Value) -> Result<(), String> {
+    native_random_seed(trace)?;
+    if trace["capabilities"]["native_random_seed"] == true
+        && (!trace["random_reseeds"].is_array() || trace["dropped_random_reseeds"] != 0)
+    {
+        return Err("declared native Lua random inputs are incomplete".into());
+    }
     if trace["oracle"] != "itgmania_song_lua_semantic_trace"
         || trace["capabilities"]["native_stage_statistics"] != true
         || trace["capabilities"]["native_machine_preferences"] != true
@@ -1119,6 +1141,16 @@ pub(crate) fn validate_capture(trace: &Value) -> Result<(), String> {
         return Err("native stage observations are empty".into());
     }
     Ok(())
+}
+
+fn native_random_seed(trace: &Value) -> Result<u32, String> {
+    if trace.get("random_seed").is_none() && trace["capabilities"]["native_random_seed"] != true {
+        // Preserve the previous diagnostic behavior for unseeded captures.
+        // Their random effects still require a source-bound seeded capture.
+        return Ok(1);
+    }
+    trace["random_seed"].as_u64().filter(|&seed| seed > 0 && seed <= i32::MAX as u64)
+        .map(|seed| seed as u32).ok_or_else(|| "native Lua random seed is missing or invalid".into())
 }
 
 fn native_autoplay(trace: &Value) -> Result<bool, String> {
@@ -1284,7 +1316,7 @@ pub(crate) fn replay(
         &session,
         &config,
         "null",
-        1,
+        native_random_seed(trace)?,
         true,
     );
     let init_scene = |prepared: deadsync_song_lua::playback::PreparedGameplaySongLua<
