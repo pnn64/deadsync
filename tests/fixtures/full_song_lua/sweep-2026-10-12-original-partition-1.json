@@ -1,0 +1,35 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": null,
+  "results": [
+    {
+      "position": 168,
+      "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
+      "simfile_sha256": "bf410851d8e4baf4478713fd48967877c33e1f7a0310b33917d42ac0dfac79be",
+      "retained_original_archive": "ec587fb16ade4af56212232791da289a0a1a0ce2f52f7a22a1a7cc297ecbb423.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "3888b1e92b5612b70edc19e66d3cf040cfd5169a6dd5f61bc2a0eeeead4acbd3",
+      "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
+      "fix_commit": "375a96e85 / harness 78d4a1e",
+      "build_proof": "/home/parity/jobs/background-activation-build-v1/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 156.93100017400138,
+      "failure": "error: ITGmania song Lua semantic trace failed: native definition instance has no observed creation identity; retained run directory /tmp/itgmania-harness-rs/song-lua-355312-1791844077654862665-0\n"
+    }
+  ],
+  "scope": {
+    "original_simfiles": 501,
+    "indexed_sources": 483,
+    "remaining_indexed_charts": 335,
+    "historical_unindexed_charts": 18,
+    "assigned_source_count": 112
+  },
+  "binary_sha256": "3888b1e92b5612b70edc19e66d3cf040cfd5169a6dd5f61bc2a0eeeead4acbd3",
+  "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
+  "passed_fixtures": 0,
+  "pending_charts": 1,
+  "processed_charts": 1
+}
