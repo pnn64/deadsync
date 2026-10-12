@@ -6292,6 +6292,16 @@
         "ce701a63b08c67e386931d9791ac1df4ed62324b7ed2ef206312464d0a69197c.tar.zst",
         "c3537fc854086b4f0004446fd017d65c59b4f8a8adc57ffe2853980050e3f245.tar.zst"
       ]
+    },
+    {
+      "title": "RUNWAY",
+      "source_simfile": "RUNWAY/RUNWAY.ssc",
+      "harness_version": "0.1.80",
+      "archive": "245281f2f7a7d95a1781eb54d7dacc8034b8f2cde0c2e9b6d2b31ef4a3174709.tar.zst",
+      "sha256": "245281f2f7a7d95a1781eb54d7dacc8034b8f2cde0c2e9b6d2b31ef4a3174709",
+      "compressed_bytes": 7808795,
+      "uncompressed_sha256": "0325753a6e5e9df1a6b44323c94b52a7221ff60b5af457bca5b1a5d5579a074d",
+      "aliases": []
     }
   ],
   "compression_level": 22
