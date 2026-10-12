@@ -1092,6 +1092,29 @@ end}
         different_results["events"] = json!([{"operation":"command.begin","actor":"b"},
             {"operation":"command.begin","actor":"a"}]);
         assert_eq!(super::native_creation_order(&different_results).expect("neutral inputs"), expected);
+        // Def.* snapshots precede later table appends, and some declarations
+        // are never instantiated. Factory parents still describe the tree.
+        let mut appended = trace.clone();
+        appended["actor_definitions"][0]["children"] = json!([]);
+        appended["roots"] = json!(["root", "child", "unused"]);
+        appended["actor_definitions"].as_array_mut().unwrap().push(json!({"id":"unused", "children":[]}));
+        assert_eq!(super::native_creation_order(&appended).expect("final native tree"), expected);
+        let mut reload = trace.clone();
+        reload["actor_definitions"].as_array_mut().unwrap().extend([
+            json!({"id":"next-root", "children":[{"layer_index":1,"definition_id":"next-child"}]}),
+            json!({"id":"next-child", "children":[]})]);
+        reload["roots"] = json!(["root", "next-root"]);
+        reload["runtime_actors"].as_array_mut().unwrap().extend([
+            json!({"id":"c", "definition_id":"next-root"}),
+            json!({"id":"d", "definition_id":"next-child"})]);
+        reload["actor_creation_inputs"].as_array_mut().unwrap().extend([
+            json!({"actor":"c","definition_id":"next-root","pointer_hex":"40","ordinal":3,
+                "scene":2,"before_seq":1,"provenance":"native-ActorUtil-before-LoadFromNode"}),
+            json!({"actor":"d","definition_id":"next-child","parent":"c","pointer_hex":"30","ordinal":4,
+                "scene":2,"before_seq":1,"provenance":"native-ActorUtil-before-LoadFromNode"})]);
+        assert_eq!(super::native_creation_order(&reload).expect("initial epoch"), expected);
+        assert_eq!(super::native_creation_order_for_scene(&reload, 2).expect("replacement epoch"),
+            vec![("1".into(), 64), ("1/1".into(), 48)]);
         assert!(super::native_creation_order(&json!({})).expect("older capture").is_empty());
         let mut empty_tree = trace.clone();
         for field in ["roots", "actor_definitions", "runtime_actors", "actor_creation_inputs"] {
@@ -1110,8 +1133,8 @@ end}
             ("/actor_creation_inputs/1/before_seq", json!(2)),
             ("/actor_creation_inputs/1/provenance", json!("expected-handler-order")),
             ("/actor_creation_inputs", json!([])),
-            ("/runtime_actors/1/definition_id", json!("root")),
-            ("/roots", json!(["root","child"])),
+            ("/runtime_actors/1/definition_id", json!("unknown")),
+            ("/actor_creation_inputs/1/parent", json!(null)),
         ] {
             let mut invalid = trace.clone();
             *invalid.pointer_mut(path).expect("input field") = value;
@@ -1315,11 +1338,15 @@ pub(crate) fn validate_capture(trace: &Value) -> Result<(), String> {
     Ok(())
 }
 
-// Only neutral factory observations determine subscriber identities. Ordered
-// handler expectations and command results are deliberately not read here.
-// Reused definitions, multiple roots and reload epochs need more ownership
-// context before they can be mapped; reject those captures rather than guess.
+// ActorFrame::LoadChildrenFromNode instantiates children in XNode array order
+// (XmlFileUtil::XNodeFromTableRecursive). The factory observes the final parent
+// tree, including children appended after Def.* recorded a declaration. Only
+// these neutral allocations determine identities, never callback results.
 fn native_creation_order(trace: &Value) -> Result<Vec<(String, usize)>, String> {
+    native_creation_order_for_scene(trace, 1)
+}
+
+fn native_creation_order_for_scene(trace: &Value, scene: u64) -> Result<Vec<(String, usize)>, String> {
     if trace["capabilities"]["native_actor_creation"] != true { return Ok(Vec::new()); }
     if !trace["actor_creation_error"].is_null() {
         return Err("native actor creation observer failed".into());
@@ -1333,79 +1360,75 @@ fn native_creation_order(trace: &Value) -> Result<Vec<(String, usize)>, String> 
     {
         return Ok(Vec::new());
     }
-    if roots.len() != 1 { return Err("native subscriber ownership needs a single observed root".into()); }
     let mut defs = BTreeMap::new();
     for definition in definitions {
         let id = definition["id"].as_str().ok_or("missing native definition identity")?;
         if defs.insert(id, definition).is_some() { return Err("duplicate native definition identity".into()); }
     }
-    fn visit<'a>(id: &'a str, path: String, defs: &BTreeMap<&'a str, &'a Value>,
-        paths: &mut BTreeMap<&'a str, String>) -> Result<(), String> {
-        if paths.insert(id, path.clone()).is_some() {
-            return Err("reused native definition needs instance-specific ownership".into());
-        }
-        let definition = defs.get(id).ok_or("native declaration forest is not closed")?;
-        let children = definition["children"].as_array().ok_or("missing native child ownership")?;
-        let mut indices = BTreeSet::new();
-        for child in children {
-            let index = child["layer_index"].as_u64().ok_or("missing native child index")?;
-            if index == 0 || index > children.len() as u64 || !indices.insert(index) {
-                return Err("ambiguous native child indices".into());
-            }
-            let child_id = child["definition_id"].as_str().ok_or("missing native child definition")?;
-            visit(child_id, format!("{path}/{index}"), defs, paths)?;
-        }
-        Ok(())
-    }
-    let mut paths = BTreeMap::new();
-    visit(roots[0].as_str().ok_or("invalid native root identity")?, "1".into(), &defs, &mut paths)?;
-    if paths.len() != defs.len() { return Err("native declaration forest contains unreachable definitions".into()); }
     let inputs = trace["actor_creation_inputs"].as_array().ok_or("missing native creation identities")?;
     let event_count = trace["events"].as_array().ok_or("missing native event bounds")?.len();
     let runtime = trace["runtime_actors"].as_array().ok_or("missing native runtime instances")?;
     let mut instances = BTreeMap::new();
     for record in runtime {
         if let Some(definition) = record["definition_id"].as_str() {
-            if instances.insert(definition, record["id"].as_str().ok_or("invalid native runtime identity")?).is_some() {
-                return Err("multiple native instances need epoch-specific ownership".into());
+            let actor = record["id"].as_str().ok_or("invalid native runtime identity")?;
+            if !defs.contains_key(definition) || instances.insert(actor, definition).is_some() {
+                return Err("invalid native runtime definition identity".into());
             }
         }
     }
-    if instances.len() != paths.len() || inputs.len() != paths.len() {
+    if instances.len() != inputs.len() {
         return Err("native factory observations do not cover the complete actor tree".into());
     }
     let mut observed = BTreeSet::new();
+    let mut paths = BTreeMap::new();
+    let mut child_counts = BTreeMap::new();
     let mut pointers = BTreeSet::new();
     let mut result = Vec::with_capacity(inputs.len());
     for (index, input) in inputs.iter().enumerate() {
         let definition = input["definition_id"].as_str().ok_or("missing creation definition")?;
-        let path = paths.get(definition).ok_or("creation identity is outside native tree")?;
         let actor = input["actor"].as_str().ok_or("missing creation actor")?;
         let pointer = input["pointer_hex"].as_str().ok_or("missing native subscriber pointer")?;
         if pointer.is_empty() || !pointer.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
             return Err("invalid native subscriber pointer".into());
         }
         let pointer = usize::from_str_radix(pointer, 16).map_err(|_| "native subscriber pointer exceeds host width")?;
-        if pointer == 0 || !pointers.insert(pointer) || !observed.insert(definition)
-            || instances.get(definition).copied() != Some(actor)
-            || input["scene"].as_u64() != Some(1)
+        if pointer == 0 || !observed.insert(actor)
+            || instances.get(actor).copied() != Some(definition)
+            || input["scene"].as_u64().is_none_or(|scene| scene == 0)
             || input["ordinal"].as_u64() != Some(index as u64 + 1)
             || input["before_seq"].as_u64().is_none_or(|seq| seq == 0 || seq > event_count as u64 + 1)
             || input["provenance"] != "native-ActorUtil-before-LoadFromNode"
         {
-            return Err("invalid or noninitial native actor creation input".into());
+            return Err("invalid native actor creation input".into());
         }
-        if let Some((parent_path, _)) = path.rsplit_once('/') {
-            let parent = paths.iter().find(|(_, path)| path.as_str() == parent_path)
-                .and_then(|(id, _)| instances.get(id)).ok_or("missing native parent instance")?;
-            if input["parent"].as_str() != Some(*parent) {
-                return Err("native factory parent differs from declaration ownership".into());
+        if let Some(parent) = input["parent"].as_str().filter(|parent| instances.contains_key(parent)) {
+            let parent_input = inputs.iter().find(|record| record["actor"].as_str() == Some(parent))
+                .ok_or("native factory parent has no creation identity")?;
+            if parent_input["scene"] != input["scene"] {
+                return Err("native factory parent belongs to another scene".into());
             }
-        } else if inputs.iter().any(|record| record["actor"] == input["parent"]) {
-            return Err("native root has an unexpected captured parent".into());
         }
-        result.push((path.clone(), pointer));
+        if input["scene"].as_u64() != Some(scene) { continue; }
+        if !pointers.insert(pointer) { return Err("duplicate native subscriber pointer in scene".into()); }
+        let path = if let Some(parent) = input["parent"].as_str().filter(|parent| instances.contains_key(parent)) {
+            let parent_path: &String = paths.get(parent).ok_or("native factory parent is outside this scene or not yet created")?;
+            let child = child_counts.entry(parent).or_insert(0usize);
+            *child += 1;
+            format!("{parent_path}/{child}")
+        } else {
+            if !input["parent"].is_null() && !runtime.iter().any(|record| record["id"] == input["parent"]) {
+                return Err("native factory parent has no runtime identity".into());
+            }
+            if !result.is_empty() { return Err("native subscriber ownership needs a single instantiated root per scene".into()); }
+            "1".into()
+        };
+        if paths.insert(actor, path.clone()).is_some() {
+            return Err("duplicate native factory instance".into());
+        }
+        result.push((path, pointer));
     }
+    if result.is_empty() { return Err("native scene has no instantiated actor root".into()); }
     Ok(result)
 }
 
@@ -1725,10 +1748,11 @@ pub(crate) fn replay(
             return Err("native frame sequence is incomplete".into());
         }
         if pending_reload {
-            let scene = state
+            let mut scene = state
                 .song_lua
                 .take()
                 .ok_or("reload has no retained Lua scene")?;
+            scene.set_message_actor_order(native_creation_order_for_scene(trace, scene_count + 1)?);
             let prepared = deadsync_song_lua::playback::reload_song_lua(
                 &song,
                 scene,

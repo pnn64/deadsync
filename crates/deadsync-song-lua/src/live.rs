@@ -695,6 +695,13 @@ impl SongLuaLiveScene {
 
     pub fn context(&self) -> &SongLuaCompileContext { &self.context }
 
+    /// Supply neutral native allocations for the next screen epoch during a
+    /// replay. A reload installs them when constructing its replacement scene.
+    #[cfg(feature = "test-support")]
+    pub fn set_message_actor_order(&mut self, order: Vec<(String, usize)>) {
+        self.context.message_actor_order = order;
+    }
+
     /// GAMESTATE may select a different chart while the current Player still
     /// owns the note field loaded at screen entry.
     pub fn selected_context(&self) -> mlua::Result<SongLuaCompileContext> {
