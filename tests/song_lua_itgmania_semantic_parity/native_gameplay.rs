@@ -78,6 +78,11 @@ const CALL_OPERATIONS: &[&str] = &[
     "Actor.visible",
     "Actor.zoom",
     "Actor.zoomto",
+    "ActorFrame.SetUpdateFunction",
+    "ActorProxy.SetTarget",
+    "Sprite.GetTexture",
+    "Sprite.loop",
+    "Sprite.rate",
 ];
 
 struct CallLog;
@@ -165,8 +170,9 @@ fn compare_calls(
                 let mut event = event.clone();
                 event["source"] = json!(source);
                 normalize_paths(&mut event, &song_dir);
+                let scene = event["scene"].as_u64().unwrap_or(0);
+                normalize_query_handles(&mut event["args"], &mut actual_handles, scene);
                 if matches!(event["kind"].as_str(), Some("query" | "modifier")) {
-                    let scene = event["scene"].as_u64().unwrap_or(0);
                     normalize_query_handles(&mut event["results"], &mut actual_handles, scene);
                 }
                 Some(event)
@@ -220,9 +226,10 @@ fn compare_calls(
         })
         .map(|event| {
             let mut value = event.clone();
+            let scene = value["scene"].as_u64().unwrap_or(0);
+            normalize_query_handles(&mut value["args"], &mut native_handles, scene);
             if matches!(event["kind"].as_str(), Some("query" | "modifier")) {
                 value["results"] = event["detail"]["results"].clone();
-                let scene = value["scene"].as_u64().unwrap_or(0);
                 normalize_query_handles(&mut value["results"], &mut native_handles, scene);
             }
             if event["kind"] != "command" {
@@ -711,7 +718,9 @@ return Def.ActorFrame{}
             assert(GAMESTATE:GetCurrentSteps(0) == steps[1])\n\
             return Def.ActorFrame {\n\
             InitCommand=function(self) self:sleep(0.125):queuecommand('Done')\n\
-             self:linear(0.25):diffuse({0.25,0.5,0.75,1}):zoomto(320,240) end\n\
+             self:linear(0.25):diffuse({0.25,0.5,0.75,1}):zoomto(320,240);self:SetUpdateFunction(function(owner) owner:aux(0) end) end,\n\
+             Def.ActorProxy{InitCommand=function(self) self:SetTarget(self:GetParent()) end},\n\
+             Def.Sprite{Texture='__songlua_theme_path/G/_Judgments/Love 2x6.png',InitCommand=function(self) self:loop(false):rate(1.25);self:GetTexture() end},\n\
             }";
         fs::write(&entry, source).expect("trace control");
         let mut context = SongLuaCompileContext::new(&dir, "class dispatch trace");
@@ -772,6 +781,24 @@ return Def.ActorFrame{}
         assert_eq!(color["line"], 9);
         assert_eq!(color["phase"], "callback");
         assert_eq!(color["tween_time_left"], 0.375);
+        let update = events.iter().find(|event| event["operation"] == "ActorFrame.SetUpdateFunction")
+            .expect("captured update callback installation");
+        assert_eq!(update["args"][0]["type"], "function");
+        assert!(update["args"][0]["source"].as_str().expect("callback source").ends_with("caller.lua"));
+        assert_eq!(update["args"][0]["line"], 10);
+        assert_eq!(update["args"][0]["last_line"], 10);
+        let target = events.iter().find(|event| event["operation"] == "ActorProxy.SetTarget")
+            .expect("captured proxy target");
+        let parent = events.iter().find(|event| event["operation"] == "Actor.GetParent")
+            .expect("captured actual parent");
+        assert_eq!(target["args"][0], parent["results"][0]);
+        let texture = events.iter().find(|event| event["operation"] == "Sprite.GetTexture")
+            .expect("captured texture object");
+        assert_eq!(texture["results"], serde_json::json!([{"type":"RageTexture"}]));
+        assert_eq!(events.iter().find(|event| event["operation"] == "Sprite.loop")
+            .expect("captured movie loop")["args"], serde_json::json!([false]));
+        assert_eq!(events.iter().find(|event| event["operation"] == "Sprite.rate")
+            .expect("captured movie rate")["args"], serde_json::json!([1.25]));
         let construction: Vec<_> = events
             .iter()
             .filter(|event| event["phase"] == "construction")

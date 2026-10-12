@@ -462,7 +462,8 @@ pub(crate) fn forward(lua: &Lua, class: &Table, name: &'static str) -> mlua::Res
                 | "name" | "aux" | "getaux" | "x" | "y" | "zoomx" | "vibrate" | "effectmagnitude"
                 | "Center" | "FullScreen" | "animate" | "decelerate" | "diffuse" | "diffusealpha"
                 | "effectperiod" | "linear" | "queuemessage" | "rainbow" | "rotationz"
-                | "spin" | "visible" | "zoom" | "zoomto")
+                | "spin" | "visible" | "zoom" | "zoomto"
+                | "SetUpdateFunction" | "SetTarget" | "GetTexture" | "loop" | "rate")
                 && crate::live::active(lua)
                 && log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace);
             let trace_args = observed.then(|| args.clone());

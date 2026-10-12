@@ -113,6 +113,12 @@ fn query_value(lua: &Lua, value: &Value, depth: usize) -> mlua::Result<serde_jso
         Value::Number(value) => json!({"type":"number","value":if value.is_nan() {"nan"}
             else if value.is_sign_negative() {"-infinity"} else {"infinity"}}),
         Value::String(value) => json!(value.to_str()?.to_string()),
+        Value::Function(value) => {
+            let info = value.info();
+            json!({"type":"function","source":info.source.unwrap_or_default(),
+                "line":info.line_defined.map_or(-1, |line| line as i64),
+                "last_line":info.last_line_defined.map_or(-1, |line| line as i64)})
+        }
         Value::Table(table) => {
             if table.raw_get::<Option<String>>("__songlua_actor_type")?.is_some() {
                 let name = query_actor_name(table)?;
@@ -133,6 +139,9 @@ fn query_value(lua: &Lua, value: &Value, depth: usize) -> mlua::Result<serde_jso
                 }
                 path.reverse();
                 return Ok(json!({"actor":format!("{:p}", table.to_pointer()),"name":name,"path":path.join("/")}));
+            }
+            if let Some(kind) = table.raw_get::<Option<String>>("__songlua_native_type")? {
+                return Ok(json!({"type":kind}));
             }
             if let Some(value) = lua.app_data_ref::<QueryTrace>().and_then(|trace|
                 trace.objects.iter().find(|(known, _)| known.to_pointer() == table.to_pointer())
@@ -164,7 +173,15 @@ fn query_details(lua: &Lua, args: &MultiValue, result: &mlua::Result<MultiValue>
 }
 
 pub(crate) fn trace_bound_method(lua: &Lua, name: &'static str, args: &MultiValue, result: &mlua::Result<MultiValue>) {
-    let class = if matches!(name, "GetChild" | "GetNumChildren") { "ActorFrame" } else { "Actor" };
+    let class = match name {
+        "GetChild" | "GetNumChildren" | "SetUpdateFunction" => "ActorFrame",
+        "SetTarget" => "ActorProxy",
+        "GetTexture" if args.front().and_then(Value::as_table).is_some_and(|actor|
+            actor.raw_get::<Option<String>>("__songlua_actor_type").ok().flatten().as_deref()
+                == Some("ActorFrameTexture")) => "ActorFrameTexture",
+        "GetTexture" | "loop" | "rate" => "Sprite",
+        _ => "Actor",
+    };
     let kind = if name.starts_with("Get") || name == "getaux" { "query" } else { "call" };
     trace_method(lua, kind, &format!("{class}.{name}"), || {
         let details = || -> mlua::Result<serde_json::Value> {

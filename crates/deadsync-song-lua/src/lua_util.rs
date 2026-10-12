@@ -5611,6 +5611,7 @@ pub fn actor_sprite_frame_count(actor: &Table) -> mlua::Result<u32> {
 
 pub fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     let texture = lua.create_table()?;
+    texture.raw_set("__songlua_native_type", "RageTexture")?;
     let frame_count = actor_sprite_frame_count(actor)?;
     if actor
         .get::<Option<String>>("__songlua_actor_type")?
