@@ -37,19 +37,47 @@ pub(crate) fn trace_command(lua: &Lua, command: &Function, name: &str, phase: &s
 }
 
 pub(crate) fn trace_stage_query(lua: &Lua, operation: &str, points: i64) {
-    if !active(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return; }
-    let source = lua.inspect_stack(1, |debug| {
-        let info = debug.source();
-        (info.source.map(|source| source.into_owned()), info.line_defined)
+    trace_method(lua, "query", operation, || serde_json::json!({"results":[points]}));
+}
+
+pub(crate) fn trace_actor_call(lua: &Lua, actor: &Table, operation: &str, arg: Option<&Value>) {
+    trace_method(lua, "call", operation, || {
+        let arg = match arg {
+            Some(Value::Integer(value)) => serde_json::json!(value),
+            Some(Value::Number(value)) if value.is_finite() => serde_json::json!(value),
+            Some(Value::String(value)) => serde_json::json!(value.to_string_lossy()),
+            _ => serde_json::Value::Null,
+        };
+        let left = crate::lua_util::actor_tween_time_left(lua, actor);
+        match left {
+            Ok(left) => serde_json::json!({"args":[arg], "tween_time_left":if left.is_finite() {
+                serde_json::json!(left)
+            } else { serde_json::json!({"type":"number", "value":if left.is_nan() {
+                "nan"
+            } else if left.is_sign_negative() { "-infinity" } else { "infinity" }}) }}),
+            Err(error) => serde_json::json!({"kind":"trace-error", "error":error.to_string()}),
+        }
     });
+}
+
+fn trace_method(lua: &Lua, kind: &str, operation: &str, details: impl FnOnce() -> serde_json::Value) {
+    if !active(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return; }
+    // Actor class dispatch adds a C adapter frame before the authored Lua
+    // caller. Inspect the first Lua frame instead of attributing it to C.
+    let source = (1..32).find_map(|level| lua.inspect_stack(level, |debug| {
+        let info = debug.source();
+        (info.what != "C").then(|| (info.source.map(|source| source.into_owned()), info.line_defined))
+    }).flatten());
     if let (Some((Some(source), line)), Ok((beat, seconds))) =
         (source, crate::compile_song_runtime_values(lua))
     {
         let scene = lua.app_data_ref::<LiveMode>().map_or(0, |mode| mode.0);
-        log::trace!(target: "deadsync_song_lua::trace", "{}", serde_json::json!({
-            "scene":scene,"kind":"query","operation":operation,"source":source,"line":line,
-            "beat":beat,"seconds":seconds,"results":[points]
-        }));
+        let mut event = serde_json::json!({"scene":scene,"kind":kind,"operation":operation,
+            "source":source,"line":line,"beat":beat,"seconds":seconds});
+        if let Some(details) = details().as_object() {
+            event.as_object_mut().expect("trace event is an object").extend(details.clone());
+        }
+        log::trace!(target: "deadsync_song_lua::trace", "{event}");
     }
 }
 

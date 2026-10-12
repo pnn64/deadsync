@@ -9,6 +9,7 @@ use deadsync_gameplay::{
 use deadsync_theme_simply_love::screens::gameplay;
 use serde_json::{Value, json};
 use std::{
+    collections::BTreeSet,
     path::Path,
     sync::atomic::{AtomicUsize, Ordering},
     sync::{Arc, Mutex, OnceLock},
@@ -75,10 +76,11 @@ fn compare_calls(
             .to_string_lossy()
             .replace('\\', "/")
     );
-    let actual: Vec<Value> = CALL_LOG
-        .events
-        .lock()
-        .map_err(|error| error.to_string())?
+    let logged = CALL_LOG.events.lock().map_err(|error| error.to_string())?;
+    for event in logged.iter().filter(|event| event["kind"] == "trace-error") {
+        mismatches.push(json!({"field":"call_trace_error","deadsync":event}));
+    }
+    let actual: Vec<Value> = logged
         .iter()
         .filter_map(|event| {
             let source = event["source"].as_str()?.replace('\\', "/");
@@ -91,6 +93,7 @@ fn compare_calls(
             Some(event)
         })
         .collect();
+    drop(logged);
     let dropped = CALL_LOG.dropped.load(Ordering::Relaxed);
     if dropped != 0 {
         mismatches.push(json!({"field":"dropped_call_trace","deadsync":dropped}));
@@ -105,7 +108,9 @@ fn compare_calls(
         .ok_or("missing native events")?
         .iter()
         .filter(|event| {
-            event["source"]
+            event
+                .pointer("/caller/source")
+                .unwrap_or(&event["source"])
                 .as_str()
                 .is_some_and(|source| source.starts_with("song:/"))
         })
@@ -117,8 +122,19 @@ fn compare_calls(
                         | "command.end"
                         | "PlayerStageStats.GetCurrentPossibleDancePoints"
                         | "PlayerStageStats.GetPossibleDancePoints"
+                        | "Actor.sleep"
+                        | "Actor.queuecommand"
                 )
             )
+        })
+        .filter(|event| {
+            !matches!(
+                event["operation"].as_str(),
+                Some("Actor.sleep" | "Actor.queuecommand")
+            ) || event.get("caller").is_some()
+                || event["actor"]
+                    .as_str()
+                    .is_some_and(|actor| actor.starts_with("def-"))
         })
         .filter(|event| {
             scope == Scope::Full
@@ -135,6 +151,15 @@ fn compare_calls(
             if event["kind"] == "query" {
                 value["results"] = event["detail"]["results"].clone();
             }
+            if event["kind"] != "command" {
+                if let Some(caller) = event.get("caller") {
+                    value["source"] = caller["source"].clone();
+                    value["line"] = caller["line"].clone();
+                }
+            }
+            if event["kind"] == "call" {
+                value["tween_time_left"] = event["detail"]["native_tween_time_left"].clone();
+            }
             value
         })
         .collect();
@@ -146,10 +171,22 @@ fn compare_calls(
     for (native, actual) in native.iter().zip(&actual) {
         let keys: &[&str] = if native["kind"] == "query" {
             &["scene", "kind", "operation", "source", "line", "results"]
+        } else if native["kind"] == "call" {
+            &[
+                "scene",
+                "kind",
+                "operation",
+                "source",
+                "line",
+                "args",
+                "tween_time_left",
+            ]
         } else {
             &["scene", "kind", "operation", "source", "line", "command"]
         };
-        if keys.iter().any(|key| native[*key] != actual[*key])
+        if keys
+            .iter()
+            .any(|key| !same_value(&native[*key], &actual[*key]))
             || (number(native, "seconds")? - number(actual, "seconds")?).abs() > 1e-6
             || (number(native, "beat")? - number(actual, "beat")?).abs() > 1e-6
         {
@@ -160,6 +197,238 @@ fn compare_calls(
     Ok(
         json!({"compared":true,"native_count":native.len(),"actual_count":actual.len(),"actual":actual,"native":native}),
     )
+}
+
+fn same_value(native: &Value, actual: &Value) -> bool {
+    match (native, actual) {
+        (Value::Number(native), Value::Number(actual)) => native
+            .as_f64()
+            .zip(actual.as_f64())
+            .is_some_and(|(native, actual)| (native - actual).abs() <= 1e-6),
+        (Value::Array(native), Value::Array(actual)) => {
+            native.len() == actual.len()
+                && native
+                    .iter()
+                    .zip(actual)
+                    .all(|(native, actual)| same_value(native, actual))
+        }
+        _ => native == actual,
+    }
+}
+
+fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: usize) -> Value {
+    let observed: BTreeSet<&str> = trace["events"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|event| {
+            event
+                .pointer("/caller/source")
+                .unwrap_or(&event["source"])
+                .as_str()
+                .is_some_and(|source| source.starts_with("song:/"))
+        })
+        .filter_map(|event| event["operation"].as_str())
+        .collect();
+    let compared = [
+        "command.begin",
+        "command.end",
+        "PlayerStageStats.GetPossibleDancePoints",
+        "PlayerStageStats.GetCurrentPossibleDancePoints",
+        "Actor.sleep",
+        "Actor.queuecommand",
+        "ScreenManager.SetNewScreen",
+        "ScreenWithMenuElements.StartTransitioningScreen",
+        "MessageManager.Broadcast",
+    ];
+    let theme: BTreeSet<&str> = trace["events"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|event| {
+            event["source"]
+                .as_str()
+                .is_some_and(|source| source.starts_with("song:/"))
+                && event
+                    .pointer("/caller/source")
+                    .and_then(Value::as_str)
+                    .is_some_and(|source| !source.starts_with("song:/"))
+        })
+        .filter_map(|event| event["operation"].as_str())
+        .collect();
+    let mut pending = Vec::new();
+    if scope != Scope::Full || replayed != total {
+        pending.push("complete song frame replay".to_owned());
+    }
+    if calls["compared"] != true {
+        pending.push("native command/query scene identities".to_owned());
+    }
+    if trace["capabilities"]["native_call_sources"] != true {
+        pending.push("native method events lack immediate caller identity".to_owned());
+    }
+    if trace["capabilities"]["native_constructor_queries"] != true {
+        pending.push("native constructor query results are not captured".to_owned());
+    }
+    let uncovered: Vec<_> = observed
+        .iter()
+        .filter(|operation| !compared.contains(operation))
+        .copied()
+        .collect();
+    if !uncovered.is_empty() {
+        pending.push(format!(
+            "uncompared song operations: {}",
+            uncovered.join(", ")
+        ));
+    }
+    let drawables: BTreeSet<_> = trace["actor_definitions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|definition| definition["class"].as_str())
+        .filter(|class| !matches!(*class, "Actor" | "ActorFrame"))
+        .collect();
+    if trace["actor_definitions"]
+        .as_array()
+        .is_none_or(Vec::is_empty)
+    {
+        pending.push("native actor definitions are missing".to_owned());
+    } else if !drawables.is_empty() {
+        pending.push(format!(
+            "native drawable state/resources: {}",
+            drawables.into_iter().collect::<Vec<_>>().join(", ")
+        ));
+    }
+    json!({"scope":"captured-song-lua-context", "observed_song_operations":observed,
+        "uncompared_song_operations":uncovered, "nested_theme_operations":theme, "pending":pending,
+        "global_pending":["full theme stage commitment and history", "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts", "production live mode activation"]})
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn actor_trace_keeps_lua_caller_through_class_dispatch() {
+        use super::{CALL_LOG, start_call_log};
+        use deadsync_song_lua::{
+            SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host,
+        };
+        use std::{fs, sync::Arc};
+        start_call_log().expect("install observational logger");
+        let dir =
+            std::env::temp_dir().join(format!("deadsync-actor-call-trace-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("trace test directory");
+        let entry = dir.join("caller.lua");
+        fs::write(&entry, "return Def.ActorFrame {\nInitCommand=function(self) self:sleep(0.125):queuecommand('Done') end\n}")
+            .expect("trace control");
+        let mut context = SongLuaCompileContext::new(&dir, "class dispatch trace");
+        context.live = true;
+        let compiled = compile_song_lua_with_default_host::<(), (), _>(
+            &entry,
+            &context,
+            SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(Arc::<[()]>::from([])),
+            |_| None,
+            |_, _| None,
+        )
+        .expect("compile real live actor");
+        assert!(compiled.live_scene.is_some());
+        let events = CALL_LOG.events.lock().expect("read actual observations");
+        let calls: Vec<_> = events
+            .iter()
+            .filter(|event| event["kind"] == "call")
+            .collect();
+        assert_eq!(calls.len(), 2, "{events:?}");
+        for event in &calls {
+            assert!(
+                event["source"]
+                    .as_str()
+                    .expect("Lua source")
+                    .ends_with("caller.lua")
+            );
+            assert_eq!(event["line"], 2);
+            assert_eq!(event["tween_time_left"], 0.125);
+        }
+        assert_eq!(calls[0]["operation"], "Actor.sleep");
+        assert_eq!(calls[0]["args"][0], 0.125);
+        assert_eq!(calls[1]["operation"], "Actor.queuecommand");
+        assert_eq!(calls[1]["args"][0], "Done");
+    }
+
+    #[test]
+    fn coverage_tracks_observed_apis_and_constructor_evidence() {
+        use super::{Scope, coverage};
+        use serde_json::json;
+        let mut trace = json!({"capabilities":{"native_call_sources":true},
+            "actor_definitions":[{"class":"ActorFrame"}],
+            "events":[{"operation":"Actor.sleep","source":"song:/control.lua",
+                "caller":{"source":"song:/control.lua"}},
+                {"operation":"PlayerStageStats.SetScore","source":"song:/control.lua",
+                    "caller":{"source":"@Themes/Simply Love/out.lua"}}]});
+        let calls = json!({"compared":true});
+        let value = coverage(&trace, Scope::Full, &calls, 4, 4);
+        assert_eq!(
+            value["pending"],
+            json!(["native constructor query results are not captured"])
+        );
+        assert_eq!(value["uncompared_song_operations"], json!([]));
+        assert_eq!(
+            value["nested_theme_operations"],
+            json!(["PlayerStageStats.SetScore"])
+        );
+        assert!(
+            !value["global_pending"]
+                .as_array()
+                .expect("global gaps")
+                .is_empty()
+        );
+        trace["capabilities"]["native_constructor_queries"] = json!(true);
+        assert_eq!(
+            coverage(&trace, Scope::Full, &calls, 4, 4)["pending"],
+            json!([])
+        );
+        trace["events"][0]["operation"] = json!("PlayerStageStats.GetAliveSeconds");
+        assert_eq!(
+            coverage(&trace, Scope::Full, &calls, 4, 4)["uncompared_song_operations"],
+            json!(["PlayerStageStats.GetAliveSeconds"])
+        );
+    }
+
+    #[test]
+    fn partial_frames_and_drawable_resources_remain_pending() {
+        use super::{Scope, coverage};
+        use serde_json::json;
+        let trace = json!({"capabilities":{"native_call_sources":true,"native_constructor_queries":true},
+            "events":[],"actor_definitions":[{"class":"Sprite"}]});
+        let value = coverage(&trace, Scope::FirstQuery, &json!({"compared":true}), 3, 10);
+        assert_eq!(
+            value["pending"],
+            json!([
+                "complete song frame replay",
+                "native drawable state/resources: Sprite"
+            ])
+        );
+        assert_eq!(
+            coverage(&trace, Scope::Full, &json!({"compared":false}), 10, 10)["pending"],
+            json!([
+                "native command/query scene identities",
+                "native drawable state/resources: Sprite"
+            ])
+        );
+    }
+
+    #[test]
+    fn call_arguments_compare_native_numbers_without_losing_value_checks() {
+        use super::same_value;
+        use serde_json::json;
+        assert!(same_value(&json!([1]), &json!([1.0])));
+        assert!(!same_value(&json!([1]), &json!([2.0])));
+        assert!(!same_value(&json!(["CheckEnd"]), &json!(["Finished"])));
+        assert!(!same_value(&json!([1]), &json!([1, 2])));
+        assert!(same_value(
+            &json!({"type":"number","value":"infinity"}),
+            &json!({"type":"number","value":"infinity"})
+        ));
+    }
 }
 
 fn read_json(path: &Path) -> Result<Value, String> {
@@ -710,6 +979,7 @@ pub(crate) fn replay(
             scope,
             &mut mismatches,
         )?;
+        let coverage = coverage(&trace, scope, &calls, used_frames, frames.len());
         return Ok(
             json!({"diagnostic_only":true,"whole_song_parity_proven":false,"archive_accepted":false,
             "scope":if scope == Scope::Entry { "entry" } else { "first-point-query" },"native_trace":trace_path,"source_simfile":simfile,
@@ -718,8 +988,7 @@ pub(crate) fn replay(
             "mismatches":mismatches,"errors":errors,"lua_requests":requests,
             "stage_observations":observations,
             "command_queries":calls,
-            "pending_coverage":["complete song replay", "overlay-init observations",
-                "command/query timing", "complete stage statistics", "actor/render/resource state"]}),
+            "pending_coverage":coverage["pending"],"coverage":coverage}),
         );
     }
     let expected_samples = samples
@@ -799,7 +1068,11 @@ pub(crate) fn replay(
         scope,
         &mut mismatches,
     )?;
-    let report = json!({"diagnostic_only":true,"whole_song_parity_proven":false,"archive_accepted":false,
+    let coverage = coverage(&trace, scope, &calls, used_frames, frames.len());
+    let proven = coverage["pending"].as_array().is_some_and(Vec::is_empty)
+        && mismatches.is_empty()
+        && errors.is_empty();
+    let report = json!({"diagnostic_only":!proven,"whole_song_parity_proven":proven,"archive_accepted":proven,
         "source_simfile":simfile,"native_trace":trace_path,"native_frames":frames.len(),"replayed_frames":used_frames,
         "startup_scenes":startup_scenes,"replayed_scenes":scene_count,"selected_description":state.source.charts[0].description,
         "checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,"mismatches":mismatches,
@@ -810,9 +1083,7 @@ pub(crate) fn replay(
         "stage_observations":observations,
         "broadcast_params_compared":true,
         "command_queries":calls,
-        "pending_coverage":["overlay-init lifecycle observations", "native command/query delivery timing", "complex or truncated broadcast values",
-            "full theme stage commitment and history", "score/alive-time getters", "all actor/render/resource state",
-            "additional game/style/input/course contexts"]});
+        "pending_coverage":coverage["pending"],"coverage":coverage});
 
     eprintln!(
         "replayed {used_frames} actual frames; {checked_samples} stage samples; {} mismatches; {} callback errors",

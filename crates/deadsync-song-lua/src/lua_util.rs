@@ -6257,6 +6257,8 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
         lua.create_function({
             let actor = actor.clone();
             move |lua, (_self, duration): (Option<Value>, Option<Value>)| {
+                let trace_arg = if log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace)
+                    && crate::live::active(lua) { duration.clone() } else { None };
                 prepare_capture_scope_actor(lua, &actor)?;
                 flush_actor_capture(&actor)?;
                 let exact_duration = duration
@@ -6278,6 +6280,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                 let cursor = delay.unwrap_or(cursor);
                 actor.set("__songlua_capture_cursor", cursor + duration)?;
                 actor.set("__songlua_capture_tween_time_left", cursor + duration)?;
+                crate::live::trace_actor_call(lua, &actor, "Actor.sleep", trace_arg.as_ref());
                 Ok(actor.clone())
             }
         })?,
@@ -6340,6 +6343,8 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
         lua.create_function({
             let actor = actor.clone();
             move |lua, (_self, name): (Option<Value>, Option<Value>)| {
+                let trace_arg = if log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace)
+                    && crate::live::active(lua) { name.clone() } else { None };
                 let Some(name) = name.and_then(read_string) else {
                     return Ok(actor.clone());
                 };
@@ -6351,6 +6356,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     || lua.app_data_ref::<SongLuaStartupQueues>().is_some()
                 {
                     enqueue_actor_command(lua, &actor, &name)?;
+                    crate::live::trace_actor_call(lua, &actor, "Actor.queuecommand", trace_arg.as_ref());
                     return Ok(actor.clone());
                 }
                 let active = actor_active_commands(lua, &actor)?;
@@ -6390,9 +6396,11 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                             )?;
                         }
                     }
+                    crate::live::trace_actor_call(lua, &actor, "Actor.queuecommand", trace_arg.as_ref());
                     return Ok(actor.clone());
                 }
                 enqueue_actor_command(lua, &actor, &name)?;
+                crate::live::trace_actor_call(lua, &actor, "Actor.queuecommand", trace_arg.as_ref());
                 Ok(actor.clone())
             }
         })?,
