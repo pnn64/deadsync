@@ -1,0 +1,151 @@
+{
+  "source_simfile": "Dimmadome/doug dimmadome owner of the dimmsdale dimmadome.sm",
+  "simfile_sha256": "e7ad12886de72b1939cb18e6dd586a14d0807977dd428abe5b0347be6b5dcf41",
+  "candidate_sha256": "101cf4a646457f7c223db429bcd866899bd66cb5b1e45ddc224228ea008f560c",
+  "failure": "[1.5s] replaying every native gameplay frame\n\nthread 'main' (443887) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+  "repair_attempts_started": 0,
+  "native_roots": [
+    "def-0006"
+  ],
+  "creation_evidence": [
+    {
+      "creation": {
+        "actor": "def-0006",
+        "before_seq": 1,
+        "definition_id": "def-0006",
+        "ordinal": 1,
+        "pointer_hex": "637536ce3c10",
+        "provenance": "native-ActorUtil-before-LoadFromNode",
+        "scene": 1
+      },
+      "definition": {
+        "id": "def-0006",
+        "class": "ActorFrame",
+        "name": null,
+        "source": "@/BackgroundEffects/UpperLeft.lua",
+        "children": [
+          {
+            "definition_id": "def-0005",
+            "layer_index": 1
+          }
+        ]
+      },
+      "runtime": {
+        "definition_id": "def-0006",
+        "id": "def-0006",
+        "name": "",
+        "path": "def-0006"
+      },
+      "parent": null
+    },
+    {
+      "creation": {
+        "actor": "def-0005",
+        "before_seq": 1,
+        "definition_id": "def-0005",
+        "ordinal": 2,
+        "parent": "def-0006",
+        "pointer_hex": "63753672e360",
+        "provenance": "native-ActorUtil-before-LoadFromNode",
+        "scene": 1
+      },
+      "definition": {
+        "id": "def-0005",
+        "class": "ActorFrame",
+        "name": null,
+        "source": "@/BackgroundEffects/UpperLeft.lua",
+        "children": [
+          {
+            "definition_id": "def-0001",
+            "layer_index": 1
+          },
+          {
+            "definition_id": "def-0003",
+            "layer_index": 2
+          }
+        ]
+      },
+      "runtime": {
+        "definition_id": "def-0005",
+        "id": "def-0005",
+        "name": "",
+        "path": "def-0005"
+      },
+      "parent": {
+        "definition_id": "def-0006",
+        "id": "def-0006",
+        "name": "",
+        "path": "def-0006"
+      }
+    },
+    {
+      "creation": {
+        "actor": "def-0001",
+        "before_seq": 1,
+        "definition_id": "def-0001",
+        "ordinal": 3,
+        "parent": "def-0005",
+        "pointer_hex": "637537d69410",
+        "provenance": "native-ActorUtil-before-LoadFromNode",
+        "scene": 1
+      },
+      "definition": {
+        "id": "def-0001",
+        "class": "Quad",
+        "name": null,
+        "source": "song:/bg/default.lua",
+        "children": []
+      },
+      "runtime": {
+        "definition_id": "def-0001",
+        "id": "def-0001",
+        "name": "",
+        "path": "def-0001"
+      },
+      "parent": {
+        "definition_id": "def-0005",
+        "id": "def-0005",
+        "name": "",
+        "path": "def-0005"
+      }
+    },
+    {
+      "creation": {
+        "actor": "def-0003",
+        "before_seq": 1,
+        "definition_id": "def-0003",
+        "ordinal": 4,
+        "parent": "def-0005",
+        "pointer_hex": "637537d6bf40",
+        "provenance": "native-ActorUtil-before-LoadFromNode",
+        "scene": 1
+      },
+      "definition": {
+        "id": "def-0003",
+        "class": "Sprite",
+        "name": null,
+        "source": "song:/bg/default.lua",
+        "children": []
+      },
+      "runtime": {
+        "definition_id": "def-0003",
+        "id": "def-0003",
+        "name": "",
+        "path": "def-0003"
+      },
+      "parent": {
+        "definition_id": "def-0005",
+        "id": "def-0005",
+        "name": "",
+        "path": "def-0005"
+      }
+    }
+  ],
+  "native_source": "../itgmania-harness/vendor/itgmania/src/Background.cpp:296",
+  "native_effect_source": "../itgmania-harness/vendor/itgmania/BackgroundEffects/UpperLeft.lua:4",
+  "composition_source": "../itgmania-harness/vendor/itgmania/Themes/_fallback/Scripts/02 ActorDef.lua:14",
+  "replay_source": "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs:1418",
+  "diagnosis": "The observed UpperLeft effect and composed song ActorFrame are both instantiated definitions. The mapper counts only external background parents, so it finds zero containers for the one authored BGCHANGE.",
+  "source_bgchange": "0.000=bg=1.000=0=0=1",
+  "next_repair": "Derive the prepared entry ownership through the pinned effect wrapper from neutral factory inputs; preserve capture and all comparison checks"
+}
