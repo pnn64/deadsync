@@ -3155,6 +3155,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 185,
+      "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+      "simfile_sha256": "66db5c1884fb2b633bfd26de2f32825a27f7fd9e8e08a0ae89d1ec4f27b8d645",
+      "retained_original_archive": "1fc4cfc27eb767f668f752ff9c327a3ccc9f9aeac16ebac527581527c67690fa.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "874046de12e1da317673ca0da4c84ed09627d58dc6c5595893b0504289560554",
+      "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+      "fix_commit": "4bd354261 / harness 55299c5",
+      "build_proof": "/home/parity/jobs/uptime-pause-build-v2/proof.json",
+      "capture_seconds": 255.18063940900174,
+      "trace_sha256": "a1d3409f3031764adf333fe8c368cf52a6a7cf9bde4a9c6a389bff7af8662929",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-185/candidates/5be4c12c6a91e1dbf9a0158cc313090e7473cea1f629a393d94df4cf7b407ebe.tar",
+      "replay_exit": 1,
+      "replay_seconds": 62.082760213001166,
+      "candidate_sha256": "5be4c12c6a91e1dbf9a0158cc313090e7473cea1f629a393d94df4cf7b407ebe",
+      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.0s] : 0 checks completed, 0 failed\n[16.0s] : 0 checks completed, 0 failed\n[18.0s] : 0 checks completed, 0 failed\n[20.0s] : 0 checks completed, 0 failed\n[22.0s] : 0 checks completed, 0 failed\n[24.0s] : 0 checks completed, 0 failed\n[25.2s] replaying every native gameplay frame\n[26.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[28.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n\nthread 'main' (625454) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[30.0s] replaying every native gameplay frame: frame 0/7084 (0.0%)\n[32.0s] replaying every native gameplay frame: frame 0/7084 (0.0%)\n[34.0s] replaying every native gameplay frame: frame 0/7084 (0.0%)\n[36.0s] replaying every native gameplay frame: frame 0/7084 (0.0%)\n"
     }
   ],
   "historical_pending": [
@@ -3178,9 +3197,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "fb0ae8b99391809080b072426dee35d2efe0e64d479b0dff9833bb6e5370848d",
+  "binary_sha256": "874046de12e1da317673ca0da4c84ed09627d58dc6c5595893b0504289560554",
   "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
   "passed_fixtures": 7,
-  "pending_charts": 17,
-  "processed_charts": 24
+  "pending_charts": 18,
+  "processed_charts": 25
 }
