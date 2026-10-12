@@ -682,7 +682,6 @@ return Def.ActorFrame{}
             ("/input/injected_inputs", serde_json::json!(true)),
             ("/update_frames", serde_json::json!([])),
             ("/update_frames/1/sequence", serde_json::json!(3)),
-            ("/events", serde_json::json!([])),
             ("/events/0/seq", serde_json::json!(2)),
             ("/events/0/kind", serde_json::json!("error")),
             ("/stage_samples", serde_json::json!([])),
@@ -694,6 +693,10 @@ return Def.ActorFrame{}
                 "accepted {path}"
             );
         }
+        let mut empty_commands = complete.clone();
+        empty_commands["events"] = serde_json::json!([]);
+        assert!(super::validate_capture(&empty_commands).is_ok(),
+            "a complete native run can execute an empty actor branch");
     }
 
     #[test]
@@ -1090,6 +1093,11 @@ end}
             {"operation":"command.begin","actor":"a"}]);
         assert_eq!(super::native_creation_order(&different_results).expect("neutral inputs"), expected);
         assert!(super::native_creation_order(&json!({})).expect("older capture").is_empty());
+        let mut empty_tree = trace.clone();
+        for field in ["roots", "actor_definitions", "runtime_actors", "actor_creation_inputs"] {
+            empty_tree[field] = json!([]);
+        }
+        assert!(super::native_creation_order(&empty_tree).expect("empty native actor branch").is_empty());
         for (path, value) in [
             ("/actor_creation_inputs/1/parent", json!("unknown")),
             ("/actor_creation_inputs/1/pointer_hex", json!("20")),
@@ -1273,10 +1281,13 @@ pub(crate) fn validate_capture(trace: &Value) -> Result<(), String> {
         return Err("declared native initial player options are incomplete".into());
     }
     for (field, sequence) in [("update_frames", "sequence"), ("events", "seq")] {
-        let values = trace[field]
-            .as_array()
-            .filter(|values| !values.is_empty())
-            .ok_or_else(|| format!("native {field} are empty"))?;
+        let values = trace[field].as_array().ok_or_else(|| format!("native {field} are missing"))?;
+        // A Lua foreground may return an empty actor (for example, a calendar
+        // condition). Its complete run still has gameplay frames and stage
+        // samples, but there are no authored commands to observe.
+        if field == "update_frames" && values.is_empty() {
+            return Err("native update_frames are empty".into());
+        }
         if values
             .iter()
             .enumerate()
@@ -1310,8 +1321,14 @@ fn native_creation_order(trace: &Value) -> Result<Vec<(String, usize)>, String> 
         return Err("native actor creation observer failed".into());
     }
     let roots = trace["roots"].as_array().ok_or("missing native actor roots")?;
-    if roots.len() != 1 { return Err("native subscriber ownership needs a single observed root".into()); }
     let definitions = trace["actor_definitions"].as_array().ok_or("missing native definitions")?;
+    if roots.is_empty() && definitions.is_empty()
+        && trace["actor_creation_inputs"].as_array().is_some_and(Vec::is_empty)
+        && trace["runtime_actors"].as_array().is_some_and(Vec::is_empty)
+    {
+        return Ok(Vec::new());
+    }
+    if roots.len() != 1 { return Err("native subscriber ownership needs a single observed root".into()); }
     let mut defs = BTreeMap::new();
     for definition in definitions {
         let id = definition["id"].as_str().ok_or("missing native definition identity")?;
