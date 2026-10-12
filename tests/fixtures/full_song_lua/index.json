@@ -2124,15 +2124,12 @@
     {
       "title": "Datura [paroxysm]",
       "source_simfile": "Datura -paroxysm-/Datura -paroxysm-.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a0d4c1066772c2db9c2c4e5ce4209985203425e790fbcedceeb6588d95f42f35.tar.zst",
-      "sha256": "a0d4c1066772c2db9c2c4e5ce4209985203425e790fbcedceeb6588d95f42f35",
-      "compressed_bytes": 97307,
-      "uncompressed_sha256": "01eadf82e47484f86123bc8bc4d9ed9136d1c22c56e473e4d63156c0e1885983",
-      "compression_level": 22,
-      "aliases": [
-        "2ced146f6abdccb02a207dec233a82eed1f8f27f315bbe639ba7e81a7592fa82.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "849330a6888e5473596428c370ba0408f0f1e519d9e758a1f79bdf9cdda63058.tar.zst",
+      "sha256": "849330a6888e5473596428c370ba0408f0f1e519d9e758a1f79bdf9cdda63058",
+      "compressed_bytes": 19306147,
+      "uncompressed_sha256": "311c7351bfee398f54126b737d895145adb01f3b720ee2788b2fbc524ecae1a8",
+      "aliases": []
     },
     {
       "title": "DAYWALKER!",

@@ -1,0 +1,114 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "25908229a / harness 55299c5",
+  "results": [
+    {
+      "position": 166,
+      "source_simfile": "Datura -paroxysm-/Datura -paroxysm-.ssc",
+      "status": "passed",
+      "repair_attempts": 1,
+      "previous_failure": [],
+      "binary_sha256": "6b1716655f37b60bc06441b4ec78450362363ab00ff2ddfb9aa9a6360ddf2aa6",
+      "candidate_sha256": "311c7351bfee398f54126b737d895145adb01f3b720ee2788b2fbc524ecae1a8",
+      "simfile_sha256": "a63214b25003d7318bca31d85335900b3c0ff6d0eb7567d42a23de22f66bbee4",
+      "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+      "fix_commit": "25908229a / harness 55299c5",
+      "build_proof": "/home/parity/jobs/screen-layer-tweens-build-v1/proof.json",
+      "previous_concrete_failures": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0018",
+            "args": [
+              1
+            ],
+            "beat": 100.50076293945312,
+            "caller": {
+              "line": 350,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "StatsShowMessageCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": 1.600000023841858
+            },
+            "kind": "call",
+            "line": 350,
+            "operation": "Actor.diffusealpha",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 81.63902282714844,
+            "seq": 485323,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 1.600000023841858
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.diffusealpha",
+            "source": "song:/lua/default.lua",
+            "line": 350,
+            "phase": "callback",
+            "beat": 100.50076293945312,
+            "seconds": 81.63902282714844,
+            "args": [
+              1
+            ],
+            "results": [
+              {
+                "actor": "0x5729a5778440",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 3.200000047683716
+          }
+        }
+      ],
+      "capture_reuse": "byte-identical original uncompressed candidate",
+      "replay_exit": 0,
+      "replay_seconds": 429.62087930399866,
+      "native_frames": 51588,
+      "replayed_frames": 51588,
+      "compared_stage_fields": 1540,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.GetZ, Actor.smooth, PlayerOptions.BounceZ, PlayerOptions.BounceZOffset, PlayerOptions.BounceZPeriod, PlayerOptions.CMod, PlayerOptions.Centered, PlayerOptions.ConfusionOffset1, PlayerOptions.ConfusionOffset2, PlayerOptions.ConfusionOffset3, PlayerOptions.ConfusionOffset4, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.DrunkZ, PlayerOptions.DrunkZOffset, PlayerOptions.DrunkZPeriod, PlayerOptions.Expand, PlayerOptions.ExpandPeriod, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.MoveX1, PlayerOptions.MoveX4, PlayerOptions.MoveY2, PlayerOptions.MoveY3, PlayerOptions.SawtoothZ, PlayerOptions.Skew, PlayerOptions.Stealth, PlayerOptions.TanBumpyX, PlayerOptions.TanTornado, PlayerOptions.Tilt, PlayerOptions.Tiny, PlayerOptions.XMod, Song.GetDisplayBpms, Song.GetDisplayMainTitle",
+        "native drawable state/resources: Quad"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "8669a90855c6b941ce2116fc6312e58a5f4ca3ff0f3037869d017181e418cd27",
+      "archive": "849330a6888e5473596428c370ba0408f0f1e519d9e758a1f79bdf9cdda63058.tar.zst",
+      "archive_sha256": "849330a6888e5473596428c370ba0408f0f1e519d9e758a1f79bdf9cdda63058",
+      "compressed_bytes": 19306147,
+      "harness_version": "0.1.80",
+      "title": "Datura [paroxysm]",
+      "pack_seconds": 12.657433779997518,
+      "retained_original_entry": {
+        "title": "Datura [paroxysm]",
+        "source_simfile": "Datura -paroxysm-/Datura -paroxysm-.ssc",
+        "harness_version": "0.1.0",
+        "archive": "a0d4c1066772c2db9c2c4e5ce4209985203425e790fbcedceeb6588d95f42f35.tar.zst",
+        "sha256": "a0d4c1066772c2db9c2c4e5ce4209985203425e790fbcedceeb6588d95f42f35",
+        "compressed_bytes": 97307,
+        "uncompressed_sha256": "01eadf82e47484f86123bc8bc4d9ed9136d1c22c56e473e4d63156c0e1885983",
+        "compression_level": 22,
+        "aliases": [
+          "2ced146f6abdccb02a207dec233a82eed1f8f27f315bbe639ba7e81a7592fa82.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "6b1716655f37b60bc06441b4ec78450362363ab00ff2ddfb9aa9a6360ddf2aa6",
+  "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+  "repair": "native screen-owned layer tween advancement and LeaveGameplay option rebuild",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
