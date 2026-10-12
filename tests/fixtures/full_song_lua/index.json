@@ -2010,17 +2010,14 @@
       ]
     },
     {
-      "title": "crew",
+      "title": "crew -All Hands on the Deck-",
       "source_simfile": "crew -All Hands on the Deck-/crew.ssc",
-      "harness_version": "0.1.0",
-      "archive": "d010be3d80f1e59b9f97a71b85264d0281752693da62f83ca4242caac39d18fa.tar.zst",
-      "sha256": "d010be3d80f1e59b9f97a71b85264d0281752693da62f83ca4242caac39d18fa",
-      "compressed_bytes": 31996,
-      "uncompressed_sha256": "14e9206c6359b8342a87ef423d36de9da8db3a37f2e334d4251cb9f557181c74",
-      "compression_level": 22,
-      "aliases": [
-        "118b8cff9b10f04418c071edb469f0a775738e1dd404df012fd8198cc96e65ca.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "5a7bb5f1894c7cc2809264abe710d548e7d85cf61543c0fc831b36f055b38e19.tar.zst",
+      "sha256": "5a7bb5f1894c7cc2809264abe710d548e7d85cf61543c0fc831b36f055b38e19",
+      "compressed_bytes": 16580403,
+      "uncompressed_sha256": "e4f11bf99138ca805fe15004ef6d729d22477f0fc35602e67736e8901269c4de",
+      "aliases": []
     },
     {
       "title": "Botanic Panic",

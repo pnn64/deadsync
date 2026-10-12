@@ -604,12 +604,55 @@
         }
       ],
       "report_sha256": "858780a82e933ddb0634e2540b4fab2c2e8bfbb84ca392e765882c0409d43e52"
+    },
+    {
+      "position": 156,
+      "source_simfile": "crew -All Hands on the Deck-/crew.ssc",
+      "status": "passed",
+      "repair_attempts": 1,
+      "previous_failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (140633) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native subscriber ownership needs a single observed root\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "binary_sha256": "a2e465639dac28b51f86ca1658a1c70d9163db63815e54d7c362cdee30b9eddf",
+      "candidate_sha256": "e4f11bf99138ca805fe15004ef6d729d22477f0fc35602e67736e8901269c4de",
+      "replay_exit": 0,
+      "replay_seconds": 750.6039183370012,
+      "native_frames": 137623,
+      "replayed_frames": 137623,
+      "compared_stage_fields": 1551,
+      "pending_coverage": [
+        "uncompared song operations: Steps.GetChartName",
+        "native drawable state/resources: Quad"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "c512bb1012c4cbd8aef6181297d3be0dfeba6c64af2b3c383970a971f4c40f28",
+      "archive": "5a7bb5f1894c7cc2809264abe710d548e7d85cf61543c0fc831b36f055b38e19.tar.zst",
+      "archive_sha256": "5a7bb5f1894c7cc2809264abe710d548e7d85cf61543c0fc831b36f055b38e19",
+      "compressed_bytes": 16580403,
+      "harness_version": "0.1.80",
+      "title": "crew -All Hands on the Deck-",
+      "pack_seconds": 2.206915809001657,
+      "retained_original_entry": {
+        "title": "crew",
+        "source_simfile": "crew -All Hands on the Deck-/crew.ssc",
+        "harness_version": "0.1.0",
+        "archive": "d010be3d80f1e59b9f97a71b85264d0281752693da62f83ca4242caac39d18fa.tar.zst",
+        "sha256": "d010be3d80f1e59b9f97a71b85264d0281752693da62f83ca4242caac39d18fa",
+        "compressed_bytes": 31996,
+        "uncompressed_sha256": "14e9206c6359b8342a87ef423d36de9da8db3a37f2e334d4251cb9f557181c74",
+        "compression_level": 22,
+        "aliases": [
+          "118b8cff9b10f04418c071edb469f0a775738e1dd404df012fd8198cc96e65ca.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "binary_sha256": "a2e465639dac28b51f86ca1658a1c70d9163db63815e54d7c362cdee30b9eddf",
   "harness_sha256": "41bfe13b815a4a9695c2271e375611ff2e0efc017c4c4bc1ee304cb89bf69a54",
   "repair": "final native factory parent trees and per-reload subscriber identities",
-  "passed_fixtures": 0,
+  "passed_fixtures": 1,
   "pending_charts": 1,
-  "processed_charts": 1
+  "processed_charts": 2
 }
