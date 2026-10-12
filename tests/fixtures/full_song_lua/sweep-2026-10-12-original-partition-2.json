@@ -1,0 +1,70 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": null,
+  "results": [
+    {
+      "position": 169,
+      "source_simfile": "Delayed Friend Request/Delayed Friend Request.sm",
+      "simfile_sha256": "1133c20561aea19271eccbfe7d3cb654f41b53c2192dd6025ab18f111924f6e9",
+      "retained_original_archive": "4a92b1159599cb32d73925349f96f78a2ea077a5e753b026fa42af8aba779697.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "3888b1e92b5612b70edc19e66d3cf040cfd5169a6dd5f61bc2a0eeeead4acbd3",
+      "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
+      "fix_commit": "375a96e85 / harness 78d4a1e",
+      "build_proof": "/home/parity/jobs/background-activation-build-v1/proof.json",
+      "capture_seconds": 160.64120072699734,
+      "trace_sha256": "c5b58852eafc35e95babf7d6c401d2d0b8f8aef50327392f091ae6a484f2cb51",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-169/candidates/a9122523c4884a8d0d43a8eb842aef900e6e9879a96bebf289c22e436fec2403.tar",
+      "replay_exit": 0,
+      "replay_seconds": 406.56281253600173,
+      "candidate_sha256": "a9122523c4884a8d0d43a8eb842aef900e6e9879a96bebf289c22e436fec2403",
+      "native_frames": 50346,
+      "replayed_frames": 50346,
+      "compared_stage_fields": 1298,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "1aa816bee4f534a59cc735e18b161db76f2fd5d0e02aee523befb7f349776c22",
+      "archive": "9496a9b91af08475c5ef20d97a9b70bb8af5c30055b3b6f00cf80660546b076b.tar.zst",
+      "archive_sha256": "9496a9b91af08475c5ef20d97a9b70bb8af5c30055b3b6f00cf80660546b076b",
+      "compressed_bytes": 15006556,
+      "pack_seconds": 15.148801416005881,
+      "harness_version": "0.1.80",
+      "title": "Delayed Friend Request",
+      "retained_original_entry": {
+        "title": "Delayed Friend Request",
+        "source_simfile": "Delayed Friend Request/Delayed Friend Request.sm",
+        "harness_version": "0.1.0",
+        "archive": "4a92b1159599cb32d73925349f96f78a2ea077a5e753b026fa42af8aba779697.tar.zst",
+        "sha256": "4a92b1159599cb32d73925349f96f78a2ea077a5e753b026fa42af8aba779697",
+        "compressed_bytes": 56747,
+        "uncompressed_sha256": "7439b5da1d4d5d575121a14954a0c39de9d75a626cdffed7269930f39ba54454",
+        "compression_level": 22,
+        "aliases": [
+          "9d2982dba60774c6119c2851aee406b1c041309cae4bc358297ca059125b0a19.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "scope": {
+    "original_simfiles": 501,
+    "indexed_sources": 483,
+    "remaining_indexed_charts": 335,
+    "historical_unindexed_charts": 18,
+    "assigned_source_count": 111
+  },
+  "binary_sha256": "3888b1e92b5612b70edc19e66d3cf040cfd5169a6dd5f61bc2a0eeeead4acbd3",
+  "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}

@@ -2166,15 +2166,12 @@
     {
       "title": "Delayed Friend Request",
       "source_simfile": "Delayed Friend Request/Delayed Friend Request.sm",
-      "harness_version": "0.1.0",
-      "archive": "4a92b1159599cb32d73925349f96f78a2ea077a5e753b026fa42af8aba779697.tar.zst",
-      "sha256": "4a92b1159599cb32d73925349f96f78a2ea077a5e753b026fa42af8aba779697",
-      "compressed_bytes": 56747,
-      "uncompressed_sha256": "7439b5da1d4d5d575121a14954a0c39de9d75a626cdffed7269930f39ba54454",
-      "compression_level": 22,
-      "aliases": [
-        "9d2982dba60774c6119c2851aee406b1c041309cae4bc358297ca059125b0a19.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "9496a9b91af08475c5ef20d97a9b70bb8af5c30055b3b6f00cf80660546b076b.tar.zst",
+      "sha256": "9496a9b91af08475c5ef20d97a9b70bb8af5c30055b3b6f00cf80660546b076b",
+      "compressed_bytes": 15006556,
+      "uncompressed_sha256": "a9122523c4884a8d0d43a8eb842aef900e6e9879a96bebf289c22e436fec2403",
+      "aliases": []
     },
     {
       "title": "Delayed Friend Request",
