@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-12T22:32:59Z",
-  "previous_goal_turn": "progress: Dance Robot SSC and Data Loss full fixtures saved; background activation fixed and committed, Windows regression plus 21 live tests and 15 native replay controls passed; RUNWAY capture reused and full 55467-frame pass saved; three disjoint original queues launched while retaining Datura capture; Cuphead pending at two-attempt limit; Cursed actual Cancel/PlayerP1 inventory mismatch diagnosed; Datamania and Deceive concrete failures recorded",
+  "updated_utc": "2026-10-12T23:06:48Z",
+  "previous_goal_turn": "progress: Delayed Friend Request SM and Daywalker full fixtures saved and committed; harness ActorDef concatenation tracing fixed and committed, 12 Windows and Linux runtime tests plus three native lifecycle controls passed; Deceive repair attempt 1 running; outro option rebuild fixed and committed, Windows regression plus 22 Linux live tests and 15 native replay controls passed; Datamania attempt 1 reuses its uncompressed capture; screen-owned layer tween advancement fixed and committed, Windows regression passed and Linux controls building; Datura attempt 1 waits for that verified build and reuses its capture; all three original queues and the single publisher remain active",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,8 +14,8 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "849da9fc16d8ff9449166fd526ed809cf4994101",
-      "itgmania_harness": "78d4a1ef5778b76a29d3d55ff42e0216edfb1a38"
+      "deadsync": "b6fb4bff28491dfb433c6da9f765213749e5f6ea",
+      "itgmania_harness": "55299c5cb59cc4bc0d3fb106b9e21bfebcebe308"
     }
   },
   "validation": {
@@ -26,6 +26,9 @@
     "factory_ownership": "final parent tree and reload epoch regression passed; all 15 Linux replay controls passed; Cold attempt 2 and crew attempt 1 reuse their captures",
     "background_entry_ownership": "native background child containers and foreground entry offset regression passed; all 15 Linux replay controls passed; Cuphead attempt 2 reuses its original capture and skips if attempt 1 passed",
     "background_activation": "startup clock regression passed on Windows; 21 live-scene tests and 15 native replay controls passed on Linux; RUNWAY attempt 1 reuses its uncompressed capture; committed as 375a96e85",
+    "definition_concat_capture": "committed as harness 55299c5; 12 runtime tests passed on Windows and Linux; composed definition, foreground and reload native controls passed; Deceive capture repair attempt 1 running; sweep-2026-10-12-definition-concat-build.json",
+    "outro_option_rebuild": "committed as df8437373; Windows regression passed; 22 Linux live tests and 15 native replay controls passed; Datamania attempt 1 reuses its uncompressed capture; sweep-2026-10-12-outro-options-build.json",
+    "screen_layer_tweens": "committed as 25908229a; Windows regression passed; Linux controls building; Datura attempt 1 waits for a verified build and reuses its uncompressed capture",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved"
   },
   "corpus_transfer": {
@@ -40,19 +43,15 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Datura -paroxysm-/Datura -paroxysm-.ssc",
-      "position": 166,
-      "phase": "replay",
-      "pid": 368364,
+      "current": "Dig Dug Theme/Dig Dug Theme.ssc",
+      "position": 173,
+      "phase": "capture",
+      "pid": 467842,
       "process_matches": true,
-      "passed": 4,
-      "pending": 13,
-      "processed": 17,
-      "last_log_lines": [
-        "[26.0s] replaying every native gameplay frame: frame 1943/51588 (3.8%)",
-        "[28.0s] replaying every native gameplay frame: frame 2273/51588 (4.4%)",
-        "[30.0s] replaying every native gameplay frame: frame 2630/51588 (5.1%)"
-      ],
+      "passed": 6,
+      "pending": 14,
+      "processed": 20,
+      "last_log_lines": [],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -179,24 +178,55 @@
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
-        "pending": 1,
-        "processed": 1,
-        "last_phase": "capture",
-        "source_simfile": "Delightful Day/Delightful Day.sm",
+        "pending": 4,
+        "processed": 4,
+        "last_phase": "replay",
+        "source_simfile": "E2/E.sm",
         "child_running": true,
-        "position": 171
+        "position": 180
       },
       {
         "job": "chart-sweep-parallel-v4-2",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 1,
+        "pending": 1,
+        "processed": 2,
+        "last_phase": "replay",
+        "source_simfile": "Distraction/sm.sm",
+        "child_running": true,
+        "position": 175
+      },
+      {
+        "job": "definition-concat-repair-v1",
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
         "pending": 0,
         "processed": 0,
         "last_phase": "replay",
-        "source_simfile": "Delayed Friend Request/Delayed Friend Request.sm",
+        "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
         "child_running": true,
-        "position": 169
+        "position": 168
+      },
+      {
+        "job": "outro-options-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Datamania (tpz Overheat Remix)/Datamania (tpz Overheat Remix).ssc",
+        "child_running": true
+      },
+      {
+        "job": "screen-layer-tweens-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0
       }
     ],
     "publisher_streams": [
@@ -290,15 +320,36 @@
         "record": "sweep-2026-10-12-original-partition-2.json",
         "finish_status": "original scope partition 2 initial replay complete",
         "compact": false
+      },
+      {
+        "name": "definition-concat-repair",
+        "remote": "/home/parity/jobs/definition-concat-repair-v1",
+        "record": "sweep-2026-10-12-definition-concat-repairs.json",
+        "fix_commit": "harness 55299c5 / deadsync 375a96e85",
+        "finish_status": "bounded definition composition capture repair complete"
+      },
+      {
+        "name": "outro-options-repair",
+        "remote": "/home/parity/jobs/outro-options-repair-v1",
+        "record": "sweep-2026-10-12-outro-options-repairs.json",
+        "fix_commit": "df8437373 / harness 55299c5",
+        "finish_status": "bounded gameplay outro option repair complete"
+      },
+      {
+        "name": "screen-layer-tweens-repair",
+        "remote": "/home/parity/jobs/screen-layer-tweens-repair-v1",
+        "record": "sweep-2026-10-12-screen-layer-tweens-repairs.json",
+        "fix_commit": "25908229a / harness 55299c5",
+        "finish_status": "bounded screen layer tween repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 7,
-    "new_pending_charts": 11,
-    "new_processed_sources": 18,
+    "new_passed_fixtures": 10,
+    "new_pending_charts": 16,
+    "new_processed_sources": 26,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 335,
+    "unprocessed_sources": 327,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -602,12 +653,115 @@
       ]
     },
     {
+      "source_simfile": "Datura -paroxysm-/Datura -paroxysm-.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 5,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0018",
+            "args": [
+              1
+            ],
+            "beat": 100.50076293945312,
+            "caller": {
+              "line": 350,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "StatsShowMessageCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": 1.600000023841858
+            },
+            "kind": "call",
+            "line": 350,
+            "operation": "Actor.diffusealpha",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 81.63902282714844,
+            "seq": 485323,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 1.600000023841858
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.diffusealpha",
+            "source": "song:/lua/default.lua",
+            "line": 350,
+            "phase": "callback",
+            "beat": 100.50076293945312,
+            "seconds": 81.63902282714844,
+            "args": [
+              1
+            ],
+            "results": [
+              {
+                "actor": "0x5729a5778440",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 3.200000047683716
+          }
+        }
+      ]
+    },
+    {
       "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: native definition instance has no observed creation identity; retained run directory /tmp/itgmania-harness-rs/song-lua-355312-1791844077654862665-0\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
+    },
+    {
+      "source_simfile": "Delightful Day/Delightful Day.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 480912,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 480989,
+          "deadsync": 480976
+        }
+      ]
+    },
+    {
+      "source_simfile": "Dimmadome/doug dimmadome owner of the dimmsdale dimmadome.sm",
+      "repair_attempts": 0,
+      "failure": "[1.5s] replaying every native gameplay frame\n\nthread 'main' (443887) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Doubles-45-HALF-[MASTER] Tacos/Tacos.ssc",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania probe script reported: no StepsType_Dance_Single chart matched difficulty Challenge; retained run directory /tmp/itgmania-harness-rs/song-lua-444050-1791845829037205558-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Delightful Day/Delightful Day.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 474087,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 474164,
+          "deadsync": 474151
+        }
+      ]
     }
   ],
   "historical_concrete_failures": [
