@@ -2746,6 +2746,7 @@ impl App {
         let gameplay_session = gameplay_session();
         let viewport = gameplay_viewport(self.state.shell.metrics);
         let display_size = space::current_window_px();
+        let display_aspect_ratio = cfg.display_aspect_ratio;
         let gameplay_config = gameplay_config_from_config(&cfg);
         let music_rate = options.music_rate;
         let video_renderer = cfg.video_renderer;
@@ -2772,6 +2773,7 @@ impl App {
                         music_rate,
                         viewport,
                         display_size,
+                        display_aspect_ratio,
                         &gameplay_session,
                         &gameplay_config,
                         &video_renderer.to_string(),
@@ -9593,6 +9595,7 @@ impl App {
                     po_state.music_rate,
                     gameplay_viewport(self.state.shell.metrics),
                     space::current_window_px(),
+                    cfg.display_aspect_ratio,
                     &gameplay_session,
                     &gameplay_config_from_config(&cfg),
                     &cfg.video_renderer.to_string(),
@@ -10096,6 +10099,7 @@ impl App {
                 };
                 let metrics = self.state.shell.metrics;
                 let (pixel_width, pixel_height) = space::current_window_px();
+                let display_aspect_ratio = finish.config.display_aspect_ratio;
                 let init = move || {
                     space::set_current_metrics(metrics);
                     space::set_current_window_px(pixel_width, pixel_height);
@@ -10114,6 +10118,7 @@ impl App {
                             music_rate,
                             viewport,
                             (pixel_width, pixel_height),
+                            display_aspect_ratio,
                             &gameplay_session,
                             &gameplay_config,
                             &video_renderer.to_string(),

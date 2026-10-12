@@ -736,13 +736,12 @@ pub fn install_manager_globals(lua: &Lua, context: &SongLuaCompileContext) -> ml
     let global_offset_seconds = context.global_offset_seconds;
     let display_width = context.display_width.max(0.0).round() as i32;
     let display_height = context.display_height.max(0.0).round() as i32;
-    let display_aspect_ratio = display_width as f32 / (display_height as f32).max(1.0);
     globals.set(
         "PREFSMAN",
         create_prefsmgr_table(
             lua,
             global_offset_seconds,
-            display_aspect_ratio,
+            context.display_aspect_ratio,
             display_width,
             display_height,
             context.video_renderers.as_str(),

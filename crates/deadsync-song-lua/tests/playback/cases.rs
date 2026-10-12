@@ -12375,6 +12375,7 @@ fn prepare_fixture(
         music_rate,
         viewport,
         display_size,
+        16.0 / 9.0,
         session,
         config,
         &video_renderer.to_string(),

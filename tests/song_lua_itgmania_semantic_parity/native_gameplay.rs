@@ -1214,6 +1214,10 @@ pub(crate) fn replay(
             number(&trace["display"], "width")? as u32,
             number(&trace["display"], "height")? as u32,
         ),
+        // Older captures use the pinned harness's fresh PrefsManager default;
+        // its Preferences.ini sets dimensions but never overrides this value.
+        preferences.get("display_aspect_ratio").and_then(Value::as_f64)
+            .map_or(16.0 / 9.0, |value| value as f32),
         &session,
         &config,
         "null",

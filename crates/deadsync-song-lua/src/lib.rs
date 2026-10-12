@@ -1456,6 +1456,8 @@ pub struct SongLuaCompileContext {
     /// Physical video mode exposed through `DISPLAY` and `PREFSMAN`.
     pub display_width: f32,
     pub display_height: f32,
+    /// Configured preference, independent of the selected renderer's size.
+    pub display_aspect_ratio: f32,
     /// Capability of the selected renderer, independent of theme helpers.
     pub render_to_texture: bool,
     pub video_renderers: String,
@@ -1493,6 +1495,7 @@ impl SongLuaCompileContext {
             screen_height: 480.0,
             display_width: 640.0,
             display_height: 480.0,
+            display_aspect_ratio: 16.0 / 9.0,
             render_to_texture: true,
             video_renderers: "software".to_string(),
             players: std::array::from_fn(|_| SongLuaPlayerContext::default()),
@@ -12587,6 +12590,7 @@ assert(SCREEN_WIDTH == 854 and SCREEN_HEIGHT == 480)
 assert(DISPLAY:GetDisplayWidth() == 0 and DISPLAY:GetDisplayHeight() == 0)
 assert(PREFSMAN:GetPreference('DisplayWidth') == 0)
 assert(PREFSMAN:GetPreference('DisplayHeight') == 0)
+assert(math.abs(PREFSMAN:GetPreference('DisplayAspectRatio') - 16 / 9) < 1e-6)
 assert(PREFSMAN:GetPreference('VideoRenderers') == 'null')
 assert(DISPLAY:SupportsRenderToTexture() == false)
 -- Simply Love's SL-SupportHelpers.lua reports true for null independently.
@@ -12606,6 +12610,28 @@ return root
         context.render_to_texture = false;
         let compiled = test_compile_song_lua(&entry, &context).expect("compile native null branch");
         assert!(compiled.overlays.is_empty());
+    }
+
+    #[test]
+    fn display_preference_ignores_mode_size() {
+        let song_dir = test_dir("display-preference-size");
+        let entry = song_dir.join("default.lua");
+        for (width, height, aspect) in [(0.0, 0.0, 16.0 / 9.0), (3840.0, 2160.0, 4.0 / 3.0)] {
+            fs::write(&entry, format!(r#"
+assert(math.abs(PREFSMAN:GetPreference('DisplayAspectRatio') - {aspect}) < 1e-6)
+assert(PREFSMAN:GetPreference('DisplayWidth') == {width})
+assert(PREFSMAN:GetPreference('DisplayHeight') == {height})
+PREFSMAN:SetPreference('DisplayWidth', 1024)
+PREFSMAN:SetPreference('DisplayHeight', 768)
+assert(math.abs(PREFSMAN:GetPreference('DisplayAspectRatio') - {aspect}) < 1e-6)
+return Def.ActorFrame{{}}
+"#)).expect("display preference control");
+            let mut context = SongLuaCompileContext::new(&song_dir, "Display Preference");
+            context.display_width = width;
+            context.display_height = height;
+            context.display_aspect_ratio = aspect;
+            test_compile_song_lua(&entry, &context).expect("independent display preference");
+        }
     }
 
     #[test]

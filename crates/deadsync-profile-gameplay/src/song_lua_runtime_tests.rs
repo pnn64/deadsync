@@ -33,11 +33,12 @@ fn null_renderer_reaches_song_lua_unchanged() {
         &song, &charts, [&timing; 2],
         &std::array::from_fn(|_| deadsync_profile::Profile::default()),
         &[deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0); 2],
-        1.0, deadsync_gameplay::GameplayViewport::new(854.0, 480.0), (0, 0),
+        1.0, deadsync_gameplay::GameplayViewport::new(854.0, 480.0), (0, 0), 16.0 / 9.0,
         &Default::default(), &Default::default(), "null",
     );
     assert_eq!((context.screen_width, context.screen_height), (854.0, 480.0));
     assert_eq!((context.display_width, context.display_height), (0.0, 0.0));
+    assert_eq!(context.display_aspect_ratio, 16.0 / 9.0);
     assert_eq!(context.video_renderers, "null");
     assert!(!context.render_to_texture);
 }
@@ -82,6 +83,7 @@ fn saved_perspective_reaches_lua_for_each_player_side() {
             1.0,
             GameplayViewport::new(854.0, 480.0),
             (854, 480),
+            4.0 / 3.0,
             &GameplaySession {
                 player_side: side,
                 ..Default::default()
@@ -90,6 +92,7 @@ fn saved_perspective_reaches_lua_for_each_player_side() {
             "opengl",
         );
         let perspective = context.players[0].perspective;
+        assert_eq!(context.display_aspect_ratio, 4.0 / 3.0);
         assert_eq!((perspective.tilt, perspective.skew), expected);
         assert!(!context.players[1].enabled);
         assert_eq!(context.players[1].perspective, Default::default());

@@ -535,6 +535,7 @@ pub fn song_lua_play_context(
     music_rate: f32,
     viewport: deadsync_gameplay::GameplayViewport,
     display_size: (u32, u32),
+    display_aspect_ratio: f32,
     session: &deadsync_gameplay::GameplaySession,
     config: &deadsync_gameplay::GameplayConfig,
     video_renderer: &str,
@@ -591,6 +592,7 @@ pub fn song_lua_play_context(
     });
     context.display_width = display_width as f32;
     context.display_height = display_height as f32;
+    context.display_aspect_ratio = display_aspect_ratio;
     // `VideoRenderers` is a legacy capability preference used by mod charts to
     // gate OpenGL-era ActorFrameTexture effects. DeadSync implements those
     // semantics above every physical backend, so advertise the compatibility

@@ -881,6 +881,11 @@ fn compile_trace_song_at(
     context.screen_height = trace.display.logical_height;
     context.display_width = trace.display.width;
     context.display_height = trace.display.height;
+    // The legacy semantic_host.lua defines this preference from its recorded
+    // display inputs; native null captures retain PrefsManager's default.
+    context.display_aspect_ratio = if trace.display.height > 0.0 {
+        trace.display.width / trace.display.height
+    } else { 16.0 / 9.0 };
     // Match gameplay's AFT capability advertisement so renderer-gated charts
     // exercise their texture effects during semantic comparisons as well.
     context.video_renderers = "opengl,software".to_string();
