@@ -2206,6 +2206,15 @@ pub fn can_create_named_child_actor(parent: &Table, name: &str) -> mlua::Result<
         .as_deref()
         .is_some_and(|child_name| child_name.eq_ignore_ascii_case("Underlay"))
     {
+        let player = underlay_score_index(name)
+            .or_else(|| top_screen_step_stats_pane_index(name))
+            .or_else(|| top_screen_danger_index(name));
+        if let Some(player) = player {
+            let key = ["__songlua_player1_enabled", "__songlua_player2_enabled"][player];
+            if parent.raw_get::<Option<bool>>(key)? == Some(false) {
+                return Ok(false);
+            }
+        }
         return Ok(underlay_score_index(name).is_some()
             || name.eq_ignore_ascii_case("SongMeter")
             || top_screen_step_stats_pane_index(name).is_some()
@@ -2475,6 +2484,11 @@ pub fn actor_wrappers(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
 }
 
 pub fn copy_dummy_actor_tags(from: &Table, into: &Table) -> mlua::Result<()> {
+    for key in ["__songlua_player1_enabled", "__songlua_player2_enabled"] {
+        if let Some(enabled) = from.raw_get::<Option<bool>>(key)? {
+            into.raw_set(key, enabled)?;
+        }
+    }
     for key in ["__songlua_player_index", "__songlua_compile_layer"] {
         if let Some(index) = from.get::<Option<i64>>(key)? {
             into.set(key, index)?;
@@ -13288,12 +13302,23 @@ pub fn install_underlay_theme_children(
     underlay: &Table,
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
 ) -> mlua::Result<()> {
-    install_named_theme_children(
-        lua,
-        underlay,
-        UNDERLAY_THEME_CHILD_NAMES,
-        create_named_child_actor,
-    )
+    let children = actor_children(lua, underlay)?;
+    for &name in UNDERLAY_THEME_CHILD_NAMES {
+        // Simply Love builds its PerPlayer underlay actors by iterating
+        // GAMESTATE:GetHumanPlayers; an inactive side has no score or pane.
+        let player = underlay_score_index(name)
+            .or_else(|| top_screen_step_stats_pane_index(name))
+            .or_else(|| top_screen_danger_index(name));
+        if let Some(player) = player {
+            let key = ["__songlua_player1_enabled", "__songlua_player2_enabled"][player];
+            if underlay.raw_get::<Option<bool>>(key)? == Some(false) {
+                continue;
+            }
+        }
+        let child = create_named_child_actor(lua, underlay, name)?;
+        children.set(name, child)?;
+    }
+    Ok(())
 }
 
 fn install_named_theme_children(
@@ -13495,6 +13520,8 @@ pub fn create_top_screen_table(
 ) -> mlua::Result<TopScreenLuaTables> {
     let players = context.players.clone();
     let top_screen = create_dummy_actor(lua, "TopScreen")?;
+    top_screen.raw_set("__songlua_player1_enabled", players[0].enabled)?;
+    top_screen.raw_set("__songlua_player2_enabled", players[1].enabled)?;
     top_screen.set("Name", "ScreenGameplay")?;
     // ScreenGameplay::GetScreenType returns gameplay; LunaScreen pushes its Lua enum.
     top_screen.set(

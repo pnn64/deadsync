@@ -19915,6 +19915,36 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_underlay_has_only_enabled_player_children() {
+        let song_dir = test_dir("underlay-enabled-players");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+return Def.ActorFrame{
+    InitCommand=function(self)
+        local underlay = SCREENMAN:GetTopScreen():GetChild('Underlay')
+        local children = underlay:GetChildren()
+        for p=1,2 do
+            local enabled = GAMESTATE:IsPlayerEnabled('PlayerNumber_P'..p)
+            for _, name in ipairs({'P'..p..'Score', 'StepStatsPaneP'..p, 'DangerP'..p}) do
+                assert((underlay:GetChild(name) ~= nil) == enabled, name)
+                assert((children[name] ~= nil) == enabled, name..' enumeration')
+            end
+        end
+        assert(underlay:GetChild('BPMDisplay'))
+        assert(underlay:GetChild('SongMeter'))
+    end,
+}
+"#).unwrap();
+        for enabled in [[true, false], [false, true], [true, true]] {
+            let mut context = SongLuaCompileContext::new(&song_dir, "enabled underlay players");
+            for (player, enabled) in context.players.iter_mut().zip(enabled) {
+                player.enabled = enabled;
+            }
+            test_compile_song_lua(&entry, &context).expect("native per-player underlay ownership");
+        }
+    }
+
+    #[test]
     fn compile_song_lua_keeps_score_targets_and_layer_tweens() {
         let song_dir = test_dir("theme-score-layer-targets");
         let entry = song_dir.join("default.lua");
