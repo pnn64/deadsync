@@ -19,6 +19,9 @@ pub fn preprocess_lua_cmd_syntax(source: &str) -> Result<String, String> {
             out.push_str(&source[index..end]);
             index = end;
         } else if let Some(open) = lua_cmd_open_at(source, index) {
+            // Native Lua's cmd parser starts the function at the opening
+            // parenthesis and retains every consumed source line.
+            out.extend(source[index..open].chars().filter(|&ch| ch == '\n'));
             index = parse_lua_cmd_call(source, open, &mut out)?;
         } else {
             let ch = source[index..].chars().next().unwrap();
@@ -53,23 +56,31 @@ fn lua_cmd_function(body: &str, out: &mut String) -> Result<(), String> {
     let body = lua_cmd_without_comments(body)?;
     out.push_str("function(self) ");
     for command in lua_cmd_commands(&body)? {
+        let leading = command.len() - command.trim_start().len();
+        out.extend(command[..leading].chars().filter(|&ch| ch == '\n'));
+        let trailing = command.trim_end().len();
+        let trailing_lines = command[trailing..].chars().filter(|&ch| ch == '\n').count();
         let command = command.trim();
         if command.is_empty() {
             continue;
         }
         let (name, rest) = lua_cmd_name(command)?;
+        let name_lines = rest[..rest.len() - rest.trim_start().len()].chars().filter(|&ch| ch == '\n').count();
         let rest = rest.trim_start();
-        let args = if rest.is_empty() {
-            ""
+        let (args, argument_lines) = if rest.is_empty() {
+            ("", 0)
         } else if let Some(args) = rest.strip_prefix(',') {
-            args.trim()
+            let leading = args.len() - args.trim_start().len();
+            (args.trim(), args[..leading].chars().filter(|&ch| ch == '\n').count())
         } else {
             return Err(format!("invalid cmd command '{command}'"));
         };
         out.push_str("self:");
         out.push_str(name);
         out.push('(');
+        out.extend(std::iter::repeat_n('\n', name_lines + argument_lines));
         out.push_str(args);
+        out.extend(std::iter::repeat_n('\n', trailing_lines));
         out.push_str("); ");
     }
     out.push_str("return self end");
@@ -416,11 +427,26 @@ mod tests {
         let source = "local s = [==[cmd(noop); )]==]; --[=[cmd(noop)]=]\nreturn cmd \t\r\n (settext, [==[x; cmd(noop); )]==]; zoom, 2)";
         assert_eq!(
             preprocess_lua_cmd_syntax(source).unwrap(),
-            "local s = [==[cmd(noop); )]==]; --[=[cmd(noop)]=]\nreturn function(self) self:settext([==[x; cmd(noop); )]==]); self:zoom(2); return self end"
+            "local s = [==[cmd(noop); )]==]; --[=[cmd(noop)]=]\nreturn \nfunction(self) self:settext([==[x; cmd(noop); )]==]); self:zoom(2); return self end"
         );
         for source in ["cmd", "cmd  \t", "cmdx(zoom, 1)", "xcmd(zoom, 1)"] {
             assert_eq!(preprocess_lua_cmd_syntax(source).unwrap(), source);
         }
+    }
+
+    #[test]
+    fn preprocess_lua_cmd_preserves_native_function_source_lines() {
+        let source = "local first = cmd\n(\nzoom, 2;\nlinear, 1\n)\nlocal second = function() return 7 end\nreturn {first, second}\n";
+        let expanded = preprocess_lua_cmd_syntax(source).unwrap();
+        assert_eq!(expanded.matches('\n').count(), source.matches('\n').count());
+        let lua = mlua::Lua::new();
+        let functions = lua.load(expanded).set_name("@cmd-source-lines.lua").eval::<mlua::Table>().unwrap();
+        let first = functions.get::<mlua::Function>(1).unwrap().info();
+        assert_eq!(first.line_defined, Some(2));
+        assert_eq!(first.last_line_defined, Some(5));
+        let second = functions.get::<mlua::Function>(2).unwrap().info();
+        assert_eq!(second.line_defined, Some(6));
+        assert_eq!(second.last_line_defined, Some(6));
     }
 
     #[test]
