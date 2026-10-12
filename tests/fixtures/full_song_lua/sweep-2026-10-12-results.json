@@ -2560,6 +2560,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 170,
+      "source_simfile": "Delayed Friend Request/Delayed Friend Request.ssc",
+      "simfile_sha256": "d5dca728997c70aaa3d1afc600cbbf87dc710c19a1b5565e5bc03a50c79f82b4",
+      "retained_original_archive": "57495262cbe58308a72a2dab4a32587e8b6122614ac52758952f35d8f9c6e111.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "3888b1e92b5612b70edc19e66d3cf040cfd5169a6dd5f61bc2a0eeeead4acbd3",
+      "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+      "fix_commit": "375a96e85 / harness 55299c5",
+      "build_proof": "/home/parity/jobs/background-activation-build-v1/proof.json",
+      "capture_seconds": 161.96431096099695,
+      "trace_sha256": "af00fdd219183728af8411c94995650a60bf55b4621ad04506903b1a8af2d0cc",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-170/candidates/fe6cdc9c5579c103bb2343e254a8f75227565fafdc3142ae7f5a0c589df29ff7.tar",
+      "replay_exit": 0,
+      "replay_seconds": 467.41456219000247,
+      "candidate_sha256": "fe6cdc9c5579c103bb2343e254a8f75227565fafdc3142ae7f5a0c589df29ff7",
+      "native_frames": 54649,
+      "replayed_frames": 54649,
+      "compared_stage_fields": 1298,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "9d315999c02107f06c26c4a26e02dacd149e30596f4c0163aa7a2612304ca2c5",
+      "archive": "b4747281a28147c680ffe86a97a697a1df666728225813b9290d38a7c1c1b8e5.tar.zst",
+      "archive_sha256": "b4747281a28147c680ffe86a97a697a1df666728225813b9290d38a7c1c1b8e5",
+      "compressed_bytes": 15610575,
+      "pack_seconds": 17.77755672099738,
+      "harness_version": "0.1.80",
+      "title": "Delayed Friend Request",
+      "retained_original_entry": {
+        "title": "Delayed Friend Request",
+        "source_simfile": "Delayed Friend Request/Delayed Friend Request.ssc",
+        "harness_version": "0.1.0",
+        "archive": "57495262cbe58308a72a2dab4a32587e8b6122614ac52758952f35d8f9c6e111.tar.zst",
+        "sha256": "57495262cbe58308a72a2dab4a32587e8b6122614ac52758952f35d8f9c6e111",
+        "compressed_bytes": 57097,
+        "uncompressed_sha256": "7b34e5a6065e290d19baae7b1d72d1cdebfacce46d2fbd3fdb79ca9cc2776199",
+        "compression_level": 22,
+        "aliases": [
+          "242aa98506b27f4d19c2333208dddd54ebe5cb285bd5a27bd25bb1df5f5e6a42.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -2584,8 +2634,8 @@
     "historical_unindexed_charts": 18
   },
   "binary_sha256": "3888b1e92b5612b70edc19e66d3cf040cfd5169a6dd5f61bc2a0eeeead4acbd3",
-  "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
-  "passed_fixtures": 5,
+  "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+  "passed_fixtures": 6,
   "pending_charts": 14,
-  "processed_charts": 19
+  "processed_charts": 20
 }

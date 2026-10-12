@@ -2173,15 +2173,12 @@
     {
       "title": "Delayed Friend Request",
       "source_simfile": "Delayed Friend Request/Delayed Friend Request.ssc",
-      "harness_version": "0.1.0",
-      "archive": "57495262cbe58308a72a2dab4a32587e8b6122614ac52758952f35d8f9c6e111.tar.zst",
-      "sha256": "57495262cbe58308a72a2dab4a32587e8b6122614ac52758952f35d8f9c6e111",
-      "compressed_bytes": 57097,
-      "uncompressed_sha256": "7b34e5a6065e290d19baae7b1d72d1cdebfacce46d2fbd3fdb79ca9cc2776199",
-      "compression_level": 22,
-      "aliases": [
-        "242aa98506b27f4d19c2333208dddd54ebe5cb285bd5a27bd25bb1df5f5e6a42.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b4747281a28147c680ffe86a97a697a1df666728225813b9290d38a7c1c1b8e5.tar.zst",
+      "sha256": "b4747281a28147c680ffe86a97a697a1df666728225813b9290d38a7c1c1b8e5",
+      "compressed_bytes": 15610575,
+      "uncompressed_sha256": "fe6cdc9c5579c103bb2343e254a8f75227565fafdc3142ae7f5a0c589df29ff7",
+      "aliases": []
     },
     {
       "title": "Delightful Day",
