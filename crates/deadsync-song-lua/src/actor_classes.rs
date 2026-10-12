@@ -499,6 +499,7 @@ fn is_frame(kind: &str) -> bool {
             | "TopScreen"
             | "Player"
             | "PlayerActor"
+            | "HoldJudgment"
             | "NoteField"
             | "GraphDisplay"
             | "SongMeterDisplay"

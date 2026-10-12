@@ -286,10 +286,51 @@ pub struct SongLuaLivePlayer {
     pub tap_scores: [u32; 11],
     /// Actual gameplay feedback survives the native autoplay scoring bypass.
     pub last_judgment: Option<deadsync_gameplay::JudgmentRenderInfo>,
+    pub hold_judgments: [Option<deadsync_gameplay::HoldJudgmentRenderInfo>; deadsync_core::input::MAX_COLS],
     pub autoplay: bool,
 }
 
 pub(crate) struct LivePlayers([SongLuaLivePlayer; LUA_PLAYERS]);
+
+pub(crate) fn update_player_holds(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let Some(player) = actor.raw_get::<Option<usize>>("__songlua_player_index")? else { return Ok(()); };
+    let Some(value) = lua.app_data_ref::<LivePlayers>()
+        .and_then(|values| values.0.get(player).copied()) else { return Ok(()); };
+    let Some(frames) = actor.raw_get::<Option<Table>>("__songlua_hold_judgments")? else { return Ok(()); };
+    for (column, render) in value.hold_judgments.iter().enumerate().take(frames.raw_len()) {
+        let Some(render) = render else { continue; };
+        let frame: Table = frames.raw_get(column + 1)?;
+        let sprite: Table = crate::lua_util::actor_children(lua, &frame)?.raw_get("HoldJudgment")?;
+        if sprite.raw_get::<Option<f32>>("__songlua_last_hold_seconds")? == Some(render.started_at_screen_s) {
+            continue;
+        }
+        sprite.raw_set("__songlua_last_hold_seconds", render.started_at_screen_s)?;
+        let state = match render.result {
+            deadsync_rules::note::HoldResult::Held => 0,
+            deadsync_rules::note::HoldResult::LetGo => 1,
+            // Native MissedHold leaves the old animation intact; the
+            // inherited Simply Love command is empty.
+            deadsync_rules::note::HoldResult::Missed => continue,
+        };
+        crate::lua_util::ensure_tween_replay(lua, &sprite)?;
+        // HoldJudgment::ResetAnimation, then Simply Love's Held/LetGo
+        // metrics. Advance children before starting the new native queue.
+        for method in ["stoptweening", "stopeffect"] {
+            sprite.get::<Function>(method)?.call::<()>(sprite.clone())?;
+        }
+        sprite.get::<Function>("xy")?.call::<()>((sprite.clone(), 0.0, 0.0))?;
+        sprite.get::<Function>("setstate")?.call::<()>((sprite.clone(), state))?;
+        let white = lua.create_sequence_from([1.0_f32; 4])?;
+        sprite.get::<Function>("diffuse")?.call::<()>((sprite.clone(), white.clone()))?;
+        for (method, amount) in [("zoom", 0.4), ("linear", 0.3), ("zoom", 0.5),
+                                 ("sleep", 0.5), ("linear", 0.0)] {
+            sprite.get::<Function>(method)?.call::<()>((sprite.clone(), amount))?;
+        }
+        white.raw_set(4, 0.0_f32)?;
+        sprite.get::<Function>("diffuse")?.call::<()>((sprite, white))?;
+    }
+    Ok(())
+}
 
 pub(crate) fn update_player_judgment(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let Some(player) = actor.raw_get::<Option<usize>>("__songlua_player_index")? else { return Ok(()); };
@@ -363,6 +404,7 @@ impl SongLuaLivePlayer {
             tap_scores: [0, player.mines_hit, player.mines_avoided, player.checkpoints_missed,
                 miss, w5, w4, w3, w2, w1, player.checkpoints_hit],
             last_judgment: player.last_judgment,
+            hold_judgments: [None; deadsync_core::input::MAX_COLS],
             autoplay: false,
         }
     }
@@ -385,6 +427,10 @@ impl SongLuaLiveFrame {
                     let mut value = SongLuaLivePlayer::from_player(
                         &game.players_runtime.players[player], score.possible_grade_points);
                     value.autoplay = game.live_autoplay_enabled();
+                    let columns = game.cols_per_player();
+                    for (column, render) in value.hold_judgments.iter_mut().enumerate().take(columns) {
+                        *render = game.hold_judgment(player * columns + column);
+                    }
                     value
                 })),
         }
@@ -822,6 +868,66 @@ return Def.ActorFrame {
         input.delta_seconds = 0.0625;
         scene.advance(input).expect("rated child update");
         assert!((crate::lua_util::actor_tween_time_left(&scene.lua, &sprite).expect("rated child") - 0.7125).abs() < 1e-6);
+    }
+
+    #[test]
+    fn live_player_hold_judgment_tree() {
+        let mut compiled = compile("player-hold-judgment-tree", r#"
+local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+local holds = player:GetChildren()['']
+local named = player:GetChild('')
+assert(#holds == 4 and #named == 4 and named[1] == holds[1])
+assert(player:GetNumChildren() == 7)
+assert(tostring(holds[1]):find('HoldJudgment', 1, true))
+for _, frame in ipairs(holds) do
+    assert(frame:GetChild('HoldJudgment'):GetParent() == frame)
+end
+return Def.ActorFrame {
+    OnCommand = function(self)
+        self:SetUpdateFunction(function(self) self:aux(player:GetTweenTimeLeft()) end)
+    end,
+}
+"#);
+        let mut scene = compiled.live_scene.take().expect("owned scene");
+        let player: Table = scene.lua.globals().get("__songlua_top_screen_player_1").expect("P1");
+        let other: Table = scene.lua.globals().get("__songlua_top_screen_player_2").expect("P2");
+        let frames: Table = player.raw_get("__songlua_hold_judgments").expect("column judgments");
+        let frame: Table = frames.raw_get(2).expect("second column");
+        let sprite: Table = crate::lua_util::actor_children(&scene.lua, &frame).expect("frame children")
+            .raw_get("HoldJudgment").expect("native sprite");
+        let mut input = SongLuaLiveFrame { screen_seconds: 0.125, delta_seconds: 0.125, ..Default::default() };
+        input.players[0].hold_judgments[1] = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
+            result: deadsync_rules::note::HoldResult::Held, started_at_screen_s: 0.125,
+        });
+        scene.advance(input).expect("held feedback without tap feedback or scoring");
+        assert!((crate::lua_util::actor_tween_time_left(&scene.lua, &sprite).expect("hold queue") - 0.8).abs() < 1e-6);
+        assert!((scene.states()[0].aux - 0.8).abs() < 1e-6, "authored callbacks see hold descendants");
+        assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &other).expect("P2 queue"), 0.0);
+        let mut pose = SongLuaOverlayState::default();
+        assert!(crate::lua_util::replay_tween_pose(&scene.lua, &sprite, &mut pose));
+        assert!((pose.zoom_x - 0.4).abs() < 1e-6, "new queue does not consume the current frame");
+        assert_eq!(pose.diffuse[3], 1.0);
+
+        input.screen_seconds += 0.0625;
+        input.delta_seconds = 0.0625;
+        scene.advance(input).expect("unchanged hold feedback");
+        assert!((scene.states()[0].aux - 0.7375).abs() < 1e-6, "the snapshot does not restart the queue");
+        input.players[0].hold_judgments[1] = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
+            result: deadsync_rules::note::HoldResult::LetGo, started_at_screen_s: 0.25,
+        });
+        scene.advance(input).expect("let-go replaces the old queue");
+        assert!((scene.states()[0].aux - 0.8).abs() < 1e-6);
+        assert_eq!(sprite.get::<Function>("GetState").expect("state getter")
+            .call::<usize>(sprite.clone()).expect("let-go frame"), 1);
+        input.players[0].hold_judgments[1] = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
+            result: deadsync_rules::note::HoldResult::Missed, started_at_screen_s: 0.3125,
+        });
+        scene.advance(input).expect("native empty MissedHold command");
+        assert!((scene.states()[0].aux - 0.7375).abs() < 1e-6);
+        input.players[0].hold_judgments.fill(None);
+        input.delta_seconds = 1.0;
+        scene.advance(input).expect("feedback expires independently of the snapshot");
+        assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &player).expect("finished player"), 0.0);
     }
 
     #[test]

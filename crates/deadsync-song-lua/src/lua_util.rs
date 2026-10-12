@@ -9676,12 +9676,9 @@ pub fn install_actor_child_query_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         lua.create_function({
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
-                let mut count = 0_i64;
-                for pair in actor_named_children(lua, &actor)?.pairs::<Value, Value>() {
-                    let _ = pair?;
-                    count += 1;
-                }
-                Ok(count)
+                // Native GetNumChildren counts actors, including siblings
+                // with duplicate or empty names, rather than table keys.
+                Ok(actor_direct_children(lua, &actor)?.len() as i64)
             }
         })?,
     )?;
@@ -11791,7 +11788,7 @@ pub fn run_actor_update_functions_with_delta(
 
 #[derive(Clone)]
 enum SongLuaCompileUpdateJob {
-    PlayerJudgment {
+    PlayerFeedback {
         actor: Table,
     },
     Enter {
@@ -11908,7 +11905,7 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
                 // Player::Update runs ActorFrame::Update first, then emits
                 // Judgment while processing rows. Song callbacks follow it.
                 if crate::live::active(lua) {
-                    jobs.push(SongLuaCompileUpdateJob::PlayerJudgment { actor: player });
+                    jobs.push(SongLuaCompileUpdateJob::PlayerFeedback { actor: player });
                 }
             }
         }
@@ -11949,7 +11946,7 @@ pub(crate) fn actor_tree_update_only(lua: &Lua, root: &Value, name: &str) -> mlu
         !matches!(
             job,
             SongLuaCompileUpdateJob::Advance { .. } | SongLuaCompileUpdateJob::Enter { .. }
-                | SongLuaCompileUpdateJob::Texture { .. } | SongLuaCompileUpdateJob::PlayerJudgment { .. }
+                | SongLuaCompileUpdateJob::Texture { .. } | SongLuaCompileUpdateJob::PlayerFeedback { .. }
         )
     });
     match (jobs.next(), jobs.next()) {
@@ -12285,7 +12282,8 @@ pub fn run_actor_compile_update_functions_with_delta(
         .expect("phase installed");
     let result = (|| {
         for job in jobs.iter() {
-            if let SongLuaCompileUpdateJob::PlayerJudgment { actor } = job {
+            if let SongLuaCompileUpdateJob::PlayerFeedback { actor } = job {
+                crate::live::update_player_holds(lua, actor)?;
                 crate::live::update_player_judgment(lua, actor)?;
                 continue;
             }
@@ -12346,7 +12344,7 @@ pub fn run_actor_compile_update_functions_with_delta(
                 SongLuaCompileUpdateJob::Advance { actor, order, .. }
                 | SongLuaCompileUpdateJob::Recurring { actor, order, .. }
                 | SongLuaCompileUpdateJob::Callback { actor, order, .. } => (actor, *order),
-                SongLuaCompileUpdateJob::Texture { .. } | SongLuaCompileUpdateJob::PlayerJudgment { .. } => unreachable!("host jobs handled above"),
+                SongLuaCompileUpdateJob::Texture { .. } | SongLuaCompileUpdateJob::PlayerFeedback { .. } => unreachable!("host jobs handled above"),
             };
             let delta = if matches!(job, SongLuaCompileUpdateJob::Advance { .. }) {
                 // A wrapper callback can change the owner's update rate. Native
@@ -12442,7 +12440,7 @@ pub fn run_actor_compile_update_functions_with_delta(
                     run_update_callback(lua, actor, delta_seconds)?
                 }
                 SongLuaCompileUpdateJob::Enter { .. } | SongLuaCompileUpdateJob::Texture { .. }
-                | SongLuaCompileUpdateJob::PlayerJudgment { .. } => unreachable!("actor entry handled above"),
+                | SongLuaCompileUpdateJob::PlayerFeedback { .. } => unreachable!("actor entry handled above"),
             }
         }
         Ok(())
@@ -13333,6 +13331,37 @@ fn install_named_theme_children(
     Ok(())
 }
 
+fn install_hold_judgments(
+    lua: &Lua, player: &Table, player_index: usize, style_name: &str,
+    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+) -> mlua::Result<()> {
+    // Player::Init adds an unnamed HoldJudgment ActorFrame for each column.
+    // Its named Sprite is shared by sequence traversal and GetChildren.
+    let frames = create_actor_child_group(lua)?;
+    let sl: Table = lua.globals().raw_get("SL")?;
+    let mods: Table = sl.raw_get::<Table>(if player_index == 0 { "P1" } else { "P2" })?.raw_get("ActiveModifiers")?;
+    let label = mods.raw_get::<Option<String>>("HoldJudgment")?.unwrap_or_else(|| "None 1x2.png".into());
+    let theme: Table = lua.globals().raw_get("THEME")?;
+    let texture = theme.get::<Function>("GetPathG")?.call::<String>(
+        (theme.clone(), "", format!("_HoldJudgments/{label}")))?;
+    for column in 0..song_lua_style_info(style_name).columns {
+        let frame = create_named_actor(lua, "HoldJudgment", "", create_dummy_actor)?;
+        frame.raw_set("__songlua_parent", player.clone())?;
+        let sprite = create_named_actor(lua, "Sprite", "HoldJudgment", create_dummy_actor)?;
+        sprite.raw_set("__songlua_parent", frame.clone())?;
+        sprite.raw_set("__songlua_sprite_animate", false)?;
+        set_actor_texture_from_path(&sprite, &texture)?;
+        sprite.get::<Function>("diffusealpha")?.call::<()>((sprite.clone(), 0.0))?;
+        push_sequence_child_once(&frame, sprite.clone())?;
+        actor_children(lua, &frame)?.set("HoldJudgment", sprite)?;
+        frames.raw_set(column + 1, frame.clone())?;
+        push_sequence_child_once(player, frame)?;
+    }
+    actor_children(lua, player)?.set("", frames.clone())?;
+    player.raw_set("__songlua_hold_judgments", frames)?;
+    Ok(())
+}
+
 pub fn create_life_meter_table(
     lua: &Lua,
     name: &'static str,
@@ -13516,10 +13545,12 @@ pub fn create_top_screen_table(
             create_dummy_actor,
         )?,
     ];
-    for player_actor in &player_actors {
+    for (player_index, player_actor) in player_actors.iter().enumerate() {
         player_actor.set("__songlua_parent", top_screen.clone())?;
-        install_named_theme_children(lua, player_actor, &["Combo", "Judgment", "NoteField"],
+        install_named_theme_children(lua, player_actor, &["Judgment", "Combo"],
             create_named_child_actor)?;
+        install_hold_judgments(lua, player_actor, player_index, &context.style_name, create_dummy_actor)?;
+        install_named_theme_children(lua, player_actor, &["NoteField"], create_named_child_actor)?;
     }
     for (player_index, life_meter) in life_meters.iter().enumerate() {
         life_meter.set("__songlua_parent", top_screen.clone())?;

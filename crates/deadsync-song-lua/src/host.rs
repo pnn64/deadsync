@@ -150,6 +150,10 @@ fn install_compile_globals(
     let current_song = game_state_globals.current_song.clone();
     lua.set_app_data(game_state_globals);
 
+    // Native gameplay loads the theme's player actors after SL's profile
+    // modifiers are initialized, including the hold-judgment graphic.
+    lua.globals().set("SL", create_sl_table(lua, context)?)?;
+
     let top_screen = create_top_screen_table(
         lua,
         context,
@@ -2058,7 +2062,6 @@ pub fn install_late_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua:
         "OperatorMenuOptionRows",
         create_operator_menu_option_rows_table(lua)?,
     )?;
-    globals.set("SL", create_sl_table(lua, context)?)?;
     globals.set("Branch", create_branch_table(lua)?)?;
     globals.set(
         "SelectMusicOrCourse",
