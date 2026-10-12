@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "additional source replay sweep complete",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "c325377bd / harness 78d4a1e",
