@@ -405,7 +405,7 @@ impl LaneSearchTimingCache {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct CutoffRowsMemo {
-    cutoff_time_ns: SongTimeNs,
+    cutoff_time_bits: u32,
     active_players: usize,
     rows: [usize; MAX_PLAYERS],
 }
@@ -426,7 +426,7 @@ pub struct GameplayTimeToBeatCaches {
     display: BeatInfoCache,
     visible: [BeatInfoCache; MAX_PLAYERS],
     notefield_search: [BeatInfoCache; MAX_PLAYERS],
-    cutoff: [BeatInfoCache; MAX_PLAYERS],
+    cutoff: [SongPositionCache; MAX_PLAYERS],
     assist: BeatInfoCache,
     assist_future: BeatInfoCache,
     input: [LaneSearchTimingCache; MAX_PLAYERS],
@@ -446,7 +446,7 @@ impl GameplayTimeToBeatCaches {
             notefield_search: std::array::from_fn(|player| {
                 BeatInfoCache::new(timing_players[player])
             }),
-            cutoff: std::array::from_fn(|player| BeatInfoCache::new(timing_players[player])),
+            cutoff: std::array::from_fn(|player| SongPositionCache::new(timing_players[player])),
             assist: BeatInfoCache::new(timing),
             assist_future: BeatInfoCache::new(timing),
             input: std::array::from_fn(|player| LaneSearchTimingCache::new(timing_players[player])),
@@ -539,10 +539,14 @@ impl GameplayTimeToBeatCaches {
         music_time_ns: SongTimeNs,
         num_players: usize,
     ) -> [usize; MAX_PLAYERS] {
-        let cutoff_time_ns = music_time_ns.saturating_sub(step_resolution_distance_ns);
+        // Player::UpdateTapNotesMissedOlderThan subtracts in float seconds and
+        // queries native float timing, including pause-onset rounding.
+        let cutoff_seconds = song_time_ns_to_seconds(music_time_ns)
+            - song_time_ns_to_seconds(step_resolution_distance_ns);
+        let cutoff_time_bits = cutoff_seconds.to_bits();
         let active_players = num_players.min(MAX_PLAYERS);
         if let Some(memo) = self.cutoff_memo
-            && memo.cutoff_time_ns == cutoff_time_ns
+            && memo.cutoff_time_bits == cutoff_time_bits
             && memo.active_players == active_players
         {
             return memo.rows;
@@ -555,11 +559,11 @@ impl GameplayTimeToBeatCaches {
             .take(active_players)
             .enumerate()
         {
-            let info = timing_player.get_beat_info_from_time_ns_cached(cutoff_time_ns, cache);
+            let info = timing_player.get_song_position_cached(cutoff_seconds, cache);
             rows[player] = missed_note_cutoff_row_from_info(timing_player, info);
         }
         self.cutoff_memo = Some(CutoffRowsMemo {
-            cutoff_time_ns,
+            cutoff_time_bits,
             active_players,
             rows,
         });
@@ -663,7 +667,7 @@ fn missed_note_cutoff_row_from_info(timing: &TimingData, beat_info: BeatInfo) ->
 pub fn missed_note_cutoff_row_for_timing(timing: &TimingData, cutoff_time_ns: SongTimeNs) -> usize {
     missed_note_cutoff_row_from_info(
         timing,
-        timing.get_beat_info_from_time_ns(cutoff_time_ns),
+        timing.get_song_position(song_time_ns_to_seconds(cutoff_time_ns)),
     )
 }
 
@@ -675,9 +679,9 @@ pub fn missed_note_cutoff_row_for_music_time(
     music_rate: f32,
     music_time_ns: SongTimeNs,
 ) -> usize {
-    let cutoff_time_ns =
-        music_time_ns.saturating_sub(max_step_distance_ns(timing_profile, music_rate));
-    missed_note_cutoff_row_for_timing(timing, cutoff_time_ns)
+    let cutoff_seconds = song_time_ns_to_seconds(music_time_ns)
+        - song_time_ns_to_seconds(max_step_distance_ns(timing_profile, music_rate));
+    missed_note_cutoff_row_from_info(timing, timing.get_song_position(cutoff_seconds))
 }
 
 #[must_use]

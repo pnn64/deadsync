@@ -15464,6 +15464,48 @@ mod tests {
     }
 
     #[test]
+    fn missed_note_cutoff_preserves_choices_float_stop_onset() {
+        // Native TimingData, sampled by harness pass355 at the three frames
+        // surrounding the failed pass207 point query. Easy has many short stops;
+        // integer accumulation reaches beat 189 one frame before native float.
+        let mut segments = TimingSegments::default();
+        for line in include_str!("../../../tests/fixtures/timing/choices-cutoff.txt").lines() {
+            if line.starts_with('#') { continue; }
+            let (kind, values) = line.split_once(':').expect("valid timing fixture");
+            for value in values.split(',') {
+                let (beat, value) = value.split_once('=').expect("valid timing pair");
+                let beat = beat.parse().expect("valid fixture beat");
+                let value = value.parse().expect("valid fixture value");
+                match kind {
+                    "BPMS" => segments.bpms.push((beat, value)),
+                    "STOPS" => segments.stops.push(StopSegment { beat, duration: value }),
+                    _ => panic!("unknown timing fixture segment"),
+                }
+            }
+        }
+        let mut timing = TimingData::from_segments(
+            0.0, -0.008, &segments, &[188.75, 189.0, 189.25],
+        );
+        timing.shift_song_offset_seconds(-0.009);
+        let players = [&timing; MAX_PLAYERS];
+        let profile = TimingProfile::default_itg_with_fa_plus();
+        let mut cache = GameplayTimeToBeatCaches::new(&timing, &players);
+        for (seconds, beat, freeze, cutoff) in [
+            (98.016_03f32, 188.996_84f32, false, 1),
+            (98.016_67, 188.999_53, false, 1),
+            (98.017_28, 189.0, true, 2),
+        ] {
+            let time_ns = song_time_ns_from_seconds(seconds);
+            let distance = max_step_distance_ns(&profile, 1.0);
+            let info = timing.get_song_position(seconds - song_time_ns_to_seconds(distance));
+            assert_eq!(info.beat.to_bits(), beat.to_bits());
+            assert_eq!(info.is_in_freeze, freeze);
+            assert_eq!(missed_note_cutoff_row_for_music_time(&profile, &timing, 1.0, time_ns), cutoff);
+            assert_eq!(cache.missed_note_cutoff_rows(&profile, &players, 1.0, time_ns, 1)[0], cutoff);
+        }
+    }
+
+    #[test]
     fn missed_note_cutoff_row_matches_stop_delay_rules() {
         let row_to_beat = test_row_to_beat(ROWS_PER_BEAT as usize * 4);
         let stop_timing = TimingData::from_segments(

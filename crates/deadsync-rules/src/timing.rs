@@ -443,6 +443,37 @@ pub struct BeatInfoCache {
     global_offset_ns: TimingNs,
 }
 
+/// Song-lifetime, game-thread cursor for native float timing. Fixed-size and
+/// allocation-free; advances only through crossed events. Rewinds or offset
+/// edits restart traversal. No eviction, background work, or runtime counters;
+/// the owner drops it with the song. A reset can traverse the whole timing map.
+#[derive(Debug, Clone)]
+pub struct SongPositionCache {
+    start: GetBeatStarts,
+    time: f32,
+    last_seconds: f32,
+    beat_start_ns: TimingNs,
+    global_offset_ns: TimingNs,
+}
+
+impl SongPositionCache {
+    #[must_use]
+    pub fn new(timing: &TimingData) -> Self {
+        let beat_start_ns = timing.beat_start_time_ns();
+        Self {
+            start: GetBeatStarts::default(),
+            time: timing_ns_to_seconds(beat_start_ns),
+            last_seconds: f32::NAN,
+            beat_start_ns,
+            global_offset_ns: timing.global_offset_ns,
+        }
+    }
+
+    pub fn reset(&mut self, timing: &TimingData) {
+        *self = Self::new(timing);
+    }
+}
+
 impl BeatInfoCache {
     #[must_use]
     pub fn new(timing: &TimingData) -> Self {
@@ -895,10 +926,27 @@ impl TimingData {
     /// this separate from the integer clock used for note judgment.
     #[must_use]
     pub fn get_song_position(&self, seconds: f32) -> BeatInfo {
+        self.get_song_position_cached(seconds, &mut SongPositionCache::new(self))
+    }
+
+    #[must_use]
+    pub fn get_song_position_cached(
+        &self,
+        seconds: f32,
+        cache: &mut SongPositionCache,
+    ) -> BeatInfo {
         let seconds = seconds + self.global_offset_sec;
-        let mut start = GetBeatStarts::default();
-        let mut time = timing_ns_to_seconds(self.beat_start_time_ns());
-        let mut bpm = self.get_bpm_for_beat(0.0);
+        if cache.global_offset_ns != self.global_offset_ns
+            || cache.beat_start_ns != self.beat_start_time_ns()
+            || cache.last_seconds.is_nan()
+            || seconds < cache.last_seconds
+        {
+            cache.reset(self);
+        }
+        cache.last_seconds = seconds;
+        let mut start = cache.start;
+        let mut time = cache.time;
+        let mut bpm = self.bpm_at_start(&start);
         let mut bps = bpm / 60.0;
         // Timing is an ordered event state machine; preserving native event
         // ordering and float operations matters more than splitting its cases.
@@ -975,6 +1023,10 @@ impl TimingData {
                 _ => {}
             }
             start.last_row = row;
+            // Keep the cursor before any incomplete pause. Resuming inside a
+            // delay followed by a stop must retain the original event ordering.
+            cache.start = start;
+            cache.time = time;
         }
         BeatInfo {
             beat: note_row_to_beat(start.last_row) + (seconds - time) * bps,
