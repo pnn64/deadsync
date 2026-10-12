@@ -1,0 +1,73 @@
+{
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/live.rs": "88f7b91021b2b468fa373b661daf6b88eb54b573e0d351ca524d3b332d70ef57",
+    "crates/deadsync-song-lua/src/song_tables.rs": "3af70eef6c3e9b53eae43811a8a641dc1d8e3e9648a053ca8678302463732e19",
+    "crates/deadsync-song-lua/src/lua_util.rs": "c40ea0830967c2a4fba4798cfd036a083ea96228c4d996c98b629a3445bf17be",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9eaafcf0d7301f957597ceb1abb9e48ec43f00dc68ae2cc6d4de201862e7215a"
+  },
+  "checks": [
+    {
+      "label": "stage-test",
+      "exit_code": 0,
+      "seconds": 133.73063466400345,
+      "results": [
+        "test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 529 filtered out; finished in 0.40s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 176.37937794599566,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.0793681499999366,
+      "results": [
+        "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.22s"
+      ]
+    }
+  ],
+  "binary": "/home/parity/jobs/screen-layer-tweens-build-v1/full-song-lua-stage-modifier-v1",
+  "binary_sha256": "6b1716655f37b60bc06441b4ec78450362363ab00ff2ddfb9aa9a6360ddf2aa6",
+  "build_attempt": 2,
+  "previous_control_failure": {
+    "commit": "25908229a",
+    "passed": 21,
+    "failed": 2,
+    "log": "/home/parity/jobs/screen-layer-tweens-build-v1/stage-test-attempt-1-failed.log",
+    "cause": "SongBackground child aliases also appeared in the authored root; callbacks advanced twice",
+    "chart_replays_started_with_failed_build": 0
+  },
+  "fix_commits": [
+    "25908229a",
+    "d236f305c"
+  ],
+  "windows_validation": {
+    "command": "cargo test --locked -p deadsync-song-lua --lib live_",
+    "passed": 23,
+    "failed": 0
+  },
+  "local_references": [
+    "../itgmania-harness/vendor/itgmania/src/ScreenWithMenuElements.cpp:80",
+    "../itgmania-harness/vendor/itgmania/src/Screen.cpp:123",
+    "crates/deadsync-song-lua/src/lua_util.rs:11955"
+  ],
+  "behavior": "Advance screen-owned Underlay, Overlay and In tween queues before authored song callbacks; background entries keep their existing single update path",
+  "concrete_failure": {
+    "source_simfile": "Datura -paroxysm-/Datura -paroxysm-.ssc",
+    "operation": "Actor.diffusealpha",
+    "callback": "StatsShowMessageCommand",
+    "caller": "song:/lua/default.lua:350",
+    "native_tween_time_left": 1.600000023841858,
+    "deadsync_tween_time_left": 3.200000047683716,
+    "cause": "A completed Underlay fade was never consumed before the later StatsShow fade"
+  },
+  "bounded_repair": {
+    "job": "/home/parity/jobs/screen-layer-tweens-repair-v1",
+    "attempt": 1,
+    "reused_uncompressed_candidate_sha256": "311c7351bfee398f54126b737d895145adb01f3b720ee2788b2fbc524ecae1a8"
+  },
+  "acceptance": "Existing complete full_song_lua replay comparisons; coverage recorded separately"
+}
