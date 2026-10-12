@@ -1,6 +1,6 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-12T22:00:33Z",
+  "updated_utc": "2026-10-12T22:12:22Z",
   "previous_goal_turn": "progress: Cursed Metamorph fixture saved; factory ownership, reload identities, foreground and background entry paths fixed with 15 controls passed after each change; captures reused; Choices classification corrected and original 501 sources audited",
   "scope": {
     "original_simfiles": 501,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "c77a72f8f6a212004814f70c295388563a82c699",
+      "deadsync": "fb1ba43dff8bd0c3a4818ff9731c3fc79efa1285",
       "itgmania_harness": "78d4a1ef5778b76a29d3d55ff42e0216edfb1a38"
     }
   },
@@ -39,14 +39,14 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Dance Robot/dancerobot-fakemines.ssc",
-      "position": 163,
+      "current": "Data Loss/Data_Loss.ssc",
+      "position": 164,
       "phase": "capture",
-      "pid": 274851,
+      "pid": 306543,
       "process_matches": true,
-      "passed": 2,
+      "passed": 3,
       "pending": 12,
-      "processed": 14,
+      "processed": 15,
       "last_log_lines": [],
       "supervisor_running": true
     },
@@ -135,25 +135,25 @@
       },
       {
         "job": "background-entry-ownership-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
+        "complete": true,
+        "supervisor_running": false,
         "passed": 0,
-        "pending": 0,
-        "processed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "replay",
         "source_simfile": "Cuphead [TaroNuke]/botanic.sm",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "chart-sweep-additions-20261012-v1",
-        "complete": false,
-        "supervisor_running": true,
+        "complete": true,
+        "supervisor_running": false,
         "passed": 0,
-        "pending": 0,
-        "processed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "replay",
         "source_simfile": "RUNWAY/RUNWAY.ssc",
-        "child_running": true
+        "child_running": false
       }
     ],
     "publisher_streams": [
@@ -230,15 +230,21 @@
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 5,
+    "new_passed_fixtures": 6,
     "new_pending_charts": 9,
-    "new_processed_sources": 14,
+    "new_processed_sources": 15,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 339,
+    "unprocessed_sources": 338,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
-  "additional_sources_outside_original_scope": [],
+  "additional_sources_outside_original_scope": [
+    {
+      "source_simfile": "RUNWAY/RUNWAY.ssc",
+      "status": "pending",
+      "repair_attempts": 0
+    }
+  ],
   "additional_source_inventory": [
     "RUNWAY/RUNWAY.ssc"
   ],
@@ -394,17 +400,41 @@
     },
     {
       "source_simfile": "Cuphead [TaroNuke]/botanic.sm",
-      "repair_attempts": 1,
+      "repair_attempts": 2,
       "failure": null,
-      "errors": [
-        "UpdateCommand failed for Quad: missing captured subscriber identity for 2/4/1\nstack traceback:\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"/tmp/.tmphjYLoj/song/lua/default.lua\"]:1513: in function <[string \"/tmp/.tmphjYLoj/song/lua/default.lua\"]:1150>\n"
-      ],
-      "mismatch_count": 141,
+      "errors": [],
+      "mismatch_count": 19686,
       "first_mismatch": [
         {
-          "field": "source_broadcast_count",
-          "native": 127,
-          "deadsync": 1
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0027",
+            "args": [],
+            "beat": 0.0014322162605822086,
+            "command": "OnCommand",
+            "definition_id": "def-0027",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 3,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 0.14251700043678284,
+            "seq": 95,
+            "source": "song:/bg/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "OnCommand",
+            "source": "song:/bg/default.lua",
+            "line": 3,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
         }
       ]
     },

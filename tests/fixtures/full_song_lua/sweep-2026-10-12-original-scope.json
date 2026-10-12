@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-12T22:00:35Z",
+  "updated_utc": "2026-10-12T22:12:54Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -11,9 +11,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 152,
+    "passed": 153,
     "pending": 10,
-    "unprocessed": 339
+    "unprocessed": 338
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1420,8 +1420,8 @@
       "source_simfile": "Cuphead [TaroNuke]/botanic.sm",
       "simfile_sha256": "6d4f35389c80992011e7b143c5959d32fb5887dfc189975153fbab4885aacd96",
       "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-12-foreground-ownership-repairs.json"
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-12-background-entry-ownership-repairs.json"
     },
     {
       "position": 158,
@@ -1467,7 +1467,9 @@
       "position": 163,
       "source_simfile": "Dance Robot/dancerobot-fakemines.ssc",
       "simfile_sha256": "bdbb20dc6f518c00cf27a912b69919c7e556edf52731eaed9962a7b2f7754252",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 164,
