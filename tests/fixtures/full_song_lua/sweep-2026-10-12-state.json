@@ -1,6 +1,6 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-12T22:23:34Z",
+  "updated_utc": "2026-10-12T22:29:44Z",
   "previous_goal_turn": "progress: both Dance Robot fixtures and repaired crew saved and committed; Cuphead final attempt pending at limit; RUNWAY initial replay has six background startup clock mismatches and bounded repair uses its retained capture; original 501 sources audited separately from additions",
   "scope": {
     "original_simfiles": 501,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "68ffbc8dd0bca53ceeb859c503f6bdcf7a62b878",
+      "deadsync": "e76d421ab48e7f62e7deb3f82085973c6498a80b",
       "itgmania_harness": "78d4a1ef5778b76a29d3d55ff42e0216edfb1a38"
     }
   },
@@ -40,23 +40,20 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Datamania (tpz Overheat Remix)/Datamania (tpz Overheat Remix).ssc",
-      "position": 165,
-      "phase": "replay",
-      "pid": 335111,
+      "current": "Datura -paroxysm-/Datura -paroxysm-.ssc",
+      "position": 166,
+      "phase": "capture",
+      "pid": 355053,
       "process_matches": true,
       "passed": 4,
-      "pending": 12,
-      "processed": 16,
-      "last_log_lines": [
-        "[112.0s] replaying every native gameplay frame: frame 21944/65013 (33.8%)",
-        "[114.0s] replaying every native gameplay frame: frame 22363/65013 (34.4%)",
-        "[116.0s] replaying every native gameplay frame: frame 22779/65013 (35.0%)"
-      ],
+      "pending": 13,
+      "processed": 17,
+      "last_log_lines": [],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
-    "runner": "../itgmania-harness/target/server-parity/run_chart_sweep_v3.py",
+    "runner": "../itgmania-harness/target/server-parity/run_chart_sweep_v4.py",
+    "parallel_queue_receipt": "tests/fixtures/full_song_lua/sweep-2026-10-12-parallel-queues.json",
     "build_transition": "tests/fixtures/full_song_lua/sweep-2026-10-12-build-transition.json",
     "source_scope_audit": "tests/fixtures/full_song_lua/sweep-2026-10-12-original-scope.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
@@ -171,6 +168,30 @@
         "last_phase": "replay",
         "source_simfile": "RUNWAY/RUNWAY.ssc",
         "child_running": true
+      },
+      {
+        "job": "chart-sweep-parallel-v4-1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "capture",
+        "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
+        "child_running": true,
+        "position": 168
+      },
+      {
+        "job": "chart-sweep-parallel-v4-2",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "capture",
+        "source_simfile": "Delayed Friend Request/Delayed Friend Request.sm",
+        "child_running": true,
+        "position": 169
       }
     ],
     "publisher_streams": [
@@ -269,10 +290,10 @@
   },
   "counts_at_checkpoint": {
     "new_passed_fixtures": 7,
-    "new_pending_charts": 9,
-    "new_processed_sources": 16,
+    "new_pending_charts": 10,
+    "new_processed_sources": 17,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 337,
+    "unprocessed_sources": 336,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -511,6 +532,69 @@
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
+    },
+    {
+      "source_simfile": "Datamania (tpz Overheat Remix)/Datamania (tpz Overheat Remix).ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 1,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "player-state:PlayerNumber_P1/options:ModsLevel_Song",
+            "args": [
+              0,
+              1000
+            ],
+            "beat": 368.5520324707031,
+            "caller": {
+              "line": 105,
+              "source": "song:/lua/mods.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "results": [
+                0,
+                1
+              ]
+            },
+            "kind": "modifier",
+            "line": 105,
+            "operation": "PlayerOptions.Reverse",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 132.05398559570312,
+            "seq": 232840,
+            "source": "song:/lua/mods.lua",
+            "results": [
+              0,
+              1
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "modifier",
+            "operation": "PlayerOptions.Reverse",
+            "source": "song:/lua/mods.lua",
+            "line": 105,
+            "phase": "callback",
+            "beat": 368.5520324707031,
+            "seconds": 132.05398559570312,
+            "args": [
+              0,
+              1000
+            ],
+            "results": [
+              0,
+              1000
+            ]
+          }
+        }
+      ]
     }
   ],
   "historical_concrete_failures": [

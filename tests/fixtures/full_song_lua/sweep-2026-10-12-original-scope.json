@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-12T22:23:35Z",
+  "updated_utc": "2026-10-12T22:29:44Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -12,8 +12,8 @@
   ],
   "counts": {
     "passed": 154,
-    "pending": 10,
-    "unprocessed": 337
+    "pending": 11,
+    "unprocessed": 336
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1483,7 +1483,9 @@
       "position": 165,
       "source_simfile": "Datamania (tpz Overheat Remix)/Datamania (tpz Overheat Remix).ssc",
       "simfile_sha256": "f00a488fe36e5b9ce8987d9dcbc462311008ad02f8d70b860138a5523f6fa7e3",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 166,
