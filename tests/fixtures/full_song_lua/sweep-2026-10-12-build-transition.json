@@ -1,0 +1,46 @@
+{
+  "position": 161,
+  "old_supervisor": {
+    "pid": 126230,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_chart_sweep_v1.py"
+    ]
+  },
+  "retained_capture": {
+    "pid": 208238,
+    "command": [
+      "/home/parity/jobs/chart-sweep-pack-build-v1/harness",
+      "song-lua-trace",
+      "/home/parity/workspace/lua-songs/Cyberpunk 2077/Cyberpunk 2077.ssc",
+      "--itgmania-bin",
+      "/home/parity/native/source-v1/ITGmania-harness-trace-creation-v1",
+      "--fallback-theme",
+      "Harness Simply Love",
+      "--difficulty",
+      "Challenge",
+      "--autoplay",
+      "1",
+      "--headless",
+      "--keep-run-dir",
+      "--timeout",
+      "900",
+      "--max-events",
+      "8000000",
+      "--random-seed",
+      "1",
+      "--out",
+      "/home/parity/jobs/chart-sweep-20261012-v2/chart-161/trace.json",
+      "--until-gameplay-end"
+    ],
+    "label": "capture",
+    "source_simfile": "Cyberpunk 2077/Cyberpunk 2077.ssc"
+  },
+  "selection": {
+    "build_proof": "/home/parity/jobs/factory-ownership-build-v1/proof.json",
+    "harness_proof": "/home/parity/jobs/metric-capture-build-v1/proof.json",
+    "fix_commit": "71ef0ade1 / harness 78d4a1e"
+  },
+  "completed_sources": 12,
+  "reason": "Continue the sweep with committed repairs; reuse the active native capture without interrupting it"
+}

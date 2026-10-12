@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-12T21:29:39Z",
-  "previous_goal_turn": "progress: both copter fixtures saved and repairs committed; current turn verifies underlay controls, repairs final factory ownership and corrects the already accepted Choices classification",
+  "updated_utc": "2026-10-12T21:34:05Z",
+  "previous_goal_turn": "progress: Cursed Metamorph fixture saved; final factory ownership and reload identities fixed in 71ef0ade1 with 15 controls passed; running capture retained while sweep adopts committed fixes; Choices classification corrected",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "faef96c3bf5b10290d13a5cb7cc0e1e0c7f16296",
+      "deadsync": "71ef0ade1de4d67689c94a9bca5691c0cdcb29da",
       "itgmania_harness": "78d4a1ef5778b76a29d3d55ff42e0216edfb1a38"
     }
   },
@@ -23,6 +23,7 @@
     "native_metric_caller": "regression passed on Windows; all 12 runtime controls passed on Linux",
     "empty_song_tree": "all 15 replay controls passed on Windows and Linux; second bounded Crab replay reuses the original capture",
     "enabled_underlay": "P1-only, P2-only and two-player underlay regression passed on Windows and Linux; all 15 Linux replay controls passed",
+    "factory_ownership": "final parent tree and reload epoch regression passed; all 15 Linux replay controls passed; Cold attempt 2 and crew attempt 1 reuse their captures",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved"
   },
   "corpus_transfer": {
@@ -49,7 +50,8 @@
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
-    "runner": "../itgmania-harness/target/server-parity/run_chart_sweep_v1.py",
+    "runner": "../itgmania-harness/target/server-parity/run_chart_sweep_v3.py",
+    "build_transition": "tests/fixtures/full_song_lua/sweep-2026-10-12-build-transition.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
       {
@@ -113,7 +115,10 @@
         "supervisor_running": true,
         "passed": 0,
         "pending": 0,
-        "processed": 0
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Cold/Cold.ssc",
+        "child_running": true
       }
     ],
     "publisher_streams": [
@@ -158,6 +163,13 @@
         "record": "sweep-2026-10-12-enabled-underlay-repairs.json",
         "fix_commit": "bd393aac5",
         "finish_status": "bounded enabled underlay repair replay complete"
+      },
+      {
+        "name": "factory-ownership-repair",
+        "remote": "/home/parity/jobs/factory-ownership-repair-v1",
+        "record": "sweep-2026-10-12-factory-ownership-repairs.json",
+        "fix_commit": "71ef0ade1",
+        "finish_status": "bounded factory ownership repair replay complete"
       }
     ]
   },
