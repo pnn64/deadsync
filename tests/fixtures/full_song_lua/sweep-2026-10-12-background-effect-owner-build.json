@@ -1,0 +1,57 @@
+{
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/live.rs": "88f7b91021b2b468fa373b661daf6b88eb54b573e0d351ca524d3b332d70ef57",
+    "crates/deadsync-song-lua/src/song_tables.rs": "3af70eef6c3e9b53eae43811a8a641dc1d8e3e9648a053ca8678302463732e19",
+    "crates/deadsync-song-lua/src/lua_util.rs": "c40ea0830967c2a4fba4798cfd036a083ea96228c4d996c98b629a3445bf17be",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "24990d27bc880ae1cc9bb11342974fdd36dbae880db56a0c6793008f662e6ee3"
+  },
+  "checks": [
+    {
+      "label": "stage-test",
+      "exit_code": 0,
+      "seconds": 47.60873981099576,
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 317 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 34.67112895399623,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 0.9949591319964384,
+      "results": [
+        "test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.21s"
+      ]
+    }
+  ],
+  "binary": "/home/parity/jobs/background-effect-owner-build-v1/full-song-lua-stage-modifier-v1",
+  "binary_sha256": "fb0ae8b99391809080b072426dee35d2efe0e64d479b0dff9833bb6e5370848d",
+  "fix_commit": "e2b01b99a",
+  "windows_validation": {
+    "command": "cargo test --locked --test song_lua_itgmania_semantic_parity native_gameplay::tests",
+    "passed": 16,
+    "failed": 0
+  },
+  "local_references": [
+    "../itgmania-harness/vendor/itgmania/src/Background.cpp:296",
+    "../itgmania-harness/vendor/itgmania/BackgroundEffects/UpperLeft.lua:4",
+    "../itgmania-harness/vendor/itgmania/BackgroundEffects/Centered.lua:4"
+  ],
+  "behavior": "Map the instantiated effect child to its authored background entry using neutral factory identities; validate outer effect allocations while retaining external-container and foreground ownership paths",
+  "concrete_failure": {
+    "source_simfile": "Dimmadome/doug dimmadome owner of the dimmsdale dimmadome.sm",
+    "failure": "native background containers do not match the prepared entry count",
+    "diagnosis_receipt": "sweep-2026-10-12-dimmadome-background-diagnosis.json"
+  },
+  "bounded_repair": {
+    "job": "/home/parity/jobs/background-effect-owner-repair-v1",
+    "attempt": 1,
+    "reused_uncompressed_candidate_sha256": "101cf4a646457f7c223db429bcd866899bd66cb5b1e45ddc224228ea008f560c"
+  },
+  "acceptance": "Existing complete full_song_lua replay comparisons; coverage recorded separately"
+}
