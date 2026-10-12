@@ -1,6 +1,6 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-12T21:56:53Z",
+  "updated_utc": "2026-10-12T22:00:33Z",
   "previous_goal_turn": "progress: Cursed Metamorph fixture saved; factory ownership, reload identities, foreground and background entry paths fixed with 15 controls passed after each change; captures reused; Choices classification corrected and original 501 sources audited",
   "scope": {
     "original_simfiles": 501,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "c325377bd1bdf8945a6b364c09d4481df0b66294",
+      "deadsync": "c77a72f8f6a212004814f70c295388563a82c699",
       "itgmania_harness": "78d4a1ef5778b76a29d3d55ff42e0216edfb1a38"
     }
   },
@@ -39,19 +39,15 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Dance Robot/dancerobot-fakemines.sm",
-      "position": 162,
-      "phase": "replay",
-      "pid": 250483,
+      "current": "Dance Robot/dancerobot-fakemines.ssc",
+      "position": 163,
+      "phase": "capture",
+      "pid": 274851,
       "process_matches": true,
-      "passed": 1,
+      "passed": 2,
       "pending": 12,
-      "processed": 13,
-      "last_log_lines": [
-        "[490.1s] replaying every native gameplay frame: 0 checks completed, 0 failed",
-        "[492.1s] replaying every native gameplay frame: 0 checks completed, 0 failed",
-        "[494.1s] replaying every native gameplay frame: 0 checks completed, 0 failed"
-      ],
+      "processed": 14,
+      "last_log_lines": [],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -117,14 +113,14 @@
       },
       {
         "job": "factory-ownership-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 1,
-        "processed": 1,
-        "last_phase": "replay",
+        "processed": 2,
+        "last_phase": "pack",
         "source_simfile": "crew -All Hands on the Deck-/crew.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "foreground-ownership-repair-v1",
@@ -234,11 +230,11 @@
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 3,
-    "new_pending_charts": 10,
-    "new_processed_sources": 13,
+    "new_passed_fixtures": 5,
+    "new_pending_charts": 9,
+    "new_processed_sources": 14,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 340,
+    "unprocessed_sources": 339,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -392,14 +388,6 @@
       "source_simfile": "Crazy Crazy/Crazy Crazy.ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-138502-1791837397902414281-0\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
-    },
-    {
-      "source_simfile": "crew -All Hands on the Deck-/crew.ssc",
-      "repair_attempts": 0,
-      "failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (140633) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native subscriber ownership needs a single observed root\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []

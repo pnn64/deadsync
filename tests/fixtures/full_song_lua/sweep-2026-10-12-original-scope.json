@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-12T21:56:55Z",
+  "updated_utc": "2026-10-12T22:00:35Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -11,9 +11,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 150,
-    "pending": 11,
-    "unprocessed": 340
+    "passed": 152,
+    "pending": 10,
+    "unprocessed": 339
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1411,9 +1411,9 @@
       "position": 156,
       "source_simfile": "crew -All Hands on the Deck-/crew.ssc",
       "simfile_sha256": "e77f9e073ded8b35b1ba0f8e1a150a6fb1e8a6091c049210486ac800519d02a3",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-factory-ownership-repairs.json"
     },
     {
       "position": 157,
@@ -1459,7 +1459,9 @@
       "position": 162,
       "source_simfile": "Dance Robot/dancerobot-fakemines.sm",
       "simfile_sha256": "e6fc845530da15ce8e1f1726e9f5c1f0881aa8eec31732328909d4ecf358ffd6",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 163,
