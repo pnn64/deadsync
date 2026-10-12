@@ -1,6 +1,6 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-12T21:03:54Z",
+  "updated_utc": "2026-10-12T21:04:14Z",
   "previous_goal_turn": "progress: stage modifiers, metric command chunk names and empty song tree repairs committed; both copter fixtures saved after complete passing replays",
   "scope": {
     "original_simfiles": 501,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "1d392db0eb034044e649513aafc747ac572ad547",
+      "deadsync": "93c63eb0ec8a52e65011ef834bb3c02968ea4c8f",
       "itgmania_harness": "78d4a1ef5778b76a29d3d55ff42e0216edfb1a38"
     }
   },
