@@ -1822,25 +1822,64 @@ fn make_actor_ctor(
     })
 }
 
+fn actor_def_children(
+    lua: &Lua,
+    actor: &Table,
+) -> mlua::Result<(Table, smallvec::SmallVec<[(Value, Table); 16]>)> {
+    let explicit = match actor.raw_get::<Value>("children")? {
+        Value::Table(children) => Some(children),
+        _ => None,
+    };
+    let array_only = explicit.is_none();
+    let source = explicit.unwrap_or_else(|| actor.clone());
+    let mut children = smallvec::SmallVec::<[(Value, Table); 16]>::new();
+    // XmlFileUtil::XNodeFromTableRecursive visits raw array entries until the
+    // first nil, then lua_next. Its duplicate range counts tables, not slots.
+    for index in 1_i64.. {
+        match source.raw_get::<Value>(index)? {
+            Value::Nil => break,
+            Value::Table(child) => children.push((Value::Integer(index), child)),
+            _ => {}
+        }
+    }
+    let prefix = children.len() as f64;
+    source.for_each::<Value, Value>(|key, value| {
+        let Value::Table(child) = value else { return Ok(()) };
+        let already_added = lua.coerce_number(key.clone())?.is_some_and(|index| {
+            index >= 1.0 && index <= prefix && index.fract() == 0.0
+        });
+        if !already_added {
+            children.push((key, child));
+        }
+        Ok(())
+    })?;
+    // ActorFrame::LoadChildrenFromNode accepts all names in an explicit
+    // children table; direct children require IsAnInt (ASCII digits only).
+    if array_only {
+        let mut selected = smallvec::SmallVec::<[(Value, Table); 16]>::new();
+        for (key, child) in children {
+            if lua.coerce_string(key.clone())?.is_some_and(|name| {
+                let bytes = name.as_bytes();
+                !bytes.is_empty() && bytes.iter().all(u8::is_ascii_digit)
+            }) {
+                selected.push((key, child));
+            }
+        }
+        children = selected;
+    }
+    Ok((source, children))
+}
+
 fn own_actor_children(
     lua: &Lua,
     actor: &Table,
     install_methods: fn(&Lua, &Table) -> mlua::Result<()>,
 ) -> mlua::Result<()> {
-    let mut children = smallvec::SmallVec::<[(i64, Table); 16]>::new();
-    actor.for_each::<Value, Value>(|key, value| {
-        if let (Value::Integer(index), Value::Table(child)) = (key, value)
-            && index > 0
-            && child
-                .get::<Option<String>>("__songlua_actor_type")?
-                .is_some()
-        {
-            children.push((index, child));
+    let (source, children) = actor_def_children(lua, actor)?;
+    for (key, child) in children {
+        if child.raw_get::<Option<String>>("__songlua_actor_type")?.is_none() {
+            continue;
         }
-        Ok(())
-    })?;
-    children.sort_unstable_by_key(|(index, _)| *index);
-    for (index, child) in children {
         // ActorFrame::LoadChildrenFromNode constructs an Actor per occurrence,
         // even when Lua reuses the same definition table in several slots.
         let child = if child
@@ -1852,7 +1891,7 @@ fn own_actor_children(
             child
         };
         child.set("__songlua_def_owned", true)?;
-        actor.raw_set(index, child)?;
+        source.raw_set(key, child)?;
     }
     Ok(())
 }
@@ -10035,30 +10074,24 @@ pub fn install_actor_parent_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
     Ok(())
 }
 
-fn compact_actor_children(actor: &Table) -> mlua::Result<()> {
-    let mut entries = smallvec::SmallVec::<[(i64, Value); 16]>::new();
-    let mut last_index = 0;
-    actor.for_each::<Value, Value>(|key, value| {
+fn compact_actor_children(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let (_, children) = actor_def_children(lua, actor)?;
+    let mut indices = smallvec::SmallVec::<[i64; 16]>::new();
+    actor.for_each::<Value, Value>(|key, _value| {
         if let Value::Integer(index) = key
             && index > 0
         {
-            last_index = last_index.max(index);
-            entries.push((index, value));
+            indices.push(index);
         }
         Ok(())
     })?;
-    if last_index == entries.len() as i64 {
-        return Ok(());
+    // Runtime sequence walks use the selected native load order. In particular,
+    // excluded direct children must not receive Init or enter the actor tree.
+    for index in indices {
+        actor.raw_set(index, Value::Nil)?;
     }
-    // LoadActor helpers can return nil inside an actor definition. ITGmania
-    // still loads children beyond those holes. Compact once at initialization
-    // so every subsequent sequence walk sees the complete tree in index order.
-    entries.sort_unstable_by_key(|(index, _)| *index);
-    for (index, _) in &entries {
-        actor.raw_set(*index, Value::Nil)?;
-    }
-    for (index, (_, value)) in entries.into_iter().enumerate() {
-        actor.raw_set(index + 1, value)?;
+    for (index, (_, child)) in children.into_iter().enumerate() {
+        actor.raw_set(index + 1, child)?;
     }
     Ok(())
 }
@@ -10070,7 +10103,7 @@ pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resu
     {
         return Ok(());
     }
-    compact_actor_children(actor)?;
+    compact_actor_children(lua, actor)?;
     // Def tables are constructed children first. Native actors subscribe as
     // the definition tree loads, with parents before their children.
     register_song_lua_actor(lua, actor)?;

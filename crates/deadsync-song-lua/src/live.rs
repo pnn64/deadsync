@@ -801,6 +801,34 @@ mod tests {
     }
 
     #[test]
+    fn explicit_actor_children() {
+        let mut compiled = compile("explicit-children", r#"
+return Def.ActorFrame{
+ Name='Root',
+ Def.Quad{InitCommand=function() error('excluded direct child') end},
+ children={
+  [1]=Def.Quad{Name='Head',InitCommand=function(self) self:x(1) end},
+  [3]=Def.ActorFrame{Name='Tail',InitCommand=function(self) self:x(3) end},
+  named=Def.Quad{Name='Named',InitCommand=function(self) self:x(7) end},
+ },
+ OnCommand=function(self)
+  assert(self:GetNumChildren()==3)
+  assert(self:GetChild('Head'):GetX()==1)
+  assert(self:GetChild('Tail'):GetX()==3)
+  assert(self:GetChild('Named'):GetX()==7)
+  self:aux(1)
+ end,
+}
+"#);
+        let mut scene = compiled.live_scene.take().expect("owned scene");
+        let output = scene.advance(SongLuaLiveFrame::default()).expect("child activation");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        let actor: Table = scene.root.as_table().expect("session roots").raw_get(1).expect("root");
+        assert_eq!(actor.get::<Function>("getaux").expect("aux getter")
+            .call::<f32>(actor.clone()).expect("On result"), 1.0);
+    }
+
+    #[test]
     fn foreground_name_changes_after_init() {
         let dir = std::env::temp_dir().join(format!("deadsync-live-foreground-name-{}", std::process::id()));
         fs::create_dir_all(&dir).expect("test directory");
