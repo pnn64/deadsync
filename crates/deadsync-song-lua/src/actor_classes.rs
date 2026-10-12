@@ -442,7 +442,7 @@ pub(crate) fn install_native(lua: &Lua) -> mlua::Result<()> {
 pub(crate) fn forward(lua: &Lua, class: &Table, name: &'static str) -> mlua::Result<()> {
     class.set(
         name,
-        lua.create_function(move |_, args: MultiValue| {
+        lua.create_function(move |lua, args: MultiValue| {
             let Some(Value::Table(actor)) = args.front() else {
                 return Err(mlua::Error::RuntimeError(format!(
                     "actor method {name} requires an actor"
@@ -458,7 +458,17 @@ pub(crate) fn forward(lua: &Lua, class: &Table, name: &'static str) -> mlua::Res
                     "native actor method {name} has no semantic implementation"
                 )));
             };
-            method.call::<MultiValue>(args)
+            let observed = matches!(name, "GetChild" | "GetName" | "x" | "y" | "zoomx" | "vibrate" | "effectmagnitude")
+                && crate::live::active(lua)
+                && log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace);
+            let trace_args = observed.then(|| args.clone());
+            if observed { crate::live::query_phase(lua, true); }
+            let result = method.call::<MultiValue>(args);
+            if let Some(args) = trace_args {
+                crate::live::query_phase(lua, false);
+                crate::live::trace_bound_method(lua, name, &args, &result);
+            }
+            result
         })?,
     )
 }
@@ -472,6 +482,9 @@ fn class_name(kind: &str) -> &'static str {
         "ActorProxy" => "ActorProxy",
         "BitmapText" => "BitmapText",
         "Player" => "Player",
+        // Player inherits ActorFrame in native Player.h; gameplay host actors
+        // use this internal kind before the complete Player inventory is linked.
+        "PlayerActor" => "ActorFrame",
         "NoteField" => "NoteField",
         kind if is_frame(kind) => "ActorFrame",
         _ => "Actor",
@@ -485,6 +498,7 @@ fn is_frame(kind: &str) -> bool {
             | "ActorFrameTexture"
             | "TopScreen"
             | "Player"
+            | "PlayerActor"
             | "NoteField"
             | "GraphDisplay"
             | "SongMeterDisplay"

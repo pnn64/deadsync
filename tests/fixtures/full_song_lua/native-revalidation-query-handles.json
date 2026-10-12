@@ -1,0 +1,97 @@
+{
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "position": 147,
+  "source_simfile": "chronic latecomer/chronic latecomer.ssc",
+  "deadsync_parent_commit": "be0271574d7bd0c8beba3e88e72afaaa530557ec",
+  "tested_source_sha256": {
+    "crates/deadsync-song-lua/src/actor_classes.rs": "7e0e4b948c5417d92f874c2e052b4c0d9bc95407295b186b33e896a3d0bfb2dd",
+    "crates/deadsync-song-lua/src/live.rs": "e2caeb5514c13fb38a8cba843ba8a7b1c93bb32f2375f61b7590c07169c9b1f6",
+    "crates/deadsync-song-lua/src/lua_util.rs": "cd4a2f6bb3c10a7f93e0abff4330d70040ed9dec393afdf3518dad1160f042bf",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "1b11e0da918ee37b229f66819f321088dd0b8ede0532220735f6298ab2346a9c"
+  },
+  "reference": {
+    "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Player.h",
+    "sha256": "aae6099628d6b79ba1a4f4753ac004821405ec1efa6f55e537faf53929da9bb4",
+    "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+    "behavior": "Player inherits ActorFrame; gameplay PlayerActor uses shared ActorFrame methods"
+  },
+  "controls": {
+    "receipt": "save/song-lua-validation/pass188/top147-query-trace-controls-v8.json",
+    "receipt_sha256": "f86de5a02b02f56e2b95004343037e26d53fafb481cd7a22eec288f83d999e05",
+    "results": [
+      "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 301 filtered out; finished in 0.16s"
+    ],
+    "callback_clocks": [
+      0,
+      0.25
+    ],
+    "inactive_player_child": "nil",
+    "player_actor_method_identity_preserved": true,
+    "actor_alias_relationships_names_and_paths_checked": true,
+    "incomplete_captures_remain_rejected": true
+  },
+  "comparison_inventory": [
+    "command.begin",
+    "command.end",
+    "PlayerStageStats.GetCurrentPossibleDancePoints",
+    "PlayerStageStats.GetPossibleDancePoints",
+    "Actor.sleep",
+    "Actor.queuecommand",
+    "GameState.GetCurrentSong",
+    "Song.GetStepsByStepsType",
+    "GameState.IsPlayerEnabled",
+    "GameState.GetCurrentSteps",
+    "Steps.GetDifficulty",
+    "GameState.SetCurrentSteps",
+    "StatsManager.GetCurStageStats",
+    "StageStats.GetPlayerStageStats",
+    "ScreenManager.GetTopScreen",
+    "GameState.GetCurrentStyle",
+    "GameState.GetPlayerState",
+    "GameState.GetSongBeat",
+    "Steps.GetStepsType",
+    "Style.GetName",
+    "Song.GetSongDir",
+    "PrefsManager.GetPreference",
+    "RageDisplay.SupportsRenderToTexture",
+    "PlayerState.GetPlayerOptions",
+    "PlayerOptions.Reverse",
+    "PlayerOptions.Boost",
+    "PlayerOptions.ConfusionOffset",
+    "PlayerOptions.Tiny1",
+    "PlayerOptions.Tiny2",
+    "PlayerOptions.Tiny3",
+    "PlayerOptions.Tiny4",
+    "ActorFrame.GetChild",
+    "Actor.GetName",
+    "Actor.x",
+    "Actor.y",
+    "Actor.zoomx",
+    "Actor.vibrate",
+    "Actor.effectmagnitude"
+  ],
+  "lifecycle_operations_compared_separately": [
+    "ScreenManager.SetNewScreen",
+    "ScreenWithMenuElements.StartTransitioningScreen",
+    "MessageManager.Broadcast"
+  ],
+  "trace_changes": [
+    "observe actual display/style/player-option/actor getter returns",
+    "classify update function reads as callbacks",
+    "suppress implementation-internal C reads",
+    "canonicalize actor allocation IDs by first observation while preserving aliases, names and paths"
+  ],
+  "retired_implementation": "remove child method replacement and duplicated comparison inventories",
+  "archive_accepted": false,
+  "full_captured_context_replay_pending": true,
+  "autoplay_context_pending": true,
+  "framebuffer_pixel_parity_proven": false,
+  "full_corpus_complete": false,
+  "remaining_scope": "Original and historical corpus and all existing broader parity gates remain active; baseline baked skew and stage-stat evaluator failures remain pending."
+}

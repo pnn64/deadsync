@@ -9,11 +9,52 @@ use deadsync_gameplay::{
 use deadsync_theme_simply_love::screens::gameplay;
 use serde_json::{Value, json};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     path::Path,
     sync::atomic::{AtomicUsize, Ordering},
     sync::{Arc, Mutex, OnceLock},
 };
+
+const CALL_OPERATIONS: &[&str] = &[
+    "command.begin",
+    "command.end",
+    "PlayerStageStats.GetCurrentPossibleDancePoints",
+    "PlayerStageStats.GetPossibleDancePoints",
+    "Actor.sleep",
+    "Actor.queuecommand",
+    "GameState.GetCurrentSong",
+    "Song.GetStepsByStepsType",
+    "GameState.IsPlayerEnabled",
+    "GameState.GetCurrentSteps",
+    "Steps.GetDifficulty",
+    "GameState.SetCurrentSteps",
+    "StatsManager.GetCurStageStats",
+    "StageStats.GetPlayerStageStats",
+    "ScreenManager.GetTopScreen",
+    "GameState.GetCurrentStyle",
+    "GameState.GetPlayerState",
+    "GameState.GetSongBeat",
+    "Steps.GetStepsType",
+    "Style.GetName",
+    "Song.GetSongDir",
+    "PrefsManager.GetPreference",
+    "RageDisplay.SupportsRenderToTexture",
+    "PlayerState.GetPlayerOptions",
+    "PlayerOptions.Reverse",
+    "PlayerOptions.Boost",
+    "PlayerOptions.ConfusionOffset",
+    "PlayerOptions.Tiny1",
+    "PlayerOptions.Tiny2",
+    "PlayerOptions.Tiny3",
+    "PlayerOptions.Tiny4",
+    "ActorFrame.GetChild",
+    "Actor.GetName",
+    "Actor.x",
+    "Actor.y",
+    "Actor.zoomx",
+    "Actor.vibrate",
+    "Actor.effectmagnitude",
+];
 
 struct CallLog {
     events: Mutex<Vec<Value>>,
@@ -80,6 +121,7 @@ fn compare_calls(
     for event in logged.iter().filter(|event| event["kind"] == "trace-error") {
         mismatches.push(json!({"field":"call_trace_error","deadsync":event}));
     }
+    let mut actual_handles = BTreeMap::new();
     let actual: Vec<Value> = logged
         .iter()
         .filter_map(|event| {
@@ -91,6 +133,10 @@ fn compare_calls(
             let mut event = event.clone();
             event["source"] = json!(source);
             normalize_paths(&mut event, &song_dir);
+            if event["kind"] == "query" {
+                let scene = event["scene"].as_u64().unwrap_or(0);
+                normalize_query_handles(&mut event["results"], &mut actual_handles, scene);
+            }
             Some(event)
         })
         .collect();
@@ -104,6 +150,7 @@ fn compare_calls(
             json!({"compared":false,"reason":"native command/query events have no scene epochs","actual":actual}),
         );
     }
+    let mut native_handles = BTreeMap::new();
     let native: Vec<Value> = trace["events"]
         .as_array()
         .ok_or("missing native events")?
@@ -116,26 +163,9 @@ fn compare_calls(
                 .is_some_and(|source| source.starts_with("song:/"))
         })
         .filter(|event| {
-            matches!(
-                event["operation"].as_str(),
-                Some(
-                    "command.begin"
-                        | "command.end"
-                        | "PlayerStageStats.GetCurrentPossibleDancePoints"
-                        | "PlayerStageStats.GetPossibleDancePoints"
-                        | "Actor.sleep"
-                        | "Actor.queuecommand"
-                        | "GameState.GetCurrentSong"
-                        | "Song.GetStepsByStepsType"
-                        | "GameState.IsPlayerEnabled"
-                        | "GameState.GetCurrentSteps"
-                        | "Steps.GetDifficulty"
-                        | "GameState.SetCurrentSteps"
-                        | "StatsManager.GetCurStageStats"
-                        | "StageStats.GetPlayerStageStats"
-                        | "ScreenManager.GetTopScreen"
-                )
-            )
+            event["operation"]
+                .as_str()
+                .is_some_and(|operation| CALL_OPERATIONS.contains(&operation))
         })
         .filter(|event| {
             !matches!(
@@ -160,6 +190,8 @@ fn compare_calls(
             let mut value = event.clone();
             if event["kind"] == "query" {
                 value["results"] = event["detail"]["results"].clone();
+                let scene = value["scene"].as_u64().unwrap_or(0);
+                normalize_query_handles(&mut value["results"], &mut native_handles, scene);
             }
             if event["kind"] != "command" {
                 if let Some(caller) = event.get("caller") {
@@ -243,6 +275,34 @@ fn normalize_paths(value: &mut Value, song_dir: &str) {
     }
 }
 
+fn normalize_query_handles(
+    value: &mut Value,
+    handles: &mut BTreeMap<(u64, String), usize>,
+    scene: u64,
+) {
+    match value {
+        Value::Array(values) => values
+            .iter_mut()
+            .for_each(|value| normalize_query_handles(value, handles, scene)),
+        Value::Object(values) => {
+            // Canonicalize allocation IDs by first observation while retaining
+            // alias relationships, actor names, and actual named ancestry.
+            if values.get("name").is_some_and(Value::is_string)
+                && values.get("path").is_some_and(Value::is_string)
+                && let Some(id) = values.get("actor").and_then(Value::as_str)
+            {
+                let next = handles.len() + 1;
+                let id = *handles.entry((scene, id.to_string())).or_insert(next);
+                values.insert("actor".into(), json!(id));
+            }
+            values
+                .values_mut()
+                .for_each(|value| normalize_query_handles(value, handles, scene));
+        }
+        _ => {}
+    }
+}
+
 fn same_value(native: &Value, actual: &Value) -> bool {
     match (native, actual) {
         (Value::Number(native), Value::Number(actual)) => native
@@ -274,26 +334,15 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
         })
         .filter_map(|event| event["operation"].as_str())
         .collect();
-    let compared = [
-        "command.begin",
-        "command.end",
-        "PlayerStageStats.GetPossibleDancePoints",
-        "PlayerStageStats.GetCurrentPossibleDancePoints",
-        "Actor.sleep",
-        "Actor.queuecommand",
-        "GameState.GetCurrentSong",
-        "Song.GetStepsByStepsType",
-        "GameState.IsPlayerEnabled",
-        "GameState.GetCurrentSteps",
-        "Steps.GetDifficulty",
-        "GameState.SetCurrentSteps",
-        "StatsManager.GetCurStageStats",
-        "StageStats.GetPlayerStageStats",
-        "ScreenManager.GetTopScreen",
-        "ScreenManager.SetNewScreen",
-        "ScreenWithMenuElements.StartTransitioningScreen",
-        "MessageManager.Broadcast",
-    ];
+    let compared: BTreeSet<_> = CALL_OPERATIONS
+        .iter()
+        .copied()
+        .chain([
+            "ScreenManager.SetNewScreen",
+            "ScreenWithMenuElements.StartTransitioningScreen",
+            "MessageManager.Broadcast",
+        ])
+        .collect();
     let theme: BTreeSet<&str> = trace["events"]
         .as_array()
         .into_iter()
@@ -324,7 +373,7 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
     }
     let uncovered: Vec<_> = observed
         .iter()
-        .filter(|operation| !compared.contains(operation))
+        .filter(|operation| !compared.contains(*operation))
         .copied()
         .collect();
     if !uncovered.is_empty() {
@@ -500,6 +549,135 @@ mod tests {
         assert_eq!(construction[1]["results"][0][1]["index"], 2);
         assert_eq!(construction[2]["results"][0]["index"], 2);
         assert_eq!(construction[6]["results"][0]["index"], 1);
+        drop(events);
+        start_call_log().expect("reset observations for display and update control");
+        let entry = dir.join("display-caller.lua");
+        fs::write(
+            &entry,
+            r#"
+local style = GAMESTATE:GetCurrentStyle()
+assert(style:GetName() == 'single')
+assert(GAMESTATE:GetCurrentSteps(0):GetStepsType() == 'StepsType_Dance_Single')
+assert(DISPLAY:SupportsRenderToTexture() == false)
+assert(PREFSMAN:GetPreference('DisplayWidth') == 0)
+assert(PREFSMAN:GetPreference('DisplayHeight') == 0)
+local state = GAMESTATE:GetPlayerState(1)
+local options = state:GetPlayerOptions('ModsLevel_Song')
+local amount, approach = options:Reverse()
+assert(amount == 0 and approach == 1)
+return Def.ActorFrame{Name='Control', InitCommand=function(self)
+    self:x(12):y(24):SetUpdateFunction(function(self)
+        local beat = GAMESTATE:GetSongBeat()
+        assert(beat == 0 or beat == 0.25)
+        assert(self:GetName() == 'Control')
+        local screen = SCREENMAN:GetTopScreen()
+        local player = screen:GetChild('PlayerP1')
+        assert(player.GetChild == ActorFrame.GetChild)
+        assert(player:GetChild('Judgment'):GetName() == 'Judgment')
+        assert(screen:GetChild('PlayerP2') == nil)
+    end)
+end}
+"#,
+        )
+        .expect("display and callback control");
+        context.display_width = 0.0;
+        context.display_height = 0.0;
+        context.render_to_texture = false;
+        context.players[1].enabled = false;
+        let mut compiled = compile_song_lua_with_default_host::<(), (), _>(
+            &entry,
+            &context,
+            SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(Arc::<[()]>::from([])),
+            |_| None,
+            |_, _| None,
+        )
+        .expect("compile actual getters and update function");
+        let output = compiled
+            .live_scene
+            .as_mut()
+            .expect("owned scene")
+            .advance(deadsync_song_lua::SongLuaLiveFrame {
+                beat: 0.25,
+                music_seconds: 0.25,
+                screen_seconds: 0.25,
+                delta_seconds: 0.01,
+                players: std::array::from_fn(|_| deadsync_song_lua::SongLuaLivePlayer::default()),
+            })
+            .expect("advance update callback");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        let events = CALL_LOG
+            .events
+            .lock()
+            .expect("actual callback observations");
+        for (operation, results) in [
+            (
+                "RageDisplay.SupportsRenderToTexture",
+                serde_json::json!([false]),
+            ),
+            ("Style.GetName", serde_json::json!(["single"])),
+            ("PlayerOptions.Reverse", serde_json::json!([0, 1])),
+        ] {
+            let event = events
+                .iter()
+                .find(|event| event["operation"] == operation)
+                .expect("observed constructor getter");
+            assert_eq!(event["kind"], "query");
+            assert_eq!(event["phase"], "construction");
+            assert!(super::same_value(&event["results"], &results));
+        }
+        let beats: Vec<_> = events
+            .iter()
+            .filter(|event| event["operation"] == "GameState.GetSongBeat")
+            .collect();
+        assert!(beats.iter().all(|event| event["phase"] == "callback"));
+        assert_eq!(
+            beats
+                .iter()
+                .map(|event| event["results"].clone())
+                .collect::<Vec<_>>(),
+            [serde_json::json!([0]), serde_json::json!([0.25])]
+        );
+        let children: Vec<_> = events
+            .iter()
+            .filter(|event| event["operation"] == "ActorFrame.GetChild")
+            .collect();
+        assert_eq!(children.len(), 6, "{events:?}");
+        assert_eq!(
+            children[1]["results"][0]["path"],
+            "ScreenGameplay/PlayerP1/Judgment"
+        );
+        assert_eq!(children[2]["results"], serde_json::json!([{"type":"nil"}]));
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| matches!(event["operation"].as_str(), Some("Actor.x" | "Actor.y")))
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn named_query_handles_keep_actor_identity() {
+        use serde_json::json;
+        use std::collections::BTreeMap;
+        let actor = |id: &str| json!({"actor":id, "name":"Judgment", "path":"ScreenGameplay/PlayerP1/Judgment"});
+        let mut native = json!([actor("external-0016"), actor("external-0016")]);
+        let mut actual = json!([actor("0x1234"), actor("0x1234")]);
+        super::normalize_query_handles(&mut native, &mut BTreeMap::new(), 1);
+        super::normalize_query_handles(&mut actual, &mut BTreeMap::new(), 1);
+        assert!(super::same_value(&native, &actual));
+        let mut wrong_alias = json!([actor("0x1234"), actor("0x5678")]);
+        super::normalize_query_handles(&mut wrong_alias, &mut BTreeMap::new(), 1);
+        assert!(!super::same_value(&native, &wrong_alias));
+        actual[0]["path"] = json!("ScreenGameplay/PlayerP2/Judgment");
+        assert!(!super::same_value(&native, &actual));
+        actual[0] = native[0].clone();
+        actual[0]["name"] = json!("Combo");
+        assert!(!super::same_value(&native, &actual));
+        let mut unnamed = json!({"actor":"external-0099"});
+        super::normalize_query_handles(&mut unnamed, &mut BTreeMap::new(), 1);
+        assert_eq!(unnamed, json!({"actor":"external-0099"}));
     }
 
     #[test]

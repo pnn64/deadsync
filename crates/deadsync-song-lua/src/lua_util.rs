@@ -12695,8 +12695,10 @@ fn run_update_callback(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Re
     let Some(update) = actor.get::<Option<Function>>(key)? else {
         return Ok(());
     };
+    crate::live::callback_phase(lua, true);
     let update_result =
         call_actor_function(lua, actor, &update, Some(Value::Number(delta_seconds)));
+    crate::live::callback_phase(lua, false);
     let drain_result = drain_actor_command_queue(lua, actor);
     if let Err(err) = update_result {
         report_update_error(lua, actor, UPDATE_FN_ERROR_KEY, "update function", &err)?;
