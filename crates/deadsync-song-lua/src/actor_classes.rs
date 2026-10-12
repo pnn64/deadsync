@@ -459,7 +459,10 @@ pub(crate) fn forward(lua: &Lua, class: &Table, name: &'static str) -> mlua::Res
                 )));
             };
             let observed = matches!(name, "GetChild" | "GetName" | "GetParent" | "GetNumChildren"
-                | "name" | "aux" | "getaux" | "x" | "y" | "zoomx" | "vibrate" | "effectmagnitude")
+                | "name" | "aux" | "getaux" | "x" | "y" | "zoomx" | "vibrate" | "effectmagnitude"
+                | "Center" | "FullScreen" | "animate" | "decelerate" | "diffuse" | "diffusealpha"
+                | "effectperiod" | "linear" | "queuemessage" | "rainbow" | "rotationz"
+                | "spin" | "visible" | "zoom" | "zoomto")
                 && crate::live::active(lua)
                 && log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace);
             let trace_args = observed.then(|| args.clone());

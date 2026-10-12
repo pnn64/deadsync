@@ -63,6 +63,21 @@ const CALL_OPERATIONS: &[&str] = &[
     "Actor.zoomx",
     "Actor.vibrate",
     "Actor.effectmagnitude",
+    "Actor.Center",
+    "Actor.FullScreen",
+    "Actor.animate",
+    "Actor.decelerate",
+    "Actor.diffuse",
+    "Actor.diffusealpha",
+    "Actor.effectperiod",
+    "Actor.linear",
+    "Actor.queuemessage",
+    "Actor.rainbow",
+    "Actor.rotationz",
+    "Actor.spin",
+    "Actor.visible",
+    "Actor.zoom",
+    "Actor.zoomto",
 ];
 
 struct CallLog;
@@ -695,7 +710,8 @@ return Def.ActorFrame{}
             GAMESTATE:SetCurrentSteps(0, steps[1])\n\
             assert(GAMESTATE:GetCurrentSteps(0) == steps[1])\n\
             return Def.ActorFrame {\n\
-            InitCommand=function(self) self:sleep(0.125):queuecommand('Done') end\n\
+            InitCommand=function(self) self:sleep(0.125):queuecommand('Done')\n\
+             self:linear(0.25):diffuse({0.25,0.5,0.75,1}):zoomto(320,240) end\n\
             }";
         fs::write(&entry, source).expect("trace control");
         let mut context = SongLuaCompileContext::new(&dir, "class dispatch trace");
@@ -750,6 +766,12 @@ return Def.ActorFrame{}
         assert_eq!(calls[0]["args"][0], 0.125);
         assert_eq!(calls[1]["operation"], "Actor.queuecommand");
         assert_eq!(calls[1]["args"][0], "Done");
+        let color = events.iter().find(|event| event["operation"] == "Actor.diffuse")
+            .expect("captured color mutation");
+        assert!(super::same_value(&color["args"], &serde_json::json!([[0.25, 0.5, 0.75, 1]])));
+        assert_eq!(color["line"], 9);
+        assert_eq!(color["phase"], "callback");
+        assert_eq!(color["tween_time_left"], 0.375);
         let construction: Vec<_> = events
             .iter()
             .filter(|event| event["phase"] == "construction")
