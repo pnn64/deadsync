@@ -1098,6 +1098,10 @@ end}
             empty_tree[field] = json!([]);
         }
         assert!(super::native_creation_order(&empty_tree).expect("empty native actor branch").is_empty());
+        empty_tree["runtime_actors"] = json!([{"id":"external-0001", "name":"PlayerP1"}]);
+        assert!(super::native_creation_order(&empty_tree).expect("screen actors are external to the song tree").is_empty());
+        empty_tree["runtime_actors"][0]["definition_id"] = json!("unknown");
+        assert!(super::native_creation_order(&empty_tree).is_err());
         for (path, value) in [
             ("/actor_creation_inputs/1/parent", json!("unknown")),
             ("/actor_creation_inputs/1/pointer_hex", json!("20")),
@@ -1324,7 +1328,8 @@ fn native_creation_order(trace: &Value) -> Result<Vec<(String, usize)>, String> 
     let definitions = trace["actor_definitions"].as_array().ok_or("missing native definitions")?;
     if roots.is_empty() && definitions.is_empty()
         && trace["actor_creation_inputs"].as_array().is_some_and(Vec::is_empty)
-        && trace["runtime_actors"].as_array().is_some_and(Vec::is_empty)
+        && trace["runtime_actors"].as_array().is_some_and(|actors|
+            actors.iter().all(|actor| actor["definition_id"].is_null()))
     {
         return Ok(Vec::new());
     }
