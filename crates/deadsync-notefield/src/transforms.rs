@@ -1551,7 +1551,7 @@ pub(crate) fn note_x_extra(
             .unwrap_or(0.0)
             .mul_add(params.invert, out);
     }
-    if (params.beat.is_finite() && params.beat != 0.0) {
+    if params.beat.is_finite() && params.beat != 0.0 {
         out += beat_wave_offset(y, beat_factor_value, params.beat, params.beat_period);
     }
     out += triangle_wave_offset(
@@ -1686,7 +1686,7 @@ pub(crate) fn note_x_offset_cached(
             .unwrap_or(0.0)
             .mul_add(params.invert, extra);
     }
-    if (params.beat.is_finite() && params.beat != 0.0) {
+    if params.beat.is_finite() && params.beat != 0.0 {
         extra += beat_wave_offset(y, beat_factor_value, params.beat, params.beat_period);
     }
     extra += triangle_wave_offset(
