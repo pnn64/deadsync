@@ -83,6 +83,633 @@
         }
       ],
       "report_sha256": "c194f2d6f41773f262a571ee9a364c559a33a663fbca54f043d629dec7944bfb"
+    },
+    {
+      "position": 150,
+      "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
+      "simfile_sha256": "162ebaf65a1a39818e74a10cea6f2e2a49b0af07b2dfce1224de0bd85395a9e5",
+      "retained_original_archive": "a1c144e3e344655e5b72c60889e209e5803c5d8be3dbc61183084c928295b35a.tar.zst",
+      "candidate": "/home/parity/jobs/chart-sweep-canonical-cloud99-v1/candidates/4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e.tar",
+      "capture_provenance": "/home/parity/jobs/native-creation-cloud99-capture-v1/proof.json",
+      "status": "pending",
+      "repair_attempts": 0,
+      "replay_exit": 2,
+      "replay_seconds": 653.1369056729964,
+      "candidate_sha256": "4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e",
+      "native_frames": 6623,
+      "replayed_frames": 6623,
+      "compared_stage_fields": 2233,
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.addy, Actor.basezoomx, Actor.basezoomy, Actor.blend, Actor.fadebottom, Actor.fadetop, Actor.horizalign, Actor.rotationx, Actor.rotationy, Actor.shadowlength, Actor.skewx, Actor.vertalign, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, GameState.GetSongPosition, PlayerOptions.FromString, Sprite.texcoordvelocity",
+        "native drawable state/resources: ActorProxy, BitmapText, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 22,
+      "concrete_failures": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0151",
+            "args": [
+              false
+            ],
+            "beat": 0.0005225837230682373,
+            "caller": {
+              "line": 177,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0134",
+            "detail": {
+              "native_tween_time_left": 10.87824535369873
+            },
+            "kind": "call",
+            "line": 177,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.5011791586875916,
+            "seq": 1300,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 10.87824535369873
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/lua/default.lua",
+            "line": 177,
+            "phase": "callback",
+            "beat": 0.0005225837230682373,
+            "seconds": 0.5011791586875916,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x5b036fc31070",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0143",
+            "args": [
+              15
+            ],
+            "beat": 484.0062255859375,
+            "caller": {
+              "line": 627,
+              "source": "song:/lua/goodies/mods.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0134",
+            "detail": {
+              "native_tween_time_left": 0.8978649973869324
+            },
+            "kind": "call",
+            "line": 627,
+            "operation": "Actor.rotationz",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 166.44598388671875,
+            "seq": 2612790,
+            "source": "song:/lua/goodies/mods.lua",
+            "tween_time_left": 0.8978649973869324
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.rotationz",
+            "source": "song:/lua/goodies/mods.lua",
+            "line": 627,
+            "phase": "callback",
+            "beat": 484.0062255859375,
+            "seconds": 166.44598388671875,
+            "args": [
+              15
+            ],
+            "results": [
+              {
+                "actor": "0x5b036f984920",
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ],
+            "tween_time_left": 0.9000000357627869
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0143",
+            "args": [
+              15
+            ],
+            "beat": 484.0506896972656,
+            "caller": {
+              "line": 627,
+              "source": "song:/lua/goodies/mods.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0134",
+            "detail": {
+              "native_tween_time_left": 0.88264399766922
+            },
+            "kind": "call",
+            "line": 627,
+            "operation": "Actor.rotationz",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 166.4612274169922,
+            "seq": 2613051,
+            "source": "song:/lua/goodies/mods.lua",
+            "tween_time_left": 0.88264399766922
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.rotationz",
+            "source": "song:/lua/goodies/mods.lua",
+            "line": 627,
+            "phase": "callback",
+            "beat": 484.0506896972656,
+            "seconds": 166.4612274169922,
+            "args": [
+              15
+            ],
+            "results": [
+              {
+                "actor": "0x5b036f984920",
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ],
+            "tween_time_left": 0.8847790360450745
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0143",
+            "args": [
+              15
+            ],
+            "beat": 484.0987243652344,
+            "caller": {
+              "line": 627,
+              "source": "song:/lua/goodies/mods.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0134",
+            "detail": {
+              "native_tween_time_left": 0.8661540150642395
+            },
+            "kind": "call",
+            "line": 627,
+            "operation": "Actor.rotationz",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 166.47769165039062,
+            "seq": 2613312,
+            "source": "song:/lua/goodies/mods.lua",
+            "tween_time_left": 0.8661540150642395
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.rotationz",
+            "source": "song:/lua/goodies/mods.lua",
+            "line": 627,
+            "phase": "callback",
+            "beat": 484.0987243652344,
+            "seconds": 166.47769165039062,
+            "args": [
+              15
+            ],
+            "results": [
+              {
+                "actor": "0x5b036f984920",
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ],
+            "tween_time_left": 0.8682889938354492
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0143",
+            "args": [
+              15
+            ],
+            "beat": 484.1488037109375,
+            "caller": {
+              "line": 627,
+              "source": "song:/lua/goodies/mods.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0134",
+            "detail": {
+              "native_tween_time_left": 0.8489810228347778
+            },
+            "kind": "call",
+            "line": 627,
+            "operation": "Actor.rotationz",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 166.49485778808594,
+            "seq": 2613572,
+            "source": "song:/lua/goodies/mods.lua",
+            "tween_time_left": 0.8489810228347778
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.rotationz",
+            "source": "song:/lua/goodies/mods.lua",
+            "line": 627,
+            "phase": "callback",
+            "beat": 484.1488037109375,
+            "seconds": 166.49485778808594,
+            "args": [
+              15
+            ],
+            "results": [
+              {
+                "actor": "0x5b036f984920",
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ],
+            "tween_time_left": 0.8511160016059875
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0143",
+            "args": [
+              15
+            ],
+            "beat": 484.197021484375,
+            "caller": {
+              "line": 627,
+              "source": "song:/lua/goodies/mods.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0134",
+            "detail": {
+              "native_tween_time_left": 0.8324289917945862
+            },
+            "kind": "call",
+            "line": 627,
+            "operation": "Actor.rotationz",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 166.5113983154297,
+            "seq": 2613832,
+            "source": "song:/lua/goodies/mods.lua",
+            "tween_time_left": 0.8324289917945862
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.rotationz",
+            "source": "song:/lua/goodies/mods.lua",
+            "line": 627,
+            "phase": "callback",
+            "beat": 484.197021484375,
+            "seconds": 166.5113983154297,
+            "args": [
+              15
+            ],
+            "results": [
+              {
+                "actor": "0x5b036f984920",
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ],
+            "tween_time_left": 0.8345640301704407
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0143",
+            "args": [
+              15
+            ],
+            "beat": 484.24505615234375,
+            "caller": {
+              "line": 627,
+              "source": "song:/lua/goodies/mods.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0134",
+            "detail": {
+              "native_tween_time_left": 0.8159869909286499
+            },
+            "kind": "call",
+            "line": 627,
+            "operation": "Actor.rotationz",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 166.52786254882812,
+            "seq": 2614092,
+            "source": "song:/lua/goodies/mods.lua",
+            "tween_time_left": 0.8159869909286499
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.rotationz",
+            "source": "song:/lua/goodies/mods.lua",
+            "line": 627,
+            "phase": "callback",
+            "beat": 484.24505615234375,
+            "seconds": 166.52786254882812,
+            "args": [
+              15
+            ],
+            "results": [
+              {
+                "actor": "0x5b036f984920",
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ],
+            "tween_time_left": 0.8181220293045044
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0143",
+            "args": [
+              15
+            ],
+            "beat": 484.2934265136719,
+            "caller": {
+              "line": 627,
+              "source": "song:/lua/goodies/mods.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0134",
+            "detail": {
+              "native_tween_time_left": 0.7993990182876587
+            },
+            "kind": "call",
+            "line": 627,
+            "operation": "Actor.rotationz",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 166.54444885253906,
+            "seq": 2614352,
+            "source": "song:/lua/goodies/mods.lua",
+            "tween_time_left": 0.7993990182876587
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.rotationz",
+            "source": "song:/lua/goodies/mods.lua",
+            "line": 627,
+            "phase": "callback",
+            "beat": 484.2934265136719,
+            "seconds": 166.54444885253906,
+            "args": [
+              15
+            ],
+            "results": [
+              {
+                "actor": "0x5b036f984920",
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ],
+            "tween_time_left": 0.8015339970588684
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0143",
+            "args": [
+              15
+            ],
+            "beat": 484.3443298339844,
+            "caller": {
+              "line": 627,
+              "source": "song:/lua/goodies/mods.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0134",
+            "detail": {
+              "native_tween_time_left": 0.7819310426712036
+            },
+            "kind": "call",
+            "line": 627,
+            "operation": "Actor.rotationz",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 166.56190490722656,
+            "seq": 2614612,
+            "source": "song:/lua/goodies/mods.lua",
+            "tween_time_left": 0.7819310426712036
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.rotationz",
+            "source": "song:/lua/goodies/mods.lua",
+            "line": 627,
+            "phase": "callback",
+            "beat": 484.3443298339844,
+            "seconds": 166.56190490722656,
+            "args": [
+              15
+            ],
+            "results": [
+              {
+                "actor": "0x5b036f984920",
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ],
+            "tween_time_left": 0.7840660214424133
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0143",
+            "args": [
+              15
+            ],
+            "beat": 484.39044189453125,
+            "caller": {
+              "line": 627,
+              "source": "song:/lua/goodies/mods.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0134",
+            "detail": {
+              "native_tween_time_left": 0.7661570310592651
+            },
+            "kind": "call",
+            "line": 627,
+            "operation": "Actor.rotationz",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 166.5777130126953,
+            "seq": 2614872,
+            "source": "song:/lua/goodies/mods.lua",
+            "tween_time_left": 0.7661570310592651
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.rotationz",
+            "source": "song:/lua/goodies/mods.lua",
+            "line": 627,
+            "phase": "callback",
+            "beat": 484.39044189453125,
+            "seconds": 166.5777130126953,
+            "args": [
+              15
+            ],
+            "results": [
+              {
+                "actor": "0x5b036f984920",
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ],
+            "tween_time_left": 0.7682920098304749
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0143",
+            "args": [
+              15
+            ],
+            "beat": 484.4413757324219,
+            "caller": {
+              "line": 627,
+              "source": "song:/lua/goodies/mods.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0134",
+            "detail": {
+              "native_tween_time_left": 0.7486900091171265
+            },
+            "kind": "call",
+            "line": 627,
+            "operation": "Actor.rotationz",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 166.5951690673828,
+            "seq": 2615132,
+            "source": "song:/lua/goodies/mods.lua",
+            "tween_time_left": 0.7486900091171265
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.rotationz",
+            "source": "song:/lua/goodies/mods.lua",
+            "line": 627,
+            "phase": "callback",
+            "beat": 484.4413757324219,
+            "seconds": 166.5951690673828,
+            "args": [
+              15
+            ],
+            "results": [
+              {
+                "actor": "0x5b036f984920",
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ],
+            "tween_time_left": 0.7508249878883362
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0143",
+            "args": [
+              15
+            ],
+            "beat": 484.4881896972656,
+            "caller": {
+              "line": 627,
+              "source": "song:/lua/goodies/mods.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0134",
+            "detail": {
+              "native_tween_time_left": 0.7326120138168335
+            },
+            "kind": "call",
+            "line": 627,
+            "operation": "Actor.rotationz",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 166.61122131347656,
+            "seq": 2615392,
+            "source": "song:/lua/goodies/mods.lua",
+            "tween_time_left": 0.7326120138168335
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.rotationz",
+            "source": "song:/lua/goodies/mods.lua",
+            "line": 627,
+            "phase": "callback",
+            "beat": 484.4881896972656,
+            "seconds": 166.61122131347656,
+            "args": [
+              15
+            ],
+            "results": [
+              {
+                "actor": "0x5b036f984920",
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ],
+            "tween_time_left": 0.7347469925880432
+          }
+        }
+      ],
+      "report_sha256": "c9b7c040bb133c422b0260bc46f1a65b19cdb4f58ebb90f92cd287c3700757e7"
     }
   ],
   "historical_pending": [
@@ -109,6 +736,6 @@
   "binary_sha256": "d515e94becf9b644c522e453045a5f07d1e149cc18765469d78b2384164539ad",
   "harness_sha256": "41bfe13b815a4a9695c2271e375611ff2e0efc017c4c4bc1ee304cb89bf69a54",
   "passed_fixtures": 0,
-  "pending_charts": 1,
-  "processed_charts": 1
+  "pending_charts": 2,
+  "processed_charts": 2
 }
