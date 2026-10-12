@@ -622,6 +622,25 @@
         }
       ],
       "report_sha256": "1d8797147030d800d5ece3b318b517f7942e60fae62e57636ed1624f7c6695bb"
+    },
+    {
+      "position": 174,
+      "source_simfile": "Dimmadome/doug dimmadome owner of the dimmsdale dimmadome.sm",
+      "simfile_sha256": "e7ad12886de72b1939cb18e6dd586a14d0807977dd428abe5b0347be6b5dcf41",
+      "retained_original_archive": "78564c9fc07f54a159cd15ca60bbe4bff2f0ced3c2971e3ec41dc4dfbfd6665a.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "3888b1e92b5612b70edc19e66d3cf040cfd5169a6dd5f61bc2a0eeeead4acbd3",
+      "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+      "fix_commit": "375a96e85 / harness 55299c5",
+      "build_proof": "/home/parity/jobs/background-activation-build-v1/proof.json",
+      "capture_seconds": 108.30017283299821,
+      "trace_sha256": "44e4f43cee8153b224bdf33115637ce17ec4971b4d7fbf173ef0bd0e6a0bdaf4",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-174/candidates/101cf4a646457f7c223db429bcd866899bd66cb5b1e45ddc224228ea008f560c.tar",
+      "replay_exit": 1,
+      "replay_seconds": 3.6358167580037843,
+      "candidate_sha256": "101cf4a646457f7c223db429bcd866899bd66cb5b1e45ddc224228ea008f560c",
+      "failure": "[1.5s] replaying every native gameplay frame\n\nthread 'main' (443887) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "scope": {
@@ -632,8 +651,8 @@
     "assigned_source_count": 112
   },
   "binary_sha256": "3888b1e92b5612b70edc19e66d3cf040cfd5169a6dd5f61bc2a0eeeead4acbd3",
-  "harness_sha256": "3e0cf8070a5f3649b297c03d6ecbf113187ed1db3870262b77aa2ba08670981f",
+  "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
   "passed_fixtures": 0,
-  "pending_charts": 2,
-  "processed_charts": 2
+  "pending_charts": 3,
+  "processed_charts": 3
 }
