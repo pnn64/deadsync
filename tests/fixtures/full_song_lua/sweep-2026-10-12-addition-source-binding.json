@@ -1,0 +1,17 @@
+{
+  "source_folder": "C:\\GitHub\\rework\\lua-songs\\RUNWAY",
+  "relative_folder": "RUNWAY",
+  "files": {
+    "RUNWAY-bg.png": "2a8464ca4c81d54af7990089fdf0c8da5f26a6f376c934eebd763b3372d21a37",
+    "RUNWAY-bn.png": "3260234f2e3a7e29484059441a4970bbc88a79312134ac1da383d5dbdd3b52f7",
+    "RUNWAY.ogg": "38476479394aca01ae84a716524ff75e9b093ecbb92ae73bf57b5164bcf9214f",
+    "RUNWAY.ssc": "40a9d09863a0ed9f75ca14c8ea71aea61705988b96a0334ca33127dd22b8bcf8",
+    "bg/default.lua": "694d3b1c6f56f504f2ff57c94f924b44cc44e22903b0253c16a8b326d5dba727",
+    "lua/default.lua": "3ac6cabe5c6e72ab8995b822c0e9ec7baa304e9006b250f49dee5e2bb6ce26ee",
+    "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+    "lua/modhelpers.lua": "3cfa9489d4ff586f21a7d28fa6accbdb7a2c4891e2a6617fc310c5aef850a1ff",
+    "lua/mods.lua": "95c4fa4ae31002e4d8cd4d2d838eb174fff6a8932ccc404267c9f3bc33cbec5e",
+    "lua/sparkle.png": "c84371646a375619936e89a32f9e3c9b1aa588a930b7fcab7f13b9d337db7a5d",
+    "lua/TopscreenActorList.txt": "5564883965ab6acd9091092eeec350bfa03fb7ebf5249910b2f0d54e31cb77e7"
+  }
+}

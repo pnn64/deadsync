@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-12T21:46:15Z",
+  "updated_utc": "2026-10-12T21:56:55Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -1420,8 +1420,8 @@
       "source_simfile": "Cuphead [TaroNuke]/botanic.sm",
       "simfile_sha256": "6d4f35389c80992011e7b143c5959d32fb5887dfc189975153fbab4885aacd96",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-foreground-ownership-repairs.json"
     },
     {
       "position": 158,
