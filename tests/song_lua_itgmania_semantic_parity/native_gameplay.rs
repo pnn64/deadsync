@@ -1384,7 +1384,7 @@ pub(crate) fn replay(
             let actual = json!({"possible":score.possible_grade_points, "current_possible":player.current_possible_points,
                 "actual":player.earned_grade_points, "misses":player.judgment_counts[5],
                 "w1":player.judgment_counts[0], "w2":player.judgment_counts[1],
-                "failed":player.fail_time.is_some(), "life_latest":player.life,
+                "failed":player.stage_failed || player.fail_time.is_some(), "life_latest":player.life,
                 "difficulty":format!("Difficulty_{}", metadata.difficulty),
                 "description":metadata.description, "meter":metadata.meter});
             let native = &sample["players"][0];

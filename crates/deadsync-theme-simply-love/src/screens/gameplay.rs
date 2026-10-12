@@ -970,6 +970,8 @@ impl State {
             && self.song_lua_out.is_none()
         {
             self.gameplay.progress.stage.song_completed_naturally = true;
+            let count = self.gameplay.num_players().min(MAX_PLAYERS);
+            fail_autoplay_players(&mut self.gameplay.players_runtime.players[..count]);
             self.song_lua_out = Some(SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY });
         }
         if matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen)) if screen == "ScreenGameplay") {
@@ -2599,6 +2601,14 @@ impl SongLuaOut {
     }
 }
 
+fn fail_autoplay_players(players: &mut [deadsync_gameplay::PlayerRuntime]) {
+    // Simply Love's FailOnHoldStart.lua remembers JudgmentMessage autoplay
+    // use per player, then calls FailPlayer on Off without draining life.
+    for player in players {
+        player.stage_failed |= player.autoplay_judged;
+    }
+}
+
 /// Advances deterministic gameplay using the shell-prepared audio snapshot.
 /// Runtime audio commands remain queued until the shell executes them.
 pub fn update(
@@ -2610,6 +2620,11 @@ pub fn update(
 ) {
     if state.song_lua_ended { return; }
     let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);
+    if matches!(action, GameplayAction::Navigate(GameplayExit::Complete)
+        | GameplayAction::NavigateNoFade(GameplayExit::Complete)) {
+        let count = state.gameplay.num_players().min(MAX_PLAYERS);
+        fail_autoplay_players(&mut state.gameplay.players_runtime.players[..count]);
+    }
     if let Err(error) = state.advance_song_lua(delta_time, effects) {
         state.song_lua_output.errors.push(error);
     }
@@ -2833,6 +2848,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeE
         return;
     }
     let action = handle_core_input(state, ev);
+    if matches!(action, GameplayAction::Navigate(GameplayExit::Complete)
+        | GameplayAction::NavigateNoFade(GameplayExit::Complete)) {
+        let count = state.gameplay.num_players().min(MAX_PLAYERS);
+        fail_autoplay_players(&mut state.gameplay.players_runtime.players[..count]);
+    }
     map_gameplay_action(action).append_to(effects);
 }
 
@@ -5801,6 +5821,27 @@ fn draw_smx_mini_pad(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn autoplay_off_failure_preserves_life_and_player_identity() {
+        let mut players = std::array::from_fn::<_, 2, _>(|_| deadsync_gameplay::init_player_runtime());
+        players[0].autoplay_judged = true;
+        super::fail_autoplay_players(&mut players);
+        assert!(players[0].stage_failed);
+        assert!(!players[1].stage_failed);
+        for player in &players {
+            assert_eq!(player.life, 0.5);
+            assert!(!player.is_failing);
+            assert_eq!(player.fail_time, None);
+        }
+        players[1].autoplay_judged = true;
+        super::fail_autoplay_players(&mut players[..1]);
+        assert!(!players[1].stage_failed, "disabled players do not receive Off");
+        players[0].autoplay_judged = false;
+        super::fail_autoplay_players(&mut players);
+        assert!(players[0].stage_failed, "an existing stage failure stays failed");
+        assert!(players[1].stage_failed);
+    }
+
     #[test]
     fn song_lua_out_native_clocks() {
         let native: serde_json::Value = serde_json::from_str(include_str!(concat!(

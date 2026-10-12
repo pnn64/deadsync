@@ -1778,6 +1778,53 @@ mod runtime_regression_tests {
         assert!(state.progress.stage.autoplay_used);
     }
 
+    #[test]
+    fn autoplay_judgment_tracks_player_and_survives_controller_changes() {
+        let mut state = regression_state_with_segments(TimingSegments {
+            bpms: vec![(0.0, 60.0)], ..TimingSegments::default()
+        }, 96);
+        assert!(!state.players_runtime.players[0].autoplay_judged);
+        state.set_live_autoplay_enabled(true);
+        assert!(!state.players_runtime.players[0].autoplay_judged, "controller selection is not a judgment");
+        let note_time = state.chart_runtime.note_time_cache_ns[0];
+        state.set_song_position_for_test(1.0, note_time, 1.0, 1.0);
+        state.run_autoplay(note_time - 1);
+        assert!(!state.players_runtime.players[0].autoplay_judged, "the note is still in the future");
+        state.run_autoplay(note_time);
+        state.update_judged_rows();
+        assert!(state.players_runtime.players[0].autoplay_judged);
+        assert!(!state.players_runtime.players[1].autoplay_judged);
+        state.set_live_autoplay_enabled(false);
+        state.set_last_mine_judgment(1, 4, MineResult::Avoided);
+        assert!(state.players_runtime.players[0].autoplay_judged);
+        assert!(!state.players_runtime.players[1].autoplay_judged);
+    }
+
+    #[test]
+    fn replay_judgments_do_not_use_autoplay_controller() {
+        let mut state = regression_state();
+        state.progress.stage.autoplay_enabled = true;
+        state.progress.replay.mode = true;
+        state.set_last_mine_judgment(0, 0, MineResult::Hit);
+        assert!(!state.players_runtime.players[0].autoplay_judged);
+    }
+
+    #[test]
+    fn stage_failure_keeps_healthy_life_and_blocks_score() {
+        let mut state = regression_state();
+        state.players_runtime.players[0].stage_failed = true;
+        for include in [false, true] {
+            state.setup.include_post_fail_passes = include;
+            assert!(state.player_score_is_blocked(0));
+            assert!(!state.player_is_dead(0));
+            assert_eq!(player_health_state(&state.players_runtime.players[0]), HealthState::Alive);
+            assert!(state.individual_song_outcome(0).is_failing);
+            assert_eq!(state.individual_song_outcome(0).life, 0.5);
+            assert_eq!(state.individual_song_outcome(0).fail_time, None);
+            assert!(state.all_joined_players_failed());
+        }
+    }
+
     fn set_state_timing(state: &mut State, timing: Arc<TimingData>) {
         state.timing_runtime.timing = Arc::clone(&timing);
         state.timing_runtime.timing_players[0] = Arc::clone(&timing);

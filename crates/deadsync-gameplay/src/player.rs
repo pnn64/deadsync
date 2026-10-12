@@ -87,6 +87,10 @@ pub struct PlayerRuntime {
     pub is_failing: bool,
     pub fail_type: crate::GameplayFailType,
     pub fail_time: Option<f32>,
+    /// PlayerStageStats::FailPlayer sets this without changing the life meter.
+    pub stage_failed: bool,
+    /// A judgment was emitted while this player used the autoplay controller.
+    pub autoplay_judged: bool,
     pub calories_burned: f32,
 
     pub earned_grade_points: i32,
@@ -245,6 +249,8 @@ pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
         is_failing: false,
         fail_type: crate::GameplayFailType::default(),
         fail_time: None,
+        stage_failed: false,
+        autoplay_judged: false,
         calories_burned: 0.0,
         earned_grade_points: 0,
         current_possible_points: 0,

@@ -244,7 +244,8 @@ pub fn all_joined_player_runtimes_failed(
     num_players: usize,
 ) -> bool {
     let count = num_players.min(MAX_PLAYERS);
-    count > 0 && players.iter().take(count).all(player_runtime_is_dead)
+    count > 0 && players.iter().take(count)
+        .all(|player| player.stage_failed || player_runtime_is_dead(player))
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -276,7 +277,7 @@ pub fn individual_song_outcome(
         });
     IndividualSongOutcome {
         song_completed_naturally,
-        is_failing,
+        is_failing: is_failing || player.stage_failed,
         life,
         fail_time,
     }

@@ -542,6 +542,7 @@ where
             apply_hold_let_go_player_state(&mut player_state, update.stats_update, scoring_blocked);
         apply_hold_resolution_player_state(&mut self.players_runtime.players[player], player_state);
         if update.effects.show_judgment {
+            self.mark_autoplay_judged(player);
             self.display.hold_feedback.set_hold_judgment(
                 column,
                 Some(hold_judgment_render_info(
@@ -633,6 +634,7 @@ where
             self.trigger_hold_explosion(column);
         }
         if update.effects.show_judgment {
+            self.mark_autoplay_judged(player);
             self.display.hold_feedback.set_hold_judgment(
                 column,
                 Some(hold_judgment_render_info(
@@ -645,6 +647,7 @@ where
 
     fn handle_hold_missed(&mut self, column: usize, note_index: usize) {
         let player = self.player_for_col(column);
+        self.mark_autoplay_judged(player);
         let stats_update = hold_result_stats_update(
             self.chart_runtime.notes[note_index].note_type,
             HoldResult::Missed,

@@ -400,6 +400,7 @@ where
 
     #[inline(always)]
     pub const fn set_last_judgment(&mut self, player_idx: usize, judgment: Judgment) {
+        self.mark_autoplay_judged(player_idx);
         set_player_last_judgment(
             &mut self.players_runtime.players[player_idx],
             judgment,
@@ -414,6 +415,7 @@ where
         column: usize,
         result: MineResult,
     ) {
+        self.mark_autoplay_judged(player_idx);
         set_player_last_mine_judgment(
             &mut self.players_runtime.players[player_idx],
             result,
@@ -1887,7 +1889,8 @@ where
 
     #[inline(always)]
     pub const fn player_score_is_blocked(&self, player: usize) -> bool {
-        self.player_is_dead(player) && !self.setup.include_post_fail_passes
+        self.players_runtime.players[player].stage_failed
+            || (self.player_is_dead(player) && !self.setup.include_post_fail_passes)
     }
 
     #[inline(always)]
@@ -2962,6 +2965,12 @@ where
     #[inline(always)]
     pub const fn mark_autoplay_used(&mut self) {
         self.progress.stage.autoplay_used = true;
+    }
+
+    pub const fn mark_autoplay_judged(&mut self, player: usize) {
+        if self.live_autoplay_enabled() {
+            self.players_runtime.players[player].autoplay_judged = true;
+        }
     }
 
     #[inline(always)]

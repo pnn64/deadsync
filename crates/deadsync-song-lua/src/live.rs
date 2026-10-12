@@ -293,7 +293,7 @@ impl SongLuaLivePlayer {
         Self {
             possible_points, actual_points: player.earned_grade_points,
             current_possible_points: player.current_possible_points,
-            life: player.life, failed: player.fail_time.is_some(),
+            life: player.life, failed: player.stage_failed || player.fail_time.is_some(),
             combo: player.combo, miss_combo: player.miss_combo,
             tap_scores: [0, player.mines_hit, player.mines_avoided, player.checkpoints_missed,
                 miss, w5, w4, w3, w2, w1, player.checkpoints_hit],
@@ -651,6 +651,19 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn stage_failure_is_visible_without_life_failure() {
+        let mut player = deadsync_gameplay::init_player_runtime();
+        assert!(!super::SongLuaLivePlayer::from_player(&player, 100).failed);
+        player.stage_failed = true;
+        let frame = super::SongLuaLivePlayer::from_player(&player, 100);
+        assert!(frame.failed);
+        assert_eq!(frame.life, 0.5);
+        assert_eq!(frame.actual_points, 0);
+        assert_eq!(player.fail_time, None);
+        assert!(!player.is_failing);
+    }
+
     use super::*;
     use std::{fs, path::Path, sync::Arc};
     use crate::{SongLuaDifficulty, SongLuaNoteskinResolver, SongLuaOverlayActor, SongLuaOverlayKind};

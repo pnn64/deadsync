@@ -1,0 +1,77 @@
+{
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "position": 147,
+  "source_simfile": "chronic latecomer/chronic latecomer.ssc",
+  "deadsync_parent_commit": "914b069472e5f96298e8b11981cf36f6fb27eb3a",
+  "harness_commit": "c77fd11aa12b2ee1eb50b6dac8b2764f7bfd9e69",
+  "tested_source_sha256": {
+    "crates/deadsync-gameplay/src/life.rs": "18ff69beeb585cd70158bd43ff63563fbed873853f7ecead123cb8313cac1400",
+    "crates/deadsync-gameplay/src/player.rs": "ca00d7bb9b535bee6e429a9b1ad1da85873974d8d8eaa4133e2c2d44975c8603",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "1eb8031588cc6867c9b6239f5b97a02ffa7fa293e4ba2139bff794233eb858e6",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "61a3012784502796acc19574bc81530b4002674b5c764539ebfa1d61faccc43b",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "5045b8dcbc519d1114456698744773c131ac88ca14c61e0166311e2b6ada7974",
+    "crates/deadsync-song-lua/src/live.rs": "d2ceca58d932b461f590158dc96a9c192ec0dc0c104c7fb83c9659b70be22f22",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "2f93f75d6392dc2014f6d84c382d58cbf65f95fc7692be2c3df61467c811e925",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "059ffe75d909248001022af8390342f06ea2fe3aa8d273c001c8490883b72385"
+  },
+  "references": {
+    "itgmania/src/Player.cpp": "fb9fbc6ead8073b26cc8ff9097068ed2c33b8d8c2bea58b43eb61e0384ae1935",
+    "itgmania/src/PlayerStageStats.cpp": "e067b3bba22adc5d016e32fd6384393d2a03d9a1bbbd2b8fe36216b03b4e7497",
+    "itgmania/src/ScreenGameplay.cpp": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+    "simply-love/BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua": "ffcd8705267aa7f299ce65970810d74de1db24c821c8a21baa6b9a547d70a269",
+    "simply-love/Scripts/SL-Helpers.lua": "3896aa23cbb8dfe07372566053adc7eb961f3b1bb1d076ddbd8757b13d0c45cf"
+  },
+  "behavior": [
+    "JudgmentMessage remembers the autoplay controller per player; selecting a controller alone does not mark use",
+    "Simply Love OffCommand fails players who received autoplay judgments",
+    "PlayerStageStats::FailPlayer sets the stage flag without changing life, health, or the life-failure timestamp",
+    "Lua stage observations and evaluation expose the stage flag; subsequent scoring is blocked",
+    "Replay uses the human controller and does not set the autoplay judgment marker"
+  ],
+  "controls": [
+    {
+      "receipt": "save\\song-lua-validation\\pass188\\top147-stage-failure-gameplay-v5.json",
+      "sha256": "ed1e4bc6c19c5307272af6945dec5160822d3f8cc917086a0abbf97793b21c50",
+      "results": [
+        "test result: ok. 812 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.36s"
+      ],
+      "log_sha256": "6771cb985cd71bc19c4a97b89f39742a5f461bca2678c941729a94d54655300e"
+    },
+    {
+      "receipt": "save\\song-lua-validation\\pass188\\top147-stage-failure-theme-v1.json",
+      "sha256": "5ab6045dc3810bfcf7f7070be527818dc67d460c037f964fb5a0c59fe4f40395",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1451 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "28d76f8e7a83e5901c251c1f2a23b6403b346794861e7e8448452d1aeef66db3"
+    },
+    {
+      "receipt": "save\\song-lua-validation\\pass188\\top147-stage-failure-live-v1.json",
+      "sha256": "6b953bb407a1bb675d2ee34e137cc7da0bd83cbe0ebb1b6c2eced4bb0cb668bd",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 538 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "0682d67336b06da3567df62dc49bd7c30beecfd52a2f8e6f74dd7ba625cb581e"
+    },
+    {
+      "receipt": "save\\song-lua-validation\\pass188\\top147-stage-failure-comparison-v1.json",
+      "sha256": "8e37ecf7badd75bbdb8cf967ca5daa0e48b6f4c8e162ccb850162d620a97f257",
+      "results": [
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 301 filtered out; finished in 0.15s"
+      ],
+      "log_sha256": "5db167e24be378c4ced71acc900a71133d98458b028d0ee033f01923aee6925f"
+    }
+  ],
+  "archive_accepted": false,
+  "canonical_position_accepted": false,
+  "remaining": [
+    "Complete replay against the corrected native capture remains pending",
+    "Original and historical corpus, other controller/style/course contexts, render and production activation gates remain active"
+  ]
+}
