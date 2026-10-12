@@ -1,0 +1,55 @@
+{
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/compile.rs": "8487ce5ba816ab8a66efe832897e39ad570a49d4920e4dc89daae2c63ac3a794",
+    "crates/deadsync-song-lua/src/live.rs": "a5da0bae526a2686837405f6c9db4853d4a7ccc2ad06f410aa9d7a88a0a3c611",
+    "crates/deadsync-song-lua/src/host.rs": "e5e630ab5f0fb72ba216b327966546f73af1139c455cd94ce12ae7c398878317",
+    "crates/deadsync-song-lua/src/song_tables.rs": "02d203c4b42e1835aad0b60b7f8742de6857d224cba03d70e3d7061985ce5af7",
+    "crates/deadsync-song-lua/src/lua_util.rs": "f3df0e808ea22fd7a91e922043e5e229a903b2a46d7ac01840731c76dd1a87a5",
+    "crates/deadsync-song-lua/src/lib.rs": "83ec36f202189d2e5544288f3fed4cb998b7370eb8fab2e69523893679228ffa",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "bc0ff8226bc708d8676848224391f390ab2967885174ec58135111c0a8d48cbf"
+  },
+  "checks": [
+    {
+      "label": "stage-test",
+      "exit_code": 0,
+      "seconds": 123.65458081100223,
+      "results": [
+        "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 529 filtered out; finished in 0.37s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 166.9285080020054,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 0.9989225199969951,
+      "results": [
+        "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.22s"
+      ]
+    }
+  ],
+  "binary": "/home/parity/jobs/background-activation-build-v1/full-song-lua-stage-modifier-v1",
+  "binary_sha256": "3888b1e92b5612b70edc19e66d3cf040cfd5169a6dd5f61bc2a0eeeead4acbd3",
+  "fix_commit": "375a96e852c385421b98781912ebe21cac0a78d1",
+  "concrete_failure": {
+    "source_simfile": "RUNWAY/RUNWAY.ssc",
+    "native_frames": 55467,
+    "initial_mismatch_count": 6,
+    "first_native_background_on_seconds": 0.008480725809931755,
+    "first_deadsync_background_on_seconds": 0.0
+  },
+  "local_reference": "../itgmania-harness/vendor/itgmania/src/Background.cpp:749,768,849-872",
+  "behavior": "Defer background On until its authored BGCHANGE beat; update with music elapsed since activation, then frame-to-frame music delta",
+  "windows_validation": "live_background_starts_at_change_beat: 1 passed, 0 failed",
+  "capture_reuse": {
+    "candidate_sha256": "0325753a6e5e9df1a6b44323c94b52a7221ff60b5af457bca5b1a5d5579a074d",
+    "source_simfile": "RUNWAY/RUNWAY.ssc",
+    "repair_attempt": 1,
+    "worker": "/home/parity/jobs/background-activation-repair-v1"
+  },
+  "acceptance": "Existing complete full_song_lua replay comparisons; coverage recorded separately"
+}

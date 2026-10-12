@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-12T22:12:54Z",
+  "updated_utc": "2026-10-12T22:23:35Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -11,9 +11,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 153,
+    "passed": 154,
     "pending": 10,
-    "unprocessed": 338
+    "unprocessed": 337
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1475,7 +1475,9 @@
       "position": 164,
       "source_simfile": "Data Loss/Data_Loss.ssc",
       "simfile_sha256": "821c71d7e8dfdc095816ae0abaaff393ef5d63f66045f7f3887561b51b23986f",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 165,
