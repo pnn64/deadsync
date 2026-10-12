@@ -817,6 +817,21 @@
       "capture_exit": 1,
       "capture_seconds": 138.93029540599673,
       "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-138502-1791837397902414281-0\n"
+    },
+    {
+      "position": 156,
+      "source_simfile": "crew -All Hands on the Deck-/crew.ssc",
+      "simfile_sha256": "e77f9e073ded8b35b1ba0f8e1a150a6fb1e8a6091c049210486ac800519d02a3",
+      "retained_original_archive": "d010be3d80f1e59b9f97a71b85264d0281752693da62f83ca4242caac39d18fa.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "capture_seconds": 141.1147534289994,
+      "trace_sha256": "1b6fa27058332bd67741c9332a36a2179dafb2ce400c02f70eaae1abe0135aeb",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-156/candidates/e4f11bf99138ca805fe15004ef6d729d22477f0fc35602e67736e8901269c4de.tar",
+      "replay_exit": 1,
+      "replay_seconds": 1.331744814000558,
+      "candidate_sha256": "e4f11bf99138ca805fe15004ef6d729d22477f0fc35602e67736e8901269c4de",
+      "failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (140633) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native subscriber ownership needs a single observed root\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "historical_pending": [
@@ -843,6 +858,6 @@
   "binary_sha256": "d515e94becf9b644c522e453045a5f07d1e149cc18765469d78b2384164539ad",
   "harness_sha256": "41bfe13b815a4a9695c2271e375611ff2e0efc017c4c4bc1ee304cb89bf69a54",
   "passed_fixtures": 0,
-  "pending_charts": 7,
-  "processed_charts": 7
+  "pending_charts": 8,
+  "processed_charts": 8
 }
