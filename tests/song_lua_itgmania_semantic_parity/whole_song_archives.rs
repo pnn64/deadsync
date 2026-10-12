@@ -1146,7 +1146,7 @@ fn archive_reference_rejects_obsolete_replays() {
     assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
 }
 
-const USAGE: &str = "Run one complete fixture:\n  cargo test --test full_song_lua <archive.tar.zst>\n\nCheck a native capture candidate before compression:\n  cargo test --test full_song_lua -- --archive <path.tar> --report <report.json> [--entry]\n\nCompressed candidates also accept .tar.zst.\n\nList fixtures:\n  cargo test --test full_song_lua -- --list\n\nRun the complete corpus:\n  cargo test --test full_song_lua -- --all\n\nThe positional selector accepts a filename, SHA-256 prefix, or song title.\nNo selector prints this help; normal cargo test does not run the expensive corpus.";
+const USAGE: &str = "Run one complete fixture:\n  cargo test --test full_song_lua <archive.tar.zst>\n\nCheck a native capture candidate before compression:\n  cargo test --test full_song_lua -- --archive <path.tar> --report <report.json> [--entry|--first-query|--through-second SECONDS]\n\nDiagnostic cutoffs preserve all preceding frames and cannot accept an archive.\n\nCompressed candidates also accept .tar.zst.\n\nList fixtures:\n  cargo test --test full_song_lua -- --list\n\nRun the complete corpus:\n  cargo test --test full_song_lua -- --all\n\nThe positional selector accepts a filename, SHA-256 prefix, or song title.\nNo selector prints this help; normal cargo test does not run the expensive corpus.";
 
 fn select_archive<'a>(
     index: &'a ArchiveIndex,
@@ -1217,14 +1217,26 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
     }
     // Capture candidates can be checked without publishing them in the fixture store.
     if args.first().is_some_and(|arg| arg == "--archive") {
-        if !(args.len() == 4 || args.len() == 5 && matches!(args[4].as_str(), "--entry" | "--first-query")) || args[2] != "--report" {
-            eprintln!("expected --archive <path.tar|path.tar.zst> --report <report.json> [--entry|--first-query]");
+        if !(args.len() == 4 || args.len() == 5 && matches!(args[4].as_str(), "--entry" | "--first-query")
+            || args.len() == 6 && args[4] == "--through-second") || args[2] != "--report" {
+            eprintln!("expected --archive <path.tar|path.tar.zst> --report <report.json> [--entry|--first-query|--through-second SECONDS]");
             return ExitCode::FAILURE;
         }
         let path = Path::new(&args[1]);
         let scope = match args.get(4).map(String::as_str) {
             Some("--entry") => native_gameplay::Scope::Entry,
             Some("--first-query") => native_gameplay::Scope::FirstQuery,
+            Some("--through-second") => {
+                let Ok(at) = args[5].parse::<f64>() else {
+                    eprintln!("diagnostic replay cutoff must be a number");
+                    return std::process::ExitCode::from(1);
+                };
+                if !at.is_finite() || at < 0.0 {
+                    eprintln!("diagnostic replay cutoff must be finite and nonnegative");
+                    return std::process::ExitCode::from(1);
+                }
+                native_gameplay::Scope::ThroughSecond(at)
+            },
             _ => native_gameplay::Scope::Full,
         };
         let outcome = std::panic::catch_unwind(|| {
@@ -1445,6 +1457,7 @@ fn replay_native_archive(
         native_gameplay::Scope::Entry => "replaying native entry and reload",
         native_gameplay::Scope::FirstQuery => "replaying through the first native point query",
         native_gameplay::Scope::Full => "replaying every native gameplay frame",
+        native_gameplay::Scope::ThroughSecond(_) => "replaying native frames through the diagnostic cutoff",
     });
     let mut report = native_gameplay::replay(&trace, &trace_path, &archive.root.join(&archive.manifest.chart.simfile),
         scope, |frame, frames| {

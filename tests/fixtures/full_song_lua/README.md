@@ -19,6 +19,13 @@ This uses the same member hashes, native replay, and completeness gates as a
 to compress the exact tested bytes. Keep uncompressed candidates outside this
 published fixture directory and out of Git.
 
+To diagnose an early native mismatch, add `--through-second SECONDS` to the
+candidate command. This replays every captured input through the first frame
+at or beyond that music time. The complete archive must still validate;
+partial replay reports retain the full-song coverage gap and cannot authorize
+packing or accepting a fixture. `--entry` and `--first-query` select other
+diagnostic prefixes.
+
 No environment variables or extra test flags are needed. Archive filenames,
 SHA-256 prefixes, and unambiguous song titles work. A missing or ambiguous
 selector fails instead of silently running no tests. Historical filenames

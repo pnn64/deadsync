@@ -920,14 +920,20 @@ end}
         use serde_json::json;
         let trace = json!({"capabilities":{"native_call_sources":true,"native_constructor_queries":true},
             "events":[],"actor_definitions":[{"class":"Sprite"}]});
-        let value = coverage(&trace, Scope::FirstQuery, &json!({"compared":true}), 3, 10);
-        assert_eq!(
-            value["pending"],
-            json!([
-                "complete song frame replay",
-                "native drawable state/resources: Sprite"
-            ])
-        );
+        for (scope, replayed) in [
+            (Scope::FirstQuery, 3),
+            (Scope::ThroughSecond(0.5), 3),
+            (Scope::ThroughSecond(1.0), 10),
+        ] {
+            let value = coverage(&trace, scope, &json!({"compared":true}), replayed, 10);
+            assert_eq!(
+                value["pending"],
+                json!([
+                    "complete song frame replay",
+                    "native drawable state/resources: Sprite"
+                ])
+            );
+        }
         assert_eq!(
             coverage(&trace, Scope::Full, &json!({"compared":false}), 10, 10)["pending"],
             json!([
@@ -1070,11 +1076,12 @@ fn native_fail_type(trace: &Value) -> Result<deadsync_gameplay::GameplayFailType
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Scope {
     Full,
     Entry,
     FirstQuery,
+    ThroughSecond(f64),
 }
 
 pub(crate) fn validate_capture(trace: &Value) -> Result<(), String> {
@@ -1228,6 +1235,15 @@ pub(crate) fn replay(
                         .is_some_and(|seconds| seconds >= at - 1e-6)
             })
             .ok_or("native point query has no matching gameplay frame")?
+            + 1
+    } else if let Scope::ThroughSecond(at) = scope {
+        if !at.is_finite() || at < 0.0 {
+            return Err("diagnostic replay cutoff must be finite and nonnegative".into());
+        }
+        frames
+            .iter()
+            .position(|frame| frame["seconds"].as_f64().is_some_and(|seconds| seconds >= at))
+            .ok_or("native capture does not reach the diagnostic replay cutoff")?
             + 1
     } else if scope == Scope::Entry {
         frames
@@ -1595,7 +1611,10 @@ pub(crate) fn replay(
         let coverage = coverage(&trace, scope, &calls, used_frames, frames.len());
         return Ok(
             json!({"diagnostic_only":true,"whole_song_parity_proven":false,"archive_accepted":false,
-            "scope":if scope == Scope::Entry { "entry" } else { "first-point-query" },"native_trace":trace_path,"source_simfile":simfile,
+            "scope":match scope { Scope::Entry => "entry", Scope::FirstQuery => "first-point-query",
+                Scope::ThroughSecond(_) => "through-second", Scope::Full => "full" },
+            "through_second":match scope { Scope::ThroughSecond(at) => Some(at), _ => None },
+            "native_trace":trace_path,"source_simfile":simfile,
             "native_frames":frames.len(),"replayed_frames":used_frames,"replayed_scenes":scene_count,
             "checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,
             "mismatches":mismatches,"errors":errors,"lua_requests":requests,
