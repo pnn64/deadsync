@@ -1,6 +1,6 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-12T21:34:05Z",
+  "updated_utc": "2026-10-12T21:46:16Z",
   "previous_goal_turn": "progress: Cursed Metamorph fixture saved; final factory ownership and reload identities fixed in 71ef0ade1 with 15 controls passed; running capture retained while sweep adopts committed fixes; Choices classification corrected",
   "scope": {
     "original_simfiles": 501,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "71ef0ade1de4d67689c94a9bca5691c0cdcb29da",
+      "deadsync": "4dab351fe59cb1f2bc7b282b43d0f1827687fd01",
       "itgmania_harness": "78d4a1ef5778b76a29d3d55ff42e0216edfb1a38"
     }
   },
@@ -38,14 +38,14 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Cyberpunk 2077/Cyberpunk 2077.ssc",
-      "position": 161,
+      "current": "Dance Robot/dancerobot-fakemines.sm",
+      "position": 162,
       "phase": "capture",
-      "pid": 208238,
+      "pid": 241197,
       "process_matches": true,
       "passed": 1,
-      "pending": 11,
-      "processed": 12,
+      "pending": 12,
+      "processed": 13,
       "last_log_lines": [],
       "supervisor_running": true
     },
@@ -100,24 +100,35 @@
       },
       {
         "job": "enabled-underlay-repair-v3",
-        "complete": false,
-        "supervisor_running": true,
+        "complete": true,
+        "supervisor_running": false,
         "passed": 0,
-        "pending": 1,
-        "processed": 1,
+        "pending": 2,
+        "processed": 2,
         "last_phase": "replay",
         "source_simfile": "Cursed 2/Cursed 2.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "factory-ownership-repair-v1",
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
+        "pending": 1,
+        "processed": 1,
+        "last_phase": "replay",
+        "source_simfile": "crew -All Hands on the Deck-/crew.ssc",
+        "child_running": true
+      },
+      {
+        "job": "foreground-ownership-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
         "pending": 0,
         "processed": 0,
         "last_phase": "replay",
-        "source_simfile": "Cold/Cold.ssc",
+        "source_simfile": "Cuphead [TaroNuke]/botanic.sm",
         "child_running": true
       }
     ],
@@ -170,15 +181,22 @@
         "record": "sweep-2026-10-12-factory-ownership-repairs.json",
         "fix_commit": "71ef0ade1",
         "finish_status": "bounded factory ownership repair replay complete"
+      },
+      {
+        "name": "foreground-ownership-repair",
+        "remote": "/home/parity/jobs/foreground-ownership-repair-v1",
+        "record": "sweep-2026-10-12-foreground-ownership-repairs.json",
+        "fix_commit": "8a49e8598",
+        "finish_status": "bounded foreground ownership repair replay complete"
       }
     ]
   },
   "counts_at_checkpoint": {
     "new_passed_fixtures": 3,
-    "new_pending_charts": 9,
-    "new_processed_sources": 12,
+    "new_pending_charts": 10,
+    "new_processed_sources": 13,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 341,
+    "unprocessed_sources": 340,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -303,11 +321,17 @@
     },
     {
       "source_simfile": "Cold/Cold.ssc",
-      "repair_attempts": 1,
-      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.0s] : 0 checks completed, 0 failed\n[16.0s] : 0 checks completed, 0 failed\n[18.0s] : 0 checks completed, 0 failed\n[20.0s] : 0 checks completed, 0 failed\n[21.0s] replaying every native gameplay frame\n[22.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n\nthread 'main' (150340) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native subscriber ownership needs a single observed root\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[24.0s] replaying every native gameplay frame: frame 0/13470 (0.0%)\n[26.0s] replaying every native gameplay frame: frame 0/13470 (0.0%)\n[28.0s] replaying every native gameplay frame: frame 0/13470 (0.0%)\n",
+      "repair_attempts": 2,
+      "failure": null,
       "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
+      "mismatch_count": 417396,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 417711,
+          "deadsync": 532586
+        }
+      ]
     },
     {
       "source_simfile": "Crab Nicholson Extreme Sleepover/Crab Nicholson Extreme Sleepover.sm",
@@ -357,17 +381,25 @@
     },
     {
       "source_simfile": "Cursed 2/Cursed 2.ssc",
-      "repair_attempts": 0,
+      "repair_attempts": 1,
       "failure": null,
       "errors": [],
-      "mismatch_count": 206614,
+      "mismatch_count": 206561,
       "first_mismatch": [
         {
           "field": "command_query_count",
           "native": 206658,
-          "deadsync": 206654
+          "deadsync": 206645
         }
       ]
+    },
+    {
+      "source_simfile": "Cyberpunk 2077/Cyberpunk 2077.ssc",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-208238-1791840553549479340-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-208238-1791840553549479340-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
     }
   ],
   "historical_concrete_failures": [
