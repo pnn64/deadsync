@@ -961,9 +961,10 @@ impl State {
         std::mem::take(&mut self.song_lua_output)
     }
 
-    fn advance_song_lua(&mut self, delta: f32, effects: &mut Vec<ThemeEffect>) -> Result<(), String> {
+    fn advance_song_lua(&mut self, delta: f32, uptime_seconds: Option<f64>, effects: &mut Vec<ThemeEffect>) -> Result<(), String> {
         let Some(scene) = &mut self.song_lua else { return Ok(()); };
-        let frame = deadsync_song_lua::SongLuaLiveFrame::from_gameplay(&self.gameplay, delta);
+        let mut frame = deadsync_song_lua::SongLuaLiveFrame::from_gameplay(&self.gameplay, delta);
+        frame.uptime_seconds = uptime_seconds;
         let output = scene.advance(frame).map_err(|error| error.to_string())?;
         let request = output.request.as_ref().or(self.song_lua_output.request.as_ref());
         if matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message)) if message == "SM_DoNextScreen")
@@ -2625,7 +2626,9 @@ pub fn update(
         let count = state.gameplay.num_players().min(MAX_PLAYERS);
         fail_autoplay_players(&mut state.gameplay.players_runtime.players[..count]);
     }
-    if let Err(error) = state.advance_song_lua(delta_time, effects) {
+    let host_nanos = audio_snapshot.stream_clock.valid_at_host_nanos;
+    let uptime_seconds = (host_nanos != 0).then_some(host_nanos as f64 / 1_000_000_000.0);
+    if let Err(error) = state.advance_song_lua(delta_time, uptime_seconds, effects) {
         state.song_lua_output.errors.push(error);
     }
     update_life_meter_visuals(state, delta_time);

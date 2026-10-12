@@ -624,6 +624,13 @@ pub fn install_basic_globals(
     globals.set(
         "GetTimeSinceStart",
         lua.create_function(|lua, _args: MultiValue| {
+            if crate::live::active(lua) {
+                let runtime = lua.globals().get::<Table>(SONG_LUA_RUNTIME_KEY)?;
+                // RageTimer exposes a double process clock, independent of
+                // the float SongPosition clock and paused music playback.
+                return Ok(Value::Number(runtime.get::<Option<f64>>("__songlua_uptime_seconds")?
+                    .unwrap_or(0.0)));
+            }
             let seconds = lua
                 .globals()
                 .get::<Option<Table>>(SONG_LUA_RUNTIME_KEY)?

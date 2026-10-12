@@ -1,0 +1,570 @@
+{
+  "source_simfile": "Dig Dug Theme/Dig Dug Theme.ssc",
+  "simfile_sha256": "fe5887b2e78aeb3fa19e3e47b35571af105eec363e0c06e56999f4ef9eacac1b",
+  "candidate_sha256": "6b897f37a9e11cd374caaebbbb319c2be3f71a19a85bd174f8b2faaf147319cd",
+  "initial_replayed_frames": 149043,
+  "initial_mismatch_count": 32,
+  "initial_errors": [],
+  "repair_attempts_started": 0,
+  "clock_evidence": {
+    "seed": 1,
+    "first_frames": [
+      {
+        "beat": -11.267449378967285,
+        "delta": 0,
+        "scene": 1,
+        "seconds": -5.951972961425781,
+        "sequence": 1,
+        "wall_seconds": 2.012462
+      },
+      {
+        "beat": -11.263447761535645,
+        "delta": 0.0022819999139755964,
+        "scene": 1,
+        "seconds": -5.9498419761657715,
+        "sequence": 2,
+        "wall_seconds": 2.014614
+      }
+    ],
+    "first_pause_queries": [
+      {
+        "seq": 10484,
+        "seconds": 12.291769027709961,
+        "beat": 22.99277687072754,
+        "line": 56,
+        "operation": "ScreenManager.GetTopScreen"
+      },
+      {
+        "seq": 12369,
+        "seconds": 12.385986328125,
+        "beat": 23.169710159301758,
+        "line": 56,
+        "operation": "ScreenManager.GetTopScreen"
+      },
+      {
+        "seq": 12889,
+        "seconds": 13.040340423583984,
+        "beat": 24.39853286743164,
+        "line": 56,
+        "operation": "ScreenManager.GetTopScreen"
+      },
+      {
+        "seq": 14152,
+        "seconds": 13.1348295211792,
+        "beat": 24.57597541809082,
+        "line": 56,
+        "operation": "ScreenManager.GetTopScreen"
+      },
+      {
+        "seq": 21022,
+        "seconds": 20.879636764526367,
+        "beat": 39.120079040527344,
+        "line": 56,
+        "operation": "ScreenManager.GetTopScreen"
+      },
+      {
+        "seq": 22678,
+        "seconds": 20.97736930847168,
+        "beat": 39.303611755371094,
+        "line": 56,
+        "operation": "ScreenManager.GetTopScreen"
+      },
+      {
+        "seq": 25796,
+        "seconds": 24.458662033081055,
+        "beat": 45.841190338134766,
+        "line": 56,
+        "operation": "ScreenManager.GetTopScreen"
+      },
+      {
+        "seq": 26029,
+        "seconds": 24.553241729736328,
+        "beat": 46.018802642822266,
+        "line": 56,
+        "operation": "ScreenManager.GetTopScreen"
+      }
+    ],
+    "clock_observations": [
+      {
+        "target": 20.97836685180664,
+        "matching_frame_count": 1,
+        "first_matches": [
+          {
+            "beat": 39.305484771728516,
+            "delta": 0.0009549999958835542,
+            "scene": 1,
+            "seconds": 20.97836685180664,
+            "sequence": 28866,
+            "wall_seconds": 34.443182
+          }
+        ],
+        "last_matches": [
+          {
+            "beat": 39.305484771728516,
+            "delta": 0.0009549999958835542,
+            "scene": 1,
+            "seconds": 20.97836685180664,
+            "sequence": 28866,
+            "wall_seconds": 34.443182
+          }
+        ],
+        "first_greater_context": [
+          {
+            "beat": 39.303611755371094,
+            "delta": 0.0009560000034980476,
+            "scene": 1,
+            "seconds": 20.97736930847168,
+            "sequence": 28775,
+            "wall_seconds": 34.347439
+          },
+          {
+            "beat": 39.303611755371094,
+            "delta": 0.0010420000180602074,
+            "scene": 1,
+            "seconds": 20.97736930847168,
+            "sequence": 28776,
+            "wall_seconds": 34.348423
+          },
+          {
+            "beat": 39.30599594116211,
+            "delta": 0.0012600000482052565,
+            "scene": 1,
+            "seconds": 20.978639602661133,
+            "sequence": 28777,
+            "wall_seconds": 34.350953
+          },
+          {
+            "beat": 39.31035232543945,
+            "delta": 0.002328000031411648,
+            "scene": 1,
+            "seconds": 20.980958938598633,
+            "sequence": 28778,
+            "wall_seconds": 34.352078
+          },
+          {
+            "beat": 39.31248474121094,
+            "delta": 0.001133000012487173,
+            "scene": 1,
+            "seconds": 20.982093811035156,
+            "sequence": 28779,
+            "wall_seconds": 34.353141
+          }
+        ],
+        "first_exact_context": [
+          {
+            "beat": 39.478118896484375,
+            "delta": 0.0009219999774359167,
+            "scene": 1,
+            "seconds": 21.070295333862305,
+            "sequence": 28864,
+            "wall_seconds": 34.441302
+          },
+          {
+            "beat": 39.47976303100586,
+            "delta": 0.0008759999764151871,
+            "scene": 1,
+            "seconds": 21.071170806884766,
+            "sequence": 28865,
+            "wall_seconds": 34.442151
+          },
+          {
+            "beat": 39.305484771728516,
+            "delta": 0.0009549999958835542,
+            "scene": 1,
+            "seconds": 20.97836685180664,
+            "sequence": 28866,
+            "wall_seconds": 34.443182
+          },
+          {
+            "beat": 39.308040618896484,
+            "delta": 0.00139999995008111,
+            "scene": 1,
+            "seconds": 20.97972869873047,
+            "sequence": 28867,
+            "wall_seconds": 34.444652
+          },
+          {
+            "beat": 39.309913635253906,
+            "delta": 0.000994000001810491,
+            "scene": 1,
+            "seconds": 20.98072624206543,
+            "sequence": 28868,
+            "wall_seconds": 34.445651
+          }
+        ],
+        "stage_samples": [
+          {
+            "scene": 1,
+            "phase": "progress",
+            "seconds": 20.97836685180664,
+            "beat": 39.305484771728516,
+            "gameplay_seconds": 33.10859298706055
+          }
+        ]
+      },
+      {
+        "target": 21.0,
+        "matching_frame_count": 1,
+        "first_matches": [
+          {
+            "beat": 39.34611129760742,
+            "delta": 0.0011320000048726797,
+            "scene": 1,
+            "seconds": 21,
+            "sequence": 28887,
+            "wall_seconds": 34.464843
+          }
+        ],
+        "last_matches": [
+          {
+            "beat": 39.34611129760742,
+            "delta": 0.0011320000048726797,
+            "scene": 1,
+            "seconds": 21,
+            "sequence": 28887,
+            "wall_seconds": 34.464843
+          }
+        ],
+        "first_greater_context": [
+          {
+            "beat": 39.34228515625,
+            "delta": 0.0010839999886229634,
+            "scene": 1,
+            "seconds": 20.997962951660156,
+            "sequence": 28794,
+            "wall_seconds": 34.369032
+          },
+          {
+            "beat": 39.34423828125,
+            "delta": 0.001041000010445714,
+            "scene": 1,
+            "seconds": 20.99900245666504,
+            "sequence": 28795,
+            "wall_seconds": 34.370106
+          },
+          {
+            "beat": 39.346248626708984,
+            "delta": 0.0010710000060498714,
+            "scene": 1,
+            "seconds": 21.00007438659668,
+            "sequence": 28796,
+            "wall_seconds": 34.371103
+          },
+          {
+            "beat": 39.349647521972656,
+            "delta": 0.0018029999919235706,
+            "scene": 1,
+            "seconds": 21.00188446044922,
+            "sequence": 28797,
+            "wall_seconds": 34.372998
+          },
+          {
+            "beat": 39.351680755615234,
+            "delta": 0.0010710000060498714,
+            "scene": 1,
+            "seconds": 21.002965927124023,
+            "sequence": 28798,
+            "wall_seconds": 34.374043
+          }
+        ],
+        "first_exact_context": [
+          {
+            "beat": 39.34206771850586,
+            "delta": 0.0010310000507161021,
+            "scene": 1,
+            "seconds": 20.997846603393555,
+            "sequence": 28885,
+            "wall_seconds": 34.462794
+          },
+          {
+            "beat": 39.3439826965332,
+            "delta": 0.0010189999593421817,
+            "scene": 1,
+            "seconds": 20.99886703491211,
+            "sequence": 28886,
+            "wall_seconds": 34.463802
+          },
+          {
+            "beat": 39.34611129760742,
+            "delta": 0.0011320000048726797,
+            "scene": 1,
+            "seconds": 21,
+            "sequence": 28887,
+            "wall_seconds": 34.464843
+          },
+          {
+            "beat": 39.3486213684082,
+            "delta": 0.0013310000067576766,
+            "scene": 1,
+            "seconds": 21.0013370513916,
+            "sequence": 28888,
+            "wall_seconds": 34.466216
+          },
+          {
+            "beat": 39.3507080078125,
+            "delta": 0.0011269999668002129,
+            "scene": 1,
+            "seconds": 21.00244903564453,
+            "sequence": 28889,
+            "wall_seconds": 34.467345
+          }
+        ],
+        "stage_samples": [
+          {
+            "scene": 1,
+            "phase": "progress",
+            "seconds": 21,
+            "beat": 39.34611129760742,
+            "gameplay_seconds": 33.13027572631836
+          }
+        ]
+      },
+      {
+        "target": 69.96607971191406,
+        "matching_frame_count": 1,
+        "first_matches": [
+          {
+            "beat": 131.30032348632812,
+            "delta": 0.0012049999786540866,
+            "scene": 1,
+            "seconds": 69.96607971191406,
+            "sequence": 77456,
+            "wall_seconds": 91.372286
+          }
+        ],
+        "last_matches": [
+          {
+            "beat": 131.30032348632812,
+            "delta": 0.0012049999786540866,
+            "scene": 1,
+            "seconds": 69.96607971191406,
+            "sequence": 77456,
+            "wall_seconds": 91.372286
+          }
+        ],
+        "first_greater_context": [
+          {
+            "beat": 131.29954528808594,
+            "delta": 0.0009820000268518925,
+            "scene": 1,
+            "seconds": 69.96566772460938,
+            "sequence": 77364,
+            "wall_seconds": 91.277356
+          },
+          {
+            "beat": 131.29954528808594,
+            "delta": 0.0009379999828524888,
+            "scene": 1,
+            "seconds": 69.96566772460938,
+            "sequence": 77365,
+            "wall_seconds": 91.278292
+          },
+          {
+            "beat": 131.30178833007812,
+            "delta": 0.001180000021122396,
+            "scene": 1,
+            "seconds": 69.96685791015625,
+            "sequence": 77366,
+            "wall_seconds": 91.280635
+          },
+          {
+            "beat": 131.30587768554688,
+            "delta": 0.0021909999195486307,
+            "scene": 1,
+            "seconds": 69.96903991699219,
+            "sequence": 77367,
+            "wall_seconds": 91.28173
+          },
+          {
+            "beat": 131.3078155517578,
+            "delta": 0.001032999949529767,
+            "scene": 1,
+            "seconds": 69.9700698852539,
+            "sequence": 77368,
+            "wall_seconds": 91.282793
+          }
+        ],
+        "first_exact_context": [
+          {
+            "beat": 131.47122192382812,
+            "delta": 0.0011530000483617187,
+            "scene": 1,
+            "seconds": 70.05708312988281,
+            "sequence": 77454,
+            "wall_seconds": 91.369844
+          },
+          {
+            "beat": 131.4735107421875,
+            "delta": 0.0012280000373721123,
+            "scene": 1,
+            "seconds": 70.05830383300781,
+            "sequence": 77455,
+            "wall_seconds": 91.371039
+          },
+          {
+            "beat": 131.30032348632812,
+            "delta": 0.0012049999786540866,
+            "scene": 1,
+            "seconds": 69.96607971191406,
+            "sequence": 77456,
+            "wall_seconds": 91.372286
+          },
+          {
+            "beat": 131.30287170410156,
+            "delta": 0.001383999944664538,
+            "scene": 1,
+            "seconds": 69.96743774414062,
+            "sequence": 77457,
+            "wall_seconds": 91.373534
+          },
+          {
+            "beat": 131.30470275878906,
+            "delta": 0.0009749999735504389,
+            "scene": 1,
+            "seconds": 69.96841430664062,
+            "sequence": 77458,
+            "wall_seconds": 91.374497
+          }
+        ],
+        "stage_samples": [
+          {
+            "scene": 1,
+            "phase": "progress",
+            "seconds": 69.96607971191406,
+            "beat": 131.30032348632812,
+            "gameplay_seconds": 90.03744506835938
+          }
+        ]
+      },
+      {
+        "target": 70.00009155273438,
+        "matching_frame_count": 1,
+        "first_matches": [
+          {
+            "beat": 131.36419677734375,
+            "delta": 0.0010160000529140234,
+            "scene": 1,
+            "seconds": 70.00009155273438,
+            "sequence": 77490,
+            "wall_seconds": 91.406152
+          }
+        ],
+        "last_matches": [
+          {
+            "beat": 131.36419677734375,
+            "delta": 0.0010160000529140234,
+            "scene": 1,
+            "seconds": 70.00009155273438,
+            "sequence": 77490,
+            "wall_seconds": 91.406152
+          }
+        ],
+        "first_greater_context": [
+          {
+            "beat": 131.36073303222656,
+            "delta": 0.000990999978967011,
+            "scene": 1,
+            "seconds": 69.99824523925781,
+            "sequence": 77396,
+            "wall_seconds": 91.310865
+          },
+          {
+            "beat": 131.3625946044922,
+            "delta": 0.0010019999463111162,
+            "scene": 1,
+            "seconds": 69.99923706054688,
+            "sequence": 77397,
+            "wall_seconds": 91.311877
+          },
+          {
+            "beat": 131.36448669433594,
+            "delta": 0.000994000001810491,
+            "scene": 1,
+            "seconds": 70.000244140625,
+            "sequence": 77398,
+            "wall_seconds": 91.312861
+          },
+          {
+            "beat": 131.36688232421875,
+            "delta": 0.0012870000209659338,
+            "scene": 1,
+            "seconds": 70.00152587890625,
+            "sequence": 77399,
+            "wall_seconds": 91.314095
+          },
+          {
+            "beat": 131.3687286376953,
+            "delta": 0.000977999996393919,
+            "scene": 1,
+            "seconds": 70.00251007080078,
+            "sequence": 77400,
+            "wall_seconds": 91.315092
+          }
+        ],
+        "first_exact_context": [
+          {
+            "beat": 131.36044311523438,
+            "delta": 0.0009950000094249845,
+            "scene": 1,
+            "seconds": 69.99809265136719,
+            "sequence": 77488,
+            "wall_seconds": 91.404129
+          },
+          {
+            "beat": 131.36227416992188,
+            "delta": 0.0009820000268518925,
+            "scene": 1,
+            "seconds": 69.99906921386719,
+            "sequence": 77489,
+            "wall_seconds": 91.405111
+          },
+          {
+            "beat": 131.36419677734375,
+            "delta": 0.0010160000529140234,
+            "scene": 1,
+            "seconds": 70.00009155273438,
+            "sequence": 77490,
+            "wall_seconds": 91.406152
+          },
+          {
+            "beat": 131.3665313720703,
+            "delta": 0.0012440000427886844,
+            "scene": 1,
+            "seconds": 70.00133514404297,
+            "sequence": 77491,
+            "wall_seconds": 91.407436
+          },
+          {
+            "beat": 131.368408203125,
+            "delta": 0.0010010000551119447,
+            "scene": 1,
+            "seconds": 70.00233459472656,
+            "sequence": 77492,
+            "wall_seconds": 91.408429
+          }
+        ],
+        "stage_samples": [
+          {
+            "scene": 1,
+            "phase": "progress",
+            "seconds": 70.00009155273438,
+            "beat": 131.36419677734375,
+            "gameplay_seconds": 90.07154846191406
+          }
+        ]
+      }
+    ]
+  },
+  "reference_sources": [
+    "../itgmania-harness/vendor/itgmania/src/RageTimer.cpp:48",
+    "../itgmania-harness/vendor/itgmania/src/ScreenGameplay.cpp:1563",
+    "../itgmania-harness/vendor/itgmania/src/RageSound.cpp:462",
+    "../itgmania-harness/probe_theme/ScreenGameplay overlay.lua:11"
+  ],
+  "diagnosis": [
+    "GetTimeSinceStart incorrectly reads the music clock, so elapsed time cannot advance during pauses",
+    "Progress samples follow native frame order; after unpause the music clock rewinds, causing the replay to consume later exact observations at an earlier overshoot"
+  ],
+  "repair": "Feed an independent double process clock to live Lua; associate progress observer clocks with chronological input frames while retaining exact clock, state and coverage comparisons",
+  "capture_reuse": "Original byte-identical uncompressed candidate remains available"
+}

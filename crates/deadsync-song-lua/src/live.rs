@@ -424,6 +424,8 @@ pub struct SongLuaLiveFrame {
     pub music_seconds: f64,
     pub screen_seconds: f64,
     pub delta_seconds: f64,
+    /// Independent process clock; music can remain frozen while this advances.
+    pub uptime_seconds: Option<f64>,
     /// The gameplay core reached its outro and removed active attacks.
     pub gameplay_outro: bool,
     pub players: [SongLuaLivePlayer; LUA_PLAYERS],
@@ -458,6 +460,7 @@ impl SongLuaLiveFrame {
             music_seconds: game.clock.song_position.current_music_time_ns as f64 / 1_000_000_000.0,
             screen_seconds: f64::from(game.boundary.total_elapsed_in_screen),
             delta_seconds: f64::from(delta_seconds),
+            uptime_seconds: None,
             gameplay_outro: game.mods.attacks.cleared_for_outro,
             players: std::array::from_fn(|player| game.stage_itg_score_inputs(player).map_or_else(
                 SongLuaLivePlayer::default, |score| {
@@ -613,6 +616,11 @@ impl SongLuaLiveScene {
             .map(|timing| timing.get_song_position(frame.music_seconds as f32));
         let beat = position.as_ref().map_or(frame.beat, |position| f64::from(position.beat));
         self.feed_stats(&frame)?;
+        let runtime = self.lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
+        let uptime = frame.uptime_seconds.unwrap_or(
+            runtime.get::<Option<f64>>("__songlua_uptime_seconds")?.unwrap_or(0.0)
+                + frame.delta_seconds);
+        runtime.set("__songlua_uptime_seconds", uptime)?;
         crate::set_compile_song_runtime_values(&self.lua, beat as f32, frame.music_seconds as f32)?;
         if let Some(position) = position {
             let runtime = self.lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
@@ -1455,6 +1463,42 @@ return Def.ActorFrame {
         assert_eq!(scene.states()[global].aux, 10.0);
         frame.screen_seconds = 1.2;
         assert!(scene.advance(frame).expect("later frame").broadcasts.is_empty(), "drain events exactly once");
+    }
+
+    #[test]
+    fn live_uptime_advances_while_music_is_paused() {
+        let mut compiled = compile("uptime-paused", r#"
+local last = nil
+return Def.ActorFrame { OnCommand = function(self)
+    self:SetUpdateFunction(function()
+        local now = GetTimeSinceStart()
+        if now == 0 then return end
+        if last == nil then
+            last = now
+            SCREENMAN:GetTopScreen():PauseGame(true)
+        elseif now - last > 0.25 then
+            SCREENMAN:GetTopScreen():PauseGame(false)
+        end
+        CLOCK = {now, GAMESTATE:GetCurMusicSeconds(), SCREENMAN:GetTopScreen():IsPaused()}
+    end)
+end }
+"#);
+        let mut scene = compiled.live_scene.take().expect("scene");
+        for (uptime, paused) in [(40.1250001, true), (40.25, true), (40.5, false)] {
+            let output = scene.advance(SongLuaLiveFrame { music_seconds: 12.0,
+                screen_seconds: 1.0, delta_seconds: 0.125,
+                uptime_seconds: Some(uptime), ..Default::default() }).expect("paused clock frame");
+            assert!(output.errors.is_empty());
+            let clock = scene.lua.globals().get::<Table>("CLOCK").expect("actual clock queries");
+            assert_eq!(clock.get::<f64>(1).expect("double process time"), uptime);
+            assert_eq!(clock.get::<f64>(2).expect("frozen music time"), 12.0);
+            assert_eq!(clock.get::<bool>(3).expect("pause state"), paused);
+        }
+        let output = scene.advance(SongLuaLiveFrame { music_seconds: 0.0,
+            screen_seconds: 1.125, delta_seconds: 0.125, ..Default::default() }).expect("fallback elapsed clock");
+        assert!(output.errors.is_empty());
+        let clock = scene.lua.globals().get::<Table>("CLOCK").expect("fallback clock queries");
+        assert_eq!(clock.get::<f64>(1).expect("process clock retains its epoch"), 40.625);
     }
 
     #[test]

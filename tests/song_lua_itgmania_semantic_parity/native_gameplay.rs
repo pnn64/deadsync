@@ -890,6 +890,7 @@ end}
                 music_seconds: 0.25,
                 screen_seconds: 0.25,
                 delta_seconds: 0.01,
+                uptime_seconds: None,
                 gameplay_outro: false,
                 players: std::array::from_fn(|_| deadsync_song_lua::SongLuaLivePlayer::default()),
             })
@@ -1068,6 +1069,30 @@ end}
             &json!({"type":"number","value":"infinity"}),
             &json!({"type":"number","value":"infinity"})
         ));
+    }
+
+    #[test]
+    fn progress_observers_follow_frame_order_when_music_rewinds() {
+        use serde_json::json;
+        let frames = vec![
+            json!({"scene":1,"seconds":20.0}),
+            json!({"scene":1,"seconds":21.05}),
+            json!({"scene":1,"seconds":20.978}),
+            json!({"scene":1,"seconds":21.0}),
+            json!({"scene":2,"seconds":20.978}),
+        ];
+        let mut samples = vec![
+            json!({"phase":"progress","scene":1,"seconds":20.0}),
+            json!({"phase":"progress","scene":1,"seconds":20.978}),
+            json!({"phase":"progress","scene":1,"seconds":21.0}),
+            json!({"phase":"progress","scene":2,"seconds":20.978}),
+        ];
+        let expected = [(0,0),(1,2),(2,3),(3,4)].into_iter().collect();
+        assert_eq!(super::native_progress_observer_frames(&samples,&frames).expect("observer clocks"), expected);
+        samples[1]["players"] = json!([{"actual":9999}]);
+        assert_eq!(super::native_progress_observer_frames(&samples,&frames).expect("independent observer phase"), expected);
+        samples[3]["seconds"] = json!(123.0);
+        assert!(!super::native_progress_observer_frames(&samples,&frames).expect("unmatched clock remains pending").contains_key(&3));
     }
 
     #[test]
@@ -1576,6 +1601,26 @@ fn native_creation_order_for_entries(trace: &Value, scene: u64, background_entri
     Ok(result)
 }
 
+// The overlay records progress in frame order. Pause/unpause can move the
+// audio clock backward, so a later sample must not be consumed at an earlier
+// overshoot. Observer clock inputs select the phase; scores remain independent.
+fn native_progress_observer_frames(samples: &[Value], frames: &[Value]) -> Result<BTreeMap<usize, usize>, String> {
+    let mut result = BTreeMap::new();
+    let mut cursor = 0;
+    for (sample_index, sample) in samples.iter().enumerate().filter(|(_, sample)| sample["phase"] == "progress") {
+        let seconds = number(sample, "seconds")?;
+        if let Some(relative) = frames[cursor..].iter().position(|frame|
+            frame["scene"] == sample["scene"]
+                && frame["seconds"].as_f64().is_some_and(|time| (time - seconds).abs() <= 1e-6))
+        {
+            let index = cursor + relative;
+            result.insert(sample_index, index);
+            cursor = index + 1;
+        }
+    }
+    Ok(result)
+}
+
 fn native_random_seed(trace: &Value) -> Result<u32, String> {
     if trace.get("random_seed").is_none() && trace["capabilities"]["native_random_seed"] != true {
         // Preserve the previous diagnostic behavior for unseeded captures.
@@ -1729,6 +1774,7 @@ pub(crate) fn replay(
     let samples = trace["stage_samples"]
         .as_array()
         .ok_or("missing native stage observations")?;
+    let progress_observer_frames = native_progress_observer_frames(samples, frames)?;
     let difficulty = trace["input"]["requested_difficulty"].as_str();
     let preferences = &trace["input"]["preferences"];
     let sync = match preferences["default_sync_offset"].as_str() {
@@ -2038,6 +2084,9 @@ pub(crate) fn replay(
                 continue;
             }
             if sample["scene"].as_u64() != Some(scene_count) {
+                break;
+            }
+            if progress_observer_frames.get(&sample_cursor).is_some_and(|&frame_index| frame_index > index) {
                 break;
             }
             if at > seconds + 1e-6 {
