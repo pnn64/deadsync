@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-12T20:33:30Z",
-  "previous_goal_turn": "progress: parity repairs were committed; no abandoned live capture was found",
+  "updated_utc": "2026-10-12T20:56:28Z",
+  "previous_goal_turn": "progress: native stage modifiers and metric command chunk-name repairs committed; both copter fixtures saved after complete passing replays",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,12 +14,13 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "e619760b0a5083eae268af9f74908c069095834b",
-      "itgmania_harness": "7dd2fabb5247be67d6442265e4d84c7f2cebd1fd"
+      "deadsync": "11f4e5d4cef9df59d0135866baa064557c7d5cff",
+      "itgmania_harness": "78d4a1ef5778b76a29d3d55ff42e0216edfb1a38"
     }
   },
   "validation": {
-    "native_replay_controls": "15 passed on the reused Linux worker build; normalized source matches local worktree",
+    "native_replay_controls": "15 passed on the stage modifier Linux build; stage modifier regression passed on Windows and Linux",
+    "native_metric_caller": "regression passed on Windows; all 12 runtime controls passed on Linux",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved"
   },
   "corpus_transfer": {
@@ -34,26 +35,79 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "copter/copter.ssc",
-      "position": 153,
+      "current": "Cursed 2/Cursed 2.sm",
+      "position": 158,
       "phase": "replay",
-      "pid": 137034,
+      "pid": 148668,
       "process_matches": true,
       "passed": 0,
-      "pending": 4,
-      "processed": 4,
+      "pending": 9,
+      "processed": 9,
       "last_log_lines": [
-        "[0.1s] replaying every native gameplay frame"
+        "[102.0s] replaying every native gameplay frame: frame 17122/82996 (20.6%)",
+        "[104.0s] replaying every native gameplay frame: frame 17446/82996 (21.0%)",
+        "[106.0s] replaying every native gameplay frame: frame 17794/82996 (21.4%)"
       ]
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
     "runner": "../itgmania-harness/target/server-parity/run_chart_sweep_v1.py",
-    "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py"
+    "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
+    "bounded_repair_jobs": [
+      {
+        "job": "stage-modifier-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 2,
+        "pending": 0,
+        "processed": 2,
+        "last_phase": "pack",
+        "source_simfile": "copter/copter.ssc",
+        "child_running": false
+      },
+      {
+        "job": "known-failure-recovery-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Cold/Cold.ssc",
+        "child_running": true
+      }
+    ],
+    "publisher_streams": [
+      {
+        "name": "initial-sweep",
+        "remote": "/home/parity/jobs/chart-sweep-20261012-v2",
+        "record": "sweep-2026-10-12-results.json",
+        "compact": true,
+        "finish_status": "initial replay sweep finished; pending charts require bounded repair sweep"
+      },
+      {
+        "name": "stage-modifier-repair",
+        "remote": "/home/parity/jobs/stage-modifier-repair-v1",
+        "record": "sweep-2026-10-12-stage-modifier-repairs.json",
+        "fix_commit": "a3fac0d8b",
+        "finish_status": "bounded stage modifier repair replay complete"
+      },
+      {
+        "name": "known-failure-recovery",
+        "remote": "/home/parity/jobs/known-failure-recovery-v1",
+        "record": "sweep-2026-10-12-known-failure-repairs.json",
+        "fix_commit": "a3fac0d8b / harness 78d4a1e",
+        "finish_status": "bounded known failure recovery complete"
+      }
+    ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 0,
-    "new_pending_charts": 4,
-    "charts_in_remaining_queue": 353
+    "new_passed_fixtures": 2,
+    "new_pending_charts": 7,
+    "new_processed_sources": 9,
+    "charts_in_remaining_queue": 353,
+    "unprocessed_sources": 344,
+    "historical_pending_sources": 2,
+    "historical_passed_sources": 146
   },
   "historical_concrete_failures": [
     {
