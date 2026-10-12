@@ -918,6 +918,38 @@ return setmetatable({__songlua_actor_type='ActorFrame',Name='Declared',
     }
 
     #[test]
+    fn live_screen_layer_consumes_earlier_tween_before_later_message() {
+        let mut compiled = compile("screen-layer-tweens", r#"
+local underlay = SCREENMAN:GetTopScreen():GetChild('Underlay')
+LEFT = {}
+return Def.ActorFrame { OnCommand = function(self)
+    underlay:smooth(1.6):diffusealpha(0)
+    local updates = 0
+    self:SetUpdateFunction(function(self, delta)
+        if delta <= 0 then return end
+        updates = updates + 1
+        if updates == 2 then MESSAGEMAN:Broadcast('StatsShow') end
+        LEFT[#LEFT + 1] = underlay:GetTweenTimeLeft()
+    end)
+end, StatsShowMessageCommand = function(self)
+    underlay:smooth(1.6):diffusealpha(1)
+end }
+"#);
+        let mut scene = compiled.live_scene.take().expect("owned scene");
+        for seconds in [0.8, 1.8, 2.8] {
+            let previous = if seconds == 0.8 { 0.0 } else { seconds - 1.0 };
+            let output = scene.advance(SongLuaLiveFrame { screen_seconds: seconds,
+                delta_seconds: seconds - previous, ..Default::default() }).expect("screen frame");
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+        }
+        let left = scene.lua.globals().get::<Table>("LEFT").expect("authored tween queries");
+        for (index, expected) in [(1, 0.8), (2, 1.6), (3, 0.6)] {
+            let actual = left.raw_get::<f32>(index).expect("tween left");
+            assert!((actual - expected).abs() < 1e-6, "frame {index}: {actual} != {expected}");
+        }
+    }
+
+    #[test]
     fn live_outro_rebuilds_song_options_after_queued_screen_message() {
         let mut compiled = compile("outro-options", r#"
 local ps = GAMESTATE:GetPlayerState(PLAYER_1)

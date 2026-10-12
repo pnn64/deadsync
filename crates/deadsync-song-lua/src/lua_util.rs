@@ -11956,6 +11956,18 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
     if lua.app_data_ref::<SongLuaCompileUpdatePlan>().is_none() {
         let mut jobs = Vec::new();
         let mut order = 0;
+        // ScreenWithMenuElements owns these actors outside the authored song
+        // roots. Their own tween queues still advance every screen Update.
+        // GetChild returns this same owner; adding a later tween must not keep
+        // an earlier completed tween in its queue.
+        if let Some(screen) = lua.globals().raw_get::<Option<Table>>("__songlua_top_screen")? {
+            let children = actor_children(lua, &screen)?;
+            for name in ["Underlay", "Overlay", "SongBackground", "In"] {
+                if let Some(actor) = children.raw_get::<Option<Table>>(name)? {
+                    collect_compile_update_jobs(lua, &actor, None, false, &mut jobs, &mut order)?;
+                }
+            }
+        }
         for key in ["__songlua_top_screen_player_1", "__songlua_top_screen_player_2"] {
             // Player actors advance native time even without NoteField wrappers.
             if let Some(player) = lua.globals().raw_get::<Option<Table>>(key)? {
