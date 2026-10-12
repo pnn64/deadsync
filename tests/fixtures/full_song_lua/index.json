@@ -1976,15 +1976,12 @@
     {
       "title": "copter",
       "source_simfile": "copter/copter.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a37fc45b363b62925514d65a5e2e7029298d4e24f393c882468b58220d1b98d2.tar.zst",
-      "sha256": "a37fc45b363b62925514d65a5e2e7029298d4e24f393c882468b58220d1b98d2",
-      "compressed_bytes": 71735,
-      "uncompressed_sha256": "ce9893c4209838e02f2a5b28b06bdc69ccbe457adb61558092d7a63912211a97",
-      "compression_level": 22,
-      "aliases": [
-        "bf8b9ae6cf49813ecc2bf7dfd593bb9ad95690db08998fd26f67ab376c898e75.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "5a5d3690592fde075ac87c42a9655a5e96e717e518dfcd3df10f295ce696f1d7.tar.zst",
+      "sha256": "5a5d3690592fde075ac87c42a9655a5e96e717e518dfcd3df10f295ce696f1d7",
+      "compressed_bytes": 807047,
+      "uncompressed_sha256": "97fdb7b257614ba583c2bc28012cf80380a9392bb05a69ee3e9fbc1a773cd171",
+      "aliases": []
     },
     {
       "title": "Crab Nicholson Extreme Sleepover",
