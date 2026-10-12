@@ -1,0 +1,80 @@
+{
+  "status": "active",
+  "updated_utc": "2026-10-12T20:05:51Z",
+  "previous_goal_turn": "progress: parity repairs were committed; no abandoned live capture was found",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9,
+    "remaining_indexed_sources": 335,
+    "unindexed_sources": 18
+  },
+  "acceptance": "existing full_song_lua full replay comparisons; coverage gaps recorded separately",
+  "repairs": {
+    "per_chart_limit_per_sweep": 2,
+    "completed_commits": {
+      "deadsync": "5e8d689e0e3f3098d1460a2bb4a0b892ec2cfef1",
+      "itgmania_harness": "f24b8969c59171096159a5ecd688e6be87921136"
+    }
+  },
+  "validation": {
+    "native_replay_controls": "15 passed on the reused Linux worker build; normalized source matches local worktree",
+    "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved"
+  },
+  "corpus_transfer": {
+    "tar_sha256": "37febe98e2e47b325b9f9b96f4d29ddf32eedda84514191252d043c5fd4a4d1a",
+    "bytes": 3879987200,
+    "folders": 280,
+    "seconds": 146.5927097001113,
+    "transfer_verified": true
+  },
+  "worker": {
+    "host": "192.168.1.33",
+    "job": "/home/parity/jobs/chart-sweep-20261012-v2",
+    "live_observation": {
+      "status": "running",
+      "current": "Circles/Circles.ssc",
+      "position": 149,
+      "phase": "replay",
+      "pid": 126231,
+      "process_matches": true,
+      "passed": 0,
+      "pending": 0,
+      "processed": 0,
+      "last_log_lines": [
+        "[252.0s] replaying every native gameplay frame: frame 32010/112467 (28.5%)",
+        "[254.0s] replaying every native gameplay frame: frame 32268/112467 (28.7%)",
+        "[256.0s] replaying every native gameplay frame: frame 32540/112467 (28.9%)"
+      ]
+    },
+    "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
+    "runner": "../itgmania-harness/target/server-parity/run_chart_sweep_v1.py",
+    "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py"
+  },
+  "counts_at_checkpoint": {
+    "new_passed_fixtures": 0,
+    "new_pending_charts": 0,
+    "charts_in_remaining_queue": 353
+  },
+  "historical_concrete_failures": [
+    {
+      "position": 148,
+      "source_simfile": "Circles/Circles.sm",
+      "failure": "Underlay descendant tween time at Actor.visible(false): native 6.393762111663818 seconds; DeadSync 0",
+      "evidence": "../itgmania-harness/target/server-parity/scalar-mutation-prefix-v2-proof.json"
+    },
+    {
+      "position": 146,
+      "source_simfile": "Choices - [Aoreo]/Choices.ssc",
+      "failure": "previous complete replay had one overdue-note cutoff mismatch; corrected complete replay remains pending",
+      "evidence": "save/song-lua-validation/pass208/work-in-progress.json"
+    }
+  ],
+  "next_actions": [
+    "Publish and commit each complete passing fixture immediately",
+    "Continue the queued charts after actual failures",
+    "Repair observed failures using pinned local sources, reusing captures, with at most two attempts per chart",
+    "Finish with verified passed/pending counts and concrete failure details"
+  ]
+}
