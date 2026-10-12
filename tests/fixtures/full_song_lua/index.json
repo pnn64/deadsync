@@ -2402,15 +2402,12 @@
     {
       "title": "finite",
       "source_simfile": "finite/sta - Finite.sm",
-      "harness_version": "0.1.0",
-      "archive": "74d925f27ea00f41fb89c41b4854bb370d427364e42df5ac7855732fa638877c.tar.zst",
-      "sha256": "74d925f27ea00f41fb89c41b4854bb370d427364e42df5ac7855732fa638877c",
-      "compressed_bytes": 17165,
-      "uncompressed_sha256": "32855561fbe3748311353984e80d4c01247b2998de003cf1a3d84ee62b1d8441",
-      "compression_level": 22,
-      "aliases": [
-        "0c6da9e74301ef29c78922c2bf06ac6a2060cc877e22424967b4acc6c9a06855.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "54a157ca189fadbbf0587f36d657929cba99eb7584a08e67e91c3ac92e11b002.tar.zst",
+      "sha256": "54a157ca189fadbbf0587f36d657929cba99eb7584a08e67e91c3ac92e11b002",
+      "compressed_bytes": 9516769,
+      "uncompressed_sha256": "137a6f616c686f424cd6996a14c60e4dd9b214a5ce649186ed6257531e3fbbc4",
+      "aliases": []
     },
     {
       "title": "✿ᵒᶠ🜍(flores sulphuris)",

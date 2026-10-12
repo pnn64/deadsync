@@ -1329,6 +1329,56 @@
         }
       ],
       "report_sha256": "d5d8ca8596715f2457b611383b0c582496d1da9bd7f64e2de2b2f9037f92bcfe"
+    },
+    {
+      "position": 189,
+      "source_simfile": "finite/sta - Finite.sm",
+      "simfile_sha256": "189f2fa6c07555b2f6e7426bcd127a328a9bb9564bdeb8cd540613c3b552baf6",
+      "retained_original_archive": "74d925f27ea00f41fb89c41b4854bb370d427364e42df5ac7855732fa638877c.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "fb0ae8b99391809080b072426dee35d2efe0e64d479b0dff9833bb6e5370848d",
+      "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+      "fix_commit": "e2b01b99a / harness 55299c5",
+      "build_proof": "/home/parity/jobs/background-effect-owner-build-v1/proof.json",
+      "capture_seconds": 157.41124652200233,
+      "trace_sha256": "866e0397037faa672a1a50af7fa6f214a1d46719754c980bb8fbfb99ad356e7d",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-189/candidates/137a6f616c686f424cd6996a14c60e4dd9b214a5ce649186ed6257531e3fbbc4.tar",
+      "replay_exit": 0,
+      "replay_seconds": 335.7398217230002,
+      "candidate_sha256": "137a6f616c686f424cd6996a14c60e4dd9b214a5ce649186ed6257531e3fbbc4",
+      "native_frames": 44435,
+      "replayed_frames": 44435,
+      "compared_stage_fields": 1276,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.addx, Actor.skewx, Actor.zoomz, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.BumpyX, PlayerOptions.BumpyXPeriod, PlayerOptions.Centered, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Hallway, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.StealthPastReceptors, PlayerOptions.StealthType, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Wave, PlayerOptions.XMod"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "05ec582b03efb3c3a1fe73e308290de23167c404d041fedf74d889a5f51f9f5a",
+      "archive": "54a157ca189fadbbf0587f36d657929cba99eb7584a08e67e91c3ac92e11b002.tar.zst",
+      "archive_sha256": "54a157ca189fadbbf0587f36d657929cba99eb7584a08e67e91c3ac92e11b002",
+      "compressed_bytes": 9516769,
+      "pack_seconds": 12.411354620999191,
+      "harness_version": "0.1.80",
+      "title": "finite",
+      "retained_original_entry": {
+        "title": "finite",
+        "source_simfile": "finite/sta - Finite.sm",
+        "harness_version": "0.1.0",
+        "archive": "74d925f27ea00f41fb89c41b4854bb370d427364e42df5ac7855732fa638877c.tar.zst",
+        "sha256": "74d925f27ea00f41fb89c41b4854bb370d427364e42df5ac7855732fa638877c",
+        "compressed_bytes": 17165,
+        "uncompressed_sha256": "32855561fbe3748311353984e80d4c01247b2998de003cf1a3d84ee62b1d8441",
+        "compression_level": 22,
+        "aliases": [
+          "0c6da9e74301ef29c78922c2bf06ac6a2060cc877e22424967b4acc6c9a06855.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -1340,7 +1390,7 @@
   },
   "binary_sha256": "fb0ae8b99391809080b072426dee35d2efe0e64d479b0dff9833bb6e5370848d",
   "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
-  "passed_fixtures": 1,
+  "passed_fixtures": 2,
   "pending_charts": 6,
-  "processed_charts": 7
+  "processed_charts": 8
 }
