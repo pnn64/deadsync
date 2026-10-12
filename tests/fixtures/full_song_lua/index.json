@@ -2104,15 +2104,12 @@
     {
       "title": "Data Loss",
       "source_simfile": "Data Loss/Data_Loss.ssc",
-      "harness_version": "0.1.0",
-      "archive": "910e5c075e0b65e2b74c418adf25bdf392d4f70de2e6b3a9d234b0129def64c3.tar.zst",
-      "sha256": "910e5c075e0b65e2b74c418adf25bdf392d4f70de2e6b3a9d234b0129def64c3",
-      "compressed_bytes": 71518,
-      "uncompressed_sha256": "7857cd579e82658b30d23f9adb5d1523c310cb81447dee2f75a65d7cd18b07d7",
-      "compression_level": 22,
-      "aliases": [
-        "b8f83fff7b99b8a34bc3ba056498ef08fa3d4284c30ac53abf81b2400481030d.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "aa65c13268e152337a2969e59e73a79eda0321d96e0773a76fc815f4ae1af621.tar.zst",
+      "sha256": "aa65c13268e152337a2969e59e73a79eda0321d96e0773a76fc815f4ae1af621",
+      "compressed_bytes": 10330279,
+      "uncompressed_sha256": "3f509654c6622e4df8602b2b68af2a7c919de686434787ce4d19329846329751",
+      "aliases": []
     },
     {
       "title": "Datamania",
