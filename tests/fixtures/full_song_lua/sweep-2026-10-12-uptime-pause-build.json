@@ -1,0 +1,68 @@
+{
+  "build_attempt": 2,
+  "previous_validation_failure": {
+    "log": "/home/parity/jobs/uptime-pause-build-v1/stage-test.log",
+    "failure": "Test input moved the option screen clock backwards inside one scene; corrected to a monotonic screen clock before any chart replay"
+  },
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/host.rs": "a2fd4b1dd717d6a1b0eb070ae7cb2a61df75b245f07e4eec418ab9dd5d78b1bb",
+    "crates/deadsync-song-lua/src/live.rs": "81e218da3d1ae4fcf32ac8fa44a7ee3c4e2b9c6ca4b76c03b302c1c8493e0260",
+    "crates/deadsync-song-lua/src/song_tables.rs": "3af70eef6c3e9b53eae43811a8a641dc1d8e3e9648a053ca8678302463732e19",
+    "crates/deadsync-song-lua/src/lua_util.rs": "c40ea0830967c2a4fba4798cfd036a083ea96228c4d996c98b629a3445bf17be",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "2714494a70e8b4cc9128f2513abe859e5b8dc97790a914dc5799e0e5eb216586",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "e20ab593fcff14d5e0daff7aa92a38261cc13e2df6d8f07c399f73abe02a24e1"
+  },
+  "checks": [
+    {
+      "label": "stage-test",
+      "exit_code": 0,
+      "seconds": 134.26407453700085,
+      "results": [
+        "test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 529 filtered out; finished in 0.38s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 169.9901815070043,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.099136406002799,
+      "results": [
+        "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.23s"
+      ]
+    }
+  ],
+  "binary": "/home/parity/jobs/uptime-pause-build-v2/full-song-lua-stage-modifier-v1",
+  "binary_sha256": "874046de12e1da317673ca0da4c84ed09627d58dc6c5595893b0504289560554",
+  "fix_commit": "4bd354261",
+  "windows_validation": [
+    {
+      "command": "cargo test --locked -p deadsync-song-lua --lib live_",
+      "passed": 24,
+      "failed": 0
+    },
+    {
+      "command": "cargo test --locked --test song_lua_itgmania_semantic_parity native_gameplay::tests",
+      "passed": 17,
+      "failed": 0
+    }
+  ],
+  "windows_previous_failed_test_log": "../itgmania-harness/target/server-parity/dig-dug-uptime-windows-live-attempt-1-failed.log",
+  "concrete_failure_receipt": "sweep-2026-10-12-dig-dug-clock-diagnosis.json",
+  "behavior": "Keep double process uptime independent of music position and rate; associate progress observations with chronological native input frames across music rewind; retain exact existing comparisons",
+  "local_references": [
+    "../itgmania-harness/vendor/itgmania/src/RageTimer.cpp:48",
+    "../itgmania-harness/vendor/itgmania/src/ScreenGameplay.cpp:1563",
+    "../itgmania-harness/probe_theme/ScreenGameplay overlay.lua:11"
+  ],
+  "bounded_repair": {
+    "job": "/home/parity/jobs/uptime-pause-repair-v1",
+    "attempt": 1,
+    "reused_uncompressed_candidate_sha256": "6b897f37a9e11cd374caaebbbb319c2be3f71a19a85bd174f8b2faaf147319cd"
+  },
+  "acceptance": "Existing complete full_song_lua replay comparisons; coverage recorded separately"
+}
