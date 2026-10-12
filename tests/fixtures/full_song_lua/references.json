@@ -655,5 +655,6 @@
   "tests/fixtures/itgmania-song-lua-micro/igaku-whole-song-provenance.legacy-synthetic-clock.json.zst": "5186d6c2c62af188b5bd2954c33c1d58080fe6bb304ec05a5e645942f5ad910f.json.zst",
   "tests/fixtures/itgmania-song-lua-micro/zero-fov.json.zst": "8188195117862e8f68a03c77e19dd4b234ec99900a96399c6cc356d7436a94ff.json.zst",
   "tests/fixtures/itgmania-song-lua-micro/zero-fov.provenance.json.zst": "1f9409d2b4c8610cb5ce97ec630248f9a3b6c0e60bb1be201c1db0ed6c23a78e.json.zst",
-  "tests/fixtures/full_song_lua/22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738.tar.zst": "22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738.tar.zst"
+  "tests/fixtures/full_song_lua/22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738.tar.zst": "22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738.tar.zst",
+  "tests/fixtures/full_song_lua/4cb5c12a32d6dec3aaff34052491970ef7857c9f6caacbe1ead0bc858d4a9ac4.tar.zst": "4cb5c12a32d6dec3aaff34052491970ef7857c9f6caacbe1ead0bc858d4a9ac4.tar.zst"
 }
