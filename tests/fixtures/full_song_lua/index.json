@@ -2330,15 +2330,12 @@
     {
       "title": "edamame",
       "source_simfile": "edamame (except bbno$ produced it under C&A)/edamame.ssc",
-      "harness_version": "0.1.0",
-      "archive": "8f6b71661630442b5fca4d4cb58bc46af366742397733ae79454851da9c819fc.tar.zst",
-      "sha256": "8f6b71661630442b5fca4d4cb58bc46af366742397733ae79454851da9c819fc",
-      "compressed_bytes": 242734,
-      "uncompressed_sha256": "3efb1214ec4a25c236548200668f8ebbc332537fc1d13d322c68c0bddefd4130",
-      "compression_level": 22,
-      "aliases": [
-        "4dd26e41cad20156d8d50d64db5d4d21c2855e32e98145422e0eeee425326021.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "ce6e8c3c2d61ccdcdc2f5229ce52a9fbe8c8d2df221ae23c4064bf34d329329f.tar.zst",
+      "sha256": "ce6e8c3c2d61ccdcdc2f5229ce52a9fbe8c8d2df221ae23c4064bf34d329329f",
+      "compressed_bytes": 13169250,
+      "uncompressed_sha256": "269c7dd059db19de2acb92abd3b9d9f1e68973c890673697a643dc69ddfc12b4",
+      "aliases": []
     },
     {
       "title": "Electrified",

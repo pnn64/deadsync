@@ -1242,6 +1242,57 @@
         }
       ],
       "report_sha256": "9ee5d91b9a667e5c6beca67cd776d11d8c5dc8a7c858cdd7dd1a7650e79f7c04"
+    },
+    {
+      "position": 183,
+      "source_simfile": "edamame (except bbno$ produced it under C&A)/edamame.ssc",
+      "simfile_sha256": "656fcee452061709ccc30f9cc61384e93fdd4e46db4b3b7b7ec395e3aa6172d3",
+      "retained_original_archive": "8f6b71661630442b5fca4d4cb58bc46af366742397733ae79454851da9c819fc.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "65deadde882c24ff688e78316e3add017f876258ae7209bc32e5a032b106b5c9",
+      "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+      "fix_commit": "df8437373 / harness 55299c5",
+      "build_proof": "/home/parity/jobs/outro-options-build-v1/proof.json",
+      "capture_seconds": 157.4784175620007,
+      "trace_sha256": "0b3f7b8e898d59d7465db273b3eb4b190fe20ca67a1f18631fa398fa0815d8c3",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-183/candidates/269c7dd059db19de2acb92abd3b9d9f1e68973c890673697a643dc69ddfc12b4.tar",
+      "replay_exit": 0,
+      "replay_seconds": 634.0768412360048,
+      "candidate_sha256": "269c7dd059db19de2acb92abd3b9d9f1e68973c890673697a643dc69ddfc12b4",
+      "native_frames": 115355,
+      "replayed_frames": 115355,
+      "compared_stage_fields": 1716,
+      "pending_coverage": [
+        "uncompared song operations: ActorSound.play",
+        "native drawable state/resources: Sound, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "ffc4a1e87c7efe1adedf54ac1a0538ec595cd2acb0499f3a15bfceb5ac59c7f1",
+      "archive": "ce6e8c3c2d61ccdcdc2f5229ce52a9fbe8c8d2df221ae23c4064bf34d329329f.tar.zst",
+      "archive_sha256": "ce6e8c3c2d61ccdcdc2f5229ce52a9fbe8c8d2df221ae23c4064bf34d329329f",
+      "compressed_bytes": 13169250,
+      "pack_seconds": 2.266414851001173,
+      "harness_version": "0.1.80",
+      "title": "edamame",
+      "retained_original_entry": {
+        "title": "edamame",
+        "source_simfile": "edamame (except bbno$ produced it under C&A)/edamame.ssc",
+        "harness_version": "0.1.0",
+        "archive": "8f6b71661630442b5fca4d4cb58bc46af366742397733ae79454851da9c819fc.tar.zst",
+        "sha256": "8f6b71661630442b5fca4d4cb58bc46af366742397733ae79454851da9c819fc",
+        "compressed_bytes": 242734,
+        "uncompressed_sha256": "3efb1214ec4a25c236548200668f8ebbc332537fc1d13d322c68c0bddefd4130",
+        "compression_level": 22,
+        "aliases": [
+          "4dd26e41cad20156d8d50d64db5d4d21c2855e32e98145422e0eeee425326021.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -1251,9 +1302,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "3888b1e92b5612b70edc19e66d3cf040cfd5169a6dd5f61bc2a0eeeead4acbd3",
+  "binary_sha256": "65deadde882c24ff688e78316e3add017f876258ae7209bc32e5a032b106b5c9",
   "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
-  "passed_fixtures": 0,
+  "passed_fixtures": 1,
   "pending_charts": 5,
-  "processed_charts": 5
+  "processed_charts": 6
 }
