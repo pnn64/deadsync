@@ -12376,6 +12376,7 @@ fn prepare_fixture(
         viewport,
         display_size,
         16.0 / 9.0,
+        0.0,
         session,
         config,
         &video_renderer.to_string(),

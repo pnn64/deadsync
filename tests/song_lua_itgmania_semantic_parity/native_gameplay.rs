@@ -556,6 +556,15 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn native_default_profile_uses_fresh_bootstrap_inputs() {
+        let mut trace = serde_json::json!({"input": {"gameplay_preferences": {"default_modifiers": ""}}});
+        let profiles = super::native_profile_inputs(&trace).expect("fresh native defaults");
+        assert!(profiles.iter().all(|profile| profile.scroll_speed == deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0)));
+        trace["input"]["gameplay_preferences"]["default_modifiers"] = serde_json::json!("C600");
+        assert!(super::native_profile_inputs(&trace).is_err());
+    }
+
+    #[test]
     fn native_capture_rejects_incomplete_or_failed_traces() {
         let complete = serde_json::json!({
             "oracle": "itgmania_song_lua_semantic_trace",
@@ -1081,6 +1090,20 @@ fn native_autoplay(trace: &Value) -> Result<bool, String> {
     }
 }
 
+fn native_profile_inputs(trace: &Value) -> Result<[deadsync_profile::Profile; 2], String> {
+    // The isolated probe starts with a fresh native profile. GameState's
+    // default player options use the inherited Common.DefaultModifiers=1x.
+    // Keep nonempty machine defaults pending instead of silently substituting
+    // DeadSync's guest profile or reconstructing options from later queries.
+    if trace.pointer("/input/gameplay_preferences/default_modifiers").and_then(Value::as_str) != Some("") {
+        return Err("nonempty native default modifiers require complete initial option support".into());
+    }
+    Ok(std::array::from_fn(|_| deadsync_profile::Profile {
+        scroll_speed: deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0),
+        ..Default::default()
+    }))
+}
+
 pub(crate) fn replay(
     trace: &Value,
     trace_path: &Path,
@@ -1195,7 +1218,7 @@ pub(crate) fn replay(
         .remove(0),
     );
     let payloads = [initial_payload.clone(), initial_payload];
-    let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+    let profiles = native_profile_inputs(&trace)?;
     let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
     let session = GameplaySession::default();
     let viewport = GameplayViewport::new(
@@ -1218,6 +1241,7 @@ pub(crate) fn replay(
         // its Preferences.ini sets dimensions but never overrides this value.
         preferences.get("display_aspect_ratio").and_then(Value::as_f64)
             .map_or(16.0 / 9.0, |value| value as f32),
+        f32::from(autoplay),
         &session,
         &config,
         "null",

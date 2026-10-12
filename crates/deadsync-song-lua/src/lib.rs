@@ -659,6 +659,8 @@ pub fn player_short_name(player: usize) -> &'static str {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SongLuaPlayerContext {
     pub enabled: bool,
+    /// Preferred controller option already set before song Lua loads.
+    pub autoplay: f32,
     pub difficulty: SongLuaDifficulty,
     pub speedmod: SongLuaSpeedMod,
     pub perspective: deadsync_gameplay::PerspectiveEffects,
@@ -681,6 +683,7 @@ impl Default for SongLuaPlayerContext {
     fn default() -> Self {
         Self {
             enabled: true,
+            autoplay: 0.0,
             difficulty: SongLuaDifficulty::default_enabled(),
             speedmod: SongLuaSpeedMod::default(),
             perspective: deadsync_gameplay::PerspectiveEffects::default(),
@@ -12336,6 +12339,26 @@ return Def.Quad{{}}
             let mut context = SongLuaCompileContext::new(&song_dir, "Profile Speed");
             context.players[0].speedmod = speed;
             test_compile_song_lua(&entry, &context).expect("compile profile speed fixture");
+        }
+    }
+
+    #[test]
+    fn initial_autoplay_precedes_song_loading() {
+        let song_dir = test_dir("initial-autoplay");
+        let entry = song_dir.join("default.lua");
+        for autoplay in [0.0, 1.0] {
+            fs::write(&entry, format!(r#"
+local ps = GAMESTATE:GetPlayerState(PLAYER_1)
+for _, level in ipairs({{'ModsLevel_Preferred', 'ModsLevel_Stage', 'ModsLevel_Song', 'ModsLevel_Current'}}) do
+    assert(ps:GetPlayerOptions(level):PlayerAutoPlay() == {autoplay})
+    assert(ps:GetPlayerOptionsString(level) == 'NoHideLights, {token}Overhead')
+end
+return Def.ActorFrame{{}}
+"#, token = if autoplay == 1.0 { "PlayerAutoPlay, " } else { "" }))
+                .expect("write initial controller input");
+            let mut context = SongLuaCompileContext::new(&song_dir, "Initial Autoplay");
+            context.players[0].autoplay = autoplay;
+            test_compile_song_lua(&entry, &context).expect("compile with initial controller input");
         }
     }
 

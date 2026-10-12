@@ -484,6 +484,7 @@ pub fn song_lua_compile_context(
     context.amod_available = false;
     context.players = std::array::from_fn(|player| deadsync_song_lua::SongLuaPlayerContext {
         enabled: player < num_players,
+        autoplay: 0.0,
         difficulty: if player < num_players {
             song_lua_difficulty_from_chart(&charts[player].difficulty)
         } else {
@@ -536,6 +537,7 @@ pub fn song_lua_play_context(
     viewport: deadsync_gameplay::GameplayViewport,
     display_size: (u32, u32),
     display_aspect_ratio: f32,
+    autoplay: f32,
     session: &deadsync_gameplay::GameplaySession,
     config: &deadsync_gameplay::GameplayConfig,
     video_renderer: &str,
@@ -593,6 +595,9 @@ pub fn song_lua_play_context(
     context.display_width = display_width as f32;
     context.display_height = display_height as f32;
     context.display_aspect_ratio = display_aspect_ratio;
+    for player in &mut context.players {
+        player.autoplay = if player.enabled { autoplay } else { 0.0 };
+    }
     // `VideoRenderers` is a legacy capability preference used by mod charts to
     // gate OpenGL-era ActorFrameTexture effects. DeadSync implements those
     // semantics above every physical backend, so advertise the compatibility

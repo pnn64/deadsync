@@ -713,6 +713,7 @@ mod tests {
             viewport,
             space::current_window_px(),
             16.0 / 9.0,
+            0.0,
             &session,
             &GameplayConfig::default(),
             &deadlib_render_core::BackendType::Software.to_string(),
