@@ -114,22 +114,29 @@ fn query_value(lua: &Lua, value: &Value, depth: usize) -> mlua::Result<serde_jso
             else if value.is_sign_negative() {"-infinity"} else {"infinity"}}),
         Value::String(value) => json!(value.to_str()?.to_string()),
         Value::Table(table) => {
-            if let Some(value) = lua.app_data_ref::<QueryTrace>().and_then(|trace|
-                trace.objects.iter().find(|(known, _)| known.to_pointer() == table.to_pointer())
-                    .map(|(_, value)| value.clone())) { return Ok(value); }
-            if let Some(name) = table.raw_get::<Option<String>>("Name")?.filter(|name| !name.is_empty()) {
-                let mut path = vec![name.clone()];
-                let mut parent = table.raw_get::<Option<Table>>("__songlua_parent")?;
+            if table.raw_get::<Option<String>>("__songlua_actor_type")?.is_some() {
+                let name = query_actor_name(table)?;
+                let mut path = Vec::new();
+                let mut current = Some(table.clone());
+                let mut seen = rustc_hash::FxHashSet::default();
                 for _ in 0..32 {
-                    let Some(actor) = parent else { break; };
-                    if let Some(name) = actor.raw_get::<Option<String>>("Name")?.filter(|name| !name.is_empty()) {
-                        path.push(name);
+                    let Some(actor) = current.take() else { break; };
+                    if !seen.insert(actor.to_pointer()) {
+                        return Err(mlua::Error::runtime("cycle in actor query ancestry"));
                     }
-                    parent = actor.raw_get::<Option<Table>>("__songlua_parent")?;
+                    let name = query_actor_name(&actor)?;
+                    if !name.is_empty() { path.push(name); }
+                    current = actor.raw_get::<Option<Table>>("__songlua_parent")?;
+                }
+                if current.is_some() {
+                    return Err(mlua::Error::runtime("actor query ancestry exceeds capture depth"));
                 }
                 path.reverse();
                 return Ok(json!({"actor":format!("{:p}", table.to_pointer()),"name":name,"path":path.join("/")}));
             }
+            if let Some(value) = lua.app_data_ref::<QueryTrace>().and_then(|trace|
+                trace.objects.iter().find(|(known, _)| known.to_pointer() == table.to_pointer())
+                    .map(|(_, value)| value.clone())) { return Ok(value); }
             if depth >= 5 { return Ok(json!({"type":"table","truncated":"depth"})); }
             let values = (1..=table.raw_len()).map(|index|
                 query_value(lua, &table.raw_get::<Value>(index)?, depth + 1))
@@ -138,6 +145,13 @@ fn query_value(lua: &Lua, value: &Value, depth: usize) -> mlua::Result<serde_jso
         }
         _ => json!({"type":value.type_name()}),
     })
+}
+
+fn query_actor_name(actor: &Table) -> mlua::Result<String> {
+    match actor.raw_get::<Option<String>>("__songlua_load_name")? {
+        Some(name) => Ok(name),
+        None => Ok(actor.raw_get::<Option<String>>("Name")?.unwrap_or_default()),
+    }
 }
 
 fn query_details(lua: &Lua, args: &MultiValue, result: &mlua::Result<MultiValue>) -> mlua::Result<serde_json::Value> {
@@ -150,8 +164,8 @@ fn query_details(lua: &Lua, args: &MultiValue, result: &mlua::Result<MultiValue>
 }
 
 pub(crate) fn trace_bound_method(lua: &Lua, name: &'static str, args: &MultiValue, result: &mlua::Result<MultiValue>) {
-    let class = if name == "GetChild" { "ActorFrame" } else { "Actor" };
-    let kind = if name.starts_with("Get") { "query" } else { "call" };
+    let class = if matches!(name, "GetChild" | "GetNumChildren") { "ActorFrame" } else { "Actor" };
+    let kind = if name.starts_with("Get") || name == "getaux" { "query" } else { "call" };
     trace_method(lua, kind, &format!("{class}.{name}"), || {
         let details = || -> mlua::Result<serde_json::Value> {
             let mut details = query_details(lua, args, result)?;
@@ -212,11 +226,8 @@ pub(crate) fn install_query_trace(lua: &Lua) -> mlua::Result<()> {
         let stage: Table = statsman.get::<Function>("GetCurStageStats")?.call(statsman.clone())?;
         let players: Table = stage.raw_get("__songlua_player_stats")?;
         let screenman: Table = globals.raw_get("SCREENMAN")?;
-        let screen: Table = screenman.get::<Function>("GetTopScreen")?.call(screenman.clone())?;
-        let screen_name: String = screen.get::<Function>("GetName")?.call(screen.clone())?;
         let mut objects = vec![(song.clone(), json!({"type":"Song","song_dir":song_dir})),
-            (stage.clone(), json!({"type":"StageStats","path":"stage:current"})),
-            (screen, json!({"type":"Screen","name":screen_name}))];
+            (stage.clone(), json!({"type":"StageStats","path":"stage:current"}))];
         let style: Table = gamestate.get::<Function>("GetCurrentStyle")?.call(gamestate.clone())?;
         let style_name: String = style.get::<Function>("GetName")?.call(style.clone())?;
         objects.push((style.clone(), json!({"type":"Style","name":style_name})));
@@ -769,6 +780,27 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn actor_query_loading_names() {
+        let lua = Lua::new();
+        let actor: Table = lua.load(r#"
+local screen={__songlua_actor_type='TopScreen',Name='ScreenGameplay'}
+return setmetatable({__songlua_actor_type='ActorFrame',Name='Declared',
+ __songlua_load_name='',__songlua_parent=screen},
+ {__index=function() error('query observation must not run authored lookup') end})
+"#).eval().expect("actor with authored lookup");
+        let mut value = query_value(&lua, &Value::Table(actor.clone()), 0).expect("loading actor");
+        assert_eq!(value["name"], "");
+        assert_eq!(value["path"], "ScreenGameplay");
+        assert!(value["actor"].is_string());
+        actor.raw_set("__songlua_load_name", Value::Nil).expect("finish loading");
+        value = query_value(&lua, &Value::Table(actor.clone()), 0).expect("loaded actor");
+        assert_eq!(value["name"], "Declared");
+        assert_eq!(value["path"], "ScreenGameplay/Declared");
+        actor.raw_set("__songlua_parent", actor.clone()).expect("invalid ownership");
+        assert!(query_value(&lua, &Value::Table(actor), 0).is_err());
+    }
+
     #[test]
     fn stage_failure_is_visible_without_life_failure() {
         let mut player = deadsync_gameplay::init_player_runtime();

@@ -458,7 +458,8 @@ pub(crate) fn forward(lua: &Lua, class: &Table, name: &'static str) -> mlua::Res
                     "native actor method {name} has no semantic implementation"
                 )));
             };
-            let observed = matches!(name, "GetChild" | "GetName" | "x" | "y" | "zoomx" | "vibrate" | "effectmagnitude")
+            let observed = matches!(name, "GetChild" | "GetName" | "GetParent" | "GetNumChildren"
+                | "name" | "aux" | "getaux" | "x" | "y" | "zoomx" | "vibrate" | "effectmagnitude")
                 && crate::live::active(lua)
                 && log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace);
             let trace_args = observed.then(|| args.clone());
