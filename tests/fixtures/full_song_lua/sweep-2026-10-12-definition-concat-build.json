@@ -1,0 +1,79 @@
+{
+  "checks": [
+    {
+      "label": "runtime-tests",
+      "exit_code": 0,
+      "seconds": 19.7396249500016,
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 188 filtered out; finished in 0.01s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 0.11289681199559709,
+      "results": []
+    },
+    {
+      "label": "native-definition-concat",
+      "exit_code": 0,
+      "seconds": 12.583249816001626,
+      "output": [
+        "{\"fixture\": \"definition-concat\", \"events\": 17, \"completion\": {\"next_screen\": \"ScreenEvaluationStage\", \"reason\": \"gameplay-exit\", \"stage_committed\": true, \"stages_played_after\": 1, \"stages_played_before\": 0}, \"update_frames\": 9292}"
+      ]
+    },
+    {
+      "label": "native-foreground",
+      "exit_code": 0,
+      "seconds": 12.466128605003178,
+      "output": [
+        "{\"fixture\": \"foreground\", \"events\": 54, \"completion\": {\"next_screen\": \"ScreenEvaluationStage\", \"reason\": \"gameplay-exit\", \"stage_committed\": true, \"stages_played_after\": 1, \"stages_played_before\": 0}, \"update_frames\": 9409}"
+      ]
+    },
+    {
+      "label": "native-reload-queue",
+      "exit_code": 0,
+      "seconds": 18.752631819996168,
+      "output": [
+        "{\"fixture\": \"reload-queue\", \"events\": 55, \"completion\": {\"next_screen\": \"ScreenEvaluationStage\", \"reason\": \"gameplay-exit\", \"stage_committed\": true, \"stages_played_after\": 1, \"stages_played_before\": 0}, \"update_frames\": 15321}"
+      ]
+    }
+  ],
+  "source_sha256": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f",
+  "binary": "/home/parity/jobs/definition-concat-capture-build-v1/harness",
+  "binary_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+  "source_files_sha256": {
+    "probe_theme/SongLuaTrace.lua": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f",
+    "scripts/check_song_lua_runtime.py": "96ba1c4b22c0d1f513049c97b4594ebba5daea73356df8c3cac1ef68b3178741",
+    "src/song_lua_runtime.rs": "2282d197834c8451622a0cff3dbc38e971ae9a764c792244a18a2f33feb95515"
+  },
+  "fix_commit": "55299c5cb59cc4bc0d3fb106b9e21bfebcebe308",
+  "windows_validation": {
+    "command": "cargo test --locked --release song_lua_runtime::tests",
+    "passed": 12,
+    "failed": 0
+  },
+  "concrete_failure": {
+    "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
+    "failure": "native definition instance has no observed creation identity",
+    "native_completion": "gameplay-exit; stage committed; no callback errors or dropped events",
+    "old_raw_native_trace_sha256": "0c791d6aa2d8bb9d4db0800a6a1990917077f4bd869399a3286557936aa943d1",
+    "unobserved_definition": "def-0141; song:/lua/chara/default.lua:6",
+    "composition_source": "song:/lua/default.lua:780"
+  },
+  "behavior": "Observe the final ActorDef concatenation before native factory creation; unwrap prior command observers before native MergeTables command composition",
+  "local_references": [
+    "../itgmania-harness/vendor/itgmania/Themes/_fallback/Scripts/02 ActorDef.lua:14",
+    "../itgmania-harness/native/trace_adapter.cpp"
+  ],
+  "bounded_repair": {
+    "attempt": 1,
+    "job": "/home/parity/jobs/definition-concat-repair-v1",
+    "recapture_reason": "Old trace contains no neutral factory identity for the composed root"
+  },
+  "acceptance": "Existing complete full_song_lua replay comparisons; coverage recorded separately"
+}
