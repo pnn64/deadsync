@@ -409,6 +409,19 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
 #[cfg(test)]
 mod tests {
     #[test]
+    fn native_controller_inputs_reject_cpu_and_partial_autoplay() {
+        for (mode, enabled) in [(0, false), (1, true)] {
+            let trace = serde_json::json!({"input": {"autoplay": mode}});
+            assert_eq!(super::native_autoplay(&trace).expect("recorded controller"), enabled);
+        }
+        for mode in [serde_json::json!(2), serde_json::json!(0.5), serde_json::json!(-1),
+                     serde_json::json!(null), serde_json::json!("1")] {
+            let trace = serde_json::json!({"input": {"autoplay": mode}});
+            assert!(super::native_autoplay(&trace).is_err(), "accepted {mode}");
+        }
+    }
+
+    #[test]
     fn native_capture_rejects_incomplete_or_failed_traces() {
         let complete = serde_json::json!({
             "oracle": "itgmania_song_lua_semantic_trace",
@@ -931,6 +944,14 @@ pub(crate) fn validate_capture(trace: &Value) -> Result<(), String> {
     Ok(())
 }
 
+fn native_autoplay(trace: &Value) -> Result<bool, String> {
+    match trace["input"]["autoplay"].as_u64() {
+        Some(0) => Ok(false),
+        Some(1) => Ok(true),
+        _ => Err("native controller must be human or full autoplay; other inputs remain pending".into()),
+    }
+}
+
 pub(crate) fn replay(
     trace_path: &Path,
     simfile: &Path,
@@ -939,9 +960,10 @@ pub(crate) fn replay(
 ) -> Result<Value, String> {
     let trace = read_json(trace_path)?;
     validate_capture(&trace)?;
-    if trace["input"]["autoplay"] != 0 || trace["style"] != "single" {
+    let autoplay = native_autoplay(&trace)?;
+    if trace["style"] != "single" {
         return Err(
-            "live replay currently supports no-input dance-single; other contexts remain pending"
+            "live replay currently supports dance-single; other styles remain pending"
                 .into(),
         );
     }
@@ -1080,7 +1102,7 @@ pub(crate) fn replay(
             &session,
             config.global_offset_seconds,
         )?;
-        let state = Box::new(gameplay::init(
+        let mut state = Box::new(gameplay::init(
             song.clone(),
             charts,
             payloads,
@@ -1111,6 +1133,10 @@ pub(crate) fn replay(
         if state.song_lua.is_none() {
             return Err("preparation did not retain a Lua scene".into());
         }
+        // This is a recorded controller input, not an expected score. Native
+        // Player::HandleTapRowScore/HandleHoldScore skip release autoplay
+        // scoring; run the production autoplay path with the same input.
+        state.set_live_autoplay_enabled(autoplay);
         Ok(state)
     };
     let mut state = init_scene(prepared)?;
