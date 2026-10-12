@@ -1,0 +1,59 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "a3fac0d8b",
+  "results": [
+    {
+      "position": 152,
+      "source_simfile": "copter/copter.sm",
+      "status": "passed",
+      "repair_attempts": 1,
+      "previous_failure": [
+        "OnCommand failed for ActorFrame 'copter': runtime error: [string \"/tmp/.tmpDWzgsE/song/copter/default.lua\"]:20: attempt to call method 'ApplyStageModifiers' (a nil value)\nstack traceback:\n\t[C]: in method 'ApplyStageModifiers'\n\t[string \"/tmp/.tmpDWzgsE/song/copter/default.lua\"]:20: in function <[string \"/tmp/.tmpDWzgsE/song/copter/default.lua\"]:18>"
+      ],
+      "binary_sha256": "ecc8edb7b5e27fbf64de6f1a6ff9ebb0dac2311f3b4b02b54ccdd009d615131b",
+      "candidate_sha256": "560f3f7b178c419bf3643f18fc52bbe8af01df598a1faf74926ffe47431fa899",
+      "replay_exit": 0,
+      "replay_seconds": 75.68200244599575,
+      "native_frames": 17735,
+      "replayed_frames": 17735,
+      "compared_stage_fields": 220,
+      "pending_coverage": [
+        "uncompared song operations: Actor.zoomy, GameState.ApplyStageModifiers",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "080d93340d39a1ebd81e360d7ecbfffad97a7f8f47885f2fb42fb211f299d8a9",
+      "archive": "24ec4a9162f8f547f305384bd25afa823f330ad71e54e566237f124cc9bb0f99.tar.zst",
+      "archive_sha256": "24ec4a9162f8f547f305384bd25afa823f330ad71e54e566237f124cc9bb0f99",
+      "compressed_bytes": 805332,
+      "harness_version": "0.1.80",
+      "title": "copter",
+      "pack_seconds": 0.502043077001872,
+      "retained_original_entry": {
+        "title": "copter",
+        "source_simfile": "copter/copter.sm",
+        "harness_version": "0.1.0",
+        "archive": "6b6c32875026ece877f493480440e61f6004b160b8c738b5251cdb9974896668.tar.zst",
+        "sha256": "6b6c32875026ece877f493480440e61f6004b160b8c738b5251cdb9974896668",
+        "compressed_bytes": 71713,
+        "uncompressed_sha256": "4848a28d6b634971b9a0acc0843c35de2a3693f7cf8640e400a43654f65743ce",
+        "compression_level": 22,
+        "aliases": [
+          "d92a64dd61764a4a4383ea73cd72f654184beca321708b8d29e6a2904cbbec04.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "ecc8edb7b5e27fbf64de6f1a6ff9ebb0dac2311f3b4b02b54ccdd009d615131b",
+  "harness_sha256": "41bfe13b815a4a9695c2271e375611ff2e0efc017c4c4bc1ee304cb89bf69a54",
+  "repair": "native GameState::ApplyStageModifiers semantics",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}

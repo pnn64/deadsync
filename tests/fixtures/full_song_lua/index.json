@@ -1966,15 +1966,12 @@
     {
       "title": "copter",
       "source_simfile": "copter/copter.sm",
-      "harness_version": "0.1.0",
-      "archive": "6b6c32875026ece877f493480440e61f6004b160b8c738b5251cdb9974896668.tar.zst",
-      "sha256": "6b6c32875026ece877f493480440e61f6004b160b8c738b5251cdb9974896668",
-      "compressed_bytes": 71713,
-      "uncompressed_sha256": "4848a28d6b634971b9a0acc0843c35de2a3693f7cf8640e400a43654f65743ce",
-      "compression_level": 22,
-      "aliases": [
-        "d92a64dd61764a4a4383ea73cd72f654184beca321708b8d29e6a2904cbbec04.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "24ec4a9162f8f547f305384bd25afa823f330ad71e54e566237f124cc9bb0f99.tar.zst",
+      "sha256": "24ec4a9162f8f547f305384bd25afa823f330ad71e54e566237f124cc9bb0f99",
+      "compressed_bytes": 805332,
+      "uncompressed_sha256": "560f3f7b178c419bf3643f18fc52bbe8af01df598a1faf74926ffe47431fa899",
+      "aliases": []
     },
     {
       "title": "copter",
