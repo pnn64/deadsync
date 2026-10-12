@@ -187,6 +187,72 @@ pub fn apply_song_lua_reload(
     Ok(true)
 }
 
+/// Build production Lua host inputs, chart timings and initial resources.
+pub fn song_lua_context(
+    song: &SongData,
+    charts: &[Arc<ChartData>; MAX_PLAYERS],
+    timing: [&deadsync_rules::timing::TimingData; MAX_PLAYERS],
+    player_profiles: &[deadsync_profile::Profile; MAX_PLAYERS],
+    scroll_speed: &[deadsync_rules::scroll::ScrollSpeedSetting; MAX_PLAYERS],
+    music_rate: f32,
+    viewport: deadsync_gameplay::GameplayViewport,
+    display_size: (u32, u32),
+    display_aspect_ratio: f32,
+    autoplay: f32,
+    session: &deadsync_gameplay::GameplaySession,
+    config: &deadsync_gameplay::GameplayConfig,
+    video_renderer: &str,
+    random_seed: u32,
+    live: bool,
+) -> Result<deadsync_song_lua::SongLuaCompileContext, String> {
+    let mut context = deadsync_profile_gameplay::song_lua_play_context(
+        song,
+        charts,
+        timing,
+        player_profiles,
+        scroll_speed,
+        music_rate,
+        viewport,
+        display_size,
+        display_aspect_ratio,
+        autoplay,
+        session,
+        config,
+        video_renderer,
+    );
+    context.random_seed = random_seed;
+    context.live = live;
+    let mut timings = deadsync_simfile::app_runtime::load_chart_timings(song, config.global_offset_seconds)?;
+    let sync_offset = if config.machine_pack_ini_offsets {
+        deadsync_chart::song::sync_pref_offset(
+            deadsync_profile_gameplay::gameplay_pack_data(song, None, None).sync_pref,
+            config.machine_default_sync_pref)
+    } else { 0.0 };
+    for timing in &mut timings { timing.shift_song_offset_seconds(sync_offset); }
+    context.song_step_timing = timings;
+    for (player, profile) in context.players.iter_mut().zip(player_profiles) {
+        let Some(choice) = deadsync_assets::textures::resolve_texture_choice_entry(
+            profile.judgment_graphic.texture_key(),
+            deadsync_assets::textures::judgment_texture_choices(),
+        ) else {
+            continue;
+        };
+        let path = deadsync_assets::textures::texture_key_source_path(
+            &choice.key,
+            &choice.key,
+            deadsync_assets::resolve_asset_path,
+        );
+        match std::fs::canonicalize(&path) {
+            Ok(path) => player.judgment_texture = Some(path),
+            Err(error) => warn!(
+                "Cannot load initial Lua judgment {}: {error}",
+                path.display()
+            ),
+        }
+    }
+    Ok(context)
+}
+
 /// Construct the owned gameplay Lua session on the CPU load worker.
 pub fn prepare_song_lua(
     song: &SongData,
@@ -208,62 +274,17 @@ pub fn prepare_song_lua(
     if song.background_lua_changes.is_empty() && song.foreground_lua_changes.is_empty() {
         return PreparedGameplaySongLua::default();
     }
-    let mut context = deadsync_profile_gameplay::song_lua_play_context(
-        song,
-        charts,
-        timing,
-        player_profiles,
-        scroll_speed,
-        music_rate,
-        viewport,
-        display_size,
-        display_aspect_ratio,
-        autoplay,
-        session,
-        config,
-        video_renderer,
-    );
-    context.random_seed = random_seed;
-    context.live = live;
-    match deadsync_simfile::app_runtime::load_chart_timings(song, config.global_offset_seconds) {
-        Ok(mut timings) => {
-            let sync_offset = if config.machine_pack_ini_offsets {
-                deadsync_chart::song::sync_pref_offset(
-                    deadsync_profile_gameplay::gameplay_pack_data(song, None, None).sync_pref,
-                    config.machine_default_sync_pref)
-            } else { 0.0 };
-            for timing in &mut timings { timing.shift_song_offset_seconds(sync_offset); }
-            context.song_step_timing = timings;
-        }
+    let context = match song_lua_context(song, charts, timing, player_profiles, scroll_speed,
+        music_rate, viewport, display_size, display_aspect_ratio, autoplay, session,
+        config, video_renderer, random_seed, live) {
+        Ok(context) => context,
         Err(error) => {
             warn!("Cannot load Lua chart timing for '{}': {error}", song.title);
             return PreparedGameplaySongLua::default();
         }
-    }
-    for (player, profile) in context.players.iter_mut().zip(player_profiles) {
-        let Some(choice) = deadsync_assets::textures::resolve_texture_choice_entry(
-            profile.judgment_graphic.texture_key(),
-            deadsync_assets::textures::judgment_texture_choices(),
-        ) else {
-            continue;
-        };
-        let path = deadsync_assets::textures::texture_key_source_path(
-            &choice.key,
-            &choice.key,
-            deadsync_assets::resolve_asset_path,
-        );
-        match std::fs::canonicalize(&path) {
-            Ok(path) => player.judgment_texture = Some(path),
-            Err(error) => warn!(
-                "Cannot load initial Lua judgment {}: {error}",
-                path.display()
-            ),
-        }
-    }
+    };
     deadsync_song_lua::playback::prepare_song_lua(
-        song,
-        &context,
-        deadsync_assets::song_lua::compile_song_lua,
+        song, &context, deadsync_assets::song_lua::compile_song_lua,
         deadsync_assets::song_lua::compile_song_lua_layers,
     )
 }
