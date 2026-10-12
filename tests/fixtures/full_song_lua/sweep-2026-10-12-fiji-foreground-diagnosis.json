@@ -1,0 +1,180 @@
+{
+  "source_simfile": "Fiji (Lange Remix)/Fiji (Lange Remix).ssc",
+  "position": 186,
+  "completed_repair_attempts": 0,
+  "remaining_repair_attempts": 2,
+  "native_frames": 93015,
+  "replayed_frames": 93015,
+  "errors": [],
+  "concrete_failures": [
+    {
+      "field": "command_query_count",
+      "native": 5,
+      "deadsync": 0
+    }
+  ],
+  "missing_native_events": [
+    {
+      "actor": "def-0001",
+      "args": [],
+      "beat": 0.00044730535591952503,
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 3,
+      "operation": "command.begin",
+      "scene": 1,
+      "seconds": 0.02619047649204731,
+      "seq": 2,
+      "source": "song:/Star Necklace/Essence Of Colbur.lua"
+    },
+    {
+      "args": [
+        0
+      ],
+      "beat": 0.00044730535591952503,
+      "caller": {
+        "line": 3,
+        "source": "song:/Star Necklace/Essence Of Colbur.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "detail": {
+        "results": [
+          true
+        ]
+      },
+      "kind": "query",
+      "line": 3,
+      "operation": "GameState.IsPlayerEnabled",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 0.02619047649204731,
+      "seq": 3,
+      "source": "song:/Star Necklace/Essence Of Colbur.lua",
+      "results": [
+        true
+      ]
+    },
+    {
+      "args": [
+        "PlayerNumber_P1"
+      ],
+      "beat": 0.00044730535591952503,
+      "caller": {
+        "line": 3,
+        "source": "song:/Star Necklace/Essence Of Colbur.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "detail": {
+        "results": [
+          {
+            "path": "player-state:PlayerNumber_P1",
+            "type": "PlayerState"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 3,
+      "operation": "GameState.GetPlayerState",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 0.02619047649204731,
+      "seq": 4,
+      "source": "song:/Star Necklace/Essence Of Colbur.lua",
+      "results": [
+        {
+          "path": "player-state:PlayerNumber_P1",
+          "type": "PlayerState"
+        }
+      ]
+    },
+    {
+      "args": [
+        1
+      ],
+      "beat": 0.00044730535591952503,
+      "caller": {
+        "line": 3,
+        "source": "song:/Star Necklace/Essence Of Colbur.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "detail": {
+        "results": [
+          false
+        ]
+      },
+      "kind": "query",
+      "line": 3,
+      "operation": "GameState.IsPlayerEnabled",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 0.02619047649204731,
+      "seq": 9,
+      "source": "song:/Star Necklace/Essence Of Colbur.lua",
+      "results": [
+        false
+      ]
+    },
+    {
+      "actor": "def-0001",
+      "args": [],
+      "beat": 0.00044730535591952503,
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 3,
+      "operation": "command.end",
+      "scene": 1,
+      "seconds": 0.02619047649204731,
+      "seq": 10,
+      "source": "song:/Star Necklace/Essence Of Colbur.lua"
+    }
+  ],
+  "source_confirmed_cause": "The first beat-zero foreground returns NullActor when only P1 is joined. Native fallback defines this as an empty Actor declaration. The DeadSync host omitted the global, leaving nil at session root slot 1. Sequence traversal then stopped before the second foreground and skipped its On command.",
+  "authored_entries": [
+    {
+      "beat": 0,
+      "path": "Cloak/Water Pulse.lua",
+      "early_return": "NullActor"
+    },
+    {
+      "beat": 0,
+      "path": "Star Necklace/Essence Of Colbur.lua",
+      "callback_line": 3
+    }
+  ],
+  "local_references": [
+    "../itgmania-harness/vendor/itgmania/Themes/_fallback/Scripts/02 ActorDef.lua:224",
+    "../itgmania-harness/vendor/itgmania/src/Foreground.cpp:38",
+    "../itgmania-harness/vendor/itgmania/src/ActorUtil.cpp:311",
+    "crates/deadsync-song-lua/src/compile.rs:328",
+    "crates/deadsync-song-lua/src/lua_util.rs:11927"
+  ],
+  "storage": {
+    "preserved_byte_identical_data": [
+      {
+        "raw": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-186/candidates/cb85a348b7f848964bf688dad1f7758613100592ac76aae18838e87f48af7942.tar",
+        "compressed": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-186/private-candidate.tar.zst",
+        "uncompressed_sha256": "cb85a348b7f848964bf688dad1f7758613100592ac76aae18838e87f48af7942"
+      },
+      {
+        "raw": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-186/report.json",
+        "compressed": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-186/report.json.zst",
+        "uncompressed_sha256": "d5d8ca8596715f2457b611383b0c582496d1da9bd7f64e2de2b2f9037f92bcfe"
+      }
+    ]
+  },
+  "acceptance": "Unchanged existing full_song_lua comparisons; no acceptance gate for unsupported GetHumanPlayers or other coverage gaps"
+}
