@@ -1116,6 +1116,9 @@ end}
                 "pointer_hex":"50","ordinal":1,"scene":1,"before_seq":1,
                 "provenance":"native-ActorUtil-before-LoadFromNode"}));
         assert_eq!(super::native_creation_order(&background).expect("owned foreground inputs"), expected);
+        assert_eq!(super::native_creation_order_for_entries(&background, 1, 1)
+            .expect("background children and second entry foreground"),
+            vec![("1/1".into(), 80), ("2".into(), 32), ("2/1".into(), 16)]);
         let mut reload = trace.clone();
         reload["actor_definitions"].as_array_mut().unwrap().extend([
             json!({"id":"next-root", "children":[{"layer_index":1,"definition_id":"next-child"}]}),
@@ -1364,6 +1367,10 @@ fn native_creation_order(trace: &Value) -> Result<Vec<(String, usize)>, String> 
 }
 
 fn native_creation_order_for_scene(trace: &Value, scene: u64) -> Result<Vec<(String, usize)>, String> {
+    native_creation_order_for_entries(trace, scene, 0)
+}
+
+fn native_creation_order_for_entries(trace: &Value, scene: u64, background_entries: usize) -> Result<Vec<(String, usize)>, String> {
     if trace["capabilities"]["native_actor_creation"] != true { return Ok(Vec::new()); }
     if !trace["actor_creation_error"].is_null() {
         return Err("native actor creation observer failed".into());
@@ -1411,6 +1418,24 @@ fn native_creation_order_for_scene(trace: &Value, scene: u64) -> Result<Vec<(Str
     let foreground_root = foreground_roots.first().copied();
     let mut observed = BTreeSet::new();
     let mut paths = BTreeMap::new();
+    if background_entries > 0 {
+        // Background::LoadFromNode loads an entry's children onto an external
+        // frame. There is no allocation for the returned declaration wrapper.
+        // The session prepares these background entries before foregrounds.
+        let mut background_parents = Vec::new();
+        for input in inputs.iter().filter(|input| input["scene"].as_u64() == Some(scene)) {
+            let Some(parent) = input["parent"].as_str() else { continue; };
+            if instances.contains_key(parent) || runtime.iter().any(|record| record["id"] == parent
+                && record["path"] == "SongForeground") { continue; }
+            if !background_parents.contains(&parent) { background_parents.push(parent); }
+        }
+        if background_parents.len() != background_entries {
+            return Err("native background containers do not match the prepared entry count".into());
+        }
+        for (index, parent) in background_parents.into_iter().enumerate() {
+            paths.insert(parent, (index + 1).to_string());
+        }
+    }
     let mut child_counts = BTreeMap::new();
     let mut pointers = BTreeSet::new();
     let mut result = Vec::with_capacity(inputs.len());
@@ -1445,17 +1470,22 @@ fn native_creation_order_for_scene(trace: &Value, scene: u64) -> Result<Vec<(Str
         {
             continue;
         }
-        let path = if let Some(parent) = input["parent"].as_str().filter(|parent| instances.contains_key(parent)) {
+        let path = if let Some(parent) = input["parent"].as_str().filter(|parent| paths.contains_key(parent)) {
             let parent_path: &String = paths.get(parent).ok_or("native factory parent is outside this scene or not yet created")?;
             let child = child_counts.entry(parent).or_insert(0usize);
             *child += 1;
             format!("{parent_path}/{child}")
         } else {
+            if input["parent"].as_str().is_some_and(|parent| instances.contains_key(parent)) {
+                return Err("native factory parent is outside this scene or not yet created".into());
+            }
             if !input["parent"].is_null() && !runtime.iter().any(|record| record["id"] == input["parent"]) {
                 return Err("native factory parent has no runtime identity".into());
             }
-            if !result.is_empty() { return Err("native subscriber ownership needs a single instantiated root per scene".into()); }
-            "1".into()
+            if !result.is_empty() && foreground_root != Some(actor) {
+                return Err("native subscriber ownership needs a single instantiated root per scene".into());
+            }
+            (background_entries + 1).to_string()
         };
         if paths.insert(actor, path.clone()).is_some() {
             return Err("duplicate native factory instance".into());
@@ -1692,7 +1722,7 @@ pub(crate) fn replay(
         native_random_seed(trace)?,
         true,
     )?;
-    context.message_actor_order = native_creation_order(trace)?;
+    context.message_actor_order = native_creation_order_for_entries(trace, 1, song.background_lua_changes.len())?;
     let prepared = deadsync_song_lua::playback::prepare_song_lua(
         &song, &context, deadsync_assets::song_lua::compile_song_lua,
         deadsync_assets::song_lua::compile_song_lua_layers,
@@ -1786,7 +1816,8 @@ pub(crate) fn replay(
                 .song_lua
                 .take()
                 .ok_or("reload has no retained Lua scene")?;
-            scene.set_message_actor_order(native_creation_order_for_scene(trace, scene_count + 1)?);
+            scene.set_message_actor_order(native_creation_order_for_entries(trace, scene_count + 1,
+                scene.context().background_layer_count)?);
             let prepared = deadsync_song_lua::playback::reload_song_lua(
                 &song,
                 scene,
