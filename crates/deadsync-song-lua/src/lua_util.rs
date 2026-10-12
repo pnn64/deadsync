@@ -11962,7 +11962,9 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
         // an earlier completed tween in its queue.
         if let Some(screen) = lua.globals().raw_get::<Option<Table>>("__songlua_top_screen")? {
             let children = actor_children(lua, &screen)?;
-            for name in ["Underlay", "Overlay", "SongBackground", "In"] {
+            // SongBackground's entries are already visited through the song
+            // root below; traversing its child aliases would update them twice.
+            for name in ["Underlay", "Overlay", "In"] {
                 if let Some(actor) = children.raw_get::<Option<Table>>(name)? {
                     collect_compile_update_jobs(lua, &actor, None, false, &mut jobs, &mut order)?;
                 }
