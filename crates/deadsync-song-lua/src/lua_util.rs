@@ -1628,6 +1628,13 @@ pub fn install_def_globals(
             )?,
         )?;
     }
+    // _fallback/02 ActorDef.lua supplies this reusable empty declaration.
+    // MakeActor constructs an independent instance for every occurrence.
+    let null_actor = create_dummy_actor(lua, "Actor")?;
+    null_actor.raw_set("Class", "Actor")?;
+    null_actor.raw_set("_Source", "(null actor)")?;
+    null_actor.raw_set("__songlua_def_owned", true)?;
+    globals.set("NullActor", null_actor)?;
     globals.set("Def", def)?;
     crate::actor_classes::install(lua)?;
     // Native Player/NoteField classes inherit ActorFrame. Their own method
@@ -1894,6 +1901,21 @@ fn own_actor_children(
         source.raw_set(key, child)?;
     }
     Ok(())
+}
+
+pub(crate) fn own_actor_root(
+    lua: &Lua,
+    root: Value,
+    install_methods: fn(&Lua, &Table) -> mlua::Result<()>,
+) -> mlua::Result<Value> {
+    let Value::Table(actor) = root else { return Ok(root) };
+    let actor = if actor.raw_get::<Option<bool>>("__songlua_def_owned")?.unwrap_or(false) {
+        clone_actor_def(lua, &actor, install_methods, true)?
+    } else {
+        actor
+    };
+    actor.raw_set("__songlua_def_owned", true)?;
+    Ok(Value::Table(actor))
 }
 
 fn clone_actor_def(

@@ -324,6 +324,8 @@ where
         for (index, entry_path) in entry_paths.iter().enumerate() {
             let root = execute_script_file(&lua, entry_path, context.song_dir.as_path())
                 .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
+            let root = crate::lua_util::own_actor_root(&lua, root, install_actor_methods)
+                .map_err(|err| err.to_string())?;
             let parent = if let Value::Table(actor) = &root {
                 #[cfg(feature = "test-support")]
                 actor.raw_set("__songlua_message_path", (index + 1).to_string())

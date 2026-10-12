@@ -1935,6 +1935,39 @@ end }
     }
 
     #[test]
+    fn live_null_foreground_keeps_later_entries_and_owns_each_instance() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-null-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("foreground directory");
+        let blank = dir.join("blank.lua");
+        let active = dir.join("active.lua");
+        fs::write(&blank, "assert(NullActor.Class == 'Actor'); return NullActor").expect("empty declaration");
+        fs::write(&active, r#"
+ACTIVATIONS = 0
+return Def.Actor { OnCommand = function(self)
+    ACTIVATIONS = ACTIVATIONS + 1
+    assert(GAMESTATE:IsPlayerEnabled(0))
+    local children = self:GetParent():GetChildren()
+    assert(children.first ~= children.last)
+    children.first:aux(17)
+    assert(children.last:getaux() == 0)
+    assert(NullActor:getaux() == 0)
+end }
+"#).expect("later foreground");
+        let mut context = SongLuaCompileContext::new(&dir, "null foreground");
+        context.live = true;
+        context.layer_start_beats = vec![0.0; 3];
+        context.foreground_names = vec!["first".into(), "active".into(), "last".into()];
+        let mut layers: Vec<Compiled> = crate::compile_song_lua_layers_with_default_host(
+            &[&blank, &active, &blank], 0, &context, SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).expect("all foreground entries");
+        let mut scene = layers[0].live_scene.take().expect("primary retains scene");
+        let output = scene.advance(SongLuaLiveFrame { music_seconds: 0.02, beat: 0.01,
+            screen_seconds: 0.1, delta_seconds: 0.1, ..Default::default() }).expect("foreground activation");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(scene.lua.globals().get::<u32>("ACTIVATIONS").expect("later On"), 1);
+    }
+
+    #[test]
     fn live_requests() {
         let mut compiled = compile("transition", r#"
 return Def.ActorFrame {
