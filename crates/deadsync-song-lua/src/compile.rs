@@ -238,6 +238,11 @@ where
     if context.background_layer_count > entry_paths.len() {
         return Err("song lua background count exceeds its session entries".to_owned());
     }
+    if !context.foreground_names.is_empty()
+        && context.foreground_names.len() != entry_paths.len() - context.background_layer_count
+    {
+        return Err("song lua foreground names do not match its session entries".into());
+    }
     if !context.layer_start_beats.is_empty()
         && (context.layer_start_beats.len() != entry_paths.len()
             || context.layer_start_beats.iter().any(|beat| !beat.is_finite()))
@@ -362,6 +367,11 @@ where
                 if actor.raw_get::<Option<f32>>("__songlua_foreground_start_beat")
                     .map_err(|err| err.to_string())?.is_some()
                 {
+                    // Foreground::LoadFromSong overwrites an authored or
+                    // Init-assigned name after MakeActor, before On activation.
+                    if let Some(name) = context.foreground_names.get(index - context.background_layer_count) {
+                        actor.raw_set("Name", name.as_str()).map_err(|err| err.to_string())?;
+                    }
                     // Foreground::LoadFromSong hides the actor after MakeActor
                     // has run Init, before its scheduled On activation.
                     actor.get::<mlua::Function>("visible").map_err(|err| err.to_string())?

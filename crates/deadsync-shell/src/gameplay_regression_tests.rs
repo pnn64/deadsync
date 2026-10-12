@@ -1157,8 +1157,8 @@ return Def.ActorFrame { Name = 'Foreground',
                 start_beat: 0.0, path: dir.join("background.lua"),
             }];
             song.foreground_lua_changes = vec![
-                deadsync_chart::SongForegroundLuaChange { start_beat: 0.0, path: dir.join("primary.lua") },
-                deadsync_chart::SongForegroundLuaChange { start_beat: 0.01, path: dir.join("foreground.lua") },
+                deadsync_chart::SongForegroundLuaChange { start_beat: 0.0, path: dir.join("primary.lua"), name: "primary.lua".into() },
+                deadsync_chart::SongForegroundLuaChange { start_beat: 0.01, path: dir.join("foreground.lua"), name: "foreground.lua".into() },
             ];
             let mut context = deadsync_song_lua::SongLuaCompileContext::new(dir, &song.title);
             context.live = true;

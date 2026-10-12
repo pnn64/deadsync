@@ -127,6 +127,7 @@ fn extract_foreground_change_sets_with(
                 lua.push(SerializableSongForegroundLuaChange {
                     start_beat,
                     path: path.to_string_lossy().into_owned(),
+                    name: target.to_string(),
                 });
             } else if include_media && !path_uses_lua {
                 let path = if path.is_dir() {
@@ -781,6 +782,13 @@ mod tests {
         assert_eq!(lua.len(), 1);
         assert_eq!(lua[0].start_beat, 8.0);
         assert_eq!(PathBuf::from(&lua[0].path), default_lua);
+        assert_eq!(lua[0].name, "scripts");
+
+        let alias = extract_foreground_lua_changes(
+            &song_dir, b"#FGCHANGES:0=./scripts/Default.lua=1=0=0=0=0;",
+        );
+        assert_eq!(alias[0].name, "./scripts/Default.lua");
+        assert_eq!(PathBuf::from(&alias[0].path), default_lua);
 
         let combined = extract_foreground_change_sets(&song_dir, simfile);
         assert_eq!(combined.media.len(), media.len());
@@ -789,6 +797,7 @@ mod tests {
         assert_eq!(combined.lua.len(), lua.len());
         assert_eq!(combined.lua[0].start_beat, lua[0].start_beat);
         assert_eq!(combined.lua[0].path, lua[0].path);
+        assert_eq!(combined.lua[0].name, lua[0].name);
         assert_eq!(simfile_uses_lua(&song_dir, simfile, ""), combined.uses_lua);
 
         let media_only = b"#FGCHANGES:4=animations=1=0=0=0=0;";

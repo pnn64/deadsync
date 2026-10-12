@@ -1426,6 +1426,9 @@ pub struct SongLuaCompileContext {
     /// Authored song beats for session entries, in the same path order.
     /// Empty for direct actor compilation without a simfile layer schedule.
     pub layer_start_beats: Vec<f32>,
+    /// Authored foreground filenames, in foreground entry order. Empty when
+    /// compiling standalone actors without simfile foreground declarations.
+    pub foreground_names: Vec<String>,
     pub song_dir: PathBuf,
     pub main_title: String,
     pub song_display_bpms: [f32; 2],
@@ -1475,6 +1478,7 @@ impl SongLuaCompileContext {
         Self {
             background_layer_count: 0,
             layer_start_beats: Vec::new(),
+            foreground_names: Vec::new(),
             live: false,
             song_dir: song_dir.into(),
             main_title: main_title.into(),

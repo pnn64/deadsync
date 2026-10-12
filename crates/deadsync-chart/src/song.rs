@@ -215,6 +215,9 @@ impl SongBackgroundChange {
 pub struct SongForegroundLuaChange {
     pub start_beat: f32,
     pub path: PathBuf,
+
+    /// Authored FGCHANGES filename, used as the native root actor name.
+    pub name: String,
 }
 
 #[derive(Clone, Debug)]

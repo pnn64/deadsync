@@ -27,7 +27,7 @@ use crate::song::{
 };
 
 // Cache authored chart MUSIC separately from the resolved gameplay path.
-pub const SONG_CACHE_VERSION: u8 = 62;
+pub const SONG_CACHE_VERSION: u8 = 63;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
@@ -276,6 +276,7 @@ pub struct SerializableSongBackgroundChange {
 pub struct SerializableSongForegroundLuaChange {
     pub start_beat: f32,
     pub path: String,
+    pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
@@ -397,6 +398,7 @@ impl From<&SongForegroundLuaChange> for SerializableSongForegroundLuaChange {
         Self {
             start_beat: change.start_beat,
             path: change.path.to_string_lossy().into_owned(),
+            name: change.name.clone(),
         }
     }
 }
@@ -406,6 +408,7 @@ impl From<SerializableSongForegroundLuaChange> for SongForegroundLuaChange {
         Self {
             start_beat: change.start_beat,
             path: PathBuf::from(change.path),
+            name: change.name,
         }
     }
 }
@@ -2944,6 +2947,25 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn foreground_name_survives_cache() {
+        let change = SongForegroundLuaChange {
+            start_beat: 4.0,
+            path: PathBuf::from("resolved/Default.lua"),
+            name: "./scripts".into(),
+        };
+        let serialized = SerializableSongForegroundLuaChange::from(&change);
+        let bytes = bincode::encode_to_vec(serialized, bincode::config::standard()).expect("encode foreground");
+        let (decoded, used) = bincode::decode_from_slice::<SerializableSongForegroundLuaChange, _>(
+            &bytes, bincode::config::standard(),
+        ).expect("decode foreground");
+        assert_eq!(used, bytes.len());
+        let restored = SongForegroundLuaChange::from(decoded);
+        assert_eq!(restored.name, change.name);
+        assert_eq!(restored.path, change.path);
+        assert_eq!(restored.start_beat, change.start_beat);
     }
 
     #[test]

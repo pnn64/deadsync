@@ -219,7 +219,8 @@ fn path_fixture(file: &str, count: usize) -> CachedSong {
     data.foreground_lua_changes = vec![
         SerializableSongForegroundLuaChange {
             start_beat: 0.0,
-            path: file.into()
+            path: file.into(),
+            name: file.into(),
         };
         count
     ];

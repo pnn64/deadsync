@@ -152,6 +152,7 @@ fn compile_song_lua_layer<S: Clone + std::fmt::Debug>(
     path: &Path,
     start_beat: f32,
     background: bool,
+    entry_name: &str,
     label: &str,
     context: &crate::SongLuaCompileContext,
     compile_song_lua: &impl Fn(
@@ -162,6 +163,7 @@ fn compile_song_lua_layer<S: Clone + std::fmt::Debug>(
     let mut context = context.clone();
     context.background_layer_count = usize::from(background);
     context.layer_start_beats = vec![start_beat];
+    context.foreground_names = if background { Vec::new() } else { vec![entry_name.to_owned()] };
     match compile_song_lua(path, &context) {
         Ok(compiled) => Some(GameplaySongLuaLayer {
             start_beat,
@@ -207,11 +209,13 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
     }
     let mut context = context.clone();
     context.background_layer_count = paths.len();
+    context.foreground_names.clear();
     for (index, change) in song.foreground_lua_changes.iter().enumerate() {
         if !change.path.is_file() {
             continue;
         }
         paths.push(change.path.as_path());
+        context.foreground_names.push(change.name.clone());
         start_beats.push(change.start_beat);
         targets.push(if Some(index) == primary_ix {
             SongLuaLayerTarget::Primary
@@ -268,10 +272,14 @@ fn compile_song_lua_separately<S: Clone + std::fmt::Debug>(
         &crate::SongLuaCompileContext,
     ) -> Result<CompiledSongLua<S>, String>,
 ) -> PreparedGameplaySongLua<S> {
+    let mut primary_context = context.clone();
+    primary_context.background_layer_count = 0;
+    primary_context.layer_start_beats = vec![song.foreground_lua_changes[primary_ix].start_beat];
+    primary_context.foreground_names = vec![song.foreground_lua_changes[primary_ix].name.clone()];
     let primary = compile_primary_song_lua(
         song.title.as_str(),
         &song.foreground_lua_changes[primary_ix].path,
-        context,
+        &primary_context,
         &compile_song_lua,
     );
     let background_layers = song
@@ -283,6 +291,7 @@ fn compile_song_lua_separately<S: Clone + std::fmt::Debug>(
                 &change.path,
                 change.start_beat,
                 true,
+                "",
                 "background lua layer",
                 context,
                 &compile_song_lua,
@@ -300,6 +309,7 @@ fn compile_song_lua_separately<S: Clone + std::fmt::Debug>(
                 &change.path,
                 change.start_beat,
                 false,
+                &change.name,
                 "foreground lua layer",
                 context,
                 &compile_song_lua,
@@ -330,6 +340,7 @@ fn compile_song_lua_without_primary<S: Clone + std::fmt::Debug>(
                 &change.path,
                 change.start_beat,
                 true,
+                "",
                 "background lua layer",
                 context,
                 &compile_song_lua,
@@ -346,6 +357,7 @@ fn compile_song_lua_without_primary<S: Clone + std::fmt::Debug>(
                 &change.path,
                 change.start_beat,
                 false,
+                &change.name,
                 "foreground lua layer",
                 context,
                 &compile_song_lua,

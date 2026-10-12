@@ -801,6 +801,41 @@ mod tests {
     }
 
     #[test]
+    fn foreground_name_changes_after_init() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-foreground-name-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("test directory");
+        let entry = dir.join("default.lua");
+        fs::write(&entry, r#"
+return Def.ActorFrame{
+ Name='Declared',
+ InitCommand=function(self)
+  assert(self:GetName()=='Declared')
+  self:name('from-init')
+  assert(self:GetName()=='from-init')
+ end,
+ OnCommand=function(self)
+  assert(self:GetName()=='scripts')
+  self:aux(1)
+ end,
+}
+"#).expect("test script");
+        let mut context = SongLuaCompileContext::new(&dir, "foreground-name");
+        context.live = true;
+        context.layer_start_beats = vec![0.0];
+        context.foreground_names = vec!["scripts".into()];
+        context.music_length_seconds = 60.0;
+        let mut compiled: Compiled = crate::compile_song_lua_with_default_host(
+            &entry, &context, SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None,
+        ).expect("foreground preparation");
+        let mut scene = compiled.live_scene.take().expect("owned scene");
+        let actor: Table = scene.root.as_table().expect("session roots").raw_get(1).expect("foreground root");
+        assert_eq!(actor.get::<String>("Name").expect("loaded name"), "scripts");
+        scene.advance(SongLuaLiveFrame::default()).expect("foreground activation");
+        assert_eq!(actor.get::<Function>("getaux").expect("aux getter").call::<f32>(actor.clone()).expect("On result"), 1.0);
+    }
+
+    #[test]
     fn live_player_judgment_tree() {
         let mut compiled = compile("player-judgment-tree", r#"
 local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
