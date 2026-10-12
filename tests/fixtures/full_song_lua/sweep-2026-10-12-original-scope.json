@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-12T22:32:59Z",
+  "updated_utc": "2026-10-12T23:06:15Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -11,9 +11,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 154,
-    "pending": 12,
-    "unprocessed": 335
+    "passed": 157,
+    "pending": 17,
+    "unprocessed": 327
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1491,13 +1491,17 @@
       "position": 166,
       "source_simfile": "Datura -paroxysm-/Datura -paroxysm-.ssc",
       "simfile_sha256": "a63214b25003d7318bca31d85335900b3c0ff6d0eb7567d42a23de22f66bbee4",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 167,
       "source_simfile": "Daywalker/Daywalker.ssc",
       "simfile_sha256": "332214ce4abd4af402064b8039af7912b7d8e10bf31a585df995879d503189ff",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 168,
@@ -1511,25 +1515,33 @@
       "position": 169,
       "source_simfile": "Delayed Friend Request/Delayed Friend Request.sm",
       "simfile_sha256": "1133c20561aea19271eccbfe7d3cb654f41b53c2192dd6025ab18f111924f6e9",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 170,
       "source_simfile": "Delayed Friend Request/Delayed Friend Request.ssc",
       "simfile_sha256": "d5dca728997c70aaa3d1afc600cbbf87dc710c19a1b5565e5bc03a50c79f82b4",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 171,
       "source_simfile": "Delightful Day/Delightful Day.sm",
       "simfile_sha256": "4618752bc04a20aa8fd3600a0dca95bc3e7ddafa01d134651cc8c61e835b21b7",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 172,
       "source_simfile": "Delightful Day/Delightful Day.ssc",
       "simfile_sha256": "2d808912da5ba2aca675a03b69e4a8a8f24cfda55e7df641988d6b53a336a5f0",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 173,
@@ -1541,7 +1553,9 @@
       "position": 174,
       "source_simfile": "Dimmadome/doug dimmadome owner of the dimmsdale dimmadome.sm",
       "simfile_sha256": "e7ad12886de72b1939cb18e6dd586a14d0807977dd428abe5b0347be6b5dcf41",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 175,
@@ -1559,7 +1573,9 @@
       "position": 177,
       "source_simfile": "Doubles-45-HALF-[MASTER] Tacos/Tacos.ssc",
       "simfile_sha256": "6541bffd7e03ac02cb8cc92e4f14af7b44843572063f07609813c13bd0ba8b52",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 178,
