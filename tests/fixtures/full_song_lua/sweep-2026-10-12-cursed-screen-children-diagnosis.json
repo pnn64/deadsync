@@ -1,0 +1,46 @@
+{
+  "status": "pending; source diagnosis for the remaining bounded attempt",
+  "sources": [
+    "Cursed 2/Cursed 2.sm",
+    "Cursed 2/Cursed 2.ssc"
+  ],
+  "repair_attempts_completed": 1,
+  "per_sweep_limit": 2,
+  "evidence": "sweep-2026-10-12-enabled-underlay-repairs.json",
+  "first_event": {
+    "operation": "Actor.diffusealpha",
+    "command": "HideMessageCommand",
+    "source": "song:/lua/default.lua",
+    "line": 115,
+    "native_actor_id": "external-0027",
+    "native_actor_name": "Cancel",
+    "native_actor_path": "ScreenGameplay/Cancel",
+    "native_tween_time_left": 0,
+    "deadsync_actor_name": "PlayerP1",
+    "deadsync_tween_time_left": 1.5
+  },
+  "diagnosis": "The first differing call targets different screen children. This is not evidence of an Underlay tween-time error. Native GetChildren exposes additional direct children and a group of unnamed actors; the missing inventory changes Lua pairs traversal and call counts.",
+  "native_query_observed_for_diagnosis_only": [
+    "Cancel",
+    "Out",
+    "Debug",
+    "SongOptions",
+    "ActiveAttackListP1",
+    "ActiveAttackListP2",
+    "LyricDisplay",
+    "OniGameOverP1",
+    "StepsDescriptionP1",
+    "PlayerOptionsP1",
+    "Header",
+    "Footer",
+    "five unnamed screen children"
+  ],
+  "reference_sources": [
+    "../itgmania-harness/vendor/itgmania/src/ActorFrame.cpp:341-384",
+    "../itgmania-harness/vendor/itgmania/src/ScreenGameplay.cpp:538-817",
+    "../itgmania-harness/vendor/itgmania/src/ScreenWithMenuElements.cpp:80-123",
+    "../itgmania-harness/vendor/simply-love/metrics.ini"
+  ],
+  "implementation_target": "Construct actual gameplay-screen children and their ownership from engine/theme sources and independent session inputs; do not seed query results or handler outputs from the native expected data",
+  "existing_capture_retained": "/home/parity/jobs/chart-sweep-20261012-v2/chart-158/storage.json"
+}
