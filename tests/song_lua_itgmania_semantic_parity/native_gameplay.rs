@@ -90,6 +90,7 @@ fn compare_calls(
                 .or_else(|| source.starts_with("song:/").then(|| source.clone()))?;
             let mut event = event.clone();
             event["source"] = json!(source);
+            normalize_paths(&mut event, &song_dir);
             Some(event)
         })
         .collect();
@@ -124,6 +125,15 @@ fn compare_calls(
                         | "PlayerStageStats.GetPossibleDancePoints"
                         | "Actor.sleep"
                         | "Actor.queuecommand"
+                        | "GameState.GetCurrentSong"
+                        | "Song.GetStepsByStepsType"
+                        | "GameState.IsPlayerEnabled"
+                        | "GameState.GetCurrentSteps"
+                        | "Steps.GetDifficulty"
+                        | "GameState.SetCurrentSteps"
+                        | "StatsManager.GetCurStageStats"
+                        | "StageStats.GetPlayerStageStats"
+                        | "ScreenManager.GetTopScreen"
                 )
             )
         })
@@ -170,7 +180,20 @@ fn compare_calls(
     }
     for (native, actual) in native.iter().zip(&actual) {
         let keys: &[&str] = if native["kind"] == "query" {
-            &["scene", "kind", "operation", "source", "line", "results"]
+            if trace["capabilities"]["native_constructor_queries"] == true {
+                &[
+                    "scene",
+                    "kind",
+                    "operation",
+                    "source",
+                    "line",
+                    "phase",
+                    "args",
+                    "results",
+                ]
+            } else {
+                &["scene", "kind", "operation", "source", "line", "results"]
+            }
         } else if native["kind"] == "call" {
             &[
                 "scene",
@@ -187,6 +210,9 @@ fn compare_calls(
         if keys
             .iter()
             .any(|key| !same_value(&native[*key], &actual[*key]))
+            || (native["kind"] == "call"
+                && trace["capabilities"]["native_constructor_queries"] == true
+                && native["phase"] != actual["phase"])
             || (number(native, "seconds")? - number(actual, "seconds")?).abs() > 1e-6
             || (number(native, "beat")? - number(actual, "beat")?).abs() > 1e-6
         {
@@ -197,6 +223,24 @@ fn compare_calls(
     Ok(
         json!({"compared":true,"native_count":native.len(),"actual_count":actual.len(),"actual":actual,"native":native}),
     )
+}
+
+fn normalize_paths(value: &mut Value, song_dir: &str) {
+    match value {
+        Value::String(value) => {
+            let normalized = value.replace('\\', "/");
+            if let Some((_, relative)) = normalized.split_once(song_dir) {
+                *value = format!("song:/{relative}");
+            }
+        }
+        Value::Array(values) => values
+            .iter_mut()
+            .for_each(|value| normalize_paths(value, song_dir)),
+        Value::Object(values) => values
+            .values_mut()
+            .for_each(|value| normalize_paths(value, song_dir)),
+        _ => {}
+    }
 }
 
 fn same_value(native: &Value, actual: &Value) -> bool {
@@ -237,6 +281,15 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
         "PlayerStageStats.GetCurrentPossibleDancePoints",
         "Actor.sleep",
         "Actor.queuecommand",
+        "GameState.GetCurrentSong",
+        "Song.GetStepsByStepsType",
+        "GameState.IsPlayerEnabled",
+        "GameState.GetCurrentSteps",
+        "Steps.GetDifficulty",
+        "GameState.SetCurrentSteps",
+        "StatsManager.GetCurStageStats",
+        "StageStats.GetPlayerStageStats",
+        "ScreenManager.GetTopScreen",
         "ScreenManager.SetNewScreen",
         "ScreenWithMenuElements.StartTransitioningScreen",
         "MessageManager.Broadcast",
@@ -307,10 +360,11 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
 #[cfg(test)]
 mod tests {
     #[test]
-    fn actor_trace_keeps_lua_caller_through_class_dispatch() {
+    fn actor_and_query_trace_keep_lua_callers() {
         use super::{CALL_LOG, start_call_log};
         use deadsync_song_lua::{
-            SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host,
+            SongLuaCompileContext, SongLuaDifficulty, SongLuaNoteskinResolver, SongLuaStep,
+            compile_song_lua_with_default_host,
         };
         use std::{fs, sync::Arc};
         start_call_log().expect("install observational logger");
@@ -318,10 +372,33 @@ mod tests {
             std::env::temp_dir().join(format!("deadsync-actor-call-trace-{}", std::process::id()));
         fs::create_dir_all(&dir).expect("trace test directory");
         let entry = dir.join("caller.lua");
-        fs::write(&entry, "return Def.ActorFrame {\nInitCommand=function(self) self:sleep(0.125):queuecommand('Done') end\n}")
-            .expect("trace control");
+        let source = "local song = GAMESTATE:GetCurrentSong()\n\
+            local steps = song:GetStepsByStepsType('StepsType_Dance_Single')\n\
+            assert(#steps == 2 and GAMESTATE:GetCurrentSteps(0) == steps[2])\n\
+            assert(steps[1]:GetDifficulty() == 'Difficulty_Easy')\n\
+            assert(GAMESTATE:IsPlayerEnabled(0))\n\
+            GAMESTATE:SetCurrentSteps(0, steps[1])\n\
+            assert(GAMESTATE:GetCurrentSteps(0) == steps[1])\n\
+            return Def.ActorFrame {\n\
+            InitCommand=function(self) self:sleep(0.125):queuecommand('Done') end\n\
+            }";
+        fs::write(&entry, source).expect("trace control");
         let mut context = SongLuaCompileContext::new(&dir, "class dispatch trace");
         context.live = true;
+        context.song_steps = [SongLuaDifficulty::Easy, SongLuaDifficulty::Challenge]
+            .into_iter()
+            .map(|difficulty| SongLuaStep {
+                steps_type: "StepsType_Dance_Single".into(),
+                difficulty,
+                description: format!("{difficulty:?}"),
+                chart_name: String::new(),
+                credit: String::new(),
+                meter: 11,
+                music_file: String::new(),
+                possible_grade_points: 100,
+            })
+            .collect();
+        context.player_step_indices[0] = Some(1);
         let compiled = compile_song_lua_with_default_host::<(), (), _>(
             &entry,
             &context,
@@ -335,7 +412,12 @@ mod tests {
         let events = CALL_LOG.events.lock().expect("read actual observations");
         let calls: Vec<_> = events
             .iter()
-            .filter(|event| event["kind"] == "call")
+            .filter(|event| {
+                matches!(
+                    event["operation"].as_str(),
+                    Some("Actor.sleep" | "Actor.queuecommand")
+                )
+            })
             .collect();
         assert_eq!(calls.len(), 2, "{events:?}");
         for event in &calls {
@@ -345,13 +427,39 @@ mod tests {
                     .expect("Lua source")
                     .ends_with("caller.lua")
             );
-            assert_eq!(event["line"], 2);
+            assert_eq!(event["line"], 9);
+            assert_eq!(event["phase"], "callback");
             assert_eq!(event["tween_time_left"], 0.125);
         }
         assert_eq!(calls[0]["operation"], "Actor.sleep");
         assert_eq!(calls[0]["args"][0], 0.125);
         assert_eq!(calls[1]["operation"], "Actor.queuecommand");
         assert_eq!(calls[1]["args"][0], "Done");
+        let construction: Vec<_> = events
+            .iter()
+            .filter(|event| event["phase"] == "construction")
+            .collect();
+        assert_eq!(construction.len(), 7, "{events:?}");
+        assert_eq!(
+            construction
+                .iter()
+                .map(|event| event["operation"].as_str().expect("operation"))
+                .collect::<Vec<_>>(),
+            [
+                "GameState.GetCurrentSong",
+                "Song.GetStepsByStepsType",
+                "GameState.GetCurrentSteps",
+                "Steps.GetDifficulty",
+                "GameState.IsPlayerEnabled",
+                "GameState.SetCurrentSteps",
+                "GameState.GetCurrentSteps"
+            ]
+        );
+        assert!(construction.iter().all(|event| event["line"] == 0));
+        assert_eq!(construction[1]["results"][0][0]["index"], 1);
+        assert_eq!(construction[1]["results"][0][1]["index"], 2);
+        assert_eq!(construction[2]["results"][0]["index"], 2);
+        assert_eq!(construction[6]["results"][0]["index"], 1);
     }
 
     #[test]

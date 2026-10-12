@@ -1,4 +1,4 @@
-use mlua::{Function, Lua, Table, Value};
+use mlua::{Function, Lua, MultiValue, Table, Value};
 use std::fmt;
 
 use crate::{SongLuaCompileContext, SongLuaOverlayState, SongLuaTrackedActorTarget, LUA_PLAYERS};
@@ -25,6 +25,10 @@ pub(crate) fn active(lua: &Lua) -> bool {
 // Trace logging observes the live VM without replacing callbacks or query results.
 pub(crate) fn trace_command(lua: &Lua, command: &Function, name: &str, phase: &str) {
     if !active(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return; }
+    if let Some(mut trace) = lua.app_data_mut::<QueryTrace>() {
+        if phase == "begin" { trace.commands += 1; }
+        else if phase == "end" { trace.commands = trace.commands.saturating_sub(1); }
+    }
     let info = command.info();
     let Some(source) = info.source else { return; };
     if let Ok((beat, seconds)) = crate::compile_song_runtime_values(lua) {
@@ -37,7 +41,7 @@ pub(crate) fn trace_command(lua: &Lua, command: &Function, name: &str, phase: &s
 }
 
 pub(crate) fn trace_stage_query(lua: &Lua, operation: &str, points: i64) {
-    trace_method(lua, "query", operation, || serde_json::json!({"results":[points]}));
+    trace_method(lua, "query", operation, || serde_json::json!({"args":[],"results":[points]}));
 }
 
 pub(crate) fn trace_actor_call(lua: &Lua, actor: &Table, operation: &str, arg: Option<&Value>) {
@@ -62,6 +66,7 @@ pub(crate) fn trace_actor_call(lua: &Lua, actor: &Table, operation: &str, arg: O
 
 fn trace_method(lua: &Lua, kind: &str, operation: &str, details: impl FnOnce() -> serde_json::Value) {
     if !active(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return; }
+    if lua.app_data_ref::<QueryTrace>().is_some_and(|trace| trace.depth != 0) { return; }
     // Actor class dispatch adds a C adapter frame before the authored Lua
     // caller. Inspect the first Lua frame instead of attributing it to C.
     let source = (1..32).find_map(|level| lua.inspect_stack(level, |debug| {
@@ -72,13 +77,128 @@ fn trace_method(lua: &Lua, kind: &str, operation: &str, details: impl FnOnce() -
         (source, crate::compile_song_runtime_values(lua))
     {
         let scene = lua.app_data_ref::<LiveMode>().map_or(0, |mode| mode.0);
+        let phase = if lua.app_data_ref::<QueryTrace>().is_some_and(|trace| trace.commands != 0) {
+            "callback"
+        } else { "construction" };
         let mut event = serde_json::json!({"scene":scene,"kind":kind,"operation":operation,
-            "source":source,"line":line,"beat":beat,"seconds":seconds});
+            "source":source,"line":line,"phase":phase,"beat":beat,"seconds":seconds});
         if let Some(details) = details().as_object() {
             event.as_object_mut().expect("trace event is an object").extend(details.clone());
         }
         log::trace!(target: "deadsync_song_lua::trace", "{event}");
     }
+}
+
+// Diagnostic-only registry, owned by the Lua VM. It retains identities and
+// original host bindings across screen reloads; no tracing work runs by default.
+#[derive(Default)]
+struct QueryTrace {
+    objects: Vec<(Table, serde_json::Value)>,
+    hooks: Vec<(Table, &'static str)>,
+    depth: usize,
+    commands: usize,
+}
+
+fn query_value(lua: &Lua, value: &Value, depth: usize) -> mlua::Result<serde_json::Value> {
+    use serde_json::json;
+    Ok(match value {
+        Value::Nil => json!({"type":"nil"}),
+        Value::Boolean(value) => json!(value),
+        Value::Integer(value) => json!(value),
+        Value::Number(value) if value.is_finite() => json!(value),
+        Value::Number(value) => json!({"type":"number","value":if value.is_nan() {"nan"}
+            else if value.is_sign_negative() {"-infinity"} else {"infinity"}}),
+        Value::String(value) => json!(value.to_str()?.to_string()),
+        Value::Table(table) => {
+            if let Some(value) = lua.app_data_ref::<QueryTrace>().and_then(|trace|
+                trace.objects.iter().find(|(known, _)| known.to_pointer() == table.to_pointer())
+                    .map(|(_, value)| value.clone())) { return Ok(value); }
+            if depth >= 5 { return Ok(json!({"type":"table","truncated":"depth"})); }
+            let values = (1..=table.raw_len()).map(|index|
+                query_value(lua, &table.raw_get::<Value>(index)?, depth + 1))
+                .collect::<mlua::Result<Vec<_>>>()?;
+            json!(values)
+        }
+        _ => json!({"type":value.type_name()}),
+    })
+}
+
+fn hook_query(lua: &Lua, table: &Table, class: &'static str, name: &'static str) -> mlua::Result<()> {
+    if lua.app_data_ref::<QueryTrace>().is_some_and(|trace| trace.hooks.iter().any(|(known, method)|
+        known.to_pointer() == table.to_pointer() && *method == name)) { return Ok(()); }
+    let original: Function = table.raw_get(name)?;
+    table.raw_set(name, lua.create_function(move |lua, args: MultiValue| {
+        let observed = lua.app_data_ref::<QueryTrace>().is_some_and(|trace| trace.depth == 0);
+        if let Some(mut trace) = lua.app_data_mut::<QueryTrace>() { trace.depth += 1; }
+        let result = original.call::<MultiValue>(args.clone());
+        if let Some(mut trace) = lua.app_data_mut::<QueryTrace>() { trace.depth -= 1; }
+        if observed {
+            let kind = if name.starts_with("Get") || name.starts_with("Is") { "query" } else { "call" };
+            trace_method(lua, kind, &format!("{class}.{name}"), || {
+                let values = || -> mlua::Result<serde_json::Value> {
+                    let args = args.iter().skip(1).map(|arg| query_value(lua, arg, 0))
+                        .collect::<mlua::Result<Vec<_>>>()?;
+                    let results = match &result {
+                        Ok(values) => values.iter().map(|value| query_value(lua, value, 0))
+                            .collect::<mlua::Result<Vec<_>>>()?,
+                        Err(error) => return Err(error.clone()),
+                    };
+                    Ok(serde_json::json!({"args":args,"results":results}))
+                };
+                values().unwrap_or_else(|error| serde_json::json!({"kind":"trace-error","error":error.to_string()}))
+            });
+        }
+        result
+    })?)?;
+    if let Some(mut trace) = lua.app_data_mut::<QueryTrace>() { trace.hooks.push((table.clone(), name)); }
+    Ok(())
+}
+
+pub(crate) fn install_query_trace(lua: &Lua) -> mlua::Result<()> {
+    if !active(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return Ok(()); }
+    if lua.app_data_ref::<QueryTrace>().is_none() { lua.set_app_data(QueryTrace::default()); }
+    if let Some(mut trace) = lua.app_data_mut::<QueryTrace>() { trace.depth += 1; }
+    let install = || -> mlua::Result<()> {
+        use serde_json::json;
+        let globals = lua.globals();
+        let gamestate: Table = globals.raw_get("GAMESTATE")?;
+        let song: Table = gamestate.get::<Function>("GetCurrentSong")?.call(gamestate.clone())?;
+        let song_dir: String = song.get::<Function>("GetSongDir")?.call(song.clone())?;
+        let steps: Table = song.raw_get("__songlua_steps")?;
+        let statsman: Table = globals.raw_get("STATSMAN")?;
+        let stage: Table = statsman.get::<Function>("GetCurStageStats")?.call(statsman.clone())?;
+        let players: Table = stage.raw_get("__songlua_player_stats")?;
+        let screenman: Table = globals.raw_get("SCREENMAN")?;
+        let screen: Table = screenman.get::<Function>("GetTopScreen")?.call(screenman.clone())?;
+        let screen_name: String = screen.get::<Function>("GetName")?.call(screen.clone())?;
+        let mut objects = vec![(song.clone(), json!({"type":"Song","song_dir":song_dir})),
+            (stage.clone(), json!({"type":"StageStats","path":"stage:current"})),
+            (screen, json!({"type":"Screen","name":screen_name}))];
+        for index in 1..=steps.raw_len() {
+            let step: Table = steps.raw_get(index)?;
+            let string = |method| step.get::<Function>(method)?.call::<String>(step.clone());
+            let meter: i64 = step.get::<Function>("GetMeter")?.call(step.clone())?;
+            objects.push((step.clone(), json!({"type":"Steps","song_dir":song_dir,"index":index,
+                "steps_type":string("GetStepsType")?,"difficulty":string("GetDifficulty")?,
+                "description":string("GetDescription")?,"meter":meter})));
+            hook_query(lua, &step, "Steps", "GetDifficulty")?;
+        }
+        for index in 1..=players.raw_len() {
+            objects.push((players.raw_get::<Table>(index)?,
+                json!({"type":"PlayerStageStats","path":format!("stage:current/player:P{index}")})));
+        }
+        if let Some(mut trace) = lua.app_data_mut::<QueryTrace>() { trace.objects = objects; }
+        for name in ["GetCurrentSong", "GetCurrentSteps", "IsPlayerEnabled", "SetCurrentSteps"] {
+            hook_query(lua, &gamestate, "GameState", name)?;
+        }
+        hook_query(lua, &song, "Song", "GetStepsByStepsType")?;
+        hook_query(lua, &statsman, "StatsManager", "GetCurStageStats")?;
+        hook_query(lua, &stage, "StageStats", "GetPlayerStageStats")?;
+        hook_query(lua, &screenman, "ScreenManager", "GetTopScreen")
+    };
+    let result = install();
+    if let Some(mut trace) = lua.app_data_mut::<QueryTrace>() { trace.depth -= 1; }
+    result
 }
 
 #[derive(Clone, Copy, Debug, Default)]

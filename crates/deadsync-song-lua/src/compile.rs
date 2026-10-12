@@ -279,6 +279,7 @@ where
     #[cfg(feature = "test-support")]
     crate::lua_util::install_message_order(&lua, &context.message_actor_order)
         .map_err(|err| err.to_string())?;
+    crate::live::install_query_trace(&lua).map_err(|err| err.to_string())?;
     compile_timer.push_stage("host");
     #[cfg(feature = "test-support")]
     lua.set_app_data(crate::song_tables::SongLuaSkinWrites::default());
@@ -431,6 +432,7 @@ where
         }
         crate::host::replace_gameplay_screen(&lua, &scene_context,
             create_dummy_actor, create_named_child_actor).map_err(|err| err.to_string())?;
+        crate::live::install_query_trace(&lua).map_err(|err| err.to_string())?;
         reloads += 1;
     };
     prior_broadcasts.append(&mut captured_startup.broadcasts);
