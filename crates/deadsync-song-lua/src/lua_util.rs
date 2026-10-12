@@ -3765,15 +3765,9 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             capture.queued_depth += 1;
         }
         let result = if let Some(message) = name.strip_prefix('!') {
-            // QueueMessage shares the native tween queue, but dispatches through
-            // the host message manager only when this queue item begins.
-            (|| {
-                let manager = lua.globals().get::<Table>("MESSAGEMAN")?;
-                manager
-                    .get::<Function>("Broadcast")?
-                    .call::<Value>((manager, message, lua.create_table()?))?;
-                Ok(())
-            })()
+            // Actor::UpdateTweening broadcasts directly from C++, bypassing the
+            // Lua binding. Listener-authored Broadcast calls still use it.
+            crate::host::broadcast_queued_message(lua, message)
         } else {
             // This entry passed the recursion check when it was enqueued. An
             // earlier dispatch with the same name may still be draining siblings;
@@ -11051,13 +11045,7 @@ fn dispatch_replay_command(
         capture.queued_depth += 1;
     }
     let result = if let Some(message) = name.strip_prefix('!') {
-        (|| {
-            let manager = lua.globals().get::<Table>("MESSAGEMAN")?;
-            manager
-                .get::<Function>("Broadcast")?
-                .call::<Value>((manager, message, lua.create_table()?))?;
-            Ok(())
-        })()
+        crate::host::broadcast_queued_message(lua, message)
     } else {
         // Actor::PlayCommand goes through virtual HandleMessage. ActorFrame
         // forwards non-broadcast commands to its children, even without an

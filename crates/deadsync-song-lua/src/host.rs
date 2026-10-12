@@ -825,6 +825,15 @@ pub fn install_screen_string_globals(lua: &Lua) -> mlua::Result<()> {
 
 pub type SongLuaBroadcastCallback = fn(&Lua, &str, Option<Value>) -> mlua::Result<()>;
 
+pub(crate) fn broadcast_queued_message(lua: &Lua, message: &str) -> mlua::Result<()> {
+    // Message(string) creates an empty parameter table. Retain that table in
+    // baked callback captures, just as for parameterized Lua broadcasts.
+    record_song_lua_broadcast(lua, message, true)?;
+    let broadcast = *lua.app_data_ref::<SongLuaBroadcastCallback>()
+        .ok_or_else(|| mlua::Error::runtime("message manager is not installed"))?;
+    broadcast(lua, message, Some(Value::Table(lua.create_table()?)))
+}
+
 pub fn install_screen_manager_globals(
     lua: &Lua,
     top_screen: Table,
@@ -908,6 +917,7 @@ pub fn install_message_manager_globals(
     lua: &Lua,
     broadcast: SongLuaBroadcastCallback,
 ) -> mlua::Result<()> {
+    lua.set_app_data(broadcast);
     let globals = lua.globals();
     let messageman = lua.create_table()?;
     let messageman_for_broadcast = messageman.clone();

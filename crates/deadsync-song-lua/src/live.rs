@@ -1192,6 +1192,30 @@ end }
     }
 
     #[test]
+    fn live_queued_broadcast_origin() {
+        let mut compiled = compile("queued-broadcast-origin", r#"
+            return Def.ActorFrame {
+                OnCommand=function(self) self:sleep(0.25):queuemessage('Queued') end,
+                QueuedMessageCommand=function(self, params)
+                    assert(type(params) == 'table' and next(params) == nil)
+                    MESSAGEMAN:Broadcast('NestedSource', params)
+                end,
+            }
+        "#);
+        let scene = compiled.live_scene.as_mut().expect("owned scene");
+        assert!(scene.take_startup_output().source_broadcasts.is_empty());
+        let output = scene.advance(SongLuaLiveFrame { screen_seconds: 0.3125,
+            delta_seconds: 0.3125, ..Default::default() }).expect("queued native message");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(output.broadcasts.iter().map(|(_, name, params)| (name.as_str(), *params)).collect::<Vec<_>>(),
+            [("Queued", true), ("NestedSource", true)]);
+        assert_eq!(output.source_broadcasts.iter().map(|event| event.name.as_str()).collect::<Vec<_>>(),
+            ["NestedSource"]);
+        assert_eq!(output.source_broadcasts[0].params.as_ref().expect("empty listener table"),
+            &Some(serde_json::json!([])));
+    }
+
+    #[test]
     fn live_source_params() {
         let mut compiled = compile("broadcast-params", r#"
             return Def.ActorFrame {
