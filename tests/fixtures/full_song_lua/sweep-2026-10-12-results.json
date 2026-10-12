@@ -791,6 +791,21 @@
         }
       ],
       "report_sha256": "e816a9734d20b638e09bd5b95344b505c5d645ae98bfce7f3a0f2b9dd9da8976"
+    },
+    {
+      "position": 154,
+      "source_simfile": "Crab Nicholson Extreme Sleepover/Crab Nicholson Extreme Sleepover.sm",
+      "simfile_sha256": "779a1edad17f928364f588986bbeca52ee452dba597728bd509ab478e2be2ea9",
+      "retained_original_archive": "b4df330b5fcbd3f71c5065c215156f431145bc2f8d4b5bc8853c63765f050021.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "capture_seconds": 114.5113779309977,
+      "trace_sha256": "502dcd154df228b57f8b6ccaf70403b73a45b7a277ec75edc349cfdb7e406b94",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-154/candidates/226394a750ef28d6607697c34c22815a7c513b6b354c458918c1f0d56088f954.tar",
+      "replay_exit": 1,
+      "replay_seconds": 0.9220896680053556,
+      "candidate_sha256": "226394a750ef28d6607697c34c22815a7c513b6b354c458918c1f0d56088f954",
+      "failure": "[0.3s] replaying every native gameplay frame\n\nthread 'main' (138500) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native events are empty\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "historical_pending": [
@@ -817,6 +832,6 @@
   "binary_sha256": "d515e94becf9b644c522e453045a5f07d1e149cc18765469d78b2384164539ad",
   "harness_sha256": "41bfe13b815a4a9695c2271e375611ff2e0efc017c4c4bc1ee304cb89bf69a54",
   "passed_fixtures": 0,
-  "pending_charts": 5,
-  "processed_charts": 5
+  "pending_charts": 6,
+  "processed_charts": 6
 }
