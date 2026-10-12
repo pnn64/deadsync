@@ -1071,6 +1071,55 @@ end}
     }
 
     #[test]
+    fn instantiated_background_effect_maps_its_authored_child() {
+        use serde_json::json;
+        let trace = json!({
+            "capabilities":{"native_actor_creation":true}, "roots":["effect","fg"],
+            "actor_definitions":[
+                {"id":"effect","class":"ActorFrame","source":"@/BackgroundEffects/UpperLeft.lua","children":[]},
+                {"id":"entry","class":"ActorFrame","source":"@/BackgroundEffects/UpperLeft.lua","children":[]},
+                {"id":"quad","class":"Quad","source":"song:/bg/default.lua","children":[]},
+                {"id":"sprite","class":"Sprite","source":"song:/bg/default.lua","children":[]},
+                {"id":"fg","class":"ActorFrame","source":"song:/fg/default.lua","children":[]}],
+            "runtime_actors":[
+                {"id":"effect-a","definition_id":"effect"},
+                {"id":"entry-a","definition_id":"entry"},
+                {"id":"quad-a","definition_id":"quad"},
+                {"id":"sprite-a","definition_id":"sprite"},
+                {"id":"fg-a","definition_id":"fg"},
+                {"id":"fg-parent","path":"SongForeground"}],
+            "events":[], "actor_creation_inputs":[
+                {"actor":"effect-a","definition_id":"effect","pointer_hex":"50","ordinal":1,"scene":1,"before_seq":1,"provenance":"native-ActorUtil-before-LoadFromNode"},
+                {"actor":"entry-a","definition_id":"entry","parent":"effect-a","pointer_hex":"40","ordinal":2,"scene":1,"before_seq":1,"provenance":"native-ActorUtil-before-LoadFromNode"},
+                {"actor":"quad-a","definition_id":"quad","parent":"entry-a","pointer_hex":"30","ordinal":3,"scene":1,"before_seq":1,"provenance":"native-ActorUtil-before-LoadFromNode"},
+                {"actor":"sprite-a","definition_id":"sprite","parent":"entry-a","pointer_hex":"20","ordinal":4,"scene":1,"before_seq":1,"provenance":"native-ActorUtil-before-LoadFromNode"},
+                {"actor":"fg-a","definition_id":"fg","parent":"fg-parent","pointer_hex":"10","ordinal":5,"scene":1,"before_seq":1,"provenance":"native-ActorUtil-before-LoadFromNode"}]
+        });
+        let expected = vec![("1".into(),64),("1/1".into(),48),("1/2".into(),32),("2".into(),16)];
+        assert_eq!(super::native_creation_order_for_entries(&trace,1,1)
+            .expect("instantiated effect ownership"), expected);
+        let mut background_only = trace.clone();
+        background_only["actor_creation_inputs"].as_array_mut().unwrap().pop();
+        background_only["runtime_actors"].as_array_mut().unwrap().remove(4);
+        assert_eq!(super::native_creation_order_for_entries(&background_only,1,1)
+            .expect("background-only scene"), expected[..3]);
+        let mut changed_results = trace.clone();
+        changed_results["events"] = json!([{"operation":"message","detail":{"results":["unrelated"]}}]);
+        assert_eq!(super::native_creation_order_for_entries(&changed_results,1,1)
+            .expect("factory inputs remain independent of observed results"), expected);
+        for (path,value) in [
+            ("/actor_creation_inputs/0/pointer_hex",json!("40")),
+            ("/actor_creation_inputs/1/parent",json!(null)),
+            ("/actor_creation_inputs/1/scene",json!(2)),
+            ("/actor_creation_inputs/2/provenance",json!("expected-handler-order")),
+        ] {
+            let mut invalid = trace.clone();
+            *invalid.pointer_mut(path).expect("input field") = value;
+            assert!(super::native_creation_order_for_entries(&invalid,1,1).is_err(), "accepted invalid {path}");
+        }
+    }
+
+    #[test]
     fn creation_identities_use_allocations_and_validate_ownership() {
         use serde_json::json;
         let trace = json!({
@@ -1419,22 +1468,48 @@ fn native_creation_order_for_entries(trace: &Value, scene: u64, background_entri
     let foreground_root = foreground_roots.first().copied();
     let mut observed = BTreeSet::new();
     let mut paths = BTreeMap::new();
+    let mut background_roots = BTreeMap::new();
+    let mut background_effects = BTreeSet::new();
     if background_entries > 0 {
-        // Background::LoadFromNode loads an entry's children onto an external
-        // frame. There is no allocation for the returned declaration wrapper.
-        // The session prepares these background entries before foregrounds.
-        let mut background_parents = Vec::new();
+        // Older captures observe children loaded directly onto an external
+        // background frame. A composed ActorDef can instead expose the full
+        // instantiated UpperLeft/Centered effect and its LoadActor(File1)
+        // child. That child is the authored entry; the effect is theme-owned.
+        let mut background_owners = Vec::new();
         for input in inputs.iter().filter(|input| input["scene"].as_u64() == Some(scene)) {
-            let Some(parent) = input["parent"].as_str() else { continue; };
-            if instances.contains_key(parent) || runtime.iter().any(|record| record["id"] == parent
+            let parent = input["parent"].as_str();
+            if parent.is_some_and(|parent| instances.contains_key(parent)) || runtime.iter().any(|record| record["id"] == input["parent"]
                 && record["path"] == "SongForeground") { continue; }
-            if !background_parents.contains(&parent) { background_parents.push(parent); }
+            let definition = input["definition_id"].as_str().and_then(|id| defs.get(id));
+            let effect = definition.is_some_and(|definition| definition["class"] == "ActorFrame"
+                && definition["source"].as_str().is_some_and(|source|
+                    source.ends_with("/BackgroundEffects/UpperLeft.lua")
+                        || source.ends_with("/BackgroundEffects/Centered.lua")));
+            if effect {
+                let actor = input["actor"].as_str().ok_or("invalid native background effect identity")?;
+                let children = inputs.iter().filter(|child| child["scene"].as_u64() == Some(scene)
+                    && child["parent"].as_str() == Some(actor)).collect::<Vec<_>>();
+                if children.len() != 1 {
+                    return Err("native background effect does not own one authored entry".into());
+                }
+                let entry = children[0]["actor"].as_str().ok_or("invalid native background entry identity")?;
+                background_effects.insert(actor);
+                background_owners.push((entry, true));
+            } else if let Some(parent) = parent {
+                if !background_owners.iter().any(|&(owner, _)| owner == parent) {
+                    background_owners.push((parent, false));
+                }
+            }
         }
-        if background_parents.len() != background_entries {
+        if background_owners.len() != background_entries {
             return Err("native background containers do not match the prepared entry count".into());
         }
-        for (index, parent) in background_parents.into_iter().enumerate() {
-            paths.insert(parent, (index + 1).to_string());
+        for (index, (owner, instantiated)) in background_owners.into_iter().enumerate() {
+            if instantiated {
+                background_roots.insert(owner, (index + 1).to_string());
+            } else {
+                paths.insert(owner, (index + 1).to_string());
+            }
         }
     }
     let mut child_counts = BTreeMap::new();
@@ -1466,12 +1541,16 @@ fn native_creation_order_for_entries(trace: &Value, scene: u64, background_entri
         }
         if input["scene"].as_u64() != Some(scene) { continue; }
         if !pointers.insert(pointer) { return Err("duplicate native subscriber pointer in scene".into()); }
+        if background_effects.contains(actor) { continue; }
         if foreground_root.is_some_and(|root| actor != root)
+            && !background_roots.contains_key(actor)
             && input["parent"].as_str().is_none_or(|parent| !paths.contains_key(parent))
         {
             continue;
         }
-        let path = if let Some(parent) = input["parent"].as_str().filter(|parent| paths.contains_key(parent)) {
+        let path = if let Some(path) = background_roots.get(actor) {
+            path.clone()
+        } else if let Some(parent) = input["parent"].as_str().filter(|parent| paths.contains_key(parent)) {
             let parent_path: &String = paths.get(parent).ok_or("native factory parent is outside this scene or not yet created")?;
             let child = child_counts.entry(parent).or_insert(0usize);
             *child += 1;
