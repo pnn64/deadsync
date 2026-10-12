@@ -176,7 +176,8 @@ fn hook_query(lua: &Lua, table: &Table, class: &'static str, name: &'static str)
         query_phase(lua, false);
         if observed {
             let kind = if name.starts_with("Get") || name.starts_with("Is") || name.starts_with("Supports")
-                || class == "PlayerOptions" && args.len() == 1 { "query" } else { "call" };
+                || class == "PlayerOptions" && args.len() == 1 { "query" }
+                else if class == "PlayerOptions" { "modifier" } else { "call" };
             trace_method(lua, kind, &format!("{class}.{name}"), || {
                 query_details(lua, &args, &result)
                     .unwrap_or_else(|error| serde_json::json!({"kind":"trace-error","error":error.to_string()}))
@@ -221,10 +222,11 @@ pub(crate) fn install_query_trace(lua: &Lua) -> mlua::Result<()> {
         hook_query(lua, &style, "Style", "GetName")?;
         for player in 0..LUA_PLAYERS {
             let state: Table = gamestate.get::<Function>("GetPlayerState")?.call((gamestate.clone(), player))?;
-            objects.push((state.clone(), json!({"type":"PlayerState","path":format!("player-state:{player}")})));
+            let player_name = crate::player_number_name(player);
+            objects.push((state.clone(), json!({"type":"PlayerState","path":format!("player-state:{player_name}")})));
             for level in ["ModsLevel_Preferred", "ModsLevel_Stage", "ModsLevel_Song", "ModsLevel_Current"] {
                 let options: Table = state.get::<Function>("GetPlayerOptions")?.call((state.clone(), level))?;
-                objects.push((options.clone(), json!({"type":"PlayerOptions","path":format!("player-state:{player}/options:{level}")})));
+                objects.push((options.clone(), json!({"type":"PlayerOptions","path":format!("player-state:{player_name}/options:{level}")})));
                 for name in ["Reverse", "Boost", "ConfusionOffset", "Tiny1", "Tiny2", "Tiny3", "Tiny4"] {
                     hook_query(lua, &options, "PlayerOptions", name)?;
                 }

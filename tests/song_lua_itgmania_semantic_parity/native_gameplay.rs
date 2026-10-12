@@ -133,7 +133,7 @@ fn compare_calls(
             let mut event = event.clone();
             event["source"] = json!(source);
             normalize_paths(&mut event, &song_dir);
-            if event["kind"] == "query" {
+            if matches!(event["kind"].as_str(), Some("query" | "modifier")) {
                 let scene = event["scene"].as_u64().unwrap_or(0);
                 normalize_query_handles(&mut event["results"], &mut actual_handles, scene);
             }
@@ -188,7 +188,7 @@ fn compare_calls(
         })
         .map(|event| {
             let mut value = event.clone();
-            if event["kind"] == "query" {
+            if matches!(event["kind"].as_str(), Some("query" | "modifier")) {
                 value["results"] = event["detail"]["results"].clone();
                 let scene = value["scene"].as_u64().unwrap_or(0);
                 normalize_query_handles(&mut value["results"], &mut native_handles, scene);
@@ -211,43 +211,7 @@ fn compare_calls(
         );
     }
     for (native, actual) in native.iter().zip(&actual) {
-        let keys: &[&str] = if native["kind"] == "query" {
-            if trace["capabilities"]["native_constructor_queries"] == true {
-                &[
-                    "scene",
-                    "kind",
-                    "operation",
-                    "source",
-                    "line",
-                    "phase",
-                    "args",
-                    "results",
-                ]
-            } else {
-                &["scene", "kind", "operation", "source", "line", "results"]
-            }
-        } else if native["kind"] == "call" {
-            &[
-                "scene",
-                "kind",
-                "operation",
-                "source",
-                "line",
-                "args",
-                "tween_time_left",
-            ]
-        } else {
-            &["scene", "kind", "operation", "source", "line", "command"]
-        };
-        if keys
-            .iter()
-            .any(|key| !same_value(&native[*key], &actual[*key]))
-            || (native["kind"] == "call"
-                && trace["capabilities"]["native_constructor_queries"] == true
-                && native["phase"] != actual["phase"])
-            || (number(native, "seconds")? - number(actual, "seconds")?).abs() > 1e-6
-            || (number(native, "beat")? - number(actual, "beat")?).abs() > 1e-6
-        {
+        if !same_call_event(trace, native, actual)? {
             mismatches
                 .push(json!({"field":"command_query_event","native":native,"deadsync":actual}));
         }
@@ -255,6 +219,25 @@ fn compare_calls(
     Ok(
         json!({"compared":true,"native_count":native.len(),"actual_count":actual.len(),"actual":actual,"native":native}),
     )
+}
+
+fn same_call_event(trace: &Value, native: &Value, actual: &Value) -> Result<bool, String> {
+    let keys: &[&str] = match native["kind"].as_str() {
+        Some("query") if trace["capabilities"]["native_constructor_queries"] == true =>
+            &["scene", "kind", "operation", "source", "line", "phase", "args", "results"],
+        Some("query") => &["scene", "kind", "operation", "source", "line", "results"],
+        Some("modifier") if trace["capabilities"]["native_modifier_results"] == true =>
+            &["scene", "kind", "operation", "source", "line", "phase", "args", "results"],
+        Some("modifier") => &["scene", "kind", "operation", "source", "line", "phase", "args"],
+        Some("call") => &["scene", "kind", "operation", "source", "line", "args", "tween_time_left"],
+        _ => &["scene", "kind", "operation", "source", "line", "command"],
+    };
+    Ok(keys.iter().all(|key| same_value(&native[*key], &actual[*key]))
+        && !(native["kind"] == "call"
+            && trace["capabilities"]["native_constructor_queries"] == true
+            && native["phase"] != actual["phase"])
+        && (number(native, "seconds")? - number(actual, "seconds")?).abs() <= 1e-6
+        && (number(native, "beat")? - number(actual, "beat")?).abs() <= 1e-6)
 }
 
 fn normalize_paths(value: &mut Value, song_dir: &str) {
@@ -285,6 +268,24 @@ fn normalize_query_handles(
             .iter_mut()
             .for_each(|value| normalize_query_handles(value, handles, scene)),
         Value::Object(values) => {
+            // Historical recorders named native enum-backed objects from the
+            // caller's numeric argument. Preserve player and option-level
+            // identity while accepting their equivalent native enum names.
+            if matches!(values.get("type").and_then(Value::as_str), Some("PlayerState" | "PlayerOptions"))
+                && let Some(path) = values.get("path").and_then(Value::as_str).map(str::to_owned)
+            {
+                let (player, suffix) = path.split_once('/').map_or((path.as_str(), ""), |(p, s)| (p, s));
+                let canonical = match player {
+                    "player-state:0" => Some("player-state:PlayerNumber_P1"),
+                    "player-state:1" => Some("player-state:PlayerNumber_P2"),
+                    _ => None,
+                };
+                if let Some(canonical) = canonical {
+                    values.insert("path".into(), json!(if suffix.is_empty() {
+                        canonical.to_owned()
+                    } else { format!("{canonical}/{suffix}") }));
+                }
+            }
             // Canonicalize allocation IDs by first observation while retaining
             // alias relationships, actor names, and actual named ancestry.
             if values.get("name").is_some_and(Value::is_string)
@@ -359,6 +360,20 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
         .filter_map(|event| event["operation"].as_str())
         .collect();
     let mut pending = Vec::new();
+    if trace["events"].as_array().is_some_and(|events| events.iter().any(|event|
+        (event.pointer("/caller/source").is_some_and(|source| source == "=(tail call)")
+            || event.pointer("/caller/tail_call").and_then(Value::as_bool) == Some(true))
+        && event["source"].as_str().is_some_and(|source| source.starts_with("song:/"))))
+    {
+        pending.push("native tail-call provenance is unavailable".to_owned());
+    }
+    if trace["capabilities"]["native_modifier_results"] != true
+        && trace["events"].as_array().is_some_and(|events| events.iter().any(|event|
+            event["kind"] == "modifier" && event.pointer("/caller/source").unwrap_or(&event["source"])
+                .as_str().is_some_and(|source| source.starts_with("song:/"))))
+    {
+        pending.push("native modifier return values are not captured".to_owned());
+    }
     if scope != Scope::Full || replayed != total {
         pending.push("complete song frame replay".to_owned());
     }
@@ -408,6 +423,56 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn modifier_comparison_keeps_values_speeds_returns_and_clocks() {
+        use serde_json::json;
+        let trace = json!({"capabilities":{"native_modifier_results":true}});
+        let native = json!({"scene":1,"kind":"modifier","operation":"PlayerOptions.Boost",
+            "source":"song:/mods.lua","line":12,"phase":"callback",
+            "args":[0.5,10000],"results":[0.25,1],"seconds":2.0,"beat":4.0});
+        assert!(super::same_call_event(&trace, &native, &native).expect("complete observation"));
+        for (pointer, value) in [
+            ("/args/0", json!(0.75)), ("/args/1", json!(1)),
+            ("/results/0", json!(0.5)), ("/results/1", json!(10000)),
+            ("/results", json!(null)), ("/kind", json!("call")),
+            ("/phase", json!("construction")), ("/seconds", json!(2.01)),
+            ("/beat", json!(4.01)),
+        ] {
+            let mut wrong = native.clone();
+            *wrong.pointer_mut(pointer).expect("control field") = value;
+            assert!(!super::same_call_event(&trace, &native, &wrong).expect("control clock"), "accepted {pointer}");
+        }
+        let legacy = json!({"events":[{"kind":"modifier","operation":"PlayerOptions.Boost",
+            "caller":{"source":"song:/mods.lua"}}], "actor_definitions":[{"class":"ActorFrame"}]});
+        let coverage = super::coverage(&legacy, super::Scope::Full, &json!({"compared":true}), 1, 1);
+        assert!(coverage["pending"].as_array().expect("pending coverage")
+            .iter().any(|item| item == "native modifier return values are not captured"));
+        let tail = json!({"events":[{"kind":"query","operation":"ActorFrame.GetChild",
+            "source":"song:/mods.lua","caller":{"source":"=(tail call)","line":-1}}],
+            "actor_definitions":[{"class":"ActorFrame"}]});
+        let coverage = super::coverage(&tail, super::Scope::Full, &json!({"compared":true}), 1, 1);
+        assert!(coverage["pending"].as_array().expect("pending coverage")
+            .iter().any(|item| item == "native tail-call provenance is unavailable"));
+    }
+
+    #[test]
+    fn player_number_paths_keep_players_and_option_levels_distinct() {
+        use serde_json::json;
+        use std::collections::BTreeMap;
+        let mut numeric = json!([{"type":"PlayerState","path":"player-state:0"},
+            {"type":"PlayerOptions","path":"player-state:0/options:ModsLevel_Song"}]);
+        let named = json!([{"type":"PlayerState","path":"player-state:PlayerNumber_P1"},
+            {"type":"PlayerOptions","path":"player-state:PlayerNumber_P1/options:ModsLevel_Song"}]);
+        super::normalize_query_handles(&mut numeric, &mut BTreeMap::new(), 1);
+        assert!(super::same_value(&numeric, &named));
+        for path in ["player-state:PlayerNumber_P2/options:ModsLevel_Song",
+                     "player-state:PlayerNumber_P1/options:ModsLevel_Current"] {
+            let mut wrong = named.clone();
+            wrong[1]["path"] = json!(path);
+            assert!(!super::same_value(&numeric, &wrong), "accepted {path}");
+        }
+    }
+
     #[test]
     fn native_controller_inputs_reject_cpu_and_partial_autoplay() {
         for (mode, enabled) in [(0, false), (1, true)] {

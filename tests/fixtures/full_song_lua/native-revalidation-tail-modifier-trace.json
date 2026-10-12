@@ -1,0 +1,88 @@
+{
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "position": 147,
+  "source_simfile": "chronic latecomer/chronic latecomer.ssc",
+  "deadsync_parent_commit": "af7a51f804962908773e248fd73e9868a6bc674d",
+  "harness_commit": "c77fd11aa12b2ee1eb50b6dac8b2764f7bfd9e69",
+  "tested_source_sha256": {
+    "crates/deadsync-song-lua/src/live.rs": "d39d46b33ce77a7779e159ee2ae4000ca586d5457b5e2d48e90d71059c67f019",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "79aebb3ca8329860431c3bbfb8febc33e25410fe74362c2495f5b55b5fcf5afe"
+  },
+  "controls": {
+    "receipt": "save\\song-lua-validation\\pass188\\top147-modifier-and-tail-controls-v2.json",
+    "sha256": "b083f4e7c8531b7eee60bf55303d599fa470569ac188bf534255d5bbfc4d7ee7",
+    "results": [
+      "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 301 filtered out; finished in 0.18s"
+    ],
+    "log_sha256": "9ad2934199753188d845dd882335429e00a32dd610ebaff08df028fc12f689b7"
+  },
+  "previous_full_replay": {
+    "receipt": "save\\song-lua-validation\\pass208\\top147-autoplay-full-v1-receipt.json",
+    "sha256": "cf950e8e5bccfd665562b0d4a3d70696186202c7c630d426a53db7c04d683b8a",
+    "report_sha256": "93e635edc4f4ae14c7539af93123d7283d33289dd5aa0fde4a3011a83e138656",
+    "summary": {
+      "native_frames": 112583,
+      "replayed_frames": 112583,
+      "compared_stage_fields": 1364,
+      "checked_stage_samples": 124,
+      "errors": [],
+      "pending_coverage": [],
+      "archive_accepted": false
+    },
+    "mismatch_count": 39718,
+    "ordered_calls": {
+      "compared": true,
+      "native_count": 64825,
+      "actual_count": 65179
+    }
+  },
+  "corrected_native_capture": {
+    "source_commit": "c77fd11aa12b2ee1eb50b6dac8b2764f7bfd9e69",
+    "exit_code": 0,
+    "seconds": 232.54139540018514,
+    "frames": 113771,
+    "events": 79418,
+    "runtime_errors": [],
+    "dropped_events": 0,
+    "dropped_update_frames": 0,
+    "native_c_method_hooks": true,
+    "tail_callers": 0,
+    "song_child_calls": 360,
+    "completion": {
+      "next_screen": "ScreenEvaluationStage",
+      "reason": "gameplay-exit",
+      "stage_committed": true,
+      "stages_played_after": 1,
+      "stages_played_before": 0
+    },
+    "native_binary_sha256": "1414a4201816ed2f29ee6610dc6ffd8961da447bf38eb62cfa6520b48da66d5e",
+    "trace_sha256": "e74a68ab265a439f26c86495a9ffd13a3fdb8d99f32efa5a8399fd82bcfd8cdd"
+  },
+  "native_receipt_sha256": "5494cefc896d11aa67cbc7e07283b6c0667342d758e811cd753c5d1ee9a45aa1",
+  "references": {
+    "LuaBinding.cpp": "46f156ae2b334d7139a4d03f84a190dcb5542d024ae66c5ebb4c9d589dc2c1c7",
+    "OptionsBinding.h": "6b43a20161b019f9e64c85d54a78220a27c6d6118f69879ed06d08ae58cb9e00",
+    "GameState.cpp": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+    "PlayerState.cpp": "d54ad94985f1917627af53a55d96986777c9c0b3949768d7822074b09b796280",
+    "Player.cpp": "fb9fbc6ead8073b26cc8ff9097068ed2c33b8d8c2bea58b43eb61e0384ae1935"
+  },
+  "changes": [
+    "Compare modifier values, speeds, previous-value returns, phase, and clocks",
+    "Keep missing modifier returns and lost tail-call caller provenance explicitly pending",
+    "Use native enum player identity while retaining player and option-level distinctions",
+    "Replace the prior inline comparison with the shared strict event comparison"
+  ],
+  "archive_accepted": false,
+  "canonical_position_accepted": false,
+  "remaining": [
+    "Autoplay theme OffCommand stage failure with healthy life is not implemented",
+    "Corrected native capture has not passed a complete DeadSync replay",
+    "All original and historical corpus, rendering, and production activation gates remain active"
+  ]
+}
