@@ -722,7 +722,7 @@ fn zero_approach_keeps_current_and_audits_song_target() {
         );
         assert_eq!(runtime_mod_value(&runtime, 0, "drunk"), Some(1.0));
     }
-    let mut missing = compiled.clone();
+    let mut missing = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     for layer in &mut missing {
         layer
             .eases
@@ -1055,7 +1055,7 @@ end}
     compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
     assert!(parity.checks() >= 5, "audit replacement strings and omitted numeric resets");
     parity.assert_complete("state option string targets");
-    let mut stale = compiled.clone();
+    let mut stale = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     stale[0].eases.retain(|window| !matches!(&window.target,
         deadsync_song_lua::SongLuaEaseTarget::Mod(key) if key == "drunk" && window.to == 0.0));
     let mut parity = Parity::default();
@@ -3495,7 +3495,7 @@ fn startup_boolean_writes_match_native() {
     compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
     assert_eq!(parity.checks(), 12, "retain every native boolean call");
     parity.assert_complete("startup and queued boolean writes");
-    let mut missing = compiled.clone();
+    let mut missing = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     missing[0].boolean_writes.remove(0);
     let mut rejected = Parity::default();
     compare_runtime_modifiers(&trace, &missing, &context, &mut rejected);
@@ -3636,13 +3636,13 @@ fn speed_field_audit_keeps_failed_and_startup_writes() {
     compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
     parity.assert_complete("native shared speed-field API and playback targets");
     for field in 0..4 {
-        let mut altered = compiled.clone();
+        let mut altered = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
         altered[0].speed_writes[0].current[field][0] += 1.0;
         let mut rejected = Parity::default();
         compare_runtime_modifiers(&trace, &altered, &context, &mut rejected);
         assert!(!rejected.gaps.is_empty(), "changing speed field {field} must fail");
     }
-    let mut missing = compiled.clone();
+    let mut missing = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     missing[0].speed_writes.remove(0);
     let mut rejected = Parity::default();
     compare_runtime_modifiers(&trace, &missing, &context, &mut rejected);

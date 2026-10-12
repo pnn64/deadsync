@@ -739,6 +739,46 @@ fn native_message_order(trace: &NativeTrace) -> Vec<(String, usize)> {
     order
 }
 
+#[cfg(test)]
+fn copy_baked_layer<T: Clone>(source: &deadsync_song_lua::CompiledSongLua<T>) -> deadsync_song_lua::CompiledSongLua<T> {
+    // Corruption tests copy baked data only. A retained VM keeps one owner.
+    assert!(source.live_scene.is_none() && source.live_actor_indices().is_empty());
+    let mut copy = deadsync_song_lua::CompiledSongLua::default();
+    copy.loaded_steps = source.loaded_steps;
+    copy.startup_reloads = source.startup_reloads;
+    copy.startup = source.startup.clone();
+    copy.entry_path = source.entry_path.clone();
+    copy.screen_width = source.screen_width;
+    copy.screen_height = source.screen_height;
+    copy.beat_mods = source.beat_mods.clone();
+    copy.time_mods = source.time_mods.clone();
+    copy.eases = source.eases.clone();
+    copy.messages = source.messages.clone();
+    copy.sound_paths = source.sound_paths.clone();
+    copy.overlays = source.overlays.clone();
+    copy.draw_frames = source.draw_frames.clone();
+    copy.screen_overlay_index = source.screen_overlay_index;
+    copy.overlay_eases = source.overlay_eases.clone();
+    copy.overlay_update_unit = source.overlay_update_unit;
+    copy.overlay_updates = source.overlay_updates.clone();
+    copy.overlay_writes = source.overlay_writes.clone();
+    copy.boolean_writes = source.boolean_writes.clone();
+    copy.speed_writes = source.speed_writes.clone();
+    copy.state_calls = source.state_calls.clone();
+    copy.noteskin_writes = source.noteskin_writes.clone();
+    copy.stateful_message_captures = source.stateful_message_captures.clone();
+    copy.player_actors = source.player_actors.clone();
+    copy.song_foreground = source.song_foreground.clone();
+    copy.screen_layers = source.screen_layers.clone();
+    copy.hidden_players = source.hidden_players;
+    copy.note_hides = source.note_hides.clone();
+    copy.column_offsets = source.column_offsets.clone();
+    copy.column_splines = source.column_splines.clone();
+    copy.column_spline_origin = source.column_spline_origin;
+    copy.info = source.info.clone();
+    copy
+}
+
 fn compile_trace_song(trace: &NativeTrace) -> (Vec<CompiledSongLua>, usize, SongLuaCompileContext) {
     let simfile = locate_simfile(trace);
     compile_trace_song_at(trace, &simfile)
@@ -5174,7 +5214,7 @@ fn queued_commands_match_native() {
                     .iter()
                     .all(|command| command.message != "Context")
             );
-            let mut incorrect = compiled.clone();
+            let mut incorrect = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
             let write = incorrect[0]
                 .stateful_message_captures
                 .iter_mut()
@@ -5301,7 +5341,7 @@ fn update_intrinsics_match_native() {
     eprintln!("{}", parity.summary("native update intrinsics"));
     parity.assert_complete("native update intrinsics");
 
-    let mut wrong = compiled.clone();
+    let mut wrong = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     let index = wrong[0].overlays.iter()
         .position(|overlay| overlay.name.as_deref() == Some("Probe")).unwrap();
     let sample = wrong[0].overlay_writes.iter_mut()
@@ -6962,7 +7002,7 @@ fn last_parent_write_waits_for_child_update() {
         !frame.ops.is_empty(),
         "pending transparent destination must not hide the last draw"
     );
-    let mut wrong = compiled.clone();
+    let mut wrong = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     for update in &mut wrong[primary].overlay_updates {
         if update.overlay_index == index && update.target == SongLuaOverlayUpdateTarget::Diffuse {
             update.samples.last_mut().unwrap().value = SongLuaOverlayUpdateValue::Vec4([0.0; 4]);
@@ -7049,7 +7089,7 @@ fn shadow_setters_bypass_child_tweens() {
         (end[index].diffuse[3] - 0.99).abs() < 0.0001,
         "the final callback's diffuse remains queued"
     );
-    let mut wrong = compiled.clone();
+    let mut wrong = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     wrong[primary].overlay_updates.retain(|update| {
         !matches!(
             update.target,
@@ -7139,7 +7179,7 @@ fn image_texture_aliases_match_native_draws() {
         handles[0], handles[2],
         "backward seek restores both bindings"
     );
-    let mut missing = compiled.clone();
+    let mut missing = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     if let SongLuaOverlayKind::Sprite { textures, .. } = &mut missing[primary].overlays[first].kind
     {
         *textures = Default::default();
@@ -7176,7 +7216,7 @@ fn hidden_cache_keeps_membership_and_visible_order() {
     compiled[primary].overlays.swap(hidden_a, hidden_b);
     compare_semantics(&trace, &compiled, primary, &context).assert_complete("hidden cache order");
     for control in 0..4 {
-        let mut wrong = compiled.clone();
+        let mut wrong = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
         match control {
             0 => wrong[primary].overlays.swap(visible_a, visible_b),
             1 => {
@@ -7261,7 +7301,7 @@ fn consumed_message_checks_runtime_timeline() {
             .all(|command| command.message != "Consume")
     );
     compare_semantics(&trace, &compiled, primary, &context).assert_complete("consumed message");
-    let mut missing = compiled[primary].clone();
+    let mut missing = copy_baked_layer(&compiled[primary]);
     missing.messages.retain(|event| event.message != "Consume");
     let mut parity = Parity::default();
     compare_timeline(&trace, &missing, &mut parity);
@@ -10047,7 +10087,7 @@ fn zero_fov_matches_native_parent_camera() {
     eprintln!("{}", parity.summary("native zero FOV"));
     assert_eq!(parity.checks(), 131, "retain every native camera observation");
     parity.assert_complete("native zero FOV");
-    let mut inherited = compiled.clone();
+    let mut inherited = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     let zero = inherited[primary].overlays.iter()
         .position(|actor| actor.name.as_deref() == Some("Zero"))
         .expect("zero FOV child");
@@ -10184,7 +10224,7 @@ fn warp_zone_whole_song_matches_native() {
     eprintln!("{}", parity.summary("Warp Zone whole song"));
     parity.assert_complete("Warp Zone whole song");
     assert_eq!(parity.checks(), 9201, "retain every native observation");
-    let mut missing = compiled.clone();
+    let mut missing = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     for layer in &mut missing {
         layer.overlay_updates.clear();
     }
@@ -10271,7 +10311,7 @@ fn bad_apple_whole_song_matches_native() {
             .sum::<usize>(),
         42
     );
-    let mut missing = compiled.clone();
+    let mut missing = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     missing[primary].boolean_writes.clear();
     let mut rejected = Parity::default();
     runtime_modifiers::compare_runtime_modifiers(&trace, &missing, &context, &mut rejected);
@@ -10279,7 +10319,7 @@ fn bad_apple_whole_song_matches_native() {
         !rejected.gaps.is_empty(),
         "missing boolean setter evidence must fail"
     );
-    let mut wrong = compiled.clone();
+    let mut wrong = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     wrong[primary].boolean_writes[0].previous = true;
     let mut rejected = Parity::default();
     runtime_modifiers::compare_runtime_modifiers(&trace, &wrong, &context, &mut rejected);
@@ -10287,7 +10327,7 @@ fn bad_apple_whole_song_matches_native() {
         !rejected.gaps.is_empty(),
         "wrong previous-value returns must fail"
     );
-    let mut missing = compiled.clone();
+    let mut missing = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     if let SongLuaOverlayKind::Sprite {
         texture_key,
         textures,
@@ -10443,7 +10483,7 @@ fn goodbye_whole_song_matches_native() {
         drawn_faces, 51,
         "all visible face sprites must use the production renderer"
     );
-    let mut missing = compiled.clone();
+    let mut missing = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     for track in trace.projected_vertex_tracks.iter().filter(|track| {
         map.get(&track.actor).is_some_and(|&(layer, index)| {
             matches!(
@@ -10468,7 +10508,7 @@ fn goodbye_whole_song_matches_native() {
         rejected.passed() < rejected.checks(),
         "missing texture aliases must fail"
     );
-    let mut uncropped = compiled.clone();
+    let mut uncropped = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     uncropped[primary]
         .overlay_updates
         .retain(|update| update.target != SongLuaOverlayUpdateTarget::CropTop);
@@ -10490,7 +10530,7 @@ fn and_drugs_whole_song_matches_native() {
     eprintln!("{}", parity.summary("And Drugs whole song"));
     parity.assert_complete("And Drugs whole song");
     assert_eq!(parity.checks(), 29680, "retain every native observation");
-    let mut missing = compiled.clone();
+    let mut missing = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     for layer in &mut missing {
         layer.eases.clear();
     }
@@ -10524,7 +10564,7 @@ fn igaku_whole_song_matches_native() {
         358379,
         "retain every native observation in its owning layer"
     );
-    let mut missing = compiled.clone();
+    let mut missing = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     for layer in &mut missing {
         layer.column_offsets.retain(|window| {
             window.target != deadsync_song_lua::SongLuaColumnTransformTarget::RotationZ
@@ -10886,7 +10926,7 @@ fn save_tears_whole_native() {
         draws, 6808,
         "retain all visible movie and JPEG observations"
     );
-    let mut wrong = compiled.clone();
+    let mut wrong = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     let track = wrong[layer]
         .overlay_updates
         .iter_mut()
@@ -10981,7 +11021,7 @@ fn i_ai_whole_native() {
     eprintln!("I (Ai) actual image draw checks: {draws}");
     assert_eq!(draws, 598, "include both completed zero-size TV effects");
     let &(layer, index) = map.get(&tv.actor).expect("TV sprite");
-    let mut wrong = compiled.clone();
+    let mut wrong = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     let fade = wrong[layer]
         .overlay_updates
         .iter_mut()
@@ -11054,7 +11094,7 @@ fn oshama_whole_native() {
             && sample[3] == 1
     ));
     let &(layer, index) = map.get(&ending.actor).expect("ending sprite");
-    let mut wrong = compiled.clone();
+    let mut wrong = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     let fade = wrong[layer]
         .overlay_updates
         .iter_mut()
@@ -11264,7 +11304,7 @@ fn karachi_whole_native() {
             };
         assert_eq!(run.blend, expected, "native glow/scringus blend");
     }
-    let mut wrong = compiled.clone();
+    let mut wrong = compiled.iter().map(copy_baked_layer).collect::<Vec<_>>();
     let &(layer, index) = map.get(&captures[0].actor).unwrap();
     let fade = wrong[layer]
         .overlay_updates

@@ -839,7 +839,7 @@ fn composition_checks_nonfinite_alpha_per_frame() {
         check(&trace, &compiled);
         compiled.overlays[0].initial_state.diffuse[3] = 1.0;
         assert!(
-            std::panic::catch_unwind(|| check(&trace, &compiled)).is_err(),
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check(&trace, &compiled))).is_err(),
             "clamping must fail"
         );
         compiled.overlays[0].initial_state.diffuse[3] = if alpha.is_nan() {
@@ -848,13 +848,13 @@ fn composition_checks_nonfinite_alpha_per_frame() {
             -alpha
         };
         assert!(
-            std::panic::catch_unwind(|| check(&trace, &compiled)).is_err(),
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check(&trace, &compiled))).is_err(),
             "the wrong kind must fail"
         );
         compiled.overlays[0].initial_state.diffuse[3] = alpha;
         trace.runtime_actors[0].render_state_samples[0].1 = Some(1.0);
         assert!(
-            std::panic::catch_unwind(|| check(&trace, &compiled)).is_err(),
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check(&trace, &compiled))).is_err(),
             "an extra nonfinite frame must fail"
         );
     }

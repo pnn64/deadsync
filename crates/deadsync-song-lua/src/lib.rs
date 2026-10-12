@@ -1861,7 +1861,8 @@ pub struct SongLuaStateCall {
 #[derive(Debug)]
 pub struct CompiledSongLua<OverlayActor> {
     pub live_scene: Option<SongLuaLiveScene>,
-    pub(crate) live_indices: Vec<usize>,
+    /// Retained scene positions corresponding to this layer's overlays.
+    pub live_indices: Vec<usize>,
     /// Charts whose note fields were constructed after startup reloads.
     pub loaded_steps: Option<[Option<usize>; LUA_PLAYERS]>,
     pub startup_reloads: u32,
