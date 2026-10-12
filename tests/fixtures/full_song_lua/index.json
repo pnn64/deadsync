@@ -2112,17 +2112,14 @@
       "aliases": []
     },
     {
-      "title": "Datamania",
+      "title": "Datamania (tpz Overheat Remix)",
       "source_simfile": "Datamania (tpz Overheat Remix)/Datamania (tpz Overheat Remix).ssc",
-      "harness_version": "0.1.0",
-      "archive": "0e8fcd8061d0b024af6b30aa841ef3e805447cf97ae6f74e61f151ac346ac969.tar.zst",
-      "sha256": "0e8fcd8061d0b024af6b30aa841ef3e805447cf97ae6f74e61f151ac346ac969",
-      "compressed_bytes": 168429,
-      "uncompressed_sha256": "02cf8a20bad57897823637b4a63470f605f8a375393a4187b731c68ee92e3c85",
-      "compression_level": 22,
-      "aliases": [
-        "28ec8346d353eba2a5d875de10f6cd066a218a923715f71fd86fe1a44a4395e5.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "3a897552734b96d026ee8a9d9871f871428ab02280da95498a19f95787e71eb5.tar.zst",
+      "sha256": "3a897552734b96d026ee8a9d9871f871428ab02280da95498a19f95787e71eb5",
+      "compressed_bytes": 6782287,
+      "uncompressed_sha256": "8c77c60472340a089cf1e600d61c1c15d4edea58499c3e117adb95fd8aa44127",
+      "aliases": []
     },
     {
       "title": "Datura [paroxysm]",
