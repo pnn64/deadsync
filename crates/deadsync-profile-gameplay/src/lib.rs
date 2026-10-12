@@ -589,13 +589,19 @@ pub fn song_lua_play_context(
                 value
             })
     });
-    context.display_width = display_width.max(1) as f32;
-    context.display_height = display_height.max(1) as f32;
+    context.display_width = display_width as f32;
+    context.display_height = display_height as f32;
     // `VideoRenderers` is a legacy capability preference used by mod charts to
     // gate OpenGL-era ActorFrameTexture effects. DeadSync implements those
     // semantics above every physical backend, so advertise the compatibility
     // renderer first while retaining the actual backend for diagnostics.
-    context.video_renderers = format!("opengl,{video_renderer}");
+    // Native null captures have no physical display or render targets.
+    context.render_to_texture = !video_renderer.eq_ignore_ascii_case("null");
+    context.video_renderers = if context.render_to_texture {
+        format!("opengl,{video_renderer}")
+    } else {
+        video_renderer.to_string()
+    };
     context
 }
 

@@ -2619,8 +2619,9 @@ pub fn create_network_response_table(lua: &Lua) -> mlua::Result<Table> {
 
 pub fn create_display_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let display = lua.create_table()?;
-    let width = context.display_width.max(1.0).round() as i32;
-    let height = context.display_height.max(1.0).round() as i32;
+    let width = context.display_width.max(0.0).round() as i32;
+    let height = context.display_height.max(0.0).round() as i32;
+    let render_to_texture = context.render_to_texture;
     let specs = create_display_specs_table(lua, width, height)?;
 
     display.set(
@@ -2646,7 +2647,7 @@ pub fn create_display_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua:
     )?;
     display.set(
         "SupportsRenderToTexture",
-        lua.create_function(|_, _args: MultiValue| Ok(true))?,
+        lua.create_function(move |_, _args: MultiValue| Ok(render_to_texture))?,
     )?;
     display.set(
         "SupportsFullscreenBorderlessWindow",

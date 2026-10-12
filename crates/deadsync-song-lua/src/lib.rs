@@ -1456,6 +1456,8 @@ pub struct SongLuaCompileContext {
     /// Physical video mode exposed through `DISPLAY` and `PREFSMAN`.
     pub display_width: f32,
     pub display_height: f32,
+    /// Capability of the selected renderer, independent of theme helpers.
+    pub render_to_texture: bool,
     pub video_renderers: String,
     pub players: [SongLuaPlayerContext; LUA_PLAYERS],
     pub confusion_offset_available: bool,
@@ -1491,6 +1493,7 @@ impl SongLuaCompileContext {
             screen_height: 480.0,
             display_width: 640.0,
             display_height: 480.0,
+            render_to_texture: true,
             video_renderers: "software".to_string(),
             players: std::array::from_fn(|_| SongLuaPlayerContext::default()),
             confusion_offset_available: true,
@@ -12573,6 +12576,36 @@ return Def.ActorFrame{}
 
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "1600:900:true:true");
+    }
+
+    #[test]
+    fn compile_song_lua_preserves_null_display_context() {
+        let song_dir = test_dir("null-display-context");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+assert(SCREEN_WIDTH == 854 and SCREEN_HEIGHT == 480)
+assert(DISPLAY:GetDisplayWidth() == 0 and DISPLAY:GetDisplayHeight() == 0)
+assert(PREFSMAN:GetPreference('DisplayWidth') == 0)
+assert(PREFSMAN:GetPreference('DisplayHeight') == 0)
+assert(PREFSMAN:GetPreference('VideoRenderers') == 'null')
+assert(DISPLAY:SupportsRenderToTexture() == false)
+-- Simply Love's SL-SupportHelpers.lua reports true for null independently.
+assert(SupportsRenderToTexture() == true)
+local root = Def.ActorFrame{}
+if DISPLAY:SupportsRenderToTexture() then
+    root[#root + 1] = Def.ActorFrameTexture{Name='UnexpectedAFT'}
+end
+return root
+"#).expect("write null-renderer control");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Null Display");
+        context.screen_width = 854.0;
+        context.screen_height = 480.0;
+        context.display_width = 0.0;
+        context.display_height = 0.0;
+        context.video_renderers = "null".into();
+        context.render_to_texture = false;
+        let compiled = test_compile_song_lua(&entry, &context).expect("compile native null branch");
+        assert!(compiled.overlays.is_empty());
     }
 
     #[test]

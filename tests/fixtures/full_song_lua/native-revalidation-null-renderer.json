@@ -1,0 +1,175 @@
+{
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "position": 147,
+  "source_simfile": "chronic latecomer/chronic latecomer.ssc",
+  "deadsync_parent_commit": "2771f35b2bb80b2a95dd93d8ca27288610b48398",
+  "changed_source_sha256": {
+    "crates/deadsync-profile-gameplay/src/lib.rs": "dcdb0018eff522c6cb77f250a3e9632b2dcae0e576a3449e6f94e9d728b89bca",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "7e38a86695bf92bf3acb46675016bff0f6daf69ac5795f7c6559efe3f9f8b4ae",
+    "crates/deadsync-song-lua/src/host.rs": "4955b2d4865986536907ab75eaae175503bdb2c2e7b27640c182c39943d9fe99",
+    "crates/deadsync-song-lua/src/lib.rs": "ba5343f022dd8b2a42ee73c084cdf952224948205d3dd739a9b8bdc68dbaf3e1",
+    "crates/deadsync-song-lua/src/tables.rs": "19e89c7cae1ab234d525ed6a166740dab9c061d37b1fd1c64f18788383f87c28"
+  },
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_simply_love_revision": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+  "native_trace": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass356\\top147-native-full-v1.json",
+  "native_trace_sha256": "efc0261673512f533700a8a8ff032b5624fd454a1119336123e63b0c0006a8a3",
+  "native_display_input": {
+    "height": 0,
+    "logical_height": 480,
+    "logical_width": 854,
+    "video_renderers": "null",
+    "width": 0
+  },
+  "native_constructor_observations": [
+    {
+      "args": [],
+      "beat": 0,
+      "caller": {
+        "line": 0,
+        "source": "song:/lua/default.lua"
+      },
+      "detail": {
+        "results": [
+          false
+        ]
+      },
+      "kind": "query",
+      "line": 0,
+      "operation": "RageDisplay.SupportsRenderToTexture",
+      "phase": "construction",
+      "scene": 1,
+      "seconds": 0,
+      "seq": 3,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "args": [
+        "DisplayWidth"
+      ],
+      "beat": 0,
+      "caller": {
+        "line": 0,
+        "source": "song:/lua/default.lua"
+      },
+      "detail": {
+        "results": [
+          0
+        ]
+      },
+      "kind": "query",
+      "line": 0,
+      "operation": "PrefsManager.GetPreference",
+      "phase": "construction",
+      "scene": 1,
+      "seconds": 0,
+      "seq": 4,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "args": [
+        "DisplayHeight"
+      ],
+      "beat": 0,
+      "caller": {
+        "line": 0,
+        "source": "song:/lua/default.lua"
+      },
+      "detail": {
+        "results": [
+          0
+        ]
+      },
+      "kind": "query",
+      "line": 0,
+      "operation": "PrefsManager.GetPreference",
+      "phase": "construction",
+      "scene": 1,
+      "seconds": 0,
+      "seq": 5,
+      "source": "song:/lua/default.lua"
+    }
+  ],
+  "reference_source_sha256": {
+    "RageDisplay.h": "21faa5fc81ede69763a07ecb3156749cfed08c3bee160564cfbd61a3fb6743fd",
+    "RageDisplay.cpp": "79292ce583c1d0a3401419bd4fa752f517269eb1ff19d948b86c6207d6e51370",
+    "RageDisplay_Null.h": "42d03cf14538314f521b1422325852e9606e61e724ec3f629e2bad0f957dfebc",
+    "RageDisplay_Null.cpp": "e9977201854681dc5b90675cbd32bf3d1ff03cbe5b2c43c47b6633d2314850d9"
+  },
+  "fixed": [
+    "preserve zero physical dimensions in gameplay context, DISPLAY and PREFSMAN",
+    "expose selected renderer render-to-texture capability independently of Simply Love helper",
+    "retain null renderer name instead of advertising opengl"
+  ],
+  "checks": [
+    {
+      "source_commit": "2771f35b2bb80b2a95dd93d8ca27288610b48398",
+      "source_pending_commit": true,
+      "exit_code": 101,
+      "seconds": 137.72051060013473,
+      "results": [
+        "test result: FAILED. 312 passed; 2 failed; 0 ignored; 0 measured; 224 filtered out; finished in 3.84s"
+      ],
+      "failures": [
+        "thread 'tests::compile_song_lua_accepts_skewy_probe_calls' (58624) panicked at crates\\deadsync-song-lua\\src\\lib.rs:18247:9:",
+        "test tests::compile_song_lua_accepts_skewy_probe_calls ... FAILED",
+        "thread 'tests::compile_song_lua_accepts_stage_stat_and_high_score_helpers' (58696) panicked at crates\\deadsync-song-lua\\src\\lib.rs:20876:9:",
+        "test tests::compile_song_lua_accepts_stage_stat_and_high_score_helpers ... FAILED",
+        "test result: FAILED. 312 passed; 2 failed; 0 ignored; 0 measured; 224 filtered out; finished in 3.84s",
+        "error: test failed, to rerun pass `-p deadsync-song-lua --lib`"
+      ],
+      "receipt": "save/song-lua-validation/pass188/top147-native-display-bindings-v1.json",
+      "receipt_sha256": "2ccff33cbcd635057a0ace3fa42689ce658f28353dcd12a585798990e31acd26"
+    },
+    {
+      "source_commit": "2771f35b2bb80b2a95dd93d8ca27288610b48398",
+      "source_pending_commit": true,
+      "exit_code": 0,
+      "seconds": 60.9648374998942,
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 0.01s"
+      ],
+      "failures": [],
+      "receipt": "save/song-lua-validation/pass188/top147-null-gameplay-context-v1.json",
+      "receipt_sha256": "719e65c15a6ff4bd421be632a4cbcf0843a89a5d02b6515f36293eb9c075b31f"
+    },
+    {
+      "source_commit": "2771f35b2bb80b2a95dd93d8ca27288610b48398",
+      "source_pending_commit": true,
+      "exit_code": 101,
+      "seconds": 112.02386320009828,
+      "results": [
+        "test result: FAILED. 11 passed; 2 failed; 0 ignored; 0 measured; 524 filtered out; finished in 0.18s"
+      ],
+      "failures": [
+        "thread 'tests::compile_song_lua_accepts_skewy_probe_calls' (39328) panicked at crates\\deadsync-song-lua\\src\\lib.rs:18214:9:",
+        "test tests::compile_song_lua_accepts_skewy_probe_calls ... FAILED",
+        "thread 'tests::compile_song_lua_accepts_stage_stat_and_high_score_helpers' (59188) panicked at crates\\deadsync-song-lua\\src\\lib.rs:20843:9:",
+        "test tests::compile_song_lua_accepts_stage_stat_and_high_score_helpers ... FAILED",
+        "test result: FAILED. 11 passed; 2 failed; 0 ignored; 0 measured; 524 filtered out; finished in 0.18s",
+        "error: test failed, to rerun pass `-p deadsync-song-lua --lib`"
+      ],
+      "receipt": "save/song-lua-validation/pass188/top147-display-baseline-accepts-v1.json",
+      "receipt_sha256": "d2c2e5cf145ff13549672e49d80f81d7de2c204f00cad4341e494f7273eea465"
+    }
+  ],
+  "baseline_verified": {
+    "source_bytes_match_parent_git_blobs": true,
+    "same_failures_before_and_after": [
+      "compile_song_lua_accepts_skewy_probe_calls",
+      "compile_song_lua_accepts_stage_stat_and_high_score_helpers"
+    ],
+    "pending": true
+  },
+  "archive_accepted": false,
+  "full_context_comparison_pending": true,
+  "autoplay_comparison_pending": true,
+  "framebuffer_pixel_parity_proven": false,
+  "remaining_scope": "Original corpus, historical variants, all existing broader parity gates and the two baseline evaluator failures remain active."
+}
