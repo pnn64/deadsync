@@ -721,6 +721,41 @@
       "capture_exit": 1,
       "capture_seconds": 234.2978513880007,
       "failure": "error: ITGmania song Lua semantic trace failed: native method event has no valid immediate caller; retained run directory /tmp/itgmania-harness-rs/song-lua-134420-1791836866036822333-0\n"
+    },
+    {
+      "position": 152,
+      "source_simfile": "copter/copter.sm",
+      "simfile_sha256": "818da899529969ff58ca8b52dc0672839cdcd51e1b5b5f46bac17c59bb2ece1b",
+      "retained_original_archive": "6b6c32875026ece877f493480440e61f6004b160b8c738b5251cdb9974896668.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "capture_seconds": 18.85646321200329,
+      "trace_sha256": "6b4721952c9e753d9185601bffa66e1ad2a4d09f7bedf90a40a54c6d1ccc6af6",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-152/candidates/560f3f7b178c419bf3643f18fc52bbe8af01df598a1faf74926ffe47431fa899.tar",
+      "replay_exit": 2,
+      "replay_seconds": 70.83847224599594,
+      "candidate_sha256": "560f3f7b178c419bf3643f18fc52bbe8af01df598a1faf74926ffe47431fa899",
+      "native_frames": 17735,
+      "replayed_frames": 17735,
+      "compared_stage_fields": 220,
+      "pending_coverage": [
+        "uncompared song operations: Actor.zoomy, GameState.ApplyStageModifiers",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [
+        "OnCommand failed for ActorFrame 'copter': runtime error: [string \"/tmp/.tmpDWzgsE/song/copter/default.lua\"]:20: attempt to call method 'ApplyStageModifiers' (a nil value)\nstack traceback:\n\t[C]: in method 'ApplyStageModifiers'\n\t[string \"/tmp/.tmpDWzgsE/song/copter/default.lua\"]:20: in function <[string \"/tmp/.tmpDWzgsE/song/copter/default.lua\"]:18>"
+      ],
+      "mismatch_count": 1,
+      "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 3573,
+          "deadsync": 2
+        }
+      ],
+      "report_sha256": "fe5d5eb9cd12751fa6e44cc70b920dce8d8d505e523c0c74832c3a6c700acc36"
     }
   ],
   "historical_pending": [
@@ -747,6 +782,6 @@
   "binary_sha256": "d515e94becf9b644c522e453045a5f07d1e149cc18765469d78b2384164539ad",
   "harness_sha256": "41bfe13b815a4a9695c2271e375611ff2e0efc017c4c4bc1ee304cb89bf69a54",
   "passed_fixtures": 0,
-  "pending_charts": 3,
-  "processed_charts": 3
+  "pending_charts": 4,
+  "processed_charts": 4
 }
