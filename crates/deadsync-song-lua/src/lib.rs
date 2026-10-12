@@ -130,7 +130,7 @@ pub use lua_util::{
     create_score_display_percent_actor, create_score_percent_text_actor, create_screen_timer_actor,
     create_string_array, create_texture_proxy, create_theme_path_actor,
     create_top_screen_player_actor, create_top_screen_score_actor,
-    create_top_screen_song_meter_display_actor, create_top_screen_table,
+    create_top_screen_table,
     create_top_screen_theme_actor, create_underlay_theme_actor, crop_actor_to,
     crop_actor_to_source_size, current_gamestate_player_value, current_gamestate_value,
     current_song_lua_style_name, current_song_value, current_steps_value,
@@ -293,10 +293,10 @@ pub use timing::{
 pub use top_screen::{
     SONG_LUA_TOP_SCREEN_OPTION_ROWS, TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES,
     option_row_default_text, player_child_proxy_name, top_screen_danger_index,
-    top_screen_life_meter_bar_index, top_screen_life_meter_index, top_screen_life_meter_name,
+    top_screen_life_meter_index, top_screen_life_meter_name,
     top_screen_option_row_name, top_screen_option_row_name_at, top_screen_player_index,
     top_screen_player_name, top_screen_score_index, top_screen_score_name,
-    top_screen_score_percent_name, top_screen_song_meter_display_index,
+    top_screen_score_percent_name,
     top_screen_step_stats_pane_index, top_screen_steps_display_index, underlay_score_index,
     underlay_score_name,
 };
@@ -19800,7 +19800,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "PlayerNumber_P1:HealthState_Alive:PlayerController_Human:0.5:0.5:false:false:false:true:1:0"
+            "PlayerNumber_P1:HealthState_Alive:PlayerController_Human:0.5:0.5:false:false:false:false:1:0"
         );
     }
 
@@ -19863,31 +19863,30 @@ return Def.ActorFrame{
 return Def.ActorFrame{
     InitCommand=function(self)
         local top = SCREENMAN:GetTopScreen()
-        local bpm = top:GetChild("BPMDisplay")
+        local underlay = top:GetChild("Underlay")
+        local bpm = underlay:GetChild("BPMDisplay")
         assert(top:GetScreenType() == "ScreenType_Gameplay")
         assert(self.GetScreenType == nil)
-        local title = top:GetChild("SongTitle")
+        assert(top:GetChild("BPMDisplay") == nil)
+        assert(top:GetChild("SongTitle") == nil)
+        assert(top:GetChild("SongMeterDisplayP1") == nil)
         local steps = top:GetChild("StepsDisplayP1")
-        local underlay = top:GetChild("Underlay")
         local p1_score = underlay:GetChild("P1Score")
         local song_meter_title = underlay:GetChild("SongMeter"):GetChild("SongTitle")
-        local screen_meter = top:GetChild("SongMeterDisplayP1")
-        local stream = screen_meter:GetChild("Stream")
+        local song_meter = underlay:GetChild("SongMeter")
         local overlay = top:GetChild("Overlay")
         mod_actions = {
             {
                 1,
                 string.format(
-                    "%s:%s:%s:%s:%s:%s:%s:%s:%s:%s",
+                    "%s:%s:%s:%s:%s:%s:%s:%s",
                     bpm:GetName(),
                     bpm:GetText(),
-                    title:GetText(),
+                    song_meter_title:GetText(),
                     tostring(steps.GetText == nil),
                     p1_score:GetName(),
                     p1_score:GetText(),
-                    song_meter_title:GetText(),
-                    screen_meter:GetName(),
-                    stream:GetName(),
+                    song_meter:GetName(),
                     overlay:GetName()
                 ),
                 true,
@@ -19906,7 +19905,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "BPMDisplay:120 - 180:Theme Actor Shapes:true:P1Score:0.00%:Theme Actor Shapes:SongMeterDisplayP1:Stream:Overlay"
+            "BPMDisplay:120 - 180:Theme Actor Shapes:true:P1Score:0.00%:SongMeter:Overlay"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
     }
@@ -24520,14 +24519,14 @@ mod_actions = {
     {
         1,
         string.format(
-            "%s:%s:%s:%s:%s:%s:%.0f:%s",
+            "%s:%s:%s:%s:%s:%s:%s:%s",
             top:GetName(),
             top:GetPrevScreenName(),
             top:GetNextScreenName(),
             tostring(top:IsPaused()),
             tostring(top:AllAreOnLastRow()),
             tostring(wheel:IsLocked()),
-            top:GetChild("Timer"):GetSeconds(),
+            tostring(top:GetChild("Timer") == nil),
             tostring(top:GetNextCourseSong() == GAMESTATE:GetCurrentSong())
         ),
         true,
@@ -24550,7 +24549,7 @@ return Def.ActorFrame{}
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "ScreenTextEntry:ScreenSelectMusic:ScreenGameplay:true:false:false:0:true"
+            "ScreenTextEntry:ScreenSelectMusic:ScreenGameplay:true:false:false:true:true"
         );
     }
 

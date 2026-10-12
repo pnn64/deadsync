@@ -211,24 +211,6 @@ pub fn top_screen_steps_display_index(name: &str) -> Option<usize> {
 }
 
 #[must_use]
-pub fn top_screen_song_meter_display_index(name: &str) -> Option<usize> {
-    match name {
-        "SongMeterDisplayP1" => Some(0),
-        "SongMeterDisplayP2" => Some(1),
-        _ => None,
-    }
-}
-
-#[must_use]
-pub fn top_screen_life_meter_bar_index(name: &str) -> Option<usize> {
-    match name {
-        "LifeMeterBarP1" => Some(0),
-        "LifeMeterBarP2" => Some(1),
-        _ => None,
-    }
-}
-
-#[must_use]
 pub fn underlay_score_index(name: &str) -> Option<usize> {
     match name {
         "P1Score" => Some(0),

@@ -770,6 +770,16 @@ return Def.ActorFrame{Name='Control', InitCommand=function(self)
         assert(player.GetChild == ActorFrame.GetChild)
         assert(player:GetChild('Judgment'):GetName() == 'Judgment')
         assert(screen:GetChild('PlayerP2') == nil)
+        local count = screen:GetNumChildren()
+        for _,name in ipairs({'ScoreP2','StepsDisplayP2','BPMDisplay','LifeFrame',
+                'ScoreFrame','Lyrics','LifeMeter','UnknownChild123'}) do
+            assert(screen:GetChild(name) == nil, name)
+            assert(screen:GetChildren()[name] == nil, name)
+        end
+        for _,name in ipairs({'ScoreP1','StepsDisplayP1'}) do
+            assert(screen:GetChild(name):GetName() == name)
+        end
+        assert(screen:GetNumChildren() == count)
     end)
 end}
 "#,
@@ -837,7 +847,7 @@ end}
             .iter()
             .filter(|event| event["operation"] == "ActorFrame.GetChild")
             .collect();
-        assert_eq!(children.len(), 6, "{events:?}");
+        assert_eq!(children.len(), 26, "{events:?}");
         assert_eq!(
             children[1]["results"][0]["path"],
             "ScreenGameplay/PlayerP1/Judgment"

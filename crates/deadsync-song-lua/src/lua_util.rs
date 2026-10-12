@@ -49,10 +49,10 @@ use crate::{
     song_lua_valid_sprite_state_index, song_lua_valign_value, song_music_rate,
     sprite_animation_state_at, sprite_frame_count, sprite_image_frame_size, sprite_texture_rect,
     text_glow_mode_label, texture_pixel_offset_rect, theme_metric_number, theme_path,
-    top_screen_danger_index, top_screen_life_meter_bar_index, top_screen_life_meter_index,
+    top_screen_danger_index, top_screen_life_meter_index,
     top_screen_life_meter_name, top_screen_option_row_name, top_screen_player_index,
     top_screen_player_name, top_screen_score_index, top_screen_score_name,
-    top_screen_score_percent_name, top_screen_song_meter_display_index,
+    top_screen_score_percent_name,
     top_screen_step_stats_pane_index, top_screen_steps_display_index, truthy, underlay_score_index,
     underlay_score_name,
 };
@@ -13000,20 +13000,6 @@ pub fn create_named_child_actor(
     Ok(child)
 }
 
-pub fn create_top_screen_song_meter_display_actor(
-    lua: &Lua,
-    name: &str,
-    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
-) -> mlua::Result<Table> {
-    let actor = create_named_actor(lua, "SongMeterDisplay", name, create_dummy_actor)?;
-    actor.set("StreamWidth", 0.0_f32)?;
-    actor.set("__songlua_stream_width", 0.0_f32)?;
-    let stream = create_named_actor(lua, "Quad", "Stream", create_dummy_actor)?;
-    stream.set("__songlua_parent", actor.clone())?;
-    actor_children(lua, &actor)?.set("Stream", stream)?;
-    Ok(actor)
-}
-
 pub fn create_top_screen_theme_actor(
     lua: &Lua,
     parent: &Table,
@@ -13033,65 +13019,16 @@ pub fn create_top_screen_theme_actor(
         }
         return Ok(Some(actor));
     }
-    if name.eq_ignore_ascii_case("BPMDisplay") {
-        return Ok(Some(create_named_text_actor(
-            lua,
-            "BPMDisplay",
-            name,
-            parent
-                .get::<Option<String>>("__songlua_bpm_text")?
-                .unwrap_or_default(),
-            create_dummy_actor,
-        )?));
-    }
-    if name.eq_ignore_ascii_case("SongTitle") {
-        return Ok(Some(create_named_text_actor(
-            lua,
-            "BitmapText",
-            name,
-            parent
-                .get::<Option<String>>("__songlua_main_title")?
-                .unwrap_or_default(),
-            create_dummy_actor,
-        )?));
-    }
-    if name.eq_ignore_ascii_case("StageDisplay") {
-        return Ok(Some(create_named_text_actor(
-            lua,
-            "BitmapText",
-            name,
-            "Stage 1".to_string(),
-            create_dummy_actor,
-        )?));
-    }
     if top_screen_steps_display_index(name).is_some() {
         // StepsDisplay derives from ActorFrame, not BitmapText.
         return Ok(Some(create_named_actor(lua, "StepsDisplay", name, create_dummy_actor)?));
     }
-    if top_screen_song_meter_display_index(name).is_some() {
-        return Ok(Some(create_top_screen_song_meter_display_actor(
-            lua,
-            name,
-            create_dummy_actor,
-        )?));
-    }
-    if name.eq_ignore_ascii_case("LifeFrame")
-        || name.eq_ignore_ascii_case("ScoreFrame")
-        || name.eq_ignore_ascii_case("Lyrics")
-        || name.eq_ignore_ascii_case("SongBackground")
+    if name.eq_ignore_ascii_case("SongBackground")
         || name.eq_ignore_ascii_case("SongForeground")
     {
         return Ok(Some(create_named_actor(
             lua,
             "ActorFrame",
-            name,
-            create_dummy_actor,
-        )?));
-    }
-    if top_screen_life_meter_bar_index(name).is_some() {
-        return Ok(Some(create_named_actor(
-            lua,
-            "LifeMeterBar",
             name,
             create_dummy_actor,
         )?));
@@ -13282,21 +13219,22 @@ pub fn create_top_screen_player_actor(
 pub fn install_top_screen_theme_children(
     lua: &Lua,
     top_screen: &Table,
+    players: &[SongLuaPlayerContext; LUA_PLAYERS],
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
 ) -> mlua::Result<()> {
-    install_named_theme_children(
-        lua,
-        top_screen,
-        TOP_SCREEN_THEME_CHILD_NAMES,
-        create_named_child_actor,
-    )?;
-    // Simply-Love-SM5 [ScreenGameplay] hibernates the engine score and
-    // difficulty displays. Its visible replacements belong to Underlay.
     let children = actor_children(lua, top_screen)?;
-    for name in ["ScoreP1", "ScoreP2", "StepsDisplayP1", "StepsDisplayP2"] {
-        children
-            .get::<Table>(name)?
-            .raw_set("__songlua_theme_hibernating", true)?;
+    for &name in TOP_SCREEN_THEME_CHILD_NAMES {
+        // ScreenGameplay::Init creates score and difficulty displays only
+        // for enabled players; Simply Love hibernates those engine actors.
+        let player = top_screen_score_index(name).or_else(|| top_screen_steps_display_index(name));
+        if player.is_some_and(|index| !players[index].enabled) {
+            continue;
+        }
+        let child = create_named_child_actor(lua, top_screen, name)?;
+        if player.is_some() {
+            child.raw_set("__songlua_theme_hibernating", true)?;
+        }
+        children.set(name, child)?;
     }
     Ok(())
 }
@@ -13575,7 +13513,7 @@ pub fn create_top_screen_table(
             children.set(top_screen_life_meter_name(player_index), life_meter.clone())?;
         }
     }
-    install_top_screen_theme_children(lua, &top_screen, create_named_child_actor)?;
+    install_top_screen_theme_children(lua, &top_screen, &players, create_named_child_actor)?;
     top_screen.set(
         "SetMinSecondsToMusic",
         lua.create_function(|_, (screen, seconds): (Table, f32)| {
@@ -13615,16 +13553,13 @@ pub fn create_top_screen_table(
                     Ok(Value::Nil)
                 };
             }
-            if name.eq_ignore_ascii_case("LifeMeter") {
-                return Ok(Value::Table(life_meters_for_get_child[0].clone()));
-            }
             let children = actor_children(lua, &top_screen_for_get_child)?;
             if let Some(child) = children.get::<Option<Table>>(name.as_str())? {
                 return Ok(Value::Table(child));
             }
-            let child = create_named_child_actor(lua, &top_screen_for_get_child, &name)?;
-            children.set(name.as_str(), child.clone())?;
-            Ok(Value::Table(child))
+            // ActorFrame::PushChildTable returns nil when no child matches.
+            // Looking up a name never creates an actor or changes the tree.
+            Ok(Value::Nil)
         })?,
     )?;
     let life_meters_for_get_life_meter = life_meters;
