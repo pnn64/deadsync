@@ -430,6 +430,23 @@ pub(crate) fn assign_song_options(
     Ok(())
 }
 
+pub(crate) fn apply_stage_modifiers(
+    lua: &Lua,
+    player: &[Table; 4],
+    song: &[Table; 4],
+    text: &str,
+) -> mlua::Result<()> {
+    // GameState::ApplyStageModifiers uses ModsGroup::FromString, which
+    // modifies Stage, Song and Current in place without resetting options.
+    for options in &player[1..] {
+        apply_player_options_string(lua, options, text)?;
+    }
+    for options in &song[1..] {
+        apply_song_options_string(options, text)?;
+    }
+    Ok(())
+}
+
 fn apply_song_options_string(options: &Table, text: &str) -> mlua::Result<()> {
     // SongOptions::FromOneModString has a separate, small grammar. In
     // particular, percentage and approach prefixes do not scale haste.
@@ -2700,6 +2717,33 @@ mod tests {
             .expect("empty skin list")).expect("install names");
         lua.globals().set("NOTESKIN", skins).expect("expose noteskin manager");
         lua
+    }
+
+    #[test]
+    fn stage_modifiers_preserve_options_and_native_player_enum() {
+        let lua = options_lua();
+        let context = SongLuaCompileContext::new(".", "stage modifiers");
+        crate::host::install_game_state_globals(&lua, &context).expect("game state");
+        lua.load(r#"
+            local p1 = GAMESTATE:GetPlayerState('PlayerNumber_P1')
+            local p2 = GAMESTATE:GetPlayerState('PlayerNumber_P2')
+            p2:GetPlayerOptions('ModsLevel_Stage'):Mini(0.25)
+            GAMESTATE:GetSongOptionsObject('ModsLevel_Stage'):AssistClap(true)
+            assert(GAMESTATE:ApplyStageModifiers(1, '50% Reverse, 1.5xmusic') == GAMESTATE)
+            for _, level in ipairs({'ModsLevel_Stage', 'ModsLevel_Song', 'ModsLevel_Current'}) do
+                assert(p2:GetPlayerOptions(level):Reverse() == 0.5)
+                assert(p1:GetPlayerOptions(level):Reverse() == 0)
+                assert(GAMESTATE:GetSongOptionsObject(level):MusicRate() == 1.5)
+            end
+            assert(p2:GetPlayerOptions('ModsLevel_Stage'):Mini() == 0.25)
+            assert(GAMESTATE:GetSongOptionsObject('ModsLevel_Stage'):AssistClap())
+            assert(p2:GetPlayerOptions('ModsLevel_Preferred'):Reverse() == 0)
+            assert(GAMESTATE:GetSongOptionsObject('ModsLevel_Preferred'):MusicRate() == 1)
+            GAMESTATE:ApplyStageModifiers('PlayerNumber_P1', '25% Reverse')
+            assert(p1:GetPlayerOptions('ModsLevel_Current'):Reverse() == 0.25)
+            assert(GAMESTATE:GetSongOptionsObject('ModsLevel_Current'):MusicRate() == 1.5)
+            assert(not pcall(function() GAMESTATE:ApplyStageModifiers(2, 'Reverse') end))
+        "#).exec().expect("native stage modifier propagation");
     }
 
     #[test]

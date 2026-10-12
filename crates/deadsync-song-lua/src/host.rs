@@ -1794,6 +1794,26 @@ pub fn install_game_state_globals(
             lua.create_string(crate::song_tables::song_options_text(&current)?)
         })?,
     )?;
+    gamestate.set(
+        "ApplyStageModifiers",
+        lua.create_function({
+            let state = gamestate.clone();
+            let players = players.option_levels.clone();
+            let songs = song_options.clone();
+            move |lua, args: MultiValue| {
+                let player = method_arg(&args, 0)
+                    .and_then(player_index_from_value)
+                    .ok_or_else(|| mlua::Error::runtime("Expected PlayerNumber"))?;
+                let text = method_arg(&args, 1)
+                    .cloned()
+                    .and_then(read_string)
+                    .ok_or_else(|| mlua::Error::runtime("Expected modifier string"))?;
+                crate::song_tables::apply_stage_modifiers(lua, &players[player], &songs, &text)?;
+                note_song_lua_side_effect(lua)?;
+                Ok(state.clone())
+            }
+        })?,
+    )?;
     let state = gamestate.clone();
     gamestate.set(
         "SetSongOptions",
