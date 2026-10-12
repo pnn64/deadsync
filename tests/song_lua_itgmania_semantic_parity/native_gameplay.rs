@@ -1099,6 +1099,23 @@ end}
         appended["roots"] = json!(["root", "child", "unused"]);
         appended["actor_definitions"].as_array_mut().unwrap().push(json!({"id":"unused", "children":[]}));
         assert_eq!(super::native_creation_order(&appended).expect("final native tree"), expected);
+        // Background::LoadFromNode creates theme effect children directly on
+        // an external frame. Those allocations are outside the song's owned
+        // Foreground tree and must not shift its entry paths.
+        let mut background = trace.clone();
+        background["actor_definitions"].as_array_mut().unwrap().push(json!({"id":"bg", "children":[]}));
+        background["runtime_actors"].as_array_mut().unwrap().extend([
+            json!({"id":"bg-actor", "definition_id":"bg"}),
+            json!({"id":"bg-parent", "name":"", "path":"bg-parent"}),
+            json!({"id":"fg-parent", "name":"SongForeground", "path":"SongForeground"})]);
+        background["actor_creation_inputs"][0]["parent"] = json!("fg-parent");
+        background["actor_creation_inputs"][0]["ordinal"] = json!(2);
+        background["actor_creation_inputs"][1]["ordinal"] = json!(3);
+        background["actor_creation_inputs"].as_array_mut().unwrap().insert(0,
+            json!({"actor":"bg-actor","definition_id":"bg","parent":"bg-parent",
+                "pointer_hex":"50","ordinal":1,"scene":1,"before_seq":1,
+                "provenance":"native-ActorUtil-before-LoadFromNode"}));
+        assert_eq!(super::native_creation_order(&background).expect("owned foreground inputs"), expected);
         let mut reload = trace.clone();
         reload["actor_definitions"].as_array_mut().unwrap().extend([
             json!({"id":"next-root", "children":[{"layer_index":1,"definition_id":"next-child"}]}),
@@ -1380,6 +1397,18 @@ fn native_creation_order_for_scene(trace: &Value, scene: u64) -> Result<Vec<(Str
     if instances.len() != inputs.len() {
         return Err("native factory observations do not cover the complete actor tree".into());
     }
+    // Foreground::LoadFromNode attaches each song Lua entry to its native
+    // SongForeground parent. Theme BackgroundEffects may also be observed in
+    // this capture, including wrappers whose children load without the wrapper.
+    let foreground_roots = inputs.iter().filter(|input| input["scene"].as_u64() == Some(scene)
+        && runtime.iter().any(|record| record["id"] == input["parent"]
+            && record["definition_id"].is_null() && record["path"] == "SongForeground"))
+        .map(|input| input["actor"].as_str().ok_or("invalid native foreground identity"))
+        .collect::<Result<Vec<_>, _>>()?;
+    if foreground_roots.len() > 1 {
+        return Err("multiple native foreground entries need entry-specific ownership".into());
+    }
+    let foreground_root = foreground_roots.first().copied();
     let mut observed = BTreeSet::new();
     let mut paths = BTreeMap::new();
     let mut child_counts = BTreeMap::new();
@@ -1411,6 +1440,11 @@ fn native_creation_order_for_scene(trace: &Value, scene: u64) -> Result<Vec<(Str
         }
         if input["scene"].as_u64() != Some(scene) { continue; }
         if !pointers.insert(pointer) { return Err("duplicate native subscriber pointer in scene".into()); }
+        if foreground_root.is_some_and(|root| actor != root)
+            && input["parent"].as_str().is_none_or(|parent| !paths.contains_key(parent))
+        {
+            continue;
+        }
         let path = if let Some(parent) = input["parent"].as_str().filter(|parent| instances.contains_key(parent)) {
             let parent_path: &String = paths.get(parent).ok_or("native factory parent is outside this scene or not yet created")?;
             let child = child_counts.entry(parent).or_insert(0usize);
