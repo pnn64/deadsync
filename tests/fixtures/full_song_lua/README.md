@@ -6,6 +6,19 @@ Run a complete fixture from the repository root:
 cargo test --test full_song_lua ff8751bfe369bcb22108866e6a10ec4183c6dcd410982e3a89d43836db39a2c9.tar.zst
 ```
 
+For capture candidates, generate a plain `.tar` with the harness's
+`song-lua-archive --uncompressed` and compare it before compression:
+
+```sh
+cargo test --test full_song_lua -- --archive /path/to/<sha256>.tar --report report.json
+```
+
+This uses the same member hashes, native replay, and completeness gates as a
+`.tar.zst`. The report records the candidate SHA-256. After a full pass, use
+`itgmania-harness-rs song-lua-pack <sha256>.tar --report report.json --out DIR`
+to compress the exact tested bytes. Keep uncompressed candidates outside this
+published fixture directory and out of Git.
+
 No environment variables or extra test flags are needed. Archive filenames,
 SHA-256 prefixes, and unambiguous song titles work. A missing or ambiguous
 selector fails instead of silently running no tests. Historical filenames

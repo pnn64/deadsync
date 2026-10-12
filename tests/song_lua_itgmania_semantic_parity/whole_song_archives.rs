@@ -277,12 +277,11 @@ fn extract_archive(entry: &ArchiveEntry, path: &Path) -> ExtractedArchive {
         .unwrap_or_else(|error| panic!("missing archive {}: {error}", path.display()));
     assert_eq!(metadata.len(), entry.compressed_bytes, "archive byte count");
     assert_eq!(hash_file(&path), entry.sha256, "archive content address");
-    assert_eq!(entry.archive, format!("{}.tar.zst", entry.sha256));
+    let suffix = if path.extension().is_some_and(|ext| ext == "tar") { "tar" } else { "tar.zst" };
+    assert_eq!(entry.archive, format!("{}.{suffix}", entry.sha256));
 
     let temp = tempfile::tempdir().expect("create archive extraction directory");
-    let input = File::open(&path).expect("open whole-song archive");
-    let decoder = zstd::stream::read::Decoder::new(input).expect("start streaming zstd decoder");
-    let mut archive = tar::Archive::new(decoder);
+    let mut archive = tar::Archive::new(archive_reader(path));
     for member in archive.entries().expect("read tar entries") {
         let mut member = member.expect("read tar member");
         assert!(
@@ -300,6 +299,15 @@ fn extract_archive(entry: &ArchiveEntry, path: &Path) -> ExtractedArchive {
         root: temp.path().to_owned(),
         _temp: temp,
         manifest,
+    }
+}
+
+fn archive_reader(path: &Path) -> Box<dyn Read> {
+    let input = File::open(path).expect("open whole-song fixture");
+    if path.extension().is_some_and(|ext| ext == "tar") {
+        Box::new(input)
+    } else {
+        Box::new(zstd::stream::read::Decoder::new(input).expect("start streaming zstd decoder"))
     }
 }
 
@@ -1138,7 +1146,7 @@ fn archive_reference_rejects_obsolete_replays() {
     assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
 }
 
-const USAGE: &str = "Run one complete fixture:\n  cargo test --test full_song_lua <archive.tar.zst>\n\nCheck a native capture candidate:\n  cargo test --test full_song_lua -- --archive <path.tar.zst> --report <report.json> [--entry]\n\nList fixtures:\n  cargo test --test full_song_lua -- --list\n\nRun the complete corpus:\n  cargo test --test full_song_lua -- --all\n\nThe positional selector accepts a filename, SHA-256 prefix, or song title.\nNo selector prints this help; normal cargo test does not run the expensive corpus.";
+const USAGE: &str = "Run one complete fixture:\n  cargo test --test full_song_lua <archive.tar.zst>\n\nCheck a native capture candidate before compression:\n  cargo test --test full_song_lua -- --archive <path.tar> --report <report.json> [--entry]\n\nCompressed candidates also accept .tar.zst.\n\nList fixtures:\n  cargo test --test full_song_lua -- --list\n\nRun the complete corpus:\n  cargo test --test full_song_lua -- --all\n\nThe positional selector accepts a filename, SHA-256 prefix, or song title.\nNo selector prints this help; normal cargo test does not run the expensive corpus.";
 
 fn select_archive<'a>(
     index: &'a ArchiveIndex,
@@ -1210,7 +1218,7 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
     // Capture candidates can be checked without publishing them in the fixture store.
     if args.first().is_some_and(|arg| arg == "--archive") {
         if !(args.len() == 4 || args.len() == 5 && matches!(args[4].as_str(), "--entry" | "--first-query")) || args[2] != "--report" {
-            eprintln!("expected --archive <path.tar.zst> --report <report.json> [--entry|--first-query]");
+            eprintln!("expected --archive <path.tar|path.tar.zst> --report <report.json> [--entry|--first-query]");
             return ExitCode::FAILURE;
         }
         let path = Path::new(&args[1]);
@@ -1220,9 +1228,8 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
             _ => native_gameplay::Scope::Full,
         };
         let outcome = std::panic::catch_unwind(|| {
-            let decoder = zstd::stream::read::Decoder::new(File::open(path).expect("open capture candidate"))
-                .expect("decode capture candidate");
-            let mut tar = tar::Archive::new(decoder);
+            let fixture_hash = hash_file(path);
+            let mut tar = tar::Archive::new(archive_reader(path));
             let mut members = tar.entries().expect("candidate members");
             let member = members.next().expect("candidate manifest").expect("read candidate manifest");
             assert_eq!(member.path().expect("manifest path"), Path::new("manifest.json"));
@@ -1231,7 +1238,8 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
             let entry = ArchiveEntry {
                 title: manifest.chart.title, source_simfile: manifest.chart.source_path,
                 harness_version: manifest.harness_version, archive: name.into(),
-                sha256: name.strip_suffix(".tar.zst").expect("archive extension").into(),
+                sha256: name.strip_suffix(".tar.zst").or_else(|| name.strip_suffix(".tar"))
+                    .expect("fixture extension").into(),
                 compressed_bytes: fs::metadata(path).expect("candidate metadata").len(),
                 local_only: false, aliases: Vec::new(), retained_version: false,
             };
@@ -1241,7 +1249,16 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
                 "candidate replay requires a native gameplay archive");
             crate::paths::init();
             let reporter = progress::Reporter::start();
-            replay_native_archive(&archive, scope, Path::new(&args[3]), &reporter.progress)
+            let passed = replay_native_archive(&archive, scope, Path::new(&args[3]), &reporter.progress);
+            assert_eq!(hash_file(path), fixture_hash, "candidate changed during replay");
+            let report_path = Path::new(&args[3]);
+            let mut report: Value = serde_json::from_slice(&fs::read(report_path).expect("read replay report"))
+                .expect("parse replay report");
+            report["fixture_sha256"] = Value::String(fixture_hash);
+            report["fixture_path"] = Value::String(path.to_string_lossy().into_owned());
+            fs::write(report_path, serde_json::to_vec_pretty(&report).expect("serialize bound replay report"))
+                .expect("write bound replay report");
+            passed
         });
         return match outcome {
             Ok(true) => ExitCode::SUCCESS,
@@ -1453,6 +1470,30 @@ fn replay_native_archive(
     eprintln!("report: {}", report_path.display());
     scope == native_gameplay::Scope::Full && mismatches.is_empty() && errors.is_empty()
         && coverage.is_empty() && report["whole_song_parity_proven"] == true
+}
+
+#[test]
+fn uncompressed_candidates_retain_member_validation() {
+    let compressed = archive_root().join("cbfe9d3319b3bb86aaacf56961ba890ba6fc6d245fb7e8a7b832c316a5ee9150.tar.zst");
+    let temp = tempfile::tempdir().expect("candidate directory");
+    let path = temp.path().join("candidate.tar");
+    std::io::copy(&mut archive_reader(&compressed), &mut File::create(&path).unwrap()).unwrap();
+    let digest = hash_file(&path);
+    let name = format!("{digest}.tar");
+    let candidate = temp.path().join(&name);
+    fs::rename(path, &candidate).unwrap();
+    let mut tar = tar::Archive::new(archive_reader(&candidate));
+    let manifest: ArchiveManifest = serde_json::from_reader(tar.entries().unwrap().next().unwrap().unwrap()).unwrap();
+    let entry = ArchiveEntry {
+        title: manifest.chart.title, source_simfile: manifest.chart.source_path,
+        harness_version: manifest.harness_version, archive: name, sha256: digest,
+        compressed_bytes: fs::metadata(&candidate).unwrap().len(), local_only: false,
+        aliases: Vec::new(), retained_version: false,
+    };
+    let archive = extract_archive(&entry, &candidate);
+    validate_archive(&entry, &archive);
+    fs::write(archive.root.join(&archive.manifest.chart.trace), b"corrupt trace").unwrap();
+    assert!(std::panic::catch_unwind(|| validate_archive(&entry, &archive)).is_err());
 }
 
 #[test]
