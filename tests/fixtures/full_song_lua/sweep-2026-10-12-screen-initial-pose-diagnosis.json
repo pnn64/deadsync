@@ -1,0 +1,133 @@
+{
+  "status": "source-confirmed cause; no new repair replay started",
+  "actual_failing_sources": [
+    "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+    "Flowers [Cringle Desolation]/Flowers.ssc"
+  ],
+  "feely_remaining_repair_attempts": 1,
+  "feely_first_position_differences": [
+    {
+      "index": 935,
+      "fields": [
+        "args"
+      ],
+      "native": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.x",
+        "source": "song:/multitap/default.lua",
+        "line": 724,
+        "seconds": 0.017301587387919426,
+        "beat": 0.0007791007519699633,
+        "args": [
+          213.25
+        ],
+        "phase": "callback",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.x",
+        "source": "song:/multitap/Default.lua",
+        "line": 724,
+        "seconds": 0.017301587387919426,
+        "beat": 0.0007791031384840608,
+        "args": [
+          0
+        ],
+        "phase": "callback",
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "index": 936,
+      "fields": [
+        "args"
+      ],
+      "native": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.y",
+        "source": "song:/multitap/default.lua",
+        "line": 724,
+        "seconds": 0.017301587387919426,
+        "beat": 0.0007791007519699633,
+        "args": [
+          240
+        ],
+        "phase": "callback",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.y",
+        "source": "song:/multitap/Default.lua",
+        "line": 724,
+        "seconds": 0.017301587387919426,
+        "beat": 0.0007791031384840608,
+        "args": [
+          0
+        ],
+        "phase": "callback",
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "index": 939,
+      "fields": [
+        "args"
+      ],
+      "native": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.y",
+        "source": "song:/multitap/default.lua",
+        "line": 724,
+        "seconds": 0.017301587387919426,
+        "beat": 0.0007791007519699633,
+        "args": [
+          10
+        ],
+        "phase": "callback",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.y",
+        "source": "song:/multitap/Default.lua",
+        "line": 724,
+        "seconds": 0.017301587387919426,
+        "beat": 0.0007791031384840608,
+        "args": [
+          0
+        ],
+        "phase": "callback",
+        "tween_time_left": 0.0
+      }
+    }
+  ],
+  "cause": "create_dummy_actor registers the actor and initializes its live tween pose before create_top_screen_player_actor or create_note_field_actor assigns screen coordinates. Those constructors then write destination fields directly. read_state overlays the already-owned zero tween pose, so authored position getters and copied transforms see zero during positive updates.",
+  "native_behavior": "ScreenGameplay sets Player X and runs PlayerInitCommand before exposing the actor. Player sets NoteField Y to the midpoint of the two receptor metrics before loading the field.",
+  "independent_input": "Existing SongLuaPlayerContext screen_x/screen_y and existing theme receptor metrics; no expected-result coordinates need to be read from the fixture.",
+  "proposed_repair": "Use the existing capture_block_set_f32 setters during those engine-owned constructors. They update both destination fields and the registered tween pose, preserving later authored tweens.",
+  "required_control": "Verify configured player and NoteField getters at startup and the first positive live update, then verify an authored tween begins from that initialized position.",
+  "local_references": [
+    "../itgmania-harness/vendor/itgmania/src/ScreenGameplay.cpp:618",
+    "../itgmania-harness/vendor/itgmania/src/Player.cpp:797",
+    "crates/deadsync-song-lua/src/lua_util.rs:2910",
+    "crates/deadsync-song-lua/src/lua_util.rs:2881",
+    "crates/deadsync-song-lua/src/lua_util.rs:13332",
+    "crates/deadsync-song-lua/src/lua_util.rs:13506",
+    "crates/deadsync-song-lua/src/lua_util.rs:4391",
+    "crates/deadsync-song-lua/src/lua_util.rs:10929"
+  ],
+  "other_observed_feely_failures": [
+    "Directory chunk source default.lua versus physical Default.lua",
+    "Later actor tween-time differences",
+    "One early stage-failed observation"
+  ],
+  "acceptance": "Existing full replay comparisons remain unchanged; this diagnosis cannot accept a fixture"
+}
