@@ -1,0 +1,23 @@
+{
+  "source_simfile": "K-Pop Foxture/K-Pop Foxture.ssc",
+  "position": 263,
+  "acceptance_commit": "ce56aede4",
+  "native_frames": 111052,
+  "replayed_frames": 111052,
+  "compared_stage_fields": 1749,
+  "mismatches": 0,
+  "callback_errors": 0,
+  "archive": "33cd1658f0e05c90641e0a67495924d0e7e65d9dae0230255e4778eaad246be4.tar.zst",
+  "compressed_sha256": "33cd1658f0e05c90641e0a67495924d0e7e65d9dae0230255e4778eaad246be4",
+  "uncompressed_sha256": "39ae432709d0d23a5d80aa1c98bc57aa27226ffe7654647f715d68df4541d9eb",
+  "compressed_bytes": 9101260,
+  "local_decompression_byte_verified": true,
+  "native_capture_reused": true,
+  "separate_coverage": [
+    "uncompared song operations: Actor.bob, Actor.xy",
+    "native drawable state/resources: Sprite"
+  ],
+  "acceptance_gate_added": false,
+  "passing_chart_reopened": false,
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons."
+}

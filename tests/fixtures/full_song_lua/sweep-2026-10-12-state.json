@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T05:33:54Z",
-  "previous_goal_turn": "progress: Feely final repair 2 passed all 7084 frames and was immediately packed, decompressed, byte-verified and committed as de1ea067f. Ghost first repair passed all 115164 frames and 1529 stage fields with zero mismatches or Lua errors; its verified compressed fixture was immediately committed as 74216ebb6. Shared player life writes are committed as 6470fdd9d, completed tap-row judgment dispatch as 86fba19f6, and completed hold judgment dispatch as 7ee5d0090. Each fix passed 815 gameplay tests, 33 live Lua checks and 20 native replay controls on Windows and Linux with 21 immutable source pins. The latest selected helper is bd9bdd3d from hold-judgment-build-v1. GREAT GREAT first repair completed all 8419 frames with no Lua errors and 50 mismatches: one missing 0.033 hold-handler life change plus startup command/query source, clock and dynamic-command phase differences. Hold dispatch is now independently validated; the remaining startup causes must be resolved before its one remaining repair. No final repair was launched. Flowers final repair 2 completed with 128831 remaining command/query mismatches at its cap. All three original queues continue with the single publisher and 32 streams. The audited original scope remains 187 passed, 54 pending and 260 unprocessed; all 501 source bytes match their baseline. Missing coverage stays separate, no passing fixture reopened, no acceptance gate added and the sweep remains active.",
+  "updated_utc": "2026-10-13T07:13:34Z",
+  "previous_goal_turn": "progress: K-Pop Foxture passed all 111052 frames and 1749 stage fields with zero mismatches or Lua errors. Its fixture was immediately committed as ce56aede4 and locally decompressed-byte-verified (compressed 33cd1658, raw 39ae4327), with missing Actor.bob/xy and Sprite coverage kept separate. Committed 34e1a7ba8 fixes native literal directory chunk names, dynamically registered command observer provenance and the first recorded zero-delta update clock. Before-fix failures are retained. Windows passed 34 live Lua checks, 21 native replay controls and both replay executable builds; the existing 815-passed gameplay result is reused because gameplay source hashes are unchanged. Linux build v3 uses host-local mtimes to avoid stale Cargo artifacts and passed fresh 815 gameplay tests, 34 live Lua checks, 21 replay controls and both executable builds against 22 source pins. Immutable helper 7f64d791 is selected. GREAT GREAT final repair 2 reused the original c0826b85 capture and replayed all 8419 frames and 143 stage fields with zero stage differences and zero Lua errors. One StageStats.GetPlayerStageStats returned identity path difference remains (native PlayerNumber_P1 versus independent P1); it is pending at the two-attempt cap with no third replay and no accepted fixture. Source diagnosis is committed as 449d6dc8a. Jumper completed all 169429 frames with 374 differences and no Lua errors on the older whole-song-end helper; its 26 failed-flag, 2 end-life and 345 command/query differences are documented as c41e0ded2 before any repair. Three original queues continue with one publisher and 33 streams. All original 501 source hashes remain audited against the initial scope; missing coverage is separate, accepted fixtures stay accepted, existing comparisons are unchanged and the sweep remains active.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "3ad5f7d4e6d57f37ad7be2726c26e78643b98c79",
+      "deadsync": "ce56aede44128d10c89c7ccd85ddc263bb3ae0da",
       "itgmania_harness": "b191ebd0fcf8b59b5294958d2ffe2939af2d742a"
     }
   },
@@ -45,7 +45,8 @@
     "whole_song_end_window": "43dae3f20 passed 815 gameplay tests and 20 controls on Windows/Linux; Feely final 2 passed all 7084 frames using its unchanged native capture; sweep-2026-10-12-whole-song-end-build.json",
     "player_life_writes": "6470fdd9d passed 815 gameplay, 33 live and 20 controls on Windows/Linux; Ghost first repair passed all 115164 frames as 74216ebb6; sweep-2026-10-12-player-life-build.json",
     "native_tap_row_judgment": "86fba19f6 passed 815/33/20 Windows/Linux checks; GREAT GREAT first repair reused its unchanged capture and diagnosed the remaining hold message and startup trace differences; sweep-2026-10-12-player-judgment-build.json",
-    "native_hold_judgment": "7ee5d0090 passed 815/33/20 Windows/Linux checks and the extended production head-plus-Held control; immutable bd9bdd3d helper selected; GREAT GREAT has one repair attempt left; sweep-2026-10-12-hold-judgment-build.json",
+    "native_hold_judgment": "7ee5d0090 passed 815/33/20 Windows/Linux checks and the extended production head-plus-Held control; immutable bd9bdd3d helper selected; GREAT GREAT final repair 2 now has one identity path mismatch at its cap; sweep-2026-10-12-hold-judgment-build.json",
+    "startup_provenance": "34e1a7ba8 passed Windows 34/21 controls and fresh Linux 815/34/21 checks; 22 source pins, host-local build mtimes, helper 7f64d791 selected; GREAT final 2 is pending at its cap with one identity path difference; sweep-2026-10-12-startup-provenance-build.json",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved"
   },
   "corpus_transfer": {
@@ -60,18 +61,18 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Jumper/Jumper.ssc",
-      "position": 260,
+      "current": "Karachi/Jorts - Karachi.ssc",
+      "position": 266,
       "phase": "replay",
-      "pid": 1749562,
+      "pid": 2521276,
       "process_matches": true,
-      "passed": 13,
-      "pending": 36,
-      "processed": 49,
+      "passed": 14,
+      "pending": 37,
+      "processed": 51,
       "last_log_lines": [
-        "[4621.2s] replaying every native gameplay frame: frame 80605/169429 (47.6%)",
-        "[4623.2s] replaying every native gameplay frame: frame 80650/169429 (47.6%)",
-        "[4625.2s] replaying every native gameplay frame: frame 80689/169429 (47.6%)"
+        "[290.1s] replaying every native gameplay frame: 0 checks completed, 0 failed",
+        "[292.1s] replaying every native gameplay frame: 0 checks completed, 0 failed",
+        "[294.1s] replaying every native gameplay frame: 0 checks completed, 0 failed"
       ],
       "supervisor_running": true
     },
@@ -92,10 +93,23 @@
     "whole_song_end_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-whole-song-end-build.json",
     "ftw_metadata_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-ftw-metadata-diagnosis.json",
     "feely_source_and_callbacks": "tests/fixtures/full_song_lua/sweep-2026-10-12-feely-source-and-callback-diagnosis.json",
+    "great_final_residual": "tests/fixtures/full_song_lua/sweep-2026-10-12-great-great-final-source-diagnosis.json",
+    "jumper_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-jumper-source-diagnosis.json",
     "repair_residuals": "tests/fixtures/full_song_lua/sweep-2026-10-12-path-repair-residuals.json",
     "fiji_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-fiji-foreground-diagnosis.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
+      {
+        "job": "great-great-final-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 0,
+        "pending": 1,
+        "processed": 1,
+        "last_phase": "replay",
+        "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
+        "child_running": false
+      },
       {
         "job": "great-great-judgment-repair-v1",
         "complete": true,
@@ -666,15 +680,22 @@
         "record": "sweep-2026-10-12-great-great-judgment-repairs.json",
         "fix_commit": "86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
         "finish_status": "bounded GREAT GREAT native row judgment first repair complete"
+      },
+      {
+        "name": "great-great-final-repair",
+        "remote": "/home/parity/jobs/great-great-final-repair-v1",
+        "record": "sweep-2026-10-12-great-great-final-repairs.json",
+        "fix_commit": "34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+        "finish_status": "bounded GREAT GREAT final repair 2 complete"
       }
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 40,
-    "new_pending_charts": 53,
-    "new_processed_sources": 93,
+    "new_passed_fixtures": 41,
+    "new_pending_charts": 54,
+    "new_processed_sources": 95,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 260,
+    "unprocessed_sources": 258,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -1131,6 +1152,22 @@
       "first_mismatch": []
     },
     {
+      "source_simfile": "Jumper/Jumper.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 374,
+      "first_mismatch": [
+        {
+          "phase": "progress",
+          "seconds": 180.0000457763672,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        }
+      ]
+    },
+    {
       "source_simfile": "Delightful Day/Delightful Day.sm",
       "repair_attempts": 0,
       "failure": null,
@@ -1328,17 +1365,68 @@
     },
     {
       "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
-      "repair_attempts": 1,
+      "repair_attempts": 2,
       "failure": null,
       "errors": [],
-      "mismatch_count": 50,
+      "mismatch_count": 1,
       "first_mismatch": [
         {
-          "phase": "progress",
-          "seconds": 3.0001814365386963,
-          "field": "life_latest",
-          "native": 0.2030000388622284,
-          "deadsync": 0.23600004613399506
+          "field": "command_query_event",
+          "native": {
+            "actor": "stage:current",
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "beat": 12.502771377563477,
+            "caller": {
+              "line": 30,
+              "source": "song:/.//default.lua",
+              "tail_call": false
+            },
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "results": [
+                {
+                  "path": "stage:current/player:PlayerNumber_P1",
+                  "type": "PlayerStageStats"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 30,
+            "operation": "StageStats.GetPlayerStageStats",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 4.676417350769043,
+            "seq": 207,
+            "source": "song:/.//default.lua",
+            "results": [
+              {
+                "path": "stage:current/player:PlayerNumber_P1",
+                "type": "PlayerStageStats"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "StageStats.GetPlayerStageStats",
+            "source": "song:/.//default.lua",
+            "line": 30,
+            "phase": "callback",
+            "beat": 12.502771377563477,
+            "seconds": 4.676417350769043,
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "results": [
+              {
+                "type": "PlayerStageStats",
+                "path": "stage:current/player:P1"
+              }
+            ]
+          }
         }
       ]
     },

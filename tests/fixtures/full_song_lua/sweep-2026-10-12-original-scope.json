@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T05:33:53Z",
+  "updated_utc": "2026-10-13T07:13:36Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 187,
-    "pending": 54,
-    "unprocessed": 260
+    "passed": 188,
+    "pending": 55,
+    "unprocessed": 258
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1918,8 +1918,8 @@
       "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
       "simfile_sha256": "2d9f60495fe97279a7e5373d970c77cd08bbe9c1d9c1d4362aaad8a3b6d88d57",
       "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-12-great-great-judgment-repairs.json"
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-12-great-great-final-repairs.json"
     },
     {
       "position": 220,
@@ -2209,7 +2209,9 @@
       "position": 260,
       "source_simfile": "Jumper/Jumper.ssc",
       "simfile_sha256": "05bf02518b778fb8fb8248e866be1d8e09b077de86e7120902a5ea9b0d8ace91",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 261,
@@ -2227,7 +2229,9 @@
       "position": 263,
       "source_simfile": "K-Pop Foxture/K-Pop Foxture.ssc",
       "simfile_sha256": "b0b0e52b83437135340f40a9a4d1016331e6db3a1ce39f1d582e6932ff2aa9c0",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 264,
