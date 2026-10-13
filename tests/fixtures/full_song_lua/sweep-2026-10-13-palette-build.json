@@ -1,0 +1,907 @@
+{
+  "source_fix_commit": "4d1ed6dd89316a06b7b7ac9da88c01b700032305",
+  "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "source_cause": "The independent Color table adds Pink, which the pinned native fallback Color table does not define. The chart appends Color.Pink to its palette; native nil leaves eight entries while the extra independent constant makes nine. This changes math.random(#colors), not the seed or the color precision.",
+  "change": "Remove unsupported Color.Pink from the production Color constants table.",
+  "regression_control": "Through the production live compiler: missing Pink and unknown property return nil, callable missing Pink returns nil and callable White retains table identity. A chart-shaped palette with trailing Pink has length eight. Explicit native seed1 produces indices4,8,6,8,1,2,3,8 through math.random(#palette); the actor receives the selected native color and final orange pose.",
+  "retained_rng_diagnosis": {
+    "native_seed": 1,
+    "native_reseeds": [],
+    "validated_random_actor_calls": 222,
+    "all_palette_calls": [
+      {
+        "seq": 445259,
+        "beat": 180.06285095214844,
+        "native_palette_index": 4,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          0.929411768913269,
+          0.10980392247438431,
+          0.1411764770746231,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 448518,
+        "beat": 181.07992553710938,
+        "native_palette_index": 8,
+        "independent_extra_palette_index": 9,
+        "native_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          0.75,
+          0.800000011920929,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 451702,
+        "beat": 182.0819091796875,
+        "native_palette_index": 5,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 454992,
+        "beat": 183.06285095214844,
+        "native_palette_index": 8,
+        "independent_extra_palette_index": 9,
+        "native_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          0.75,
+          0.800000011920929,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 458434,
+        "beat": 184.04466247558594,
+        "native_palette_index": 3,
+        "independent_extra_palette_index": 3,
+        "native_color": [
+          0.0,
+          0.6823529601097107,
+          0.9372549057006836,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.0,
+          0.6823529601097107,
+          0.9372549057006836,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 461888,
+        "beat": 185.07655334472656,
+        "native_palette_index": 5,
+        "independent_extra_palette_index": 6,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.572549045085907,
+          0.15294118225574493,
+          0.5607843399047852,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 465246,
+        "beat": 186.06556701660156,
+        "native_palette_index": 8,
+        "independent_extra_palette_index": 9,
+        "native_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          0.75,
+          0.800000011920929,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 468604,
+        "beat": 187.04884338378906,
+        "native_palette_index": 2,
+        "independent_extra_palette_index": 3,
+        "native_color": [
+          1.0,
+          0.9490196108818054,
+          0.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.0,
+          0.6823529601097107,
+          0.9372549057006836,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 472070,
+        "beat": 188.05255126953125,
+        "native_palette_index": 8,
+        "independent_extra_palette_index": 9,
+        "native_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          0.75,
+          0.800000011920929,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 532807,
+        "beat": 212.2734375,
+        "native_palette_index": 5,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 533378,
+        "beat": 213.3261260986328,
+        "native_palette_index": 1,
+        "independent_extra_palette_index": 1,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 533970,
+        "beat": 214.4853973388672,
+        "native_palette_index": 7,
+        "independent_extra_palette_index": 8,
+        "native_color": [
+          0.2235294133424759,
+          0.7098039388656616,
+          0.29019609093666077,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 534463,
+        "beat": 215.34889221191406,
+        "native_palette_index": 8,
+        "independent_extra_palette_index": 8,
+        "native_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 535214,
+        "beat": 216.2078857421875,
+        "native_palette_index": 4,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          0.929411768913269,
+          0.10980392247438431,
+          0.1411764770746231,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 536103,
+        "beat": 217.24114990234375,
+        "native_palette_index": 4,
+        "independent_extra_palette_index": 4,
+        "native_color": [
+          0.929411768913269,
+          0.10980392247438431,
+          0.1411764770746231,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.929411768913269,
+          0.10980392247438431,
+          0.1411764770746231,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 537085,
+        "beat": 218.06727600097656,
+        "native_palette_index": 6,
+        "independent_extra_palette_index": 6,
+        "native_color": [
+          0.572549045085907,
+          0.15294118225574493,
+          0.5607843399047852,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.572549045085907,
+          0.15294118225574493,
+          0.5607843399047852,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 540044,
+        "beat": 219.0732421875,
+        "native_palette_index": 5,
+        "independent_extra_palette_index": 6,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.572549045085907,
+          0.15294118225574493,
+          0.5607843399047852,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 1037883,
+        "beat": 450.0576171875,
+        "native_palette_index": 1,
+        "independent_extra_palette_index": 1,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 1041238,
+        "beat": 451.05596923828125,
+        "native_palette_index": 4,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          0.929411768913269,
+          0.10980392247438431,
+          0.1411764770746231,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 1044710,
+        "beat": 452.0522155761719,
+        "native_palette_index": 4,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          0.929411768913269,
+          0.10980392247438431,
+          0.1411764770746231,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 1047891,
+        "beat": 453.07586669921875,
+        "native_palette_index": 7,
+        "independent_extra_palette_index": 8,
+        "native_color": [
+          0.2235294133424759,
+          0.7098039388656616,
+          0.29019609093666077,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 1050946,
+        "beat": 454.06005859375,
+        "native_palette_index": 1,
+        "independent_extra_palette_index": 1,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 1054331,
+        "beat": 455.0617370605469,
+        "native_palette_index": 6,
+        "independent_extra_palette_index": 7,
+        "native_color": [
+          0.572549045085907,
+          0.15294118225574493,
+          0.5607843399047852,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.2235294133424759,
+          0.7098039388656616,
+          0.29019609093666077,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 1058001,
+        "beat": 456.05462646484375,
+        "native_palette_index": 4,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          0.929411768913269,
+          0.10980392247438431,
+          0.1411764770746231,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 1061824,
+        "beat": 457.06060791015625,
+        "native_palette_index": 5,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 1356578,
+        "beat": 561.0458984375,
+        "native_palette_index": 1,
+        "independent_extra_palette_index": 1,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 1399255,
+        "beat": 569.0371704101562,
+        "native_palette_index": 2,
+        "independent_extra_palette_index": 2,
+        "native_color": [
+          1.0,
+          0.9490196108818054,
+          0.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          0.9490196108818054,
+          0.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 1438558,
+        "beat": 577.0701904296875,
+        "native_palette_index": 1,
+        "independent_extra_palette_index": 1,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      }
+    ],
+    "mismatches_explained": 15,
+    "all_15_exactly_match_retained_report": true,
+    "source_formula": "Native MT19937 and std::uniform_int_distribution on Linux, matching frozen independent multiply-high with rejection. Native palette has 8 entries; independent extra Color.Pink makes 9.",
+    "only_color_constant_changed_for_prediction": true,
+    "chart_repair_attempts_spent": 0
+  },
+  "before_fix_controls": {
+    "linux": [
+      {
+        "label": "palette",
+        "exit_code": 101,
+        "expected_failure": true,
+        "log_sha256": "9155762cd1a2a9c79eae784cb58f3728a51f897545d130dd2929e78fa7baf631",
+        "seconds": 222.3074808770034
+      }
+    ],
+    "windows": [
+      {
+        "label": "palette",
+        "exit_code": 101,
+        "expected_failure": true,
+        "log": "palette-red-windows-palette-v1.log",
+        "log_sha256": "1d089f39b2a1cfdb5d9e743f762051482531d86acf3e23589b7a28f006dc1366",
+        "seconds": 244.90877250023186
+      }
+    ]
+  },
+  "linux_checks": [
+    {
+      "label": "gameplay-tests",
+      "exit_code": 0,
+      "seconds": 49.94588666201162,
+      "log_sha256": "76df741f21540d1554df287901c5335c2ea995d615a45855844f30efea7b525e",
+      "results": [
+        "test result: ok. 815 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.10s"
+      ]
+    },
+    {
+      "label": "palette-control",
+      "exit_code": 0,
+      "seconds": 211.90146311800345,
+      "log_sha256": "d8e2be813ab6bfba42f54e0dc5ba9f64a695899312a47e6eba14a2d14a24ea51",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 573 filtered out; finished in 0.16s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 32.76911188199301,
+      "log_sha256": "c3918fd676595d0452c9f8f259e8f25495900cf838b886ac1b48c9947853060a",
+      "results": [
+        "test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 531 filtered out; finished in 31.81s"
+      ]
+    },
+    {
+      "label": "deceleration-control",
+      "exit_code": 0,
+      "seconds": 0.9429732639982831,
+      "log_sha256": "1b5de7fbef47268bc6aeac983eab87c9c74eab8241655f913f0f89c5651ab6fc",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 573 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 263.719789181996,
+      "log_sha256": "038bb8b6d485e45e43d56fb3ebc9596d75bed782bc4ad9c91d3a3d27d22fe662",
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.159178828005679,
+      "log_sha256": "718a4d37d0cd3922db42de47abc8c6785bd498ee209c29592d1fe5a9f450f5a3",
+      "results": [
+        "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.27s"
+      ]
+    }
+  ],
+  "windows_checks": [
+    {
+      "label": "palette",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "palette-green-windows-palette-v1.log",
+      "sha256": "4127f70f699e346d696f38204dbb8db8e0bf611fade8a774a42d0b793c97b0e4",
+      "seconds": 346.46451159985736
+    },
+    {
+      "label": "live",
+      "passed": 44,
+      "exit_code": 0,
+      "log": "palette-green-windows-live-v1.log",
+      "sha256": "109928f6fe59588a124b741358f9fe8a063e4550bcda78905e5cfdca3284f439",
+      "seconds": 32.587184799835086
+    },
+    {
+      "label": "deceleration",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "palette-green-windows-deceleration-v1.log",
+      "sha256": "a7b6388de57d1db61c5d616537ea69f2e2a16e720a7142b4e1538b2ddc38aafb",
+      "seconds": 1.4474376998841763
+    },
+    {
+      "label": "native",
+      "passed": 21,
+      "exit_code": 0,
+      "log": "palette-green-windows-native-v1.log",
+      "sha256": "15d245517dc20b3e290fca23a698d77c7f0dc22f6a1b1740b583e51f334c3dbf",
+      "seconds": 196.6860592002049
+    },
+    {
+      "label": "build",
+      "passed": null,
+      "exit_code": 0,
+      "log": "palette-green-windows-build-v1.log",
+      "sha256": "058dc5c968b40c50514ab0318778d9e26268d970ef7521d9338f06967fccccf3",
+      "seconds": 18.142310100141913
+    }
+  ],
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "8811b4ed411c8afb48c847db32ff07123a07290673350a0899864a76675d2069",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "0cd4110f9c9db0d374f066cb6c480cbbcb74d2ccc024a760b1dc757032af15ef",
+    "crates/deadsync-song-lua/src/live.rs": "dacd693ef738f1fad60092e16b8a98adca4199514d181ba4c29b1944842b385c",
+    "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+    "crates/deadsync-song-lua/src/lua_util.rs": "13704633b1912cbfa4dee3ed6807a99fb76deaa384a898efb6b8692a09d35bae",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "0a9453b0e768b8f8000a6d7ae71595c8ceef54c51ddf85e8e519113454ca90e3",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "4c64f432137495e3299c3695ece48dac92e74c30272da1d0ad4741560815dc15",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+    "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+    "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+    "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+    "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+    "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+  },
+  "source_provenance": {
+    "baseline_build": "palette-red-v1",
+    "baseline_source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "8811b4ed411c8afb48c847db32ff07123a07290673350a0899864a76675d2069",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "0cd4110f9c9db0d374f066cb6c480cbbcb74d2ccc024a760b1dc757032af15ef",
+      "crates/deadsync-song-lua/src/live.rs": "dacd693ef738f1fad60092e16b8a98adca4199514d181ba4c29b1944842b385c",
+      "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+      "crates/deadsync-song-lua/src/lua_util.rs": "8bd61249db9347b598b7e5d1eb79fb6be97d0932d2f326f8eb6484fee0e66b10",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "0a9453b0e768b8f8000a6d7ae71595c8ceef54c51ddf85e8e519113454ca90e3",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "4c64f432137495e3299c3695ece48dac92e74c30272da1d0ad4741560815dc15",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+      "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+      "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+      "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+    },
+    "baseline_source_bundle_sha256": "46ce10ef9e41a355b7ba2e4a08c94c5c6fa2c1b48d0aa6661bd965f5e96976db",
+    "source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "8811b4ed411c8afb48c847db32ff07123a07290673350a0899864a76675d2069",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "0cd4110f9c9db0d374f066cb6c480cbbcb74d2ccc024a760b1dc757032af15ef",
+      "crates/deadsync-song-lua/src/live.rs": "dacd693ef738f1fad60092e16b8a98adca4199514d181ba4c29b1944842b385c",
+      "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+      "crates/deadsync-song-lua/src/lua_util.rs": "13704633b1912cbfa4dee3ed6807a99fb76deaa384a898efb6b8692a09d35bae",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "0a9453b0e768b8f8000a6d7ae71595c8ceef54c51ddf85e8e519113454ca90e3",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "4c64f432137495e3299c3695ece48dac92e74c30272da1d0ad4741560815dc15",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+      "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+      "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+      "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+    },
+    "source_bundle_sha256": "d94e9c3bf062cca1fcf1ca8e93cd9a77e3cf1a826e0761b455a4a258eb03ff97",
+    "isolated_production_edits": {
+      "crates/deadsync-song-lua/src/lua_util.rs": [
+        [
+          "        (\"Pink\", \"1,0.75,0.8,1\"),\n",
+          ""
+        ]
+      ]
+    },
+    "current_worktree_production_source_sha256": "87d1ec9a397ccc4992b49c8f3a8441fe6ca0a4fce60791515fd84bdc35fe2df6",
+    "windows_root_source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "8811b4ed411c8afb48c847db32ff07123a07290673350a0899864a76675d2069",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "48c2ea7a0c031cb5c4b5cfd72e0e0bcb5ef5c62884916c4883866e74fcdd2a70",
+      "crates/deadsync-song-lua/src/live.rs": "f93a487ddf2e39087ea9f6fb4ddc302043cbd41644c37483e98027b747dbb752",
+      "crates/deadsync-song-lua/src/song_tables.rs": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182",
+      "crates/deadsync-song-lua/src/lua_util.rs": "0aac60afb2242b3a78421f5297eab24e69ea594c0cdf93b45d254baef2134523",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "3fe64cc0f81e35cde8c49b4f64a23d2d0b070f22f9d1218bb31c2a90e99f6398",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "5937bdd0460b46c579d1c955d8ce1d6f0b84ad6a1709d3e5c3bfa45f244e5366",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+      "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+      "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+      "crates/deadsync-song-lua/src/draw_capture.rs": "9dd81bb6c6f5ae211d7243cba5d070570abf279a0b7c0f9121b689091c2d8594"
+    },
+    "chart_repair_attempts_spent": 0,
+    "unselected_theme_listener": "874f2e535 remains excluded."
+  },
+  "control_provenance": {
+    "baseline_build": "column-update-green-v1",
+    "baseline_source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "8811b4ed411c8afb48c847db32ff07123a07290673350a0899864a76675d2069",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "0cd4110f9c9db0d374f066cb6c480cbbcb74d2ccc024a760b1dc757032af15ef",
+      "crates/deadsync-song-lua/src/live.rs": "fd97388ef0a47b3bc6fe1f56b98c34396501f94e165f174def89301e66cf2029",
+      "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+      "crates/deadsync-song-lua/src/lua_util.rs": "8bd61249db9347b598b7e5d1eb79fb6be97d0932d2f326f8eb6484fee0e66b10",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "0a9453b0e768b8f8000a6d7ae71595c8ceef54c51ddf85e8e519113454ca90e3",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "4c64f432137495e3299c3695ece48dac92e74c30272da1d0ad4741560815dc15",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+      "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+      "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+      "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+    },
+    "baseline_source_bundle_sha256": "6df49480dc3b3c69db0dc2e0e6964e75650a438f40c9015e888792996efd3e9c",
+    "source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "8811b4ed411c8afb48c847db32ff07123a07290673350a0899864a76675d2069",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "0cd4110f9c9db0d374f066cb6c480cbbcb74d2ccc024a760b1dc757032af15ef",
+      "crates/deadsync-song-lua/src/live.rs": "dacd693ef738f1fad60092e16b8a98adca4199514d181ba4c29b1944842b385c",
+      "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+      "crates/deadsync-song-lua/src/lua_util.rs": "8bd61249db9347b598b7e5d1eb79fb6be97d0932d2f326f8eb6484fee0e66b10",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "0a9453b0e768b8f8000a6d7ae71595c8ceef54c51ddf85e8e519113454ca90e3",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "4c64f432137495e3299c3695ece48dac92e74c30272da1d0ad4741560815dc15",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+      "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+      "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+      "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+    },
+    "source_bundle_sha256": "46ce10ef9e41a355b7ba2e4a08c94c5c6fa2c1b48d0aa6661bd965f5e96976db",
+    "isolated_control_edits": {
+      "crates/deadsync-song-lua/src/live.rs": [
+        [
+          "    #[test]\n    fn live_named_notefield_advances_once()",
+          "    #[test]\n    fn live_color_constants_preserve_native_palette_bound() {\n        let mut compiled = compile(\"native-color-palette\", r#\"\nassert(Color.Pink == nil, 'native Color table does not define Pink')\nassert(Color('Pink') == nil and Color.NotAColor == nil)\nassert(Color('White') == Color.White)\nlocal palette = {\n    Color.White, Color.Yellow, Color.Blue, Color.Red, Color.White,\n    Color.Purple, Color.Green, Color.Orange, Color.Pink,\n}\nassert(#palette == 8, 'trailing native nil leaves an eight-entry palette')\nmath.randomseed(1)\nlocal expected = {4, 8, 6, 8, 1, 2, 3, 8}\nreturn Def.ActorFrame {\n    InitCommand = function(self)\n        for _, index in ipairs(expected) do\n            local selected = math.random(#palette)\n            assert(selected == index, 'native palette preserves seeded random choices')\n            self:diffuse(palette[selected])\n        end\n        PALETTE_CHECKED = true\n    end,\n}\n\"#);\n        let scene = compiled.live_scene.take().expect(\"production color scene\");\n        assert!(scene.lua.globals().get::<bool>(\"PALETTE_CHECKED\").unwrap());\n        assert_eq!(scene.states()[0].diffuse, [247.0 / 255.0, 148.0 / 255.0, 29.0 / 255.0, 1.0]);\n    }\n\n    #[test]\n    fn live_named_notefield_advances_once()"
+        ]
+      ]
+    },
+    "current_worktree_control_source_sha256": "9f0b60933483ba4953d5d65ce015453f8e5c786c970f2e5b350e45bcf3486385",
+    "windows_root_source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "8811b4ed411c8afb48c847db32ff07123a07290673350a0899864a76675d2069",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "48c2ea7a0c031cb5c4b5cfd72e0e0bcb5ef5c62884916c4883866e74fcdd2a70",
+      "crates/deadsync-song-lua/src/live.rs": "f93a487ddf2e39087ea9f6fb4ddc302043cbd41644c37483e98027b747dbb752",
+      "crates/deadsync-song-lua/src/song_tables.rs": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182",
+      "crates/deadsync-song-lua/src/lua_util.rs": "b115004535e4e039d92df7a4bed53d430d95770bbd4767ee7ab915fb0cbfb507",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "3fe64cc0f81e35cde8c49b4f64a23d2d0b070f22f9d1218bb31c2a90e99f6398",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "5937bdd0460b46c579d1c955d8ce1d6f0b84ad6a1709d3e5c3bfa45f244e5366",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+      "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+      "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+      "crates/deadsync-song-lua/src/draw_capture.rs": "9dd81bb6c6f5ae211d7243cba5d070570abf279a0b7c0f9121b689091c2d8594"
+    },
+    "chart_repair_attempts_spent": 0,
+    "production_changed": false,
+    "unselected_theme_listener": "874f2e535 remains excluded."
+  },
+  "linux_binary": "/home/parity/jobs/palette-green-v1/full-song-lua-stage-modifier-v1",
+  "binary_sha256": "dc33e10eb25790fe5f57e0adf311eb04f8029fa0983e22ce00e25f125eb8111c",
+  "native_harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "native_harness_and_three_source_pins_verified": true,
+  "host_local_mtimes_before_cargo": true,
+  "postbuild_source_pins_verified": true,
+  "chart_repair_attempts_spent": 0,
+  "unselected_theme_listener": "874f2e535 remains excluded from the immutable Linux helper.",
+  "acceptance": "Existing complete uncompressed replay comparisons unchanged. Kaboom full repair replay still required after remaining concrete source causes are addressed; missing coverage remains separate and no passing chart reopened."
+}
