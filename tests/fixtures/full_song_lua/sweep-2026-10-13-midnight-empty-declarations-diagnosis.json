@@ -1,0 +1,278 @@
+{
+  "status": "actual Midnight Madness preparation failure traced to empty declared song layers; no repair launched",
+  "source_simfile": "Midnight Madness/midnight.sm",
+  "position": 314,
+  "original_result": {
+    "position": 314,
+    "source_simfile": "Midnight Madness/midnight.sm",
+    "simfile_sha256": "936cc658a970b6e5d211d690465f34d93f911f96c12e8951fa15cb6024d9bcf7",
+    "retained_original_archive": "455f21464f636b3a35fe11a9fc1c8842eee2a467c78af915875e70c9eab8bed4.tar.zst",
+    "status": "pending",
+    "repair_attempts": 0,
+    "binary_sha256": "1df4edb6457cb51a6720afb6f97c47421d2830b23881e133afd0e9821bcaf44c",
+    "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "fix_commit": "9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+    "build_proof": "/home/parity/jobs/koi-judgment-green-v1/proof.json",
+    "capture_seconds": 34.49794794499758,
+    "trace_sha256": "9eaea38c4600f27b56f3b16df848b417c7a814edb122c692ccc44bab30801463",
+    "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-314/candidates/7800e1c6d93bdbdd8a220697e94021e54e6b57948c8677f2ba3dc567c2000e80.tar",
+    "replay_exit": 1,
+    "replay_seconds": 0.47814732702681795,
+    "candidate_sha256": "7800e1c6d93bdbdd8a220697e94021e54e6b57948c8677f2ba3dc567c2000e80",
+    "failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (2070555) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+  },
+  "bounded_native_capture": {
+    "source_simfile": "Midnight Madness/midnight.sm",
+    "candidate_sha256": "7800e1c6d93bdbdd8a220697e94021e54e6b57948c8677f2ba3dc567c2000e80",
+    "trace_sha256": "9eaea38c4600f27b56f3b16df848b417c7a814edb122c692ccc44bab30801463",
+    "simfile_sha256": "936cc658a970b6e5d211d690465f34d93f911f96c12e8951fa15cb6024d9bcf7",
+    "all_manifest_members_byte_verified": true,
+    "actor_definitions": 0,
+    "actor_creation_inputs": 0,
+    "source_roots": 0,
+    "source_events": 0,
+    "runtime_actors": [
+      {
+        "id": "external-0001",
+        "name": "quad",
+        "path": "/quad"
+      },
+      {
+        "id": "external-0002",
+        "name": "ScreenSongLuaHarness",
+        "path": "ScreenGameplay"
+      },
+      {
+        "id": "external-0003",
+        "name": "JudgmentWithOffsets",
+        "path": "Player Judgment/JudgmentWithOffsets"
+      },
+      {
+        "id": "external-0004",
+        "name": "Holds_Label",
+        "path": "HoldsMinesRolls/Holds_Label"
+      },
+      {
+        "id": "external-0005",
+        "name": "Mines_Label",
+        "path": "HoldsMinesRolls/Mines_Label"
+      },
+      {
+        "id": "external-0006",
+        "name": "Rolls_Label",
+        "path": "HoldsMinesRolls/Rolls_Label"
+      },
+      {
+        "id": "external-0007",
+        "name": "ScreenGameplay",
+        "path": "ScreenGameplay"
+      },
+      {
+        "id": "external-0008",
+        "name": "PlayerP1",
+        "path": "ScreenGameplay/PlayerP1"
+      },
+      {
+        "id": "external-0009",
+        "name": "LifeP1",
+        "path": "ScreenGameplay/LifeP1"
+      },
+      {
+        "id": "external-0010",
+        "name": "NoteField",
+        "path": "ScreenGameplay/PlayerP1/NoteField"
+      },
+      {
+        "id": "external-0011",
+        "name": "Column3",
+        "path": "/Column3"
+      },
+      {
+        "id": "external-0012",
+        "name": "ColumnFlash",
+        "path": "/Column3/ColumnFlash"
+      },
+      {
+        "id": "external-0013",
+        "name": "",
+        "path": "GraphDisplay/[1]"
+      },
+      {
+        "id": "external-0014",
+        "name": "",
+        "path": "GraphDisplay/[2]"
+      },
+      {
+        "id": "external-0015",
+        "name": "Line",
+        "path": "GraphDisplay/Line"
+      },
+      {
+        "id": "external-0016",
+        "name": "Panes",
+        "path": "ScreenEval Common/Panes"
+      },
+      {
+        "id": "external-0017",
+        "name": "Pane1_SideP1",
+        "path": "ScreenEval Common/Panes/Pane1_SideP1"
+      },
+      {
+        "id": "external-0018",
+        "name": "Pane2_SideP1",
+        "path": "ScreenEval Common/Panes/Pane2_SideP1"
+      },
+      {
+        "id": "external-0019",
+        "name": "Pane3_SideP1",
+        "path": "ScreenEval Common/Panes/Pane3_SideP1"
+      },
+      {
+        "id": "external-0020",
+        "name": "Pane4_SideP1",
+        "path": "ScreenEval Common/Panes/Pane4_SideP1"
+      },
+      {
+        "id": "external-0021",
+        "name": "Pane5_SideP1",
+        "path": "ScreenEval Common/Panes/Pane5_SideP1"
+      },
+      {
+        "id": "external-0022",
+        "name": "Pane7_SideP1",
+        "path": "ScreenEval Common/Panes/Pane7_SideP1"
+      },
+      {
+        "id": "external-0023",
+        "name": "Pane1_SideP2",
+        "path": "ScreenEval Common/Panes/Pane1_SideP2"
+      },
+      {
+        "id": "external-0024",
+        "name": "Pane2_SideP2",
+        "path": "ScreenEval Common/Panes/Pane2_SideP2"
+      },
+      {
+        "id": "external-0025",
+        "name": "Pane3_SideP2",
+        "path": "ScreenEval Common/Panes/Pane3_SideP2"
+      },
+      {
+        "id": "external-0026",
+        "name": "Pane4_SideP2",
+        "path": "ScreenEval Common/Panes/Pane4_SideP2"
+      },
+      {
+        "id": "external-0027",
+        "name": "Pane5_SideP2",
+        "path": "ScreenEval Common/Panes/Pane5_SideP2"
+      },
+      {
+        "id": "external-0028",
+        "name": "Pane7_SideP2",
+        "path": "ScreenEval Common/Panes/Pane7_SideP2"
+      },
+      {
+        "id": "external-0029",
+        "name": "ScreenEvaluationStage",
+        "path": "ScreenGameplay"
+      }
+    ],
+    "native_frames": 19414,
+    "native_stage_samples": 36,
+    "first_frame": {
+      "beat": -11.999922752380371,
+      "delta": 0,
+      "scene": 1,
+      "seconds": -3.1099772453308105,
+      "sequence": 1,
+      "wall_seconds": 2.417765
+    },
+    "last_frame": {
+      "beat": 1266.1934814453125,
+      "delta": 0.0015219999477267265,
+      "scene": 1,
+      "seconds": 27.548049926757812,
+      "sequence": 19414,
+      "wall_seconds": 33.17581
+    },
+    "completion": {
+      "next_screen": "ScreenEvaluationStage",
+      "reason": "gameplay-exit",
+      "stage_committed": true,
+      "stages_played_after": 1,
+      "stages_played_before": 0
+    },
+    "terminal_samples": [
+      {
+        "beat": 1266.1934814453125,
+        "gameplay_seconds": 30.09828758239746,
+        "phase": "screen-end",
+        "players": [
+          {
+            "actual": 0,
+            "alive_seconds": 30.09828758239746,
+            "autoplay": 1,
+            "current_max_score": 0,
+            "current_possible": 0,
+            "description": "ITGAlex",
+            "difficulty": "Difficulty_Challenge",
+            "failed": true,
+            "life_begin": 0.5,
+            "life_latest": 0.5,
+            "meter": 16,
+            "misses": 0,
+            "player": "PlayerNumber_P1",
+            "possible": 845,
+            "score": 0,
+            "w1": 0,
+            "w2": 0
+          }
+        ],
+        "scene": 1,
+        "seconds": 27.548049926757812
+      }
+    ]
+  },
+  "bounded_input_sha256": "4cdfd5a99f01c866597bc6e08a88012ab45a06a40f5c256faa0190f88d879ff7",
+  "local_source_pins": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Foreground.cpp",
+      "sha256": "04655fe3db304e08f8d424ac6a928858b74182f74ba14ceb658b709324153847",
+      "source_behavior": "Native Foreground::LoadFromSong iterates only declared foreground changes."
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Background.cpp",
+      "sha256": "8ac3e579ba9b3adf41acd425c4ad921d0ed17f511761dd9e80301119d76eba2c",
+      "source_behavior": "Native Background::LoadFromSong uses declared changes and static background separately."
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\BGAnimations\\ScreenGameplay overlay\\default.lua",
+      "sha256": "8c78b48fe3058b9c8ad62add6bc67f7c389110970fcee56e07339b6fb2d826d3",
+      "source_behavior": "The native gameplay overlay loads theme observers independently of song Lua roots."
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\playback\\prepare.rs",
+      "sha256": "34516e37d6ff7bafd18ea0fac8ea0a3ff1f00d99cadc5c472ca067f4b1cfd69e",
+      "source_behavior": "prepare_song_lua returns the default empty prepared value when both change lists are empty; take_live_scene then returns None."
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\tests\\song_lua_itgmania_semantic_parity\\native_gameplay.rs",
+      "sha256": "ad214e4cd9f8bd32529f8b69391f5ed6bde49295c71bc80bf8bd630217f79a04",
+      "source_behavior": "The existing replay rejects a production gameplay state without a retained Lua scene before any native frame comparison."
+    }
+  ],
+  "inert_unreferenced_song_file": {
+    "path": "lua/default.lua",
+    "sha256": "1d7fbd050e3af038fcfccb1671051b60bc944f844b7ed052c0ab410dc15f82eb",
+    "contents": "-- made u look haha"
+  },
+  "concrete_source_cause": "The simfile declares no background or foreground Lua changes, and the native capture confirms zero source definitions, roots, events and creation inputs. Production prepare_song_lua returns an empty prepared value before constructing an owned Lua scene. The existing full replay therefore stops with preparation did not retain a Lua scene. The unreferenced comment-only default.lua is not a declared native actor source.",
+  "repair_requirement": "Preserve the existing complete comparison and construct the required owned gameplay/theme scene independently of authored song layers; do not execute an unreferenced default.lua or invent an authored actor.",
+  "chart_repair_attempts_spent": 0,
+  "remaining_repairs": 2,
+  "comparisons_modified": false,
+  "passing_charts_reopened": false,
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "simply_love_commit": "dd06138b15492f4136796dfe4b6708ced0f7b9eb"
+}
