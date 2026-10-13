@@ -7567,6 +7567,21 @@
         }
       ],
       "report_sha256": "f8716b5155a8aa6bd11685ed2f4c1c5950904881760c1dc13b20d86042429425"
+    },
+    {
+      "position": 278,
+      "source_simfile": "Lesson by DJ/Lesson by DJ.ssc",
+      "simfile_sha256": "f7d7ca10969dc5d84afa14cd001fba4d3f090778176ebf56cafac937c1c666e2",
+      "retained_original_archive": "38cecaf5f613cc14d15bfcc76326f00c881139da30f695d06cb3fdfa4d939835.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "4713556073fc219eef2dd0db6fbb496506cdfa4f49c27f62d6427ec63f95ab84",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/fg-filename-build-v1/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 5.355594338994706,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-3720042-1791891709207637875-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-3720042-1791891709207637875-0\n"
     }
   ],
   "historical_pending": [
@@ -7593,6 +7608,6 @@
   "binary_sha256": "4713556073fc219eef2dd0db6fbb496506cdfa4f49c27f62d6427ec63f95ab84",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 15,
-  "pending_charts": 40,
-  "processed_charts": 55
+  "pending_charts": 41,
+  "processed_charts": 56
 }
