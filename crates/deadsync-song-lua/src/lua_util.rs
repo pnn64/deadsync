@@ -3567,6 +3567,23 @@ pub fn run_actor_named_command_with_drain(
     run_actor_named_command_with_drain_and_params(lua, actor, name, drain_queue, None)
 }
 
+// Message handlers share the native direct command map. Retain their
+// authored field name when a direct command executes them in the live trace.
+fn lookup_actor_named_command<'a>(
+    actor: &Table,
+    name: &'a str,
+) -> mlua::Result<Option<(Function, std::borrow::Cow<'a, str>)>> {
+    if let Some(command) = actor.get::<Option<Function>>(name)? {
+        return Ok(Some((command, std::borrow::Cow::Borrowed(name))));
+    }
+    let Some(base) = name.strip_suffix("Command").filter(|base| !base.ends_with("Message")) else {
+        return Ok(None);
+    };
+    let field = format!("{base}MessageCommand");
+    Ok(actor.get::<Option<Function>>(field.as_str())?
+        .map(|command| (command, std::borrow::Cow::Owned(field))))
+}
+
 pub fn run_actor_named_command_with_drain_and_params(
     lua: &Lua,
     actor: &Table,
@@ -3574,10 +3591,10 @@ pub fn run_actor_named_command_with_drain_and_params(
     drain_queue: bool,
     params: Option<Value>,
 ) -> mlua::Result<()> {
-    let Some(command) = actor.get::<Option<Function>>(name)? else {
+    let Some((command, field)) = lookup_actor_named_command(actor, name)? else {
         return Ok(());
     };
-    run_guarded_actor_command(lua, actor, name, &command, drain_queue, params)
+    run_guarded_actor_command(lua, actor, field.as_ref(), &command, drain_queue, params)
 }
 
 fn run_actor_message_with_params(
@@ -6419,9 +6436,8 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                 let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) else {
                     return Ok(Value::Nil);
                 };
-                Ok(actor
-                    .get::<Option<Function>>(ActorCommandName::new(&name, "Command"))?
-                    .map_or(Value::Nil, Value::Function))
+                Ok(lookup_actor_named_command(&actor, &ActorCommandName::new(&name, "Command"))?
+                    .map_or(Value::Nil, |(command, _)| Value::Function(command)))
             }
         })?,
     )?;
@@ -11826,7 +11842,15 @@ pub(crate) fn run_actor_startup_commands(
     }
     // Screen::BeginScreen propagates Begin before Foreground::Update sends On.
     // This root is the session loader list, so dispatch to its actor children.
-    run_named_command_on_children_recursively(lua, root, "BeginCommand", None)?;
+    for child in actor_direct_children(lua, root)? {
+        // Native Background keeps its cached actors outside the screen's
+        // propagated command children. Foreground actors receive Begin.
+        if child.raw_get::<Option<f32>>("__songlua_background_start_beat")?.is_some() {
+            continue;
+        }
+        run_actor_named_command(lua, &child, "BeginCommand")?;
+        run_named_command_on_children_recursively(lua, &child, "BeginCommand", None)?;
+    }
     // LoadDelayedScreen broadcasts after activation, before Update(0) sends On.
     crate::record_song_lua_broadcast(lua, "ScreenChanged", false)?;
     broadcast_song_lua_message(lua, "ScreenChanged", None)?;

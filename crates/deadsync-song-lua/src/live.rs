@@ -1363,6 +1363,56 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn live_screen_begin_reaches_message_commands_only_in_screen_children() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-begin-message-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("begin message directory");
+        let background = dir.join("background.lua");
+        let foreground = dir.join("foreground.lua");
+        fs::write(&background, r#"
+BG_BEGIN = 0
+return Def.ActorFrame { Def.Actor {
+    BeginMessageCommand = function() BG_BEGIN = BG_BEGIN + 1 end,
+} }
+"#).unwrap();
+        fs::write(&foreground, r#"
+FG_BEGIN, TARGETS = 0, 0
+local proxy = Def.ActorProxy {
+    InitCommand = function(self) PROXY = self end,
+    BeginMessageCommand = function(self)
+        FG_BEGIN = FG_BEGIN + 1
+        if TARGET then self:SetTarget(TARGET); TARGETS = TARGETS + 1 end
+    end,
+}
+return Def.ActorFrame { proxy, Def.ActorProxy {
+    BeginMessageCommand = function(self) FG_BEGIN = FG_BEGIN + 1 end,
+} }
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&dir, "native begin aliases");
+        context.live = true;
+        context.background_layer_count = 1;
+        context.layer_start_beats = vec![0.0, 0.0];
+        context.foreground_names = vec!["foreground".into()];
+        let mut layers: Vec<Compiled> = crate::compile_song_lua_layers_with_default_host(
+            &[&background, &foreground], 1, &context, SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).expect("owned background and foreground");
+        let mut scene = layers[1].live_scene.take().expect("primary scene");
+        let startup = scene.take_startup_output();
+        assert!(startup.errors.is_empty(), "{:?}", startup.errors);
+        let globals = scene.lua.globals();
+        assert_eq!(globals.get::<u32>("FG_BEGIN").unwrap(), 2,
+            "screen Begin invokes native foreground BeginMessageCommand aliases");
+        assert_eq!(globals.get::<u32>("BG_BEGIN").unwrap(), 0,
+            "cached background owners are outside screen Begin propagation");
+        assert_eq!(globals.get::<u32>("TARGETS").unwrap(), 0);
+        assert!(scene.lua.load("return type(PROXY:GetCommand('Begin')) == 'function'").eval::<bool>().unwrap());
+        scene.lua.load("PROXY:playcommand('Begin')").exec().unwrap();
+        assert_eq!(globals.get::<u32>("FG_BEGIN").unwrap(), 3);
+        assert_eq!(globals.get::<u32>("BG_BEGIN").unwrap(), 0);
+        assert!(startup.broadcasts.iter().all(|(_, name, _)| name != "Begin"),
+            "direct screen command creates no synthetic Begin broadcast");
+    }
+
     #[cfg(feature = "test-support")]
     #[test]
     fn live_numeric_option_getter_retains_native_argument_path() {
