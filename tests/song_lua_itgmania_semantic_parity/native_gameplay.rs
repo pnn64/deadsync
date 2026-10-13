@@ -754,6 +754,67 @@ return Def.ActorFrame{}
             Some(deadsync_gameplay::GameplayAction::Navigate(deadsync_gameplay::GameplayExit::Complete))));
     }
 
+    #[test]
+    fn gameplay_empty_declared_layers_retains_owned_theme_scene() {
+        paths::init();
+        let dir = std::env::temp_dir().join(format!("deadsync-empty-declared-layers-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("lua")).unwrap();
+        let simfile = dir.join("empty.sm");
+        std::fs::write(&simfile, "#TITLE:Empty declared layers;#BPMS:0=60;#BGCHANGES:;#FGCHANGES:;#NOTES:dance-single:Control:Hard:1:0,0,0,0,0:\n1000\n0000\n0000\n0000\n;").unwrap();
+        std::fs::write(dir.join("lua/default.lua"), "error('unreferenced song Lua must not execute')").unwrap();
+        let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap());
+        assert!(song.background_lua_changes.is_empty() && song.foreground_lua_changes.is_empty());
+        let chart = Arc::new(song.charts[0].clone());
+        let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
+        let mut context = deadsync_song_lua::SongLuaCompileContext::new(&dir, "empty declared layers");
+        let mut inactive = deadsync_song_lua::playback::prepare_song_lua(
+            &song, &context, deadsync_assets::song_lua::compile_song_lua,
+            deadsync_assets::song_lua::compile_song_lua_layers);
+        assert!(inactive.take_live_scene().unwrap().is_none(), "non-live empty layers need no VM");
+        context.live = true;
+        context.defer_initial_live_update = true;
+        context.song_timing = song.song_timing.clone();
+        let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+        let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
+        let prepared = deadsync_song_lua::playback::prepare_song_lua(
+            &song, &context, deadsync_assets::song_lua::compile_song_lua,
+            deadsync_assets::song_lua::compile_song_lua_layers);
+        let mut state = gameplay::init(song, [chart.clone(), chart], [payload.clone(), payload],
+            GameplayViewport::default(), GameplaySession::default(), GameplayConfig::default(),
+            5, 1.0, scroll, profiles, None, None, None, Arc::from("EVENT"), None, None, None,
+            None, None, [deadsync_gameplay::CourseLifeConfig::Bar; 2], false, None, None,
+            [0; 2], prepared, Default::default());
+        assert!(state.song_lua.is_some(), "empty declared layers retain the owned gameplay scene");
+        let scene = state.song_lua.as_ref().unwrap();
+        assert!(scene.matches_entries(&[], 0), "no authored entry is invented");
+        assert!(scene.context().foreground_names.is_empty() && scene.context().layer_start_beats.is_empty());
+        assert_eq!(scene.states().len(), 1, "the screen has no authored actor overlay");
+        let startup = state.take_song_lua_output();
+        assert!(startup.errors.is_empty() && startup.source_broadcasts.is_empty());
+        assert_eq!(startup.broadcasts.iter().filter(|(_, name, _)| name == "ScreenChanged").count(), 1);
+        state.set_live_autoplay_enabled(true);
+        let mut navigated = false;
+        for index in 0..80 {
+            let at = index * 125_000_000;
+            let host = at as u64 + 1_000_000_000;
+            let mut effects = Vec::new();
+            gameplay::update(&mut state, if index == 0 { 0.0 } else { 0.125 }, GameplayAudioSnapshot {
+                stream_clock: GameplayStreamClockSnapshot { music_nanos: at,
+                    has_music_mapping: true, valid_at_host_nanos: host, ..Default::default() },
+                ..Default::default()
+            }, || host, &mut effects);
+            let output = state.take_song_lua_output();
+            assert!(output.errors.is_empty() && output.source_broadcasts.is_empty(), "{:?}", output.errors);
+            if effects.iter().any(|effect| matches!(effect,
+                deadsync_theme_simply_love::SimplyLoveEffect::NavigateNoFade(deadsync_theme_simply_love::screens::SimplyLoveScreen::Evaluation))) {
+                navigated = true;
+                break;
+            }
+        }
+        assert!(navigated, "the owned scene reaches natural navigation");
+        assert!(state.gameplay.players()[0].stage_failed, "owned theme Off fails judged autoplay");
+    }
+
     fn owned_judgment_control(name: &str, notes: &str, script: &str, offset: f32) -> gameplay::State {
         paths::init();
         let dir = std::env::temp_dir().join(format!("deadsync-judgment-{name}-{}", std::process::id()));

@@ -232,7 +232,7 @@ where
         SongLuaOverlayState,
     )>,
 {
-    if entry_paths.is_empty() {
+    if entry_paths.is_empty() && !context.live {
         return Ok(Vec::new());
     }
     if context.background_layer_count > entry_paths.len() {
@@ -249,7 +249,7 @@ where
     {
         return Err("song lua layer beats do not match its session entries".into());
     }
-    if primary_index >= entry_paths.len() {
+    if primary_index >= entry_paths.len() && !(entry_paths.is_empty() && primary_index == 0) {
         return Err(format!(
             "song lua primary index {primary_index} is outside {} entries",
             entry_paths.len()
@@ -263,7 +263,8 @@ where
                 .ok_or_else(|| format!("song lua entry '{}' does not exist", path.display()))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let trace_entry_path = entry_paths[primary_index].clone();
+    let trace_entry_path = entry_paths.get(primary_index).cloned()
+        .unwrap_or_else(|| context.song_dir.clone());
     let reloaded = retained_lua.is_some();
     let lua = retained_lua.unwrap_or_else(Lua::new);
     if context.live {
@@ -522,7 +523,7 @@ where
             .map_err(|err| err.to_string())).collect::<Result<Vec<_>, _>>()?;
         let mut out = CompiledSongLua {
             startup, loaded_steps: Some(context.player_step_indices), startup_reloads: reloads,
-            entry_path: entry_paths[primary_index].clone(),
+            entry_path: trace_entry_path.clone(),
             screen_width: context.screen_width, screen_height: context.screen_height,
             screen_overlay_index: Some(screen_index), hidden_players,
             sound_paths: read_song_lua_sound_paths(&lua)?,
@@ -552,6 +553,12 @@ where
             .map_err(|err| err.to_string())?);
         compile_timer.push_stage("live_scene");
         log_song_lua_compile_timing(&trace_entry_path, &compile_timer);
+        if entry_paths.is_empty() {
+            // ScreenGameplay and its theme actors exist without authored song
+            // actors. Retain that owned scene without inventing an entry file.
+            out.live_indices.extend(0..out.overlays.len());
+            return Ok(vec![out]);
+        }
         return split_compiled_song_lua(out, overlay_layers, &entry_paths, primary_index);
     }
     let mut screen_layer_startup = crate::lua_util::capture_startup_states(screen_layer_states)?;

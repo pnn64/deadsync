@@ -228,7 +228,24 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
         .position(|target| matches!(target, SongLuaLayerTarget::Primary))
         .unwrap_or(0);
     if paths.is_empty() {
-        return Ok(PreparedGameplaySongLua::default());
+        if !context.live {
+            return Ok(PreparedGameplaySongLua::default());
+        }
+        // Native ScreenGameplay owns its theme actors even when a song has
+        // no declared Lua layers. Compile the host with no authored entries.
+        let compile_started = Instant::now();
+        let mut compiled = compile_song_lua_layers(&[], 0, &context)?;
+        if compiled.len() != 1 || compiled[0].live_scene.is_none() {
+            return Err("empty song layers did not retain the owned gameplay scene".into());
+        }
+        return Ok(PreparedGameplaySongLua {
+            primary: Some(GameplayCompiledSongLua {
+                compiled: compiled.pop().expect("one owned scene checked"),
+                compile_ms: compile_started.elapsed().as_secs_f64() * 1000.0,
+            }),
+            background_layers: Vec::new(),
+            foreground_layers: Vec::new(),
+        });
     }
     context.layer_start_beats = start_beats;
     let compile_started = Instant::now();
@@ -392,6 +409,7 @@ pub fn prepare_song_lua<S: Clone + std::fmt::Debug>(
     if primary_ix.is_none()
         && song.background_lua_changes.is_empty()
         && song.foreground_lua_changes.is_empty()
+        && !context.live
     {
         return PreparedGameplaySongLua::default();
     }
