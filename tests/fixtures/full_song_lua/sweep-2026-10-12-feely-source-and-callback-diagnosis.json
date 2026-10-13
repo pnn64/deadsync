@@ -31,7 +31,9 @@
   },
   "already_validated_shared_fixes": [
     "21c106cb4 owned style reads",
-    "58fcc8043 initial Player and NoteField poses"
+    "58fcc8043 initial Player and NoteField poses",
+    "8f91878dc native integer player margins",
+    "9e0511014 synchronous retained-VM engine tap callbacks"
   ],
   "first_remaining_tween_example": {
     "native_operation": "Actor.x",
@@ -49,8 +51,17 @@
       "multitap/Default.lua:634 installs this callback with NoteField:SetDidTapNoteCallback."
     ],
     "native": "NoteField.cpp:1223-1234 calls the stored callback with the one-based column, TapNoteScore and bright flag before GhostArrowRow::DidTapNote.",
-    "independent": "lua_util.rs stores the callback and invokes it only through the Lua did_tap_note method; repository search finds no gameplay caller. Legacy multitap.rs captures explosion hits, but compile.rs returns the retained live scene before that legacy compilation path.",
-    "next_work": "Confirm and implement the missing gameplay tap callback dispatch with independent judgment events and correct callback timing before spending the final full replay. Do not seed callback events from the native expected trace."
+    "independent": "Engine tap and mine ghosts now synchronously invoke the current callback in the same retained Lua VM. It sees current independent scores and song-global clock before the ghost; native optional return conversions and brightness are preserved.",
+    "next_work": "The callback and requested source fixes are verified. Establish the observed early failed flag before the final whole-chart replay; no native expected events are imported.",
+    "implementation_commit": "9e0511014",
+    "build_proof": "/home/parity/jobs/tap-callback-and-margins-build-v2/proof.json",
+    "binary_sha256": "56c7f5ad7480dc190223b46f68cd1f78d172e09431fc49d6eb9a095937789469",
+    "validation": {
+      "windows_and_linux_gameplay_controls": 2,
+      "windows_and_linux_live_controls": 32,
+      "windows_and_linux_native_controls": 19,
+      "foreground_clock_control_commit": "5e84abcd4"
+    }
   },
   "remaining_stage_failure": {
     "phase": "progress",

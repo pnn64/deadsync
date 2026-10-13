@@ -114,11 +114,15 @@
   "errors": [],
   "source_confirmed_causes": [
     "ArrowEffects internally invoked the public Lua style getter rather than owned GameState data.",
-    "Player and NoteField constructors updated destination coordinates after their live tween pose had been registered at zero."
+    "Player and NoteField constructors updated destination coordinates after their live tween pose had been registered at zero.",
+    "Native SafeFArg returns an integer: Simply Love outer margin 77.5 truncates to 77 before ScreenGameplay centers the player, producing independent P1 X 213.25.",
+    "Gameplay did not invoke the retained NoteField SetDidTapNoteCallback before each engine tap ghost; native NoteField::DidTapNote does so synchronously."
   ],
   "source_fixes": [
     "21c106cb4",
-    "58fcc8043"
+    "58fcc8043",
+    "8f91878dc",
+    "9e0511014"
   ],
   "windows_live_controls": {
     "passed": 30,
@@ -261,5 +265,24 @@
     "evidence": "sweep-2026-10-12-flowers-cringle-pose-repairs.json",
     "remaining_attempts": 1,
     "next_source_work": "Trace independent player-position preparation: native copied P1 X is 213.25, independent is 213.5. Establish the 3584 missing operations before using the final full replay. Do not substitute native expected coordinates or calls."
+  },
+  "final_bounded_repair": {
+    "attempt": 2,
+    "status": "running",
+    "job": "/home/parity/jobs/flowers-cringle-tap-and-margins-repair-v1",
+    "build_proof": "/home/parity/jobs/tap-callback-and-margins-build-v2/proof.json",
+    "binary_sha256": "56c7f5ad7480dc190223b46f68cd1f78d172e09431fc49d6eb9a095937789469",
+    "candidate_sha256": "8b80d71c87d7021ef5195e0c057d16bd590c3dd3843e16e6748dac056f3d75c0",
+    "reuses_original_capture": true,
+    "compares_uncompressed_data": true,
+    "repair_limit": 2,
+    "native_sources": [
+      "GameplayHelpers.cpp:46-55",
+      "LuaManager.h:276",
+      "ScreenGameplay.cpp:605-615",
+      "NoteField.cpp:1223-1234",
+      "Player.cpp:2943,3019",
+      "Simply Love metrics.ini:2309"
+    ]
   }
 }
