@@ -3499,17 +3499,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 05",
+      "title": "Episode 05 Lonely",
       "source_simfile": "Lonely/Lonely.ssc",
-      "harness_version": "0.1.0",
-      "archive": "8c2c0cd30f1a403443c2200f746ff714442c1bd2f99408092e4ac36766aeb757.tar.zst",
-      "sha256": "8c2c0cd30f1a403443c2200f746ff714442c1bd2f99408092e4ac36766aeb757",
-      "compressed_bytes": 123179,
-      "uncompressed_sha256": "d852c6fc784b28f992fe7220628fac40907f2fd01fae6423614264b2d5d32ed7",
-      "compression_level": 22,
-      "aliases": [
-        "17f0757869edb1f432a0af1025d9b01c22af273e79b6d6eb7a99d6e0f1141a49.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "2be8be74e06c09d191b8056b5a6e850ff910a10b148784e619dd8a8c7ca5573d.tar.zst",
+      "sha256": "2be8be74e06c09d191b8056b5a6e850ff910a10b148784e619dd8a8c7ca5573d",
+      "compressed_bytes": 12616959,
+      "uncompressed_sha256": "168904618cd51ba2aee74126daf1556fae2889e7f0c54a867ba0d4b2a8ae00dc",
+      "aliases": []
     },
     {
       "title": "Longinus",
