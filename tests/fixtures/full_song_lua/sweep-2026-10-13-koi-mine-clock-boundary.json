@@ -1,0 +1,243 @@
+{
+  "source_simfile": "Koi [UPS2016]/koi.sm",
+  "retained_candidate_sha256": "4d39fd730470637e80f595cac7581a1d3cb2861c0824090536c7c608668ad7f6",
+  "retained_native_trace_sha256": "eefd069616db4eb3e759a2469ad10f81f79c1a6a0f4168a97c79e4e050a3d839",
+  "unchanged_simfile_sha256": "4d5cbb5b95ac61be0a56f3eec6013904e68a04aefc279d4439a697c628a91bdc",
+  "bounded_probe": "Initialize the real independent song parser, timing and gameplay core with retained neutral preferences. Feed 1247 sampled original update clocks around the actual missing mine callbacks. Its owned avoidance callback emits all35 messages with exact native column order and exact native float music clocks. Native judgments and command calls are never gameplay input.",
+  "input_policy": "Only sampled neutral update clocks feed the independent core. Native expected callback clocks stay separate and are used only to inspect its output.",
+  "preferences": {
+    "default_sync_offset": "SyncOffset_ITG",
+    "display_aspect_ratio": 1.7777777910232544,
+    "global_offset_seconds": -0.00800000037997961,
+    "visual_delay_seconds": 0
+  },
+  "proof": {
+    "source_graph": "Latest native integration dependency graph after both focused green controls passed",
+    "input_test_fingerprint": "/home/parity/build/deadsync-v1/debug/.fingerprint/deadsync-455b2f98583f9179/test-integration-test-song_lua_itgmania_semantic_parity.json",
+    "dependency_rlibs": {
+      "deadsync_simfile": {
+        "rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_simfile-e8155e0dd2c226f4.rlib",
+        "sha256": "aec189d9e833955d908a11ce94142e3d174c33a9c4661f062ebb257a78b71002"
+      },
+      "deadsync_gameplay": {
+        "rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_gameplay-9467e7b0400d21d8.rlib",
+        "sha256": "b60aa3932ea54cbedd4b5335328c12fdfb320fd6d57b92b55723a6c2c24ad6dd"
+      },
+      "deadsync_chart": {
+        "rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_chart-7849460d3dc650be.rlib",
+        "sha256": "b3f81f36e396ceed9e483fee53312f44765bd89afcff24bbd86b05392f7b693e"
+      },
+      "deadsync_profile": {
+        "rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_profile-c7eefbf058e10bec.rlib",
+        "sha256": "1d4396e3d48be8fff837613d6f83a6b1deff717e98809917b3486a947b83a1db"
+      },
+      "deadsync_profile_gameplay": {
+        "rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_profile_gameplay-22c102dfc1329460.rlib",
+        "sha256": "6ae0551cb8fd8e2b47cb95cf47756b5c55fbb416a866c500f6b7df46c8eb2240"
+      },
+      "deadsync_rules": {
+        "rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_rules-4fb95f03f1be4e23.rlib",
+        "sha256": "23b9cfdc4302c3c49f92784b7bc5b1bb1a88e424b0e45ad9ef3c6f1a667e9224"
+      },
+      "serde_json": {
+        "rlib": "/home/parity/build/deadsync-v1/debug/deps/libserde_json-8137c1765cdb7c2b.rlib",
+        "sha256": "0a2d8696dd89acd1cb5d4971df04e8c81932e2044d054d273289486f6b580e1d"
+      }
+    },
+    "source_sha256": "ad148d5d2d397ba14e07ec7c58f4897821e5b74c28f8ff4ea9400b39592a2984",
+    "input_sha256": "9f309168bd4650e359d7185ba0d0b25ff7c8cc65a8fa6e88b0c76fe7f02d3c14",
+    "binary_sha256": "02297aacaf0168bca136bc52f1b77f8703838638c75e7147ec863974298aeebb",
+    "exit_code": 0,
+    "output_sha256": "2f36ff4c3500ad06512b3ebca6283a6944f74faaf6a9a0fe89088440584700bc",
+    "sampled_neutral_frames": 1247,
+    "observed_callbacks": [
+      {
+        "player": 0,
+        "column": 0,
+        "seconds": 10.783333778381348
+      },
+      {
+        "player": 0,
+        "column": 3,
+        "seconds": 11.199841499328613
+      },
+      {
+        "player": 0,
+        "column": 0,
+        "seconds": 11.616190910339355
+      },
+      {
+        "player": 0,
+        "column": 3,
+        "seconds": 12.034943580627441
+      },
+      {
+        "player": 0,
+        "column": 0,
+        "seconds": 12.449660301208496
+      },
+      {
+        "player": 0,
+        "column": 3,
+        "seconds": 12.866416931152344
+      },
+      {
+        "player": 0,
+        "column": 0,
+        "seconds": 13.283650398254395
+      },
+      {
+        "player": 0,
+        "column": 0,
+        "seconds": 34.117347717285156
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 34.117347717285156
+      },
+      {
+        "player": 0,
+        "column": 2,
+        "seconds": 34.117347717285156
+      },
+      {
+        "player": 0,
+        "column": 3,
+        "seconds": 34.117347717285156
+      },
+      {
+        "player": 0,
+        "column": 0,
+        "seconds": 37.45038604736328
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 37.45038604736328
+      },
+      {
+        "player": 0,
+        "column": 2,
+        "seconds": 37.45038604736328
+      },
+      {
+        "player": 0,
+        "column": 3,
+        "seconds": 37.45038604736328
+      },
+      {
+        "player": 0,
+        "column": 0,
+        "seconds": 56.61752700805664
+      },
+      {
+        "player": 0,
+        "column": 2,
+        "seconds": 56.61752700805664
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 56.82884216308594
+      },
+      {
+        "player": 0,
+        "column": 0,
+        "seconds": 67.45403289794922
+      },
+      {
+        "player": 0,
+        "column": 2,
+        "seconds": 67.45403289794922
+      },
+      {
+        "player": 0,
+        "column": 3,
+        "seconds": 67.45403289794922
+      },
+      {
+        "player": 0,
+        "column": 0,
+        "seconds": 119.95020294189453
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 119.95020294189453
+      },
+      {
+        "player": 0,
+        "column": 2,
+        "seconds": 119.95020294189453
+      },
+      {
+        "player": 0,
+        "column": 3,
+        "seconds": 119.95020294189453
+      },
+      {
+        "player": 0,
+        "column": 0,
+        "seconds": 134.11729431152344
+      },
+      {
+        "player": 0,
+        "column": 2,
+        "seconds": 134.11729431152344
+      },
+      {
+        "player": 0,
+        "column": 3,
+        "seconds": 134.11729431152344
+      },
+      {
+        "player": 0,
+        "column": 0,
+        "seconds": 180.78451538085938
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 180.78451538085938
+      },
+      {
+        "player": 0,
+        "column": 2,
+        "seconds": 180.78451538085938
+      },
+      {
+        "player": 0,
+        "column": 0,
+        "seconds": 187.03536987304688
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 187.03536987304688
+      },
+      {
+        "player": 0,
+        "column": 2,
+        "seconds": 187.03536987304688
+      },
+      {
+        "player": 0,
+        "column": 3,
+        "seconds": 187.03536987304688
+      }
+    ],
+    "clock_differences": [],
+    "full_chart_repair": false,
+    "chart_repair_attempts_spent": 0
+  },
+  "all35_callback_clocks_match": true,
+  "diagnostic_only": true,
+  "production_code_used": true,
+  "full_chart_repair": false,
+  "chart_repair_attempts_spent": 0,
+  "repairs_remaining": 1,
+  "next_step": "Finish both-host broad checks, freeze and select the validated helper, then use the final allowed full Koi SM repair with its unchanged capture.",
+  "acceptance_comparisons_changed": false,
+  "passing_charts_reopened": false
+}
