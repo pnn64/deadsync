@@ -1656,6 +1656,16 @@ pub fn install_def_globals(
     globals.set("NullActor", null_actor)?;
     globals.set("Def", def)?;
     crate::actor_classes::install(lua)?;
+    // _fallback/Scripts/02 Sprite.lua builds authored animation states.
+    lua.load(r#"
+function Sprite.LinearFrames(NumFrames, Seconds)
+    local Frames = {}
+    for i = 0,NumFrames-1 do
+        Frames[#Frames+1] = {Frame = i, Delay = (1/NumFrames)*Seconds}
+    end
+    return Frames
+end
+"#).set_name("_fallback/Scripts/02 Sprite.lua").exec()?;
     // Native Player/NoteField classes inherit ActorFrame. Their own method
     // inventories also keep SM5.2-only feature probes absent on ITGmania.
     for (name, methods) in [
@@ -2153,7 +2163,7 @@ pub(crate) fn actor_name(actor: &Table) -> mlua::Result<String> {
     Ok(actor.raw_get::<Option<String>>("Name")?.unwrap_or_default())
 }
 
-pub(crate) fn set_actor_name(actor: &Table, name: mlua::String) -> mlua::Result<()> {
+pub(crate) fn set_actor_name(actor: &Table, name: mlua::LuaString) -> mlua::Result<()> {
     if !matches!(actor.raw_get::<Value>("__songlua_load_name")?, Value::Nil) {
         actor.raw_set("__songlua_load_name", name.clone())?;
     }

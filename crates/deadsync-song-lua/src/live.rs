@@ -1313,6 +1313,37 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 #[cfg(test)]
 mod tests {
     #[test]
+    fn live_sprite_linear_frames_builds_native_authored_states() {
+        let mut compiled = compile_with_context("sprite-linear-frames", r#"
+assert(type(Sprite.LinearFrames) == 'function', 'native Sprite.LinearFrames helper is available')
+local seconds = 184/60*2
+local frames = Sprite.LinearFrames(144, seconds)
+assert(#frames == 144)
+for i, entry in ipairs(frames) do
+    assert(entry.Frame == i-1 and entry.Delay == (1/144)*seconds)
+end
+assert(#Sprite.LinearFrames(0, 1) == 0)
+local other = Sprite.LinearFrames(3, 1.5)
+assert(#other == 3 and other[1].Frame == 0 and other[3].Frame == 2)
+assert(other[1].Delay == 0.5 and other[3].Delay == 0.5)
+other[1].Frame = 99
+assert(Sprite.LinearFrames(3, 1.5)[1].Frame == 0)
+return Def.Sprite {
+    Frames = frames,
+    InitCommand = function(self) FRAME_SPRITE = self end,
+}
+"#, |context| context.defer_initial_live_update = true);
+        let scene = compiled.live_scene.take().expect("live sprite declaration");
+        let actor = scene.lua.globals().get::<Table>("FRAME_SPRITE").expect("initialized authored sprite");
+        let states = crate::lua_util::read_sprite_states(&actor).expect("native Frames table is consumed");
+        assert_eq!(states.len(), 144);
+        for (index, state) in states.iter().enumerate() {
+            assert_eq!(state.frame, index as u32);
+            assert_eq!(state.delay, ((1.0_f64 / 144.0) * (184.0 / 60.0 * 2.0)) as f32);
+        }
+    }
+
+    #[test]
     fn live_actor_name_ignores_lua_attribute_writes() {
         let mut compiled = compile("native-actor-name", r#"
 return Def.ActorFrame{Name='Root',

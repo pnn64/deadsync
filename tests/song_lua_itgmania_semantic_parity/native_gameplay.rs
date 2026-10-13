@@ -753,6 +753,15 @@ return Def.ActorFrame{}
 
     #[test]
     fn gameplay_natural_navigation_ends_owned_song_actors_once() {
+        check_natural_navigation_ends_owned_song_actors_once(false);
+    }
+
+    #[test]
+    fn gameplay_autoplay_overlay_off_keeps_successful_exit_clock() {
+        check_natural_navigation_ends_owned_song_actors_once(true);
+    }
+
+    fn check_natural_navigation_ends_owned_song_actors_once(autoplay: bool) {
         use super::{gameplay, paths, GameplayAudioSnapshot, GameplayConfig,
             GameplaySession, GameplayStreamClockSnapshot, GameplayViewport};
         use deadsync_song_lua::SongLuaCompileContext;
@@ -764,13 +773,19 @@ return Def.ActorFrame{}
         fs::write(&simfile, "#TITLE:Natural owned End;#BPMS:0=60;#FGCHANGES:0=default.lua=1=0=0=1;#NOTES:dance-single:Control:Hard:1:0,0,0,0,0:\n1000\n0000\n0000\n0000\n;").unwrap();
         fs::write(dir.join("default.lua"), r#"
 local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
 local ends = 0
+local off = false
 return Def.ActorFrame {
     OnCommand = function(self)
         self:sleep(9999)
+        self:SetUpdateFunction(function()
+            assert(off or not stats:GetFailed(), 'autoplay remains unfailed before owned Off')
+        end)
         self:SetDrawFunction(function() MESSAGEMAN:Broadcast('AliveDraw') end)
     end,
     OffCommand = function()
+        off = true
         assert(SCREENMAN:GetTopScreen() ~= nil)
         MESSAGEMAN:Broadcast('OwnedOff')
     end,
@@ -804,6 +819,7 @@ return Def.ActorFrame {
             5, 1.0, scroll, profiles, None, None, None, Arc::from("EVENT"), None, None, None,
             None, None, [deadsync_gameplay::CourseLifeConfig::Bar; 2], false, None, None,
             [0; 2], prepared, Default::default());
+        state.set_live_autoplay_enabled(autoplay);
         let mut effects = Vec::new();
         let mut ends = Vec::new();
         let mut lifecycle = Vec::new();
