@@ -1,0 +1,66 @@
+{
+  "source_sha256": {
+    "src/song_lua_archive.rs": "4d5739f88e781cfe1b4cf5cdef8348cdeb6331b6bcb7c4c3cb9c461e6423603b",
+    "src/song_lua_oracle.rs": "e0a18b177b501a8bc7feafe0540a929abcc8dbbc66e35c2d7cdd14725a0c282c",
+    "probe_theme/SongLuaTrace.lua": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f"
+  },
+  "checks": [
+    {
+      "label": "oracle-path-tests",
+      "exit_code": 0,
+      "seconds": 20.08887302799849,
+      "results": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 199 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "archive-tests",
+      "exit_code": 0,
+      "seconds": 0.25930150900239823,
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 0.12s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 0.10750395299692173,
+      "results": []
+    }
+  ],
+  "binary": "/home/parity/jobs/case-lua-archive-build-v1/harness",
+  "binary_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+  "fix_commit": "b191ebd",
+  "native_capture_instrumentation": "Unchanged from validated definition-concat-capture-build-v1",
+  "acceptance": "Unchanged full-song replay and pack comparisons",
+  "windows_validation": [
+    {
+      "filter": "song_lua_oracle::tests",
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "filter": "song_lua_archive::tests",
+      "passed": 12,
+      "failed": 0
+    }
+  ],
+  "concrete_failure_receipt": "sweep-2026-10-12-feely-archive-diagnosis.json",
+  "native_capture_controls_retained": "sweep-2026-10-12-definition-concat-build.json",
+  "bounded_repair": {
+    "job": "/home/parity/jobs/feely-case-lua-repair-v1",
+    "attempt": 1,
+    "recapture": false,
+    "native_trace_byte_identical": true,
+    "compares_uncompressed_data": true
+  },
+  "future_replay_selection": "/home/parity/jobs/chart-sweep-replay-selection-v3.json"
+}
