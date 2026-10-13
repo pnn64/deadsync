@@ -1,0 +1,236 @@
+{
+  "status": "actual Myths original failure matches validated sole-subscriber dispatch cause; no repair launched",
+  "position": 323,
+  "source_simfile": "Myths You Forgot/Myths You Forgot.ssc",
+  "original_result": {
+    "position": 323,
+    "source_simfile": "Myths You Forgot/Myths You Forgot.ssc",
+    "simfile_sha256": "ffc2b7b1ca7a865af390a5b9bba87322e84ba056a3c999cbd26e50fe28c0b25e",
+    "retained_original_archive": "eb9ec0cc567a02617f99dad8503fc22278f3c0d03cad9d935e5bd7156a31add8.tar.zst",
+    "status": "pending",
+    "repair_attempts": 0,
+    "binary_sha256": "b0f2c78467821c35b24856d3169c79e65f53a8a595784b61389ae14c323fa731",
+    "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "fix_commit": "2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+    "build_proof": "/home/parity/jobs/foreground-row-green-v1/proof.json",
+    "capture_seconds": 174.15802543901373,
+    "trace_sha256": "4b70cf60a7fa521498d196bdd88e448139b92982bfff0c6a8b0a85c86f5d41a7",
+    "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-323/candidates/95c43ceb59efa3dc19a01f750d3b141ca0d03d9a88b0b7eb0ba60baf499784b6.tar",
+    "replay_exit": 2,
+    "replay_seconds": 768.3346839619917,
+    "candidate_sha256": "95c43ceb59efa3dc19a01f750d3b141ca0d03d9a88b0b7eb0ba60baf499784b6",
+    "native_frames": 40940,
+    "replayed_frames": 40940,
+    "compared_stage_fields": 1463,
+    "pending_coverage": [
+      "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+    ],
+    "whole_song_parity_proven": false,
+    "archive_accepted": false,
+    "errors": [
+      "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 15.006: missing captured subscriber identity for ScreenGameplay/6/1",
+      "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 32.744: missing captured subscriber identity for ScreenGameplay/6/1",
+      "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 82.396: missing captured subscriber identity for ScreenGameplay/6/1"
+    ],
+    "mismatch_count": 4,
+    "concrete_failures": [
+      {
+        "phase": "progress",
+        "seconds": 126.00186157226562,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "phase": "progress",
+        "seconds": 127.00174713134766,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "phase": "screen-end",
+        "seconds": 127.28995513916016,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "phase": "gameplay-exit",
+        "seconds": 127.28995513916016,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      }
+    ],
+    "report_sha256": "350a12abed20c189b5e14526ab5a1352c6831b6f0bc5cdeadec4a301c3505d2d"
+  },
+  "bounded_native_capture": {
+    "source_simfile": "Myths You Forgot/Myths You Forgot.ssc",
+    "candidate_sha256": "95c43ceb59efa3dc19a01f750d3b141ca0d03d9a88b0b7eb0ba60baf499784b6",
+    "trace_sha256": "4b70cf60a7fa521498d196bdd88e448139b92982bfff0c6a8b0a85c86f5d41a7",
+    "simfile_sha256": "ffc2b7b1ca7a865af390a5b9bba87322e84ba056a3c999cbd26e50fe28c0b25e",
+    "all_manifest_members_byte_verified": true,
+    "native_frames": 40940,
+    "source_definitions": [
+      {
+        "id": "def-0001",
+        "source": "song:/lua/_script.lua",
+        "commands": [
+          {
+            "last_line": 144,
+            "line": 144,
+            "name": "OnCommand",
+            "source": "song:/lua/_script.lua"
+          }
+        ]
+      },
+      {
+        "id": "def-0002",
+        "source": "song:/lua/_script.lua",
+        "commands": [
+          {
+            "last_line": 145,
+            "line": 145,
+            "name": "InitCommand",
+            "source": "song:/lua/_script.lua"
+          }
+        ]
+      },
+      {
+        "id": "def-0003",
+        "source": "song:/lua/_script.lua",
+        "commands": [
+          {
+            "last_line": 314,
+            "line": 149,
+            "name": "OnCommand",
+            "source": "song:/lua/_script.lua"
+          }
+        ]
+      },
+      {
+        "id": "def-0004",
+        "source": "song:/lua/_script.lua",
+        "commands": []
+      },
+      {
+        "id": "def-0005",
+        "source": "=(tail call)",
+        "commands": []
+      }
+    ],
+    "authored_judgment_subscribers": [],
+    "actor_creation_inputs": [
+      {
+        "actor": "def-0005",
+        "before_seq": 9,
+        "definition_id": "def-0005",
+        "ordinal": 1,
+        "parent": "external-0005",
+        "pointer_hex": "5d19998af1b0",
+        "provenance": "native-ActorUtil-before-LoadFromNode",
+        "scene": 1
+      },
+      {
+        "actor": "def-0004",
+        "before_seq": 9,
+        "definition_id": "def-0004",
+        "ordinal": 2,
+        "parent": "def-0005",
+        "pointer_hex": "5d1999331020",
+        "provenance": "native-ActorUtil-before-LoadFromNode",
+        "scene": 1
+      },
+      {
+        "actor": "def-0001",
+        "before_seq": 9,
+        "definition_id": "def-0001",
+        "ordinal": 3,
+        "parent": "def-0004",
+        "pointer_hex": "5d19999090e0",
+        "provenance": "native-ActorUtil-before-LoadFromNode",
+        "scene": 1
+      },
+      {
+        "actor": "def-0002",
+        "before_seq": 9,
+        "definition_id": "def-0002",
+        "ordinal": 4,
+        "parent": "def-0004",
+        "pointer_hex": "5d19982bae30",
+        "provenance": "native-ActorUtil-before-LoadFromNode",
+        "scene": 1
+      },
+      {
+        "actor": "def-0003",
+        "before_seq": 11,
+        "definition_id": "def-0003",
+        "ordinal": 5,
+        "parent": "def-0004",
+        "pointer_hex": "5d199989f600",
+        "provenance": "native-ActorUtil-before-LoadFromNode",
+        "scene": 1
+      }
+    ],
+    "runtime_actor_count": 41,
+    "native_terminal_samples": [
+      {
+        "beat": 311.1038818359375,
+        "gameplay_seconds": 129.69813537597656,
+        "phase": "screen-end",
+        "players": [
+          {
+            "actual": 0,
+            "alive_seconds": 129.69813537597656,
+            "autoplay": 1,
+            "current_max_score": 0,
+            "current_possible": 0,
+            "description": "",
+            "difficulty": "Difficulty_Challenge",
+            "failed": true,
+            "life_begin": 0.5,
+            "life_latest": 0.5,
+            "meter": 12,
+            "misses": 0,
+            "player": "PlayerNumber_P1",
+            "possible": 3205,
+            "score": 0,
+            "w1": 0,
+            "w2": 0
+          }
+        ],
+        "scene": 1,
+        "seconds": 127.28995513916016
+      }
+    ]
+  },
+  "bounded_input_sha256": "fddf5b39a40907a94670afeab1b1abdcc3efeb54909f889abf1cf829e090ab69",
+  "local_source_pins": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\MessageManager.cpp",
+      "sha256": "d7b8f7873062039d81d7d5b3b052f785c182deea731d4c4ed5d473499689c311"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\MessageManager.h",
+      "sha256": "074508d5de2bb2255137a7dec8995d7a82ecb1d8872fbdcbd1a4195a85a4c41b"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\BGAnimations\\ScreenGameplay overlay\\FailOnHoldStart.lua",
+      "sha256": "ffcd8705267aa7f299ce65970810d74de1db24c821c8a21baa6b9a547d70a269"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs",
+      "sha256": "7f4791580aa7e7851d2f5d7cb407f236a7fb4f143d050b717d535dde31bd5db9"
+    }
+  ],
+  "source_diagnosis": "sweep-2026-10-13-wargame-subscriber-diagnosis.json",
+  "validated_source_fix": "sweep-2026-10-13-subscriber-single-build.json",
+  "concrete_source_cause": "The complete original replay reports only three missing captured identities for the owned FailOnHoldStart Judgment listener and four failed-state differences. The byte-verified native definitions have no authored Judgment subscribers. Native MessageManager uses a subscriber set; a sole subscriber needs no relative sort rank. The original helper looked up that absent rank before delivering Judgment, blocking the owned latch and later autoplay failure. The validated production fix dispatches the sole listener directly and still requires all ranks for multiple listeners.",
+  "chart_repair_attempts_spent": 0,
+  "remaining_repairs": 2,
+  "comparisons_modified": false,
+  "passing_charts_reopened": false,
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "simply_love_commit": "dd06138b15492f4136796dfe4b6708ced0f7b9eb"
+}
