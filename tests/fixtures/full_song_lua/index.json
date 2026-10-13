@@ -2578,15 +2578,12 @@
     {
       "title": "Furst",
       "source_simfile": "Furst/furst-fakemines.ssc",
-      "harness_version": "0.1.0",
-      "archive": "5c7ebc9c1deeee55853e959958ae430a8ef0ba6319b283cbbe75bc6552cee8f4.tar.zst",
-      "sha256": "5c7ebc9c1deeee55853e959958ae430a8ef0ba6319b283cbbe75bc6552cee8f4",
-      "compressed_bytes": 102892,
-      "uncompressed_sha256": "d8e82c646e9c3a0e9694ca4dfc7853df7612fe2954a43dbbdbd6e0dc5fd48be6",
-      "compression_level": 22,
-      "aliases": [
-        "d8fed530532c3d0c04cacdfd9a6305c8c094c2819f09bb2008ff168b18ad4f5a.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "17c1d7340761c1520082f69627e9a4a19f05a47e48a61b42710f107407fe79c6.tar.zst",
+      "sha256": "17c1d7340761c1520082f69627e9a4a19f05a47e48a61b42710f107407fe79c6",
+      "compressed_bytes": 10328661,
+      "uncompressed_sha256": "9d0911188e5738ebb0545b6589db03ffea07516ea80986141dad8c1058dbd040",
+      "aliases": []
     },
     {
       "title": "Gallium Phosphide",
