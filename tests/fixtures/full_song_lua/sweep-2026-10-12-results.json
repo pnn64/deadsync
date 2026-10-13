@@ -5313,6 +5313,21 @@
         }
       ],
       "report_sha256": "c2c946e1c2f53418aeaa0616e3643e95a093cbdb7e999e7aed4182760cd42bdb"
+    },
+    {
+      "position": 236,
+      "source_simfile": "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc",
+      "simfile_sha256": "30720d33bd4a2f6746f910b4ac601b4b8bdda7c49c8c04cc9d1914482db12631",
+      "retained_original_archive": "449192edf61f0f3fe8df4f05d8161bc21231d7e96743996893341d88cd44f204.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "63e17ffe7 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/foreground-source-build-v2/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 3.3214514499995857,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-1403153-1791860093488127063-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1403153-1791860093488127063-0\n"
     }
   ],
   "historical_pending": [
@@ -5339,6 +5354,6 @@
   "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 11,
-  "pending_charts": 30,
-  "processed_charts": 41
+  "pending_charts": 31,
+  "processed_charts": 42
 }
