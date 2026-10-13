@@ -9172,6 +9172,69 @@
         }
       ],
       "report_sha256": "3417a67b5de65a0ddb1be73ae129ba6cf3acb4486e7809bbc9d5c2a15515bb61"
+    },
+    {
+      "position": 323,
+      "source_simfile": "Myths You Forgot/Myths You Forgot.ssc",
+      "simfile_sha256": "ffc2b7b1ca7a865af390a5b9bba87322e84ba056a3c999cbd26e50fe28c0b25e",
+      "retained_original_archive": "eb9ec0cc567a02617f99dad8503fc22278f3c0d03cad9d935e5bd7156a31add8.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "b0f2c78467821c35b24856d3169c79e65f53a8a595784b61389ae14c323fa731",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/foreground-row-green-v1/proof.json",
+      "capture_seconds": 174.15802543901373,
+      "trace_sha256": "4b70cf60a7fa521498d196bdd88e448139b92982bfff0c6a8b0a85c86f5d41a7",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-323/candidates/95c43ceb59efa3dc19a01f750d3b141ca0d03d9a88b0b7eb0ba60baf499784b6.tar",
+      "replay_exit": 2,
+      "replay_seconds": 768.3346839619917,
+      "candidate_sha256": "95c43ceb59efa3dc19a01f750d3b141ca0d03d9a88b0b7eb0ba60baf499784b6",
+      "native_frames": 40940,
+      "replayed_frames": 40940,
+      "compared_stage_fields": 1463,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 15.006: missing captured subscriber identity for ScreenGameplay/6/1",
+        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 32.744: missing captured subscriber identity for ScreenGameplay/6/1",
+        "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 82.396: missing captured subscriber identity for ScreenGameplay/6/1"
+      ],
+      "mismatch_count": 4,
+      "concrete_failures": [
+        {
+          "phase": "progress",
+          "seconds": 126.00186157226562,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "progress",
+          "seconds": 127.00174713134766,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "screen-end",
+          "seconds": 127.28995513916016,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "gameplay-exit",
+          "seconds": 127.28995513916016,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        }
+      ],
+      "report_sha256": "350a12abed20c189b5e14526ab5a1352c6831b6f0bc5cdeadec4a301c3505d2d"
     }
   ],
   "historical_pending": [
@@ -9198,6 +9261,6 @@
   "binary_sha256": "b0f2c78467821c35b24856d3169c79e65f53a8a595784b61389ae14c323fa731",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 20,
-  "pending_charts": 50,
-  "processed_charts": 70
+  "pending_charts": 51,
+  "processed_charts": 71
 }
