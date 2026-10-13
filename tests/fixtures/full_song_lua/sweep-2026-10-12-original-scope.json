@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T16:28:50Z",
+  "updated_utc": "2026-10-13T17:51:59Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 220,
+    "passed": 224,
     "pending": 78,
-    "unprocessed": 203
+    "unprocessed": 199
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2445,9 +2445,9 @@
       "position": 285,
       "source_simfile": "Lonely/Lonely.ssc",
       "simfile_sha256": "7d4a0c9d176a875d7e4b4c75ede165c591807996e40591522ad9570dbc80ba4f",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-lonely-ssc-column-repair.json"
     },
     {
       "position": 286,
@@ -2525,7 +2525,9 @@
       "position": 295,
       "source_simfile": "Marshall Maximizer/marshall maximizer.ssc",
       "simfile_sha256": "c561d16c6246303fad1ab5559e9c97cfcde29a36b1078d48813a171186ab7077",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 296,
@@ -2547,7 +2549,9 @@
       "position": 298,
       "source_simfile": "Maware! Setsugetsuka (ric3show3r bootleg)/maware ric3show3r.ssc",
       "simfile_sha256": "a6c8ac02a9eac6281723ac28ffabe444cad982929ade5766509aa64208cce800",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 299,
@@ -2561,7 +2565,9 @@
       "position": 300,
       "source_simfile": "mawaru2/mawaru2.sm",
       "simfile_sha256": "ea69873e0a9324e201f367a79bc110c6712b33ecd456a62f023fbf4b937df994",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 301,
@@ -2581,7 +2587,9 @@
       "position": 303,
       "source_simfile": "mawaru4/mawaru4.ssc",
       "simfile_sha256": "9006c956669afc6740329f508f8159e4df66275a3fc33f192df57b000e4ab93b",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 304,
