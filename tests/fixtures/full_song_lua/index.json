@@ -2958,15 +2958,12 @@
     {
       "title": "ICON KILLER",
       "source_simfile": "ICON KILLER - [Zaia + StarrySergal + dimo + Brother Mojo]/ICON KILLER.ssc",
-      "harness_version": "0.1.0",
-      "archive": "f179752171159d4d19163f3a076307f06448ca5b5eaf40ffa3fcf94e515ae6d0.tar.zst",
-      "sha256": "f179752171159d4d19163f3a076307f06448ca5b5eaf40ffa3fcf94e515ae6d0",
-      "compressed_bytes": 68204,
-      "uncompressed_sha256": "f90346c13d42fb821bcf07a1b44a44f15c3b1a1680916ae13dcf03857d6780e4",
-      "compression_level": 22,
-      "aliases": [
-        "953ccce5382c777105b3426c058574f3a8f57efd67e26012638032b0d5174486.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "57f694f70fad176cb3c3bbe423bde296847f20af6b87e7377e4c9735160d455d.tar.zst",
+      "sha256": "57f694f70fad176cb3c3bbe423bde296847f20af6b87e7377e4c9735160d455d",
+      "compressed_bytes": 8572072,
+      "uncompressed_sha256": "35923b20dc303325f5faf325ba28dd9352c907af8d96f32d207e56d1b5a31b64",
+      "aliases": []
     },
     {
       "title": "If You Crump Stand Up",
