@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T00:06:53Z",
-  "previous_goal_turn": "progress: edamame SM, finite, Dig Dug and Final Flash Flight complete fixtures saved and committed; Dig Dug attempt 1 reused its byte-identical capture and passed all 149043 frames and 1672 stage fields with zero mismatches/errors; native cmd source lines fixed as b1160be8c and gameplay Debug ownership fixed as 3cdcfeb3a; all 9 command syntax tests and 25 live tests passed on Windows and Linux, plus 17 Linux replay controls; Deceive attempt 2 is running on its preserved uncompressed capture with validated immutable helper; Fiji failure traced to the missing native NullActor declaration cutting off traversal before its second foreground; independent empty foreground instances fixed as ce20604ea with all 26 Windows and Linux live tests passing; all 17 Linux replay controls and immutable helper validation passed; Fiji attempt 1 is running on its original capture; feelyourtouch initial replay is pending because preparation did not retain a Lua scene; Flowers R.I.G.H.T.S initial replay completed all 50828 frames and remains pending on command source paths containing an extra dot segment, with no repair attempt used; all three original queues, Dreams Bloom attempt 1 and the single publisher remain active",
+  "updated_utc": "2026-10-13T00:27:59Z",
+  "previous_goal_turn": "progress: Fiji attempt 1 passed all 93015 frames and 1144 stage fields on its reused capture and was saved as 8c075d14e; Flying Castle complete fixture saved as 18a1bd764; DREAMING-ING!! completed all 32257 frames and remains pending on a missing captured subscriber identity and command/stage failures; LoadActor path collapse fixed as c71e8b4fe after native source diagnosis, with 10 LoadActor and 27 live tests passing on Windows and Linux and 17 Linux replay controls passing; immutable helper ab80853f is selected for future charts; Flowers R.I.G.H.T.S attempt 1 is running on its original capture; replay preparation warnings retained as 3c0a6d0b7; feelyourtouch entry diagnostic showed no scene and no compiler warning because its archive omitted all multitap Lua files despite 1565215 native song events; harness native-case Lua discovery and dependency lookup fixed as b191ebd, with 3 oracle and 12 archive controls passing on Windows and Linux; helper 34a97821 is selected for future charts and feelyourtouch attempt 1 repackages the byte-identical native trace without recapturing; Deceive final attempt 2 and Dreams Bloom attempt 1 remain live; all three frozen original queues and the single publisher remain active",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,8 +14,8 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "f5fad0ebcfd1763df173f17c7752d8f6aa9cfc82",
-      "itgmania_harness": "55299c5cb59cc4bc0d3fb106b9e21bfebcebe308"
+      "deadsync": "d881ff47f3144da5fd22d7b941cc4f4de234ab20",
+      "itgmania_harness": "b191ebd0fcf8b59b5294958d2ffe2939af2d742a"
     }
   },
   "validation": {
@@ -32,7 +32,9 @@
     "instantiated_effect_ownership": "committed as e2b01b99a; all 16 Windows and Linux replay controls passed; Dimmadome attempt 1 completed and remains pending on four exact command clocks; Dreams Bloom attempt 1 is running; sweep-2026-10-12-background-effect-owner-build.json",
     "independent_uptime_and_observer_order": "committed as 4bd354261; all 24 Windows and Linux live tests plus 17 replay controls passed; an invalid test frame and its failure logs were preserved and corrected before any chart replay; Dig Dug attempt 1 reuses the byte-identical capture; sweep-2026-10-12-uptime-pause-build.json",
     "cmd_source_lines_and_debug": "committed as b1160be8c and 3cdcfeb3a; 9 command syntax and 25 live tests passed on Windows and Linux; all 17 Linux replay controls passed; Deceive attempt 2 reuses the uncompressed capture; sweep-2026-10-12-debug-source-lines-build.json",
-    "null_foreground_declarations": "committed as ce20604ea; all 26 Windows and Linux live tests passed; all 17 Linux replay controls and immutable helper validation passed; Fiji attempt 1 reuses its original capture; sweep-2026-10-12-null-foreground-build.json",
+    "null_foreground_declarations": "committed as ce20604ea; all 26 Windows and Linux live tests passed; all 17 Linux replay controls and immutable helper validation passed; Fiji attempt 1 passed all 93015 frames and 1144 stage fields with zero mismatches/errors and was saved as 8c075d14e; sweep-2026-10-12-null-foreground-build.json",
+    "load_actor_paths": "c71e8b4fe passed 10 LoadActor and 27 live tests on Windows and Linux plus 17 Linux replay controls; Flowers attempt 1 reuses its capture; sweep-2026-10-12-actor-paths-build.json",
+    "native_case_lua_dependencies": "harness b191ebd passed 3 oracle and 12 archive controls on Windows and Linux; native trace observer unchanged; feelyourtouch attempt 1 repackages the unchanged capture; sweep-2026-10-12-case-lua-archive-build.json",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved"
   },
   "corpus_transfer": {
@@ -49,13 +51,17 @@
       "status": "running",
       "current": "Flowers [Cringle Desolation]/Flowers.ssc",
       "position": 191,
-      "phase": "capture",
-      "pid": 688676,
+      "phase": "replay",
+      "pid": 719218,
       "process_matches": true,
       "passed": 8,
       "pending": 18,
       "processed": 26,
-      "last_log_lines": [],
+      "last_log_lines": [
+        "[936.2s] replaying every native gameplay frame: frame 9125/18924 (48.2%)",
+        "[938.2s] replaying every native gameplay frame: frame 9141/18924 (48.3%)",
+        "[940.2s] replaying every native gameplay frame: frame 9155/18924 (48.4%)"
+      ],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -72,6 +78,28 @@
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
       {
+        "job": "feely-case-lua-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "candidate",
+        "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+        "child_running": true
+      },
+      {
+        "job": "actor-paths-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "flowers [R.I.G.H.T.S]/flowers.ssc",
+        "child_running": true
+      },
+      {
         "job": "debug-source-lines-repair-v1",
         "complete": false,
         "supervisor_running": true,
@@ -84,14 +112,14 @@
       },
       {
         "job": "null-foreground-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "Fiji (Lange Remix)/Fiji (Lange Remix).ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "stage-modifier-repair-v1",
@@ -208,25 +236,25 @@
         "job": "chart-sweep-parallel-v4-1",
         "complete": false,
         "supervisor_running": true,
-        "passed": 2,
+        "passed": 3,
         "pending": 7,
-        "processed": 9,
-        "last_phase": "capture",
-        "source_simfile": "Flying Castle/flying castle.ssc",
+        "processed": 10,
+        "last_phase": "replay",
+        "source_simfile": "Freaky Deaky/Freaky Deaky.sm",
         "child_running": true,
-        "position": 195
+        "position": 198
       },
       {
         "job": "chart-sweep-parallel-v4-2",
         "complete": false,
         "supervisor_running": true,
         "passed": 2,
-        "pending": 1,
-        "processed": 3,
+        "pending": 2,
+        "processed": 4,
         "last_phase": "replay",
-        "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
+        "source_simfile": "E2/E.ssc",
         "child_running": true,
-        "position": 178
+        "position": 181
       },
       {
         "job": "definition-concat-repair-v1",
@@ -443,15 +471,29 @@
         "record": "sweep-2026-10-12-null-foreground-repairs.json",
         "fix_commit": "ce20604ea / harness 55299c5",
         "finish_status": "bounded Fiji NullActor foreground repair complete"
+      },
+      {
+        "name": "actor-paths-repair",
+        "remote": "/home/parity/jobs/actor-paths-repair-v1",
+        "record": "sweep-2026-10-12-actor-paths-repairs.json",
+        "fix_commit": "c71e8b4fe + 3c0a6d0b7 / harness 55299c5",
+        "finish_status": "bounded Flowers LoadActor path repair complete"
+      },
+      {
+        "name": "feely-case-lua-repair",
+        "remote": "/home/parity/jobs/feely-case-lua-repair-v1",
+        "record": "sweep-2026-10-12-feely-case-lua-repairs.json",
+        "fix_commit": "harness b191ebd / deadsync c71e8b4fe",
+        "finish_status": "bounded feelyourtouch archive dependency repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 18,
+    "new_passed_fixtures": 20,
     "new_pending_charts": 20,
-    "new_processed_sources": 38,
+    "new_processed_sources": 40,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 315,
+    "unprocessed_sources": 313,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -806,20 +848,6 @@
       ]
     },
     {
-      "source_simfile": "Fiji (Lange Remix)/Fiji (Lange Remix).ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 1,
-      "first_mismatch": [
-        {
-          "field": "command_query_count",
-          "native": 5,
-          "deadsync": 0
-        }
-      ]
-    },
-    {
       "source_simfile": "flowers [R.I.G.H.T.S]/flowers.ssc",
       "repair_attempts": 0,
       "failure": null,
@@ -844,6 +872,24 @@
           "field": "command_query_count",
           "native": 474164,
           "deadsync": 474151
+        }
+      ]
+    },
+    {
+      "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [
+        "UpdateCommand failed for Quad: missing captured subscriber identity for 1/17/1/5\nstack traceback:\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"/tmp/.tmpjCIS3e/song/lua/default.lua\"]:565: in function <[string \"/tmp/.tmpjCIS3e/song/lua/default.lua\"]:454>\n"
+      ],
+      "mismatch_count": 10357,
+      "first_mismatch": [
+        {
+          "phase": "screen-end",
+          "seconds": 48.47612380981445,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
         }
       ]
     }

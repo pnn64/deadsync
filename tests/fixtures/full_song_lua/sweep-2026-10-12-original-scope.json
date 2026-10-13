@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T00:06:55Z",
+  "updated_utc": "2026-10-13T00:28:01Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -11,9 +11,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 165,
+    "passed": 167,
     "pending": 21,
-    "unprocessed": 315
+    "unprocessed": 313
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1587,7 +1587,9 @@
       "position": 178,
       "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
       "simfile_sha256": "0e7c2c767ce9e342b4ed9ec53e6c6d5ff4ba6f55acad41173fe9f91cf20360d3",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 179,
@@ -1645,9 +1647,9 @@
       "position": 186,
       "source_simfile": "Fiji (Lange Remix)/Fiji (Lange Remix).ssc",
       "simfile_sha256": "0f350ad4c25182026fab6a7dccd41351859949cd35dbd69ca98a0e0e163b9ebd",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-null-foreground-repairs.json"
     },
     {
       "position": 187,
@@ -1707,7 +1709,9 @@
       "position": 195,
       "source_simfile": "Flying Castle/flying castle.ssc",
       "simfile_sha256": "a41993d60eb67a8775607758aced9182ea7432a9ceb865cce6073ec4b47b8522",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 196,
