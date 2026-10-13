@@ -23,7 +23,9 @@ pub fn create_song_runtime_table(
     table.set(SONG_LUA_RUNTIME_SECONDS_KEY, 0_i64)?;
     table.set(SONG_LUA_RUNTIME_DELTA_BEAT_KEY, 0_i64)?;
     table.set(SONG_LUA_RUNTIME_DELTA_SECONDS_KEY, 0_i64)?;
-    table.set(SONG_LUA_RUNTIME_BPS_KEY, song_display_bps(context))?;
+    // SongPosition::Reset runs before live actors load. Song timing replaces
+    // its native construction BPS on the first gameplay update.
+    table.set(SONG_LUA_RUNTIME_BPS_KEY, if context.live { 10.0 } else { song_display_bps(context) })?;
     table.set(SONG_LUA_RUNTIME_RATE_KEY, song_music_rate(context))?;
     table.set("__songlua_freeze", false)?;
     table.set("__songlua_delay", false)?;

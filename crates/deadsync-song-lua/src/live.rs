@@ -904,6 +904,8 @@ impl SongLuaLiveScene {
             runtime.set(crate::SONG_LUA_RUNTIME_BPS_KEY, position.bpm / 60.0)?;
             runtime.set("__songlua_freeze", position.is_in_freeze)?;
             runtime.set("__songlua_delay", position.is_in_delay)?;
+        } else {
+            runtime.set(crate::SONG_LUA_RUNTIME_BPS_KEY, crate::song_bps_at_beat(beat as f32, &self.context))?;
         }
         crate::set_compile_song_runtime_delta_values(&self.lua,
             (beat - self.last_beat) as f32, frame.delta_seconds as f32)?;
@@ -1363,6 +1365,65 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn live_initial_song_bps_uses_native_reset_before_timing_update() {
+        for timing_clock in [false, true] {
+            let mut compiled = compile_with_context(&format!("reset-bps-{timing_clock}"), r#"
+INIT_CLOCKS = {}
+local function init(self)
+    INIT_CLOCKS[#INIT_CLOCKS + 1] = {GAMESTATE:GetSongBPS(),
+        GAMESTATE:GetSongPosition():GetCurBPS(), GAMESTATE:GetSongBeat(),
+        GAMESTATE:GetCurMusicSeconds()}
+    self:effectperiod(4.0 / GAMESTATE:GetSongBPS())
+end
+return Def.ActorFrame {
+    Def.Sprite {InitCommand = init}, Def.Sprite {InitCommand = init},
+    OnCommand = function(self)
+        self:SetUpdateFunction(function()
+            CLOCK = {GAMESTATE:GetSongBPS(), GAMESTATE:GetSongPosition():GetCurBPS()}
+        end)
+    end,
+}
+"#, |context| {
+                context.defer_initial_live_update = true;
+                context.song_display_bpms = [135.0; 2];
+                context.song_timing_bpms = vec![(0.0, 135.0), (4.0, 180.0)];
+                if timing_clock {
+                    context.song_timing = Some(deadsync_rules::timing::TimingData::from_segments(
+                        0.0, 0.0, &deadsync_rules::timing::TimingSegments {
+                            bpms: context.song_timing_bpms.clone(), ..Default::default()
+                        }, &[]));
+                }
+            });
+            let mut scene = compiled.live_scene.take().expect("owned initial song clock");
+            let startup = scene.take_startup_output();
+            assert!(startup.errors.is_empty(), "{:?}", startup.errors);
+            let clocks = scene.lua.globals().get::<Table>("INIT_CLOCKS").unwrap();
+            assert_eq!(clocks.raw_len(), 2);
+            for clock in clocks.sequence_values::<Table>() {
+                let clock = clock.unwrap();
+                for index in [1, 2] {
+                    assert_eq!(clock.get::<f64>(index).unwrap(), 10.0,
+                        "live Init sees native SongPosition Reset BPS before first timing update");
+                }
+                for index in [3, 4] { assert_eq!(clock.get::<f64>(index).unwrap(), 0.0); }
+            }
+            for (beat, seconds, bps) in [(2.25, 1.0, 2.25), (4.75, 2.0277778, 3.0)] {
+                let output = scene.advance(SongLuaLiveFrame { beat, music_seconds: seconds,
+                    screen_seconds: seconds, delta_seconds: 0.01, ..Default::default() }).unwrap();
+                assert!(output.errors.is_empty(), "{:?}", output.errors);
+                let clock = scene.lua.globals().get::<Table>("CLOCK").unwrap();
+                for index in [1, 2] { assert_eq!(clock.get::<f64>(index).unwrap(), bps); }
+            }
+        }
+        let lua = mlua::Lua::new();
+        let mut preview = SongLuaCompileContext::new(".", "preview BPS");
+        preview.song_display_bpms = [135.0; 2];
+        let runtime = crate::create_song_runtime_table(&lua, &preview).unwrap();
+        assert_eq!(runtime.get::<f64>(crate::SONG_LUA_RUNTIME_BPS_KEY).unwrap(), 2.25,
+            "nonlive preview retains display BPS");
+    }
+
     #[test]
     fn live_screen_begin_reaches_message_commands_only_in_screen_children() {
         let dir = std::env::temp_dir().join(format!("deadsync-live-begin-message-{}", std::process::id()));
