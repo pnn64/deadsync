@@ -1,0 +1,549 @@
+{
+  "source_fix_commit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6",
+  "enrolled_existing_fix_commit": "874f2e535ad5a3ce39394ddb03c49600c20e2044",
+  "source_simfiles": [
+    "Get Into It/GetIntoIt.sm",
+    "Get Into It/GetIntoIt.ssc",
+    "Lower Times/Lower Times.ssc"
+  ],
+  "sprite_source_cause": "Both Get Into It variants fail during authored Sprite.LinearFrames calls. The fallback helper returns fresh indexed Frames tables, using Frame=i and Delay=(1/NumFrames)*Seconds. The independent Sprite class did not provide it.",
+  "sprite_change": "Install the native fallback helper and consume its states through the existing Sprite Frames path. Replace the deprecated mlua String alias with LuaString in the already changed utility file.",
+  "autoplay_source_cause": "The frozen Linux helper marked autoplay failed before owned Off, selecting BeginFailed and shifting Off one native frame later. Native ScreenGameplay selects AllFailed before Simply Love fails judged autoplay during overlay Off. Paired bounded Lower Times probes establish this one-frame cause; the Windows source already contained the overlay fix.",
+  "autoplay_change": "Enroll existing fix 874f2e535 through 12 isolated preimage-checked hunks in six frozen Linux files. Keep both new controls unchanged. The added autoplay navigation control checks the real theme lifecycle remains unfailed before Off and ends its owned actors once.",
+  "native_source_sha256": {
+    "Themes/_fallback/Scripts/02 Sprite.lua": "e7de67ee7ff1b289dba7d1fb7d480eb5aa1fe6ec4da85dc7022d6973d10fe823",
+    "src/ScreenGameplay.cpp": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b"
+  },
+  "native_simply_love_source_sha256": {
+    "BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua": "ffcd8705267aa7f299ce65970810d74de1db24c821c8a21baa6b9a547d70a269"
+  },
+  "before_fix_controls": {
+    "linux": {
+      "sprite-frames-red-v1": {
+        "source_sha256": {
+          "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+          "crates/deadsync-song-lua/src/compile.rs": "9ce955f9e2eb4e15cbac37a9bb3c70c1ed7196ffee1b8d31f077043263e1f421",
+          "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+          "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+          "crates/deadsync-song-lua/src/host.rs": "0cd4110f9c9db0d374f066cb6c480cbbcb74d2ccc024a760b1dc757032af15ef",
+          "crates/deadsync-song-lua/src/live.rs": "aa49a8b18ad6f68afee30c4487900747ccd14a497903abd18abe929b5016b2e4",
+          "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+          "crates/deadsync-song-lua/src/lua_util.rs": "ff2c25ab3e910b5fdcf32d8fb9be086c452beffcb121e0661eb9148282abee86",
+          "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "a8d41f0add9072dde725522c0a99dd1f2e59baee02e18c552e1c23eef5d48f02",
+          "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "ed4771b3eb85970c6d459dd7ef2db3f224b16e3b655f822eab8a06e3f4ca587b",
+          "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+          "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+          "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+          "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+          "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+          "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+          "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+          "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+          "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+          "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+          "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+          "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+          "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+          "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+          "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+          "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+        },
+        "checks": [
+          {
+            "label": "sprite-frames",
+            "exit_code": 101,
+            "expected_failure": true,
+            "log_sha256": "d136f11ed29765dcd0a97fb2d093bc51275790ed4f8de3af1db8c97922f6f6ef",
+            "seconds": 191.59577476099366
+          }
+        ]
+      },
+      "overlay-off-red-v1": {
+        "source_sha256": {
+          "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+          "crates/deadsync-song-lua/src/compile.rs": "9ce955f9e2eb4e15cbac37a9bb3c70c1ed7196ffee1b8d31f077043263e1f421",
+          "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+          "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+          "crates/deadsync-song-lua/src/host.rs": "0cd4110f9c9db0d374f066cb6c480cbbcb74d2ccc024a760b1dc757032af15ef",
+          "crates/deadsync-song-lua/src/live.rs": "aa49a8b18ad6f68afee30c4487900747ccd14a497903abd18abe929b5016b2e4",
+          "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+          "crates/deadsync-song-lua/src/lua_util.rs": "ff2c25ab3e910b5fdcf32d8fb9be086c452beffcb121e0661eb9148282abee86",
+          "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "a8d41f0add9072dde725522c0a99dd1f2e59baee02e18c552e1c23eef5d48f02",
+          "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "028e8d8f0c60b15f2b4c50215df0346232f8cb6c4d578c1addcfdd328df4da3d",
+          "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+          "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+          "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+          "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+          "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+          "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+          "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+          "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+          "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+          "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+          "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+          "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+          "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+          "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+          "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+          "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+        },
+        "checks": [
+          {
+            "label": "overlay-off",
+            "exit_code": 101,
+            "expected_failure": true,
+            "log_sha256": "0b91ca587b39cdd7b6cd56f10f1b81d6ae4d2416470dce89c4b8d2539e54ac08",
+            "seconds": 239.9658539069933
+          }
+        ]
+      }
+    },
+    "windows_sprite": {
+      "source_sha256": {
+        "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+        "crates/deadsync-song-lua/src/compile.rs": "848206cee042fff73bf80da62f9c287a538c3f805dd2b790367766050fecc1a2",
+        "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+        "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+        "crates/deadsync-song-lua/src/host.rs": "48c2ea7a0c031cb5c4b5cfd72e0e0bcb5ef5c62884916c4883866e74fcdd2a70",
+        "crates/deadsync-song-lua/src/live.rs": "578efda741fbfe590e88fe43200cd04f8432cb669005196a255626d7aba2c8f7",
+        "crates/deadsync-song-lua/src/song_tables.rs": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182",
+        "crates/deadsync-song-lua/src/lua_util.rs": "374ccbe279b34e3c55b3dfc46be885a7ceccd4e1d97671d9ef57d4415d2c4e91",
+        "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "366ae906ee2b7b5cfb89a0a34c4dc0ebf437bd873db5e764fc454fdad25f62cb",
+        "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "e2632e93dc75eba8560df0be0bdc7a0cc633ecc7dd41662d346facd645129bc5",
+        "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+        "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+        "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+        "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+        "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+        "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+        "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+        "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+        "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+        "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+        "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+        "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+        "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+        "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+        "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+        "crates/deadsync-song-lua/src/draw_capture.rs": "9dd81bb6c6f5ae211d7243cba5d070570abf279a0b7c0f9121b689091c2d8594"
+      },
+      "checks": [
+        {
+          "label": "actor-name",
+          "exit_code": 101,
+          "expected_failure": true,
+          "log": "sprite-frames-red-v1-windows-name-v1.log",
+          "log_sha256": "0a351770a7c84444fa497008358160b7d67de2d50254d6f005f084abbfb5c652",
+          "seconds": 356.6372024999
+        }
+      ]
+    },
+    "windows_existing_autoplay_fix": {
+      "existing_fix_commit": "874f2e535ad5a3ce39394ddb03c49600c20e2044",
+      "production_changed_since_sprite_red": false,
+      "source_sha256": {
+        "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+        "crates/deadsync-song-lua/src/compile.rs": "848206cee042fff73bf80da62f9c287a538c3f805dd2b790367766050fecc1a2",
+        "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+        "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+        "crates/deadsync-song-lua/src/host.rs": "48c2ea7a0c031cb5c4b5cfd72e0e0bcb5ef5c62884916c4883866e74fcdd2a70",
+        "crates/deadsync-song-lua/src/live.rs": "578efda741fbfe590e88fe43200cd04f8432cb669005196a255626d7aba2c8f7",
+        "crates/deadsync-song-lua/src/song_tables.rs": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182",
+        "crates/deadsync-song-lua/src/lua_util.rs": "374ccbe279b34e3c55b3dfc46be885a7ceccd4e1d97671d9ef57d4415d2c4e91",
+        "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "366ae906ee2b7b5cfb89a0a34c4dc0ebf437bd873db5e764fc454fdad25f62cb",
+        "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "c1890f9129b15ecd62e8a1b567dc7514b351e9808ab4545a705363f8fac70f8f",
+        "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+        "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+        "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+        "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+        "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+        "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+        "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+        "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+        "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+        "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+        "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+        "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+        "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+        "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+        "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+        "crates/deadsync-song-lua/src/draw_capture.rs": "9dd81bb6c6f5ae211d7243cba5d070570abf279a0b7c0f9121b689091c2d8594"
+      },
+      "exit_code": 0,
+      "passed": 1,
+      "log_sha256": "58230ffdc2bf800dc222d3c19a04356dec034305b8c0a5342d3be5ff8b8e2f93",
+      "seconds": 90.00389060005546
+    }
+  },
+  "windows_sprite_red_receipt_label_note": "The inherited receipt label is actor-name; the actual recorded Cargo filter and failed assertion are the Sprite.LinearFrames control.",
+  "linux_checks": [
+    {
+      "label": "gameplay-tests",
+      "exit_code": 0,
+      "seconds": 0.5940594929998042,
+      "log_sha256": "b302fb5e17b9cb1a12752536c7d77b3a2933fc8e9a6d41b9a5346d388e54abc1",
+      "results": [
+        "test result: ok. 815 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.09s"
+      ]
+    },
+    {
+      "label": "sprite-frames-control",
+      "exit_code": 0,
+      "seconds": 178.54624526199768,
+      "log_sha256": "5b743711b140e5b1f5ff2c20d4e3e0766f6e984012bd214fdbdd60cd8889862a",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 576 filtered out; finished in 0.21s"
+      ]
+    },
+    {
+      "label": "overlay-clock-control",
+      "exit_code": 0,
+      "seconds": 281.46725306900044,
+      "log_sha256": "7875f65cdbaac18849a7ccd09ef2d45e72c21b23c656c7d65331f3c12599c869",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 324 filtered out; finished in 0.47s"
+      ]
+    },
+    {
+      "label": "actor-name-control",
+      "exit_code": 0,
+      "seconds": 0.8799690250016283,
+      "log_sha256": "facae7c833397bbddb3dc3342fa355965df704845f66ff20f5b77a0b5a3dc039",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 576 filtered out; finished in 0.14s"
+      ]
+    },
+    {
+      "label": "parent-loading-control",
+      "exit_code": 0,
+      "seconds": 0.7972235180059215,
+      "log_sha256": "d4cae095956f729ea9b3dc198d0be0fbb10a2f641b3b9f98469faf5f7b3377c4",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 576 filtered out; finished in 0.14s"
+      ]
+    },
+    {
+      "label": "foreground-name-control",
+      "exit_code": 0,
+      "seconds": 0.8117693740059622,
+      "log_sha256": "4b17a84e2d8d5e98df62fdad0252bf8c261e21f62d07982a02e9bf2e5f9bf4e1",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 576 filtered out; finished in 0.14s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 26.194978756000637,
+      "log_sha256": "f550c9889db60e56dac6938bd348dbe23f6193dab71faac45aa5ee78e8a9eb8e",
+      "results": [
+        "test result: ok. 46 passed; 0 failed; 0 ignored; 0 measured; 531 filtered out; finished in 25.49s"
+      ]
+    },
+    {
+      "label": "deceleration-control",
+      "exit_code": 0,
+      "seconds": 0.7306789509893861,
+      "log_sha256": "f31d9caf451edf0cadf12267851c92254f0412fb18e7b17b258a32985dcb2e15",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 576 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 38.77871371799847,
+      "log_sha256": "4d60036a4d5c8f87c95d229cc209cc7c644e65d80b3337b4293efc4a919e58e2",
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.9174059390061302,
+      "log_sha256": "680258cbcd299354c6012af46d8fbabd7c1815f08ec4d0354741e394fae05457",
+      "results": [
+        "test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.52s"
+      ]
+    }
+  ],
+  "windows_checks": [
+    {
+      "label": "sprite-frames",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "sprite-frames-overlay-green-v2-windows-sprite-frames-v1.log",
+      "sha256": "8cbbd587c30a15db9b89490df3127b214fe2084fe526a1fc0f7bdb3aaf1dceb3",
+      "seconds": 425.91442759986967
+    },
+    {
+      "label": "overlay-clock",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "sprite-frames-overlay-green-v2-windows-overlay-clock-v1.log",
+      "sha256": "288f89f3bbcc61677b12556f30ec00dd8eee4522f65bf066467a1cf66636376f",
+      "seconds": 209.37587810028344
+    },
+    {
+      "label": "actor-name",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "sprite-frames-overlay-green-v2-windows-actor-name-v1.log",
+      "sha256": "8ee46c164d2859891436538242ba52900968c3555454c534e2e158b4bc529f09",
+      "seconds": 1.6930674002505839
+    },
+    {
+      "label": "parent-loading",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "sprite-frames-overlay-green-v2-windows-parent-loading-v1.log",
+      "sha256": "3f3c3982d57d6e02e70fa80325ea70dd148d4dbad6e2e4210be29090adf39c2e",
+      "seconds": 1.6156697999686003
+    },
+    {
+      "label": "foreground-name",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "sprite-frames-overlay-green-v2-windows-foreground-name-v1.log",
+      "sha256": "ddb3356e234e844e4b222df96ea3a0755e2e3a3505c0cb377bcd8e6fdde1717b",
+      "seconds": 1.6040823999792337
+    },
+    {
+      "label": "live",
+      "passed": 46,
+      "exit_code": 0,
+      "log": "sprite-frames-overlay-green-v2-windows-live-v1.log",
+      "sha256": "0f7c191a83be924618a083ee3e309c5a333c00adc5611463d8d3e04e891ae944",
+      "seconds": 27.909459399990737
+    },
+    {
+      "label": "deceleration",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "sprite-frames-overlay-green-v2-windows-deceleration-v1.log",
+      "sha256": "b51907e47394f2c328a238bbe3a500a9f016ce13afa455d7c8bbc8fc96118a7b",
+      "seconds": 1.4205288998782635
+    },
+    {
+      "label": "native",
+      "passed": 23,
+      "exit_code": 0,
+      "log": "sprite-frames-overlay-green-v2-windows-native-v1.log",
+      "sha256": "3350dcdbdba04e54dab838b362a7bba1d9e7eac9de12ef244a6b76e771e0ba45",
+      "seconds": 2.712234599981457
+    },
+    {
+      "label": "build",
+      "passed": null,
+      "exit_code": 0,
+      "log": "sprite-frames-overlay-green-v2-windows-build-v1.log",
+      "sha256": "559dc952a1481dc60d7d6bb278cedbfdda86d274dc5915587bb4607e8df5669d",
+      "seconds": 17.058726400136948
+    }
+  ],
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "9ce955f9e2eb4e15cbac37a9bb3c70c1ed7196ffee1b8d31f077043263e1f421",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "b3b021737261adaaa280c222cc1e4156a1c1ed1b173a0962bbab9f4e834da395",
+    "crates/deadsync-song-lua/src/live.rs": "fb9391074e54f563ff33db805d2c9b78cb0905ce48135ddea25d4c65e68ce322",
+    "crates/deadsync-song-lua/src/song_tables.rs": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182",
+    "crates/deadsync-song-lua/src/lua_util.rs": "c2e6321a9ecf6d58f1e29dd7835ada9022e8cfb5bf98d12fcf3db1d6d4d8c131",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "366ae906ee2b7b5cfb89a0a34c4dc0ebf437bd873db5e764fc454fdad25f62cb",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "c1890f9129b15ecd62e8a1b567dc7514b351e9808ab4545a705363f8fac70f8f",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+    "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+    "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+    "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+    "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+    "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+  },
+  "source_provenance": {
+    "baseline_build": "overlay-off-red-v1",
+    "baseline_source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "9ce955f9e2eb4e15cbac37a9bb3c70c1ed7196ffee1b8d31f077043263e1f421",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "0cd4110f9c9db0d374f066cb6c480cbbcb74d2ccc024a760b1dc757032af15ef",
+      "crates/deadsync-song-lua/src/live.rs": "aa49a8b18ad6f68afee30c4487900747ccd14a497903abd18abe929b5016b2e4",
+      "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+      "crates/deadsync-song-lua/src/lua_util.rs": "ff2c25ab3e910b5fdcf32d8fb9be086c452beffcb121e0661eb9148282abee86",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "a8d41f0add9072dde725522c0a99dd1f2e59baee02e18c552e1c23eef5d48f02",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "028e8d8f0c60b15f2b4c50215df0346232f8cb6c4d578c1addcfdd328df4da3d",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+      "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+      "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+      "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+    },
+    "baseline_source_bundle_sha256": "24d4ee9b0edc6f52effd9bd5fdb7dcd22f7c821690be1c4fd993e87b33632a54",
+    "source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "9ce955f9e2eb4e15cbac37a9bb3c70c1ed7196ffee1b8d31f077043263e1f421",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "b3b021737261adaaa280c222cc1e4156a1c1ed1b173a0962bbab9f4e834da395",
+      "crates/deadsync-song-lua/src/live.rs": "fb9391074e54f563ff33db805d2c9b78cb0905ce48135ddea25d4c65e68ce322",
+      "crates/deadsync-song-lua/src/song_tables.rs": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182",
+      "crates/deadsync-song-lua/src/lua_util.rs": "c2e6321a9ecf6d58f1e29dd7835ada9022e8cfb5bf98d12fcf3db1d6d4d8c131",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "366ae906ee2b7b5cfb89a0a34c4dc0ebf437bd873db5e764fc454fdad25f62cb",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "c1890f9129b15ecd62e8a1b567dc7514b351e9808ab4545a705363f8fac70f8f",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+      "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+      "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+      "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+    },
+    "source_bundle_sha256": "6e41d6397460a232b9ea6fa790eb7cd967b49aa8f57386db675519c637d2e202",
+    "isolated_existing_overlay_fix_enrollment": {
+      "crates/deadsync-song-lua/src/host.rs": [
+        [
+          "    )?;\n    globals.set(\n        \"IsAutoplay\",\n        lua.create_function(|_, _args: MultiValue| Ok(false))?,\n    )?;\n    globals.set(\n        \"IsW0Judgment\",\n",
+          "    )?;\n    globals.set(\n        \"IsAutoplay\",\n        // SL-Helpers.lua compares the actual PlayerState controller, rather\n        // than the preferred PlayerAutoPlay option (which can change in play).\n        lua.load(\"return function(player) return GAMESTATE:GetPlayerState(player):GetPlayerController() == 'PlayerController_Autoplay' end\")\n            .set_name(\"@theme:/Scripts/SL-Helpers.lua\").eval::<Function>()?,\n    )?;\n    globals.set(\n        \"IsW0Judgment\",\n"
+        ]
+      ],
+      "crates/deadsync-song-lua/src/live.rs": [
+        [
+          "\npub(crate) fn player_life(lua: &Lua, player: usize) -> Option<f32> {\n    lua.app_data_ref::<LivePlayers>().and_then(|players| players.0.get(player).map(|p| p.life))\n}\n\npub(crate) fn player_health_state(lua: &Lua, player: usize) -> Option<&'static str> {\n",
+          "\npub(crate) fn player_life(lua: &Lua, player: usize) -> Option<f32> {\n    lua.app_data_ref::<LivePlayers>().and_then(|players| players.0.get(player).map(|p| p.life))\n}\n\npub(crate) fn player_autoplay(lua: &Lua, player: usize) -> Option<bool> {\n    lua.app_data_ref::<LivePlayers>().and_then(|players| players.0.get(player).map(|p| p.autoplay))\n}\n\npub(crate) fn player_health_state(lua: &Lua, player: usize) -> Option<&'static str> {\n"
+        ],
+        [
+          "                .raw_get(\"Underlay\").expect(\"underlay\");\n            assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &underlay).expect(\"excluded graph\"), 0.0,\n                \"{name}: excluded StepStatistics layouts create no recurring queue\");\n        }\n    }\n\n",
+          "                .raw_get(\"Underlay\").expect(\"underlay\");\n            assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &underlay).expect(\"excluded graph\"), 0.0,\n                \"{name}: excluded StepStatistics layouts create no recurring queue\");\n        }\n    }\n\n    #[test]\n    fn live_overlay_fails_judged_autoplay_during_off_after_exit_decision() {\n        for (name, autoplay, judgment) in [(\"used\", true, true), (\"unused\", true, false), (\"human\", false, true)] {\n            let mut compiled = compile_with_context(&format!(\"overlay-failure-{name}\"), r#\"\nOFFS, FAILED_AT_OFF = 0, false\nreturn Def.ActorFrame { OffCommand = function(self)\n    OFFS = OFFS + 1\n    FAILED_AT_OFF = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1):GetFailed()\nend }\n\"#, |context| {\n                context.defer_initial_live_update = true;\n                context.players[1].enabled = false;\n            });\n            let mut scene = compiled.live_scene.take().expect(\"owned scene\");\n            let mut frame = SongLuaLiveFrame { delta_seconds: 0.1, ..Default::default() };\n            frame.players[0].autoplay = autoplay;\n            scene.advance(frame).expect(\"controller frame\");\n            assert_eq!(scene.lua.load(\"return IsAutoplay(PLAYER_1)\").eval::<bool>().unwrap(), autoplay);\n            if judgment {\n                let params = scene.lua.create_table().unwrap();\n                params.raw_set(\"Player\", crate::player_number_name(0)).unwrap();\n                crate::lua_util::broadcast_native_song_lua_message(&scene.lua, \"Judgment\", Some(Value::Table(params))).unwrap();\n            }\n            // The overlay remembers actual Judgment use, even after autoplay\n            // is disabled. Merely selecting autoplay does not fail a player.\n            frame.players[0].autoplay = false;\n            frame.gameplay_outro = true;\n            let boundary = scene.advance(frame).expect(\"NotesEnded posted\");\n            assert!(boundary.player_writes.is_empty());\n            assert_eq!(scene.lua.globals().get::<i64>(\"OFFS\").unwrap(), 0);\n            let off = scene.advance(frame).expect(\"LeaveGameplay after actor update\");\n            assert_eq!(scene.lua.globals().get::<i64>(\"OFFS\").unwrap(), 1,\n                \"autoplay fails inside successful Off, without posting BeginFailed\");\n            assert_eq!(scene.lua.globals().get::<bool>(\"FAILED_AT_OFF\").unwrap(), autoplay && judgment,\n                \"overlay Off precedes foreground Off\");\n            assert_eq!(off.player_writes, if autoplay && judgment {\n                vec![SongLuaLivePlayerWrite::Fail { player: 0 }]\n            } else { vec![] });\n            frame.players[0].failed = autoplay && judgment;\n            assert!(scene.advance(frame).unwrap().player_writes.is_empty(), \"Off runs once\");\n            assert_eq!(scene.lua.globals().get::<i64>(\"OFFS\").unwrap(), 1);\n        }\n    }\n\n"
+        ]
+      ],
+      "crates/deadsync-song-lua/src/song_tables.rs": [
+        [
+          "    player_index: usize,\n    song_runtime: &Table,\n) -> mlua::Result<(Table, [Table; 4])> {\n    let controller = if player.enabled {\n        \"PlayerController_Human\"\n    } else {\n        \"PlayerController_Autoplay\"\n",
+          "    player_index: usize,\n    song_runtime: &Table,\n) -> mlua::Result<(Table, [Table; 4])> {\n    let controller = if player.enabled && player.autoplay == 0.0 {\n        \"PlayerController_Human\"\n    } else {\n        \"PlayerController_Autoplay\"\n"
+        ],
+        [
+          "    ];\n    let song_position = create_song_position_table(lua, song_runtime)?;\n    let table = lua.create_table()?;\n    set_string_method(lua, &table, \"GetPlayerController\", controller)?;\n    table.set(\"GetHealthState\", lua.create_function(move |lua, _args: MultiValue| {\n        Ok(crate::live::player_health_state(lua, player_index).unwrap_or(health_state))\n    })?)?;\n",
+          "    ];\n    let song_position = create_song_position_table(lua, song_runtime)?;\n    let table = lua.create_table()?;\n    table.set(\"GetPlayerController\", lua.create_function(move |lua, _args: MultiValue| {\n        Ok(crate::live::player_autoplay(lua, player_index).map_or(controller, |autoplay|\n            if autoplay { \"PlayerController_Autoplay\" } else { \"PlayerController_Human\" }))\n    })?)?;\n    table.set(\"GetHealthState\", lua.create_function(move |lua, _args: MultiValue| {\n        Ok(crate::live::player_health_state(lua, player_index).unwrap_or(health_state))\n    })?)?;\n"
+        ]
+      ],
+      "crates/deadsync-song-lua/src/lua_util.rs": [
+        [
+          "            actor.set(\"__songlua_top_screen_child_name\", \"Underlay\")?;\n            install_underlay_theme_children(lua, &actor, create_named_child_actor)?;\n        }\n        return Ok(Some(actor));\n    }\n    if top_screen_steps_display_index(name).is_some() {\n",
+          "            actor.set(\"__songlua_top_screen_child_name\", \"Underlay\")?;\n            install_underlay_theme_children(lua, &actor, create_named_child_actor)?;\n        }\n        if name.eq_ignore_ascii_case(\"Overlay\") {\n            // Simply Love's FailOnHoldStart owns its judgment latch under\n            // the overlay. Its Off runs after LeaveGameplay's AllFailed\n            // decision and before SongForeground (DRAW_ORDER_OVERLAY + 1).\n            let fail = create_named_actor(lua, \"ActorFrame\", \"\", create_dummy_actor)?;\n            fail.raw_set(\"__songlua_parent\", actor.clone())?;\n            let commands = lua.load(r#\"\nlocal usedAutoplay = {}\nreturn {\n    JudgmentMessageCommand = function(self, params)\n        if params.Player == nil then return end\n        if IsAutoplay(params.Player) then usedAutoplay[params.Player] = true end\n    end,\n    OffCommand = function(self)\n        local stage = STATSMAN:GetCurStageStats()\n        local fail = false\n        if stage.GaveUp then fail = stage:GaveUp()\n        else fail = GAMESTATE:GetCurMusicSeconds() < GAMESTATE:GetCurrentSong():GetLastSecond() end\n        if GAMESTATE:IsCourseMode() then\n            local course = GAMESTATE:GetCurrentCourse()\n            if GAMESTATE:GetCourseSongIndex() + 1 < course:GetNumCourseEntries() then fail = true end\n        end\n        for player in ivalues(GAMESTATE:GetEnabledPlayers()) do\n            if fail or usedAutoplay[player] then\n                STATSMAN:GetCurStageStats():GetPlayerStageStats(player):FailPlayer()\n            end\n        end\n    end,\n}\n\"#).set_name(\"@theme:/BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua\").eval::<Table>()?;\n            for command in [\"JudgmentMessageCommand\", \"OffCommand\"] {\n                fail.raw_set(command, commands.raw_get::<Function>(command)?)?;\n            }\n            push_sequence_child_once(&actor, fail.clone())?;\n            actor_children(lua, &actor)?.raw_set(\"\", fail)?;\n        }\n        return Ok(Some(actor));\n    }\n    if top_screen_steps_display_index(name).is_some() {\n"
+        ],
+        [
+          "            child.raw_set(\"__songlua_theme_hibernating\", true)?;\n        }\n        children.set(name, child)?;\n    }\n    Ok(())\n}\n",
+          "            child.raw_set(\"__songlua_theme_hibernating\", true)?;\n        }\n        children.set(name, child)?;\n    }\n    // ActorFrame traverses its ordered actor tree. Named lookup aliases must\n    // not let Lua hash order place foreground Off before the theme overlay.\n    for name in [\"SongBackground\", \"Underlay\", \"PlayerP1\", \"PlayerP2\",\n        \"ScoreP1\", \"ScoreP2\", \"StepsDisplayP1\", \"StepsDisplayP2\",\n        \"Overlay\", \"SongForeground\", \"In\", \"Debug\"] {\n        if let Some(child) = children.raw_get::<Option<Table>>(name)? {\n            push_sequence_child_once(top_screen, child)?;\n        }\n    }\n    Ok(())\n}\n"
+        ]
+      ],
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": [
+        [
+          "            && self.song_lua_out.is_none()\n        {\n            self.gameplay.progress.stage.song_completed_naturally = true;\n            let count = self.gameplay.num_players().min(MAX_PLAYERS);\n            fail_autoplay_players(&mut self.gameplay.players_runtime.players[..count]);\n            self.song_lua_out = Some(SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY });\n        }\n        if self.song_lua_draw_reload_pending\n",
+          "            && self.song_lua_out.is_none()\n        {\n            self.gameplay.progress.stage.song_completed_naturally = true;\n            self.song_lua_out = Some(SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY });\n        }\n        if self.song_lua_draw_reload_pending\n"
+        ],
+        [
+          "    if state.song_lua_ended { return; }\n    let effect_start = effects.len();\n    let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);\n    if matches!(action, GameplayAction::Navigate(GameplayExit::Complete)\n        | GameplayAction::NavigateNoFade(GameplayExit::Complete)) {\n        let count = state.gameplay.num_players().min(MAX_PLAYERS);\n        fail_autoplay_players(&mut state.gameplay.players_runtime.players[..count]);\n",
+          "    if state.song_lua_ended { return; }\n    let effect_start = effects.len();\n    let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);\n    if state.song_lua.is_none() && matches!(action, GameplayAction::Navigate(GameplayExit::Complete)\n        | GameplayAction::NavigateNoFade(GameplayExit::Complete)) {\n        let count = state.gameplay.num_players().min(MAX_PLAYERS);\n        fail_autoplay_players(&mut state.gameplay.players_runtime.players[..count]);\n"
+        ]
+      ],
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": [
+        [
+          "    end,\n    JudgmentMessageCommand = function(_, params)\n        assert(params.Player == PLAYER_1 and params.FirstTrack == 0)\n        if params.HoldNoteScore then\n            assert(params.HoldNoteScore == 'HoldNoteScore_Held' and params.NumTracks == 4)\n            assert(params.TapNoteScore == 'TapNoteScore_W1' and params.Notes == nil)\n",
+          "    end,\n    JudgmentMessageCommand = function(_, params)\n        assert(params.Player == PLAYER_1 and params.FirstTrack == 0)\n        assert(IsAutoplay(params.Player))\n        if params.HoldNoteScore then\n            assert(params.HoldNoteScore == 'HoldNoteScore_Held' and params.NumTracks == 4)\n            assert(params.TapNoteScore == 'TapNoteScore_W1' and params.Notes == nil)\n"
+        ],
+        [
+          "        player:SetLife(0.125)\n        judgments = judgments + 1\n        MESSAGEMAN:Broadcast('EngineJudgment', {judgments=judgments})\n    end,\n}\n\"#).unwrap();\n",
+          "        player:SetLife(0.125)\n        judgments = judgments + 1\n        MESSAGEMAN:Broadcast('EngineJudgment', {judgments=judgments})\n    end,\n    OffCommand = function(self)\n        assert(not IsAutoplay(PLAYER_1))\n        assert(stats:GetFailed())\n        MESSAGEMAN:Broadcast('EngineOff', {music=GAMESTATE:GetCurMusicSeconds()})\n    end,\n}\n\"#).unwrap();\n"
+        ],
+        [
+          "        assert_eq!(held.source_broadcasts.iter().filter(|event| event.name == \"EngineHold\").count(), 1);\n        assert_eq!(state.gameplay.players_runtime.players[0].life, 0.0625,\n            \"completed native hold judgments also reach the retained VM during autoplay\");\n    }\n\n    #[test]\n",
+          "        assert_eq!(held.source_broadcasts.iter().filter(|event| event.name == \"EngineHold\").count(), 1);\n        assert_eq!(state.gameplay.players_runtime.players[0].life, 0.0625,\n            \"completed native hold judgments also reach the retained VM during autoplay\");\n        state.set_live_autoplay_enabled(false);\n        let end = state.gameplay.music_end_time_ns();\n        for (index, music) in [end, end + 100_000_000, end + 200_000_000].into_iter().enumerate() {\n            gameplay::update(&mut state, 0.1, GameplayAudioSnapshot {\n                stream_clock: GameplayStreamClockSnapshot { music_nanos: music,\n                    has_music_mapping: true, valid_at_host_nanos: 2_000_000_000 + index as u64 * 100_000_000,\n                    ..Default::default() }, ..Default::default()\n            }, || 2_000_000_000, &mut effects);\n            let output = state.take_song_lua_output();\n            assert!(output.errors.is_empty(), \"{:?}\", output.errors);\n            let offs: Vec<_> = output.source_broadcasts.iter().filter(|event| event.name == \"EngineOff\").collect();\n            assert_eq!(offs.len(), usize::from(index == 1), \"Off runs on LeaveGameplay, after one actor update\");\n            assert_eq!(state.gameplay.players_runtime.players[0].stage_failed, index >= 1,\n                \"the actual overlay Off writes shared Core failure after the exit decision\");\n            if let Some(off) = offs.first() {\n                assert_eq!(off.music_seconds, f64::from((music as f64 / 1_000_000_000.0) as f32));\n            }\n        }\n    }\n\n    #[test]\n"
+        ]
+      ]
+    },
+    "enrolled_fix_commit": "874f2e535ad5a3ce39394ddb03c49600c20e2044",
+    "isolated_new_production_edits": {
+      "crates/deadsync-song-lua/src/lua_util.rs": [
+        [
+          "    globals.set(\"NullActor\", null_actor)?;\n    globals.set(\"Def\", def)?;\n    crate::actor_classes::install(lua)?;\n    // Native Player/NoteField classes inherit ActorFrame. Their own method\n    // inventories also keep SM5.2-only feature probes absent on ITGmania.\n    for (name, methods) in [\n",
+          "    globals.set(\"NullActor\", null_actor)?;\n    globals.set(\"Def\", def)?;\n    crate::actor_classes::install(lua)?;\n    // _fallback/Scripts/02 Sprite.lua builds authored animation states.\n    lua.load(r#\"\nfunction Sprite.LinearFrames(NumFrames, Seconds)\n    local Frames = {}\n    for i = 0,NumFrames-1 do\n        Frames[#Frames+1] = {Frame = i, Delay = (1/NumFrames)*Seconds}\n    end\n    return Frames\nend\n\"#).set_name(\"_fallback/Scripts/02 Sprite.lua\").exec()?;\n    // Native Player/NoteField classes inherit ActorFrame. Their own method\n    // inventories also keep SM5.2-only feature probes absent on ITGmania.\n    for (name, methods) in [\n"
+        ],
+        [
+          "    Ok(actor.raw_get::<Option<String>>(\"Name\")?.unwrap_or_default())\n}\n\npub(crate) fn set_actor_name(actor: &Table, name: mlua::String) -> mlua::Result<()> {\n    if !matches!(actor.raw_get::<Value>(\"__songlua_load_name\")?, Value::Nil) {\n        actor.raw_set(\"__songlua_load_name\", name.clone())?;\n    }\n",
+          "    Ok(actor.raw_get::<Option<String>>(\"Name\")?.unwrap_or_default())\n}\n\npub(crate) fn set_actor_name(actor: &Table, name: mlua::LuaString) -> mlua::Result<()> {\n    if !matches!(actor.raw_get::<Value>(\"__songlua_load_name\")?, Value::Nil) {\n        actor.raw_set(\"__songlua_load_name\", name.clone())?;\n    }\n"
+        ]
+      ]
+    },
+    "windows_root_source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "848206cee042fff73bf80da62f9c287a538c3f805dd2b790367766050fecc1a2",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "48c2ea7a0c031cb5c4b5cfd72e0e0bcb5ef5c62884916c4883866e74fcdd2a70",
+      "crates/deadsync-song-lua/src/live.rs": "578efda741fbfe590e88fe43200cd04f8432cb669005196a255626d7aba2c8f7",
+      "crates/deadsync-song-lua/src/song_tables.rs": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182",
+      "crates/deadsync-song-lua/src/lua_util.rs": "c2e6321a9ecf6d58f1e29dd7835ada9022e8cfb5bf98d12fcf3db1d6d4d8c131",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "366ae906ee2b7b5cfb89a0a34c4dc0ebf437bd873db5e764fc454fdad25f62cb",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "c1890f9129b15ecd62e8a1b567dc7514b351e9808ab4545a705363f8fac70f8f",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+      "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+      "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+      "crates/deadsync-song-lua/src/draw_capture.rs": "9dd81bb6c6f5ae211d7243cba5d070570abf279a0b7c0f9121b689091c2d8594"
+    },
+    "sprite_control_unchanged_from_red": true,
+    "autoplay_clock_control_unchanged_from_red": true,
+    "chart_repair_attempts_spent": 0
+  },
+  "linux_binary": "/home/parity/jobs/sprite-frames-overlay-green-v2/full-song-lua-stage-modifier-v1",
+  "binary_sha256": "5ae071ff2319cc8c107d87763b84978c29b7ecc763fb4de47330fd6287f5b283",
+  "native_harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "postbuild_source_pins_verified": true,
+  "harness_three_source_pins_verified": true,
+  "immutable_helper_verified": true,
+  "rejected_packaging_preflight": "v1 stopped before installation because Windows default text decoding created unrelated Unicode differences. UTF-8 v2 passed with only the intended six enrollment files and one new production file. Initial launch commands referenced nonexistent v2 filenames and started no processes; versioned launchers then started exactly one builder on each host.",
+  "chart_repair_attempts_spent": 0,
+  "lower_repairs_remaining": 1,
+  "get_into_it_repairs_remaining_each": 2,
+  "acceptance": "Existing complete uncompressed replay comparisons remain unchanged; coverage stays separate and no passing chart was reopened."
+}
