@@ -1,5 +1,5 @@
 {
-  "status": "source-confirmed cause; no new repair replay started",
+  "status": "source fix committed; Windows controls passed; Linux validation and first Flowers repair queued",
   "actual_failing_sources": [
     "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
     "Flowers [Cringle Desolation]/Flowers.ssc"
@@ -129,5 +129,11 @@
     "Later actor tween-time differences",
     "One early stage-failed observation"
   ],
-  "acceptance": "Existing full replay comparisons remain unchanged; this diagnosis cannot accept a fixture"
+  "acceptance": "Existing full replay comparisons remain unchanged; this diagnosis cannot accept a fixture",
+  "fix_commit": "58fcc8043",
+  "windows_live_controls": {
+    "passed": 30,
+    "failed": 0
+  },
+  "build_proof": "/home/parity/jobs/screen-initial-pose-build-v1/proof.json"
 }
