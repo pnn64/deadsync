@@ -2735,6 +2735,21 @@
       "replay_seconds": 0.3587999899900751,
       "candidate_sha256": "25048708fba913d8df34db378b6e74f12d0f2fec932f41544b5fced1ca99b649",
       "failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (1590110) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 223,
+      "source_simfile": "Happy Now Remastered/Happy Now.ssc",
+      "simfile_sha256": "d7cb2c12b9ab2e40fb30ed6c082ed12ccd4f71f2420bde2942b72ac5f6e68195",
+      "retained_original_archive": "eef35c934b33bd6b7c85f27d08b0a06499baaea8bcb5eb6678fc209a2a937842.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "63e17ffe7 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/foreground-source-build-v2/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 900.2148301630077,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1590174-1791862771070224596-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1590174-1791862771070224596-0\n"
     }
   ],
   "scope": {
@@ -2747,6 +2762,6 @@
   "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 8,
-  "pending_charts": 10,
-  "processed_charts": 18
+  "pending_charts": 11,
+  "processed_charts": 19
 }
