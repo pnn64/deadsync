@@ -3332,15 +3332,12 @@
     {
       "title": "Karachi",
       "source_simfile": "Karachi/Jorts - Karachi.ssc",
-      "harness_version": "0.1.0",
-      "archive": "478872d42a1163d1ac2fcd2005ede99579910d3be84cdf7a2703e55469e6b4e1.tar.zst",
-      "sha256": "478872d42a1163d1ac2fcd2005ede99579910d3be84cdf7a2703e55469e6b4e1",
-      "compressed_bytes": 948831,
-      "uncompressed_sha256": "e0e8a621954bcad17f277ed5e5d971ee80f3c337d4f23e9427716aa9f590fb6b",
-      "compression_level": 22,
-      "aliases": [
-        "c9e685ca614fff6bdf9a88683fb915474d31ff9b715e5b2a0359722c59e16e1e.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "05c2b66a59e1287df8fcb20f506f2458874ff4ea1160f49d54394dddec62b24a.tar.zst",
+      "sha256": "05c2b66a59e1287df8fcb20f506f2458874ff4ea1160f49d54394dddec62b24a",
+      "compressed_bytes": 8113289,
+      "uncompressed_sha256": "1ecc3eb73f0d8bfdb3932b5a6438fd3d734545d3b686a33b66bfd52c67ec1c78",
+      "aliases": []
     },
     {
       "title": "Kita Saitama 2000",

@@ -5907,6 +5907,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 266,
+      "source_simfile": "Karachi/Jorts - Karachi.ssc",
+      "simfile_sha256": "ac9bf1049c1ab311cb95a1fa1b86606f23c46ebe26972e65f9bdf0ee124b7650",
+      "retained_original_archive": "478872d42a1163d1ac2fcd2005ede99579910d3be84cdf7a2703e55469e6b4e1.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "7f64d791484688206a4eeaf9f264d48cf0de71ac73780fc40226f1f74bb473e8",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+      "build_proof": "/home/parity/jobs/startup-provenance-build-v3/proof.json",
+      "capture_seconds": 165.6587050829985,
+      "trace_sha256": "4e907ee079c1c6daf3cf55ad1d36a7fac946285787a08813a37e06282970e252",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-266/candidates/1ecc3eb73f0d8bfdb3932b5a6438fd3d734545d3b686a33b66bfd52c67ec1c78.tar",
+      "replay_exit": 0,
+      "replay_seconds": 327.6084016789973,
+      "candidate_sha256": "1ecc3eb73f0d8bfdb3932b5a6438fd3d734545d3b686a33b66bfd52c67ec1c78",
+      "native_frames": 32245,
+      "replayed_frames": 32245,
+      "compared_stage_fields": 1474,
+      "pending_coverage": [
+        "uncompared song operations: Actor.zoomy, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Roll, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "8a6ae6d149cddd857936b92f4e4900b7e1e6887cdcd5a1956d63728bffafb30e",
+      "archive": "05c2b66a59e1287df8fcb20f506f2458874ff4ea1160f49d54394dddec62b24a.tar.zst",
+      "archive_sha256": "05c2b66a59e1287df8fcb20f506f2458874ff4ea1160f49d54394dddec62b24a",
+      "compressed_bytes": 8113289,
+      "pack_seconds": 11.104782605994842,
+      "harness_version": "0.1.80",
+      "title": "Karachi",
+      "retained_original_entry": {
+        "title": "Karachi",
+        "source_simfile": "Karachi/Jorts - Karachi.ssc",
+        "harness_version": "0.1.0",
+        "archive": "478872d42a1163d1ac2fcd2005ede99579910d3be84cdf7a2703e55469e6b4e1.tar.zst",
+        "sha256": "478872d42a1163d1ac2fcd2005ede99579910d3be84cdf7a2703e55469e6b4e1",
+        "compressed_bytes": 948831,
+        "uncompressed_sha256": "e0e8a621954bcad17f277ed5e5d971ee80f3c337d4f23e9427716aa9f590fb6b",
+        "compression_level": 22,
+        "aliases": [
+          "c9e685ca614fff6bdf9a88683fb915474d31ff9b715e5b2a0359722c59e16e1e.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -5930,9 +5980,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "bd9bdd3d7818ac8895ce3fbe58e73d984227d46f6d6a6753deb56cdc4503d035",
+  "binary_sha256": "7f64d791484688206a4eeaf9f264d48cf0de71ac73780fc40226f1f74bb473e8",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 14,
+  "passed_fixtures": 15,
   "pending_charts": 37,
-  "processed_charts": 51
+  "processed_charts": 52
 }
