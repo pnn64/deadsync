@@ -20294,7 +20294,6 @@ pub fn create_color_constants_table(lua: &Lua) -> mlua::Result<Table> {
         ("Invisible", "1,1,1,0"),
         ("Orange", "#f7941d"),
         ("Outline", "0,0,0,0.5"),
-        ("Pink", "1,0.75,0.8,1"),
         ("Purple", "#92278f"),
         ("Red", "#ed1c24"),
         ("Stealth", "0,0,0,0"),

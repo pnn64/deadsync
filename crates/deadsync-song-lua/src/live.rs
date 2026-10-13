@@ -2395,6 +2395,35 @@ end
     }
 
     #[test]
+    fn live_color_constants_preserve_native_palette_bound() {
+        let mut compiled = compile("native-color-palette", r#"
+assert(Color.Pink == nil, 'native Color table does not define Pink')
+assert(Color('Pink') == nil and Color.NotAColor == nil)
+assert(Color('White') == Color.White)
+local palette = {
+    Color.White, Color.Yellow, Color.Blue, Color.Red, Color.White,
+    Color.Purple, Color.Green, Color.Orange, Color.Pink,
+}
+assert(#palette == 8, 'trailing native nil leaves an eight-entry palette')
+math.randomseed(1)
+local expected = {4, 8, 6, 8, 1, 2, 3, 8}
+return Def.ActorFrame {
+    InitCommand = function(self)
+        for _, index in ipairs(expected) do
+            local selected = math.random(#palette)
+            assert(selected == index, 'native palette preserves seeded random choices')
+            self:diffuse(palette[selected])
+        end
+        PALETTE_CHECKED = true
+    end,
+}
+"#);
+        let scene = compiled.live_scene.take().expect("production color scene");
+        assert!(scene.lua.globals().get::<bool>("PALETTE_CHECKED").unwrap());
+        assert_eq!(scene.states()[0].diffuse, [247.0 / 255.0, 148.0 / 255.0, 29.0 / 255.0, 1.0]);
+    }
+
+    #[test]
     fn live_named_notefield_advances_once() {
         let mut compiled = compile("named-notefield-once", r#"
 local field = SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField')
