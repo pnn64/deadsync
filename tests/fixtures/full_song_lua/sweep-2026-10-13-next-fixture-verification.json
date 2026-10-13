@@ -1,0 +1,46 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "I'm sorry/sm.ssc",
+      "acceptance_commit": "b869cccd6",
+      "native_frames": 114341,
+      "replayed_frames": 114341,
+      "compared_stage_fields": 1771,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "d1f193494499be32d11345b8d5d4fc0922234b5789ad041e00810862789a78ad.tar.zst",
+      "compressed_sha256": "d1f193494499be32d11345b8d5d4fc0922234b5789ad041e00810862789a78ad",
+      "uncompressed_sha256": "b0f067ee0e3baf05f032e1f46acf06445b2978c4b42a16ca51809b8eb3b9cbcd",
+      "compressed_bytes": 5908176,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.setsize, Actor.xy, GameState.ApplyGameCommand, Screen.AddInputCallback",
+        "native drawable state/resources: Quad"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    },
+    {
+      "source_simfile": "Into The Light2/Into The Light.sm",
+      "acceptance_commit": "204211b1a",
+      "native_frames": 50780,
+      "replayed_frames": 50780,
+      "compared_stage_fields": 1320,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "a3364ac3587bf20af3139fbb81fce9a6b7381e13462778e5cadeea5e87b75ced.tar.zst",
+      "compressed_sha256": "a3364ac3587bf20af3139fbb81fce9a6b7381e13462778e5cadeea5e87b75ced",
+      "uncompressed_sha256": "130d3ecf5ad9625b7a97bae6933792ff31bdd89bb388784fd1c8043330374637",
+      "compressed_bytes": 14456414,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
