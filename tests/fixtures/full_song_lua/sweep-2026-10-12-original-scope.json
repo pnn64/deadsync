@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T10:45:02Z",
+  "updated_utc": "2026-10-13T11:16:25Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 203,
+    "passed": 204,
     "pending": 61,
-    "unprocessed": 237
+    "unprocessed": 236
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2101,25 +2101,25 @@
       "position": 242,
       "source_simfile": "Impulse/impulse.sm",
       "simfile_sha256": "4202087684d63c9525e824368b4e2c021070b3c7bfd01409db460d94823392b4",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-13-fg-entry-family-repairs.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-13-impulse-sm-fg-filename-final-repair.json"
     },
     {
       "position": 243,
       "source_simfile": "Impulse/impulse.ssc",
       "simfile_sha256": "aa93c8e88e250f19c9f8a3d9ec3ed5fa2ed544f471342f36f1b229b27d66a3a2",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-fg-entry-family-repairs.json"
     },
     {
       "position": 244,
       "source_simfile": "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc",
       "simfile_sha256": "fa95ab0c13007ddba2a9c4f194258e939fa9f802880a12ef90dc13a7552666d6",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-mountain-listed-lua-repair.json"
     },
     {
       "position": 245,
@@ -2309,7 +2309,9 @@
       "position": 269,
       "source_simfile": "Koi [UPS2016]/koi.sm",
       "simfile_sha256": "4d5cbb5b95ac61be0a56f3eec6013904e68a04aefc279d4439a697c628a91bdc",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 270,

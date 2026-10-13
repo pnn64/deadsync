@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T10:45:05Z",
-  "previous_goal_turn": "progress: Just a Friend, Jerk and Kita passed their original full replays and were immediately saved and committed; storage bytes locally verified in 0a040cd4b. Coverage remained separate. Mapper fix be2565b8d preserves the independent ownership slots and descendants of every native foreground entry, including repeated filenames and definition IDs. Fresh Linux 815 gameplay, 38 live and 21 native controls plus both builds verified helper 95e3f733 against all 23 source pins and the immutable native harness. Jeans first repair passed all 27391 frames and 495 stage fields with zero mismatches and errors; fixture acceptance 5dbfd60bd and local compressed/decompressed-byte proof 90304442a. Its 34 captured roots and 102 neutral allocations were reused, without recapture. Gaming's first repair completed all 26294 frames and 363 fields with no errors; only 18 literal ./foreground filename differences remained. Primary pinned Foreground.cpp concatenates the raw authored direct-file name. Fix 469d6157b retains that spelling while reading the already resolved file. The existing control failed before the fix, then complete Windows 39 live/21 native and Linux 815/38/21 controls and both executable builds passed. Helper 4713556073fc219eef2dd0db6fbb496506cdfa4f49c27f62d6427ec63f95ab84 was rehashed with all 23 actual frozen source inputs and immutable harness before selection. The helper retains the previously selected baseline and only changes the compiler and existing source-name control from helper 95; the uncaptured theme listener from 874f2e535 remains unselected. Gaming final repair 2 finished 26294/26294 frames and 363 stage fields; status passed, 0 mismatches and 0 Lua errors. The accepted fixture was immediately published and committed; its compressed bytes and decompressed original hash are locally verified. Impulse SM first repair completed all 156090 frames and 2222 stage fields with zero Lua errors and exactly 39 direct ./default.lua source differences; all other compared fields match. Diagnosis 695ec1783; its final attempt 2 is running with the verified filename helper and reused raw capture. Impulse SSC first repair is still running; inspect its complete actual residuals before any final attempt. Freg remains pending at cap two; no third attempt or passing-chart reopening. The single publisher watches 39 streams. Latest original-scope counts are {'passed': 203, 'pending': 61, 'unprocessed': 237}; all 501 original source bytes remain unchanged, and the goal remains active and incomplete.",
+  "updated_utc": "2026-10-13T11:26:49Z",
+  "previous_goal_turn": "progress: Impulse SM final repair 2 passed all 156090 native frames and 2222 stage fields with zero mismatches and Lua errors. It reused the original capture, was immediately saved and committed as 933965f8c, and its compressed/decompressed bytes were locally verified in 5fee2da39. Drawable Sprite coverage remains separate. Impulse SSC first repair completed all 124609 frames and 2222 fields with zero Lua errors; exactly 39 literal ./default.lua differences remained, with every other compared field matching. Diagnosis cf4539a39; its final repair 2 is running on immutable helper 4713556073 with the unchanged capture. Mountain King's original replay failed at default.lua:106 because the archive omitted all 59 data-only Lua puzzle files. Primary pinned RageFileManager enumerates the physical directory. Harness fix 79bb77d archives the complete song Lua input namespace while retaining static dependencies and assets. The regression failed before the fix; both hosts passed 12 archive and 3 path controls and built the harness. A copied Feely-only preparation assertion stopped before any replay; the corrected resume reused the generated archive and verified every prior member, all 61 physical Lua files and byte-identical native trace. First repair 1 then rejected a changed lua_closure.strategy label at the existing reader assertion before replaying frames. The attempt remains counted. c283a8a restores the required schema tag while preserving the complete inputs; neither the reader nor any comparison gate changed. The original byte-verified harness was selected during rebuild, with its old archive source rechecked from b191ebd and actual checkout line endings. Fresh corrected-schema checks passed 12/3 controls and builds on both hosts, with host-local Linux mtimes and all three source pins and actual binary hashes verified. Corrected harness 058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4 is now selected; native observer SHA remains 399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f. Mountain final repair 2 is running with all 61 Lua files, no additional change to prior archive members, and the original native trace; no third repair is permitted. Koi SM original replay completed all 145074 frames and 2299 stage fields. All stage fields match, but one actual AddFishCommand Lua error names missing rec_print_table and 1940 command comparisons remain (one count and 1939 events). Pinned fallback 02 Utilities.lua supplies the recursive table/depth/non-table helper; actor handles are native userdata. Source diagnosis 85032bcc4 retains the original report and requires a complete helper plus a real owned-actor control before the first repair; neither Koi repair attempt is spent. The single publisher watches 42 streams. Original queues and the two final repair children remain live; current original counts are {'passed': 204, 'pending': 61, 'unprocessed': 236}. All 501 original source bytes remain unchanged, and the goal remains active and incomplete. No passing chart was reopened and no capped third repair started.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,8 +14,8 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "6b8a544d66c3f81335f70c3406b9fd006944b49b",
-      "itgmania_harness": "b191ebd0fcf8b59b5294958d2ffe2939af2d742a"
+      "deadsync": "85032bcc432e8227d4325f4b9800e50cab6b864f",
+      "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
   "validation": {
@@ -62,19 +62,15 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Koi [UPS2016]/koi.sm",
-      "position": 269,
-      "phase": "replay",
-      "pid": 2564779,
+      "current": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.ssc",
+      "position": 275,
+      "phase": "candidate",
+      "pid": 3654959,
       "process_matches": true,
       "passed": 15,
-      "pending": 37,
-      "processed": 52,
-      "last_log_lines": [
-        "[12419.5s] replaying every native gameplay frame: frame 128863/145074 (88.8%)",
-        "[12421.5s] replaying every native gameplay frame: frame 128879/145074 (88.8%)",
-        "[12423.5s] replaying every native gameplay frame: frame 128896/145074 (88.8%)"
-      ],
+      "pending": 39,
+      "processed": 54,
+      "last_log_lines": [],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -82,6 +78,13 @@
     "parallel_queue_receipt": "tests/fixtures/full_song_lua/sweep-2026-10-12-parallel-queues.json",
     "build_transition": "tests/fixtures/full_song_lua/sweep-2026-10-12-build-transition.json",
     "source_scope_audit": "tests/fixtures/full_song_lua/sweep-2026-10-12-original-scope.json",
+    "koi_sm_debug_helper_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-koi-sm-debug-helper-diagnosis.json",
+    "compatible_lua_archive_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-listed-lua-schema-build.json",
+    "mountain_schema_residual": "tests/fixtures/full_song_lua/sweep-2026-10-13-mountain-first-schema-residual.json",
+    "complete_lua_archive_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-listed-lua-archive-build.json",
+    "mountain_archive_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-mountain-archive-diagnosis.json",
+    "impulse_ssc_first_residual": "tests/fixtures/full_song_lua/sweep-2026-10-13-impulse-ssc-first-residual.json",
+    "impulse_sm_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-impulse-sm-fixture-verification.json",
     "gaming_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-gaming-fixture-verification.json",
     "impulse_sm_first_residual": "tests/fixtures/full_song_lua/sweep-2026-10-13-impulse-sm-first-residual.json",
     "foreground_filename_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-fg-filename-build.json",
@@ -113,15 +116,48 @@
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
       {
-        "job": "impulse-sm-fg-filename-final-repair-v1",
+        "job": "mountain-listed-lua-final-repair-v1",
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
         "pending": 0,
         "processed": 0,
         "last_phase": "replay",
-        "source_simfile": "Impulse/impulse.sm",
+        "source_simfile": "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc",
         "child_running": true
+      },
+      {
+        "job": "impulse-ssc-fg-filename-final-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Impulse/impulse.ssc",
+        "child_running": true
+      },
+      {
+        "job": "mountain-listed-lua-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 0,
+        "pending": 1,
+        "processed": 1,
+        "last_phase": "replay",
+        "source_simfile": "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc",
+        "child_running": false
+      },
+      {
+        "job": "impulse-sm-fg-filename-final-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
+        "pending": 0,
+        "processed": 1,
+        "last_phase": "pack",
+        "source_simfile": "Impulse/impulse.sm",
+        "child_running": false
       },
       {
         "job": "gaming-fg-filename-final-repair-v1",
@@ -136,14 +172,14 @@
       },
       {
         "job": "fg-entry-family-repairs-v1",
-        "complete": false,
-        "supervisor_running": true,
+        "complete": true,
+        "supervisor_running": false,
         "passed": 0,
-        "pending": 2,
-        "processed": 2,
+        "pending": 3,
+        "processed": 3,
         "last_phase": "replay",
         "source_simfile": "Impulse/impulse.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "jeans-fg-entry-repair-v1",
@@ -808,15 +844,36 @@
         "record": "sweep-2026-10-13-impulse-sm-fg-filename-final-repair.json",
         "fix_commit": "469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 / harness b191ebd",
         "finish_status": "bounded final Impulse SM foreground filename repair complete"
+      },
+      {
+        "name": "mountain-listed-lua-repair",
+        "remote": "/home/parity/jobs/mountain-listed-lua-repair-v1",
+        "record": "sweep-2026-10-13-mountain-listed-lua-repair.json",
+        "fix_commit": "harness 79bb77d / deadsync 469d6157b + be2565b8d + d851d0c3b",
+        "finish_status": "bounded first Mountain King Lua input archive repair complete"
+      },
+      {
+        "name": "impulse-ssc-fg-filename-final-repair",
+        "remote": "/home/parity/jobs/impulse-ssc-fg-filename-final-repair-v1",
+        "record": "sweep-2026-10-13-impulse-ssc-fg-filename-final-repair.json",
+        "fix_commit": "469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 / harness b191ebd",
+        "finish_status": "bounded final Impulse SSC foreground filename repair complete"
+      },
+      {
+        "name": "mountain-listed-lua-final-repair",
+        "remote": "/home/parity/jobs/mountain-listed-lua-final-repair-v1",
+        "record": "sweep-2026-10-13-mountain-listed-lua-final-repair.json",
+        "fix_commit": "harness c283a8a + 79bb77d / deadsync 469d6157b + be2565b8d + d851d0c3b",
+        "finish_status": "bounded final Mountain King archive namespace repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 56,
-    "new_pending_charts": 60,
-    "new_processed_sources": 116,
+    "new_passed_fixtures": 57,
+    "new_pending_charts": 61,
+    "new_processed_sources": 118,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 237,
+    "unprocessed_sources": 235,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -1237,46 +1294,6 @@
       ]
     },
     {
-      "source_simfile": "Impulse/impulse.sm",
-      "repair_attempts": 1,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 39,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0001",
-            "args": [],
-            "beat": 128.0001220703125,
-            "command": "OnCommand",
-            "definition_id": "def-0001",
-            "detail": {
-              "name": "OnCommand"
-            },
-            "kind": "command",
-            "line": 5,
-            "operation": "command.begin",
-            "scene": 1,
-            "seconds": 60.017051696777344,
-            "seq": 1,
-            "source": "song:/./default.lua"
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "command",
-            "operation": "command.begin",
-            "command": "OnCommand",
-            "source": "song:/default.lua",
-            "line": 5,
-            "beat": 128.0001220703125,
-            "seconds": 60.017051696777344,
-            "args": null
-          }
-        }
-      ]
-    },
-    {
       "source_simfile": "INAZUMA (Gio)/INAZUMA.ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1482682-1791861272532323397-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1482682-1791861272532323397-0\n",
@@ -1313,6 +1330,36 @@
           "field": "failed",
           "native": true,
           "deadsync": false
+        }
+      ]
+    },
+    {
+      "source_simfile": "Koi [UPS2016]/koi.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [
+        "AddFishCommand failed for Actor: runtime error: [string \"/tmp/.tmphGKoq7/song/lua/koi.lua\"]:241: attempt to call global 'rec_print_table' (a nil value)\nstack traceback:\n\t[C]: in global 'rec_print_table'\n\t[string \"/tmp/.tmphGKoq7/song/lua/koi.lua\"]:241: in function <[string \"/tmp/.tmphGKoq7/song/lua/koi.lua\"]:234>"
+      ],
+      "mismatch_count": 1940,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 4909,
+          "deadsync": 3694
+        }
+      ]
+    },
+    {
+      "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 41368,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 402665,
+          "deadsync": 41375
         }
       ]
     },
@@ -1632,11 +1679,43 @@
     },
     {
       "source_simfile": "Impulse/impulse.ssc",
-      "repair_attempts": 0,
-      "failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (2667728) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: multiple native foreground entries need entry-specific ownership\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "repair_attempts": 1,
+      "failure": null,
       "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
+      "mismatch_count": 39,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0001",
+            "args": [],
+            "beat": 128.00027465820312,
+            "command": "OnCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 5,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 60.017120361328125,
+            "seq": 1,
+            "source": "song:/./default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "OnCommand",
+            "source": "song:/default.lua",
+            "line": 5,
+            "beat": 128.00027465820312,
+            "seconds": 60.017120361328125,
+            "args": null
+          }
+        }
+      ]
     },
     {
       "source_simfile": "kaboooooom!/KABOOOOOM!!!!.sm",
@@ -1950,8 +2029,8 @@
     },
     {
       "source_simfile": "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc",
-      "repair_attempts": 0,
-      "failure": "[0.2s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: frame 293/56068 (0.5%)\n[4.0s] replaying every native gameplay frame: frame 675/56068 (1.2%)\n[6.0s] replaying every native gameplay frame: frame 1036/56068 (1.8%)\n\nthread 'main' (2778362) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: failed to execute '/tmp/.tmpO4LgxL/song/default.lua': runtime error: interval is empty\nstack traceback:\n\t[C]: in function 'math.random'\n\t[string \"/tmp/.tmpO4LgxL/song/default.lua\"]:106: in main chunk\n\t>[C]: in ?\n\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[8.0s] replaying every native gameplay frame: frame 1354/56068 (2.4%)\n",
+      "repair_attempts": 1,
+      "failure": "\nthread 'main' (3539087) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:350:5:\nassertion `left == right` failed\n  left: \"complete-song-lua-plus-executed-and-static-loads\"\n right: \"executed-sources-plus-static-loads\"\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
