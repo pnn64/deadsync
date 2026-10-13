@@ -1,0 +1,26 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Macarena/Macarena.ssc",
+      "acceptance_commit": "7b85dfc5f3c9ab045b2dca48d44c1dc70052b039",
+      "native_frames": 71667,
+      "replayed_frames": 71667,
+      "compared_stage_fields": 1056,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "d154e6667bb11fc1ad9b4b68a45deecf7f07bd016160d2686afbfd0d2c1f2f1d.tar.zst",
+      "compressed_sha256": "d154e6667bb11fc1ad9b4b68a45deecf7f07bd016160d2686afbfd0d2c1f2f1d",
+      "uncompressed_sha256": "61fd6405690b271eee9f87453e0dbdd64b26d114baa45b77338cd7c5efa9686c",
+      "compressed_bytes": 4167922,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.accelerate, Actor.addrotationz, Actor.addx, Actor.addy, Actor.setsize, Actor.stopeffect, Actor.xy, PlayerOptions.Mini",
+        "native drawable state/resources: Quad"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
