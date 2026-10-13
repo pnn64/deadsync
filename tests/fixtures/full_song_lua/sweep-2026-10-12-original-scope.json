@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-12T23:38:26Z",
+  "updated_utc": "2026-10-13T00:03:17Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -11,9 +11,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 161,
+    "passed": 164,
     "pending": 20,
-    "unprocessed": 320
+    "unprocessed": 317
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1547,9 +1547,9 @@
       "position": 173,
       "source_simfile": "Dig Dug Theme/Dig Dug Theme.ssc",
       "simfile_sha256": "fe5887b2e78aeb3fa19e3e47b35571af105eec363e0c06e56999f4ef9eacac1b",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-uptime-pause-repairs.json"
     },
     {
       "position": 174,
@@ -1615,7 +1615,9 @@
       "position": 182,
       "source_simfile": "edamame (except bbno$ produced it under C&A)/edamame.sm",
       "simfile_sha256": "81d33740c66727043e3ba36b3029d4c7021c8925ca4a1ee3aa791e2980b613d1",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 183,
@@ -1635,7 +1637,9 @@
       "position": 185,
       "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
       "simfile_sha256": "66db5c1884fb2b633bfd26de2f32825a27f7fd9e8e08a0ae89d1ec4f27b8d645",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 186,
@@ -1661,7 +1665,9 @@
       "position": 189,
       "source_simfile": "finite/sta - Finite.sm",
       "simfile_sha256": "189f2fa6c07555b2f6e7426bcd127a328a9bb9564bdeb8cd540613c3b552baf6",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 190,
