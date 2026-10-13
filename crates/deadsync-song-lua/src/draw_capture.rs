@@ -167,11 +167,29 @@ pub(crate) fn finish(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
-fn state(actor: &Table) -> mlua::Result<SongLuaOverlayState> {
-    actor_overlay_initial_state(actor).map_err(mlua::Error::external)
+fn state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
+    if crate::live::active(lua) {
+        crate::live::read_state(lua, actor)
+    } else {
+        actor_overlay_initial_state(actor).map_err(mlua::Error::external)
+    }
 }
 
-fn scoped_context(actor: &Table, prior: &Context) -> mlua::Result<Option<Context>> {
+// Actor::PreDraw multiplies diffuse by its inherited diffuse and combines
+// glow with Screen blending before Actor::PartiallyOpaque tests the result.
+fn partially_opaque(state: SongLuaOverlayState, parents: &[SongLuaOverlayState]) -> bool {
+    let mut diffuse = 1.0;
+    let mut glow = 0.0;
+    for parent in parents {
+        diffuse *= parent.vertex_colors.map_or(parent.diffuse[3], |colors| colors[0][3]);
+        glow = glow + parent.glow[3] - glow * parent.glow[3];
+    }
+    let diffuse_visible = state.vertex_colors.map_or(state.diffuse[3] * diffuse > 0.0,
+        |colors| colors.iter().any(|color| color[3] * diffuse > 0.0));
+    diffuse_visible || state.glow[3] + glow - state.glow[3] * glow > 0.0
+}
+
+fn scoped_context(lua: &Lua, actor: &Table, prior: &Context) -> mlua::Result<Option<Context>> {
     if actor
         .raw_get::<Option<bool>>("__songlua_theme_hibernating")?
         .unwrap_or(false)
@@ -188,15 +206,17 @@ fn scoped_context(actor: &Table, prior: &Context) -> mlua::Result<Option<Context
     let mut parents = prior.parents.to_vec();
     if let Some(wrappers) = actor.raw_get::<Option<Table>>("__songlua_wrappers")? {
         for index in (1..=wrappers.raw_len()).rev() {
-            let wrapper = state(&wrappers.raw_get::<Table>(index)?)?;
-            if !wrapper.draw_visible() {
+            let wrapper = state(lua, &wrappers.raw_get::<Table>(index)?)?;
+            if !wrapper.draw_visible()
+                || (crate::live::active(lua) && !partially_opaque(wrapper, &parents)) {
                 return Ok(None);
             }
             parents.push(wrapper);
         }
     }
-    let state = state(actor)?;
-    if !state.draw_visible() {
+    let state = state(lua, actor)?;
+    if !state.draw_visible()
+        || (crate::live::active(lua) && !partially_opaque(state, &parents)) {
         return Ok(None);
     }
     parents.push(state);
@@ -218,7 +238,7 @@ pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         .app_data_ref::<Capture>()
         .and_then(|capture| capture.context.clone());
     let Some(prior) = prior else { return Ok(()) };
-    let Some(context) = scoped_context(actor, &prior)? else {
+    let Some(context) = scoped_context(lua, actor, &prior)? else {
         return Ok(());
     };
     if let Some(mut capture) = lua.app_data_mut::<Capture>() {
@@ -237,8 +257,21 @@ pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         }
         let result = (|| {
             if let Some(callback) = actor.raw_get::<Option<Function>>("__songlua_draw_function")? {
-                call_actor_function(lua, actor, &callback, None)?;
-                drain_actor_command_queue(lua, actor)
+                crate::live::callback_phase(lua, true);
+                let result = call_actor_function(lua, actor, &callback, None);
+                crate::live::callback_phase(lua, false);
+                if crate::live::active(lua) {
+                    if let Err(error) = result {
+                        crate::lua_util::report_update_error(lua, actor,
+                            "__songlua_draw_error_reported", "draw callback", &error)?;
+                    }
+                    // Native draw callbacks do not update the actor queue.
+                    // queuecommand from Draw waits for the next actor Update.
+                    Ok(())
+                } else {
+                    result?;
+                    drain_actor_command_queue(lua, actor)
+                }
             } else {
                 let kind = actor
                     .get::<Option<String>>("__songlua_actor_type")?
@@ -337,13 +370,36 @@ fn visit(lua: &Lua, actor: &Table, prior: &Context) -> mlua::Result<()> {
         result?;
         return Ok(());
     }
-    let Some(context) = scoped_context(actor, prior)? else {
+    let Some(context) = scoped_context(lua, actor, prior)? else {
         return Ok(());
     };
     for child in actor.sequence_values::<Table>() {
         visit(lua, &child?, &context)?;
     }
     Ok(())
+}
+
+/// The live VM retains only this frame's draw stack. Reuse the same owned
+/// traversal and explicit Draw/render-target scopes as the baker, while
+/// releasing prior frame payloads before any callback runs. Trace events and
+/// pending actor queues are separate and are never cleared here.
+pub(crate) fn run_live(lua: &Lua, root: &Table) -> mlua::Result<()> {
+    if let Some(mut capture) = lua.app_data_mut::<Capture>() {
+        capture.context = None;
+        capture.targets.clear();
+        capture.calls.clear();
+        capture.owners.clear();
+        capture.frames.clear();
+        capture.labels.clear();
+        capture.bytes = 0;
+    }
+    run(lua, root)
+}
+
+#[cfg(test)]
+pub(crate) fn live_storage(lua: &Lua) -> (usize, usize, usize) {
+    lua.app_data_ref::<Capture>().map_or((0, 0, 0), |capture|
+        (capture.frames.len(), capture.frames.iter().map(|frame| frame.calls.len()).sum(), capture.bytes))
 }
 
 pub(crate) fn run(lua: &Lua, root: &Table) -> mlua::Result<()> {
@@ -359,7 +415,7 @@ pub(crate) fn run(lua: &Lua, root: &Table) -> mlua::Result<()> {
     let screen = lua
         .globals()
         .raw_get::<Option<Table>>("__songlua_top_screen")?;
-    let screen = screen.as_ref().map(state).transpose()?;
+    let screen = screen.as_ref().map(|actor| state(lua, actor)).transpose()?;
     let parents = screen.into_iter().collect::<Vec<_>>().into();
     let result = visit(
         lua,

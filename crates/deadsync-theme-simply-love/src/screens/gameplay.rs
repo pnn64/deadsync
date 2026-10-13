@@ -757,6 +757,7 @@ pub struct State {
     song_lua_output: deadsync_song_lua::SongLuaLiveOutput,
     song_lua_out: Option<SongLuaOut>,
     song_lua_ended: bool,
+    song_lua_draw_reload_pending: bool,
     judgment_palettes: [deadsync_theme::color::JudgmentPalette; MAX_PLAYERS],
     /// Game-thread, song-lifetime identity for the fixed two HUD slots. Built
     /// during gameplay setup, read immutably thereafter, and dropped with the
@@ -972,7 +973,7 @@ impl State {
         scene.apply_pending_player_writes(&mut self.gameplay);
         let mut frame = deadsync_song_lua::SongLuaLiveFrame::from_gameplay(&self.gameplay, delta);
         frame.uptime_seconds = uptime_seconds;
-        let output = scene.advance(frame).map_err(|error| error.to_string())?;
+        let output = scene.update(frame).map_err(|error| error.to_string())?;
         scene.apply_output_player_writes(&output, &mut self.gameplay);
         let request = output.request.as_ref().or(self.song_lua_output.request.as_ref());
         if matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message)) if message == "SM_DoNextScreen")
@@ -981,8 +982,10 @@ impl State {
             self.gameplay.progress.stage.song_completed_naturally = true;
             self.song_lua_out = Some(SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY });
         }
-        if matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen)) if screen == "ScreenGameplay") {
+        if self.song_lua_draw_reload_pending
+            || matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen)) if screen == "ScreenGameplay") {
             effects.push(ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::ReloadSongLua));
+            self.song_lua_draw_reload_pending = false;
         }
         // Entry events precede the first real update and must reach the shell
         // exactly once. The shell drains this buffer every frame.
@@ -997,6 +1000,28 @@ impl State {
             self.gameplay.hold_judgment_callback = None;
             effects.push(ThemeEffect::NavigateNoFade(crate::screens::SimplyLoveScreen::Evaluation));
         }
+        scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)
+    }
+
+    fn draw_song_lua(&mut self) -> Result<(), String> {
+        if self.song_lua_ended { return Ok(()); }
+        let Some(scene) = &mut self.song_lua else { return Ok(()); };
+        let output = scene.draw().map_err(|error| error.to_string())?;
+        scene.apply_output_player_writes(&output, &mut self.gameplay);
+        match output.request.as_ref() {
+            Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message))
+                if message == "SM_DoNextScreen" && self.song_lua_out.is_none() => {
+                    self.gameplay.progress.stage.song_completed_naturally = true;
+                    self.song_lua_out = Some(SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY });
+                }
+            Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen)) if screen == "ScreenGameplay" => {
+                // Draw follows ScreenManager::Update: its delayed screen load
+                // is processed after the next update, not during this draw.
+                self.song_lua_draw_reload_pending = true;
+            }
+            _ => {}
+        }
+        self.song_lua_output.append(output);
         scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)
     }
 
@@ -1191,6 +1216,7 @@ impl State {
             song_lua_output: deadsync_song_lua::SongLuaLiveOutput::default(),
             song_lua_out: None,
             song_lua_ended: false,
+            song_lua_draw_reload_pending: false,
             judgment_palettes,
             hud_snapshot,
             noteskin_assets,
@@ -2631,6 +2657,7 @@ pub fn update(
     effects: &mut Vec<ThemeEffect>,
 ) {
     if state.song_lua_ended { return; }
+    let effect_start = effects.len();
     let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);
     if state.song_lua.is_none() && matches!(action, GameplayAction::Navigate(GameplayExit::Complete)
         | GameplayAction::NavigateNoFade(GameplayExit::Complete)) {
@@ -2657,6 +2684,14 @@ pub fn update(
             }
         }
         action => effects.push(map_gameplay_action(action)),
+    }
+    // GameLoop updates the screen manager before drawing. An outgoing screen
+    // is already popped; a replacement has not received its first Update yet.
+    let screen_changes = effects[effect_start..].iter().any(|effect| matches!(effect,
+        ThemeEffect::Navigate(_) | ThemeEffect::NavigateNoFade(_)
+        | ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::ReloadSongLua)));
+    if !screen_changes && let Err(error) = state.draw_song_lua() {
+        state.song_lua_output.errors.push(error);
     }
 }
 

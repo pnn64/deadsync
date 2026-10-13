@@ -12980,7 +12980,11 @@ pub fn run_actor_draw_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Res
     let globals = lua.globals();
     let prior = globals.raw_get::<Value>(DRAW_CALLBACK_ACTIVE_KEY)?;
     globals.raw_set(DRAW_CALLBACK_ACTIVE_KEY, true)?;
-    let result = crate::draw_capture::run(lua, actor);
+    let result = if crate::live::active(lua) {
+        crate::draw_capture::run_live(lua, actor)
+    } else {
+        crate::draw_capture::run(lua, actor)
+    };
     globals.raw_set(DRAW_CALLBACK_ACTIVE_KEY, prior)?;
     if let Err(err) = result {
         report_update_error(

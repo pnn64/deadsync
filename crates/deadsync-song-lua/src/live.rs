@@ -795,6 +795,7 @@ pub struct SongLuaLiveScene {
     outro_options_reset: bool,
     outro_off_pending: bool,
     ended: bool,
+    updated: bool,
 }
 
 impl fmt::Debug for SongLuaLiveScene {
@@ -857,10 +858,19 @@ impl SongLuaLiveScene {
         Ok(Self { lua, root, stage, players, actors, states, tracked, registry,
             targets: Vec::new(), context, entry_paths, primary_index, last_beat,
             last_music_seconds: -9999.0, backgrounds, foregrounds, startup_output,
-            outro_started: false, outro_options_reset: false, outro_off_pending: false, ended: false })
+            outro_started: false, outro_options_reset: false, outro_off_pending: false, ended: false, updated: false })
     }
 
+    /// Advance one complete active-screen frame: update, then draw.
     pub fn advance(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {
+        let mut output = self.update(frame)?;
+        output.append(self.draw()?);
+        Ok(output)
+    }
+
+    /// Update the owned actor tree and health. Screen owners can process exit
+    /// or replacement before deciding whether this scene is still drawn.
+    pub fn update(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {
         if self.ended { return Err(mlua::Error::runtime("cannot advance an ended song Lua scene")); }
         // GameState.cpp::UpdateSongPosition maintains global Song timing apart
         // from each Player's selected Steps timing. The domain frame carries
@@ -945,6 +955,24 @@ impl SongLuaLiveScene {
             crate::lua_util::report_update_error(&self.lua, &screen,
                 "__songlua_health_error_reported", "HealthStateChanged", &error)?;
         }
+        self.updated = true;
+        take_output(&self.lua)
+    }
+
+    /// ScreenManager::Draw skips a screen before its first Update and after
+    /// it has been popped. Authored Draw uses the latest owned tween pose.
+    pub fn draw(&mut self) -> mlua::Result<SongLuaLiveOutput> {
+        if self.ended || !self.updated { return Ok(SongLuaLiveOutput::default()); }
+        if let Value::Table(root) = &self.root {
+            crate::lua_util::run_actor_draw_functions_for_table(&self.lua, root)?;
+        }
+        for (actor, state) in self.actors.iter().zip(&mut self.states) {
+            *state = read_state(&self.lua, actor)?;
+        }
+        for (_, actor, state) in &mut self.tracked {
+            *state = read_state(&self.lua, actor)?;
+        }
+        for actor in &self.registry { crate::reset_actor_capture(&self.lua, actor)?; }
         take_output(&self.lua)
     }
 
@@ -1651,6 +1679,118 @@ end }
         assert_eq!(first.raw_get::<f64>(1).unwrap(), 0.0);
         assert_eq!(first.raw_get::<f64>(2).unwrap(), -4.5);
         assert_eq!(updates.raw_get::<Table>(2).unwrap().raw_get::<f32>(2).unwrap(), -4.49_f32);
+    }
+
+    #[test]
+    fn live_draw_follows_owned_update_and_replaces_automatic_children() {
+        let mut compiled = compile_with_context("live-draw", r#"
+DRAWS, NESTED, AUTOMATIC, QUEUED = 0, 0, 0, 0
+return Def.ActorFrame {
+    Name='DrawRoot',
+    OnCommand=function(self)
+        ROOT = self
+        local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+        local state = GAMESTATE:GetPlayerState('PlayerNumber_P1')
+        self:SetUpdateFunction(function(actor) actor:aux(actor:getaux()+1) end)
+        self:SetDrawFunction(function(actor)
+            assert(actor:getaux() > DRAWS, 'draw must follow the owned actor update')
+            assert(state:GetHealthState() == 'HealthState_Dead', 'draw must see the updated health')
+            DRAWS = DRAWS + 1
+            actor:GetChild('Nested'):Draw()
+            actor:queuecommand('AfterDraw')
+        end)
+        ORIGINAL_DRAW = self:GetDrawFunction()
+        player:SetLife(0)
+    end,
+    AfterDrawCommand=function() QUEUED = QUEUED + 1 end,
+    Def.ActorFrame {
+        Name='Nested',
+        InitCommand=function(self)
+            self:SetDrawFunction(function(actor)
+                NESTED = NESTED + 1
+                actor:GetChild('Leaf'):x(NESTED):Draw()
+            end)
+        end,
+        Def.Quad { Name='Leaf' },
+    },
+    Def.ActorFrame {
+        Name='Automatic',
+        InitCommand=function(self)
+            self:SetDrawFunction(function() AUTOMATIC = AUTOMATIC + 1 end)
+        end,
+    },
+}
+"#, |context| context.defer_initial_live_update = true);
+        let mut scene = compiled.live_scene.take().expect("owned draw scene");
+        let output = scene.advance(SongLuaLiveFrame { screen_seconds: 0.1,
+            music_seconds: 0.1, beat: 0.1, delta_seconds: 0.1,
+            players: [SongLuaLivePlayer { fail_enabled: true, ..Default::default() }; LUA_PLAYERS],
+            ..Default::default() })
+            .expect("first update and draw");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 1,
+            "the live frame must execute its installed draw callback");
+        assert_eq!(scene.lua.globals().get::<u32>("NESTED").unwrap(), 1,
+            "explicit Draw must execute the nested callback");
+        assert_eq!(scene.lua.globals().get::<u32>("AUTOMATIC").unwrap(), 0,
+            "custom draw replaces automatic child traversal");
+        assert_eq!(scene.lua.globals().get::<u32>("QUEUED").unwrap(), 0,
+            "draw must leave queued commands for the next actor update");
+
+        let frame = SongLuaLiveFrame { screen_seconds: 0.2, music_seconds: 0.2,
+            beat: 0.2, delta_seconds: 0.1,
+            players: [SongLuaLivePlayer { fail_enabled: true, ..Default::default() }; LUA_PLAYERS],
+            ..Default::default() };
+        scene.update(frame).expect("update without draw");
+        assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 1);
+        assert_eq!(scene.lua.globals().get::<u32>("QUEUED").unwrap(), 1);
+        scene.draw().expect("separate draw");
+        assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 2);
+
+        scene.lua.load("ROOT:visible(false)").exec().unwrap();
+        scene.advance(frame).unwrap();
+        assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 2);
+        scene.lua.load("ROOT:visible(true):hibernate(0.25)").exec().unwrap();
+        scene.advance(frame).unwrap();
+        assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 2);
+        scene.lua.load("ROOT:hibernate(0):diffusealpha(0)").exec().unwrap();
+        scene.advance(frame).unwrap();
+        assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 2,
+            "transparent actors do not reach native DrawPrimitives");
+        scene.lua.load("ROOT:glow(1,1,1,1)").exec().unwrap();
+        scene.advance(frame).unwrap();
+        assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 3,
+            "glow makes a transparent actor partially opaque");
+
+        scene.lua.load("ROOT:diffusealpha(1):glow(0,0,0,0):AddWrapperState(); ROOT:GetWrapperState(1):visible(false)").exec().unwrap();
+        scene.advance(frame).unwrap();
+        assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 3,
+            "an invisible wrapper aborts the nested draw");
+        scene.lua.load("ROOT:GetWrapperState(1):visible(true); ROOT:SetDrawFunction(nil)").exec().unwrap();
+        scene.advance(frame).unwrap();
+        assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 3);
+        assert_eq!(scene.lua.globals().get::<u32>("AUTOMATIC").unwrap(), 1,
+            "removing a callback restores ordinary child traversal");
+        scene.lua.load("ROOT:SetDrawFunction(function(actor) actor:x(42) end)").exec().unwrap();
+        scene.advance(frame).unwrap();
+        assert_eq!(scene.states().iter().find(|state| state.x == 42.0).unwrap().x, 42.0,
+            "draw mutations are reflected in the current live visual poses");
+        scene.lua.load("ROOT:SetDrawFunction(ORIGINAL_DRAW)").exec().unwrap();
+        for index in 0..2000 {
+            let output = scene.advance(SongLuaLiveFrame { screen_seconds: 1.0 + index as f64 * 0.1,
+                music_seconds: 1.0 + index as f64 * 0.1, beat: 1.0 + index as f64 * 0.1,
+                ..frame }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            let (frames, calls, bytes) = crate::draw_capture::live_storage(&scene.lua);
+            assert_eq!(frames, 1, "draw storage must retain only the current frame");
+            assert_eq!(calls, 1, "one explicitly drawn leaf per live frame");
+            assert!(bytes < 8192, "live draw storage must not accumulate song history");
+        }
+        let draws = scene.lua.globals().get::<u32>("DRAWS").unwrap();
+        scene.end().unwrap();
+        scene.draw().unwrap();
+        assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), draws,
+            "a popped screen does not run another draw callback");
     }
 
     #[test]
