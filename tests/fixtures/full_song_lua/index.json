@@ -2468,15 +2468,12 @@
     {
       "title": "Flying Castle",
       "source_simfile": "Flying Castle/flying castle.ssc",
-      "harness_version": "0.1.0",
-      "archive": "0f44812a968442a37374935441406301a6c11cc4026abb557dba654005e39160.tar.zst",
-      "sha256": "0f44812a968442a37374935441406301a6c11cc4026abb557dba654005e39160",
-      "compressed_bytes": 120288,
-      "uncompressed_sha256": "146fbd2e9f1dae42fea86d5b16b095fb4e0a96a07da16f3446ffa565d3d80dba",
-      "compression_level": 22,
-      "aliases": [
-        "27aeebd330258d7165ef6ce29e2ced4de1b328b265e47dabe08964b9ccbaaa7d.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "6dacfca697e7a273ff2a2b3b0170a46ee13fa0f9cc96a8ac421f7af59363e369.tar.zst",
+      "sha256": "6dacfca697e7a273ff2a2b3b0170a46ee13fa0f9cc96a8ac421f7af59363e369",
+      "compressed_bytes": 6841081,
+      "uncompressed_sha256": "8e562b12b57addaa8b4a7c99c53e0539e13c8f998f8aba12222abfd01cc57970",
+      "aliases": []
     },
     {
       "title": "Fof Guys",

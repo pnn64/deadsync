@@ -1777,6 +1777,56 @@
         }
       ],
       "report_sha256": "49c599b6825f88be0f48a4924c24d6cbb1032c40aaa9bfb46b20b7af804fc327"
+    },
+    {
+      "position": 195,
+      "source_simfile": "Flying Castle/flying castle.ssc",
+      "simfile_sha256": "a41993d60eb67a8775607758aced9182ea7432a9ceb865cce6073ec4b47b8522",
+      "retained_original_archive": "0f44812a968442a37374935441406301a6c11cc4026abb557dba654005e39160.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "fdb93c3526a021c8fd78788ab0365161fe3b73fe4bf0431f072244cd8ba28493",
+      "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+      "fix_commit": "ce20604ea / harness 55299c5",
+      "build_proof": "/home/parity/jobs/null-foreground-build-v1/proof.json",
+      "capture_seconds": 158.88534313399578,
+      "trace_sha256": "6051b03edefe7ac57d0b1b0ba7f83fc2b40abeb670f6cce359b5f194bc3a7830",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-195/candidates/8e562b12b57addaa8b4a7c99c53e0539e13c8f998f8aba12222abfd01cc57970.tar",
+      "replay_exit": 0,
+      "replay_seconds": 266.10878072599735,
+      "candidate_sha256": "8e562b12b57addaa8b4a7c99c53e0539e13c8f998f8aba12222abfd01cc57970",
+      "native_frames": 30073,
+      "replayed_frames": 30073,
+      "compared_stage_fields": 1485,
+      "pending_coverage": [
+        "uncompared song operations: Actor.z, Actor.zoomy, Actor.zoomz, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.ConfusionOffset1, PlayerOptions.ConfusionOffset2, PlayerOptions.ConfusionOffset3, PlayerOptions.ConfusionOffset4, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.DrunkOffset, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.MoveX1, PlayerOptions.MoveX2, PlayerOptions.MoveX3, PlayerOptions.MoveX4, PlayerOptions.MoveY1, PlayerOptions.MoveY2, PlayerOptions.MoveY3, PlayerOptions.MoveY4, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "c55858e038fde6c31accf19438f70b645466a94571913a4656deb92cc136766c",
+      "archive": "6dacfca697e7a273ff2a2b3b0170a46ee13fa0f9cc96a8ac421f7af59363e369.tar.zst",
+      "archive_sha256": "6dacfca697e7a273ff2a2b3b0170a46ee13fa0f9cc96a8ac421f7af59363e369",
+      "compressed_bytes": 6841081,
+      "pack_seconds": 8.169517269998323,
+      "harness_version": "0.1.80",
+      "title": "Flying Castle",
+      "retained_original_entry": {
+        "title": "Flying Castle",
+        "source_simfile": "Flying Castle/flying castle.ssc",
+        "harness_version": "0.1.0",
+        "archive": "0f44812a968442a37374935441406301a6c11cc4026abb557dba654005e39160.tar.zst",
+        "sha256": "0f44812a968442a37374935441406301a6c11cc4026abb557dba654005e39160",
+        "compressed_bytes": 120288,
+        "uncompressed_sha256": "146fbd2e9f1dae42fea86d5b16b095fb4e0a96a07da16f3446ffa565d3d80dba",
+        "compression_level": 22,
+        "aliases": [
+          "27aeebd330258d7165ef6ce29e2ced4de1b328b265e47dabe08964b9ccbaaa7d.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -1786,9 +1836,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "874046de12e1da317673ca0da4c84ed09627d58dc6c5595893b0504289560554",
+  "binary_sha256": "fdb93c3526a021c8fd78788ab0365161fe3b73fe4bf0431f072244cd8ba28493",
   "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
-  "passed_fixtures": 2,
+  "passed_fixtures": 3,
   "pending_charts": 7,
-  "processed_charts": 9
+  "processed_charts": 10
 }
