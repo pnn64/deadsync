@@ -302,5 +302,30 @@
     }
   ],
   "source_confirmed_missing_hold_dispatch": "Player.cpp:1688-1689 broadcasts SetHoldJudgment before HandleHoldScore; Player.cpp:3497-3521 includes the head TapNoteScore in the hold message. GREAT GREAT/default.lua:30-51 handles that score again.",
-  "remaining_before_final_repair": "Resolve startup On clock and dynamic Set callback begin/end/phase differences from native sources and retained capture inputs. Do not spend a third repair attempt or relax existing comparisons."
+  "remaining_before_final_repair": "Resolve startup On clock and dynamic Set callback begin/end/phase differences from native sources and retained capture inputs. Do not spend a third repair attempt or relax existing comparisons.",
+  "additional_source_evidence": {
+    "foreground_directory_source": {
+      "native": "song:/.//default.lua",
+      "independent": "song:/./default.lua",
+      "authored_foreground": "-24=./",
+      "native_source": "Foreground.cpp:37-43 concatenates song directory, the authored folder string and /default.lua.",
+      "independent_source": "compile.rs:327-335 uses Path.join(default.lua), which removes a duplicated separator for a folder ending in slash."
+    },
+    "dynamic_command_scope": {
+      "native": "Set queries are construction observations without Set command begin/end records.",
+      "independent": "run_guarded_actor_command calls live::trace_command for every added command, incrementing the callback-depth counter.",
+      "source_locations": [
+        "lua_util.rs:6338",
+        "lua_util.rs:3647",
+        "live.rs:34-49"
+      ]
+    },
+    "startup_clock": {
+      "native_on_seconds": -4.492290019989014,
+      "independent_on_seconds": -4.488644123077393,
+      "native_metrics": "Simply Love metrics.ini:1819-1820 uses six rate-scaled seconds to steps and two to music.",
+      "native_source": "ScreenGameplay.cpp:1508-1536 and 1657",
+      "status": "The initial foreground On clock precedes the first replayed frame. Confirm the retained epoch input/initial music position and native update ordering before changing replay startup."
+    }
+  }
 }

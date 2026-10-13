@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T04:52:14Z",
-  "previous_goal_turn": "progress: Feely final attempt 2 passed all 7084 frames and 1408 stage checks with zero errors or mismatches. Its compressed fixture was decompressed, byte-verified and immediately committed as de1ea067f. Flowers Cringle final attempt 2 completed all 18924 frames with zero Lua errors and 128831 command/query mismatches, reaching its two-attempt cap; the first remaining difference is Lua reconstruction phase at beat 17. Player SetLife shared meter/stats state, synchronous LifeChanged, clamping, recursion rejection, stage FailPlayer propagation and post-actor health update are committed as 6470fdd9d. Windows and Linux passed 815 gameplay tests, 33 live Lua checks and 20 native replay controls; the immutable player-life helper pins all 21 source files. Ghost first repair reuses its byte-identical uncompressed native capture. GREAT GREAT has a separate source-confirmed missing engine JudgmentMessage dispatch before row scoring; no repair replay was spent before implementing that dispatch. The three original queues continue with the single publisher; no passing chart is reopened, no acceptance gate added, and this remains an incomplete 501-source sweep.",
+  "updated_utc": "2026-10-13T05:33:54Z",
+  "previous_goal_turn": "progress: Feely final repair 2 passed all 7084 frames and was immediately packed, decompressed, byte-verified and committed as de1ea067f. Ghost first repair passed all 115164 frames and 1529 stage fields with zero mismatches or Lua errors; its verified compressed fixture was immediately committed as 74216ebb6. Shared player life writes are committed as 6470fdd9d, completed tap-row judgment dispatch as 86fba19f6, and completed hold judgment dispatch as 7ee5d0090. Each fix passed 815 gameplay tests, 33 live Lua checks and 20 native replay controls on Windows and Linux with 21 immutable source pins. The latest selected helper is bd9bdd3d from hold-judgment-build-v1. GREAT GREAT first repair completed all 8419 frames with no Lua errors and 50 mismatches: one missing 0.033 hold-handler life change plus startup command/query source, clock and dynamic-command phase differences. Hold dispatch is now independently validated; the remaining startup causes must be resolved before its one remaining repair. No final repair was launched. Flowers final repair 2 completed with 128831 remaining command/query mismatches at its cap. All three original queues continue with the single publisher and 32 streams. The audited original scope remains 187 passed, 54 pending and 260 unprocessed; all 501 source bytes match their baseline. Missing coverage stays separate, no passing fixture reopened, no acceptance gate added and the sweep remains active.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "16341ff5cf934b0567ad97ad0d7017fd747d2091",
+      "deadsync": "3ad5f7d4e6d57f37ad7be2726c26e78643b98c79",
       "itgmania_harness": "b191ebd0fcf8b59b5294958d2ffe2939af2d742a"
     }
   },
@@ -43,7 +43,9 @@
     "requested_foreground_source": "63e17ffe7 passed 31 Windows/Linux live tests and 18 Linux controls; Feely final 2 now passed with validated callbacks and whole-song end as de1ea067f; sweep-2026-10-12-foreground-source-build.json",
     "tap_callbacks_margins_and_ssc": "9e0511014, 8f91878dc, b29bff67c and 5e84abcd4 passed seven-check Windows/Linux validation; FTW SSC passed as 1918f8e67; Flowers final 2 completed with remaining reconstruction-phase command mismatches at its cap; sweep-2026-10-12-tap-callback-and-margins-build.json",
     "whole_song_end_window": "43dae3f20 passed 815 gameplay tests and 20 controls on Windows/Linux; Feely final 2 passed all 7084 frames using its unchanged native capture; sweep-2026-10-12-whole-song-end-build.json",
-    "player_life_writes": "6470fdd9d passed 815 gameplay, 33 live and 20 native controls on Windows/Linux; Ghost first retained-capture repair launched; GREAT GREAT still needs engine judgment dispatch; sweep-2026-10-12-player-life-build.json",
+    "player_life_writes": "6470fdd9d passed 815 gameplay, 33 live and 20 controls on Windows/Linux; Ghost first repair passed all 115164 frames as 74216ebb6; sweep-2026-10-12-player-life-build.json",
+    "native_tap_row_judgment": "86fba19f6 passed 815/33/20 Windows/Linux checks; GREAT GREAT first repair reused its unchanged capture and diagnosed the remaining hold message and startup trace differences; sweep-2026-10-12-player-judgment-build.json",
+    "native_hold_judgment": "7ee5d0090 passed 815/33/20 Windows/Linux checks and the extended production head-plus-Held control; immutable bd9bdd3d helper selected; GREAT GREAT has one repair attempt left; sweep-2026-10-12-hold-judgment-build.json",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved"
   },
   "corpus_transfer": {
@@ -67,9 +69,9 @@
       "pending": 36,
       "processed": 49,
       "last_log_lines": [
-        "[2120.6s] replaying every native gameplay frame: frame 36253/169429 (21.4%)",
-        "[2122.6s] replaying every native gameplay frame: frame 36297/169429 (21.4%)",
-        "[2124.6s] replaying every native gameplay frame: frame 36339/169429 (21.4%)"
+        "[4621.2s] replaying every native gameplay frame: frame 80605/169429 (47.6%)",
+        "[4623.2s] replaying every native gameplay frame: frame 80650/169429 (47.6%)",
+        "[4625.2s] replaying every native gameplay frame: frame 80689/169429 (47.6%)"
       ],
       "supervisor_running": true
     },
@@ -95,15 +97,26 @@
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
       {
-        "job": "ghost-player-life-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
+        "job": "great-great-judgment-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
         "passed": 0,
-        "pending": 0,
-        "processed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "replay",
+        "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
+        "child_running": false
+      },
+      {
+        "job": "ghost-player-life-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
+        "pending": 0,
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "ghost [Telperion]/ghost.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "flowers-cringle-tap-and-margins-repair-v1",
@@ -646,12 +659,19 @@
         "record": "sweep-2026-10-12-ghost-player-life-repairs.json",
         "fix_commit": "6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
         "finish_status": "bounded Ghost shared player life first repair complete"
+      },
+      {
+        "name": "great-great-judgment-repair",
+        "remote": "/home/parity/jobs/great-great-judgment-repair-v1",
+        "record": "sweep-2026-10-12-great-great-judgment-repairs.json",
+        "fix_commit": "86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+        "finish_status": "bounded GREAT GREAT native row judgment first repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 39,
-    "new_pending_charts": 54,
+    "new_passed_fixtures": 40,
+    "new_pending_charts": 53,
     "new_processed_sources": 93,
     "charts_in_remaining_queue": 353,
     "unprocessed_sources": 260,
@@ -961,22 +981,6 @@
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
-    },
-    {
-      "source_simfile": "ghost [Telperion]/ghost.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [
-        "UpdateCommand failed for ActorFrame: runtime error: [string \"/tmp/.tmpSyNYYb/song/spooky/default.lua\"]:108: attempt to call method 'SetLife' (a nil value)\nstack traceback:\n\t[C]: in method 'SetLife'\n\t[string \"/tmp/.tmpSyNYYb/song/spooky/default.lua\"]:108: in function <[string \"/tmp/.tmpSyNYYb/song/spooky/default.lua\"]:74>"
-      ],
-      "mismatch_count": 2,
-      "first_mismatch": [
-        {
-          "field": "command_query_count",
-          "native": 56057,
-          "deadsync": 43482
-        }
-      ]
     },
     {
       "source_simfile": "Godspeed [TaroNuke]/godspeed.sm",
@@ -1324,17 +1328,17 @@
     },
     {
       "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
-      "repair_attempts": 0,
+      "repair_attempts": 1,
       "failure": null,
       "errors": [],
-      "mismatch_count": 21,
+      "mismatch_count": 50,
       "first_mismatch": [
         {
           "phase": "progress",
-          "seconds": 2.000136137008667,
+          "seconds": 3.0001814365386963,
           "field": "life_latest",
-          "native": 0.4010000228881836,
-          "deadsync": 0.5
+          "native": 0.2030000388622284,
+          "deadsync": 0.23600004613399506
         }
       ]
     },

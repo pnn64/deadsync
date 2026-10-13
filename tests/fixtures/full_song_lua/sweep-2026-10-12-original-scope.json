@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T04:48:43Z",
+  "updated_utc": "2026-10-13T05:33:53Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,8 +13,8 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 186,
-    "pending": 55,
+    "passed": 187,
+    "pending": 54,
     "unprocessed": 260
   },
   "complete": false,
@@ -1861,9 +1861,9 @@
       "position": 212,
       "source_simfile": "ghost [Telperion]/ghost.ssc",
       "simfile_sha256": "dda0f60cd58a4087f0c02b0bd08cdbe04f037836fe8b1ba07c205e4360ceffc4",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-ghost-player-life-repairs.json"
     },
     {
       "position": 213,
@@ -1918,8 +1918,8 @@
       "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
       "simfile_sha256": "2d9f60495fe97279a7e5373d970c77cd08bbe9c1d9c1d4362aaad8a3b6d88d57",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-great-great-judgment-repairs.json"
     },
     {
       "position": 220,
