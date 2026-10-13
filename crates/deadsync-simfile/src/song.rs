@@ -254,6 +254,22 @@ fn parse_song_source(
     let parsed = rssp::parse::extract_sections(source.data, source.extension)
         .map_err(|error| error.to_string())?;
     summary.offset = rssp::parse::parse_offset_seconds(parsed.offset);
+    if source.extension.eq_ignore_ascii_case("sm") {
+        // RSSP trims Unicode whitespace for analysis. SMLoader::LoadFromTokens
+        // trims only RageUtil's CR, LF, tab and space, then uses the same
+        // authored text for the description, credit and chart name.
+        let entries = parsed.notes_list.iter().filter(|entry| {
+            entry.field_count >= 5
+                && rssp::supported_stepstype_lanes_bytes(entry.fields[0]).is_some()
+        });
+        for (chart, entry) in summary.charts.iter_mut().zip(entries) {
+            let description = rssp::parse::decode_unescape(entry.fields[1]);
+            let description = description.trim_matches(['\r', '\n', '\t', ' ']);
+            chart.description_str = description.to_owned();
+            chart.step_artist_str = description.to_owned();
+            chart.chart_name_str = description.to_owned();
+        }
+    }
     let media_dir = if source.on_disk {
         Some(
             source
@@ -733,6 +749,34 @@ fn chart_bpm_bounds(bpms: &[(f32, f32)]) -> (f64, f64) {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn sm_chart_metadata_preserves_non_ascii_whitespace() {
+        let root = test_dir("sm-metadata-whitespace");
+        let simfile = root.join("metadata.sm");
+        let source = "#TITLE:Metadata;\n#BPMS:0=120;\n\
+            #NOTES:unknown-style:Skipped:Hard:1:0,0,0,0,0:1000;\n\
+            #NOTES:dance-single:\r\n\t \u{a0}Author\\: credit\u{a0} \t\r\n:Hard:1:0,0,0,0,0:1000;\n\
+            #NOTES:dance-double: \tSecond\t :Challenge:2:0,0,0,0,0:10000000;";
+        fs::write(&simfile, source).unwrap();
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let from_file = parse_song_file(&simfile, &options, |_| 0.0).unwrap();
+        let from_bytes =
+            parse_song_bytes(source.as_bytes(), "SM", &simfile, &options, |_| 0.0).unwrap();
+        for song in [from_file, from_bytes] {
+            assert_eq!(song.charts.len(), 2);
+            for (chart, expected) in song
+                .charts
+                .iter()
+                .zip(["\u{a0}Author: credit\u{a0}", "Second"])
+            {
+                assert_eq!(chart.description, expected);
+                assert_eq!(chart.step_artist, expected);
+                assert_eq!(chart.chart_name, expected);
+                assert_eq!(chart.parsed_notes.len(), 1);
+            }
+        }
+    }
 
     #[test]
     fn reused_analysis_matches_fresh_parsing_across_files() {
