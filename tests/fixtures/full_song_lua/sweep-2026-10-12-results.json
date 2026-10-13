@@ -3880,6 +3880,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 197,
+      "source_simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
+      "simfile_sha256": "535ed73ac6613a9c4a4f565cc8496e3c87f3a4825fd023237d7c34afbd5b6025",
+      "retained_original_archive": "f57eb16400d31576642620a501576e4a219c0cbed7bac182baf404345e689cfb.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "1d6c6e802 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/condition-build-v1/proof.json",
+      "capture_seconds": 261.8750229720026,
+      "trace_sha256": "a5d8f4725fa1823bffc9a909c0ac4b9436d10b91513df6fbeb8eea89ab9e82c1",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-197/candidates/b637897cc508ebf3e4149376a02f3445f279d4814d16ddcd22e825a881ca76f0.tar",
+      "replay_exit": 1,
+      "replay_seconds": 2.234806964996096,
+      "candidate_sha256": "b637897cc508ebf3e4149376a02f3445f279d4814d16ddcd22e825a881ca76f0",
+      "failure": "[0.7s] replaying every native gameplay frame\n\nthread 'main' (923739) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "historical_pending": [
@@ -3906,6 +3925,6 @@
   "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 9,
-  "pending_charts": 19,
-  "processed_charts": 28
+  "pending_charts": 20,
+  "processed_charts": 29
 }
