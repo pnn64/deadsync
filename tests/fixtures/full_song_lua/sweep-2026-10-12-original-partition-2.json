@@ -6308,6 +6308,56 @@
         }
       ],
       "report_sha256": "0e000aba1fd156cb50d03b5e09ebe3b4de23fe193668c3120767261d2ee48e1b"
+    },
+    {
+      "position": 283,
+      "source_simfile": "Lip-Sync [Gpop]/Lip-Sync.ssc",
+      "simfile_sha256": "1c5b9ddf0999dc96563c83095dccabd8b7bc0f14fc9c0da8684209869720fa42",
+      "retained_original_archive": "e44e772a15d2867ef60411a39bafd13d07c907d43090ced20d1e1a837b648f91.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "fc7e246c948eb5b0ecb64a09b3777c480ac81eb26d2cf232c4ed3d2f8112cdd1",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/table-find-build-v4/proof.json",
+      "capture_seconds": 154.7359462339955,
+      "trace_sha256": "1ef39e13f8e45051f62f61ef4a040c1745c56c3a8f4283d58dfd5d9d29039b95",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-283/candidates/60a52fea52e1e79fadff9a0ef70e4725b6f9a4d6b89efdcbf2f318a40115726c.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1416.7392184500059,
+      "candidate_sha256": "60a52fea52e1e79fadff9a0ef70e4725b6f9a4d6b89efdcbf2f318a40115726c",
+      "native_frames": 88261,
+      "replayed_frames": 88261,
+      "compared_stage_fields": 1518,
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Beat, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Stealth, PlayerOptions.Tipsy"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "58718b26199fa4b96e43d2c5903dc6afd4a6d78edfe189aac0f5f877991c1462",
+      "archive": "c1be008f5949bd1bd0d9648c674e587a666eab9bf954cb3c42bf15d98997531b.tar.zst",
+      "archive_sha256": "c1be008f5949bd1bd0d9648c674e587a666eab9bf954cb3c42bf15d98997531b",
+      "compressed_bytes": 6314201,
+      "pack_seconds": 4.536708053012262,
+      "harness_version": "0.1.80",
+      "title": "リップシンク",
+      "retained_original_entry": {
+        "title": "リップシンク",
+        "source_simfile": "Lip-Sync [Gpop]/Lip-Sync.ssc",
+        "harness_version": "0.1.0",
+        "archive": "e44e772a15d2867ef60411a39bafd13d07c907d43090ced20d1e1a837b648f91.tar.zst",
+        "sha256": "e44e772a15d2867ef60411a39bafd13d07c907d43090ced20d1e1a837b648f91",
+        "compressed_bytes": 103569,
+        "uncompressed_sha256": "5bda1cffaae10952339364b4685e0a9a292dfd4a9f25f6f10909621efdd971c0",
+        "compression_level": 22,
+        "aliases": [
+          "ae94eba860008ef191917ec4db329cc6e90067fe0448e4711e2115f657718032.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -6319,7 +6369,7 @@
   },
   "binary_sha256": "fc7e246c948eb5b0ecb64a09b3777c480ac81eb26d2cf232c4ed3d2f8112cdd1",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 15,
+  "passed_fixtures": 16,
   "pending_charts": 23,
-  "processed_charts": 38
+  "processed_charts": 39
 }

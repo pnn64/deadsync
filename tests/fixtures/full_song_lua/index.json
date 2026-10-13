@@ -3481,15 +3481,12 @@
     {
       "title": "リップシンク",
       "source_simfile": "Lip-Sync [Gpop]/Lip-Sync.ssc",
-      "harness_version": "0.1.0",
-      "archive": "e44e772a15d2867ef60411a39bafd13d07c907d43090ced20d1e1a837b648f91.tar.zst",
-      "sha256": "e44e772a15d2867ef60411a39bafd13d07c907d43090ced20d1e1a837b648f91",
-      "compressed_bytes": 103569,
-      "uncompressed_sha256": "5bda1cffaae10952339364b4685e0a9a292dfd4a9f25f6f10909621efdd971c0",
-      "compression_level": 22,
-      "aliases": [
-        "ae94eba860008ef191917ec4db329cc6e90067fe0448e4711e2115f657718032.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "c1be008f5949bd1bd0d9648c674e587a666eab9bf954cb3c42bf15d98997531b.tar.zst",
+      "sha256": "c1be008f5949bd1bd0d9648c674e587a666eab9bf954cb3c42bf15d98997531b",
+      "compressed_bytes": 6314201,
+      "uncompressed_sha256": "60a52fea52e1e79fadff9a0ef70e4725b6f9a4d6b89efdcbf2f318a40115726c",
+      "aliases": []
     },
     {
       "title": "Episode 21",
