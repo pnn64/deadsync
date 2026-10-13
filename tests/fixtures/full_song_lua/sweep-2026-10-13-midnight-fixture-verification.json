@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Midnight Madness/midnight.sm",
+      "acceptance_commit": "1f8af2eca6eeeb0c5d9266b7304e8cd4c898cf22",
+      "native_frames": 19414,
+      "replayed_frames": 19414,
+      "compared_stage_fields": 385,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "3adb8fdec8997e7ac138bbf4ce49f8cd61de1163cb79759c1de721208457ae2a.tar.zst",
+      "compressed_sha256": "3adb8fdec8997e7ac138bbf4ce49f8cd61de1163cb79759c1de721208457ae2a",
+      "uncompressed_sha256": "7800e1c6d93bdbdd8a220697e94021e54e6b57948c8677f2ba3dc567c2000e80",
+      "compressed_bytes": 1174294,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "native actor definitions are missing"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
