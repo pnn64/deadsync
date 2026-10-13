@@ -3290,6 +3290,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 250,
+      "source_simfile": "Invert/invert.ssc",
+      "simfile_sha256": "5c97f248659f6c4c9816d49d3ea43c0bdffc3d913c5f73fa486021a060c2165e",
+      "retained_original_archive": "e9f34494835cb78fdcff987b2e3840aab8831fbc79ec91188673aa26c8337090.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+      "build_proof": "/home/parity/jobs/density-graph-build-v1/proof.json",
+      "capture_seconds": 442.8996824729984,
+      "trace_sha256": "5f886b0aa2eff1bd3c442e041f8e73406e4101d4fe6080027a7a344d32cdaea3",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-250/candidates/121316fceefc39a647074cd93c107e0ee874a2ad734f80b31ecaffeb4c499b58.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1331.1600524019887,
+      "candidate_sha256": "121316fceefc39a647074cd93c107e0ee874a2ad734f80b31ecaffeb4c499b58",
+      "native_frames": 118104,
+      "replayed_frames": 118104,
+      "compared_stage_fields": 3696,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "d8fb88f7ac3e50e35979dc09466bd36c8abd3dac73e3f2fe20dbe8d53289156b",
+      "archive": "e3f01c5af96b14bd0ee9dbcfb93f3df6e270f2423ecba31c780694ef795f76d8.tar.zst",
+      "archive_sha256": "e3f01c5af96b14bd0ee9dbcfb93f3df6e270f2423ecba31c780694ef795f76d8",
+      "compressed_bytes": 38339494,
+      "pack_seconds": 43.848256590004894,
+      "harness_version": "0.1.80",
+      "title": "Invert",
+      "retained_original_entry": {
+        "title": "Invert",
+        "source_simfile": "Invert/invert.ssc",
+        "harness_version": "0.1.0",
+        "archive": "e9f34494835cb78fdcff987b2e3840aab8831fbc79ec91188673aa26c8337090.tar.zst",
+        "sha256": "e9f34494835cb78fdcff987b2e3840aab8831fbc79ec91188673aa26c8337090",
+        "compressed_bytes": 140715,
+        "uncompressed_sha256": "58f67d77a91e059de07ca4c753dd29d635666ae9f82d121084e7add758d371d4",
+        "compression_level": 22,
+        "aliases": [
+          "c507bf18a1a0edbdc8ea18ea12eeefae63eda53e1338d6aa4dae31f527ae2e1b.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -3299,9 +3349,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "7f64d791484688206a4eeaf9f264d48cf0de71ac73780fc40226f1f74bb473e8",
+  "binary_sha256": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 10,
+  "passed_fixtures": 11,
   "pending_charts": 17,
-  "processed_charts": 27
+  "processed_charts": 28
 }

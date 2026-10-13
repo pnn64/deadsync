@@ -3115,15 +3115,12 @@
     {
       "title": "Invert",
       "source_simfile": "Invert/invert.ssc",
-      "harness_version": "0.1.0",
-      "archive": "e9f34494835cb78fdcff987b2e3840aab8831fbc79ec91188673aa26c8337090.tar.zst",
-      "sha256": "e9f34494835cb78fdcff987b2e3840aab8831fbc79ec91188673aa26c8337090",
-      "compressed_bytes": 140715,
-      "uncompressed_sha256": "58f67d77a91e059de07ca4c753dd29d635666ae9f82d121084e7add758d371d4",
-      "compression_level": 22,
-      "aliases": [
-        "c507bf18a1a0edbdc8ea18ea12eeefae63eda53e1338d6aa4dae31f527ae2e1b.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "e3f01c5af96b14bd0ee9dbcfb93f3df6e270f2423ecba31c780694ef795f76d8.tar.zst",
+      "sha256": "e3f01c5af96b14bd0ee9dbcfb93f3df6e270f2423ecba31c780694ef795f76d8",
+      "compressed_bytes": 38339494,
+      "uncompressed_sha256": "121316fceefc39a647074cd93c107e0ee874a2ad734f80b31ecaffeb4c499b58",
+      "aliases": []
     },
     {
       "title": "It's Showtime!",
