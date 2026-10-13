@@ -1,0 +1,26 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Loop/loop.ssc",
+      "acceptance_commit": "4991919d158f63e26d8cb1d5d8620f1386afa526",
+      "native_frames": 14674,
+      "replayed_frames": 14674,
+      "compared_stage_fields": 1485,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "6dbb18c6e2d56bd3ba5e21604b2ecce2b45d88536780d6ff14acbe7c5d9a5505.tar.zst",
+      "compressed_sha256": "6dbb18c6e2d56bd3ba5e21604b2ecce2b45d88536780d6ff14acbe7c5d9a5505",
+      "uncompressed_sha256": "6bdac29e0109dda2fa9f208ed5592294470fa2a21651fbff13b154f64b04b622",
+      "compressed_bytes": 12368341,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.rotationx, Actor.rotationy, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.vanishpoint, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Song.GetMainTitle",
+        "native drawable state/resources: BitmapText, Model, Sprite"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
