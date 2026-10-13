@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Oil Ocean Act 2/steps.sm",
+      "acceptance_commit": "a5e65535ab853cb5889534099b65a3122a4c8ede",
+      "native_frames": 89481,
+      "replayed_frames": 89481,
+      "compared_stage_fields": 1793,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "dbd4c1382a54e6ebe36d913d72d2c18f2509155f85fe51282dce773a02e2fc55.tar.zst",
+      "compressed_sha256": "dbd4c1382a54e6ebe36d913d72d2c18f2509155f85fe51282dce773a02e2fc55",
+      "uncompressed_sha256": "d37f1ffcdf0e2b8626c362511fdff1c06a74376d91132ec1e345b0725653bfff",
+      "compressed_bytes": 6144528,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "native actor definitions are missing"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
