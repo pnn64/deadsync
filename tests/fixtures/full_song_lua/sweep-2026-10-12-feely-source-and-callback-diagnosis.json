@@ -1,0 +1,56 @@
+{
+  "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+  "position": 185,
+  "repair_attempts_completed": 1,
+  "repair_attempts_remaining": 1,
+  "original_native_trace_sha256": "a1d3409f3031764adf333fe8c368cf52a6a7cf9bde4a9c6a389bff7af8662929",
+  "retained_corrected_candidate_sha256": "a9ae3b3944776d2b894c4d24a9fb2a49f331b7e9ce12448202c9c311665fc787",
+  "source_name_fix": {
+    "commit": "63e17ffe7",
+    "native_behavior": "Foreground::LoadFromSong requests directory/default.lua literally; ActorUtil loads with that requested Lua chunk name through the case-insensitive native file driver.",
+    "native_sources": [
+      "Foreground.cpp:30-49",
+      "ActorUtil.cpp:251-260"
+    ],
+    "independent_behavior": "Compile reads the resolved physical file separately from the requested directory/default.lua source path. An explicitly named Default.lua keeps its original spelling.",
+    "windows_live_tests": {
+      "passed": 31,
+      "failed": 0
+    },
+    "build_proof": "/home/parity/jobs/foreground-source-build-v2/proof.json",
+    "validation_revision": "First Windows and Linux validation logs retained. The first test inspected a callback stack wrapper; revision 2 checks the callback prototype and verifies its actual invocation. No chart repair was launched."
+  },
+  "already_validated_shared_fixes": [
+    "21c106cb4 owned style reads",
+    "58fcc8043 initial Player and NoteField poses"
+  ],
+  "first_remaining_tween_example": {
+    "native_operation": "Actor.x",
+    "source_line": 724,
+    "seconds": 6.213016033172607,
+    "beat": 16.00637435913086,
+    "native_tween_time_left": 0.13061228394508362,
+    "independent_tween_time_left": 0.0,
+    "diagnostic_only": true,
+    "evidence": "/home/parity/jobs/feely-case-lua-repair-v1/chart-185/tween-evidence-v1.json"
+  },
+  "callback_source_findings": {
+    "authored": [
+      "multitap/Default.lua:578-585 installs a callback that propagates Judgment, Dim and the tap score commands to the custom noteskin explosion.",
+      "multitap/Default.lua:634 installs this callback with NoteField:SetDidTapNoteCallback."
+    ],
+    "native": "NoteField.cpp:1223-1234 calls the stored callback with the one-based column, TapNoteScore and bright flag before GhostArrowRow::DidTapNote.",
+    "independent": "lua_util.rs stores the callback and invokes it only through the Lua did_tap_note method; repository search finds no gameplay caller. Legacy multitap.rs captures explosion hits, but compile.rs returns the retained live scene before that legacy compilation path.",
+    "next_work": "Confirm and implement the missing gameplay tap callback dispatch with independent judgment events and correct callback timing before spending the final full replay. Do not seed callback events from the native expected trace."
+  },
+  "remaining_stage_failure": {
+    "phase": "progress",
+    "seconds": 121.01800537109375,
+    "field": "failed",
+    "native": false,
+    "independent": true,
+    "first_independent_domain_navigation_seconds": 120.7923812866211,
+    "cause": "Not yet established; one frame or observer ordering has not been proven. Native GetMusicEndTiming uses the whole Song last second and its late-resolution window; current gameplay computes bounds from selected note arrays and the last-second hint."
+  },
+  "acceptance": "Existing full replay comparisons unchanged. Inspector style filtering and source-case equivalence were diagnostic only. No final chart repair launched."
+}

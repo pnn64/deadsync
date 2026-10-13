@@ -42,5 +42,23 @@
     "candidate_sha256": "28f0309e49d011a4f3649df3836c2d8466a463d2a7d71f6883e5cec2a358b05d"
   },
   "separate_coverage": "Live audio mixing and applying mutable sound parameters to the scheduled SFX backend remain outside the existing whole-song comparisons.",
-  "acceptance": "Unchanged existing full_song_lua full comparisons; coverage remains separate"
+  "acceptance": "Unchanged existing full_song_lua full comparisons; coverage remains separate",
+  "final_bounded_result": {
+    "status": "pending",
+    "repair_attempts": 2,
+    "native_frames": 32257,
+    "replayed_frames": 32257,
+    "errors": [],
+    "mismatch_count": 1,
+    "failure": {
+      "phase": "progress",
+      "seconds": 48.077754974365234,
+      "field": "failed",
+      "native": false,
+      "deadsync": true
+    },
+    "candidate_sha256": "28f0309e49d011a4f3649df3836c2d8466a463d2a7d71f6883e5cec2a358b05d",
+    "evidence": "sweep-2026-10-12-dreaming-sound-volume-repairs.json",
+    "cap_action": "Stop repairs for this chart in this sweep; retain the capture and continue other charts."
+  }
 }
