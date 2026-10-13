@@ -1,0 +1,81 @@
+{
+  "selected_build": {
+    "build_proof": "/home/parity/jobs/empty-layers-green-v2/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "binary_sha256": "6a912f949896b963329aaa0cde4ea6c5fbc86bf6368091a1a6974d2b22629114",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "actual_source_pins": 27,
+  "harness_source_pins": 3,
+  "repairs": [
+    {
+      "position": 314,
+      "source_simfile": "Midnight Madness/midnight.sm",
+      "attempt_started": 1,
+      "per_chart_limit": 2,
+      "remaining_repairs_after_this_attempt": 1,
+      "launch_receipt": {
+        "supervisor_pid": 2382172,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_midnight_empty_layers_repair_v1.py",
+          "314"
+        ]
+      },
+      "live_observation": {
+        "pid": 2382229,
+        "command": [
+          "/home/parity/jobs/empty-layers-green-v2/full-song-lua-stage-modifier-v1",
+          "--archive",
+          "/home/parity/jobs/midnight-empty-layers-repair-v1/chart-314/7800e1c6d93bdbdd8a220697e94021e54e6b57948c8677f2ba3dc567c2000e80.tar",
+          "--report",
+          "/home/parity/jobs/midnight-empty-layers-repair-v1/chart-314/report.json"
+        ],
+        "label": "replay",
+        "source_simfile": "Midnight Madness/midnight.sm"
+      },
+      "exact_process_matches": [
+        true,
+        true
+      ],
+      "attempt_start": {
+        "position": 314,
+        "source_simfile": "Midnight Madness/midnight.sm",
+        "status": "pending",
+        "repair_attempts": 1,
+        "previous_concrete_failures": [],
+        "previous_errors": [],
+        "previous_failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (2070555) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+        "binary_sha256": "6a912f949896b963329aaa0cde4ea6c5fbc86bf6368091a1a6974d2b22629114",
+        "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+        "candidate_sha256": "7800e1c6d93bdbdd8a220697e94021e54e6b57948c8677f2ba3dc567c2000e80",
+        "trace_sha256": "9eaea38c4600f27b56f3b16df848b417c7a814edb122c692ccc44bab30801463",
+        "simfile_sha256": "936cc658a970b6e5d211d690465f34d93f911f96c12e8951fa15cb6024d9bcf7",
+        "build_proof": "/home/parity/jobs/empty-layers-green-v2/proof.json",
+        "fix_commit": "d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+        "native_capture_reused": true,
+        "all_candidate_manifest_members_byte_verified": true
+      },
+      "replay_log_tail": [
+        "[4.0s] replaying every native gameplay frame: frame 279/19414 (1.4%)",
+        "[6.0s] replaying every native gameplay frame: frame 421/19414 (2.2%)",
+        "[8.0s] replaying every native gameplay frame: frame 564/19414 (2.9%)"
+      ],
+      "completed_result": null
+    }
+  ],
+  "status": "first bounded Midnight Madness repair launched; existing complete replay comparisons determine acceptance",
+  "validated_build": "sweep-2026-10-13-empty-layers-build.json",
+  "native_capture_reused": true,
+  "all_uncompressed_candidate_members_verified": true,
+  "publisher_streams": 56,
+  "publisher_count": 1,
+  "actual_publisher": {
+    "ProcessId": 60312,
+    "CommandLine": "\"C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe\" -B -X utf8 C:/GitHub/itgmania-harness/target/server-parity/publish_chart_sweep_v1.py"
+  },
+  "comparisons_modified": false,
+  "passing_charts_reopened": false,
+  "capped_lower_ssc_not_retried": true
+}
