@@ -1,0 +1,13 @@
+{
+  "separate_from_acceptance": true,
+  "acceptance_gate_added": false,
+  "remaining_coverage": [
+    "Native mine messages remain separate from the tap-row and hold hooks.",
+    "The production hold control covers a single head and completion. Joined hold groups, routine-player data and all TapNote/HoldResult fields are not certified by it."
+  ],
+  "accepted_ghost_uncompared_operations": [
+    "Player.SetLife",
+    "ScreenGameplay.GetLifeMeter"
+  ],
+  "passing_charts_reopened": false
+}

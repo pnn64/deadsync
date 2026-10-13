@@ -1,0 +1,306 @@
+{
+  "diagnostic_only": true,
+  "repair_attempts_spent": 1,
+  "repair_attempts_remaining": 1,
+  "native_frames": 8419,
+  "replayed_frames": 8419,
+  "mismatch_count": 50,
+  "errors": [],
+  "stage_failures": [
+    {
+      "phase": "progress",
+      "seconds": 3.0001814365386963,
+      "field": "life_latest",
+      "native": 0.2030000388622284,
+      "deadsync": 0.23600004613399506
+    },
+    {
+      "phase": "progress",
+      "seconds": 4.001246929168701,
+      "field": "life_latest",
+      "native": 0.07100002467632294,
+      "deadsync": 0.104000024497509
+    },
+    {
+      "phase": "screen-end",
+      "seconds": 4.676417350769043,
+      "field": "failed",
+      "native": true,
+      "deadsync": false
+    },
+    {
+      "phase": "screen-end",
+      "seconds": 4.676417350769043,
+      "field": "life_latest",
+      "native": 0,
+      "deadsync": 0.005000025033950806
+    },
+    {
+      "phase": "gameplay-exit",
+      "seconds": 4.676417350769043,
+      "field": "failed",
+      "native": true,
+      "deadsync": false
+    },
+    {
+      "phase": "gameplay-exit",
+      "seconds": 4.676417350769043,
+      "field": "life_latest",
+      "native": 0,
+      "deadsync": 0.005000025033950806
+    }
+  ],
+  "command_counts": [
+    {
+      "field": "command_query_count",
+      "native": 45,
+      "deadsync": 43
+    }
+  ],
+  "startup_command_differences": [
+    {
+      "native": {
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "InitCommand",
+        "source": "song:/.//default.lua",
+        "line": 15,
+        "beat": 0,
+        "seconds": 0
+      },
+      "deadsync": {
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "InitCommand",
+        "source": "song:/./default.lua",
+        "line": 15,
+        "beat": 0.0,
+        "seconds": 0.0
+      }
+    },
+    {
+      "native": {
+        "kind": "call",
+        "operation": "Actor.queuecommand",
+        "command": "InitCommand",
+        "phase": "callback",
+        "source": "song:/.//default.lua",
+        "line": 15,
+        "beat": 0,
+        "seconds": 0
+      },
+      "deadsync": {
+        "kind": "call",
+        "operation": "Actor.queuecommand",
+        "phase": "callback",
+        "source": "song:/./default.lua",
+        "line": 15,
+        "beat": 0.0,
+        "seconds": 0.0
+      }
+    },
+    {
+      "native": {
+        "kind": "command",
+        "operation": "command.end",
+        "command": "InitCommand",
+        "source": "song:/.//default.lua",
+        "line": 15,
+        "beat": 0,
+        "seconds": 0
+      },
+      "deadsync": {
+        "kind": "command",
+        "operation": "command.end",
+        "command": "InitCommand",
+        "source": "song:/./default.lua",
+        "line": 15,
+        "beat": 0.0,
+        "seconds": 0.0
+      }
+    },
+    {
+      "native": {
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "OnCommand",
+        "source": "song:/.//default.lua",
+        "line": 29,
+        "beat": -12.09992790222168,
+        "seconds": -4.492290019989014
+      },
+      "deadsync": {
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "OnCommand",
+        "source": "song:/./default.lua",
+        "line": 29,
+        "beat": -12.090144157409668,
+        "seconds": -4.488644123077393
+      }
+    },
+    {
+      "native": {
+        "kind": "call",
+        "operation": "Actor.sleep",
+        "command": "OnCommand",
+        "phase": "callback",
+        "source": "song:/.//default.lua",
+        "line": 29,
+        "beat": -12.09992790222168,
+        "seconds": -4.492290019989014
+      },
+      "deadsync": {
+        "kind": "call",
+        "operation": "Actor.sleep",
+        "phase": "callback",
+        "source": "song:/./default.lua",
+        "line": 29,
+        "beat": -12.090144157409668,
+        "seconds": -4.488644123077393
+      }
+    },
+    {
+      "native": {
+        "kind": "command",
+        "operation": "command.end",
+        "command": "OnCommand",
+        "source": "song:/.//default.lua",
+        "line": 29,
+        "beat": -12.09992790222168,
+        "seconds": -4.492290019989014
+      },
+      "deadsync": {
+        "kind": "command",
+        "operation": "command.end",
+        "command": "OnCommand",
+        "source": "song:/./default.lua",
+        "line": 29,
+        "beat": -12.090144157409668,
+        "seconds": -4.488644123077393
+      }
+    },
+    {
+      "native": {
+        "kind": "query",
+        "operation": "ScreenManager.GetTopScreen",
+        "phase": "construction",
+        "source": "song:/.//default.lua",
+        "line": 16,
+        "beat": -12.09992790222168,
+        "seconds": -4.492290019989014
+      },
+      "deadsync": {
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "SetCommand",
+        "source": "song:/./default.lua",
+        "line": 16,
+        "beat": -12.090144157409668,
+        "seconds": -4.488644123077393
+      }
+    },
+    {
+      "native": {
+        "kind": "query",
+        "operation": "ActorFrame.GetChild",
+        "phase": "construction",
+        "source": "song:/.//default.lua",
+        "line": 16,
+        "beat": -12.09992790222168,
+        "seconds": -4.492290019989014
+      },
+      "deadsync": {
+        "kind": "query",
+        "operation": "ScreenManager.GetTopScreen",
+        "phase": "callback",
+        "source": "song:/./default.lua",
+        "line": 16,
+        "beat": -12.090144157409668,
+        "seconds": -4.488644123077393
+      }
+    },
+    {
+      "native": {
+        "kind": "query",
+        "operation": "GameState.GetPlayerState",
+        "phase": "construction",
+        "source": "song:/.//default.lua",
+        "line": 16,
+        "beat": -12.09992790222168,
+        "seconds": -4.492290019989014
+      },
+      "deadsync": {
+        "kind": "query",
+        "operation": "ActorFrame.GetChild",
+        "phase": "callback",
+        "source": "song:/./default.lua",
+        "line": 16,
+        "beat": -12.090144157409668,
+        "seconds": -4.488644123077393
+      }
+    },
+    {
+      "native": {
+        "kind": "query",
+        "operation": "PlayerState.GetPlayerOptions",
+        "phase": "construction",
+        "source": "song:/.//default.lua",
+        "line": 16,
+        "beat": -12.09992790222168,
+        "seconds": -4.492290019989014
+      },
+      "deadsync": {
+        "kind": "query",
+        "operation": "GameState.GetPlayerState",
+        "phase": "callback",
+        "source": "song:/./default.lua",
+        "line": 16,
+        "beat": -12.090144157409668,
+        "seconds": -4.488644123077393
+      }
+    },
+    {
+      "native": {
+        "kind": "query",
+        "operation": "ActorFrame.GetChild",
+        "phase": "construction",
+        "source": "song:/.//default.lua",
+        "line": 16,
+        "beat": -12.09992790222168,
+        "seconds": -4.492290019989014
+      },
+      "deadsync": {
+        "kind": "query",
+        "operation": "PlayerState.GetPlayerOptions",
+        "phase": "callback",
+        "source": "song:/./default.lua",
+        "line": 16,
+        "beat": -12.090144157409668,
+        "seconds": -4.488644123077393
+      }
+    },
+    {
+      "native": {
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "JudgmentMessageCommand",
+        "source": "song:/.//default.lua",
+        "line": 30,
+        "beat": 4.000984191894531,
+        "seconds": 1.5080498456954956
+      },
+      "deadsync": {
+        "kind": "query",
+        "operation": "ActorFrame.GetChild",
+        "phase": "callback",
+        "source": "song:/./default.lua",
+        "line": 16,
+        "beat": -12.090144157409668,
+        "seconds": -4.488644123077393
+      }
+    }
+  ],
+  "source_confirmed_missing_hold_dispatch": "Player.cpp:1688-1689 broadcasts SetHoldJudgment before HandleHoldScore; Player.cpp:3497-3521 includes the head TapNoteScore in the hold message. GREAT GREAT/default.lua:30-51 handles that score again.",
+  "remaining_before_final_repair": "Resolve startup On clock and dynamic Set callback begin/end/phase differences from native sources and retained capture inputs. Do not spend a third repair attempt or relax existing comparisons."
+}
