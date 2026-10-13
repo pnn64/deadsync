@@ -208,6 +208,25 @@ fn hook_query(lua: &Lua, table: &Table, class: &'static str, name: &'static str)
         query_phase(lua, true);
         let result = original.call::<MultiValue>(args.clone());
         query_phase(lua, false);
+        if class == "PlayerState" && name == "GetPlayerOptions"
+            && let (Some(Value::Table(state)), Some(Value::Table(options)), Some(level)) =
+                (args.front(), result.as_ref().ok().and_then(|values| values.front()), args.get(1))
+        {
+            // The native capture labels the existing option object with the
+            // raw getter argument, including numeric ModsLevel aliases.
+            let level = lua.coerce_string(level.clone())?
+                .map(|value| value.to_string_lossy()).unwrap_or_else(|| "nil".into());
+            let state_path = lua.app_data_ref::<QueryTrace>().and_then(|trace|
+                trace.objects.iter().find(|(known, _)| known.to_pointer() == state.to_pointer())
+                    .and_then(|(_, value)| value["path"].as_str()).map(str::to_owned))
+                .unwrap_or_else(|| "player-state".into());
+            if let Some(mut trace) = lua.app_data_mut::<QueryTrace>()
+                && let Some((_, value)) = trace.objects.iter_mut()
+                    .find(|(known, _)| known.to_pointer() == options.to_pointer())
+            {
+                value["path"] = serde_json::Value::String(format!("{state_path}/options:{level}"));
+            }
+        }
         if observed {
             let kind = if name.starts_with("Get") || name.starts_with("Is") || name.starts_with("Supports")
                 || matches!(class, "PlayerOptions" | "SongOptions") && args.len() == 1 { "query" }
@@ -1344,6 +1363,40 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "test-support")]
+    #[test]
+    fn live_numeric_option_getter_retains_native_argument_path() {
+        let mut compiled = compile("numeric-option-path", "return Def.Actor{}");
+        let scene = compiled.live_scene.take().expect("owned option state");
+        let game = scene.lua.globals().get::<Table>("GAMESTATE").unwrap();
+        let state = game.get::<Function>("GetPlayerState").unwrap()
+            .call::<Table>((game, "PlayerNumber_P1")).unwrap();
+        let original = state.get::<Function>("GetPlayerOptions").unwrap()
+            .call::<Table>((state.clone(), "ModsLevel_Current")).unwrap();
+        scene.lua.set_app_data(QueryTrace {
+            objects: vec![
+                (state.clone(), serde_json::json!({"type":"PlayerState", "path":"player-state:PlayerNumber_P1"})),
+                (original.clone(), serde_json::json!({"type":"PlayerOptions", "path":"player-state:PlayerNumber_P1/options:ModsLevel_Current"})),
+            ],
+            ..Default::default()
+        });
+        hook_query(&scene.lua, &state, "PlayerState", "GetPlayerOptions").unwrap();
+        let numeric = state.get::<Function>("GetPlayerOptions").unwrap()
+            .call::<Table>((state.clone(), 3)).unwrap();
+        assert_eq!(numeric.to_pointer(), original.to_pointer(), "numeric level addresses the existing option object");
+        assert_eq!(query_value(&scene.lua, &Value::Table(numeric.clone()), 0).unwrap(),
+            serde_json::json!({"type":"PlayerOptions", "path":"player-state:PlayerNumber_P1/options:3"}),
+            "numeric ModsLevel query retains the native raw argument path");
+        numeric.get::<Function>("Reverse").unwrap().call::<MultiValue>((numeric.clone(), 0.5)).unwrap();
+        let symbolic = state.get::<Function>("GetPlayerOptions").unwrap()
+            .call::<Table>((state, "ModsLevel_Current")).unwrap();
+        assert_eq!(symbolic.to_pointer(), numeric.to_pointer(), "getter aliases preserve object identity");
+        assert_eq!(symbolic.get::<Function>("Reverse").unwrap().call::<f32>(symbolic.clone()).unwrap(), 0.5);
+        assert_eq!(query_value(&scene.lua, &Value::Table(symbolic), 0).unwrap(),
+            serde_json::json!({"type":"PlayerOptions", "path":"player-state:PlayerNumber_P1/options:ModsLevel_Current"}),
+            "a later symbolic getter refreshes the same native object path");
+    }
+
     #[test]
     fn live_hsva_initializes_native_vertex_colors() {
         let mut compiled = compile("native-hsva-vertices", r#"
