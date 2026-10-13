@@ -8025,6 +8025,57 @@
         }
       ],
       "report_sha256": "3b992837c1f12a1ecd0b8edd2b78d43052c6b0768280f155d55cf21ef9b434f5"
+    },
+    {
+      "position": 287,
+      "source_simfile": "Loop/loop.ssc",
+      "simfile_sha256": "4b54b8d229402da08496d958dd47ce987d54d4fd03a9fc21dc23a8d861c45377",
+      "retained_original_archive": "98f68595f44765ad11a6d097c8ec749ddd0dc8f8e830b33c69ec21b6942d959a.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "e1e574aa62e36912260a8bcf656514c334db73a3cf6188c0d21242b688406793",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/rec-print-build-v1/proof.json",
+      "capture_seconds": 195.421477743992,
+      "trace_sha256": "03870a1d295ba432d1d9ecd8d0b18e48063ecb4e94934133d88927dbdb3d6a72",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-287/candidates/6bdac29e0109dda2fa9f208ed5592294470fa2a21651fbff13b154f64b04b622.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1808.3827764040034,
+      "candidate_sha256": "6bdac29e0109dda2fa9f208ed5592294470fa2a21651fbff13b154f64b04b622",
+      "native_frames": 14674,
+      "replayed_frames": 14674,
+      "compared_stage_fields": 1485,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.rotationx, Actor.rotationy, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.vanishpoint, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Song.GetMainTitle",
+        "native drawable state/resources: BitmapText, Model, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "3e951fbe14f027af69de2965255289de40d6f3c04109ec78426066206dc2bc20",
+      "archive": "6dbb18c6e2d56bd3ba5e21604b2ecce2b45d88536780d6ff14acbe7c5d9a5505.tar.zst",
+      "archive_sha256": "6dbb18c6e2d56bd3ba5e21604b2ecce2b45d88536780d6ff14acbe7c5d9a5505",
+      "compressed_bytes": 12368341,
+      "pack_seconds": 13.863631254003849,
+      "harness_version": "0.1.80",
+      "title": "LOOP",
+      "retained_original_entry": {
+        "title": "LOOP",
+        "source_simfile": "Loop/loop.ssc",
+        "harness_version": "0.1.0",
+        "archive": "98f68595f44765ad11a6d097c8ec749ddd0dc8f8e830b33c69ec21b6942d959a.tar.zst",
+        "sha256": "98f68595f44765ad11a6d097c8ec749ddd0dc8f8e830b33c69ec21b6942d959a",
+        "compressed_bytes": 796270,
+        "uncompressed_sha256": "1be034834ee11fd025c86aea21ab8dd70be6089f46151f31d06f31d4895f152b",
+        "compression_level": 22,
+        "aliases": [
+          "216a4d90d32fe463b7cd93a2bc8fa05af6ae59b30f1af70d941412fa9675ca31.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -8048,9 +8099,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "4713556073fc219eef2dd0db6fbb496506cdfa4f49c27f62d6427ec63f95ab84",
+  "binary_sha256": "e1e574aa62e36912260a8bcf656514c334db73a3cf6188c0d21242b688406793",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 16,
+  "passed_fixtures": 17,
   "pending_charts": 42,
-  "processed_charts": 58
+  "processed_charts": 59
 }

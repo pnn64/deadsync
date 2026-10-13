@@ -3550,15 +3550,12 @@
     {
       "title": "LOOP",
       "source_simfile": "Loop/loop.ssc",
-      "harness_version": "0.1.0",
-      "archive": "98f68595f44765ad11a6d097c8ec749ddd0dc8f8e830b33c69ec21b6942d959a.tar.zst",
-      "sha256": "98f68595f44765ad11a6d097c8ec749ddd0dc8f8e830b33c69ec21b6942d959a",
-      "compressed_bytes": 796270,
-      "uncompressed_sha256": "1be034834ee11fd025c86aea21ab8dd70be6089f46151f31d06f31d4895f152b",
-      "compression_level": 22,
-      "aliases": [
-        "216a4d90d32fe463b7cd93a2bc8fa05af6ae59b30f1af70d941412fa9675ca31.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "6dbb18c6e2d56bd3ba5e21604b2ecce2b45d88536780d6ff14acbe7c5d9a5505.tar.zst",
+      "sha256": "6dbb18c6e2d56bd3ba5e21604b2ecce2b45d88536780d6ff14acbe7c5d9a5505",
+      "compressed_bytes": 12368341,
+      "uncompressed_sha256": "6bdac29e0109dda2fa9f208ed5592294470fa2a21651fbff13b154f64b04b622",
+      "aliases": []
     },
     {
       "title": "LORELEI",
