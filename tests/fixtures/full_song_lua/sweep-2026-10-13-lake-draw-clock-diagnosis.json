@@ -1,0 +1,119 @@
+{
+  "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
+  "candidate_sha256": "d78b8d9bafa72c56258292e677f939aec2629fb3895b20cff5f5a7bf5720a095",
+  "native_trace_sha256": "6d08d1e7c74a97b57bb2c5a59bd53020f789d6f9bf33ea1548ee27364899f075",
+  "native_trace_uncompressed_bytes_verified": true,
+  "native_frames": 17472,
+  "draw_passes": 17471,
+  "update_frame_phase": "gameplay-overlay-probe",
+  "display": {
+    "height": 0,
+    "logical_height": 480,
+    "logical_width": 854,
+    "video_renderers": "null",
+    "width": 0
+  },
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "dropped_events": 0,
+  "draw_clock_absent_from_inputs": false,
+  "draw_clock_exceeds_input_multiplicity": false,
+  "first_frame": {
+    "beat": -2.1418426036834717,
+    "delta": 0,
+    "scene": 1,
+    "seconds": -1.9999773502349854,
+    "sequence": 1,
+    "wall_seconds": 2.895144
+  },
+  "last_frame": {
+    "beat": 209.9923553466797,
+    "delta": 0.005520000122487545,
+    "scene": 1,
+    "seconds": 131.87582397460938,
+    "sequence": 17472,
+    "wall_seconds": 138.635979
+  },
+  "first_draw_pass": {
+    "actor": "def-0001",
+    "args": [
+      854,
+      480
+    ],
+    "beat": -2.1418426036834717,
+    "callback": "SetDrawFunction",
+    "caller": {
+      "line": 8,
+      "source": "song:/sm5/modules/draw.lua",
+      "tail_call": false
+    },
+    "command": "OnCommand",
+    "definition_id": "def-0002",
+    "detail": {
+      "native_tween_time_left": 0
+    },
+    "kind": "call",
+    "line": 49,
+    "operation": "Actor.zoomto",
+    "phase": "callback",
+    "scene": 1,
+    "seconds": -1.9999773502349854,
+    "seq": 1259,
+    "source": "song:/.//default.lua"
+  },
+  "last_draw_pass": {
+    "actor": "def-0001",
+    "args": [
+      854,
+      480
+    ],
+    "beat": 209.9865264892578,
+    "callback": "SetDrawFunction",
+    "caller": {
+      "line": 8,
+      "source": "song:/sm5/modules/draw.lua",
+      "tail_call": false
+    },
+    "command": "OnCommand",
+    "definition_id": "def-0002",
+    "detail": {
+      "native_tween_time_left": 0
+    },
+    "kind": "call",
+    "line": 49,
+    "operation": "Actor.zoomto",
+    "phase": "callback",
+    "scene": 1,
+    "seconds": 131.870361328125,
+    "seq": 592018,
+    "source": "song:/.//default.lua"
+  },
+  "diagnostic_only": true,
+  "repair_attempts_spent": 0,
+  "repair_attempts_remaining": 2,
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "source_sha256": {
+    "itgmania-harness/vendor/itgmania/src/GameLoop.cpp": "84692b23c40c2de0bbcee22e027e1440b3777cacf0d012ae398fe9db328dc732",
+    "itgmania-harness/vendor/itgmania/src/RageDisplay_Null.h": "42d03cf14538314f521b1422325852e9606e61e724ec3f629e2bad0f957dfebc",
+    "itgmania-harness/vendor/itgmania/src/RageDisplay_Null.cpp": "e9977201854681dc5b90675cbd32bf3d1ff03cbe5b2c43c47b6633d2314850d9",
+    "itgmania-harness/vendor/itgmania/src/Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "itgmania-harness/vendor/itgmania/src/ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+    "itgmania-harness/vendor/itgmania/src/ScreenManager.cpp": "6c4edf63e2536ec63caa32cef582bbd41678423f87a9f4f45ab4ccd3a6e16e1e",
+    "itgmania-harness/probe_theme/ScreenGameplay overlay.lua": "e823515b341602e9811eb3eeb6006a49a5643bf80eb534e5fc7b53a41bd8653b",
+    "rework/lua-songs/Lake of Lost Nostalgia/code/draw.lua": "7b16f07e352d4f3418169e3b0a8fe8ea1e40caf45d2969ccbb15aa2d6cbfa358",
+    "rework/lua-songs/Lake of Lost Nostalgia/sm5/modules/draw.lua": "a184ba8e4a579b6ba14d830e512903cb64f19de5e2c622d7cab5aa47258fd16c"
+  },
+  "native_boundary": "GameLoop.cpp:310 updates the gameplay/screen state, then :314 draws the screen. The null renderer begins every frame and its EndFrame performs only flip statistics; it has no VBLANK update hook.",
+  "observed_boundary": "The unchanged Lake trace contains one first zoomto call from the authored draw body for each of the first 17471 update frames, at the same scene/music/beat clocks and without excess multiplicity. The final recorded update exits gameplay before another recorded draw. The immediate caller source, rather than the enclosing OnCommand source, identifies these draw body calls.",
+  "required_behavior": "Run owned visible actor draw callbacks after the complete actor and health update. Honor visibility, hibernation, nested explicit Actor:Draw, callback replacement/removal and screen lifetime. Keep live storage bounded rather than accumulating the compile-time whole-song draw history.",
+  "acceptance_unchanged": true,
+  "comparisons_modified": false,
+  "expected_commands_used_as_runtime_inputs": false,
+  "passing_chart_reopened": false,
+  "native_capture_reused": true
+}
