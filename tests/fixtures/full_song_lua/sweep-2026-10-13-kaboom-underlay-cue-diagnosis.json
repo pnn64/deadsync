@@ -1,0 +1,163 @@
+{
+  "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+  "candidate_sha256": "70d46f8a7297fb5e58d7d19783915d6bb2f9210774da9a8d6f3d1423afd6b419",
+  "native_trace_sha256": "cd1b99822ffab060d4148dd3a492b6b606bebc622a7a1a3c97c00763f8167ce0",
+  "report_sha256": "1aea9fc62743f9c8cc755993687897535e01eefa45125e9290b44e10d8c1369c",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "repair_attempts_spent": 0,
+  "repair_attempts_remaining": 2,
+  "repair_not_started": true,
+  "native_simply_love_commit": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+  "diagnostic_only": true,
+  "retained_uncompressed_report_and_trace_bytes_verified": true,
+  "acceptance_comparisons_changed": false,
+  "passing_charts_reopened": false,
+  "first_difference": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "external-0248",
+      "args": [
+        60
+      ],
+      "beat": 340.00433349609375,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 613,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0263",
+      "detail": {
+        "native_tween_time_left": 5.485710144042969
+      },
+      "kind": "call",
+      "line": 613,
+      "operation": "Actor.rotationz",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 102.87562561035156,
+      "seq": 834511,
+      "source": "song:/lua/default.lua",
+      "tween_time_left": 5.485710144042969
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "call",
+      "operation": "Actor.rotationz",
+      "source": "song:/lua/default.lua",
+      "line": 613,
+      "phase": "callback",
+      "beat": 340.00433349609375,
+      "seconds": 102.87562561035156,
+      "args": [
+        60
+      ],
+      "results": [
+        {
+          "actor": "0x58af9f8ce750",
+          "name": "Underlay",
+          "path": "ScreenGameplay/Underlay"
+        }
+      ],
+      "tween_time_left": 1.0
+    }
+  },
+  "cause": "The rotation arguments both equal 60; the mismatch is recursive GetTweenTimeLeft. Actual native Underlay owns NoteFieldContainerP1 and its ColumnCues Column4/ColumnFlash descendant with 5.485710144042969 seconds left. Independent underlay initialization omits the NoteField container and cue subtree, so its own accelerate(1) is the longest queue and reports 1.",
+  "native_underlay_observation": {
+    "seq": 834510,
+    "operation": "Actor.accelerate",
+    "actor": "external-0248",
+    "phase": "callback",
+    "source": "song:/lua/default.lua",
+    "line": 1185,
+    "caller": {
+      "line": 613,
+      "source": "song:/lua/default.lua",
+      "tail_call": false
+    },
+    "callback": "SetUpdateFunction",
+    "command": "OnCommand",
+    "definition_id": "def-0263",
+    "seconds": 102.87562561035156,
+    "beat": 340.00433349609375,
+    "args": [
+      1
+    ]
+  },
+  "longest_owned_native_path": [
+    {
+      "path": "Underlay",
+      "time_left": 5.485710144042969,
+      "commands": {
+        "On": {
+          "last_line": 60,
+          "line": 56,
+          "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/default.lua"
+        }
+      }
+    },
+    {
+      "path": "Underlay/NoteFieldContainerP1",
+      "time_left": 5.485710144042969,
+      "commands": {
+        "On": {
+          "last_line": 33,
+          "line": 9,
+          "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua"
+        }
+      }
+    },
+    {
+      "path": "Underlay/NoteFieldContainerP1/0/0",
+      "time_left": 5.485710144042969,
+      "commands": {
+        "Init": {
+          "last_line": 86,
+          "line": 81,
+          "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+        }
+      }
+    },
+    {
+      "path": "Underlay/NoteFieldContainerP1/0/0/Column4",
+      "time_left": 5.485710144042969,
+      "commands": []
+    },
+    {
+      "path": "Underlay/NoteFieldContainerP1/0/0/Column4/ColumnFlash",
+      "time_left": 5.485710144042969,
+      "commands": {
+        "Init": {
+          "last_line": 170,
+          "line": 159,
+          "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+        }
+      }
+    }
+  ],
+  "captured_initial_cue_inputs": {
+    "column_cue_min_time": 1.5,
+    "music_rate": 1,
+    "player_theme_modifiers": {
+      "ColumnCues": true,
+      "Mini": "0%",
+      "NoteFieldOffsetX": 0,
+      "NoteFieldOffsetY": 0,
+      "ComboFont": "Wendy"
+    }
+  },
+  "native_source_sha256": {
+    "BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua": "47231e3ffed11e082b553364d53eea72c7f677e37ee2c8a9080773a58d5b86c2",
+    "BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua": "9dc23ded0fe7e29541b383ad5a3b7dc04d9e3257ab5305a8995c228b5549642e",
+    "Scripts/SL-ChartParser.lua": "6ca623b3676a72ed95e67aab8a2fd62ec954b962ae906f2106c1d7ff28bab4ab"
+  },
+  "original_selected_independent_source_sha256": {
+    "crates/deadsync-song-lua/src/lua_util.rs": "b40e1cc30c5a228a3e01060164a056b5565a4e2cf03068d2e0975a1388aad12b",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9"
+  },
+  "source_contract": "SL ColumnCues.Update reads the player visible music time and authored steps:GetColumnCues(1.5). For an eligible cue it runs the owned ColumnFlash Flash command: stoptweening, decelerate(0.15), diffuse, sleep(duration-0.30), accelerate(0.15), diffuse transparent. Parent tween time is the maximum of actual descendants.",
+  "required_fix": "Construct the actual enabled-player NoteField container and cue actors from source, derive cue data from the selected simfile and player timing, and advance their real queues in native underlay order. Verify pause, time/rate scaling, multiple columns, recurring cues and recursive tween time before spending a repair attempt. Do not inject the observed duration, synthesize a fixed parent timer, or add empty count placeholders.",
+  "all_four_tween_time_differences_established": false,
+  "implementation_not_yet_changed": true
+}

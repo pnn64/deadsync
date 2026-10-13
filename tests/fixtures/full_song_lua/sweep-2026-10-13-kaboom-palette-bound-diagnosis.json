@@ -1,0 +1,585 @@
+{
+  "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+  "candidate_sha256": "70d46f8a7297fb5e58d7d19783915d6bb2f9210774da9a8d6f3d1423afd6b419",
+  "native_trace_sha256": "cd1b99822ffab060d4148dd3a492b6b606bebc622a7a1a3c97c00763f8167ce0",
+  "report_sha256": "1aea9fc62743f9c8cc755993687897535e01eefa45125e9290b44e10d8c1369c",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "repair_attempts_spent": 0,
+  "repair_attempts_remaining": 2,
+  "repair_not_started": true,
+  "native_simply_love_commit": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+  "diagnostic_only": true,
+  "retained_uncompressed_report_and_trace_bytes_verified": true,
+  "acceptance_comparisons_changed": false,
+  "passing_charts_reopened": false,
+  "cause": "The independent Color table adds Pink, which the pinned native fallback Color table does not define. The chart appends Color.Pink to its palette; native nil leaves eight entries while the extra independent constant makes nine. This changes math.random(#colors), not the seed or the color precision.",
+  "authored_palette": [
+    "White",
+    "Yellow",
+    "Blue",
+    "Red",
+    "White",
+    "Purple",
+    "Green",
+    "Orange",
+    "Pink"
+  ],
+  "native_palette_length": 8,
+  "independent_palette_length": 9,
+  "native_source_sha256": {
+    "Themes/_fallback/Scripts/02 Colors.lua": "3396661905e5cd2c6715d903d59a433ead2eca78709724358c3545c320a17294",
+    "src/RageUtil/RandomNumbers.cpp": "7ff37771f9209cc3e16a65a6d374015265f0b7afc8cd180dbb2f55d977d33edf"
+  },
+  "authored_source_sha256": {
+    "lua/default.lua": "314febe722e881c0d1d8ca75c5dadaa32474fba1ae34c418780de978a78f1c80"
+  },
+  "original_selected_independent_source_sha256": {
+    "crates/deadsync-song-lua/src/lua_util.rs": "b40e1cc30c5a228a3e01060164a056b5565a4e2cf03068d2e0975a1388aad12b"
+  },
+  "rng_verification": {
+    "native_seed": 1,
+    "native_reseeds": [],
+    "validated_random_actor_calls": 222,
+    "all_palette_calls": [
+      {
+        "seq": 445259,
+        "beat": 180.06285095214844,
+        "native_palette_index": 4,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          0.929411768913269,
+          0.10980392247438431,
+          0.1411764770746231,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 448518,
+        "beat": 181.07992553710938,
+        "native_palette_index": 8,
+        "independent_extra_palette_index": 9,
+        "native_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          0.75,
+          0.800000011920929,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 451702,
+        "beat": 182.0819091796875,
+        "native_palette_index": 5,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 454992,
+        "beat": 183.06285095214844,
+        "native_palette_index": 8,
+        "independent_extra_palette_index": 9,
+        "native_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          0.75,
+          0.800000011920929,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 458434,
+        "beat": 184.04466247558594,
+        "native_palette_index": 3,
+        "independent_extra_palette_index": 3,
+        "native_color": [
+          0.0,
+          0.6823529601097107,
+          0.9372549057006836,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.0,
+          0.6823529601097107,
+          0.9372549057006836,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 461888,
+        "beat": 185.07655334472656,
+        "native_palette_index": 5,
+        "independent_extra_palette_index": 6,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.572549045085907,
+          0.15294118225574493,
+          0.5607843399047852,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 465246,
+        "beat": 186.06556701660156,
+        "native_palette_index": 8,
+        "independent_extra_palette_index": 9,
+        "native_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          0.75,
+          0.800000011920929,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 468604,
+        "beat": 187.04884338378906,
+        "native_palette_index": 2,
+        "independent_extra_palette_index": 3,
+        "native_color": [
+          1.0,
+          0.9490196108818054,
+          0.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.0,
+          0.6823529601097107,
+          0.9372549057006836,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 472070,
+        "beat": 188.05255126953125,
+        "native_palette_index": 8,
+        "independent_extra_palette_index": 9,
+        "native_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          0.75,
+          0.800000011920929,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 532807,
+        "beat": 212.2734375,
+        "native_palette_index": 5,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 533378,
+        "beat": 213.3261260986328,
+        "native_palette_index": 1,
+        "independent_extra_palette_index": 1,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 533970,
+        "beat": 214.4853973388672,
+        "native_palette_index": 7,
+        "independent_extra_palette_index": 8,
+        "native_color": [
+          0.2235294133424759,
+          0.7098039388656616,
+          0.29019609093666077,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 534463,
+        "beat": 215.34889221191406,
+        "native_palette_index": 8,
+        "independent_extra_palette_index": 8,
+        "native_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 535214,
+        "beat": 216.2078857421875,
+        "native_palette_index": 4,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          0.929411768913269,
+          0.10980392247438431,
+          0.1411764770746231,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 536103,
+        "beat": 217.24114990234375,
+        "native_palette_index": 4,
+        "independent_extra_palette_index": 4,
+        "native_color": [
+          0.929411768913269,
+          0.10980392247438431,
+          0.1411764770746231,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.929411768913269,
+          0.10980392247438431,
+          0.1411764770746231,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 537085,
+        "beat": 218.06727600097656,
+        "native_palette_index": 6,
+        "independent_extra_palette_index": 6,
+        "native_color": [
+          0.572549045085907,
+          0.15294118225574493,
+          0.5607843399047852,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.572549045085907,
+          0.15294118225574493,
+          0.5607843399047852,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 540044,
+        "beat": 219.0732421875,
+        "native_palette_index": 5,
+        "independent_extra_palette_index": 6,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.572549045085907,
+          0.15294118225574493,
+          0.5607843399047852,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 1037883,
+        "beat": 450.0576171875,
+        "native_palette_index": 1,
+        "independent_extra_palette_index": 1,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 1041238,
+        "beat": 451.05596923828125,
+        "native_palette_index": 4,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          0.929411768913269,
+          0.10980392247438431,
+          0.1411764770746231,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 1044710,
+        "beat": 452.0522155761719,
+        "native_palette_index": 4,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          0.929411768913269,
+          0.10980392247438431,
+          0.1411764770746231,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 1047891,
+        "beat": 453.07586669921875,
+        "native_palette_index": 7,
+        "independent_extra_palette_index": 8,
+        "native_color": [
+          0.2235294133424759,
+          0.7098039388656616,
+          0.29019609093666077,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.9686274528503418,
+          0.5803921818733215,
+          0.11372549086809158,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 1050946,
+        "beat": 454.06005859375,
+        "native_palette_index": 1,
+        "independent_extra_palette_index": 1,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 1054331,
+        "beat": 455.0617370605469,
+        "native_palette_index": 6,
+        "independent_extra_palette_index": 7,
+        "native_color": [
+          0.572549045085907,
+          0.15294118225574493,
+          0.5607843399047852,
+          1.0
+        ],
+        "predicted_independent_color": [
+          0.2235294133424759,
+          0.7098039388656616,
+          0.29019609093666077,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 1058001,
+        "beat": 456.05462646484375,
+        "native_palette_index": 4,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          0.929411768913269,
+          0.10980392247438431,
+          0.1411764770746231,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": true
+      },
+      {
+        "seq": 1061824,
+        "beat": 457.06060791015625,
+        "native_palette_index": 5,
+        "independent_extra_palette_index": 5,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 1356578,
+        "beat": 561.0458984375,
+        "native_palette_index": 1,
+        "independent_extra_palette_index": 1,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 1399255,
+        "beat": 569.0371704101562,
+        "native_palette_index": 2,
+        "independent_extra_palette_index": 2,
+        "native_color": [
+          1.0,
+          0.9490196108818054,
+          0.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          0.9490196108818054,
+          0.0,
+          1.0
+        ],
+        "would_mismatch": false
+      },
+      {
+        "seq": 1438558,
+        "beat": 577.0701904296875,
+        "native_palette_index": 1,
+        "independent_extra_palette_index": 1,
+        "native_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "predicted_independent_color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "would_mismatch": false
+      }
+    ],
+    "mismatches_explained": 15,
+    "all_15_exactly_match_retained_report": true,
+    "source_formula": "Native MT19937 and std::uniform_int_distribution on Linux, matching frozen independent multiply-high with rejection. Native palette has 8 entries; independent extra Color.Pink makes 9.",
+    "only_color_constant_changed_for_prediction": true,
+    "chart_repair_attempts_spent": 0
+  },
+  "required_fix": "Align the production Color table with native constants by removing unsupported Pink. Add a production-path control for absent keys, palette length and retained RNG choices before another source build. Do not seed observed colors or alter random state.",
+  "implementation_not_yet_changed": true
+}
