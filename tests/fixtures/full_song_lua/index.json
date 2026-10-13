@@ -3489,17 +3489,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 21",
+      "title": "Episode 21 Lonely",
       "source_simfile": "Lonely/Lonely.sm",
-      "harness_version": "0.1.0",
-      "archive": "8c7122bf839dbe1a2788c27c873a83631ab155e7223e36f79b18eba0f9985a6a.tar.zst",
-      "sha256": "8c7122bf839dbe1a2788c27c873a83631ab155e7223e36f79b18eba0f9985a6a",
-      "compressed_bytes": 123157,
-      "uncompressed_sha256": "dcd31c98763b70c5efdc87898ce82c94a19cc0f962b6b6f93bab39b2de2404f6",
-      "compression_level": 22,
-      "aliases": [
-        "62ae32ff02458f998075a0f86f406f1f73f1523bbd200358c9e0256839534065.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "2a023dab1fb201fe1312a899bfa06282a75ca20b4422004c6ef378e944b65f47.tar.zst",
+      "sha256": "2a023dab1fb201fe1312a899bfa06282a75ca20b4422004c6ef378e944b65f47",
+      "compressed_bytes": 12369891,
+      "uncompressed_sha256": "9e8d473175281b2fc8028dea5c02deceed55cf3af101dc1d0e347f2ed8dcd431",
+      "aliases": []
     },
     {
       "title": "Episode 05",
