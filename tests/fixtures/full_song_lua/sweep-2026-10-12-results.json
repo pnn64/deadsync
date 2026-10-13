@@ -8228,6 +8228,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 299,
+      "source_simfile": "mawaru1/mawaru.sm",
+      "simfile_sha256": "cb10489b3cf018ea822152693fe3d682db32e0319d1169cc826e6ae110c9ae5d",
+      "retained_original_archive": "84bca9032bf72170351c50fc5462a468095e4b9d39c8328f77b7d6eb22d9e5df.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/live-draw-build-v1/proof.json",
+      "capture_seconds": 156.59180819599715,
+      "trace_sha256": "29aca8ffaacc07fa463eab04f275192af84361ab2fd112cc7999d18150e1e550",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-299/candidates/1677900151e89aa5127edd6ce01e0b9dad75098beb5015ccf59e3839a8fca9db.tar",
+      "replay_exit": 1,
+      "replay_seconds": 1.447106818013708,
+      "candidate_sha256": "1677900151e89aa5127edd6ce01e0b9dad75098beb5015ccf59e3839a8fca9db",
+      "failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (137260) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "historical_pending": [
@@ -8254,6 +8273,6 @@
   "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 20,
-  "pending_charts": 42,
-  "processed_charts": 62
+  "pending_charts": 43,
+  "processed_charts": 63
 }
