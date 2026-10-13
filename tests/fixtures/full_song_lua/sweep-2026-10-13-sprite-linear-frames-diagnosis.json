@@ -1,0 +1,59 @@
+{
+  "charts": [
+    {
+      "source_simfile": "Get Into It/GetIntoIt.sm",
+      "position": 210,
+      "repair_attempts_spent": 0,
+      "repair_attempts_remaining": 2,
+      "simfile_sha256": "5577279c57ba4255fcec3f2f7e105c0e2627731193ee239d4ecc2486806027af",
+      "candidate_sha256": "c8525597f7140851887306420f697065b157204649f38c77434fb24b5fa69c27",
+      "trace_sha256": "955ef8d80682254161222f06ac6f57ede4122e54d0cba577443e5cb6406e4632",
+      "replay_exit": 1,
+      "concrete_startup_failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[8.5s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Get Into It': failed to execute '/tmp/.tmp1eV1dG/song/lua/bg.lua': runtime error: [string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Get Into It' from '/tmp/.tmp1eV1dG/song/lua/default.lua': failed to execute '/tmp/.tmp1eV1dG/song/lua/default.lua': runtime error: [string \"/tmp/.tmp1eV1dG/song/lua/default.lua\"]:460: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmp1eV1dG/song/lua/default.lua\"]:460: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\ndeadsync_song_lua::playback::prepare: Failed to compile background lua layer for 'Get Into It' from '/tmp/.tmp1eV1dG/song/lua/bg.lua': failed to execute '/tmp/.tmp1eV1dG/song/lua/bg.lua': runtime error: [string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (996272) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[10.0s] replaying every native gameplay frame: frame 0/70013 (0.0%)\n"
+    },
+    {
+      "source_simfile": "Get Into It/GetIntoIt.ssc",
+      "position": 211,
+      "repair_attempts_spent": 0,
+      "repair_attempts_remaining": 2,
+      "simfile_sha256": "c13e18cc0089f8bd5f5dbf814ff97ae0fd614856914b8c41b1593a120e9ebed5",
+      "candidate_sha256": "bc410b2ec660dea177cd25b913edd879070438441184378f20362174d5aed8fa",
+      "trace_sha256": "4a209e499e1d30cf87f93117723c64f4dc55c9c0604f72683735375a955b60a5",
+      "replay_exit": 1,
+      "concrete_startup_failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[7.1s] replaying every native gameplay frame\n[8.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Get Into It (Yuh)': failed to execute '/tmp/.tmpgRWmbz/song/lua/bg.lua': runtime error: [string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Get Into It (Yuh)' from '/tmp/.tmpgRWmbz/song/lua/default.lua': failed to execute '/tmp/.tmpgRWmbz/song/lua/default.lua': runtime error: [string \"/tmp/.tmpgRWmbz/song/lua/default.lua\"]:460: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmpgRWmbz/song/lua/default.lua\"]:460: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\ndeadsync_song_lua::playback::prepare: Failed to compile background lua layer for 'Get Into It (Yuh)' from '/tmp/.tmpgRWmbz/song/lua/bg.lua': failed to execute '/tmp/.tmpgRWmbz/song/lua/bg.lua': runtime error: [string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (1455192) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[10.0s] replaying every native gameplay frame: frame 0/57594 (0.0%)\n"
+    }
+  ],
+  "concrete_cause": "Authored Lua calls the static native fallback helper Sprite.LinearFrames during declaration construction. It is absent from the independent Sprite class, preventing preparation from retaining a live scene.",
+  "native_source_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_source": "../itgmania-harness/vendor/itgmania/Themes/_fallback/Scripts/02 Sprite.lua",
+  "native_source_sha256": "e7de67ee7ff1b289dba7d1fb7d480eb5aa1fe6ec4da85dc7022d6973d10fe823",
+  "native_first_line": 63,
+  "native_function": "function Sprite.LinearFrames(NumFrames, Seconds)\n\tlocal Frames = {}\n\tfor i = 0,NumFrames-1 do\n\t\tFrames[#Frames+1] = {\n\t\t\tFrame = i,\n\t\t\tDelay = (1/NumFrames)*Seconds\n\t\t}\n\tend\n\treturn Frames\nend\n",
+  "authored_calls": {
+    "lua/bg.lua:13": "Sprite.LinearFrames(144, 184/60*2)",
+    "lua/bg.lua:27": "Sprite.LinearFrames(144, 18*60/184)",
+    "lua/default.lua:460": "Sprite.LinearFrames(51, 4); repeated for eight authored sprites"
+  },
+  "focused_control": "live_sprite_linear_frames_builds_native_authored_states calls the static helper with authored 144-frame values, verifies zero-based frame indices and per-frame delays, zero-count and fresh-table behavior, then builds a real Def.Sprite and verifies all Frames are consumed as Sprite states.",
+  "unchanged_production_red": {
+    "linux": {
+      "label": "sprite-frames",
+      "exit_code": 101,
+      "expected_failure": true,
+      "log_sha256": "d136f11ed29765dcd0a97fb2d093bc51275790ed4f8de3af1db8c97922f6f6ef",
+      "seconds": 191.59577476099366
+    },
+    "windows": {
+      "label": "actor-name",
+      "exit_code": 101,
+      "expected_failure": true,
+      "log": "sprite-frames-red-v1-windows-name-v1.log",
+      "log_sha256": "0a351770a7c84444fa497008358160b7d67de2d50254d6f005f084abbfb5c652",
+      "seconds": 356.6372024999
+    }
+  },
+  "production_fix_not_yet_applied": true,
+  "additional_chart_replay_launched": false,
+  "new_acceptance_gate": false,
+  "passing_chart_reopened": false
+}
