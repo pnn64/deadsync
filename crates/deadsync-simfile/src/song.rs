@@ -269,6 +269,20 @@ fn parse_song_source(
             chart.step_artist_str = description.to_owned();
             chart.chart_name_str = description.to_owned();
         }
+    } else if source.extension.eq_ignore_ascii_case("ssc") {
+        let version = rssp::parse::parse_version(parsed.version, rssp::timing::TimingFormat::Ssc);
+        // SSC SetDescription uses the same ASCII-only Trim. Before 0.74 the
+        // tag names the chart instead, so leave that existing normalization.
+        if !(version < rssp::parse::SSC_VERSION_CHART_NAME_TAG) {
+            let entries = parsed.notes_list.iter().filter(|entry| {
+                entry.field_count >= 5
+                    && rssp::supported_stepstype_lanes_bytes(entry.fields[0]).is_some()
+            });
+            for (chart, entry) in summary.charts.iter_mut().zip(entries) {
+                chart.description_str = rssp::parse::decode_unescape(entry.fields[1])
+                    .trim_matches(['\r', '\n', '\t', ' ']).to_owned();
+            }
+        }
     }
     let media_dir = if source.on_disk {
         Some(
@@ -749,6 +763,28 @@ fn chart_bpm_bounds(bpms: &[(f32, f32)]) -> (f64, f64) {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn ssc_chart_description_preserves_non_ascii_whitespace() {
+        let root = test_dir("ssc-description-whitespace");
+        let simfile = root.join("metadata.ssc");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        for (version, expected) in [("0.83", "\u{a0}Author: description\u{a0}"), ("0.60", "")] {
+            let source = format!("#VERSION:{version};\n#TITLE:Metadata;\n#BPMS:0=120;\n\
+                #NOTEDATA:;\n#STEPSTYPE:unknown-style;\n#DESCRIPTION:Skipped;\n#DIFFICULTY:Hard;\n#METER:1;\n#NOTES:1000;\n\
+                #NOTEDATA:;\n#STEPSTYPE:dance-single;\n#CHARTNAME:Independent name;\n#CREDIT:Independent credit;\n\
+                #DESCRIPTION:\t \u{a0}Author\\: description\u{a0} \t ;\n#DIFFICULTY:Hard;\n#METER:1;\n#NOTES:1000;");
+            fs::write(&simfile, &source).unwrap();
+            for song in [parse_song_file(&simfile, &options, |_| 0.0).unwrap(),
+                parse_song_bytes(source.as_bytes(), "SSC", &simfile, &options, |_| 0.0).unwrap()] {
+                assert_eq!(song.charts.len(), 1);
+                assert_eq!(song.charts[0].description, expected);
+                assert_eq!(song.charts[0].step_artist, "Independent credit");
+                if version == "0.83" { assert_eq!(song.charts[0].chart_name, "Independent name"); }
+                assert_eq!(song.charts[0].parsed_notes.len(), 1);
+            }
+        }
+    }
 
     #[test]
     fn sm_chart_metadata_preserves_non_ascii_whitespace() {
