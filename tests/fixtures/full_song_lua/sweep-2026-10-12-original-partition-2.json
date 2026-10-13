@@ -1487,6 +1487,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 187,
+      "source_simfile": "Final Flash Flight/Final Flash Flight.sm",
+      "simfile_sha256": "26d967cbef3b221927e25076a0320087e3005edbbb8ef34deac43d1f242ca56f",
+      "retained_original_archive": "ead4c346d2785b108a55db2e37aba9b33b1a6b58e6fd5eb24c7ad9edb1301cdc.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "1d6c6e802 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/condition-build-v1/proof.json",
+      "capture_seconds": 209.54068806400028,
+      "trace_sha256": "d4057a22de7ebe596fdc7047592271d3bece92cdbff1b0c7c1e0385d3377990c",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-187/candidates/789a8a0336a4513a4d27c89975c58a69079bae3ac3c20e3844dd324ba2d0c2c1.tar",
+      "replay_exit": 0,
+      "replay_seconds": 569.2386616940057,
+      "candidate_sha256": "789a8a0336a4513a4d27c89975c58a69079bae3ac3c20e3844dd324ba2d0c2c1",
+      "native_frames": 66037,
+      "replayed_frames": 66037,
+      "compared_stage_fields": 1650,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "a7af9d2fc599a0d1a5612c0e61b62368c659633b0af977783428284c3e8980cc",
+      "archive": "142bfbc0ade69fa381ecc1136b68de14d63713d1d68b50d07a08e503dea0770f.tar.zst",
+      "archive_sha256": "142bfbc0ade69fa381ecc1136b68de14d63713d1d68b50d07a08e503dea0770f",
+      "compressed_bytes": 15199385,
+      "pack_seconds": 22.192074212995067,
+      "harness_version": "0.1.80",
+      "title": "Final Flash Flight",
+      "retained_original_entry": {
+        "title": "Final Flash Flight",
+        "source_simfile": "Final Flash Flight/Final Flash Flight.sm",
+        "harness_version": "0.1.0",
+        "archive": "ead4c346d2785b108a55db2e37aba9b33b1a6b58e6fd5eb24c7ad9edb1301cdc.tar.zst",
+        "sha256": "ead4c346d2785b108a55db2e37aba9b33b1a6b58e6fd5eb24c7ad9edb1301cdc",
+        "compressed_bytes": 65364,
+        "uncompressed_sha256": "127dd038c826c1ca5f7ed576434f23a206c2d743c51c4e4976e9b345cdf66981",
+        "compression_level": 22,
+        "aliases": [
+          "37bf852c44314c05e26cca5280ec32447abacc766c8dd060412dd31c533b8d99.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -1496,9 +1546,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "ab80853f896e96fcde3099428398a9dddc7e0f75a3646ef99297bc553cd861af",
+  "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 3,
+  "passed_fixtures": 4,
   "pending_charts": 3,
-  "processed_charts": 6
+  "processed_charts": 7
 }

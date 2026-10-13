@@ -2364,15 +2364,12 @@
     {
       "title": "Final Flash Flight",
       "source_simfile": "Final Flash Flight/Final Flash Flight.sm",
-      "harness_version": "0.1.0",
-      "archive": "ead4c346d2785b108a55db2e37aba9b33b1a6b58e6fd5eb24c7ad9edb1301cdc.tar.zst",
-      "sha256": "ead4c346d2785b108a55db2e37aba9b33b1a6b58e6fd5eb24c7ad9edb1301cdc",
-      "compressed_bytes": 65364,
-      "uncompressed_sha256": "127dd038c826c1ca5f7ed576434f23a206c2d743c51c4e4976e9b345cdf66981",
-      "compression_level": 22,
-      "aliases": [
-        "37bf852c44314c05e26cca5280ec32447abacc766c8dd060412dd31c533b8d99.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "142bfbc0ade69fa381ecc1136b68de14d63713d1d68b50d07a08e503dea0770f.tar.zst",
+      "sha256": "142bfbc0ade69fa381ecc1136b68de14d63713d1d68b50d07a08e503dea0770f",
+      "compressed_bytes": 15199385,
+      "uncompressed_sha256": "789a8a0336a4513a4d27c89975c58a69079bae3ac3c20e3844dd324ba2d0c2c1",
+      "aliases": []
     },
     {
       "title": "Final Flash Flight",
