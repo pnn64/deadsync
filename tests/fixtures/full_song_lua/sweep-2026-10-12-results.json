@@ -7632,6 +7632,399 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 284,
+      "source_simfile": "Lonely/Lonely.sm",
+      "simfile_sha256": "faff72213058f1e3dfee6fca405836936dcabc5603612b233d8274b3fd2bca82",
+      "retained_original_archive": "8c7122bf839dbe1a2788c27c873a83631ab155e7223e36f79b18eba0f9985a6a.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "4713556073fc219eef2dd0db6fbb496506cdfa4f49c27f62d6427ec63f95ab84",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/fg-filename-build-v1/proof.json",
+      "capture_seconds": 304.9531880130089,
+      "trace_sha256": "75dfcff68a91d32ad4ec911fb53afc9d819cd09fbaa4ffa34de7092a591af20b",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-284/candidates/9e8d473175281b2fc8028dea5c02deceed55cf3af101dc1d0e347f2ed8dcd431.tar",
+      "replay_exit": 2,
+      "replay_seconds": 1057.2406997969956,
+      "candidate_sha256": "9e8d473175281b2fc8028dea5c02deceed55cf3af101dc1d0e347f2ed8dcd431",
+      "native_frames": 90583,
+      "replayed_frames": 90583,
+      "compared_stage_fields": 2706,
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.smooth, GameState.GetCurrentGame, GameState.GetHumanPlayers, GameState.GetMasterPlayerNumber, GameState.GetSongBPS, PlayerOptions.CMod, PlayerOptions.Dark1, PlayerOptions.Dark2, PlayerOptions.Dark3, PlayerOptions.Dark4, PlayerState.GetSongPosition",
+        "native drawable state/resources: ActorProxy, Quad"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [
+        "update function for ActorFrame 'lua' at beat 50.006: ShowArrowMessageCommand failed for ActorFrame 'lua': runtime error: [string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:567: attempt to call field 'find' (a nil value)\nstack traceback:\n\t[C]: in field 'find'\n\t[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:567: in function <[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:557>\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:478: in function <[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:431>\nstack traceback:\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:478: in function <[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:431>\n"
+      ],
+      "mismatch_count": 275039,
+      "concrete_failures": [
+        {
+          "field": "source_broadcast_count",
+          "native": 39,
+          "deadsync": 10360
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 32.08149719238281,
+            "beat": 96.00149536132812,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  2
+                ],
+                2
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 16.774694442749023,
+            "beat": 50.026493072509766,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  1
+                ],
+                2
+              ]
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 42.070228576660156,
+            "beat": 126.0033187866211,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  4
+                ],
+                2
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 16.77739143371582,
+            "beat": 50.03459167480469,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  1
+                ],
+                2
+              ]
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 51.725826263427734,
+            "beat": 155.00454711914062,
+            "name": "HideArrow",
+            "args": [
+              "HideArrow",
+              [
+                [
+                  4
+                ],
+                2
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 16.780475616455078,
+            "beat": 50.043853759765625,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  1
+                ],
+                2
+              ]
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 55.471405029296875,
+            "beat": 166.254638671875,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  4
+                ],
+                2
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 16.783309936523438,
+            "beat": 50.0523681640625,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  1
+                ],
+                2
+              ]
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 59.71492004394531,
+            "beat": 179.0003204345703,
+            "name": "HideArrow",
+            "args": [
+              "HideArrow",
+              [
+                [
+                  1
+                ],
+                2
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 16.786008834838867,
+            "beat": 50.06047439575195,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  1
+                ],
+                2
+              ]
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 62.38335418701172,
+            "beat": 187.01515197753906,
+            "name": "HideArrow",
+            "args": [
+              "HideArrow",
+              [
+                [
+                  4
+                ],
+                2
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 16.788549423217773,
+            "beat": 50.06810760498047,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  1
+                ],
+                2
+              ]
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 63.382835388183594,
+            "beat": 190.01715087890625,
+            "name": "HideArrow",
+            "args": [
+              "HideArrow",
+              [
+                [
+                  2
+                ],
+                2
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 16.791088104248047,
+            "beat": 50.07572937011719,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  1
+                ],
+                2
+              ]
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 85.35165405273438,
+            "beat": 256.001953125,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  4
+                ],
+                2
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 16.793447494506836,
+            "beat": 50.08281707763672,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  1
+                ],
+                2
+              ]
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 105.99634552001953,
+            "beat": 318.0096740722656,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  1,
+                  2
+                ],
+                2
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 16.795804977416992,
+            "beat": 50.08989715576172,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  1
+                ],
+                2
+              ]
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 105.99634552001953,
+            "beat": 318.0096740722656,
+            "name": "HideArrow",
+            "args": [
+              "HideArrow",
+              [
+                [
+                  3,
+                  4
+                ],
+                2
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 16.798141479492188,
+            "beat": 50.09691619873047,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  1
+                ],
+                2
+              ]
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 126.9703598022461,
+            "beat": 381.00653076171875,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  4
+                ],
+                2
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 16.800430297851562,
+            "beat": 50.103790283203125,
+            "name": "ShowArrow",
+            "args": [
+              "ShowArrow",
+              [
+                [
+                  1
+                ],
+                2
+              ]
+            ],
+            "params_error": null
+          }
+        }
+      ],
+      "report_sha256": "3b992837c1f12a1ecd0b8edd2b78d43052c6b0768280f155d55cf21ef9b434f5"
     }
   ],
   "historical_pending": [
@@ -7658,6 +8051,6 @@
   "binary_sha256": "4713556073fc219eef2dd0db6fbb496506cdfa4f49c27f62d6427ec63f95ab84",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 16,
-  "pending_charts": 41,
-  "processed_charts": 57
+  "pending_charts": 42,
+  "processed_charts": 58
 }
