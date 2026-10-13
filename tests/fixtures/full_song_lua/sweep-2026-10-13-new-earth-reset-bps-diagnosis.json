@@ -1,0 +1,219 @@
+{
+  "status": "New Earth first repair completes with only two construction effectperiod differences; final repair not launched",
+  "position": 326,
+  "source_simfile": "new earth/new earth.ssc",
+  "first_repair_result": {
+    "position": 326,
+    "source_simfile": "new earth/new earth.ssc",
+    "status": "pending",
+    "repair_attempts": 1,
+    "previous_concrete_failures": [],
+    "previous_errors": [],
+    "previous_failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'new earth': failed to run actor init commands for '/tmp/.tmpuDkUwQ/song/lua/default.lua': InitCommand failed for ActorMultiVertex 'SpaceshipTrailP1': runtime error: [string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: attempt to call global 'HSVA' (a nil value)\nstack traceback:\n\t[C]: in global 'HSVA'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: in upvalue 'makeSpaceshipTrail'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:152: in function <[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:151>; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'new earth' from '/tmp/.tmpuDkUwQ/song/lua/default.lua': failed to run actor init commands for '/tmp/.tmpuDkUwQ/song/lua/default.lua': InitCommand failed for ActorMultiVertex 'SpaceshipTrailP1': runtime error: [string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: attempt to call global 'HSVA' (a nil value)\nstack traceback:\n\t[C]: in global 'HSVA'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: in upvalue 'makeSpaceshipTrail'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:152: in function <[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:151>\n\nthread 'main' (2316501) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+    "binary_sha256": "13910428be95f3669acf1ad4f85fc2098557c84a66ca66606780bedd9c5f2b0c",
+    "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "candidate_sha256": "1cf42f912b0caf2c3c0d9ba3f17a640ffd9313f9a353d4c4f4bcb076c5c1b1ab",
+    "trace_sha256": "5142c22ee3a02a750a5bf8de5aea44b4eeaa1ed26dff9a6889614801e61444d4",
+    "simfile_sha256": "614f29f557e0e936a2650122071d9d408eaaa46690031b08dddb471f694a4abb",
+    "build_proof": "/home/parity/jobs/hsva-green-v2/proof.json",
+    "fix_commit": "ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+    "native_capture_reused": true,
+    "all_candidate_manifest_members_byte_verified": true,
+    "replay_exit": 2,
+    "replay_seconds": 2645.7025687979767,
+    "native_frames": 89954,
+    "replayed_frames": 89954,
+    "compared_stage_fields": 1408,
+    "pending_coverage": [
+      "uncompared song operations: Actor.blend, Actor.diffuseshift, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetNumVertices, ActorMultiVertex.SetVertices, GameState.GetSongBPS",
+      "native drawable state/resources: ActorMultiVertex, Sprite"
+    ],
+    "archive_accepted": false,
+    "errors": [],
+    "mismatch_count": 2,
+    "concrete_failures": [
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0017",
+          "args": [
+            0.4
+          ],
+          "beat": 0,
+          "caller": {
+            "line": 171,
+            "source": "song:/lua/default.lua",
+            "tail_call": false
+          },
+          "command": "InitCommand",
+          "definition_id": "def-0017",
+          "detail": {
+            "native_tween_time_left": 0
+          },
+          "kind": "call",
+          "line": 171,
+          "operation": "Actor.effectperiod",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 87,
+          "source": "song:/lua/default.lua",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.effectperiod",
+          "source": "song:/lua/default.lua",
+          "line": 171,
+          "phase": "callback",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [
+            1.7777777777777777
+          ],
+          "results": [
+            {
+              "actor": "0x5b14ede87940",
+              "name": "SpaceshipSpriteP1",
+              "path": "ScreenGameplay/SongForeground/SpaceshipSpriteP1"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0020",
+          "args": [
+            0.4
+          ],
+          "beat": 0,
+          "caller": {
+            "line": 171,
+            "source": "song:/lua/default.lua",
+            "tail_call": false
+          },
+          "command": "InitCommand",
+          "definition_id": "def-0020",
+          "detail": {
+            "native_tween_time_left": 0
+          },
+          "kind": "call",
+          "line": 171,
+          "operation": "Actor.effectperiod",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 109,
+          "source": "song:/lua/default.lua",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.effectperiod",
+          "source": "song:/lua/default.lua",
+          "line": 171,
+          "phase": "callback",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [
+            1.7777777777777777
+          ],
+          "results": [
+            {
+              "actor": "0x5b14ededadb0",
+              "name": "SpaceshipSpriteP2",
+              "path": "ScreenGameplay/SongForeground/SpaceshipSpriteP2"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      }
+    ],
+    "report_sha256": "2b28606c0154a9cd2547b14c99858b34ad53bba088ea37e21fcc37c2bb069576"
+  },
+  "all_candidate_manifest_members_byte_verified": true,
+  "native_initial_bps_queries": [
+    {
+      "args": [],
+      "beat": 0,
+      "caller": {
+        "line": 171,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "InitCommand",
+      "definition_id": "def-0017",
+      "detail": {
+        "results": [
+          10
+        ]
+      },
+      "kind": "query",
+      "line": 171,
+      "operation": "GameState.GetSongBPS",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 0,
+      "seq": 85,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "args": [],
+      "beat": 0,
+      "caller": {
+        "line": 171,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "InitCommand",
+      "definition_id": "def-0020",
+      "detail": {
+        "results": [
+          10
+        ]
+      },
+      "kind": "query",
+      "line": 171,
+      "operation": "GameState.GetSongBPS",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 0,
+      "seq": 107,
+      "source": "song:/lua/default.lua"
+    }
+  ],
+  "local_source_pins": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\SongPosition.h",
+      "sha256": "bdbb3a0ebbd0ffb932ce48a4b46720c4472fe2cbe38fd118b6880532f36528a6"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\GameState.cpp",
+      "sha256": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\runtime.rs",
+      "sha256": "f520af148c0beadff9736de4fc9fe9d89d5bb474faac881f0498b6a9b78efb9a"
+    },
+    {
+      "path": "C:\\GitHub\\rework\\lua-songs\\new earth\\lua\\default.lua",
+      "sha256": "e54e380437643b6ce566893aaf29764676c1d3727137387685eeca4d6291f21b"
+    }
+  ],
+  "unchanged_runtime_baseline_commit": "0b637312ab477d59cc8b1aa086c3df92f85f6d4f",
+  "concrete_source_cause": "HSVA preparation now succeeds and all 89954 frames and 1408 stage fields replay with zero callback errors. Only the two SpaceshipSprite InitCommand Actor.effectperiod calls differ. Authored code computes 4/GetSongBPS: native passes 0.4 and independent passes 1.7777777777777777. Pinned GameState exposes SongPosition.m_fCurBPS, whose Reset sets 10 before gameplay updates. The independent runtime instead initializes its construction BPS from the authored display BPM, here 135/60=2.25. The two arguments therefore follow the exact native reset versus independent song-tempo calculation.",
+  "repair_requirement": "Retain native reset BPS during live actor construction, then use actual song timing on gameplay updates. Verify a meaningful real InitCommand control and existing live/native controls before spending the one remaining full repair. Add and verify the unchanged runtime.rs baseline source pin. Preserve nonlive preview behavior, captured bytes and all comparison fields.",
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "chart_repair_attempts_spent": 1,
+  "remaining_repairs": 1,
+  "comparisons_modified": false,
+  "passing_charts_reopened": false,
+  "native_constructor_bps_directly_captured": [
+    10,
+    10
+  ]
+}
