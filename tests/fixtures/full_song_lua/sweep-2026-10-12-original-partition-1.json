@@ -6831,6 +6831,606 @@
         }
       ],
       "report_sha256": "ea121741520a86825d6c55395f973a7afa27a61e6d0da1b7c8c7bbca0b09720c"
+    },
+    {
+      "position": 288,
+      "source_simfile": "LORELEI/LORELEI.ssc",
+      "simfile_sha256": "ff15d9b5b73d09fb5a23a2df9be6d1943d21dcb865814565245fb4f2539d390f",
+      "retained_original_archive": "8a651ca7788d9cb9b9ef6ffa8a9377bcaff6ff7dcca479a42ec07f608a9b6157.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "93f59d2cedd99eeeb3e8ec457f3e7cffe3ed04a4f812311fdd8ff85046afb559",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/kaboom-controls-green-v1/proof.json",
+      "capture_seconds": 285.44207324500894,
+      "trace_sha256": "8967298efb7488fd03a271d974da979b8cc5afaeccb3c936989d0e16f28425d3",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-288/candidates/19827cbfb3213b70e0a7ad62ea7fcf33ea7d362f4f0e36beab96de24812c155e.tar",
+      "replay_exit": 2,
+      "replay_seconds": 1103.8882296060037,
+      "candidate_sha256": "19827cbfb3213b70e0a7ad62ea7fcf33ea7d362f4f0e36beab96de24812c155e",
+      "native_frames": 34652,
+      "replayed_frames": 34652,
+      "compared_stage_fields": 2299,
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.Draw, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.SetHeight, Actor.SetWidth, Actor.addcommand, Actor.blend, Actor.clearzbuffer, Actor.cropright, Actor.playcommand, Actor.scaletofit, Actor.xy, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov, ActorFrame.vanishpoint, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableDepthBuffer, ActorFrameTexture.GetTexture, GameState.GetSongPosition, RageDisplay.GetDisplayHeight, RageDisplay.GetDisplayWidth, Song.GetTimingData, Sprite.SetTexture",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 421792,
+      "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 493200,
+          "deadsync": 490794
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0004",
+            "args": [
+              0.8
+            ],
+            "beat": -3.4369406700134277,
+            "caller": {
+              "line": 54,
+              "source": "song:/code/draw.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 54,
+            "operation": "Actor.diffusealpha",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9012925624847412,
+            "seq": 97,
+            "source": "song:/code/draw.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrameTexture.GetTexture",
+            "source": "song:/code/draw.lua",
+            "line": 54,
+            "phase": "callback",
+            "beat": -3.4369406700134277,
+            "seconds": -1.9012925624847412,
+            "args": [],
+            "results": [
+              {
+                "type": "RageTexture"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0004",
+            "args": [
+              1.2
+            ],
+            "beat": -3.4369406700134277,
+            "caller": {
+              "line": 54,
+              "source": "song:/code/draw.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 54,
+            "operation": "Actor.zoom",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9012925624847412,
+            "seq": 98,
+            "source": "song:/code/draw.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.diffusealpha",
+            "source": "song:/code/draw.lua",
+            "line": 54,
+            "phase": "callback",
+            "beat": -3.4369406700134277,
+            "seconds": -1.9012925624847412,
+            "args": [
+              0.8
+            ],
+            "results": [
+              {
+                "actor": "0x56a198060a20",
+                "name": "aft.basesprite",
+                "path": "ScreenGameplay/SongForeground/.//aft.base/aft.basesprite"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0005",
+            "args": [
+              true
+            ],
+            "beat": -3.4369406700134277,
+            "caller": {
+              "line": 54,
+              "source": "song:/code/draw.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 54,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9012925624847412,
+            "seq": 104,
+            "source": "song:/code/draw.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.zoom",
+            "source": "song:/code/draw.lua",
+            "line": 54,
+            "phase": "callback",
+            "beat": -3.4369406700134277,
+            "seconds": -1.9012925624847412,
+            "args": [
+              1.2
+            ],
+            "results": [
+              {
+                "actor": "0x56a198060a20",
+                "name": "aft.basesprite",
+                "path": "ScreenGameplay/SongForeground/.//aft.base/aft.basesprite"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0007",
+            "args": [
+              true
+            ],
+            "beat": -3.4369406700134277,
+            "caller": {
+              "line": 54,
+              "source": "song:/code/draw.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 54,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9012925624847412,
+            "seq": 105,
+            "source": "song:/code/draw.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrameTexture.GetTexture",
+            "source": "song:/code/draw.lua",
+            "line": 54,
+            "phase": "callback",
+            "beat": -3.4369406700134277,
+            "seconds": -1.9012925624847412,
+            "args": [],
+            "results": [
+              {
+                "type": "RageTexture"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0008",
+            "args": [
+              {
+                "last_line": 80,
+                "line": 61,
+                "source": "song:/sm5/core/main.lua",
+                "type": "function"
+              }
+            ],
+            "beat": -3.4369406700134277,
+            "caller": {
+              "line": 30,
+              "source": "song:/sm5/core/main.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 8999999488.0
+            },
+            "kind": "call",
+            "line": 30,
+            "operation": "ActorFrame.SetUpdateFunction",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9012925624847412,
+            "seq": 106,
+            "source": "song:/sm5/core/main.lua",
+            "tween_time_left": 8999999488.0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/code/draw.lua",
+            "line": 54,
+            "phase": "callback",
+            "beat": -3.4369406700134277,
+            "seconds": -1.9012925624847412,
+            "args": [
+              true
+            ],
+            "results": [
+              {
+                "actor": "0x56a1980519f0",
+                "name": "aft.base",
+                "path": "ScreenGameplay/SongForeground/.//aft.base"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0008",
+            "args": [],
+            "beat": -3.4369406700134277,
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 48,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": -1.9012925624847412,
+            "seq": 108,
+            "source": "song:/.//default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/code/draw.lua",
+            "line": 54,
+            "phase": "callback",
+            "beat": -3.4369406700134277,
+            "seconds": -1.9012925624847412,
+            "args": [
+              true
+            ],
+            "results": [
+              {
+                "actor": "0x56a198092620",
+                "name": "aft.recursive",
+                "path": "ScreenGameplay/SongForeground/.//aft.recursive"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0001",
+            "args": [
+              854,
+              480
+            ],
+            "beat": -3.4369406700134277,
+            "callback": "SetDrawFunction",
+            "caller": {
+              "line": 8,
+              "source": "song:/sm5/modules/draw.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 8,
+            "operation": "Actor.zoomto",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9012925624847412,
+            "seq": 110,
+            "source": "song:/sm5/modules/draw.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "ActorFrame.SetUpdateFunction",
+            "source": "song:/sm5/core/main.lua",
+            "line": 30,
+            "phase": "callback",
+            "beat": -3.4369406700134277,
+            "seconds": -1.9012925624847412,
+            "args": [
+              {
+                "type": "function",
+                "source": "song:/sm5/core/main.lua",
+                "line": 61,
+                "last_line": 80
+              }
+            ],
+            "results": [
+              {
+                "actor": "0x56a198023550",
+                "name": "./",
+                "path": "ScreenGameplay/SongForeground/./"
+              }
+            ],
+            "tween_time_left": 8999999488.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0001",
+            "args": [
+              0,
+              0,
+              0,
+              0.00392156862745098
+            ],
+            "beat": -3.4369406700134277,
+            "callback": "SetDrawFunction",
+            "caller": {
+              "line": 31,
+              "source": "song:/sm5/modules/draw.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 31,
+            "operation": "Actor.diffuse",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9012925624847412,
+            "seq": 111,
+            "source": "song:/sm5/modules/draw.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "OnCommand",
+            "source": "song:/.//default.lua",
+            "line": 48,
+            "beat": -3.4369406700134277,
+            "seconds": -1.9012925624847412,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0001",
+            "args": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "beat": -3.4369406700134277,
+            "callback": "SetDrawFunction",
+            "caller": {
+              "line": 31,
+              "source": "song:/sm5/modules/draw.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 31,
+            "operation": "Actor.diffuse",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9012925624847412,
+            "seq": 113,
+            "source": "song:/sm5/modules/draw.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.zoomto",
+            "source": "song:/sm5/modules/draw.lua",
+            "line": 8,
+            "phase": "callback",
+            "beat": -3.4369406700134277,
+            "seconds": -1.9012925624847412,
+            "args": [
+              854,
+              480
+            ],
+            "results": [
+              {
+                "actor": "0x56a1980238d0",
+                "name": "quad",
+                "path": "ScreenGameplay/SongForeground/.//quad"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0017",
+            "args": [
+              "Judgment"
+            ],
+            "beat": -3.4369406700134277,
+            "callback": "SetDrawFunction",
+            "caller": {
+              "line": 64,
+              "source": "song:/sm5/core/players.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 8999999488.0,
+              "results": [
+                {
+                  "actor": "external-0023",
+                  "name": "Judgment",
+                  "path": "ScreenGameplay/PlayerP1/Judgment"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 64,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9012925624847412,
+            "seq": 115,
+            "source": "song:/sm5/core/players.lua",
+            "results": [
+              {
+                "actor": 5,
+                "name": "Judgment",
+                "path": "ScreenGameplay/PlayerP1/Judgment"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.diffuse",
+            "source": "song:/sm5/modules/draw.lua",
+            "line": 31,
+            "phase": "callback",
+            "beat": -3.4369406700134277,
+            "seconds": -1.9012925624847412,
+            "args": [
+              0,
+              0,
+              0,
+              0.00392156862745098
+            ],
+            "results": [
+              {
+                "actor": "0x56a1980238d0",
+                "name": "quad",
+                "path": "ScreenGameplay/SongForeground/.//quad"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0024",
+            "args": [
+              true
+            ],
+            "beat": -3.4369406700134277,
+            "callback": "SetDrawFunction",
+            "caller": {
+              "line": 64,
+              "source": "song:/sm5/core/players.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 64,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9012925624847412,
+            "seq": 117,
+            "source": "song:/sm5/core/players.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.diffuse",
+            "source": "song:/sm5/modules/draw.lua",
+            "line": 31,
+            "phase": "callback",
+            "beat": -3.4369406700134277,
+            "seconds": -1.9012925624847412,
+            "args": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "results": [
+              {
+                "actor": "0x56a1980238d0",
+                "name": "quad",
+                "path": "ScreenGameplay/SongForeground/.//quad"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        }
+      ],
+      "report_sha256": "80beb844f4cea0aa4ff509ca73c58e2f18838fb3b907cfc4ba4fc8564a43e84b"
     }
   ],
   "scope": {
@@ -6840,9 +7440,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "fc7e246c948eb5b0ecb64a09b3777c480ac81eb26d2cf232c4ed3d2f8112cdd1",
+  "binary_sha256": "93f59d2cedd99eeeb3e8ec457f3e7cffe3ed04a4f812311fdd8ff85046afb559",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 18,
-  "pending_charts": 22,
-  "processed_charts": 40
+  "pending_charts": 23,
+  "processed_charts": 41
 }
