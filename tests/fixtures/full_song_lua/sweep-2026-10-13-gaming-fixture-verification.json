@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Gaming in 2018/Gaming in 2018.ssc",
+      "acceptance_commit": "fc0e06e48760c8bc8e41536bf3b7449e8c31fc12",
+      "native_frames": 26294,
+      "replayed_frames": 26294,
+      "compared_stage_fields": 363,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "fdcb61ee1b447ec72aae687901500ee0c26a5fdf4f564b2b98a13c3f8b1adf4b.tar.zst",
+      "compressed_sha256": "fdcb61ee1b447ec72aae687901500ee0c26a5fdf4f564b2b98a13c3f8b1adf4b",
+      "uncompressed_sha256": "55a78928607c6930accfaf6696355229a72580c749ce9191898415eb6a8b484f",
+      "compressed_bytes": 1270852,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "native drawable state/resources: BitmapText"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
