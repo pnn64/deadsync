@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T20:44:01Z",
-  "previous_goal_turn": "Mawaru6's first repair 1 is running with immutable foreground-row-green-v1 helper b0f2c78467821c35b24856d3169c79e65f53a8a595784b61389ae14c323fa731. Its original full replay completed all 121856 frames and 2992 fields with zero errors and 505260 differences. Pinned native Foreground and TimingData sources establish that the authored start beat 0.01 rounds to note row zero. The independent float tween model reproduces all 4680 early native queue callbacks exactly; the continuous start reproduces the first five DeadSync broadcast differences exactly. Fix 2b28998120d97876715bfe2a81255fb5de156b89 changes one foreground timing expression to the native note row conversion. The unchanged owned-scene control fails before production and passes after on both hosts. All five checks on each host pass: the focused control, 47 live controls, foreground names, 25 native controls and both executable builds. The prior Koi build's gameplay validation remains unchanged. All 26 physical source pins, three native harness pins, immutable binaries and logs are byte verified. Mawaru6 reuses its original capture and complete candidate; it has one repair left after the current full attempt. Koi SM's final repair 2 and both Get Into It first repairs 1 continue with their immutable validated helpers and unchanged captures. Lower Times SSC completed its final repair 2 across 114997 frames and 2420 fields but remains pending with two missing subscriber identity errors and four failed-state differences; its previous terminal command-count difference is absent from that report. Its two-repair cap is exhausted. Wargame and Media Offline originals completed all 46936 and 45745 frames respectively and remain pending with missing identity errors and four failed-state differences each. Wargame has no authored Judgment subscriber; the owned theme latch is interrupted before dispatch. A focused control for the sole-subscriber delivery is required before a production repair. Wargame and Media Offline have two repairs available each. Midnight Madness SM failed preparation because no Lua scene was retained, and its concrete source cause remains undiagnosed. Mawaru4 SSC still needs 11 cached native background actor owners with all 20 authored timeline changes and native focus behavior; no repair has launched. Original main and both partition workers continue without restart. Singleton publisher 60312 watches 53 streams. Capped charts remain pending without another retry. Earlier accepted fixtures remain saved and byte verified. Only existing complete uncompressed replay comparisons determine acceptance; coverage stays separate, no passing chart was reopened, all 501 original simfiles remain byte unchanged, RUNWAY stays outside original scope, and the goal is active and incomplete.",
+  "updated_utc": "2026-10-13T21:18:04Z",
+  "previous_goal_turn": "Wargame and Media Offline first repairs 1 are running with immutable subscriber-single-green-v1 helper 49482e042c5a60991fd859ab5d1ee6b5eeb64b6511ea2320dcb850abc06f1f78, fix 402a3854bf58c4b4dd460c4098fa0baf8a927885. Their originals completed all 46936/1056 and 45745/1562 frames/fields respectively, with two and three missing identity errors and four failed-state differences each. Byte-verified native definitions contain no authored Judgment subscriber in either chart. Pinned native MessageManager stores a set; a single subscriber has one delivery order. The owned FailOnHoldStart Judgment latch was blocked by an irrelevant identity lookup before dispatch. The unchanged real-scene single-subscriber control fails meaningfully before production on both hosts and passes after. Its multiple-subscriber subcase still rejects a missing rank before either callback. The initial compile-only controls omitted test-support and are excluded from behavioral evidence; the body remains unchanged. All five Linux and five Windows checks pass: the focused control, 48 live controls, captured pointer ordering, 25 native replay controls and both executable builds. All 26 physical source pins, three native harness pins, binaries, source bundles and logs are verified. Both full repairs reuse their original byte-identical captures and candidates; each has one repair left after the current attempt. Mawaru6 first repair 1 continues with the prior validated rounded foreground helper and has one repair left. Its authored start beat 0.01 rounds to native row zero; the bounded float model matched all 4680 native early queue callbacks. Koi SM final repair 2 and both Get Into It first repairs 1 continue without restart. Lower Times SSC remains pending after complete final repair 2: two missing subscriber errors and four failed-state differences across 114997 frames and 2420 fields. Its prior terminal command-count difference is absent, and its cap is exhausted; it was not retried for the subscriber change. Midnight Madness's byte-verified capture has zero authored definitions, roots or events, 29 runtime actors and 19414 frames. Empty BG/FG declarations make production preparation return without an owned scene; the existing full replay rejects it. Its unreferenced default.lua is a comment only and must not be executed as an invented native actor. No Midnight repair has launched; both attempts remain. MODULO original failed at frame 11256 when native scene 2 differed from independent scene 1; its source cause is not established and both attempts remain. My Exes Bestfriend original completed all 66182 frames and 1639 fields with three missing subscriber identity errors and 126676 differences; the broader source cause remains undiagnosed and its two repairs remain available. Mawaru4 SSC still needs 11 cached native background owners, all 20 authored changes and native focus behavior; no repair launched. Original main and both partition workers continue. Singleton publisher 60312 watches 55 streams. Capped charts remain pending without another retry. Earlier accepted fixtures remain saved and byte verified. Only existing complete uncompressed comparisons determine acceptance, coverage is separate, no passing chart reopened, all 501 original simfiles remain byte unchanged, RUNWAY stays outside scope, and the goal is active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,11 +14,12 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "96aaa30c59a0e2f4fb3cd65879ad43f73fd5676d",
+      "deadsync": "e8ce615f7517752f099c408ffd3645e84b9bc618",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
   "validation": {
+    "single_subscriber_dispatch": "402a3854bf58c4b4dd460c4098fa0baf8a927885: unchanged meaningful sole-subscriber control fails before and passes after on both hosts; multiple ranks still required before callbacks; all five checks each host pass, 26 source and three harness pins verified; subscriber-single-build.json",
     "foreground_start_note_row": "2b28998120d97876715bfe2a81255fb5de156b89: unchanged meaningful owned-scene control fails before and passes after on both hosts; all five checks on each host pass, 26 source and three harness pins verified; foreground-row-build.json",
     "native_autoplay_and_avoided_mine_judgments": "9bd984b71e3dd593c07e302839a75be8c6ec3c10: unchanged meaningful red controls on both hosts; all 12 Linux and 12 Windows checks pass; 26 source and 3 harness pins verified; koi-judgment-build.json",
     "sprite_and_overlay_exit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535: meaningful unchanged focused controls; all10 Linux and9 Windows checks pass; 26 actual source and3 native harness pins verified; sprite-frames-overlay-build.json",
@@ -69,15 +70,19 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "My Exes Bestfriend/ExBestFriend.sm",
-      "position": 320,
-      "phase": "capture",
-      "pid": 2097606,
+      "current": "Myths You Forgot/Myths You Forgot.ssc",
+      "position": 323,
+      "phase": "replay",
+      "pid": 2243379,
       "process_matches": true,
       "passed": 20,
-      "pending": 49,
-      "processed": 69,
-      "last_log_lines": [],
+      "pending": 50,
+      "processed": 70,
+      "last_log_lines": [
+        "[180.1s] replaying every native gameplay frame: frame 10557/40940 (25.8%)",
+        "[182.1s] replaying every native gameplay frame: frame 10674/40940 (26.1%)",
+        "[184.1s] replaying every native gameplay frame: frame 10790/40940 (26.4%)"
+      ],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -85,6 +90,10 @@
     "parallel_queue_receipt": "tests/fixtures/full_song_lua/sweep-2026-10-12-parallel-queues.json",
     "build_transition": "tests/fixtures/full_song_lua/sweep-2026-10-12-build-transition.json",
     "source_scope_audit": "tests/fixtures/full_song_lua/sweep-2026-10-12-original-scope.json",
+    "midnight_empty_declarations_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-midnight-empty-declarations-diagnosis.json",
+    "subscriber_single_launch": "tests/fixtures/full_song_lua/sweep-2026-10-13-subscriber-single-launch.json",
+    "subscriber_single_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-subscriber-single-build.json",
+    "media_offline_subscriber_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-media-offline-subscriber-diagnosis.json",
     "wargame_subscriber_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-wargame-subscriber-diagnosis.json",
     "mawaru6_foreground_row_launch": "tests/fixtures/full_song_lua/sweep-2026-10-13-mawaru6-foreground-row-launch.json",
     "foreground_row_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-foreground-row-build.json",
@@ -194,6 +203,28 @@
     "fiji_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-fiji-foreground-diagnosis.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
+      {
+        "job": "media-offline-single-subscriber-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "media offline/media offline.ssc",
+        "child_running": true
+      },
+      {
+        "job": "wargame-single-subscriber-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc",
+        "child_running": true
+      },
       {
         "job": "mawaru6-foreground-row-repair-v1",
         "complete": false,
@@ -1142,15 +1173,29 @@
         "record": "sweep-2026-10-13-mawaru6-foreground-row-repair.json",
         "fix_commit": "2b28998120d97876715bfe2a81255fb5de156b89",
         "finish_status": "bounded first Mawaru6 foreground note row repair complete"
+      },
+      {
+        "name": "wargame-single-subscriber-repair",
+        "remote": "/home/parity/jobs/wargame-single-subscriber-repair-v1",
+        "record": "sweep-2026-10-13-wargame-single-subscriber-repair.json",
+        "fix_commit": "402a3854bf58c4b4dd460c4098fa0baf8a927885",
+        "finish_status": "bounded first single-subscriber repair complete"
+      },
+      {
+        "name": "media-offline-single-subscriber-repair",
+        "remote": "/home/parity/jobs/media-offline-single-subscriber-repair-v1",
+        "record": "sweep-2026-10-13-media-offline-single-subscriber-repair.json",
+        "fix_commit": "402a3854bf58c4b4dd460c4098fa0baf8a927885",
+        "finish_status": "bounded first single-subscriber repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
     "new_passed_fixtures": 77,
-    "new_pending_charts": 82,
-    "new_processed_sources": 159,
+    "new_pending_charts": 83,
+    "new_processed_sources": 160,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 194,
+    "unprocessed_sources": 193,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -1803,6 +1848,26 @@
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
+    },
+    {
+      "source_simfile": "My Exes Bestfriend/ExBestFriend.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 3.001: missing captured subscriber identity for ScreenGameplay/6/1",
+        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 3.496: missing captured subscriber identity for ScreenGameplay/6/1",
+        "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 67.504: missing captured subscriber identity for ScreenGameplay/6/1"
+      ],
+      "mismatch_count": 126676,
+      "first_mismatch": [
+        {
+          "phase": "progress",
+          "seconds": 140.0004119873047,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        }
+      ]
     },
     {
       "source_simfile": "Delightful Day/Delightful Day.sm",

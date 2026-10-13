@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T20:44:03Z",
+  "updated_utc": "2026-10-13T21:18:06Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -14,8 +14,8 @@
   ],
   "counts": {
     "passed": 224,
-    "pending": 83,
-    "unprocessed": 194
+    "pending": 84,
+    "unprocessed": 193
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2701,7 +2701,9 @@
       "position": 320,
       "source_simfile": "My Exes Bestfriend/ExBestFriend.sm",
       "simfile_sha256": "2314771d6ae77815b2ef52e8d5600a8f5183762f694012ba305771a0a83fbe3b",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 321,
