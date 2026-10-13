@@ -3072,15 +3072,12 @@
     {
       "title": "Into The Light",
       "source_simfile": "Into The Light2/Into The Light.sm",
-      "harness_version": "0.1.0",
-      "archive": "3ebe1dc8e4ebc48b5a1f1034b98bd472f4886a19aaf189d279257e5f796a07cd.tar.zst",
-      "sha256": "3ebe1dc8e4ebc48b5a1f1034b98bd472f4886a19aaf189d279257e5f796a07cd",
-      "compressed_bytes": 47840,
-      "uncompressed_sha256": "8b54f64c0fd0645cff6c8bcefabbc6a3d7d0229131520d48b779fc8367c34a02",
-      "compression_level": 22,
-      "aliases": [
-        "e5fac16c8cd9704e2907b0a60f08602bf049416016dc4cf18dbcbaeba5cc140b.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "a3364ac3587bf20af3139fbb81fce9a6b7381e13462778e5cadeea5e87b75ced.tar.zst",
+      "sha256": "a3364ac3587bf20af3139fbb81fce9a6b7381e13462778e5cadeea5e87b75ced",
+      "compressed_bytes": 14456414,
+      "uncompressed_sha256": "130d3ecf5ad9625b7a97bae6933792ff31bdd89bb388784fd1c8043330374637",
+      "aliases": []
     },
     {
       "title": "Into The Light",
