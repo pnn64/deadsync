@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Myths You Forgot/Myths You Forgot.ssc",
+      "acceptance_commit": "3c0c4e8666d6025fbf80125aca87115810e46d09",
+      "native_frames": 40940,
+      "replayed_frames": 40940,
+      "compared_stage_fields": 1463,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "6b36e2c44e4ac70868685760bd8d57274e7d4bf01af1996f53b89aff35a85022.tar.zst",
+      "compressed_sha256": "6b36e2c44e4ac70868685760bd8d57274e7d4bf01af1996f53b89aff35a85022",
+      "uncompressed_sha256": "95c43ceb59efa3dc19a01f750d3b141ca0d03d9a88b0b7eb0ba60baf499784b6",
+      "compressed_bytes": 10409746,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
