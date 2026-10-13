@@ -8538,6 +8538,66 @@
         }
       ],
       "report_sha256": "6ac89d9bdfb0ca08a00b954b5265259c010016ab7a4acd3bf0eeaa7c13e5995e"
+    },
+    {
+      "position": 308,
+      "source_simfile": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc",
+      "simfile_sha256": "56c58acf784dc382fa293f1e7b10aaf659d149d51addc349a421779fbcadde0d",
+      "retained_original_archive": "ebf9644db80ec47e8dc40ac42c6eeba9b27d9de80da4380be783c15a97a3a0f4.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "5ae071ff2319cc8c107d87763b84978c29b7ecc763fb4de47330fd6287f5b283",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/sprite-frames-overlay-green-v2/proof.json",
+      "capture_seconds": 94.77368605701486,
+      "trace_sha256": "cf6cc0edef6e8bd39d0e25c657b2315bd642ad901ef96896bfde81f75be1db52",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-308/candidates/b0add8db6ca7f8c6988d2037c193335e899a12b0e4719cd38cece20154c2e950.tar",
+      "replay_exit": 2,
+      "replay_seconds": 660.6789083080075,
+      "candidate_sha256": "b0add8db6ca7f8c6988d2037c193335e899a12b0e4719cd38cece20154c2e950",
+      "native_frames": 46936,
+      "replayed_frames": 46936,
+      "compared_stage_fields": 1056,
+      "pending_coverage": [],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 16.008: missing captured subscriber identity for ScreenGameplay/6/1",
+        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 80.993: missing captured subscriber identity for ScreenGameplay/6/1"
+      ],
+      "mismatch_count": 4,
+      "concrete_failures": [
+        {
+          "phase": "progress",
+          "seconds": 86.0012435913086,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "progress",
+          "seconds": 87.00226593017578,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "screen-end",
+          "seconds": 87.3050308227539,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "gameplay-exit",
+          "seconds": 87.3050308227539,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        }
+      ],
+      "report_sha256": "b3d4c390521827599198a17351cd675aae1b02eca2c7e7921244868777ba814c"
     }
   ],
   "historical_pending": [
@@ -8561,9 +8621,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
+  "binary_sha256": "5ae071ff2319cc8c107d87763b84978c29b7ecc763fb4de47330fd6287f5b283",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 20,
-  "pending_charts": 45,
-  "processed_charts": 65
+  "pending_charts": 46,
+  "processed_charts": 66
 }
