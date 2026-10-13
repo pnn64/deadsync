@@ -1,0 +1,70 @@
+{
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/compile.rs": "81e0d98be4dc394276102ed861aae8ad0b1ba05ef657aaa463331df7c43bd3c6",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "a2fd4b1dd717d6a1b0eb070ae7cb2a61df75b245f07e4eec418ab9dd5d78b1bb",
+    "crates/deadsync-song-lua/src/live.rs": "61633bb035467a6bd9f7e9d3cec0405a74965f5935dda93187883bafe45d15d9",
+    "crates/deadsync-song-lua/src/song_tables.rs": "3af70eef6c3e9b53eae43811a8a641dc1d8e3e9648a053ca8678302463732e19",
+    "crates/deadsync-song-lua/src/lua_util.rs": "3a0bec4686b324a241629e37978de7601f024261363b508be618a711c945d405",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "2714494a70e8b4cc9128f2513abe859e5b8dc97790a914dc5799e0e5eb216586",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "e20ab593fcff14d5e0daff7aa92a38261cc13e2df6d8f07c399f73abe02a24e1"
+  },
+  "checks": [
+    {
+      "label": "cmd-source-lines",
+      "exit_code": 0,
+      "seconds": 138.73344795800222,
+      "results": [
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 547 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "stage-test",
+      "exit_code": 0,
+      "seconds": 1.1745741750055458,
+      "results": [
+        "test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 530 filtered out; finished in 0.49s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 174.05128461500135,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.1514687570015667,
+      "results": [
+        "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.27s"
+      ]
+    }
+  ],
+  "binary": "/home/parity/jobs/null-foreground-build-v1/full-song-lua-stage-modifier-v1",
+  "binary_sha256": "fdb93c3526a021c8fd78788ab0365161fe3b73fe4bf0431f072244cd8ba28493",
+  "fix_commits": [
+    "ce20604ea"
+  ],
+  "windows_validation": [
+    {
+      "filter": "preprocess_lua_cmd",
+      "passed": 9,
+      "failed": 0
+    },
+    {
+      "filter": "live_",
+      "passed": 26,
+      "failed": 0
+    }
+  ],
+  "behavior": "Supply fallback NullActor and construct independent root instances; retain later foreground entries and their scheduled On commands",
+  "concrete_failure_receipt": "sweep-2026-10-12-fiji-foreground-diagnosis.json",
+  "bounded_repair": {
+    "job": "/home/parity/jobs/null-foreground-repair-v1",
+    "attempt": 1,
+    "reused_uncompressed_candidate_sha256": "cb85a348b7f848964bf688dad1f7758613100592ac76aae18838e87f48af7942"
+  },
+  "acceptance": "Existing complete full_song_lua replay comparisons; coverage recorded separately"
+}
