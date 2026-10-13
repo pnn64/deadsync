@@ -1,0 +1,66 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "ce20604ea / harness 55299c5",
+  "results": [
+    {
+      "position": 186,
+      "source_simfile": "Fiji (Lange Remix)/Fiji (Lange Remix).ssc",
+      "status": "passed",
+      "repair_attempts": 1,
+      "previous_failure": [],
+      "binary_sha256": "fdb93c3526a021c8fd78788ab0365161fe3b73fe4bf0431f072244cd8ba28493",
+      "candidate_sha256": "cb85a348b7f848964bf688dad1f7758613100592ac76aae18838e87f48af7942",
+      "simfile_sha256": "0f350ad4c25182026fab6a7dccd41351859949cd35dbd69ca98a0e0e163b9ebd",
+      "fix_commit": "ce20604ea / harness 55299c5",
+      "previous_concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 5,
+          "deadsync": 0
+        }
+      ],
+      "build_proof": "/home/parity/jobs/null-foreground-build-v1/proof.json",
+      "replay_exit": 0,
+      "replay_seconds": 534.577658037997,
+      "native_frames": 93015,
+      "replayed_frames": 93015,
+      "compared_stage_fields": 1144,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers, PlayerOptions.CMod, PlayerOptions.MMod, PlayerOptions.XMod, PlayerState.GetCurrentPlayerOptions"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "b91cd9fcd0011d4986ba8eed400f5b2adcbd046f25ebfe35b0d61939744f88f3",
+      "archive": "a6674298b7a42d5314fd663a8ca210dc030530595166499eb5c84e69eae082f2.tar.zst",
+      "archive_sha256": "a6674298b7a42d5314fd663a8ca210dc030530595166499eb5c84e69eae082f2",
+      "compressed_bytes": 5619611,
+      "harness_version": "0.1.80",
+      "title": "Fiji (Lange Remix)",
+      "pack_seconds": 1.7980202849939815,
+      "retained_original_entry": {
+        "title": "Fiji",
+        "source_simfile": "Fiji (Lange Remix)/Fiji (Lange Remix).ssc",
+        "harness_version": "0.1.0",
+        "archive": "9b20d2ab75f6484949300e97d1152c5f747b6c561a8c718b419473704f1c73a8.tar.zst",
+        "sha256": "9b20d2ab75f6484949300e97d1152c5f747b6c561a8c718b419473704f1c73a8",
+        "compressed_bytes": 62960,
+        "uncompressed_sha256": "524023111f9dc65c95808416f33a250bb3415cf778e7500cf48a02481806ba21",
+        "compression_level": 22,
+        "aliases": [
+          "21ea3e896ad219c4c210ad658c72ecc7bb1f280bbf6e8aab7a1e6d2ee3015e59.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "fdb93c3526a021c8fd78788ab0365161fe3b73fe4bf0431f072244cd8ba28493",
+  "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+  "repair": "native NullActor declarations and independent foreground root instances",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}

@@ -2358,17 +2358,14 @@
       ]
     },
     {
-      "title": "Fiji",
+      "title": "Fiji (Lange Remix)",
       "source_simfile": "Fiji (Lange Remix)/Fiji (Lange Remix).ssc",
-      "harness_version": "0.1.0",
-      "archive": "9b20d2ab75f6484949300e97d1152c5f747b6c561a8c718b419473704f1c73a8.tar.zst",
-      "sha256": "9b20d2ab75f6484949300e97d1152c5f747b6c561a8c718b419473704f1c73a8",
-      "compressed_bytes": 62960,
-      "uncompressed_sha256": "524023111f9dc65c95808416f33a250bb3415cf778e7500cf48a02481806ba21",
-      "compression_level": 22,
-      "aliases": [
-        "21ea3e896ad219c4c210ad658c72ecc7bb1f280bbf6e8aab7a1e6d2ee3015e59.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "a6674298b7a42d5314fd663a8ca210dc030530595166499eb5c84e69eae082f2.tar.zst",
+      "sha256": "a6674298b7a42d5314fd663a8ca210dc030530595166499eb5c84e69eae082f2",
+      "compressed_bytes": 5619611,
+      "uncompressed_sha256": "cb85a348b7f848964bf688dad1f7758613100592ac76aae18838e87f48af7942",
+      "aliases": []
     },
     {
       "title": "Final Flash Flight",
