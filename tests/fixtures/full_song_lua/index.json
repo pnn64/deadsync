@@ -3194,15 +3194,12 @@
     {
       "title": "Jack The Reaper",
       "source_simfile": "Jack The Reaper/Jack The Reaper.ssc",
-      "harness_version": "0.1.0",
-      "archive": "7916834fcaf47f572b6ddbeb04578dcd9c70e4a1b5fb68640e146f654ba9a651.tar.zst",
-      "sha256": "7916834fcaf47f572b6ddbeb04578dcd9c70e4a1b5fb68640e146f654ba9a651",
-      "compressed_bytes": 63240,
-      "uncompressed_sha256": "cbb5ddf064ac0e220c4644099df90cf914a68ce62fcc46dd7bb95df522ad43e2",
-      "compression_level": 22,
-      "aliases": [
-        "fcbf3333bd7c7c62f5fd3fb6b565ad2da65e98e1fb3b027b7c8e0404634e20ac.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "902fa9c20aac1a4d4f49952de113c4c466509caa89aa78982d558e71869a38f9.tar.zst",
+      "sha256": "902fa9c20aac1a4d4f49952de113c4c466509caa89aa78982d558e71869a38f9",
+      "compressed_bytes": 13533088,
+      "uncompressed_sha256": "e3991a67546e053804e88209d0b66e26b790a0f86cafe1f9ee5b7a75d570c0a3",
+      "aliases": []
     },
     {
       "title": "Jeans",

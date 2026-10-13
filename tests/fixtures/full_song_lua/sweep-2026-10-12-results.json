@@ -5640,6 +5640,56 @@
       "replay_seconds": 785.3309054389974,
       "candidate_sha256": "378bedd6129e825b38ebb4cdf6fbd210820f86f9c366036dab669ca89d079f29",
       "failure": " 45682/145878 (31.3%)\n[698.1s] replaying every native gameplay frame: frame 45809/145878 (31.4%)\n[700.1s] replaying every native gameplay frame: frame 45944/145878 (31.5%)\n[702.1s] replaying every native gameplay frame: frame 46072/145878 (31.6%)\n[704.1s] replaying every native gameplay frame: frame 46205/145878 (31.7%)\n[706.1s] replaying every native gameplay frame: frame 46337/145878 (31.8%)\n[708.1s] replaying every native gameplay frame: frame 46477/145878 (31.9%)\n[710.1s] replaying every native gameplay frame: frame 46618/145878 (32.0%)\n[712.1s] replaying every native gameplay frame: frame 46756/145878 (32.1%)\n[714.1s] replaying every native gameplay frame: frame 46896/145878 (32.1%)\n[716.1s] replaying every native gameplay frame: frame 47033/145878 (32.2%)\n[718.1s] replaying every native gameplay frame: frame 47162/145878 (32.3%)\n[720.2s] replaying every native gameplay frame: frame 47292/145878 (32.4%)\n[722.2s] replaying every native gameplay frame: frame 47422/145878 (32.5%)\n[724.2s] replaying every native gameplay frame: frame 47554/145878 (32.6%)\n[726.2s] replaying every native gameplay frame: frame 47686/145878 (32.7%)\n[728.2s] replaying every native gameplay frame: frame 47817/145878 (32.8%)\n[730.2s] replaying every native gameplay frame: frame 47927/145878 (32.9%)\n[732.2s] replaying every native gameplay frame: frame 48058/145878 (32.9%)\n[734.2s] replaying every native gameplay frame: frame 48189/145878 (33.0%)\n[736.2s] replaying every native gameplay frame: frame 48323/145878 (33.1%)\n[738.2s] replaying every native gameplay frame: frame 48455/145878 (33.2%)\n[740.2s] replaying every native gameplay frame: frame 48589/145878 (33.3%)\n[742.2s] replaying every native gameplay frame: frame 48717/145878 (33.4%)\n[744.2s] replaying every native gameplay frame: frame 48846/145878 (33.5%)\n[746.2s] replaying every native gameplay frame: frame 48973/145878 (33.6%)\n[748.2s] replaying every native gameplay frame: frame 49099/145878 (33.7%)\n[750.2s] replaying every native gameplay frame: frame 49225/145878 (33.7%)\n[752.2s] replaying every native gameplay frame: frame 49352/145878 (33.8%)\n[754.2s] replaying every native gameplay frame: frame 49477/145878 (33.9%)\n[756.2s] replaying every native gameplay frame: frame 49601/145878 (34.0%)\n[758.2s] replaying every native gameplay frame: frame 49721/145878 (34.1%)\n[760.2s] replaying every native gameplay frame: frame 49840/145878 (34.2%)\n[762.2s] replaying every native gameplay frame: frame 49964/145878 (34.3%)\n[764.2s] replaying every native gameplay frame: frame 50088/145878 (34.3%)\n[766.2s] replaying every native gameplay frame: frame 50213/145878 (34.4%)\n[768.2s] replaying every native gameplay frame: frame 50332/145878 (34.5%)\n[770.2s] replaying every native gameplay frame: frame 50459/145878 (34.6%)\n[772.2s] replaying every native gameplay frame: frame 50586/145878 (34.7%)\n[774.2s] replaying every native gameplay frame: frame 50709/145878 (34.8%)\n[776.2s] replaying every native gameplay frame: frame 50839/145878 (34.9%)\n[778.2s] replaying every native gameplay frame: frame 50971/145878 (34.9%)\n[780.2s] replaying every native gameplay frame: frame 51100/145878 (35.0%)\n[782.2s] replaying every native gameplay frame: frame 51231/145878 (35.1%)\n\nthread 'main' (1572481) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: GAMESTATE has no selected P1 chart\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 254,
+      "source_simfile": "Jack The Reaper/Jack The Reaper.ssc",
+      "simfile_sha256": "1c5e5890830b97d3122feb59ab13f89c6b336b09b67546114022519ae1e660d3",
+      "retained_original_archive": "7916834fcaf47f572b6ddbeb04578dcd9c70e4a1b5fb68640e146f654ba9a651.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "56c7f5ad7480dc190223b46f68cd1f78d172e09431fc49d6eb9a095937789469",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+      "build_proof": "/home/parity/jobs/tap-callback-and-margins-build-v2/proof.json",
+      "capture_seconds": 157.2952216190024,
+      "trace_sha256": "1e3f49ce000c25379627540ac624c892334a145b3e9befd254b6d8b85ae83bbc",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-254/candidates/e3991a67546e053804e88209d0b66e26b790a0f86cafe1f9ee5b7a75d570c0a3.tar",
+      "replay_exit": 0,
+      "replay_seconds": 444.1468249979953,
+      "candidate_sha256": "e3991a67546e053804e88209d0b66e26b790a0f86cafe1f9ee5b7a75d570c0a3",
+      "native_frames": 44325,
+      "replayed_frames": 44325,
+      "compared_stage_fields": 1287,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "16fc372176c5379f378876fd5c2ac41b58eb51173a9a251a805fe87532c39f29",
+      "archive": "902fa9c20aac1a4d4f49952de113c4c466509caa89aa78982d558e71869a38f9.tar.zst",
+      "archive_sha256": "902fa9c20aac1a4d4f49952de113c4c466509caa89aa78982d558e71869a38f9",
+      "compressed_bytes": 13533088,
+      "pack_seconds": 14.611605047000921,
+      "harness_version": "0.1.80",
+      "title": "Jack The Reaper",
+      "retained_original_entry": {
+        "title": "Jack The Reaper",
+        "source_simfile": "Jack The Reaper/Jack The Reaper.ssc",
+        "harness_version": "0.1.0",
+        "archive": "7916834fcaf47f572b6ddbeb04578dcd9c70e4a1b5fb68640e146f654ba9a651.tar.zst",
+        "sha256": "7916834fcaf47f572b6ddbeb04578dcd9c70e4a1b5fb68640e146f654ba9a651",
+        "compressed_bytes": 63240,
+        "uncompressed_sha256": "cbb5ddf064ac0e220c4644099df90cf914a68ce62fcc46dd7bb95df522ad43e2",
+        "compression_level": 22,
+        "aliases": [
+          "fcbf3333bd7c7c62f5fd3fb6b565ad2da65e98e1fb3b027b7c8e0404634e20ac.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -5663,9 +5713,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+  "binary_sha256": "56c7f5ad7480dc190223b46f68cd1f78d172e09431fc49d6eb9a095937789469",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 11,
+  "passed_fixtures": 12,
   "pending_charts": 36,
-  "processed_charts": 47
+  "processed_charts": 48
 }
