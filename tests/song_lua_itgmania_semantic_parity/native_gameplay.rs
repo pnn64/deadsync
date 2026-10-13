@@ -762,7 +762,7 @@ return Def.ActorFrame{}
         let dir = std::env::temp_dir().join(format!("deadsync-engine-tap-{}", std::process::id()));
         fs::create_dir_all(&dir).expect("script directory");
         let simfile = dir.join("tap.sm");
-        fs::write(&simfile, "#TITLE:Engine tap;#BPMS:0=120;#FGCHANGES:0=default.lua=1=0=0=1;#NOTES:dance-single:Control:Hard:1:0,0,0,0,0:\n0000\n2000\n3000\n0000\n;").unwrap();
+        fs::write(&simfile, "#TITLE:Engine tap;#BPMS:0=120;#FGCHANGES:-24=default.lua=1=0=0=1;#NOTES:dance-single:Control:Hard:1:0,0,0,0,0:\n0000\n2000\n3000\n0000\n;").unwrap();
         let entry = dir.join("default.lua");
         fs::write(&entry, r#"
 local field = SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField')
@@ -773,6 +773,7 @@ local taps = 0
 local judgments = 0
 return Def.ActorFrame {
     OnCommand = function(self)
+        MESSAGEMAN:Broadcast('EngineStartup', {music=GAMESTATE:GetCurMusicSeconds()})
         self:sleep(60)
         field:SetDidTapNoteCallback(function(column, score, bright)
             assert(column == 1 and score == 'TapNoteScore_W1' and bright == false)
@@ -781,11 +782,11 @@ return Def.ActorFrame {
             assert(meter:GetLife() == 0.25 and stats:GetCurrentLife() == 0.25)
             self:stoptweening():sleep(0.25)
             MESSAGEMAN:Broadcast('EngineTap', {beat=GAMESTATE:GetSongBeat(),
-                combo=stats:GetCurrentCombo(), possible=stats:GetCurrentPossibleDancePoints()})
+                combo=stats:GetCurrentCombo(), possible=stats:GetCurrentPossibleDancePoints(), left=self:GetTweenTimeLeft()})
             return 2, 'TapNoteScore_W2', true
         end)
-        self:SetUpdateFunction(function(self)
-            MESSAGEMAN:Broadcast('EngineObserve', {left=self:GetTweenTimeLeft(), taps=taps})
+        self:SetUpdateFunction(function(self, delta)
+            MESSAGEMAN:Broadcast('EngineObserve', {left=self:GetTweenTimeLeft(), taps=taps, delta=delta})
         end)
     end,
     JudgmentMessageCommand = function(_, params)
@@ -817,6 +818,7 @@ return Def.ActorFrame {
         let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
         let mut context = SongLuaCompileContext::new(&dir, "engine tap");
         context.live = true;
+        context.defer_initial_live_update = true;
         context.song_timing = song.song_timing.clone();
         // Use production preparation and screen attachment, including their
         // concrete sprite and profile types; expectations never enter gameplay.
@@ -833,6 +835,17 @@ return Def.ActorFrame {
         state.set_current_music_time_ns(0);
         let mut effects = Vec::new();
         let tap_time = state.gameplay.chart_runtime.note_time_cache_ns[0];
+        gameplay::update(&mut state, 0.0, GameplayAudioSnapshot {
+            stream_clock: GameplayStreamClockSnapshot { music_nanos: -250_000_000,
+                has_music_mapping: true, valid_at_host_nanos: 800_000_000, ..Default::default() },
+            ..Default::default()
+        }, || 800_000_000, &mut effects);
+        let first = state.take_song_lua_output();
+        assert!(first.errors.is_empty(), "{:?}", first.errors);
+        let initial = first.source_broadcasts.iter().find(|event| event.name == "EngineStartup")
+            .expect("zero-delta input activates the foreground");
+        assert_eq!(initial.music_seconds, -0.25);
+        assert_eq!(initial.params.as_ref().unwrap().as_ref().unwrap()["music"].as_f64(), Some(-0.25));
         // Foreground uses the music-position delta. Keep successive clock
         // inputs 100ms apart, as well as their wall-frame delta.
         gameplay::update(&mut state, 0.1, GameplayAudioSnapshot {
@@ -866,7 +879,9 @@ return Def.ActorFrame {
             .expect("foreground observer").params.as_ref().unwrap().as_ref().unwrap();
         assert_eq!(observation["taps"], serde_json::json!(1), "callback precedes the foreground update");
         assert!((observation["left"].as_f64().unwrap() - 0.15).abs() < 1e-6,
-            "new foreground tween consumes this frame's delta");
+            "new foreground tween consumes this frame's delta: observation={observation}, music_ns={}, tap={:?}",
+            state.gameplay.clock.song_position.current_music_time_ns,
+            output.source_broadcasts.iter().find(|event| event.name == "EngineTap"));
         let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
         let queries: Vec<_> = events.iter().filter(|event| event["operation"] == "GameState.GetSongBeat").collect();
         assert_eq!(queries.len(), 1);
@@ -926,6 +941,46 @@ return Def.Actor {}
         assert!(queries[0]["source"].as_str().expect("authored query source")
             .ends_with("default.lua"));
         assert_eq!(queries[0]["results"][0]["name"], "single");
+    }
+
+    #[test]
+    fn dynamically_added_commands_keep_native_observer_provenance() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame,
+            SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use std::{fs, sync::Arc};
+        super::start_call_log(10_000).expect("observational logger");
+        let dir = std::env::temp_dir().join(format!("deadsync-dynamic-trace-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("default.lua");
+        fs::write(&entry, r#"
+return Def.Actor {
+    InitCommand = function(self)
+        self:addcommand('Set', function(owner)
+            GAMESTATE:GetSongBeat()
+            owner:playcommand('Declared')
+        end)
+        self:queuecommand('Set')
+    end,
+    DeclaredCommand = function(self) GAMESTATE:GetSongBeat() end,
+}
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&dir, "dynamic observer");
+        context.live = true;
+        let mut compiled = compile_song_lua_with_default_host::<(), (), _>(
+            &entry, &context, SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).unwrap();
+        let output = compiled.live_scene.as_mut().unwrap().advance(SongLuaLiveFrame {
+            music_seconds: 0.1, beat: 0.2, screen_seconds: 0.1,
+            delta_seconds: 0.1, ..Default::default()
+        }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
+        assert!(!events.iter().any(|event| event["command"] == "SetCommand"), "{events:?}");
+        let queries: Vec<_> = events.iter().filter(|event| event["operation"] == "GameState.GetSongBeat").collect();
+        assert_eq!(queries.len(), 2);
+        assert_eq!(queries[0]["phase"], "construction");
+        assert_eq!(queries[1]["phase"], "callback");
+        assert_eq!(events.iter().filter(|event| event["command"] == "DeclaredCommand").count(), 2);
     }
 
     #[test]
@@ -2078,6 +2133,10 @@ pub(crate) fn replay(
         true,
     )?;
     context.message_actor_order = native_creation_order_for_entries(trace, 1, song.background_lua_changes.len())?;
+    // Native ScreenGameplay updates song position before its first Update(0).
+    // Defer preparation's placeholder update and run every recorded frame,
+    // including zero-delta inputs, through the actual gameplay entry point.
+    context.defer_initial_live_update = true;
     let prepared = deadsync_song_lua::playback::prepare_song_lua(
         &song, &context, deadsync_assets::song_lua::compile_song_lua,
         deadsync_assets::song_lua::compile_song_lua_layers,
@@ -2230,11 +2289,6 @@ pub(crate) fn replay(
             }
             starting_scene = false;
         }
-        // Preparation already performs the real startup Update(0). Set the
-        // input clock without running those callbacks a second time.
-        if delta == 0.0 {
-            state.set_current_music_time_ns((seconds * 1e9).round() as i64);
-        }
         let host = (wall * 1e9).round() as u64;
         let snapshot = GameplayAudioSnapshot {
             stream_clock: GameplayStreamClockSnapshot {
@@ -2246,9 +2300,7 @@ pub(crate) fn replay(
             ..Default::default()
         };
         let mut effects = Vec::new();
-        if delta > 0.0 {
-            gameplay::update(&mut state, delta as f32, snapshot, || host, &mut effects);
-        }
+        gameplay::update(&mut state, delta as f32, snapshot, || host, &mut effects);
         used_frames += 1;
         progress(used_frames, frame_count);
         pending_reload = effects.iter().any(|effect| {

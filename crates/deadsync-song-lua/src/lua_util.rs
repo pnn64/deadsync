@@ -3644,7 +3644,13 @@ fn run_guarded_actor_command(
     let prior_update = lua
         .app_data_mut::<SongLuaOverlayUpdateCapture>()
         .map(|mut capture| std::mem::replace(&mut capture.update_command, name == "UpdateCommand"));
-    crate::live::trace_command(lua, command, name, "begin");
+    // The native observer wraps Def declaration functions only. A function
+    // installed later by Actor:addcommand has no command observer of its own.
+    // Snapshot this provenance before the callback can replace its command.
+    let dynamic = actor.raw_get::<Option<Table>>("__songlua_dynamic_commands")?
+        .map(|commands| commands.raw_get::<Option<Function>>(name)).transpose()?.flatten();
+    let observed = dynamic.is_none_or(|function| function.to_pointer() != command.to_pointer());
+    if observed { crate::live::trace_command(lua, command, name, "begin"); }
     let result = call_actor_function(lua, actor, command, params).map_err(|err| {
         mlua::Error::external(format!(
             "{} failed for {}: {err}",
@@ -3652,7 +3658,7 @@ fn run_guarded_actor_command(
             actor_debug_label(actor)
         ))
     });
-    crate::live::trace_command(lua, command, name, "end");
+    if observed { crate::live::trace_command(lua, command, name, "end"); }
     #[cfg(feature = "test-support")]
     if let Some(prior) = prior_update {
         lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
@@ -6338,8 +6344,20 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
         "addcommand",
         lua.create_function({
             let actor = actor.clone();
-            move |_, (_self, name, function): (Table, String, Function)| {
-                actor.set(ActorCommandName::new(&name, "Command"), function)?;
+            move |lua, (_self, name, function): (Table, String, Function)| {
+                let command_name = ActorCommandName::new(&name, "Command");
+                if crate::live::active(lua) {
+                    let commands = match actor.raw_get::<Option<Table>>("__songlua_dynamic_commands")? {
+                        Some(commands) => commands,
+                        None => {
+                            let commands = lua.create_table()?;
+                            actor.raw_set("__songlua_dynamic_commands", commands.clone())?;
+                            commands
+                        }
+                    };
+                    commands.raw_set(command_name.as_str(), function.clone())?;
+                }
+                actor.set(command_name, function)?;
                 Ok(actor.clone())
             }
         })?,
@@ -6349,7 +6367,11 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
         lua.create_function({
             let actor = actor.clone();
             move |_, (_self, name): (Table, String)| {
-                actor.set(ActorCommandName::new(&name, "Command"), Value::Nil)?;
+                let command_name = ActorCommandName::new(&name, "Command");
+                if let Some(commands) = actor.raw_get::<Option<Table>>("__songlua_dynamic_commands")? {
+                    commands.raw_set(command_name.as_str(), Value::Nil)?;
+                }
+                actor.set(command_name, Value::Nil)?;
                 Ok(actor.clone())
             }
         })?,
@@ -11713,6 +11735,9 @@ fn capture_initial_update(
     root: &Table,
     context: &SongLuaCompileContext,
 ) -> mlua::Result<SongLuaStartupStates> {
+    if context.live && context.defer_initial_live_update {
+        return Ok(HashMap::new());
+    }
     let root = Value::Table(root.clone());
     let mut states = HashMap::new();
     collect_initial_states(&root, &mut states)?;

@@ -1398,6 +1398,40 @@ end }
     }
 
     #[test]
+    fn live_deferred_initial_update_uses_first_input_clock_once() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-first-clock-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("default.lua");
+        fs::write(&entry, r#"
+UPDATES = {}
+return Def.ActorFrame { InitCommand = function(self)
+    self:SetUpdateFunction(function(_, delta)
+        UPDATES[#UPDATES+1] = { delta, GAMESTATE:GetCurMusicSeconds() }
+    end)
+end }
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&dir, "first input clock");
+        context.live = true;
+        context.defer_initial_live_update = true;
+        let mut compiled: Compiled = crate::compile_song_lua_with_default_host(
+            &entry, &context, SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).unwrap();
+        let mut scene = compiled.live_scene.take().unwrap();
+        let updates = scene.lua.globals().get::<Table>("UPDATES").unwrap();
+        assert_eq!(updates.raw_len(), 0, "preparation must leave Update(0) to the input clock");
+        for (music, delta) in [(-4.5, 0.0), (-4.49, 0.01)] {
+            let output = scene.advance(SongLuaLiveFrame { music_seconds: music,
+                screen_seconds: delta, delta_seconds: delta, ..Default::default() }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+        }
+        assert_eq!(updates.raw_len(), 2);
+        let first = updates.raw_get::<Table>(1).unwrap();
+        assert_eq!(first.raw_get::<f64>(1).unwrap(), 0.0);
+        assert_eq!(first.raw_get::<f64>(2).unwrap(), -4.5);
+        assert_eq!(updates.raw_get::<Table>(2).unwrap().raw_get::<f32>(2).unwrap(), -4.49_f32);
+    }
+
+    #[test]
     fn live_foreground_directory_uses_requested_default_chunk_name() {
         let dir = std::env::temp_dir().join(format!("deadsync-live-directory-source-{}", std::process::id()));
         let folder = dir.join("directory");
@@ -1411,14 +1445,23 @@ end
 CALLBACK_SOURCE = debug.getinfo(on, 'S').source
 return Def.Actor { OnCommand = on }
 "#).expect("case-sensitive physical source");
-        for (name, expected) in [("directory", folder.join("default.lua")),
-            ("directory/Default.lua", entry.clone())] {
+        for (name, expected) in [
+            ("directory", crate::file_path_string(&folder.join("default.lua"))),
+            ("directory/", format!("{}//default.lua", crate::file_path_string(&folder))),
+            ("./", format!("{}/.//default.lua", crate::file_path_string(&dir))),
+            ("directory/Default.lua", crate::file_path_string(&entry)),
+        ] {
+            let physical_entry = if name == "./" {
+                let root_entry = dir.join("Default.lua");
+                fs::copy(&entry, &root_entry).expect("root directory entry");
+                root_entry
+            } else { entry.clone() };
             let mut context = SongLuaCompileContext::new(&dir, "foreground source");
             context.live = true;
             context.foreground_names = vec![name.into()];
             context.layer_start_beats = vec![0.0];
             let mut compiled: Compiled = crate::compile_song_lua_with_default_host(
-                &entry, &context, SongLuaNoteskinResolver::default(),
+                &physical_entry, &context, SongLuaNoteskinResolver::default(),
                 |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None)
                 .expect("read physical file with native source name");
             let mut scene = compiled.live_scene.take().expect("retained Lua scene");
@@ -1429,7 +1472,7 @@ return Def.Actor { OnCommand = on }
             for key in ["CONSTRUCTION_SOURCE", "CALLBACK_SOURCE"] {
                 let source = scene.lua.globals().get::<String>(key).expect("Lua source name");
                 assert_eq!(source.trim_start_matches('@').replace('\\', "/"),
-                    crate::file_path_string(&expected));
+                    expected);
             }
             assert!(scene.states().iter().any(|state| state.aux == 17.0));
         }

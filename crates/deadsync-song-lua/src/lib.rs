@@ -1420,6 +1420,9 @@ pub struct SongLuaCompileContext {
     /// Retain the initialized scene for actual gameplay instead of probing
     /// future callbacks on the load worker.
     pub live: bool,
+    /// Let the caller supply the first live Update(0) clock after preparation.
+    /// Recorded gameplay replay uses this instead of a placeholder clock.
+    pub defer_initial_live_update: bool,
     /// Session entry paths list backgrounds first, then foregrounds.
     /// A single-entry compile defaults to the foreground layer.
     pub background_layer_count: usize,
@@ -1480,6 +1483,7 @@ impl SongLuaCompileContext {
             layer_start_beats: Vec::new(),
             foreground_names: Vec::new(),
             live: false,
+            defer_initial_live_update: false,
             song_dir: song_dir.into(),
             main_title: main_title.into(),
             song_display_bpms: [60.0, 60.0],
