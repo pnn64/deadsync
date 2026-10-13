@@ -4080,17 +4080,12 @@
     {
       "title": "Number 9",
       "source_simfile": "Number 9/1556 - Number 9.sm",
-      "harness_version": "0.1.6",
-      "archive": "b42b38c99ad528dd0f4abff0253c557ba59f0b8ae120838c938dfedc0bd42c3e.tar.zst",
-      "sha256": "b42b38c99ad528dd0f4abff0253c557ba59f0b8ae120838c938dfedc0bd42c3e",
-      "compressed_bytes": 66847,
-      "uncompressed_sha256": "969744c5d2252abcffe24dfa1f37d7fddcde5af0106293952c680138338ede95",
-      "compression_level": 22,
-      "aliases": [
-        "07813d09dda5bfb0ce7e25ec33cdb3c909f131268847606255b57d16a7cc3e74.tar.zst",
-        "e653242eb83bb7e27b2955d4cfd7dd216265195eb7318dc86ebbf27845d8116c.tar.zst",
-        "ea31c720307f1908534fff40c4539049dfff1d25b1ea74a582f173ceefc66239.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b16bd29c6db728568d34679b0eeafc4048a5197a43af784f354d8c14bd73df72.tar.zst",
+      "sha256": "b16bd29c6db728568d34679b0eeafc4048a5197a43af784f354d8c14bd73df72",
+      "compressed_bytes": 4294815,
+      "uncompressed_sha256": "ff6fc8aa7326a92b8de6a0043cc84d3886cf3e180d2709a7ad7e29bb495d0c9b",
+      "aliases": []
     },
     {
       "title": "ヌムジカac.10",

@@ -9510,6 +9510,58 @@
         }
       ],
       "report_sha256": "3c8cf255e0fcd66096fc87c02e9ecb7ec429bd7dcd7eb7e3199fdd336dbc3f6d"
+    },
+    {
+      "position": 332,
+      "source_simfile": "Number 9/1556 - Number 9.sm",
+      "simfile_sha256": "523384100adf1f5591ce4dace7537e26b91377e645699270a26dc04d09f0795d",
+      "retained_original_archive": "b42b38c99ad528dd0f4abff0253c557ba59f0b8ae120838c938dfedc0bd42c3e.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "6a912f949896b963329aaa0cde4ea6c5fbc86bf6368091a1a6974d2b22629114",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/empty-layers-green-v2/proof.json",
+      "capture_seconds": 129.39133655600017,
+      "trace_sha256": "b893f1e3bebb00e26b73456ebc3bd49068c048079a8619855766a7756f198431",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-332/candidates/ff6fc8aa7326a92b8de6a0043cc84d3886cf3e180d2709a7ad7e29bb495d0c9b.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1194.0741378810199,
+      "candidate_sha256": "ff6fc8aa7326a92b8de6a0043cc84d3886cf3e180d2709a7ad7e29bb495d0c9b",
+      "native_frames": 84399,
+      "replayed_frames": 84399,
+      "compared_stage_fields": 1408,
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "5da5e160b4e683ad3e265791690d8de90635f01678901fa8bdd807a2379d77f5",
+      "archive": "b16bd29c6db728568d34679b0eeafc4048a5197a43af784f354d8c14bd73df72.tar.zst",
+      "archive_sha256": "b16bd29c6db728568d34679b0eeafc4048a5197a43af784f354d8c14bd73df72",
+      "compressed_bytes": 4294815,
+      "pack_seconds": 2.456192011013627,
+      "harness_version": "0.1.80",
+      "title": "Number 9",
+      "retained_original_entry": {
+        "title": "Number 9",
+        "source_simfile": "Number 9/1556 - Number 9.sm",
+        "harness_version": "0.1.6",
+        "archive": "b42b38c99ad528dd0f4abff0253c557ba59f0b8ae120838c938dfedc0bd42c3e.tar.zst",
+        "sha256": "b42b38c99ad528dd0f4abff0253c557ba59f0b8ae120838c938dfedc0bd42c3e",
+        "compressed_bytes": 66847,
+        "uncompressed_sha256": "969744c5d2252abcffe24dfa1f37d7fddcde5af0106293952c680138338ede95",
+        "compression_level": 22,
+        "aliases": [
+          "07813d09dda5bfb0ce7e25ec33cdb3c909f131268847606255b57d16a7cc3e74.tar.zst",
+          "e653242eb83bb7e27b2955d4cfd7dd216265195eb7318dc86ebbf27845d8116c.tar.zst",
+          "ea31c720307f1908534fff40c4539049dfff1d25b1ea74a582f173ceefc66239.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -9533,9 +9585,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "49482e042c5a60991fd859ab5d1ee6b5eeb64b6511ea2320dcb850abc06f1f78",
+  "binary_sha256": "6a912f949896b963329aaa0cde4ea6c5fbc86bf6368091a1a6974d2b22629114",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 20,
+  "passed_fixtures": 21,
   "pending_charts": 53,
-  "processed_charts": 73
+  "processed_charts": 74
 }
