@@ -1,0 +1,26 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Kuru Kuru kururin/Kuru Kuru kururin.ssc",
+      "acceptance_commit": "a594392123e58114d66391c557480aed957249c0",
+      "native_frames": 20849,
+      "replayed_frames": 20849,
+      "compared_stage_fields": 451,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "6577dfb6182e8590c79d8f57bdb2ef6a9970106c80f30196eeac614ed64ec89f.tar.zst",
+      "compressed_sha256": "6577dfb6182e8590c79d8f57bdb2ef6a9970106c80f30196eeac614ed64ec89f",
+      "uncompressed_sha256": "ae9f77ebf292815e61f589ae1599e9306241907962e53bf4272cebcff57eaa5b",
+      "compressed_bytes": 3424636,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.rotationy, PlayerOptions.FromString",
+        "native drawable state/resources: Sprite"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}

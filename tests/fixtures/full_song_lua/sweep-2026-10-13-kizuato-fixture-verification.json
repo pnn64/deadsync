@@ -1,0 +1,23 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Kizuato - [Zaia]/Kizuato.ssc",
+      "acceptance_commit": "4abf757b0c6ccd01b0ba4f33f8bf88e30a90eb92",
+      "native_frames": 101334,
+      "replayed_frames": 101334,
+      "compared_stage_fields": 1628,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "9b37441118bd8521c7f2ba3d7e9588b84247d1cc1858c7cfac2abf09759b0823.tar.zst",
+      "compressed_sha256": "9b37441118bd8521c7f2ba3d7e9588b84247d1cc1858c7cfac2abf09759b0823",
+      "uncompressed_sha256": "5ed247bed481679102d19247be399528bd55e47cb8de95167e03bbeac67b874d",
+      "compressed_bytes": 13055554,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
