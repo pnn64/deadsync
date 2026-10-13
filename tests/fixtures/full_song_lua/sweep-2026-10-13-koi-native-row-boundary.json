@@ -1,0 +1,284 @@
+{
+  "source_simfile": "Koi [UPS2016]/koi.sm",
+  "report_sha256": "6512abe289fb43bd959d690ad1abfcfd79e67689c9102e4b77428995656b8ec8",
+  "bounded_diagnostic": "Initialize the real independent song parser, timing and gameplay core with the retained -0.008 global offset and ITG sync preference. Supply only each retained native callback clock and inspect authored note deadlines and independent float timing. No native judgments or command calls are used as independent input.",
+  "observations": [
+    {
+      "target": 38.5,
+      "index": 17.0,
+      "column": 0.0,
+      "row": 27.0,
+      "clock_seconds": 16.46766471862793,
+      "clock_ns": 16467664719.0,
+      "note_ns": 16467666038.0,
+      "behind_ns": 1319.0,
+      "independent_float_beat": 38.5,
+      "row_crossed": 1848.0
+    },
+    {
+      "target": 92.5,
+      "index": 125.0,
+      "column": 1.0,
+      "row": 256.0,
+      "clock_seconds": 38.9676628112793,
+      "clock_ns": 38967662811.0,
+      "note_ns": 38967664131.0,
+      "behind_ns": 1320.0,
+      "independent_float_beat": 92.5,
+      "row_crossed": 4440.0
+    },
+    {
+      "target": 356.0,
+      "index": 678.0,
+      "column": 0.0,
+      "row": 1930.0,
+      "clock_seconds": 148.7593231201172,
+      "clock_ns": 148759323120.0,
+      "note_ns": 148759328255.0,
+      "behind_ns": 5135.0,
+      "independent_float_beat": 356.0,
+      "row_crossed": 17088.0
+    }
+  ],
+  "retained_delayed_callback_blocks": [
+    {
+      "operation": "replace",
+      "native_range": [
+        1960,
+        1962
+      ],
+      "actual_range": [
+        1946,
+        1948
+      ],
+      "native": [
+        {
+          "actor": "def-0242",
+          "args": [],
+          "beat": 38.5,
+          "command": "JudgmentMessageCommand",
+          "definition_id": "def-0242",
+          "detail": {
+            "name": "JudgmentMessageCommand"
+          },
+          "kind": "command",
+          "line": 266,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 16.46766471862793,
+          "seq": 2741,
+          "source": "song:/lua/koi.lua"
+        },
+        {
+          "actor": "def-0242",
+          "args": [],
+          "beat": 38.5,
+          "command": "JudgmentMessageCommand",
+          "definition_id": "def-0242",
+          "detail": {
+            "name": "JudgmentMessageCommand"
+          },
+          "kind": "command",
+          "line": 266,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 16.46766471862793,
+          "seq": 2742,
+          "source": "song:/lua/koi.lua"
+        }
+      ],
+      "deadsync": [
+        {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.begin",
+          "command": "JudgmentMessageCommand",
+          "source": "song:/lua/koi.lua",
+          "line": 266,
+          "beat": 38.50554656982422,
+          "seconds": 16.4699764251709,
+          "args": null
+        },
+        {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.end",
+          "command": "JudgmentMessageCommand",
+          "source": "song:/lua/koi.lua",
+          "line": 266,
+          "beat": 38.50554656982422,
+          "seconds": 16.4699764251709,
+          "args": null
+        }
+      ]
+    },
+    {
+      "operation": "replace",
+      "native_range": [
+        2358,
+        2360
+      ],
+      "actual_range": [
+        2328,
+        2330
+      ],
+      "native": [
+        {
+          "actor": "def-0242",
+          "args": [],
+          "beat": 92.5,
+          "command": "JudgmentMessageCommand",
+          "definition_id": "def-0242",
+          "detail": {
+            "name": "JudgmentMessageCommand"
+          },
+          "kind": "command",
+          "line": 266,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 38.9676628112793,
+          "seq": 3139,
+          "source": "song:/lua/koi.lua"
+        },
+        {
+          "actor": "def-0242",
+          "args": [],
+          "beat": 92.5,
+          "command": "JudgmentMessageCommand",
+          "definition_id": "def-0242",
+          "detail": {
+            "name": "JudgmentMessageCommand"
+          },
+          "kind": "command",
+          "line": 266,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 38.9676628112793,
+          "seq": 3140,
+          "source": "song:/lua/koi.lua"
+        }
+      ],
+      "deadsync": [
+        {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.begin",
+          "command": "JudgmentMessageCommand",
+          "source": "song:/lua/koi.lua",
+          "line": 266,
+          "beat": 92.50587463378906,
+          "seconds": 38.97011184692383,
+          "args": null
+        },
+        {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.end",
+          "command": "JudgmentMessageCommand",
+          "source": "song:/lua/koi.lua",
+          "line": 266,
+          "beat": 92.50587463378906,
+          "seconds": 38.97011184692383,
+          "args": null
+        }
+      ]
+    },
+    {
+      "operation": "replace",
+      "native_range": [
+        4190,
+        4192
+      ],
+      "actual_range": [
+        4134,
+        4136
+      ],
+      "native": [
+        {
+          "actor": "def-0242",
+          "args": [],
+          "beat": 356,
+          "command": "JudgmentMessageCommand",
+          "definition_id": "def-0242",
+          "detail": {
+            "name": "JudgmentMessageCommand"
+          },
+          "kind": "command",
+          "line": 266,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 148.7593231201172,
+          "seq": 4971,
+          "source": "song:/lua/koi.lua"
+        },
+        {
+          "actor": "def-0242",
+          "args": [],
+          "beat": 356,
+          "command": "JudgmentMessageCommand",
+          "definition_id": "def-0242",
+          "detail": {
+            "name": "JudgmentMessageCommand"
+          },
+          "kind": "command",
+          "line": 266,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 148.7593231201172,
+          "seq": 4972,
+          "source": "song:/lua/koi.lua"
+        }
+      ],
+      "deadsync": [
+        {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.begin",
+          "command": "JudgmentMessageCommand",
+          "source": "song:/lua/koi.lua",
+          "line": 266,
+          "beat": 356.0111999511719,
+          "seconds": 148.7639923095703,
+          "args": null
+        },
+        {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.end",
+          "command": "JudgmentMessageCommand",
+          "source": "song:/lua/koi.lua",
+          "line": 266,
+          "beat": 356.0111999511719,
+          "seconds": 148.7639923095703,
+          "args": null
+        }
+      ]
+    }
+  ],
+  "source_cause": "Player::Update computes a float displayed beat, then BeatToNoteRowNotRounded and CrossedRows. At all three native clocks the independent timing also returns the exact authored beat. GameplayRuntimeState::run_autoplay instead waits for a cached nanosecond deadline; those deadlines are 1319,1320 and5135 ns later. Waiting advances to the following retained frame, matching the three observed millisecond callback delays.",
+  "native_row_from_float_beat": "row_crossed is the native 48-rows-per-beat integer. The probe row field is the independent dense row-entry index, not a native note-row number.",
+  "native_source_sha256": {
+    "src/Player.cpp": "fb9fbc6ead8073b26cc8ff9097068ed2c33b8d8c2bea58b43eb61e0384ae1935"
+  },
+  "independent_source_sha256": {
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+    "crates/deadsync-gameplay/src/holds.rs": "546c3244be38b429f6cbbe333568f48e652d5c5f677fcb47569bd27862af5997",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff"
+  },
+  "probe_source_sha256": "9bc27ecac6e4289a51681838c32e12ae6baec9d8569414d2fdf3c34a57af9f47",
+  "probe_binary_sha256": "6aaf3f909e86c73b05358cd7d668178ef1870374714d5ae0d258b79620ab642f",
+  "probe_log_sha256": "f18428f12b205aea12e8894c193549baa95f36a12a8bae84fc0040e7dc19c61d",
+  "direct_existing_rlib_sha256": {
+    "deadsync_simfile": "3f2763a024dc6cfba4686f32354eea82d8a31f7a02d42b7c1e2abdedd4b597bb",
+    "deadsync_gameplay": "c1d71d4f534efd465b1908112ee772f7c13a54dda5ca0630c577ddfb05cce975",
+    "deadsync_profile_gameplay": "e15daca4ad7f6e988d7819c58d04783473bdce6ab1e8b496b6133e7773fa9c95"
+  },
+  "correction": "Hold and roll windows already include TIMING_WINDOW_ADD_S. No constant repair is needed.",
+  "remaining_work": "Add a focused pre-fix row-crossing control and an independently owned mine Judgment control. Implement native float row crossing and next-update avoided-mine dispatch, validate both hosts, then use the one remaining full Koi SM repair.",
+  "development_probe_compilation": "The first rustc call used unwrap on a TimingData reference and did not compile. Corrected the accessor; the probe then ran successfully.",
+  "production_changed": false,
+  "new_chart_repair_attempts_spent": 0,
+  "repairs_remaining": 1,
+  "acceptance_comparisons_changed": false,
+  "passing_charts_reopened": false
+}
