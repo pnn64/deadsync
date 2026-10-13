@@ -7469,6 +7469,57 @@
       "replay_seconds": 19.714638824007125,
       "candidate_sha256": "bde1951c118452ab0725c8b59a2572e0411d31830f20d578ad5376cda3f9b80d",
       "failure": "[0.7s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\n[4.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\n[6.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\n[8.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\n[10.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Hustle Beach': failed to run actor startup commands for song lua session '/tmp/.tmpRhXVna/song/lua/mamono.lua': out of Lua stack, too many arguments to a Lua function or too many return values from a callback; retrying layers independently\n[12.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\n[14.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\n[16.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\n[18.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Hustle Beach' from '/tmp/.tmpRhXVna/song/lua/mamono.lua': failed to run actor startup commands for song lua session '/tmp/.tmpRhXVna/song/lua/mamono.lua': out of Lua stack, too many arguments to a Lua function or too many return values from a callback\n\nthread 'main' (646884) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 297,
+      "source_simfile": "Marvins Room/MarvinsRoom.ssc",
+      "simfile_sha256": "122969227756f0a04900e566d1d8c7199a065dd6313c93aa4f3407b45e0a7d7a",
+      "retained_original_archive": "911e8c02c3e02f713b94d4ff04b04647eaa69bf34f359a3a9d48a158b3295ed1.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "93f59d2cedd99eeeb3e8ec457f3e7cffe3ed04a4f812311fdd8ff85046afb559",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/kaboom-controls-green-v1/proof.json",
+      "capture_seconds": 361.8520745720016,
+      "trace_sha256": "41a8429608e72d8fef60c025394d68caabdcf79307014f9b9be76898b973babe",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-297/candidates/3e5cc01d2a7af41fc1405c2cf3dbc2b9a9d32fcabe6fcd8628116b875a428e32.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1915.306612676999,
+      "candidate_sha256": "3e5cc01d2a7af41fc1405c2cf3dbc2b9a9d32fcabe6fcd8628116b875a428e32",
+      "native_frames": 120078,
+      "replayed_frames": 120078,
+      "compared_stage_fields": 3388,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY",
+        "native drawable state/resources: Quad"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "d7e4274478a9d1577bef1369246472b1a07430735fb6d3ef8aa477a856ad06b8",
+      "archive": "3f99cb43ede6d04ac9f70b993669f1360a7191d0a5f220e84a7a4410eba6306c.tar.zst",
+      "archive_sha256": "3f99cb43ede6d04ac9f70b993669f1360a7191d0a5f220e84a7a4410eba6306c",
+      "compressed_bytes": 23834603,
+      "pack_seconds": 15.176573424003436,
+      "harness_version": "0.1.80",
+      "title": "Episode 11 Marvin's Room",
+      "retained_original_entry": {
+        "title": "Episode 11",
+        "source_simfile": "Marvins Room/MarvinsRoom.ssc",
+        "harness_version": "0.1.0",
+        "archive": "911e8c02c3e02f713b94d4ff04b04647eaa69bf34f359a3a9d48a158b3295ed1.tar.zst",
+        "sha256": "911e8c02c3e02f713b94d4ff04b04647eaa69bf34f359a3a9d48a158b3295ed1",
+        "compressed_bytes": 67886,
+        "uncompressed_sha256": "5ed7b1d53643aeae4b3ebac5245e86fa36cdbf2705bd02c9d7145a1f51187c36",
+        "compression_level": 22,
+        "aliases": [
+          "1a597b504a9d65a3367bf8190a0b7f5eb04fb7ac05db6fe4d26b93322516f45b.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -7480,7 +7531,7 @@
   },
   "binary_sha256": "93f59d2cedd99eeeb3e8ec457f3e7cffe3ed04a4f812311fdd8ff85046afb559",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 18,
+  "passed_fixtures": 19,
   "pending_charts": 25,
-  "processed_charts": 43
+  "processed_charts": 44
 }

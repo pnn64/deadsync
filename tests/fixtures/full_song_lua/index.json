@@ -3644,17 +3644,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 11",
+      "title": "Episode 11 Marvin's Room",
       "source_simfile": "Marvins Room/MarvinsRoom.ssc",
-      "harness_version": "0.1.0",
-      "archive": "911e8c02c3e02f713b94d4ff04b04647eaa69bf34f359a3a9d48a158b3295ed1.tar.zst",
-      "sha256": "911e8c02c3e02f713b94d4ff04b04647eaa69bf34f359a3a9d48a158b3295ed1",
-      "compressed_bytes": 67886,
-      "uncompressed_sha256": "5ed7b1d53643aeae4b3ebac5245e86fa36cdbf2705bd02c9d7145a1f51187c36",
-      "compression_level": 22,
-      "aliases": [
-        "1a597b504a9d65a3367bf8190a0b7f5eb04fb7ac05db6fe4d26b93322516f45b.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "3f99cb43ede6d04ac9f70b993669f1360a7191d0a5f220e84a7a4410eba6306c.tar.zst",
+      "sha256": "3f99cb43ede6d04ac9f70b993669f1360a7191d0a5f220e84a7a4410eba6306c",
+      "compressed_bytes": 23834603,
+      "uncompressed_sha256": "3e5cc01d2a7af41fc1405c2cf3dbc2b9a9d32fcabe6fcd8628116b875a428e32",
+      "aliases": []
     },
     {
       "title": "回レ！雪月花",
