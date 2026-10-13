@@ -1,0 +1,55 @@
+{
+  "launch_receipt": {
+    "supervisor_pid": 4118280,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_lake_live_draw_repair_v1.py"
+    ]
+  },
+  "live_observation": {
+    "pid": 4118696,
+    "command": [
+      "/home/parity/jobs/live-draw-build-v1/full-song-lua-stage-modifier-v1",
+      "--archive",
+      "/home/parity/jobs/lake-live-draw-repair-v1/chart-272/d78b8d9bafa72c56258292e677f939aec2629fb3895b20cff5f5a7bf5720a095.tar",
+      "--report",
+      "/home/parity/jobs/lake-live-draw-repair-v1/chart-272/report.json"
+    ],
+    "label": "replay",
+    "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc"
+  },
+  "exact_process_matches": true,
+  "selected_build": {
+    "build_proof": "/home/parity/jobs/live-draw-build-v1/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "actual_source_pins": 26,
+  "candidate_sha256": "d78b8d9bafa72c56258292e677f939aec2629fb3895b20cff5f5a7bf5720a095",
+  "native_trace_sha256": "6d08d1e7c74a97b57bb2c5a59bd53020f789d6f9bf33ea1548ee27364899f075",
+  "replay_log_tail": [
+    "[62.0s] replaying every native gameplay frame: frame 1821/17472 (10.4%)",
+    "[64.0s] replaying every native gameplay frame: frame 1887/17472 (10.8%)",
+    "[66.0s] replaying every native gameplay frame: frame 1949/17472 (11.2%)"
+  ],
+  "status": "first bounded Lake repair running; complete replay acceptance not yet decided",
+  "source_fix_commits": [
+    "04899487a",
+    "8cb4b7633"
+  ],
+  "validated_build": "sweep-2026-10-13-live-draw-build.json",
+  "original_diagnosis": "sweep-2026-10-13-lake-draw-startup-diagnosis.json",
+  "native_draw_clock_diagnosis": "sweep-2026-10-13-lake-draw-clock-diagnosis.json",
+  "repair_attempts_before_launch": 0,
+  "repair_attempt_started": 1,
+  "per_chart_limit": 2,
+  "native_capture_reused": true,
+  "input_archive_uncompressed_bytes_verified": true,
+  "publisher_streams": 44,
+  "publisher_count": 1,
+  "comparisons_modified": false,
+  "acceptance_unchanged": true,
+  "passing_chart_reopened": false
+}
