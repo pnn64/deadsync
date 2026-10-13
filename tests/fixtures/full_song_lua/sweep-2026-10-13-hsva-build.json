@@ -1,0 +1,280 @@
+{
+  "status": "validated native HSVA color helpers; observed chart repairs not yet launched",
+  "source_fix_commit": "ec04bf2e0224c9320d86d84c2a44bec5a38f87f8",
+  "source_diagnoses": [
+    "sweep-2026-10-13-new-earth-hsva-diagnosis.json",
+    "sweep-2026-10-13-myths-subscriber-diagnosis.json"
+  ],
+  "prior_validated_build": "sweep-2026-10-13-empty-layers-build.json",
+  "binary_sha256": "13910428be95f3669acf1ad4f85fc2098557c84a66ca66606780bedd9c5f2b0c",
+  "binary_path": "/home/parity/jobs/hsva-green-v2/full-song-lua-stage-modifier-v1",
+  "linux_checks": [
+    {
+      "label": "hsva-control",
+      "exit_code": 0,
+      "seconds": 222.49728966201656,
+      "log_sha256": "706c45fad3f34c65cf6d0e5450f7ddb4971c05a46a9bd4546360af3cc6fd42b6",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 581 filtered out; finished in 0.18s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 33.89914445800241,
+      "log_sha256": "9755cdf1d64f6a6e387e13d44558fba9a0290eb17341733c7e148c01b0d54290",
+      "results": [
+        "test result: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 533 filtered out; finished in 32.82s"
+      ]
+    },
+    {
+      "label": "captured-order-control",
+      "exit_code": 0,
+      "seconds": 1.5854502430011053,
+      "log_sha256": "0ae2cd677ffa4cf6a0eb4d1853d845224d9bd86212b147716c88e043d1d77d7b",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 581 filtered out; finished in 0.54s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 273.28868736798177,
+      "log_sha256": "753b0f7d9b81baacd0897f7c2e23deb3bc95232b8037f349528e2a37b2788591",
+      "results": [
+        "test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.54s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 50.829916733986465,
+      "log_sha256": "84cbc85f39ddcc4f76397a13c0e60b22a29f55b7cdac2beb25fa9fd47861c18d",
+      "results": []
+    }
+  ],
+  "windows_checks": [
+    {
+      "label": "hsva-control",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "hsva-green-v2-windows-hsva-control-v1.log",
+      "sha256": "37e493c849c56fd661f13f3d685505f2b4a90a2345a0bf2c15141119ff5de1d9",
+      "seconds": 330.61774390004575
+    },
+    {
+      "label": "live-controls",
+      "passed": 49,
+      "exit_code": 0,
+      "log": "hsva-green-v2-windows-live-controls-v1.log",
+      "sha256": "f02fd628403ff73db44c11430c82834ea8d3325e99260a9380bf9968883e50d7",
+      "seconds": 33.66743199992925
+    },
+    {
+      "label": "captured-order-control",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "hsva-green-v2-windows-captured-order-control-v1.log",
+      "sha256": "1f0a264da55cb4a2e44e4fbc6e13b44b37096ac61a676810a9a35fa259b63a1a",
+      "seconds": 2.2142388997599483
+    },
+    {
+      "label": "replay-controls",
+      "passed": 26,
+      "exit_code": 0,
+      "log": "hsva-green-v2-windows-replay-controls-v1.log",
+      "sha256": "a95d544f77b2cf9edf419104e6627c101da939966f2738ded9e81190a30f0740",
+      "seconds": 218.58627430023625
+    },
+    {
+      "label": "build",
+      "passed": null,
+      "exit_code": 0,
+      "log": "hsva-green-v2-windows-build-v1.log",
+      "sha256": "f78baec0471c1913528135fc6b26df66aa70a1e73dbcb51d5a98e0322d925fe7",
+      "seconds": 35.34861629968509
+    }
+  ],
+  "excluded_initial_v2_bootstrap": {
+    "status": "initial v2 bootstrap failed before Cargo because the generated launcher retained the v1 filename",
+    "full_chart_repairs_spent": 0,
+    "validation_checks_before_correction": 0,
+    "source_bundle_unchanged": true,
+    "source_bundle_sha256": "7c6193a5301f1d18fa8a5698ef2611c7bdb8f65f5ba5dfb4b02ac7320df7511d",
+    "initial_v1_builder_restored_from_its_frozen_provenance": true,
+    "corrected_v2_scripts_sha256": {
+      "build_hsva_green_v2.py": "b02b7920e3c0ba575d870e3eb951a1b80f92aed3f446c4473a5f77902d838303",
+      "launch_hsva_green_v2.py": "40a6738f7dc9465442e55130d82cfec0333a55d32892f1a0b03224998836af93",
+      "check_hsva_green_windows_v2.py": "2a826c601ef35a74a83fd9d26fa2abb5e1ebac3adda3bd5c9b61ba0d6ace7484"
+    }
+  },
+  "meaningful_red_controls": {
+    "linux": [
+      {
+        "label": "hsva-vertices",
+        "exit_code": 101,
+        "expected_failure": true,
+        "log_sha256": "8316fb11bc15e3a63dc942ac98f8068c5c9024714a2182b30519f814674e096d",
+        "seconds": 213.46986981399823
+      }
+    ],
+    "windows": [
+      {
+        "label": "hsva-vertices",
+        "exit_code": 101,
+        "expected_failure": true,
+        "log": "hsva-red-v2-windows-hsva-vertices-v1.log",
+        "log_sha256": "aa1bd908f7a2c7022ea0dfa001cc593b79f5e08f93e346cd87b3baf5bf3e6398",
+        "seconds": 431.79321470018476
+      }
+    ]
+  },
+  "isolated_control_edits": {
+    "crates/deadsync-song-lua/src/live.rs": [
+      [
+        "\n#[cfg(test)]\nmod tests {\n    #[cfg(feature = \"test-support\")]\n    #[test]\n    fn live_single_judgment_subscriber_needs_no_captured_sort_rank() {\n",
+        "\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn live_hsva_initializes_native_vertex_colors() {\n        let mut compiled = compile(\"native-hsva-vertices\", r#\"\nreturn Def.ActorMultiVertex {\n    Name = 'SpaceshipTrailP1',\n    InitCommand = function(self)\n        assert(type(HSVA) == 'function', 'native HSVA is available for authored vertex initialization')\n        local inputs = {\n            {0, 1, 1, 1}, {60, 1, 1, 0.75}, {120, 1, 1, 0.5},\n            {180, 1, 1, 0.25}, {240, 1, 1, 0}, {300, 1, 1, 1},\n            {360, 1, 1, 0.5}, {-30, 1, 1, 0.25}, {480, 1, 1, 1},\n            {15, 0.5, 0.25, 0.125}, {270, 0, 0.375, -0.25}, {30, 2, 0.5, 1.25},\n        }\n        local vertices = {}\n        HSVA_COLORS = {}\n        for index, input in ipairs(inputs) do\n            local rgba = HSVA(unpack(input))\n            HSVA_COLORS[index] = rgba\n            vertices[index] = {{index, index % 2, 0}, rgba}\n        end\n        assert(HSVToColor{Hue=0, Sat=0, Value=0.5}[4] == 0)\n        assert(HSVToColor{Hue=0, Sat=0, Value=0.5, Alpha=false}[4] == 0)\n        assert(HSVA(0, 1, 1)[4] == 0)\n        self:SetDrawState{Mode='DrawMode_Quads'}:SetVertices(vertices)\n    end,\n}\n\"#);\n        let expected: [[f64; 4]; 12] = [\n            [1.0, 0.0, 0.0, 1.0], [1.0, 1.0, 0.0, 0.75], [0.0, 1.0, 0.0, 0.5],\n            [0.0, 1.0, 1.0, 0.25], [0.0, 0.0, 1.0, 0.0], [1.0, 0.0, 1.0, 1.0],\n            [1.0, 0.0, 1.0, 0.5], [1.0, 0.0, 0.5, 0.25], [1.0, 0.0, 1.0, 1.0],\n            [0.25, 0.15625, 0.125, 0.125], [0.375, 0.375, 0.375, -0.25], [0.5, 0.0, -0.5, 1.25],\n        ];\n        let mut scene = compiled.live_scene.take().expect(\"owned vertex color scene\");\n        assert!(scene.take_startup_output().errors.is_empty());\n        let colors = scene.lua.globals().get::<Table>(\"HSVA_COLORS\").unwrap();\n        for (index, expected) in expected.iter().enumerate() {\n            let rgba = colors.raw_get::<Table>(index + 1).unwrap();\n            for (channel, expected) in expected.iter().enumerate() {\n                assert_eq!(rgba.raw_get::<f64>(channel + 1).unwrap(), *expected,\n                    \"native Lua color {index}, channel {channel}\");\n            }\n        }\n        let SongLuaOverlayKind::ActorMultiVertex { vertices, .. } = &compiled.overlays[0].kind else {\n            panic!(\"the authored trail retains its vertex mesh\");\n        };\n        assert_eq!(vertices.len(), 18);\n        let mut seen = [false; 12];\n        for vertex in vertices.iter() {\n            let index = vertex.pos[0] as usize;\n            assert!((1..=expected.len()).contains(&index), \"authored vertex position retained\");\n            assert_eq!(vertex.color, expected[index - 1].map(|v| v as f32));\n            seen[index - 1] = true;\n        }\n        assert!(seen.into_iter().all(|seen| seen), \"all authored colors reach the rendered mesh\");\n    }\n\n    #[cfg(feature = \"test-support\")]\n    #[test]\n    fn live_single_judgment_subscriber_needs_no_captured_sort_rank() {\n"
+      ]
+    ]
+  },
+  "isolated_production_edits": {
+    "crates/deadsync-song-lua/src/theme_colors.rs": [
+      [
+        "            make_color_table(lua, blend_color(first, second))\n        })?,\n    )?;\n    Ok(())\n}\n\n",
+        "            make_color_table(lua, blend_color(first, second))\n        })?,\n    )?;\n    // ITGmania fallback 02 Colors.lua keeps Lua number precision and uses\n    // its final sector branch for every hue outside sectors zero to four.\n    lua.load(r#\"\nfunction HSVToColor(hsv)\n    local s, v = hsv.Sat, hsv.Value\n    local a = hsv.Alpha or 0\n    if s == 0 then\n        return {v, v, v, a}\n    end\n    local h = hsv.Hue / 60\n    local i = math.floor(h)\n    local f = h - i\n    local p = v * (1 - s)\n    local q = v * (1 - s * f)\n    local t = v * (1 - s * (1 - f))\n    if i == 0 then return {v, t, p, a}\n    elseif i == 1 then return {q, v, p, a}\n    elseif i == 2 then return {p, v, t, a}\n    elseif i == 3 then return {p, q, v, a}\n    elseif i == 4 then return {t, p, v, a}\n    else return {v, p, q, a}\n    end\nend\nfunction HSVA(h, s, v, a)\n    return HSVToColor{Hue=h, Sat=s, Value=v, Alpha=a}\nend\n\"#)\n        .set_name(\"native HSV color helpers\")\n        .set_environment(globals.clone())\n        .exec()?;\n    Ok(())\n}\n\n"
+      ]
+    ]
+  },
+  "excluded_first_green_mesh_control": {
+    "reason": "The first green passed every Lua color assertion, then rejected a valid mesh because the control assumed a triangle order. V2 associates each rendered color with its authored vertex position and verifies every input color is present. Production is restored to the verified preimage before fresh meaningful red controls. No full chart repair ran.",
+    "linux_log_sha256": "95800fe19f0ad83b3ea3a10a4ccd1bb8770f070eeae366851c4b5cd33d5a6aaf",
+    "windows_log_sha256": "388abc361dc8577626d98556f04f7eab2622c54da371ba81f1d54df8b62dc8e9"
+  },
+  "control_unchanged_from_meaningful_red": true,
+  "lua_number_precision_preserved": true,
+  "hue_not_wrapped": true,
+  "saturation_value_alpha_not_clamped": true,
+  "native_source_pin": {
+    "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\Scripts\\02 Colors.lua",
+    "sha256": "3396661905e5cd2c6715d903d59a433ead2eca78709724358c3545c320a17294"
+  },
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "additional_unchanged_source_pin": {
+    "crates/deadsync-song-lua/src/theme_colors.rs": "a0b962f9b5bb4483a35c057154166c110d2cc5c599acdf06c9c027805f9f9f63"
+  },
+  "additional_source_verified_against_linux_and_windows_commit": true,
+  "frozen_source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "8670cd6bf70ccb2b6a21a3898b94e9dea6816c84723bf626318a64766e1205d1",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "b3b021737261adaaa280c222cc1e4156a1c1ed1b173a0962bbab9f4e834da395",
+    "crates/deadsync-song-lua/src/live.rs": "1ecb8fc396f63062f423d19306f154c048001334592ac66fcff71068eeda5280",
+    "crates/deadsync-song-lua/src/song_tables.rs": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182",
+    "crates/deadsync-song-lua/src/lua_util.rs": "7f4791580aa7e7851d2f5d7cb407f236a7fb4f143d050b717d535dde31bd5db9",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "090ee7ef08a554972b5bba9fb72d2bb51d065cd5e324427a9a256e417735c10d",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "bf3df6999f8dcc945b876715ad197574c9aa513ee121125591f2fd66d2ece41f",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "6a52092c53d4441b96c609aafc3fdc315fb6d8988ae04d0c3133d5e243651673",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "642ff0d5ed5f9365bdc1c9c54c2353bf293c21b813fdd967bb8511fe52c256bd",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "aacfd41959a6c1795ffd9a3854c25f161dde783d0e40dee8dc1aec5368b06470",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "3d4e4ec033727d60449713937a5dc2506b3d3402d6570f4033a0a3be75e85722",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+    "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+    "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+    "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+    "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+    "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879",
+    "crates/deadsync-song-lua/src/playback/prepare.rs": "67eb64b772ede170e6dfe28158a70d66d7c9cd0246e61479494b4569b5c7ae2d",
+    "crates/deadsync-song-lua/src/theme_colors.rs": "56dccc788960021d78e9fc2c8933ad2d15a5f87830268779b2132e1467010a69"
+  },
+  "windows_root_source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "f9a66ab7c351f1a934d45e602663e909b02b1c88f10f63991e926539cfb7439c",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "48c2ea7a0c031cb5c4b5cfd72e0e0bcb5ef5c62884916c4883866e74fcdd2a70",
+    "crates/deadsync-song-lua/src/live.rs": "4aee5285b9da02efddf0be6a74a8453748eb73604ffac2b4639c9dc41cf96732",
+    "crates/deadsync-song-lua/src/song_tables.rs": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182",
+    "crates/deadsync-song-lua/src/lua_util.rs": "7f4791580aa7e7851d2f5d7cb407f236a7fb4f143d050b717d535dde31bd5db9",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "090ee7ef08a554972b5bba9fb72d2bb51d065cd5e324427a9a256e417735c10d",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "bf3df6999f8dcc945b876715ad197574c9aa513ee121125591f2fd66d2ece41f",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "61ec0b8c848d0ef4a78ebe4e3d19dc9e316e0cd900c1464e5dd2f79904b4dbb2",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "642ff0d5ed5f9365bdc1c9c54c2353bf293c21b813fdd967bb8511fe52c256bd",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "aacfd41959a6c1795ffd9a3854c25f161dde783d0e40dee8dc1aec5368b06470",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "3d4e4ec033727d60449713937a5dc2506b3d3402d6570f4033a0a3be75e85722",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+    "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+    "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+    "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+    "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+    "crates/deadsync-song-lua/src/draw_capture.rs": "9dd81bb6c6f5ae211d7243cba5d070570abf279a0b7c0f9121b689091c2d8594",
+    "crates/deadsync-song-lua/src/playback/prepare.rs": "67eb64b772ede170e6dfe28158a70d66d7c9cd0246e61479494b4569b5c7ae2d",
+    "crates/deadsync-song-lua/src/theme_colors.rs": "56dccc788960021d78e9fc2c8933ad2d15a5f87830268779b2132e1467010a69"
+  },
+  "source_bundle_sha256": "7c6193a5301f1d18fa8a5698ef2611c7bdb8f65f5ba5dfb4b02ac7320df7511d",
+  "native_harness": {
+    "source_sha256": {
+      "src/song_lua_archive.rs": "97cf09add0cec5b48e007a6ac50a46ae423bf684c661f52754f6d5b35086f603",
+      "src/song_lua_oracle.rs": "e0a18b177b501a8bc7feafe0540a929abcc8dbbc66e35c2d7cdd14725a0c282c",
+      "probe_theme/SongLuaTrace.lua": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f"
+    },
+    "checks": [
+      {
+        "label": "oracle-path-tests",
+        "exit_code": 0,
+        "seconds": 26.568072756999754,
+        "results": [
+          "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 199 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "label": "archive-tests",
+        "exit_code": 0,
+        "seconds": 0.8939706840028521,
+        "results": [
+          "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 0.65s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "label": "build",
+        "exit_code": 0,
+        "seconds": 0.18723358200804796,
+        "results": []
+      }
+    ],
+    "binary": "/home/parity/jobs/listed-lua-schema-build-v1/harness",
+    "binary_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "fix_commit": "c283a8a",
+    "native_capture_instrumentation": "Unchanged from byte-verified case-lua-archive-build-v1; only Rust archive collection changed",
+    "acceptance": "Unchanged full-song replay and pack comparisons"
+  },
+  "selection_before": {
+    "build_proof": "/home/parity/jobs/empty-layers-green-v2/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "validation_scope": "Restore the observed missing native HSVA and its HSVToColor dependency using the pinned fallback Lua sector arithmetic and Lua number precision. Validate unchanged authored ActorMultiVertex Init colors, all 49 live controls, captured subscriber ordering, all 26 native gameplay controls and both executable builds. No gameplay source or comparison change.",
+  "chart_repair_attempts_spent": 0,
+  "comparisons_modified": false,
+  "passing_chart_reopened": false
+}
