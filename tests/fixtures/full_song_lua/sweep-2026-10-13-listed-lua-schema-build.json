@@ -1,0 +1,80 @@
+{
+  "source_sha256": {
+    "src/song_lua_archive.rs": "97cf09add0cec5b48e007a6ac50a46ae423bf684c661f52754f6d5b35086f603",
+    "src/song_lua_oracle.rs": "e0a18b177b501a8bc7feafe0540a929abcc8dbbc66e35c2d7cdd14725a0c282c",
+    "probe_theme/SongLuaTrace.lua": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f"
+  },
+  "checks": [
+    {
+      "label": "oracle-path-tests",
+      "exit_code": 0,
+      "seconds": 26.568072756999754,
+      "results": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 199 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "archive-tests",
+      "exit_code": 0,
+      "seconds": 0.8939706840028521,
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 0.65s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 0.18723358200804796,
+      "results": []
+    }
+  ],
+  "binary": "/home/parity/jobs/listed-lua-schema-build-v1/harness",
+  "binary_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "fix_commit": "c283a8a",
+  "native_capture_instrumentation": "Unchanged from byte-verified case-lua-archive-build-v1; only Rust archive collection changed",
+  "acceptance": "Unchanged full-song replay and pack comparisons",
+  "windows_checks": [
+    {
+      "label": "archive",
+      "exit_code": 0,
+      "passed": 12,
+      "log": "listed-lua-schema-windows-controls-v1.log",
+      "sha256": "772a8cf8119f12f77785f8af58eb4192bfe4a2a4cc40b0477b7273b5cb020d18"
+    },
+    {
+      "label": "oracle",
+      "exit_code": 0,
+      "passed": 3,
+      "log": "listed-lua-schema-windows-oracle-v1.log",
+      "sha256": "8f6e0e946639d9eb570bd5cd33d41fbff4046cba638247c765c97659a2e83e2f",
+      "seconds": 1.2753242002800107
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "passed": null,
+      "log": "listed-lua-schema-windows-build-v1.log",
+      "sha256": "5604fc8f0c276397a55db4bd7008236712075c0ad37d3b3a0f1fe362b1b85a36",
+      "seconds": 0.3494199002161622
+    }
+  ],
+  "host_local_mtimes_before_cargo": true,
+  "before_fix_regression_sha256": "a15f0ad1823286a74f63fd8cf0b6438fce662cd57b855e903e008d7c3dc9ef75",
+  "before_fix_regression_exit_code": 101,
+  "regression": "The existing static dependency control now uses a physical listing and a dynamic Lua filename. It proves both nested data files, including uppercase .LUA, are retained when no native call names them; unrelated non-Lua files are excluded.",
+  "source_cause": "sweep-2026-10-13-mountain-archive-diagnosis.json",
+  "source_fix": "Complete physical song Lua inputs augment executed/static source discovery. Ordinary dependency and asset handling remains active; no gameplay expectations are synthesized.",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_observer_sha256_unchanged": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f",
+  "passing_charts_reopened": false,
+  "acceptance_unchanged": true,
+  "next_repair": "Mountain King final repair 2 retains all 61 physical Lua inputs and the byte-identical native capture. The original strategy tag required by whole_song_archives.rs:350 is restored; the existing consumer and acceptance gates are unchanged."
+}
