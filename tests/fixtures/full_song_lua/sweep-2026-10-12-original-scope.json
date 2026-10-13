@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T13:11:40Z",
+  "updated_utc": "2026-10-13T13:34:49Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 210,
-    "pending": 66,
-    "unprocessed": 225
+    "passed": 212,
+    "pending": 67,
+    "unprocessed": 222
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2309,7 +2309,9 @@
       "position": 268,
       "source_simfile": "Kizuato - [Zaia]/Kizuato.ssc",
       "simfile_sha256": "07ac539c88d4a669a66b9f2b3a08cbd4baf78183c379f1a99e2e316bca4a4132",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 269,
@@ -2323,21 +2325,25 @@
       "position": 270,
       "source_simfile": "Koi [UPS2016]/koi.ssc",
       "simfile_sha256": "2efedac6dcecd6354ba67a65cc0f0732260d4f37536fe2522a6ee6402a7be205",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 271,
       "source_simfile": "Kuru Kuru kururin/Kuru Kuru kururin.ssc",
       "simfile_sha256": "c26acc535f8940f9eb9493162fd37fd69285f2d0964c3d9293b81227ff56e189",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 272,
       "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
       "simfile_sha256": "8cf411edce220fdb7f0d1a7fadc5e9ea6e5123f1eb21a4b29a9ddc738b2c4beb",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-lake-live-draw-repair.json"
     },
     {
       "position": 273,
