@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T07:40:57Z",
+  "updated_utc": "2026-10-13T08:14:49Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 191,
-    "pending": 56,
-    "unprocessed": 254
+    "passed": 193,
+    "pending": 60,
+    "unprocessed": 248
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1766,8 +1766,8 @@
       "source_simfile": "freg/freg.sm",
       "simfile_sha256": "c17a176bd2314c4d9e122db759e9377c11096c92b6890431a31c3b781753854f",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-freg-density-repairs.json"
     },
     {
       "position": 201,
@@ -2045,7 +2045,9 @@
       "position": 235,
       "source_simfile": "I'm sorry/sm.ssc",
       "simfile_sha256": "fa76aab36e8dafd4a362371f8a6767b3d0c143e7862b573dd2c94834fe066033",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 236,
@@ -2067,7 +2069,9 @@
       "position": 238,
       "source_simfile": "If You Crump Stand Up/crump.sm",
       "simfile_sha256": "f4a05dc2796ca3b02322b3e889af3f6ad5e4db2f18435a63941e65c33119f3eb",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 239,
@@ -2089,7 +2093,9 @@
       "position": 241,
       "source_simfile": "iLLness LiLin/iLLness LiLin.ssc",
       "simfile_sha256": "50e01c6d0a8ca3a3f7486011b5f5e093ea96fd6018385805e021cd459157a32d",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 242,
@@ -2103,13 +2109,17 @@
       "position": 243,
       "source_simfile": "Impulse/impulse.ssc",
       "simfile_sha256": "aa93c8e88e250f19c9f8a3d9ec3ed5fa2ed544f471342f36f1b229b27d66a3a2",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 244,
       "source_simfile": "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc",
       "simfile_sha256": "fa95ab0c13007ddba2a9c4f194258e939fa9f802880a12ef90dc13a7552666d6",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 245,
@@ -2123,7 +2133,9 @@
       "position": 246,
       "source_simfile": "Into The Light2/Into The Light.sm",
       "simfile_sha256": "6a25600407362ee80625cf993e95165396909b1994cb054d0c4e8dd0f42cad19",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 247,
