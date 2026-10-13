@@ -1,0 +1,10 @@
+{
+  "separate_from_acceptance": true,
+  "acceptance_gate_added": false,
+  "implemented_dispatch": "Completed tap rows, before HandleTapRowScore, including autoplay.",
+  "remaining_coverage": [
+    "Native SetMineJudgment and SetHoldJudgment have separate messages and are not forwarded by this tap-row hook.",
+    "The production control covers a tap-row score and its note result, not every native TapNote/HoldResult field or routine-player payload."
+  ],
+  "passing_charts_reopened": false
+}

@@ -1,0 +1,101 @@
+{
+  "source_fix_commit": "86fba19f6",
+  "depends_on_player_life_fix": "6470fdd9d",
+  "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
+  "position": 219,
+  "observed_failure": "All 8419 frames replayed with 21 life/failure mismatches and no Lua errors. Native life at 2.000136137 seconds is 0.4010000229; independent life stays 0.5.",
+  "candidate_sha256": "c0826b85cb615b23b55b45859795e975d859502a02d4066b87d1f382544a8196",
+  "trace_sha256": "a29e37ab31bd62f6bd8bc719949da5489f74070e8607cd68273248f3fff2ce3d",
+  "source_confirmed_cause": "Player::UpdateJudgedRows broadcasts Judgment before HandleTapRowScore, including unscored autoplay rows. GREAT GREAT changes life from that handler. DeadSync updated only its judgment sprite and never dispatched the message to the retained VM.",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_simply_love_commit": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+  "native_sources": [
+    "Player.cpp:2853-2899",
+    "Player.cpp:3450-3500",
+    "Player.h:160-167",
+    "NoteTypes.cpp:278-281"
+  ],
+  "authored_source": "../rework/lua-songs/GREAT GREAT/default.lua:30-51",
+  "independent_behavior": "The screen installs a synchronous completed-tap-row callback. It feeds the retained VM from owned gameplay state, constructs Player/FirstTrack/score/offset/early/Notes/Holds parameters from the independently parsed row and lane indices, dispatches the native message without sampled compiler defaults, and applies Lua life/failure writes before row scoring. Engine messages are not captured as authored broadcasts. Each screen replaces the callback and clears it on exit; no event history is retained.",
+  "regression": "The existing production engine tap control now verifies that the following native row Judgment has zero-based FirstTrack, the original W1 result despite a modified W2 ghost, real note methods, absent HoldNoteScore and empty Holds. The handler sees the tap callback life 0.25, sets 0.125 in actual gameplay before foreground update, and runs once; the next frame cannot repeat it.",
+  "baseline_failure_log": "player-judgment-windows-before-fix-v1.log",
+  "baseline_failure": "Production engine tap leaves gameplay life 0.25 instead of the judgment handler value 0.125.",
+  "windows_checks": [
+    {
+      "log": "player-judgment-windows-gameplay-v1.log",
+      "passed": 815,
+      "failed": 0,
+      "sha256": "44a53530e8a2272c1151b26386c3528a1e2267b2ff77b1ae1cddf3519e6cf91d"
+    },
+    {
+      "log": "player-judgment-windows-live-v1.log",
+      "passed": 33,
+      "failed": 0,
+      "sha256": "2bbc1b24983c4a053359ab5fa6c866f3f520a0d580b8c3c4d94c43726afaf204"
+    },
+    {
+      "log": "player-judgment-windows-native-v1.log",
+      "passed": 20,
+      "failed": 0,
+      "sha256": "fc8669c0dd8ee7c20a85ca93b1c574eec95967873bc7fa6ba4e9a966b9fe61f7"
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "gameplay-tests",
+      "exit_code": 0,
+      "seconds": 54.53723243100103,
+      "results": [
+        "test result: ok. 815 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.09s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 182.34472553798696,
+      "results": [
+        "test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 530 filtered out; finished in 0.65s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 252.99356099500437,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.7923325180017855,
+      "results": [
+        "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.28s"
+      ]
+    }
+  ],
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "b7290301b41472a87236fe90399893048b4711d332c1d157f8ce30de74ded4a1",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "ccecdf07dae6378a7df8c94152537d0bab63651b2d193a496aaff3a40d2447dd",
+    "crates/deadsync-song-lua/src/live.rs": "46d0c362e70016d79f88f144d730462fcf3b34efd25e1b22d61f58f855e1c573",
+    "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+    "crates/deadsync-song-lua/src/lua_util.rs": "86dc31843fbf8bef7b0c5dce336ea4b40bf62aa9cd78dfaecc84b663df77f17c",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "472e5630236d1ea9ce3287e62e4673647524b3a8d05860b37c11502efe5de895",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "55018a8dfe9cdb7c21e6ee9f41d361f16973fbdd6a53b618207bb62bcfb53bc6",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "477536eece581d53aade8f900d988f87ffa74ee973cdd82a7d82ee9be9c0637c",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "9af19c6bbaac28be7b8cc51a5119429e7a2fd5703e4f96920cb32521dcf15336",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "2473d07b82a32ff00b5e1f8132fefe442bb76ee15b246da3c35a813bf1431c26",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0"
+  },
+  "build_proof": "/home/parity/jobs/player-judgment-build-v1/proof.json",
+  "binary_sha256": "6ce3531a6f24997104ea4a154750967811012f6a4ef84d3630d2537cf4b0d7f1",
+  "acceptance": "Existing whole replay comparisons unchanged; no passing chart reopened. GREAT GREAT first repair will reuse its original byte-identical uncompressed capture."
+}
