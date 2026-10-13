@@ -1,0 +1,201 @@
+{
+  "selected_build": {
+    "build_proof": "/home/parity/jobs/subscriber-single-green-v1/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "binary_sha256": "49482e042c5a60991fd859ab5d1ee6b5eeb64b6511ea2320dcb850abc06f1f78",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "actual_source_pins": 26,
+  "harness_source_pins": 3,
+  "repairs": [
+    {
+      "position": 308,
+      "source_simfile": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc",
+      "attempt_started": 1,
+      "per_chart_limit": 2,
+      "remaining_repairs_after_this_attempt": 1,
+      "launch_receipt": {
+        "position": 308,
+        "supervisor_pid": 2254945,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_single_subscriber_chart_repair_v1.py",
+          "308"
+        ]
+      },
+      "live_observation": {
+        "pid": 2255213,
+        "command": [
+          "/home/parity/jobs/subscriber-single-green-v1/full-song-lua-stage-modifier-v1",
+          "--archive",
+          "/home/parity/jobs/wargame-single-subscriber-repair-v1/chart-308/b0add8db6ca7f8c6988d2037c193335e899a12b0e4719cd38cece20154c2e950.tar",
+          "--report",
+          "/home/parity/jobs/wargame-single-subscriber-repair-v1/chart-308/report.json"
+        ],
+        "label": "replay",
+        "source_simfile": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc"
+      },
+      "exact_process_matches": [
+        true,
+        true
+      ],
+      "attempt_start": {
+        "position": 308,
+        "source_simfile": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc",
+        "status": "pending",
+        "repair_attempts": 1,
+        "previous_concrete_failures": [
+          {
+            "phase": "progress",
+            "seconds": 86.0012435913086,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "progress",
+            "seconds": 87.00226593017578,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "screen-end",
+            "seconds": 87.3050308227539,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "gameplay-exit",
+            "seconds": 87.3050308227539,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          }
+        ],
+        "previous_errors": [
+          "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 16.008: missing captured subscriber identity for ScreenGameplay/6/1",
+          "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 80.993: missing captured subscriber identity for ScreenGameplay/6/1"
+        ],
+        "previous_failure": null,
+        "binary_sha256": "49482e042c5a60991fd859ab5d1ee6b5eeb64b6511ea2320dcb850abc06f1f78",
+        "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+        "candidate_sha256": "b0add8db6ca7f8c6988d2037c193335e899a12b0e4719cd38cece20154c2e950",
+        "trace_sha256": "cf6cc0edef6e8bd39d0e25c657b2315bd642ad901ef96896bfde81f75be1db52",
+        "simfile_sha256": "56c58acf784dc382fa293f1e7b10aaf659d149d51addc349a421779fbcadde0d",
+        "build_proof": "/home/parity/jobs/subscriber-single-green-v1/proof.json",
+        "fix_commit": "402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+        "native_capture_reused": true,
+        "all_candidate_manifest_members_byte_verified": true
+      },
+      "replay_log_tail": [
+        "[14.0s] replaying every native gameplay frame: frame 908/46936 (1.9%)",
+        "[16.0s] replaying every native gameplay frame: frame 1038/46936 (2.2%)",
+        "[18.0s] replaying every native gameplay frame: frame 1168/46936 (2.5%)"
+      ],
+      "completed_result": null
+    },
+    {
+      "position": 311,
+      "source_simfile": "media offline/media offline.ssc",
+      "attempt_started": 1,
+      "per_chart_limit": 2,
+      "remaining_repairs_after_this_attempt": 1,
+      "launch_receipt": {
+        "position": 311,
+        "supervisor_pid": 2255054,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_single_subscriber_chart_repair_v1.py",
+          "311"
+        ]
+      },
+      "live_observation": {
+        "pid": 2256304,
+        "command": [
+          "/home/parity/jobs/subscriber-single-green-v1/full-song-lua-stage-modifier-v1",
+          "--archive",
+          "/home/parity/jobs/media-offline-single-subscriber-repair-v1/chart-311/bac0bf5d49c374f91375c34908defc95e0f4b52eb66f32418e2a68e2d4a1c4c8.tar",
+          "--report",
+          "/home/parity/jobs/media-offline-single-subscriber-repair-v1/chart-311/report.json"
+        ],
+        "label": "replay",
+        "source_simfile": "media offline/media offline.ssc"
+      },
+      "exact_process_matches": [
+        true,
+        true
+      ],
+      "attempt_start": {
+        "position": 311,
+        "source_simfile": "media offline/media offline.ssc",
+        "status": "pending",
+        "repair_attempts": 1,
+        "previous_concrete_failures": [
+          {
+            "phase": "progress",
+            "seconds": 135.00112915039062,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "progress",
+            "seconds": 136.00148010253906,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "screen-end",
+            "seconds": 136.34828186035156,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "gameplay-exit",
+            "seconds": 136.34828186035156,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          }
+        ],
+        "previous_errors": [
+          "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 33.007: missing captured subscriber identity for ScreenGameplay/6/1",
+          "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 55.793: missing captured subscriber identity for ScreenGameplay/6/1",
+          "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 63.013: missing captured subscriber identity for ScreenGameplay/6/1"
+        ],
+        "previous_failure": null,
+        "binary_sha256": "49482e042c5a60991fd859ab5d1ee6b5eeb64b6511ea2320dcb850abc06f1f78",
+        "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+        "candidate_sha256": "bac0bf5d49c374f91375c34908defc95e0f4b52eb66f32418e2a68e2d4a1c4c8",
+        "trace_sha256": "f7eb43316383f988ea48a6caaa0d22c0a8e90b04bedaa0b9173cf1891f215f44",
+        "simfile_sha256": "62fa6179278daeded2cb031ca8532dd5242ce18331b850d8bed44f516b80a535",
+        "build_proof": "/home/parity/jobs/subscriber-single-green-v1/proof.json",
+        "fix_commit": "402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+        "native_capture_reused": true,
+        "all_candidate_manifest_members_byte_verified": true
+      },
+      "replay_log_tail": [
+        "[2.0s] : 0 checks completed, 0 failed"
+      ],
+      "completed_result": null
+    }
+  ],
+  "status": "first bounded Wargame and Media Offline repairs launched; existing complete replay comparisons determine acceptance",
+  "validated_build": "sweep-2026-10-13-subscriber-single-build.json",
+  "native_capture_reused": true,
+  "all_uncompressed_candidate_members_verified": true,
+  "publisher_streams": 55,
+  "publisher_count": 1,
+  "actual_publisher": {
+    "ProcessId": 60312,
+    "CommandLine": "\"C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe\" -B -X utf8 C:/GitHub/itgmania-harness/target/server-parity/publish_chart_sweep_v1.py"
+  },
+  "comparisons_modified": false,
+  "passing_charts_reopened": false,
+  "capped_lower_ssc_not_retried": true
+}
