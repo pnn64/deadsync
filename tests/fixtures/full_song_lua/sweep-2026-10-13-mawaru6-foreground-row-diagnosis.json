@@ -1,0 +1,226 @@
+{
+  "status": "actual original replay failure diagnosed; no chart repair replay started",
+  "source_simfile": "mawaru6/mawaru6.sm",
+  "position": 305,
+  "native_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "cause": "Foreground::Update uses GetElapsedTimeFromBeat with a BeatToNoteRow marker. Authored foreground 0.01 rounds to row zero. DeadSync advance_foreground uses continuous get_time_for_beat_exact, shifting its first music delta and recurring queue phase.",
+  "bounded_inputs": {
+    "path": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\mawaru6-queue-clock-inputs-v1.json",
+    "sha256": "87ad79981d18b310ee92487d8542e8fa191e8a4a0a4335194589a3f8cf081019",
+    "frames": 19320,
+    "seconds_upper_bound_exclusive": 40,
+    "native_queue_callbacks": 4680
+  },
+  "models": [
+    {
+      "model": "native_rounded_marker",
+      "start_seconds": 1.274999976158142,
+      "queue_callback_count": 4680,
+      "all_native_callback_clocks_and_names_match": true,
+      "first_five_broadcast_clocks": [
+        {
+          "seconds": 15.584239959716797,
+          "beat": 31.003353118896484,
+          "target": 31
+        },
+        {
+          "seconds": 16.518434524536133,
+          "beat": 33.027442932128906,
+          "target": 33
+        },
+        {
+          "seconds": 18.585147857666016,
+          "beat": 37.50532150268555,
+          "target": 37.5
+        },
+        {
+          "seconds": 26.675668716430664,
+          "beat": 55.034786224365234,
+          "target": 55
+        },
+        {
+          "seconds": 27.59151840209961,
+          "beat": 57.019126892089844,
+          "target": 57
+        }
+      ]
+    },
+    {
+      "model": "current_continuous_marker",
+      "start_seconds": 1.2796154022216797,
+      "queue_callback_count": 4680,
+      "all_native_callback_clocks_and_names_match": false,
+      "first_five_broadcast_clocks": [
+        {
+          "seconds": 15.592312812805176,
+          "beat": 31.020843505859375,
+          "target": 31
+        },
+        {
+          "seconds": 16.525056838989258,
+          "beat": 33.04179000854492,
+          "target": 33
+        },
+        {
+          "seconds": 18.589523315429688,
+          "beat": 37.514801025390625,
+          "target": 37.5
+        },
+        {
+          "seconds": 26.662857055664062,
+          "beat": 55.00702667236328,
+          "target": 55
+        },
+        {
+          "seconds": 27.59678077697754,
+          "beat": 57.0305290222168,
+          "target": 57
+        }
+      ]
+    }
+  ],
+  "pinned_native_sources": {
+    "Actor.cpp": {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Actor.cpp",
+      "sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150"
+    },
+    "Foreground.cpp": {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Foreground.cpp",
+      "sha256": "04655fe3db304e08f8d424ac6a928858b74182f74ba14ceb658b709324153847"
+    },
+    "TimingData.cpp": {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\TimingData.cpp",
+      "sha256": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1"
+    },
+    "Group.cpp": {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Group.cpp",
+      "sha256": "da7f47617ad69a09de314e258e5d75de5980edee4dff7a892746ea4385421694"
+    }
+  },
+  "retained_capture_verification": {
+    "retained_report_sha256": "6ac89d9bdfb0ca08a00b954b5265259c010016ab7a4acd3bf0eeaa7c13e5995e",
+    "candidate_sha256": "2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb",
+    "trace_sha256": "4d205ed710879e4011d75fc735b3ae9fa7e9e9b6c53eb81873b64fff35771b7f",
+    "simfile_sha256": "394d4b03ce745a22d46dfef9bf581301840ee654ebd382d2c76412260694c37c",
+    "first_five_failures": [
+      {
+        "field": "source_broadcast",
+        "native": {
+          "seconds": 15.584239959716797,
+          "beat": 31.003353118896484,
+          "name": "Close",
+          "args": [
+            "Close"
+          ]
+        },
+        "deadsync": {
+          "seconds": 15.592312812805176,
+          "beat": 31.020843505859375,
+          "name": "Close",
+          "args": [
+            "Close"
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "field": "source_broadcast",
+        "native": {
+          "seconds": 16.518434524536133,
+          "beat": 33.027442932128906,
+          "name": "Game1",
+          "args": [
+            "Game1"
+          ]
+        },
+        "deadsync": {
+          "seconds": 16.525056838989258,
+          "beat": 33.04179000854492,
+          "name": "Game1",
+          "args": [
+            "Game1"
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "field": "source_broadcast",
+        "native": {
+          "seconds": 18.585147857666016,
+          "beat": 37.50532150268555,
+          "name": "Open",
+          "args": [
+            "Open"
+          ]
+        },
+        "deadsync": {
+          "seconds": 18.589523315429688,
+          "beat": 37.514801025390625,
+          "name": "Open",
+          "args": [
+            "Open"
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "field": "source_broadcast",
+        "native": {
+          "seconds": 26.675668716430664,
+          "beat": 55.034786224365234,
+          "name": "Close",
+          "args": [
+            "Close"
+          ]
+        },
+        "deadsync": {
+          "seconds": 26.662857055664062,
+          "beat": 55.00702667236328,
+          "name": "Close",
+          "args": [
+            "Close"
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "field": "source_broadcast",
+        "native": {
+          "seconds": 27.59151840209961,
+          "beat": 57.019126892089844,
+          "name": "Game2",
+          "args": [
+            "Game2"
+          ]
+        },
+        "deadsync": {
+          "seconds": 27.59678077697754,
+          "beat": 57.0305290222168,
+          "name": "Game2",
+          "args": [
+            "Game2"
+          ],
+          "params_error": null
+        }
+      }
+    ],
+    "full_replay": {
+      "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
+      "fix_commit": "04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "native_frames": 121856,
+      "replayed_frames": 121856,
+      "compared_stage_fields": 2992,
+      "mismatch_count": 505260,
+      "errors": [],
+      "repair_attempts": 0
+    },
+    "raw_candidate_and_report_byte_verified": true,
+    "bounded_inputs_exact_native_subset": true
+  },
+  "method": "Independent float timing and Actor tween recurrence, using only retained neutral frame clocks as inputs. Native command clocks and report values are comparison observations, never production inputs.",
+  "repair_attempts_spent": 0,
+  "remaining_full_repairs": 2,
+  "passing_chart_reopened": false,
+  "comparisons_modified": false,
+  "diagnostic_correction": "An initial extraction selected actor_q and encountered an absent name field. The corrected actor_s extraction and source models above are the successful evidence. A later Linux red launcher selected the integration target instead of the library; it is excluded from behavioral red evidence."
+}
