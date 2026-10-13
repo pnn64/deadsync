@@ -1,0 +1,173 @@
+{
+  "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+  "binary_sha256": "e1e574aa62e36912260a8bcf656514c334db73a3cf6188c0d21242b688406793",
+  "candidate_sha256": "70d46f8a7297fb5e58d7d19783915d6bb2f9210774da9a8d6f3d1423afd6b419",
+  "native_trace_sha256": "cd1b99822ffab060d4148dd3a492b6b606bebc622a7a1a3c97c00763f8167ce0",
+  "report_sha256": "1aea9fc62743f9c8cc755993687897535e01eefa45125e9290b44e10d8c1369c",
+  "retained_uncompressed_report_and_trace_bytes_verified": true,
+  "native_frames": 18612,
+  "replayed_frames": 18612,
+  "compared_stage_fields": 2310,
+  "mismatch_count": 2131,
+  "mismatch_fields": {
+    "command_query_event": 2131
+  },
+  "native_construction_vs_independent_callback": 1938,
+  "same_phase_event_differences": 193,
+  "first_mismatch": {
+    "field": "command_query_event",
+    "native": {
+      "args": [],
+      "beat": 32.007293701171875,
+      "caller": {
+        "line": 38,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "detail": {
+        "results": [
+          {
+            "actor": "external-0240",
+            "name": "ScreenGameplay",
+            "path": "ScreenGameplay"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 38,
+      "operation": "ScreenManager.GetTopScreen",
+      "phase": "construction",
+      "scene": 1,
+      "seconds": 10.99092960357666,
+      "seq": 129874,
+      "source": "song:/lua/default.lua",
+      "results": [
+        {
+          "actor": 1,
+          "name": "ScreenGameplay",
+          "path": "ScreenGameplay"
+        }
+      ]
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "query",
+      "operation": "ScreenManager.GetTopScreen",
+      "source": "song:/lua/default.lua",
+      "line": 38,
+      "phase": "callback",
+      "beat": 32.007293701171875,
+      "seconds": 10.99092960357666,
+      "args": [],
+      "results": [
+        {
+          "actor": 1,
+          "name": "ScreenGameplay",
+          "path": "ScreenGameplay"
+        }
+      ]
+    }
+  },
+  "first_same_phase_difference": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "def-0353",
+      "args": [
+        751.1607666015625
+      ],
+      "beat": 152.11318969726562,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 2676,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "InitCommand",
+      "definition_id": "def-0355",
+      "detail": {
+        "native_tween_time_left": 0
+      },
+      "kind": "call",
+      "line": 2676,
+      "operation": "Actor.y",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 46.68437576293945,
+      "seq": 401456,
+      "source": "song:/lua/default.lua",
+      "tween_time_left": 0
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "call",
+      "operation": "Actor.y",
+      "source": "song:/lua/default.lua",
+      "line": 2676,
+      "phase": "callback",
+      "beat": 152.11318969726562,
+      "seconds": 46.68437576293945,
+      "args": [
+        751.1607055664062
+      ],
+      "results": [
+        {
+          "actor": "0x58afa2425db0",
+          "name": "",
+          "path": "ScreenGameplay/SongForeground/lua"
+        }
+      ],
+      "tween_time_left": 0.0
+    }
+  },
+  "actual_native_update_installs": [
+    {
+      "actor": "def-0355",
+      "args": [
+        {
+          "last_line": 2909,
+          "line": 2756,
+          "source": "song:/lua/default.lua",
+          "type": "function"
+        }
+      ],
+      "beat": 0,
+      "caller": {
+        "line": 3007,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "InitCommand",
+      "definition_id": "def-0355",
+      "detail": {
+        "native_tween_time_left": 69420
+      },
+      "kind": "call",
+      "line": 3007,
+      "operation": "ActorFrame.SetUpdateFunction",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 0,
+      "seq": 712,
+      "source": "song:/lua/default.lua"
+    }
+  ],
+  "errors": [],
+  "diagnostic_only": true,
+  "repair_attempts_spent": 0,
+  "repair_attempts_remaining": 2,
+  "repair_not_started": true,
+  "native_probe_source_sha256": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f",
+  "authored_song_source_sha256": "314febe722e881c0d1d8ca75c5dadaa32474fba1ae34c418780de978a78f1c80",
+  "current_root_lua_util_source_sha256": "d1f345d4cb58aaa31530bde9326d9644fab4bd16c02c0b4bbfaca4d1673945c2",
+  "actual_original_frozen_lua_util_source_sha256": "8577249fcae4a1d51f6d4620783d5794ddbfc03e1780dacaa91913e2b9641c62",
+  "actual_original_update_callback_body_verified": true,
+  "pinned_native_callback_context": {
+    "source": "probe_theme/SongLuaTrace.lua",
+    "line": 538,
+    "implementation": "local function callback_context(method)\n\tif not active_context then return nil end\n\treturn {\n\t\tdefinition_id = active_context.definition_id,\n\t\tcommand = active_context.command,\n\t\tcallback = method,\n\t\tsource = active_context.source,\n\t\tline = active_context.line,\n\t}\nend\n\nlocal function wrap_callback(method, callback)\n\tlocal context = callback_context(method)\n\tif not context or type(callback) ~= \"function\" then return callback end\n\treturn function(...)\n\t\treturn call_in_context(context, callback, ...)\n\tend\nend\n\n"
+  },
+  "source_cause": "There are 1938 native construction versus independent callback event pairs and another 193 pairs that share callback phase but differ elsewhere. The first same-phase pair has Actor.y argument native751.1607666015625 versus independent751.1607055664062 in copy_transforms_player at definition line2676. The retained native SetUpdateFunction install at lua/default.lua:3007 actually occurs inside a wrapped InitCommand callback. Thus an absent installation context does not explain the construction-phase queries and must not be used as a repair. The unchanged native observer conditionally wraps callbacks from the active context, while the actual frozen independent update runner enters callback phase. The remaining execution/scoping and value causes are not yet established. No Lua errors or other mismatch field is present.",
+  "required_behavior": "Explain the construction-phase observations despite the verified callback-context installation, using the unchanged observer and the authored/native execution path. Diagnose the separate value differences. Preserve authored functions, their actual query results and installation provenance; no expected event seeding, query overrides, comparison changes or mismatch filtering.",
+  "scope": "This is an actual retained failure. It does not authorize reopening passing fixtures. Both repairs remain available; source diagnosis and meaningful controls for both event groups must precede the first full retained-capture attempt.",
+  "acceptance": "Existing complete uncompressed comparisons unchanged; coverage separate."
+}
