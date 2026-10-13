@@ -1,0 +1,260 @@
+{
+  "source_simfile": "Lonely/Lonely.sm",
+  "diagnostic_only": true,
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "retained_uncompressed_report_bytes_verified": true,
+  "candidate_sha256": "9e8d473175281b2fc8028dea5c02deceed55cf3af101dc1d0e347f2ed8dcd431",
+  "native_trace_sha256": "75dfcff68a91d32ad4ec911fb53afc9d819cd09fbaa4ffa34de7092a591af20b",
+  "repair_report_sha256": "402362731d9d7cc294f970c3ea12e51132911a5f673d61d3e59acc39e995c186",
+  "repair_attempts_spent": 1,
+  "repair_attempts_remaining": 1,
+  "second_repair_not_started": true,
+  "full_repair_result": {
+    "native_frames": 90583,
+    "replayed_frames": 90583,
+    "compared_stage_fields": 2706,
+    "mismatch_count": 196,
+    "errors": []
+  },
+  "residual_groups": [
+    {
+      "field": "command_query_event",
+      "operation": "Actor.visible",
+      "line": 557,
+      "count": 17
+    },
+    {
+      "field": "command_query_event",
+      "operation": "Actor.diffusealpha",
+      "line": 557,
+      "count": 17
+    },
+    {
+      "field": "command_query_event",
+      "operation": "Actor.diffusealpha",
+      "line": 583,
+      "count": 15
+    },
+    {
+      "field": "command_query_event",
+      "operation": "Actor.x",
+      "line": 611,
+      "count": 15
+    },
+    {
+      "field": "command_query_event",
+      "operation": "Actor.y",
+      "line": 611,
+      "count": 15
+    },
+    {
+      "field": "command_query_event",
+      "operation": "Actor.diffusealpha",
+      "line": 611,
+      "count": 60
+    },
+    {
+      "field": "command_query_event",
+      "operation": "Actor.linear",
+      "line": 611,
+      "count": 45
+    },
+    {
+      "field": "command_query_event",
+      "operation": "Actor.diffusealpha",
+      "line": 643,
+      "count": 4
+    },
+    {
+      "field": "command_query_event",
+      "operation": "Actor.x",
+      "line": 643,
+      "count": 4
+    },
+    {
+      "field": "command_query_event",
+      "operation": "Actor.y",
+      "line": 643,
+      "count": 4
+    }
+  ],
+  "different_compared_fields": {
+    "tween_time_left": 196
+  },
+  "first_examples": [
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "external-0021",
+        "args": [
+          true
+        ],
+        "beat": 50.00551223754883,
+        "caller": {
+          "line": 557,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "ShowArrowMessageCommand",
+        "definition_id": "def-0005",
+        "detail": {
+          "native_tween_time_left": 3.3520548343658447
+        },
+        "kind": "call",
+        "line": 557,
+        "operation": "Actor.visible",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 16.767709732055664,
+        "seq": 91877,
+        "source": "song:/lua/default.lua",
+        "tween_time_left": 3.3520548343658447
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.visible",
+        "source": "song:/lua/default.lua",
+        "line": 557,
+        "phase": "callback",
+        "beat": 50.00551223754883,
+        "seconds": 16.767709732055664,
+        "args": [
+          true
+        ],
+        "results": [
+          {
+            "actor": "0x61d696a7f0d0",
+            "name": "",
+            "path": "ScreenGameplay/PlayerP1/NoteField"
+          }
+        ],
+        "tween_time_left": 20.0
+      },
+      "different_compared_fields": [
+        "tween_time_left"
+      ]
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "external-0021",
+        "args": [
+          1
+        ],
+        "beat": 50.00551223754883,
+        "caller": {
+          "line": 557,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "ShowArrowMessageCommand",
+        "definition_id": "def-0005",
+        "detail": {
+          "native_tween_time_left": 5.352054595947266
+        },
+        "kind": "call",
+        "line": 557,
+        "operation": "Actor.diffusealpha",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 16.767709732055664,
+        "seq": 91880,
+        "source": "song:/lua/default.lua",
+        "tween_time_left": 5.352054595947266
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.diffusealpha",
+        "source": "song:/lua/default.lua",
+        "line": 557,
+        "phase": "callback",
+        "beat": 50.00551223754883,
+        "seconds": 16.767709732055664,
+        "args": [
+          1
+        ],
+        "results": [
+          {
+            "actor": "0x61d696a7f0d0",
+            "name": "",
+            "path": "ScreenGameplay/PlayerP1/NoteField"
+          }
+        ],
+        "tween_time_left": 22.0
+      },
+      "different_compared_fields": [
+        "tween_time_left"
+      ]
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "external-0022",
+        "args": [
+          true
+        ],
+        "beat": 96.00149536132812,
+        "caller": {
+          "line": 557,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "ShowArrowMessageCommand",
+        "definition_id": "def-0005",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 557,
+        "operation": "Actor.visible",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 32.08149719238281,
+        "seq": 170512,
+        "source": "song:/lua/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.visible",
+        "source": "song:/lua/default.lua",
+        "line": 557,
+        "phase": "callback",
+        "beat": 96.00149536132812,
+        "seconds": 32.08149719238281,
+        "args": [
+          true
+        ],
+        "results": [
+          {
+            "actor": "0x61d696cf9fe0",
+            "name": "",
+            "path": "ScreenGameplay/PlayerP1/NoteField"
+          }
+        ],
+        "tween_time_left": 20.0
+      },
+      "different_compared_fields": [
+        "tween_time_left"
+      ]
+    }
+  ],
+  "source_cause": "The production column actors are cached in NoteField.__songlua_note_columns, outside its sequence children. The compiled screen update plan traverses wrappers, sequence children and the special song-meter stream but never traverses the owned column renderer cache. Thus column tweens are appended by ShowArrow/HideArrow/RandomLocation/ReturnLocation and never receive elapsed time. Native NoteField.Update first runs ActorFrame.Update then explicitly updates every m_ColumnRenderers[c] with the NoteField delta.",
+  "actual_first_difference": "At beat50.00551223754883 the original column hide tween has native3.3520548343658447 seconds left, independent20. The real ShowArrow callback succeeds after table.find, then adds smooth(2) giving native5.352054595947266 versus independent22. Later completed native columns report0 before new tweens, while independent queues retain and accumulate old durations.",
+  "native_source_sha256": {
+    "src/NoteField.cpp": "a08c46e722bfc727158caab50ad0c753ac93e9a2521c73e46182e9693ad02c74"
+  },
+  "authored_source_sha256": {
+    "lua/default.lua": "35dd12d2b6e08529ba478276cf1494e03f72b10d1c36bbd9616bf22c99a73093"
+  },
+  "selected_first_repair_source_sha256": {
+    "crates/deadsync-song-lua/src/lua_util.rs": "b40e1cc30c5a228a3e01060164a056b5565a4e2cf03068d2e0975a1388aad12b"
+  },
+  "required_fix": "Schedule each real cached NoteColumnRenderer in the production live update plan after its NoteField ActorFrame update, using the native NoteField delta. Retain named/sequence child semantics; native column renderers are a special owned vector. Handle lazy column creation and plan invalidation, paused/hibernated ownership, update rates and repeated field lookups without double advancement. Add production-path controls before the last allowed full repair, which must reuse the retained capture.",
+  "implementation_not_yet_changed": true,
+  "acceptance_comparisons_changed": false,
+  "passing_charts_reopened": false
+}
