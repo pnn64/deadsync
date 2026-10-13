@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Limitless/Limitless.sm",
+      "acceptance_commit": "080bd3bb2083992ead463d2132b3fbb79a7b270a",
+      "native_frames": 37926,
+      "replayed_frames": 37926,
+      "compared_stage_fields": 1243,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "4d4850eb485f771cca3a20527099e55c1bfc3a50687e01c66032b866f72e5dd1.tar.zst",
+      "compressed_sha256": "4d4850eb485f771cca3a20527099e55c1bfc3a50687e01c66032b866f72e5dd1",
+      "uncompressed_sha256": "491c4b6793e33f73a0ca0148e949fce3b47dc6f0c37cb4002b643c847bc32950",
+      "compressed_bytes": 12325099,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
