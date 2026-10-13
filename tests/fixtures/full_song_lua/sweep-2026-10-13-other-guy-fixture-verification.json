@@ -1,0 +1,26 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Other Guy/Other Guy.ssc",
+      "acceptance_commit": "b2663ff1ec6203087367ef8df36adaaf8808938a",
+      "native_frames": 75298,
+      "replayed_frames": 75298,
+      "compared_stage_fields": 1727,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "fb3cfc0ed2f8361c7c1e1612664bdfa586c0989b8afccdbe8bff1f2b4e4d7535.tar.zst",
+      "compressed_sha256": "fb3cfc0ed2f8361c7c1e1612664bdfa586c0989b8afccdbe8bff1f2b4e4d7535",
+      "uncompressed_sha256": "875446d3f7437b96877f9d5e83db0cddfd589cac6815d3121f06868db8772223",
+      "compressed_bytes": 10101804,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.bounce",
+        "native drawable state/resources: Quad"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
