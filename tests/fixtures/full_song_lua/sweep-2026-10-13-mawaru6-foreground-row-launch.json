@@ -1,0 +1,324 @@
+{
+  "selected_build": {
+    "build_proof": "/home/parity/jobs/foreground-row-green-v1/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "binary_sha256": "b0f2c78467821c35b24856d3169c79e65f53a8a595784b61389ae14c323fa731",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "actual_source_pins": 26,
+  "harness_source_pins": 3,
+  "repairs": [
+    {
+      "position": 305,
+      "source_simfile": "mawaru6/mawaru6.sm",
+      "attempt_started": 1,
+      "per_chart_limit": 2,
+      "launch_receipt": {
+        "supervisor_pid": 2097074,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_mawaru6_foreground_row_repair_v1.py",
+          "305"
+        ]
+      },
+      "live_observation": {
+        "pid": 2098528,
+        "command": [
+          "/home/parity/jobs/foreground-row-green-v1/full-song-lua-stage-modifier-v1",
+          "--archive",
+          "/home/parity/jobs/mawaru6-foreground-row-repair-v1/chart-305/2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb.tar",
+          "--report",
+          "/home/parity/jobs/mawaru6-foreground-row-repair-v1/chart-305/report.json"
+        ],
+        "label": "replay",
+        "source_simfile": "mawaru6/mawaru6.sm"
+      },
+      "exact_process_matches": [
+        true,
+        true
+      ],
+      "attempt_start": {
+        "position": 305,
+        "source_simfile": "mawaru6/mawaru6.sm",
+        "status": "pending",
+        "repair_attempts": 1,
+        "previous_concrete_failures": [
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 15.584239959716797,
+              "beat": 31.003353118896484,
+              "name": "Close",
+              "args": [
+                "Close"
+              ]
+            },
+            "deadsync": {
+              "seconds": 15.592312812805176,
+              "beat": 31.020843505859375,
+              "name": "Close",
+              "args": [
+                "Close"
+              ],
+              "params_error": null
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 16.518434524536133,
+              "beat": 33.027442932128906,
+              "name": "Game1",
+              "args": [
+                "Game1"
+              ]
+            },
+            "deadsync": {
+              "seconds": 16.525056838989258,
+              "beat": 33.04179000854492,
+              "name": "Game1",
+              "args": [
+                "Game1"
+              ],
+              "params_error": null
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 18.585147857666016,
+              "beat": 37.50532150268555,
+              "name": "Open",
+              "args": [
+                "Open"
+              ]
+            },
+            "deadsync": {
+              "seconds": 18.589523315429688,
+              "beat": 37.514801025390625,
+              "name": "Open",
+              "args": [
+                "Open"
+              ],
+              "params_error": null
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 26.675668716430664,
+              "beat": 55.034786224365234,
+              "name": "Close",
+              "args": [
+                "Close"
+              ]
+            },
+            "deadsync": {
+              "seconds": 26.662857055664062,
+              "beat": 55.00702667236328,
+              "name": "Close",
+              "args": [
+                "Close"
+              ],
+              "params_error": null
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 27.59151840209961,
+              "beat": 57.019126892089844,
+              "name": "Game2",
+              "args": [
+                "Game2"
+              ]
+            },
+            "deadsync": {
+              "seconds": 27.59678077697754,
+              "beat": 57.0305290222168,
+              "name": "Game2",
+              "args": [
+                "Game2"
+              ],
+              "params_error": null
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 29.89151954650879,
+              "beat": 62.00246047973633,
+              "name": "Open",
+              "args": [
+                "Open"
+              ]
+            },
+            "deadsync": {
+              "seconds": 29.89891242980957,
+              "beat": 62.01847839355469,
+              "name": "Open",
+              "args": [
+                "Open"
+              ],
+              "params_error": null
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 38.20990753173828,
+              "beat": 80.02564239501953,
+              "name": "Close",
+              "args": [
+                "Close"
+              ]
+            },
+            "deadsync": {
+              "seconds": 38.19809341430664,
+              "beat": 80.00004577636719,
+              "name": "Close",
+              "args": [
+                "Close"
+              ],
+              "params_error": null
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 40.059478759765625,
+              "beat": 84.03304290771484,
+              "name": "ShowScore",
+              "args": [
+                "ShowScore"
+              ]
+            },
+            "deadsync": {
+              "seconds": 40.04843521118164,
+              "beat": 84.00911712646484,
+              "name": "ShowScore",
+              "args": [
+                "ShowScore"
+              ],
+              "params_error": null
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 40.059478759765625,
+              "beat": 84.03304290771484,
+              "name": "CheckGame1",
+              "args": [
+                "CheckGame1"
+              ]
+            },
+            "deadsync": {
+              "seconds": 40.04843521118164,
+              "beat": 84.00911712646484,
+              "name": "CheckGame1",
+              "args": [
+                "CheckGame1"
+              ],
+              "params_error": null
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 41.906917572021484,
+              "beat": 88.03858947753906,
+              "name": "SpeedUp",
+              "args": [
+                "SpeedUp"
+              ]
+            },
+            "deadsync": {
+              "seconds": 41.894535064697266,
+              "beat": 88.00968933105469,
+              "name": "SpeedUp",
+              "args": [
+                "SpeedUp"
+              ],
+              "params_error": null
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 41.906917572021484,
+              "beat": 88.03858947753906,
+              "name": "Game3",
+              "args": [
+                "Game3"
+              ]
+            },
+            "deadsync": {
+              "seconds": 41.894535064697266,
+              "beat": 88.00968933105469,
+              "name": "Game3",
+              "args": [
+                "Game3"
+              ],
+              "params_error": null
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 43.83195114135742,
+              "beat": 92.53033447265625,
+              "name": "Open",
+              "args": [
+                "Open"
+              ]
+            },
+            "deadsync": {
+              "seconds": 43.82285690307617,
+              "beat": 92.50910949707031,
+              "name": "Open",
+              "args": [
+                "Open"
+              ],
+              "params_error": null
+            }
+          }
+        ],
+        "previous_errors": [],
+        "previous_failure": null,
+        "binary_sha256": "b0f2c78467821c35b24856d3169c79e65f53a8a595784b61389ae14c323fa731",
+        "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+        "candidate_sha256": "2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb",
+        "trace_sha256": "4d205ed710879e4011d75fc735b3ae9fa7e9e9b6c53eb81873b64fff35771b7f",
+        "simfile_sha256": "394d4b03ce745a22d46dfef9bf581301840ee654ebd382d2c76412260694c37c",
+        "build_proof": "/home/parity/jobs/foreground-row-green-v1/proof.json",
+        "fix_commit": "2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+        "native_capture_reused": true,
+        "all_candidate_manifest_members_byte_verified": true
+      },
+      "replay_log_tail": [
+        "[20.0s] replaying every native gameplay frame: frame 15/121856 (0.0%)",
+        "[22.0s] replaying every native gameplay frame: frame 28/121856 (0.0%)",
+        "[24.0s] replaying every native gameplay frame: frame 40/121856 (0.0%)"
+      ],
+      "completed_result": null
+    }
+  ],
+  "status": "first bounded Mawaru6 repair launched; results must satisfy the existing complete replay comparisons",
+  "validated_build": "sweep-2026-10-13-foreground-row-build.json",
+  "native_capture_reused": true,
+  "all_uncompressed_candidate_members_verified": true,
+  "publisher_streams": 53,
+  "publisher_count": 1,
+  "actual_publisher": {
+    "ProcessId": 60312,
+    "CommandLine": "\"C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe\" -B -X utf8 C:/GitHub/itgmania-harness/target/server-parity/publish_chart_sweep_v1.py"
+  },
+  "comparisons_modified": false,
+  "passing_charts_reopened": false,
+  "mawaru6_attempt1": true,
+  "remaining_repairs_after_this_attempt": 1,
+  "source_diagnosis": "sweep-2026-10-13-mawaru6-foreground-row-diagnosis.json",
+  "all4680_bounded_queue_callback_clocks_match": true
+}
