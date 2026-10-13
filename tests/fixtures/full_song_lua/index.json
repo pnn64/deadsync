@@ -3476,15 +3476,12 @@
     {
       "title": "Limitless",
       "source_simfile": "Limitless/Limitless.sm",
-      "harness_version": "0.1.0",
-      "archive": "f74464df085496fce867837826f3af0c9181ea9d449575d48e38a44cbbc26933.tar.zst",
-      "sha256": "f74464df085496fce867837826f3af0c9181ea9d449575d48e38a44cbbc26933",
-      "compressed_bytes": 65097,
-      "uncompressed_sha256": "8abd266936f4af5108b5e5e348b3610540653f85a1820a175c0a3fc036ffc4ab",
-      "compression_level": 22,
-      "aliases": [
-        "0bf29c6536fed29a58d9246232bb18abbfed7151805fda0f3934c33e8ad5a345.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "4d4850eb485f771cca3a20527099e55c1bfc3a50687e01c66032b866f72e5dd1.tar.zst",
+      "sha256": "4d4850eb485f771cca3a20527099e55c1bfc3a50687e01c66032b866f72e5dd1",
+      "compressed_bytes": 12325099,
+      "uncompressed_sha256": "491c4b6793e33f73a0ca0148e949fce3b47dc6f0c37cb4002b643c847bc32950",
+      "aliases": []
     },
     {
       "title": "Limitless",

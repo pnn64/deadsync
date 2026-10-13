@@ -7582,6 +7582,56 @@
       "capture_exit": 1,
       "capture_seconds": 5.355594338994706,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-3720042-1791891709207637875-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-3720042-1791891709207637875-0\n"
+    },
+    {
+      "position": 281,
+      "source_simfile": "Limitless/Limitless.sm",
+      "simfile_sha256": "d52fbd7eab49de498fd5ac70ec220f34d7fb2dcc786a6cb3aa6583959bf842da",
+      "retained_original_archive": "f74464df085496fce867837826f3af0c9181ea9d449575d48e38a44cbbc26933.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "4713556073fc219eef2dd0db6fbb496506cdfa4f49c27f62d6427ec63f95ab84",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/fg-filename-build-v1/proof.json",
+      "capture_seconds": 152.56621490701218,
+      "trace_sha256": "7531901d8614aa752eb1255a41240a039bdd94a52d2068092784058fcb53fb8d",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-281/candidates/491c4b6793e33f73a0ca0148e949fce3b47dc6f0c37cb4002b643c847bc32950.tar",
+      "replay_exit": 0,
+      "replay_seconds": 470.51186714200594,
+      "candidate_sha256": "491c4b6793e33f73a0ca0148e949fce3b47dc6f0c37cb4002b643c847bc32950",
+      "native_frames": 37926,
+      "replayed_frames": 37926,
+      "compared_stage_fields": 1243,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "78b760c431122698a494ec8266d7a41e603917e4f825d4fe5caee4d011702ab8",
+      "archive": "4d4850eb485f771cca3a20527099e55c1bfc3a50687e01c66032b866f72e5dd1.tar.zst",
+      "archive_sha256": "4d4850eb485f771cca3a20527099e55c1bfc3a50687e01c66032b866f72e5dd1",
+      "compressed_bytes": 12325099,
+      "pack_seconds": 13.930214131993125,
+      "harness_version": "0.1.80",
+      "title": "Limitless",
+      "retained_original_entry": {
+        "title": "Limitless",
+        "source_simfile": "Limitless/Limitless.sm",
+        "harness_version": "0.1.0",
+        "archive": "f74464df085496fce867837826f3af0c9181ea9d449575d48e38a44cbbc26933.tar.zst",
+        "sha256": "f74464df085496fce867837826f3af0c9181ea9d449575d48e38a44cbbc26933",
+        "compressed_bytes": 65097,
+        "uncompressed_sha256": "8abd266936f4af5108b5e5e348b3610540653f85a1820a175c0a3fc036ffc4ab",
+        "compression_level": 22,
+        "aliases": [
+          "0bf29c6536fed29a58d9246232bb18abbfed7151805fda0f3934c33e8ad5a345.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -7607,7 +7657,7 @@
   },
   "binary_sha256": "4713556073fc219eef2dd0db6fbb496506cdfa4f49c27f62d6427ec63f95ab84",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 15,
+  "passed_fixtures": 16,
   "pending_charts": 41,
-  "processed_charts": 56
+  "processed_charts": 57
 }
