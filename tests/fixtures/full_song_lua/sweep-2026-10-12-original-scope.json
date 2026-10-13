@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T22:27:01Z",
+  "updated_utc": "2026-10-13T22:55:55Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 229,
-    "pending": 85,
-    "unprocessed": 187
+    "passed": 231,
+    "pending": 84,
+    "unprocessed": 186
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1846,8 +1846,8 @@
       "source_simfile": "Get Into It/GetIntoIt.sm",
       "simfile_sha256": "5577279c57ba4255fcec3f2f7e105c0e2627731193ee239d4ecc2486806027af",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-get-into-it-sm-frames-repair.json"
     },
     {
       "position": 211,
@@ -2725,9 +2725,9 @@
       "position": 323,
       "source_simfile": "Myths You Forgot/Myths You Forgot.ssc",
       "simfile_sha256": "ffc2b7b1ca7a865af390a5b9bba87322e84ba056a3c999cbd26e50fe28c0b25e",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-myths-single-subscriber-repair.json"
     },
     {
       "position": 324,
@@ -2805,7 +2805,9 @@
       "position": 335,
       "source_simfile": "Oil Ocean Act 2/steps.sm",
       "simfile_sha256": "73a35a516658cc511871ea4b2997fef3234eca60eb3e63a5c92a37bf8f5447b4",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 336,
