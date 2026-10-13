@@ -477,6 +477,70 @@ impl SongLuaLiveFrame {
     }
 }
 
+fn feed_live_stats(stage: &Table, players: &[Table; LUA_PLAYERS], frame: &SongLuaLiveFrame) -> mlua::Result<()> {
+    stage.raw_set("__songlua_gameplay_seconds", frame.screen_seconds)?;
+    for (stats, value) in players.iter().zip(frame.players) {
+        stats.raw_set("__songlua_possible_dance_points", value.possible_points)?;
+        stats.raw_set("__songlua_actual_dance_points", value.actual_points)?;
+        stats.raw_set("__songlua_current_possible_dance_points", value.current_possible_points)?;
+        stats.raw_set("__songlua_failed", value.failed)?;
+        stats.raw_set("__songlua_life", value.life)?;
+        stats.raw_set("__songlua_combo", value.combo)?;
+        stats.raw_set("__songlua_miss_combo", value.miss_combo)?;
+        let counts = stats.raw_get::<Table>("__songlua_tap_scores")?;
+        for (name, count) in TAP_SCORES.into_iter().zip(value.tap_scores) {
+            counts.raw_set(name, count)?;
+        }
+    }
+    Ok(())
+}
+
+fn invoke_note_field_tap_callback(
+    lua: &Lua, field: &Table, callback: &Function,
+    mut tap: deadsync_gameplay::GameplayNoteFieldTap, columns: usize,
+) -> mlua::Result<deadsync_gameplay::GameplayNoteFieldTap> {
+    // NoteField.cpp passes three arguments without self and reads three optional
+    // returns. Each valid return replaces its argument independently.
+    callback_phase(lua, true);
+    let result = callback.call::<MultiValue>((tap.column + 1, format!("TapNoteScore_{}", tap.score), tap.bright));
+    callback_phase(lua, false);
+    let values = result?;
+    if let Some(value) = values.front() {
+        if let Some(column) = lua.coerce_number(value.clone())? {
+            // Native subtracts one before truncating the floating Lua number.
+            let column = (column - 1.0).trunc();
+            if column.is_finite() && column >= 0.0 && column < columns as f64 {
+                tap.column = column as usize;
+            } else {
+                crate::lua_util::report_update_error(lua, field,
+                    "__songlua_did_tap_note_column_error_reported", "DidTapNote callback return",
+                    &mlua::Error::runtime(format!("Column returned by callback must be between 1 and {columns}")))?;
+            }
+        }
+    }
+    if let Some(value) = values.get(1).filter(|value| !matches!(value, Value::Nil)) {
+        let score = match value {
+            Value::Integer(index) => usize::try_from(*index).ok().and_then(|index| TAP_SCORES.get(index).copied()),
+            Value::Number(index) if index.is_finite() && *index >= 0.0 && index.fract() == 0.0 =>
+                TAP_SCORES.get(*index as usize).copied(),
+            Value::String(score) => {
+                let score = score.to_str()?;
+                TAP_SCORES.iter().copied().find(|name|
+                    score.as_ref() == format!("TapNoteScore_{name}") || score.eq_ignore_ascii_case(name))
+            }
+            _ => None,
+        };
+        if let Some(score) = score { tap.score = score; }
+        else {
+            crate::lua_util::report_update_error(lua, field,
+                "__songlua_did_tap_note_score_error_reported", "DidTapNote callback return",
+                &mlua::Error::runtime("Expected TapNoteScore"))?;
+        }
+    }
+    if let Some(Value::Boolean(bright)) = values.get(2) { tap.bright = *bright; }
+    Ok(tap)
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum SongLuaLiveRequest {
     NewScreen(String),
@@ -745,20 +809,57 @@ impl SongLuaLiveScene {
     }
 
     fn feed_stats(&self, frame: &SongLuaLiveFrame) -> mlua::Result<()> {
-        self.stage.raw_set("__songlua_gameplay_seconds", frame.screen_seconds)?;
-        for (stats, value) in self.players.iter().zip(frame.players) {
-            stats.raw_set("__songlua_possible_dance_points", value.possible_points)?;
-            stats.raw_set("__songlua_actual_dance_points", value.actual_points)?;
-            stats.raw_set("__songlua_current_possible_dance_points", value.current_possible_points)?;
-            stats.raw_set("__songlua_failed", value.failed)?;
-            stats.raw_set("__songlua_life", value.life)?;
-            stats.raw_set("__songlua_combo", value.combo)?;
-            stats.raw_set("__songlua_miss_combo", value.miss_combo)?;
-            let counts = stats.raw_get::<Table>("__songlua_tap_scores")?;
-            for (name, count) in TAP_SCORES.into_iter().zip(value.tap_scores) {
-                counts.raw_set(name, count)?;
+        feed_live_stats(&self.stage, &self.players, frame)
+    }
+
+    /// Share the retained VM with the gameplay thread's synchronous NoteField
+    /// hook. No VM or actor tree is copied and each screen replaces its hook.
+    pub fn install_note_field_tap_callback<P, O, C, D>(
+        &self,
+        game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
+        bright_combo_threshold: u32,
+    ) -> mlua::Result<()>
+    where P: deadsync_gameplay::GameplayProfileData {
+        let lua = self.lua.clone();
+        let screen = lua.globals().get::<Table>("__songlua_top_screen")?;
+        let children = crate::actor_children(&lua, &screen)?;
+        let mut note_fields = [None, None];
+        for (player, field) in note_fields.iter_mut().enumerate() {
+            if let Some(actor) = children.get::<Option<Table>>(format!("PlayerP{}", player + 1))? {
+                *field = crate::actor_children(&lua, &actor)?.get::<Option<Table>>("NoteField")?;
             }
         }
+        let stage = self.stage.clone();
+        let players = self.players.clone();
+        let song_timing = self.context.song_timing.clone();
+        game.note_field_tap_callback = Some(Box::new(move |game, tap| {
+            let Some(field) = note_fields.get(tap.player).and_then(Option::as_ref) else { return tap; };
+            let result = (|| -> mlua::Result<deadsync_gameplay::GameplayNoteFieldTap> {
+                let Some(callback) = field.raw_get::<Option<Function>>("__songlua_did_tap_note_callback")?
+                    else { return Ok(tap); };
+                let frame = SongLuaLiveFrame::from_gameplay(game, 0.0);
+                feed_live_stats(&stage, &players, &frame)?;
+                let beat = song_timing.as_ref().map_or(frame.beat as f32,
+                    |timing| timing.get_song_position(frame.music_seconds as f32).beat);
+                crate::set_compile_song_runtime_values(&lua, beat, frame.music_seconds as f32)?;
+                crate::lua_util::set_live_frame(&lua, frame.screen_seconds, f64::from(beat), 0.0);
+                lua.set_app_data(LivePlayers(frame.players));
+                let mut native_tap = tap;
+                // Player.cpp sends mine hits dim even when Blind is active.
+                native_tap.bright = tap.score != "HitMine" &&
+                    (frame.players[tap.player].combo as u32 > bright_combo_threshold
+                    || game.effective_visibility_effects_for_player(tap.player).blind != 0.0);
+                invoke_note_field_tap_callback(&lua, field, &callback, native_tap, game.cols_per_player())
+            })();
+            match result {
+                Ok(tap) => tap,
+                Err(error) => {
+                    let _ = crate::lua_util::report_update_error(&lua, field,
+                        "__songlua_did_tap_note_error_reported", "DidTapNote callback", &error);
+                    tap
+                }
+            }
+        }));
         Ok(())
     }
 
@@ -1342,6 +1443,35 @@ return Def.ActorFrame {
         input.delta_seconds = 1.0;
         scene.advance(input).expect("feedback expires independently of the snapshot");
         assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &player).expect("finished player"), 0.0);
+    }
+
+    #[test]
+    fn live_note_field_tap_returns_follow_native_optional_conversions() {
+        let lua = Lua::new();
+        let field = lua.create_table().unwrap();
+        let original = deadsync_gameplay::GameplayNoteFieldTap {
+            player: 1, column: 3, score: "W3", bright: false,
+        };
+        for (body, column, score, bright) in [
+            ("return nil, nil, nil", 3, "W3", false),
+            ("return '2.8', 'TapNoteScore_W1', true", 1, "W1", true),
+            ("return 0.5, 'w2', 1", 0, "W2", false),
+            ("return false, 9, true", 3, "W1", true),
+        ] {
+            let callback: Function = lua.load(format!(r#"
+return function(column, score, bright)
+    assert(column == 4 and score == 'TapNoteScore_W3' and bright == false)
+    {body}
+end
+"#)).eval().unwrap();
+            let actual = invoke_note_field_tap_callback(&lua, &field, &callback, original, 4).unwrap();
+            assert_eq!(actual, deadsync_gameplay::GameplayNoteFieldTap { column, score, bright, ..original });
+        }
+        let invalid: Function = lua.load("return function() return 9, 'typo', true end").eval().unwrap();
+        let actual = invoke_note_field_tap_callback(&lua, &field, &invalid, original, 4).unwrap();
+        assert_eq!(actual, deadsync_gameplay::GameplayNoteFieldTap { bright: true, ..original });
+        assert!(field.raw_get::<bool>("__songlua_did_tap_note_column_error_reported").unwrap());
+        assert!(field.raw_get::<bool>("__songlua_did_tap_note_score_error_reported").unwrap());
     }
 
     #[test]

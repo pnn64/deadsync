@@ -505,7 +505,7 @@ where
         let Some(window_key) = grade_to_window(grade) else {
             return;
         };
-        self.spawn_tap_explosion(column, window_key, bright);
+        self.note_field_did_tap_note(column, window_key, bright);
     }
 
     #[inline(always)]
@@ -1246,7 +1246,7 @@ where
     }
 
     #[inline(always)]
-    pub fn trigger_mine_explosion(&mut self, column: usize) {
+    fn spawn_mine_explosion(&mut self, column: usize) {
         let player = self.player_for_col(column);
         let duration = self
             .display
@@ -1260,10 +1260,37 @@ where
                 started_at_screen_s: self.boundary.total_elapsed_in_screen,
             }),
         );
+    }
+
+    #[inline(always)]
+    pub fn trigger_mine_explosion(&mut self, column: usize) {
+        self.note_field_did_tap_note(column, "HitMine", false);
         if self.setup.config.mine_hit_sound {
             self.push_audio_command(GameplayAudioCommand::PlayPreloadedSfx(
                 "assets/sounds/boom.ogg",
             ));
+        }
+    }
+
+    /// Invoke the screen's engine callback before rendering. Its return values
+    /// change only the ghost column, score and brightness, as in NoteField.cpp.
+    fn note_field_did_tap_note(&mut self, column: usize, score: &'static str, bright: bool) {
+        let player = self.player_for_col(column);
+        let mut tap = GameplayNoteFieldTap {
+            player, column: local_column_for_field(self.setup.cols_per_player, column),
+            score, bright,
+        };
+        if let Some(mut callback) = self.note_field_tap_callback.take() {
+            tap = callback(self, tap);
+            self.note_field_tap_callback = Some(callback);
+        }
+        let column = player * self.setup.cols_per_player + tap.column;
+        if tap.column >= self.setup.cols_per_player { return; }
+        match tap.score {
+            "HitMine" => self.spawn_mine_explosion(column),
+            "W1" | "W2" | "W3" | "W4" | "W5" | "Miss" =>
+                self.spawn_tap_explosion(column, tap.score, tap.bright),
+            _ => {},
         }
     }
 
@@ -1279,7 +1306,7 @@ where
             return;
         };
         let bright = self.tap_judgment_uses_bright_explosion(player_idx, judgment);
-        self.spawn_tap_explosion(column, window_key, bright);
+        self.note_field_did_tap_note(column, window_key, bright);
     }
 
     #[inline(always)]

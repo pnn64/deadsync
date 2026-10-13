@@ -12688,7 +12688,7 @@ fn advance_hibernation(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Re
     Ok((left <= 0.0).then(|| f64::from(-left)))
 }
 
-fn report_update_error(
+pub(crate) fn report_update_error(
     lua: &Lua,
     actor: &Table,
     reported_key: &'static str,

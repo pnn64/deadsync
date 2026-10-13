@@ -949,6 +949,9 @@ impl GameplayPresentationSkeleton {
 impl State {
     pub fn attach_song_lua(&mut self, mut scene: deadsync_song_lua::SongLuaLiveScene) -> Result<(), String> {
         scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)?;
+        // Simply Love's Player metric is -1; Player.cpp compares it unsigned.
+        scene.install_note_field_tap_callback(&mut self.gameplay, u32::MAX)
+            .map_err(|error| error.to_string())?;
         if let Some(scratch) = &mut self.song_scratch { scratch.enable_live_scene(); }
         self.song_lua_output = scene.take_startup_output();
         self.song_lua = Some(scene);
@@ -984,6 +987,7 @@ impl State {
         if self.song_lua_out.as_mut().is_some_and(|out| out.advance(delta)) {
             self.song_lua_output.append(scene.end().map_err(|error| error.to_string())?);
             self.song_lua_ended = true;
+            self.gameplay.note_field_tap_callback = None;
             effects.push(ThemeEffect::NavigateNoFade(crate::screens::SimplyLoveScreen::Evaluation));
         }
         scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)

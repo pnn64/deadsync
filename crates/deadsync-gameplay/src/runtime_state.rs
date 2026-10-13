@@ -1039,6 +1039,22 @@ pub struct GameplayControlRuntimeState {
     pub update_trace: GameplayUpdateTraceState,
 }
 
+/// NoteField::DidTapNote arguments. Columns are local to the player's field;
+/// the Lua adapter converts them to native one-based callback columns.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GameplayNoteFieldTap {
+    pub player: usize,
+    pub column: usize,
+    pub score: &'static str,
+    pub bright: bool,
+}
+
+pub type GameplayNoteFieldTapCallback<Profile, OverlayActor, CapturedActor, StateDelta> =
+    Box<dyn FnMut(
+        &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
+        GameplayNoteFieldTap,
+    ) -> GameplayNoteFieldTap + Send>;
+
 pub struct GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta> {
     pub source: GameplaySourceRuntimeState,
     pub setup: GameplaySetupRuntimeState,
@@ -1054,6 +1070,10 @@ pub struct GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta
     pub mods: GameplayModRuntimeState<OverlayActor, CapturedActor, StateDelta>,
     pub control: GameplayControlRuntimeState,
     pub pending_input: GameplayPendingInputState<GameplayInputEdge>,
+    /// Screen-owned hook, called synchronously before starting the ghost.
+    /// No event history is accumulated when a screen has no Lua scene.
+    pub note_field_tap_callback:
+        Option<GameplayNoteFieldTapCallback<Profile, OverlayActor, CapturedActor, StateDelta>>,
 }
 
 pub fn gameplay_runtime_profiles<Profile: GameplayProfileData>(

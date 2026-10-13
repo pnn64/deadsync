@@ -709,6 +709,93 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn gameplay_note_field_tap_runs_owned_lua_before_actor_update() {
+        use super::{gameplay, paths, GameplayAudioSnapshot, GameplayConfig,
+            GameplaySession, GameplayStreamClockSnapshot, GameplayViewport};
+        use deadsync_song_lua::SongLuaCompileContext;
+        use std::{fs, sync::Arc};
+        super::start_call_log(10_000).expect("observational logger");
+        paths::init();
+        let dir = std::env::temp_dir().join(format!("deadsync-engine-tap-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("script directory");
+        let simfile = dir.join("tap.sm");
+        fs::write(&simfile, "#TITLE:Engine tap;#BPMS:0=120;#FGCHANGES:0=default.lua=1=0=0=1;#NOTES:dance-single:Control:Hard:1:0,0,0,0,0:\n0000\n1000\n0000\n0000\n;").unwrap();
+        let entry = dir.join("default.lua");
+        fs::write(&entry, r#"
+local field = SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField')
+local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
+local taps = 0
+return Def.ActorFrame {
+    OnCommand = function(self)
+        field:SetDidTapNoteCallback(function(column, score, bright)
+            assert(column == 1 and score == 'TapNoteScore_W1' and bright == false)
+            taps = taps + 1
+            field:stoptweening():sleep(0.25)
+            MESSAGEMAN:Broadcast('EngineTap', {beat=GAMESTATE:GetSongBeat(),
+                combo=stats:GetCurrentCombo(), possible=stats:GetCurrentPossibleDancePoints()})
+            return 2, 'TapNoteScore_W2', true
+        end)
+        self:SetUpdateFunction(function(self)
+            self:aux(field:GetTweenTimeLeft()):x(taps)
+        end)
+    end,
+}
+"#).unwrap();
+        let config = GameplayConfig::default();
+        let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap());
+        let chart = Arc::new(song.charts[0].clone());
+        let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
+        let mut context = SongLuaCompileContext::new(&dir, "engine tap");
+        context.live = true;
+        context.song_timing = song.song_timing.clone();
+        // Use production preparation and screen attachment, including their
+        // concrete sprite and profile types; expectations never enter gameplay.
+        let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+        let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
+        let prepared = deadsync_song_lua::playback::prepare_song_lua(
+            &song, &context, deadsync_assets::song_lua::compile_song_lua,
+            deadsync_assets::song_lua::compile_song_lua_layers);
+        let mut state = gameplay::init(song, [chart.clone(), chart], [payload.clone(), payload],
+            GameplayViewport::default(), GameplaySession::default(), config, 5, 1.0, scroll, profiles,
+            None, None, None, Arc::from("EVENT"), None, None, None, None, None,
+            [deadsync_gameplay::CourseLifeConfig::Bar; 2], false, None, None, [0; 2], prepared, Default::default());
+        state.set_live_autoplay_enabled(true);
+        state.set_current_music_time_ns(0);
+        let mut effects = Vec::new();
+        gameplay::update(&mut state, 0.1, GameplayAudioSnapshot {
+            stream_clock: GameplayStreamClockSnapshot { music_nanos: 0,
+                has_music_mapping: true, valid_at_host_nanos: 900_000_000, ..Default::default() },
+            ..Default::default()
+        }, || 900_000_000, &mut effects);
+        let startup = state.take_song_lua_output();
+        assert!(startup.errors.is_empty(), "{:?}", startup.errors);
+        let tap_time = state.gameplay.chart_runtime.note_time_cache_ns[0];
+        let expected_beat = context.song_timing.as_ref().unwrap()
+            .get_song_position(tap_time as f32 / 1_000_000_000.0).beat;
+        gameplay::update(&mut state, 0.1, GameplayAudioSnapshot {
+            stream_clock: GameplayStreamClockSnapshot { music_nanos: tap_time,
+                has_music_mapping: true, valid_at_host_nanos: 1_000_000_000, ..Default::default() },
+            ..Default::default()
+        }, || 1_000_000_000, &mut effects);
+        let output = state.take_song_lua_output();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(output.source_broadcasts.iter().filter(|event| event.name == "EngineTap").count(), 1,
+            "clock={} notes={:?} scores={:?} scene={} hook={}",
+            state.gameplay.clock.song_position.current_music_time_ns,
+            state.gameplay.chart_runtime.note_time_cache_ns,
+            state.gameplay.chart_runtime.notes.iter().map(|note| note.result).collect::<Vec<_>>(),
+            state.song_lua.is_some(), state.gameplay.note_field_tap_callback.is_some());
+        let scene = state.song_lua.as_ref().expect("owned scene");
+        assert_eq!(scene.states()[0].x, 1.0, "callback precedes the authored update");
+        assert!((scene.states()[0].aux - 0.15).abs() < 1e-6, "new tween consumes this frame's delta");
+        let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
+        let queries: Vec<_> = events.iter().filter(|event| event["operation"] == "GameState.GetSongBeat").collect();
+        assert_eq!(queries.len(), 1);
+        assert_eq!(queries[0]["phase"], "callback");
+        assert_eq!(queries[0]["results"][0], serde_json::json!(expected_beat));
+    }
+
+    #[test]
     fn arrow_effects_reads_owned_style_without_extra_lua_queries() {
         use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver,
             compile_song_lua_with_default_host};

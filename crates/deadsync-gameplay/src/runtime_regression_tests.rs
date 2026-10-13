@@ -4421,6 +4421,53 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn note_field_tap_callback_runs_before_mask_and_each_ghost() {
+        let profile = TestProfile {
+            tap_explosion_options: TapExplosionOptions {
+                great: false,
+                ..all_tap_explosion_options()
+            },
+            ..TestProfile::default()
+        };
+        let mut state = regression_state_with_profiles(std::array::from_fn(|_| profile.clone()));
+        enable_tap_explosion_durations(&mut state);
+        let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let observed = Arc::clone(&calls);
+        state.note_field_tap_callback = Some(Box::new(move |game, tap| {
+            assert!(game.display.visual_feedback.tap_explosions[1].is_none());
+            observed.lock().unwrap().push((tap, game.boundary.total_elapsed_in_screen));
+            GameplayNoteFieldTap { column: 3, score: "W1", bright: true, ..tap }
+        }));
+        for seconds in [1.0, 1.01] {
+            state.boundary.total_elapsed_in_screen = seconds;
+            state.spawn_tap_explosion_for_grade(1, JudgeGrade::Great, false);
+            assert_eq!(calls.lock().unwrap().len(), if seconds == 1.0 { 1 } else { 2 });
+            let ghost = state.display.visual_feedback.tap_explosions[3].as_ref().unwrap();
+            assert_eq!(ghost.window, "W1");
+            assert!(ghost.bright);
+        }
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls[0], (GameplayNoteFieldTap { player: 0, column: 1, score: "W3", bright: false }, 1.0));
+        assert_eq!(calls[1].1, 1.01);
+    }
+
+    #[test]
+    fn note_field_mine_callback_changes_ghost_without_suppressing_hit_sound() {
+        let mut state = regression_state();
+        state.setup.config.mine_hit_sound = true;
+        state.drain_audio_commands().for_each(drop);
+        state.note_field_tap_callback = Some(Box::new(|_, tap| {
+            assert_eq!(tap.score, "HitMine");
+            assert_eq!(tap.column, 1);
+            GameplayNoteFieldTap { score: "None", ..tap }
+        }));
+        state.trigger_mine_explosion(1);
+        assert!(state.display.visual_feedback.mine_explosions[1].is_none());
+        assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(),
+            vec![GameplayAudioCommand::PlayPreloadedSfx("assets/sounds/boom.ogg")]);
+    }
+
+    #[test]
     fn tap_explosion_mask_disables_selected_tap_window() {
         let column = 1usize;
         let enabled_profile = TestProfile {

@@ -1043,6 +1043,7 @@ where
     let tick_mode = session.tick_mode;
 
     let mut state = GameplayRuntimeState {
+        note_field_tap_callback: None,
         source: GameplaySourceRuntimeState {
             song,
             charts,
