@@ -1,0 +1,193 @@
+{
+  "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
+  "position": 178,
+  "repair_attempts": 0,
+  "candidate": "/home/parity/jobs/dreaming-condition-evidence-v1/28f0309e49d011a4f3649df3836c2d8466a463d2a7d71f6883e5cec2a358b05d.tar",
+  "candidate_sha256": "28f0309e49d011a4f3649df3836c2d8466a463d2a7d71f6883e5cec2a358b05d",
+  "native_frames": 32257,
+  "replayed_frames": 32257,
+  "errors": [
+    "UpdateCommand failed for Quad: missing captured subscriber identity for 1/17/1/5\nstack traceback:\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"/tmp/.tmpjCIS3e/song/lua/default.lua\"]:565: in function <[string \"/tmp/.tmpjCIS3e/song/lua/default.lua\"]:454>\n"
+  ],
+  "mismatch_count": 10357,
+  "concrete_failures": [
+    {
+      "phase": "screen-end",
+      "seconds": 48.47612380981445,
+      "field": "failed",
+      "native": true,
+      "deadsync": false
+    },
+    {
+      "phase": "gameplay-exit",
+      "seconds": 48.47612380981445,
+      "field": "failed",
+      "native": true,
+      "deadsync": false
+    },
+    {
+      "field": "source_request_count",
+      "native": 1,
+      "deadsync": 0
+    },
+    {
+      "field": "screen_end_navigation_clock",
+      "native": 48.47612380981445,
+      "deadsync": null
+    },
+    {
+      "field": "source_broadcast_count",
+      "native": 7,
+      "deadsync": 1
+    },
+    {
+      "field": "command_query_count",
+      "native": 336361,
+      "deadsync": 10720
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0036",
+        "args": [],
+        "beat": 0,
+        "command": "InitCommand",
+        "definition_id": "def-0036",
+        "detail": {
+          "name": "InitCommand"
+        },
+        "kind": "command",
+        "line": 741,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 49,
+        "source": "song:/lua/default.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "InitCommand",
+        "source": "song:/lua/default.lua",
+        "line": 669,
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0036",
+        "args": [],
+        "beat": 0,
+        "command": "InitCommand",
+        "definition_id": "def-0036",
+        "detail": {
+          "name": "InitCommand"
+        },
+        "kind": "command",
+        "line": 741,
+        "operation": "command.end",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 56,
+        "source": "song:/lua/default.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.end",
+        "command": "InitCommand",
+        "source": "song:/lua/default.lua",
+        "line": 669,
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": null
+      }
+    }
+  ],
+  "native_false_definitions": [
+    {
+      "id": "def-0010",
+      "class": "Sound",
+      "source": "song:/lua/default.lua",
+      "line": 665,
+      "properties": {
+        "Condition": false,
+        "File": "sounds/bgm",
+        "SupportPan": true
+      },
+      "runtime_actors": [],
+      "commands": [
+        {
+          "last_line": 672,
+          "line": 672,
+          "name": "GameStopP2MessageCommand",
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "last_line": 669,
+          "line": 669,
+          "name": "InitCommand",
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "last_line": 38,
+          "line": 35,
+          "name": "OnCommand",
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "last_line": 671,
+          "line": 671,
+          "name": "StartMessageCommand",
+          "source": "song:/lua/default.lua"
+        }
+      ]
+    },
+    {
+      "id": "def-0306",
+      "class": "Sprite",
+      "source": "song:/lua/default.lua",
+      "line": 1014,
+      "properties": {
+        "Condition": false,
+        "Texture": "player"
+      },
+      "runtime_actors": [],
+      "commands": [
+        {
+          "last_line": 1017,
+          "line": 1017,
+          "name": "OnCommand",
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "last_line": 1018,
+          "line": 1018,
+          "name": "StartMessageCommand",
+          "source": "song:/lua/default.lua"
+        }
+      ]
+    }
+  ],
+  "native_created_false_definitions": [],
+  "source_confirmed_cause": "ActorUtil::LoadFromNode rejects Condition=false before native construction or initialization. DeadSync compacted all selected actor definitions into the runtime tree, including disabled P2 actors. Its first differing Init runs at line 669 on native def-0010, a Sound with Condition=false and no native runtime instances. Extra instantiated children also shifted subscriber paths.",
+  "local_references": [
+    "../itgmania-harness/vendor/itgmania/src/ActorUtil.cpp:180",
+    "../itgmania-harness/vendor/itgmania/src/ActorFrame.cpp:114",
+    "../itgmania-harness/vendor/itgmania/src/LuaManager.cpp:125",
+    "crates/deadsync-song-lua/src/lua_util.rs:10125"
+  ],
+  "fix_commit": "1d6c6e802",
+  "bounded_repair": {
+    "attempt": 1,
+    "job": "/home/parity/jobs/dreaming-condition-repair-v1",
+    "reuses_original_capture": true,
+    "compares_uncompressed_data": true,
+    "awaits_validated_helper": true
+  },
+  "acceptance": "Existing full_song_lua full comparisons; coverage remains separate"
+}
