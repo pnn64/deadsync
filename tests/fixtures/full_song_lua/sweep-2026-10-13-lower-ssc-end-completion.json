@@ -1,0 +1,242 @@
+{
+  "source_simfile": "Lower Times/Lower Times.ssc",
+  "repair_attempts_spent": 1,
+  "repair_attempts_remaining": 1,
+  "per_chart_limit": 2,
+  "status": "pending",
+  "native_frames": 114997,
+  "replayed_frames": 114997,
+  "compared_stage_fields": 2420,
+  "mismatch_count": 1,
+  "errors": [],
+  "native_capture_reused": true,
+  "candidate_sha256": "f2f5ef47ffbd972a1a82faed813e31cff6b36e3177114c0a8b579b815115cb8b",
+  "native_trace_sha256": "60becf74ac483841cd11aade35a2a7a1a838e486b72b39294d1c7e4e032a78de",
+  "report_sha256": "5e00ae370c167d64b57824ce2d80708df930254e232582030290d7ed307dd930",
+  "full_uncompressed_report_sha256_verified": true,
+  "immutable_helper_sha256": "47f6ef41978d4b2f60a074e3dbf91ed8bedf705a65f7852e0a7e66f301f4d017",
+  "source_fix_commit": "7c8b4c460131bb1c1674813ca53a210e20ff895d",
+  "validated_build": "sweep-2026-10-13-natural-end-build.json",
+  "command_queries": {
+    "native_count": 93,
+    "actual_count": 88
+  },
+  "native_final_events": [
+    {
+      "actor": "def-0002",
+      "args": [],
+      "beat": 465.1004943847656,
+      "command": "EndCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "name": "EndCommand"
+      },
+      "kind": "command",
+      "line": 41,
+      "operation": "command.begin",
+      "scene": 1,
+      "seconds": 210.0229034423828,
+      "seq": 92,
+      "source": "song:/endroll/default.lua"
+    },
+    {
+      "actor": "def-0002",
+      "args": [
+        false
+      ],
+      "beat": 465.1004943847656,
+      "caller": {
+        "line": 41,
+        "source": "song:/endroll/default.lua",
+        "tail_call": false
+      },
+      "command": "EndCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0
+      },
+      "kind": "call",
+      "line": 41,
+      "operation": "Actor.animate",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 210.0229034423828,
+      "seq": 93,
+      "source": "song:/endroll/default.lua",
+      "tween_time_left": 0
+    },
+    {
+      "actor": "def-0002",
+      "args": [
+        2.3587223587223587
+      ],
+      "beat": 465.1004943847656,
+      "caller": {
+        "line": 41,
+        "source": "song:/endroll/default.lua",
+        "tail_call": false
+      },
+      "command": "EndCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 2.358722448348999
+      },
+      "kind": "call",
+      "line": 41,
+      "operation": "Actor.linear",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 210.0229034423828,
+      "seq": 94,
+      "source": "song:/endroll/default.lua",
+      "tween_time_left": 2.358722448348999
+    },
+    {
+      "actor": "def-0002",
+      "args": [
+        730
+      ],
+      "beat": 465.1004943847656,
+      "caller": {
+        "line": 41,
+        "source": "song:/endroll/default.lua",
+        "tail_call": false
+      },
+      "command": "EndCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 2.358722448348999
+      },
+      "kind": "call",
+      "line": 41,
+      "operation": "Actor.y",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 210.0229034423828,
+      "seq": 95,
+      "source": "song:/endroll/default.lua",
+      "tween_time_left": 2.358722448348999
+    },
+    {
+      "actor": "def-0002",
+      "args": [],
+      "beat": 465.1004943847656,
+      "command": "EndCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "name": "EndCommand"
+      },
+      "kind": "command",
+      "line": 41,
+      "operation": "command.end",
+      "scene": 1,
+      "seconds": 210.0229034423828,
+      "seq": 96,
+      "source": "song:/endroll/default.lua"
+    }
+  ],
+  "independent_final_events": [
+    {
+      "scene": 1,
+      "kind": "call",
+      "operation": "Actor.animate",
+      "source": "song:/endroll/default.lua",
+      "line": 73,
+      "phase": "callback",
+      "beat": 453.842529296875,
+      "seconds": 205.92909240722656,
+      "args": [
+        true
+      ],
+      "results": [
+        {
+          "actor": "0x5fa296403030",
+          "name": "2hugeddanl",
+          "path": "ScreenGameplay/SongForeground/endroll/2hugeddanl"
+        }
+      ],
+      "tween_time_left": 0.0
+    },
+    {
+      "scene": 1,
+      "kind": "call",
+      "operation": "Actor.y",
+      "source": "song:/endroll/default.lua",
+      "line": 73,
+      "phase": "callback",
+      "beat": 453.842529296875,
+      "seconds": 205.92909240722656,
+      "args": [
+        283
+      ],
+      "results": [
+        {
+          "actor": "0x5fa296403030",
+          "name": "2hugeddanl",
+          "path": "ScreenGameplay/SongForeground/endroll/2hugeddanl"
+        }
+      ],
+      "tween_time_left": 0.0
+    },
+    {
+      "scene": 1,
+      "kind": "call",
+      "operation": "Actor.sleep",
+      "source": "song:/endroll/default.lua",
+      "line": 73,
+      "phase": "callback",
+      "beat": 453.842529296875,
+      "seconds": 205.92909240722656,
+      "args": [
+        0.364
+      ],
+      "tween_time_left": 0.36399999260902405
+    },
+    {
+      "scene": 1,
+      "kind": "call",
+      "operation": "Actor.y",
+      "source": "song:/endroll/default.lua",
+      "line": 73,
+      "phase": "callback",
+      "beat": 453.842529296875,
+      "seconds": 205.92909240722656,
+      "args": [
+        1479
+      ],
+      "results": [
+        {
+          "actor": "0x5fa296403030",
+          "name": "2hugeddanl",
+          "path": "ScreenGameplay/SongForeground/endroll/2hugeddanl"
+        }
+      ],
+      "tween_time_left": 0.36399999260902405
+    },
+    {
+      "scene": 1,
+      "kind": "command",
+      "operation": "command.end",
+      "command": "AppearCommand",
+      "source": "song:/endroll/default.lua",
+      "line": 73,
+      "beat": 453.842529296875,
+      "seconds": 205.92909240722656,
+      "args": null
+    }
+  ],
+  "concrete_failures": [
+    {
+      "field": "command_query_count",
+      "native": 93,
+      "deadsync": 88
+    }
+  ],
+  "coverage_kept_separate": [
+    "uncompared song operations: Actor.accelerate, Sprite.SetAllStateDelays",
+    "native drawable state/resources: Sprite"
+  ],
+  "acceptance_gate_added": false,
+  "passing_chart_reopened": false,
+  "additional_repair_launched": false
+}
