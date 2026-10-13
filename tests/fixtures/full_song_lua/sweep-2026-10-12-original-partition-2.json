@@ -5544,6 +5544,770 @@
         }
       ],
       "report_sha256": "180cc3fd82f6b392c35472b7184fd83a19cb3595309e3c370e8b458c226258fe"
+    },
+    {
+      "position": 280,
+      "source_simfile": "Life Cheating Game/lifecheatinggame.ssc",
+      "simfile_sha256": "12d76e3e3171fab6fe19a2d94d5462f45d079ec365a6c12d153bd49f22347e7a",
+      "retained_original_archive": "bcf3e7f0e00b0eac4974127394505aac8facfd8402cd6b3f4b917d738de458ea.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "fc7e246c948eb5b0ecb64a09b3777c480ac81eb26d2cf232c4ed3d2f8112cdd1",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/table-find-build-v4/proof.json",
+      "capture_seconds": 164.79482412399375,
+      "trace_sha256": "4fe7554a2aa752ff017c718e7fe3c4a440613ee55ad78e54db0e67581b153b88",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-280/candidates/d6c3def5524b1ff5b8d0e8dfea1b11916b7656f8d08ef366370b9c2300a63e6c.tar",
+      "replay_exit": 2,
+      "replay_seconds": 1309.7135485440085,
+      "candidate_sha256": "d6c3def5524b1ff5b8d0e8dfea1b11916b7656f8d08ef366370b9c2300a63e6c",
+      "native_frames": 81304,
+      "replayed_frames": 81304,
+      "compared_stage_fields": 1650,
+      "pending_coverage": [
+        "uncompared song operations: Screen.AddInputCallback",
+        "native drawable state/resources: Quad, Sound"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 79171,
+      "concrete_failures": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0011",
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "beat": 0.002668180037289858,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 10,
+              "source": "song:/boys/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              }
+            },
+            "kind": "call",
+            "line": 10,
+            "operation": "Actor.effectmagnitude",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.017800454050302505,
+            "seq": 11,
+            "source": "song:/boys/default.lua",
+            "tween_time_left": {
+              "type": "number",
+              "value": "infinity"
+            }
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.effectmagnitude",
+            "source": "song:/boys/default.lua",
+            "line": 10,
+            "phase": "callback",
+            "beat": 0.002668183296918869,
+            "seconds": 0.017800454050302505,
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "results": [
+              {
+                "actor": "0x5eda9359ec40",
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0011",
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "beat": 0.007808012887835503,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 10,
+              "source": "song:/boys/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              }
+            },
+            "kind": "call",
+            "line": 10,
+            "operation": "Actor.effectmagnitude",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.01934240385890007,
+            "seq": 13,
+            "source": "song:/boys/default.lua",
+            "tween_time_left": {
+              "type": "number",
+              "value": "infinity"
+            }
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.effectmagnitude",
+            "source": "song:/boys/default.lua",
+            "line": 10,
+            "phase": "callback",
+            "beat": 0.0078080156818032265,
+            "seconds": 0.01934240385890007,
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "results": [
+              {
+                "actor": "0x5eda9359ec40",
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0011",
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "beat": 0.011360542848706245,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 10,
+              "source": "song:/boys/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              }
+            },
+            "kind": "call",
+            "line": 10,
+            "operation": "Actor.effectmagnitude",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.020408162847161293,
+            "seq": 15,
+            "source": "song:/boys/default.lua",
+            "tween_time_left": {
+              "type": "number",
+              "value": "infinity"
+            }
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.effectmagnitude",
+            "source": "song:/boys/default.lua",
+            "line": 10,
+            "phase": "callback",
+            "beat": 0.01136054564267397,
+            "seconds": 0.020408162847161293,
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "results": [
+              {
+                "actor": "0x5eda9359ec40",
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0011",
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "beat": 0.014988664537668228,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 10,
+              "source": "song:/boys/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              }
+            },
+            "kind": "call",
+            "line": 10,
+            "operation": "Actor.effectmagnitude",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.021496599540114403,
+            "seq": 17,
+            "source": "song:/boys/default.lua",
+            "tween_time_left": {
+              "type": "number",
+              "value": "infinity"
+            }
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.effectmagnitude",
+            "source": "song:/boys/default.lua",
+            "line": 10,
+            "phase": "callback",
+            "beat": 0.014988668262958527,
+            "seconds": 0.021496599540114403,
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "results": [
+              {
+                "actor": "0x5eda9359ec40",
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0011",
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "beat": 0.01884353905916214,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 10,
+              "source": "song:/boys/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              }
+            },
+            "kind": "call",
+            "line": 10,
+            "operation": "Actor.effectmagnitude",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.022653061896562576,
+            "seq": 19,
+            "source": "song:/boys/default.lua",
+            "tween_time_left": {
+              "type": "number",
+              "value": "infinity"
+            }
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.effectmagnitude",
+            "source": "song:/boys/default.lua",
+            "line": 10,
+            "phase": "callback",
+            "beat": 0.01884354278445244,
+            "seconds": 0.022653061896562576,
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "results": [
+              {
+                "actor": "0x5eda9359ec40",
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0011",
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "beat": 0.02232048660516739,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 10,
+              "source": "song:/boys/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              }
+            },
+            "kind": "call",
+            "line": 10,
+            "operation": "Actor.effectmagnitude",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.02369614504277706,
+            "seq": 21,
+            "source": "song:/boys/default.lua",
+            "tween_time_left": {
+              "type": "number",
+              "value": "infinity"
+            }
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.effectmagnitude",
+            "source": "song:/boys/default.lua",
+            "line": 10,
+            "phase": "callback",
+            "beat": 0.022320488467812538,
+            "seconds": 0.02369614504277706,
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "results": [
+              {
+                "actor": "0x5eda9359ec40",
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0011",
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "beat": 0.025797422975301743,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 10,
+              "source": "song:/boys/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              }
+            },
+            "kind": "call",
+            "line": 10,
+            "operation": "Actor.effectmagnitude",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.024739228188991547,
+            "seq": 23,
+            "source": "song:/boys/default.lua",
+            "tween_time_left": {
+              "type": "number",
+              "value": "infinity"
+            }
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.effectmagnitude",
+            "source": "song:/boys/default.lua",
+            "line": 10,
+            "phase": "callback",
+            "beat": 0.02579742670059204,
+            "seconds": 0.024739228188991547,
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "results": [
+              {
+                "actor": "0x5eda9359ec40",
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0011",
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "beat": 0.029349960386753082,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 10,
+              "source": "song:/boys/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              }
+            },
+            "kind": "call",
+            "line": 10,
+            "operation": "Actor.effectmagnitude",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.02580498903989792,
+            "seq": 25,
+            "source": "song:/boys/default.lua",
+            "tween_time_left": {
+              "type": "number",
+              "value": "infinity"
+            }
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.effectmagnitude",
+            "source": "song:/boys/default.lua",
+            "line": 10,
+            "phase": "callback",
+            "beat": 0.02934996224939823,
+            "seconds": 0.02580498903989792,
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "results": [
+              {
+                "actor": "0x5eda9359ec40",
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0011",
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "beat": 0.032902494072914124,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 10,
+              "source": "song:/boys/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              }
+            },
+            "kind": "call",
+            "line": 10,
+            "operation": "Actor.effectmagnitude",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.02687074802815914,
+            "seq": 27,
+            "source": "song:/boys/default.lua",
+            "tween_time_left": {
+              "type": "number",
+              "value": "infinity"
+            }
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.effectmagnitude",
+            "source": "song:/boys/default.lua",
+            "line": 10,
+            "phase": "callback",
+            "beat": 0.03290249779820442,
+            "seconds": 0.02687074802815914,
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "results": [
+              {
+                "actor": "0x5eda9359ec40",
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0011",
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "beat": 0.03645502030849457,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 10,
+              "source": "song:/boys/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              }
+            },
+            "kind": "call",
+            "line": 10,
+            "operation": "Actor.effectmagnitude",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.027936507016420364,
+            "seq": 29,
+            "source": "song:/boys/default.lua",
+            "tween_time_left": {
+              "type": "number",
+              "value": "infinity"
+            }
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.effectmagnitude",
+            "source": "song:/boys/default.lua",
+            "line": 10,
+            "phase": "callback",
+            "beat": 0.036455024033784866,
+            "seconds": 0.027936507016420364,
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "results": [
+              {
+                "actor": "0x5eda9359ec40",
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0011",
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "beat": 0.04000755399465561,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 10,
+              "source": "song:/boys/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              }
+            },
+            "kind": "call",
+            "line": 10,
+            "operation": "Actor.effectmagnitude",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.029002267867326736,
+            "seq": 31,
+            "source": "song:/boys/default.lua",
+            "tween_time_left": {
+              "type": "number",
+              "value": "infinity"
+            }
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.effectmagnitude",
+            "source": "song:/boys/default.lua",
+            "line": 10,
+            "phase": "callback",
+            "beat": 0.04000755771994591,
+            "seconds": 0.029002267867326736,
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "results": [
+              {
+                "actor": "0x5eda9359ec40",
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0011",
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "beat": 0.04363567754626274,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 10,
+              "source": "song:/boys/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              }
+            },
+            "kind": "call",
+            "line": 10,
+            "operation": "Actor.effectmagnitude",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.030090702697634697,
+            "seq": 33,
+            "source": "song:/boys/default.lua",
+            "tween_time_left": {
+              "type": "number",
+              "value": "infinity"
+            }
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.effectmagnitude",
+            "source": "song:/boys/default.lua",
+            "line": 10,
+            "phase": "callback",
+            "beat": 0.04363568127155304,
+            "seconds": 0.030090702697634697,
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "results": [
+              {
+                "actor": "0x5eda9359ec40",
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        }
+      ],
+      "report_sha256": "0e000aba1fd156cb50d03b5e09ebe3b4de23fe193668c3120767261d2ee48e1b"
     }
   ],
   "scope": {
@@ -5553,9 +6317,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
+  "binary_sha256": "fc7e246c948eb5b0ecb64a09b3777c480ac81eb26d2cf232c4ed3d2f8112cdd1",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 15,
-  "pending_charts": 22,
-  "processed_charts": 37
+  "pending_charts": 23,
+  "processed_charts": 38
 }
