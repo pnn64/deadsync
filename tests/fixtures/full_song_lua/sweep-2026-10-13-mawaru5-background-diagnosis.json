@@ -1,0 +1,323 @@
+{
+  "source_simfile": "mawaru5/mawaru5.sm",
+  "original_repair_attempts": 0,
+  "repair_attempts_remaining": 2,
+  "native_frames_in_verified_retained_capture": 162894,
+  "original_replay_failed_before_frames": true,
+  "original_failure": "[0.6s] replaying every native gameplay frame\n\nthread 'main' (2389615) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+  "original_binary_sha256": "49482e042c5a60991fd859ab5d1ee6b5eeb64b6511ea2320dcb850abc06f1f78",
+  "candidate_sha256": "7b9ab3bde10c5a0295fe1047d5a3a00fb02a14d44c1497980d49e73dde41b910",
+  "native_trace_sha256": "a23decee8de832a1fb24a93bc54f6bde4ace2175676dcbe542b3ff1475dc1bd4",
+  "simfile_sha256": "6feab5a3a888443ae3e50802a230a7ddf6de95ba1e14b8805880795ef14e56b2",
+  "native_capture_uncompressed_bytes_verified": true,
+  "authored_lua_background_changes": [
+    {
+      "start_beat": 0.0,
+      "name": "Backgrounds/Intro",
+      "fields": [
+        "0.000000",
+        "Backgrounds/Intro",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 108.0,
+      "name": "people/PicTaron",
+      "fields": [
+        "108.000000",
+        "people/PicTaron",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 132.0,
+      "name": "people/PicAyaze",
+      "fields": [
+        "132.000000",
+        "people/PicAyaze",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 156.0,
+      "name": "people/PicSplitKoizuAyaze",
+      "fields": [
+        "156.000000",
+        "people/PicSplitKoizuAyaze",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 180.0,
+      "name": "speedups/140to155",
+      "fields": [
+        "180.000000",
+        "speedups/140to155",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 194.0,
+      "name": "people/PicAma",
+      "fields": [
+        "194.000000",
+        "people/PicAma",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 212.0,
+      "name": "people/PicTaka",
+      "fields": [
+        "212.000000",
+        "people/PicTaka",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 232.0,
+      "name": "people/PicAma",
+      "fields": [
+        "232.000000",
+        "people/PicAma",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 252.0,
+      "name": "speedups/155to170",
+      "fields": [
+        "252.000000",
+        "speedups/155to170",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 268.0,
+      "name": "people/PicTaronInterrupted",
+      "fields": [
+        "268.000000",
+        "people/PicTaronInterrupted",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 308.0,
+      "name": "people/PicSplitAyazeTaron",
+      "fields": [
+        "308.000000",
+        "people/PicSplitAyazeTaron",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 341.0,
+      "name": "speedups/170to185",
+      "fields": [
+        "341.000000",
+        "speedups/170to185",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 357.0,
+      "name": "people/PicTaron",
+      "fields": [
+        "357.000000",
+        "people/PicTaron",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 377.0,
+      "name": "people/PicSplitAmaAyaze",
+      "fields": [
+        "377.000000",
+        "people/PicSplitAmaAyaze",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 397.0,
+      "name": "people/PicAyaze",
+      "fields": [
+        "397.000000",
+        "people/PicAyaze",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 417.0,
+      "name": "speedups/185to200",
+      "fields": [
+        "417.000000",
+        "speedups/185to200",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 501.0,
+      "name": "speedups/200to215",
+      "fields": [
+        "501.000000",
+        "speedups/200to215",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 517.0,
+      "name": "people/PicAma",
+      "fields": [
+        "517.000000",
+        "people/PicAma",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 565.0,
+      "name": "Backgrounds/warning",
+      "fields": [
+        "565.000000",
+        "Backgrounds/warning",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 597.0,
+      "name": "people/PicUFO",
+      "fields": [
+        "597.000000",
+        "people/PicUFO",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 613.0,
+      "name": "Backgrounds/Boss",
+      "fields": [
+        "613.000000",
+        "Backgrounds/Boss",
+        "1.000000",
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "start_beat": 641.0,
+      "name": "Backgrounds/Boss2",
+      "fields": [
+        "641.000000",
+        "Backgrounds/Boss2",
+        "1.000000",
+        "1",
+        "0",
+        "1",
+        "",
+        "",
+        "CrossFade",
+        "",
+        ""
+      ]
+    }
+  ],
+  "occurrences_by_filename": {
+    "Backgrounds/Intro": 1,
+    "people/PicTaron": 2,
+    "people/PicAyaze": 2,
+    "people/PicSplitKoizuAyaze": 1,
+    "speedups/140to155": 1,
+    "people/PicAma": 3,
+    "people/PicTaka": 1,
+    "speedups/155to170": 1,
+    "people/PicTaronInterrupted": 1,
+    "people/PicSplitAyazeTaron": 1,
+    "speedups/170to185": 1,
+    "people/PicSplitAmaAyaze": 1,
+    "speedups/185to200": 1,
+    "speedups/200to215": 1,
+    "Backgrounds/warning": 1,
+    "people/PicUFO": 1,
+    "Backgrounds/Boss": 1,
+    "Backgrounds/Boss2": 1
+  },
+  "native_observed_background_instances": 18,
+  "independent_background_entry_count_from_authored_plan": 22,
+  "cause": "The independent metadata keeps each distinct start beat, and compile_song_lua_session compiles each background_lua_changes entry as an independent owner. The native BackgroundImpl layer caches actors by BackgroundDef, whose key is effect, File1, File2, Color1 and Color2; start beat, rate and transition are outside that key. This chart has 22 Lua background changes but 18 distinct definitions and 18 retained native UpperLeft wrappers. The creation-order check fails on that ownership mismatch before any frame. Repeated PicTaron, PicAyaze and PicAma entries must retain one actor and replay the actual focus/change schedule; dropping later timeline changes or relaxing the owner check would not repair the production behavior.",
+  "native_source_sha256": {
+    "src/Background.cpp": "8ac3e579ba9b3adf41acd425c4ad921d0ed17f511761dd9e80301119d76eba2c",
+    "src/BackgroundUtil.cpp": "72839c7ee3a7b95fc26251843fbf9846407cee15b2a4f10895390a105758d447"
+  },
+  "independent_source_sha256": {
+    "crates/deadsync-simfile/src/changes.rs": "9b606abda7d0c797148c21420d661c4d1e089f42d3672ed84381bb3cb3984632",
+    "crates/deadsync-song-lua/src/playback/prepare.rs": "67eb64b772ede170e6dfe28158a70d66d7c9cd0246e61479494b4569b5c7ae2d",
+    "crates/deadsync-song-lua/src/live.rs": "8fb87dd7bd1152827274d34efaf3f0fe42cef858c0e5b0abe517d8fc48011950",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "bf3df6999f8dcc945b876715ad197574c9aa513ee121125591f2fd66d2ece41f"
+  },
+  "shared_native_ownership_diagnosis": "sweep-2026-10-13-mawaru4-background-diagnosis.json",
+  "diagnostic_only": true,
+  "production_changed": false,
+  "new_repair_launched": false,
+  "acceptance_comparisons_changed": false,
+  "passing_charts_reopened": false
+}
