@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T21:18:04Z",
-  "previous_goal_turn": "Wargame and Media Offline first repairs 1 are running with immutable subscriber-single-green-v1 helper 49482e042c5a60991fd859ab5d1ee6b5eeb64b6511ea2320dcb850abc06f1f78, fix 402a3854bf58c4b4dd460c4098fa0baf8a927885. Their originals completed all 46936/1056 and 45745/1562 frames/fields respectively, with two and three missing identity errors and four failed-state differences each. Byte-verified native definitions contain no authored Judgment subscriber in either chart. Pinned native MessageManager stores a set; a single subscriber has one delivery order. The owned FailOnHoldStart Judgment latch was blocked by an irrelevant identity lookup before dispatch. The unchanged real-scene single-subscriber control fails meaningfully before production on both hosts and passes after. Its multiple-subscriber subcase still rejects a missing rank before either callback. The initial compile-only controls omitted test-support and are excluded from behavioral evidence; the body remains unchanged. All five Linux and five Windows checks pass: the focused control, 48 live controls, captured pointer ordering, 25 native replay controls and both executable builds. All 26 physical source pins, three native harness pins, binaries, source bundles and logs are verified. Both full repairs reuse their original byte-identical captures and candidates; each has one repair left after the current attempt. Mawaru6 first repair 1 continues with the prior validated rounded foreground helper and has one repair left. Its authored start beat 0.01 rounds to native row zero; the bounded float model matched all 4680 native early queue callbacks. Koi SM final repair 2 and both Get Into It first repairs 1 continue without restart. Lower Times SSC remains pending after complete final repair 2: two missing subscriber errors and four failed-state differences across 114997 frames and 2420 fields. Its prior terminal command-count difference is absent, and its cap is exhausted; it was not retried for the subscriber change. Midnight Madness's byte-verified capture has zero authored definitions, roots or events, 29 runtime actors and 19414 frames. Empty BG/FG declarations make production preparation return without an owned scene; the existing full replay rejects it. Its unreferenced default.lua is a comment only and must not be executed as an invented native actor. No Midnight repair has launched; both attempts remain. MODULO original failed at frame 11256 when native scene 2 differed from independent scene 1; its source cause is not established and both attempts remain. My Exes Bestfriend original completed all 66182 frames and 1639 fields with three missing subscriber identity errors and 126676 differences; the broader source cause remains undiagnosed and its two repairs remain available. Mawaru4 SSC still needs 11 cached native background owners, all 20 authored changes and native focus behavior; no repair launched. Original main and both partition workers continue. Singleton publisher 60312 watches 55 streams. Capped charts remain pending without another retry. Earlier accepted fixtures remain saved and byte verified. Only existing complete uncompressed comparisons determine acceptance, coverage is separate, no passing chart reopened, all 501 original simfiles remain byte unchanged, RUNWAY stays outside scope, and the goal is active and incomplete.",
+  "updated_utc": "2026-10-13T21:44:46Z",
+  "previous_goal_turn": "Wargame SSC first repair 1 passed all 46936 frames and 1056 fields; Media Offline SSC first repair 1 passed all 45745 frames and 1562 fields. Both have zero errors and differences, are accepted, compressed, locally byte verified and committed. Media Offline coverage remains separate. Neither passing chart was reopened or assigned another repair. Midnight Madness first repair 1 now runs with immutable empty-layers-green-v2 helper 6a912f949896b963329aaa0cde4ea6c5fbc86bf6368091a1a6974d2b22629114, fix d4c07384681a2a717183a702403b52b53357ef37, reusing its original byte-identical capture and candidate; one repair remains after this attempt. Empty BG/FG declarations previously returned without the owned theme scene. The fix retains that scene with zero authored entries and never executes unreferenced default.lua. The unchanged meaningful empty-layer control fails before production and passes after on both hosts, including natural navigation and owned autoplay Off failure. All five checks on each host pass: focused control, 48 live controls, captured subscriber ordering, 26 native gameplay controls, and both executable builds. All 27 physical source pins, three native harness pins, binary and log hashes are verified. Production changes are seven isolated hunks in compile.rs and playback/prepare.rs; gameplay sources are unchanged. Initial controls with a nonexistent failed field were compile-only and excluded. The initial Linux green inventory assertion rejected its stage before Cargo; corrected v2 validates identical 27 source bytes. New Earth original fails during SpaceshipTrailP1 initialization because global HSVA is missing. Its byte-verified native capture contains the authored 48-vertex trail; pinned fallback Colors.lua defines HSVA through HSVToColor without wrapping hue or clamping saturation/value. No New Earth repair has launched; both attempts remain. Myths You Forgot original is pending and needs its concrete report inspected. My Exes Bestfriend original completed all 66182 frames and 1639 fields with three subscriber identity errors and 126676 differences; the broader cause remains undiagnosed and both repairs remain. MODULO original fails at frame 11256 on native scene 2 versus independent scene 1; a bounded float queue model matches all 986 native early command clocks but the actual source cause is not established and both repairs remain. Mawaru6 first repair 1, Koi SM final repair 2, and both Get Into It first repairs 1 continue without restart. Mawaru4 SSC still needs 11 cached native background owners, all 20 authored changes and native focus behavior; no repair launched. Lower Times SSC remains pending at its two-repair cap with two missing subscriber errors and four failed-state differences across 114997 frames and 2420 fields; it was not retried for the later subscriber fix. Original main and both partition workers continue. Singleton publisher 60312 watches 56 streams. Capped charts remain pending without another retry. Earlier accepted fixtures remain saved and byte verified. Only existing complete uncompressed comparisons determine acceptance, coverage is separate, no passing chart reopened, all 501 original simfiles remain byte unchanged, RUNWAY stays outside scope, and the goal is active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,11 +14,12 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "e8ce615f7517752f099c408ffd3645e84b9bc618",
+      "deadsync": "58adcb161cb83052ae15e573eea6b933b207a402",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
   "validation": {
+    "empty_declared_layers": "d4c07384681a2a717183a702403b52b53357ef37: unchanged meaningful empty-layer gameplay control fails before and passes after on both hosts; all five checks each host pass; 27 source and three native harness pins verified; initial compile-only and pre-Cargo bootstrap failures excluded; empty-layers-build.json",
     "single_subscriber_dispatch": "402a3854bf58c4b4dd460c4098fa0baf8a927885: unchanged meaningful sole-subscriber control fails before and passes after on both hosts; multiple ranks still required before callbacks; all five checks each host pass, 26 source and three harness pins verified; subscriber-single-build.json",
     "foreground_start_note_row": "2b28998120d97876715bfe2a81255fb5de156b89: unchanged meaningful owned-scene control fails before and passes after on both hosts; all five checks on each host pass, 26 source and three harness pins verified; foreground-row-build.json",
     "native_autoplay_and_avoided_mine_judgments": "9bd984b71e3dd593c07e302839a75be8c6ec3c10: unchanged meaningful red controls on both hosts; all 12 Linux and 12 Windows checks pass; 26 source and 3 harness pins verified; koi-judgment-build.json",
@@ -70,18 +71,18 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Myths You Forgot/Myths You Forgot.ssc",
-      "position": 323,
+      "current": "No Tears Left To Cry - [JNero]/No-Tears.sm",
+      "position": 329,
       "phase": "replay",
-      "pid": 2243379,
+      "pid": 2329314,
       "process_matches": true,
       "passed": 20,
-      "pending": 50,
-      "processed": 70,
+      "pending": 52,
+      "processed": 72,
       "last_log_lines": [
-        "[180.1s] replaying every native gameplay frame: frame 10557/40940 (25.8%)",
-        "[182.1s] replaying every native gameplay frame: frame 10674/40940 (26.1%)",
-        "[184.1s] replaying every native gameplay frame: frame 10790/40940 (26.4%)"
+        "[720.3s] replaying every native gameplay frame: frame 41000/90167 (45.5%)",
+        "[722.3s] replaying every native gameplay frame: frame 41096/90167 (45.6%)",
+        "[724.3s] replaying every native gameplay frame: frame 41187/90167 (45.7%)"
       ],
       "supervisor_running": true
     },
@@ -90,6 +91,13 @@
     "parallel_queue_receipt": "tests/fixtures/full_song_lua/sweep-2026-10-12-parallel-queues.json",
     "build_transition": "tests/fixtures/full_song_lua/sweep-2026-10-12-build-transition.json",
     "source_scope_audit": "tests/fixtures/full_song_lua/sweep-2026-10-12-original-scope.json",
+    "new_earth_hsva_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-new-earth-hsva-diagnosis.json",
+    "midnight_empty_layers_launch": "tests/fixtures/full_song_lua/sweep-2026-10-13-midnight-empty-layers-launch.json",
+    "empty_layers_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-empty-layers-build.json",
+    "media_offline_single_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-media-offline-single-subscriber-repair.json",
+    "media_offline_ssc_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-media-offline-ssc-fixture-verification.json",
+    "wargame_single_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-wargame-single-subscriber-repair.json",
+    "wargame_ssc_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-wargame-ssc-fixture-verification.json",
     "midnight_empty_declarations_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-midnight-empty-declarations-diagnosis.json",
     "subscriber_single_launch": "tests/fixtures/full_song_lua/sweep-2026-10-13-subscriber-single-launch.json",
     "subscriber_single_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-subscriber-single-build.json",
@@ -204,26 +212,37 @@
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
       {
-        "job": "media-offline-single-subscriber-repair-v1",
+        "job": "midnight-empty-layers-repair-v1",
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
         "pending": 0,
         "processed": 0,
         "last_phase": "replay",
-        "source_simfile": "media offline/media offline.ssc",
+        "source_simfile": "Midnight Madness/midnight.sm",
         "child_running": true
       },
       {
-        "job": "wargame-single-subscriber-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "job": "media-offline-single-subscriber-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
+        "source_simfile": "media offline/media offline.ssc",
+        "child_running": false
+      },
+      {
+        "job": "wargame-single-subscriber-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
+        "pending": 0,
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "mawaru6-foreground-row-repair-v1",
@@ -726,13 +745,13 @@
         "job": "chart-sweep-parallel-v4-2",
         "complete": false,
         "supervisor_running": true,
-        "passed": 19,
+        "passed": 20,
         "pending": 25,
-        "processed": 44,
-        "last_phase": "replay",
-        "source_simfile": "mawaru3/mawaru3.sm",
+        "processed": 45,
+        "last_phase": "capture",
+        "source_simfile": "mawaru5/mawaru5.sm",
         "child_running": true,
-        "position": 301
+        "position": 304
       },
       {
         "job": "definition-concat-repair-v1",
@@ -1187,15 +1206,22 @@
         "record": "sweep-2026-10-13-media-offline-single-subscriber-repair.json",
         "fix_commit": "402a3854bf58c4b4dd460c4098fa0baf8a927885",
         "finish_status": "bounded first single-subscriber repair complete"
+      },
+      {
+        "name": "midnight-empty-layers-repair",
+        "remote": "/home/parity/jobs/midnight-empty-layers-repair-v1",
+        "record": "sweep-2026-10-13-midnight-empty-layers-repair.json",
+        "fix_commit": "d4c07384681a2a717183a702403b52b53357ef37",
+        "finish_status": "bounded first Midnight empty-layer repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 77,
+    "new_passed_fixtures": 80,
     "new_pending_charts": 83,
-    "new_processed_sources": 160,
+    "new_processed_sources": 163,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 193,
+    "unprocessed_sources": 190,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -1795,45 +1821,6 @@
       ]
     },
     {
-      "source_simfile": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [
-        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 16.008: missing captured subscriber identity for ScreenGameplay/6/1",
-        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 80.993: missing captured subscriber identity for ScreenGameplay/6/1"
-      ],
-      "mismatch_count": 4,
-      "first_mismatch": [
-        {
-          "phase": "progress",
-          "seconds": 86.0012435913086,
-          "field": "failed",
-          "native": true,
-          "deadsync": false
-        }
-      ]
-    },
-    {
-      "source_simfile": "media offline/media offline.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [
-        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 33.007: missing captured subscriber identity for ScreenGameplay/6/1",
-        "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 55.793: missing captured subscriber identity for ScreenGameplay/6/1",
-        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 63.013: missing captured subscriber identity for ScreenGameplay/6/1"
-      ],
-      "mismatch_count": 4,
-      "first_mismatch": [
-        {
-          "phase": "progress",
-          "seconds": 135.00112915039062,
-          "field": "failed",
-          "native": true,
-          "deadsync": false
-        }
-      ]
-    },
-    {
       "source_simfile": "Midnight Madness/midnight.sm",
       "repair_attempts": 0,
       "failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (2070555) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
@@ -1868,6 +1855,34 @@
           "deadsync": false
         }
       ]
+    },
+    {
+      "source_simfile": "Myths You Forgot/Myths You Forgot.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 15.006: missing captured subscriber identity for ScreenGameplay/6/1",
+        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 32.744: missing captured subscriber identity for ScreenGameplay/6/1",
+        "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 82.396: missing captured subscriber identity for ScreenGameplay/6/1"
+      ],
+      "mismatch_count": 4,
+      "first_mismatch": [
+        {
+          "phase": "progress",
+          "seconds": 126.00186157226562,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        }
+      ]
+    },
+    {
+      "source_simfile": "new earth/new earth.ssc",
+      "repair_attempts": 0,
+      "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'new earth': failed to run actor init commands for '/tmp/.tmpuDkUwQ/song/lua/default.lua': InitCommand failed for ActorMultiVertex 'SpaceshipTrailP1': runtime error: [string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: attempt to call global 'HSVA' (a nil value)\nstack traceback:\n\t[C]: in global 'HSVA'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: in upvalue 'makeSpaceshipTrail'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:152: in function <[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:151>; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'new earth' from '/tmp/.tmpuDkUwQ/song/lua/default.lua': failed to run actor init commands for '/tmp/.tmpuDkUwQ/song/lua/default.lua': InitCommand failed for ActorMultiVertex 'SpaceshipTrailP1': runtime error: [string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: attempt to call global 'HSVA' (a nil value)\nstack traceback:\n\t[C]: in global 'HSVA'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: in upvalue 'makeSpaceshipTrail'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:152: in function <[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:151>\n\nthread 'main' (2316501) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
     },
     {
       "source_simfile": "Delightful Day/Delightful Day.sm",

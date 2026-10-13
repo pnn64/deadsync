@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T21:18:06Z",
+  "updated_utc": "2026-10-13T21:44:44Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 224,
+    "passed": 227,
     "pending": 84,
-    "unprocessed": 193
+    "unprocessed": 190
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2573,7 +2573,9 @@
       "position": 301,
       "source_simfile": "mawaru3/mawaru3.sm",
       "simfile_sha256": "5a69ffb76ead10df5e436a6f49b6239f657ee820ce626175912e0a1eab834ec8",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 302,
@@ -2621,9 +2623,9 @@
       "position": 308,
       "source_simfile": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc",
       "simfile_sha256": "56c58acf784dc382fa293f1e7b10aaf659d149d51addc349a421779fbcadde0d",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-wargame-single-subscriber-repair.json"
     },
     {
       "position": 309,
@@ -2641,9 +2643,9 @@
       "position": 311,
       "source_simfile": "media offline/media offline.ssc",
       "simfile_sha256": "62fa6179278daeded2cb031ca8532dd5242ce18331b850d8bed44f516b80a535",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-media-offline-single-subscriber-repair.json"
     },
     {
       "position": 312,
@@ -2721,7 +2723,9 @@
       "position": 323,
       "source_simfile": "Myths You Forgot/Myths You Forgot.ssc",
       "simfile_sha256": "ffc2b7b1ca7a865af390a5b9bba87322e84ba056a3c999cbd26e50fe28c0b25e",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 324,
@@ -2739,7 +2743,9 @@
       "position": 326,
       "source_simfile": "new earth/new earth.ssc",
       "simfile_sha256": "614f29f557e0e936a2650122071d9d408eaaa46690031b08dddb471f694a4abb",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 327,
