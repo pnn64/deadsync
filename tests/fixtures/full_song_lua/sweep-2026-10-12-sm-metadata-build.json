@@ -1,0 +1,84 @@
+{
+  "source_fix_commit": "a45545f0a",
+  "proof": "/home/parity/jobs/sm-metadata-build-v1/proof.json",
+  "binary": "/home/parity/jobs/sm-metadata-build-v1/full-song-lua-stage-modifier-v1",
+  "binary_sha256": "76f1176f97fb1c43d5417e1e076c02c4ba3f1e43b57b6a66ac7f4b78f54e9332",
+  "source_sha256": {
+    "crates/deadsync-simfile/src/song.rs": "d17a62890dd0f6afc9b0df4abeb6615af4b930c365a963a29d7afa51c1fbf62a",
+    "crates/deadsync-simfile/src/cache.rs": "5a7cc8e4c917dc8a7b005a4cd42c4bc1f4a2429fbb34cda9527ded2cd5a2afcc",
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "81e0d98be4dc394276102ed861aae8ad0b1ba05ef657aaa463331df7c43bd3c6",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "ccecdf07dae6378a7df8c94152537d0bab63651b2d193a496aaff3a40d2447dd",
+    "crates/deadsync-song-lua/src/live.rs": "67cc93fc5454ea4eb1770ec4e953fc5d12312f86a81c4c4f17c980b821d19050",
+    "crates/deadsync-song-lua/src/song_tables.rs": "3af70eef6c3e9b53eae43811a8a641dc1d8e3e9648a053ca8678302463732e19",
+    "crates/deadsync-song-lua/src/lua_util.rs": "2e6c8f5dc8f0a2de956789857e28b6475cb40ed32cb339b3eea72d3f610bdaac",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "2714494a70e8b4cc9128f2513abe859e5b8dc97790a914dc5799e0e5eb216586",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "8bd4d5d1c25c3d74d6563ad68a38cd074e5085490bc5012c5a528393cfc6cefa"
+  },
+  "linux_checks": [
+    {
+      "label": "metadata-control",
+      "exit_code": 0,
+      "seconds": 33.29507102799835,
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 268 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "cache-control",
+      "exit_code": 0,
+      "seconds": 1.763385032005317,
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 268 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "stage-test",
+      "exit_code": 0,
+      "seconds": 0.7243104969966225,
+      "results": [
+        "test result: ok. 17 passed; 0 failed; 1 ignored; 0 measured; 251 filtered out; finished in 0.02s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 171.45093880700006,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.1390764020034112,
+      "results": [
+        "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.25s"
+      ]
+    }
+  ],
+  "windows_checks": [
+    {
+      "filter": "song::tests",
+      "passed": 17,
+      "ignored": 1,
+      "failed": 0
+    },
+    {
+      "filter": "old_cache_version_is_rejected_before_header_decode",
+      "passed": 1,
+      "failed": 0
+    }
+  ],
+  "behavior": "SM description, credit and chart name retain non-ASCII whitespace and escaped authored text, with native ASCII trimming. Cache version 64 invalidates the previously trimmed metadata.",
+  "regression": "File and in-memory paths preserve distinct descriptions, credit and names across a skipped unsupported chart, trim ASCII whitespace, decode escaped colon, and preserve parsed notes.",
+  "bounded_repair": {
+    "job": "/home/parity/jobs/ftw-metadata-repair-v1",
+    "attempt": 1,
+    "reuses_original_capture": true,
+    "compares_uncompressed_data": true
+  },
+  "diagnosis": "sweep-2026-10-12-ftw-metadata-diagnosis.json",
+  "future_replay_selection": "/home/parity/jobs/chart-sweep-replay-selection-v3.json",
+  "acceptance": "Existing full_song_lua comparisons unchanged; coverage stays separate"
+}

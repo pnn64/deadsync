@@ -122,7 +122,7 @@
       ]
     }
   },
-  "status": "source fix committed; Windows validation passed; Linux validation and first repair queued",
+  "status": "source fix validated on Windows and Linux; first FTW repair bound to immutable helper",
   "source_confirmed_cause": "RSSP decode_unescape_trim uses Unicode str::trim; native SMLoader trims only CR, LF, tab and space. The authored trailing NBSP was removed from the chart description and current Steps identity.",
   "native_sources": [
     "NotesLoaderSM.cpp:273-301",
@@ -155,5 +155,46 @@
     "compares_uncompressed_data": true,
     "awaits_validated_helper": true
   },
-  "acceptance": "Existing full_song_lua comparisons remain unchanged; coverage stays separate"
+  "acceptance": "Existing full_song_lua comparisons remain unchanged; coverage stays separate",
+  "binary_sha256": "76f1176f97fb1c43d5417e1e076c02c4ba3f1e43b57b6a66ac7f4b78f54e9332",
+  "linux_checks": [
+    {
+      "label": "metadata-control",
+      "exit_code": 0,
+      "seconds": 33.29507102799835,
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 268 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "cache-control",
+      "exit_code": 0,
+      "seconds": 1.763385032005317,
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 268 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "stage-test",
+      "exit_code": 0,
+      "seconds": 0.7243104969966225,
+      "results": [
+        "test result: ok. 17 passed; 0 failed; 1 ignored; 0 measured; 251 filtered out; finished in 0.02s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 171.45093880700006,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.1390764020034112,
+      "results": [
+        "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.25s"
+      ]
+    }
+  ]
 }
