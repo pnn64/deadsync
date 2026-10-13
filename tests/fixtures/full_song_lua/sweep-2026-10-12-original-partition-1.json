@@ -6099,6 +6099,56 @@
         }
       ],
       "report_sha256": "62bdf262a40c6f8786c8501666f0d960b5e17a87a239acc512e143c21050db95"
+    },
+    {
+      "position": 279,
+      "source_simfile": "Levels/levels-fakemines.ssc",
+      "simfile_sha256": "2c6fc66bb92d32944bed3aca2a7eb0a1df1686a8791458738c843081ae1db732",
+      "retained_original_archive": "b8cd477152be171a7a651d5446eb25273e2047400b319669c495fa90e4700159.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/live-draw-build-v1/proof.json",
+      "capture_seconds": 183.43546572100604,
+      "trace_sha256": "f6e5ddb8ce7978975f242846f6ea9dd10880420559ac8f7f4c07c94da4ee2e42",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-279/candidates/fd9cc3147104e5999afdae0b8408416ffaac168246b4ad60bb83dd6b1391bc1c.tar",
+      "replay_exit": 0,
+      "replay_seconds": 726.5823424010014,
+      "candidate_sha256": "fd9cc3147104e5999afdae0b8408416ffaac168246b4ad60bb83dd6b1391bc1c",
+      "native_frames": 41311,
+      "replayed_frames": 41311,
+      "compared_stage_fields": 1540,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "a5d7addcbfec98031c16ca1a31bc49916857f765dff39d4fbe31519cb5caa47a",
+      "archive": "e9e265da30f50252453800bf851e069bddd0be61be3f62946dfb8bbc7feb9d57.tar.zst",
+      "archive_sha256": "e9e265da30f50252453800bf851e069bddd0be61be3f62946dfb8bbc7feb9d57",
+      "compressed_bytes": 13473916,
+      "pack_seconds": 14.407084948004922,
+      "harness_version": "0.1.80",
+      "title": "Levels (Skrillex Remix)",
+      "retained_original_entry": {
+        "title": "Levels",
+        "source_simfile": "Levels/levels-fakemines.ssc",
+        "harness_version": "0.1.0",
+        "archive": "b8cd477152be171a7a651d5446eb25273e2047400b319669c495fa90e4700159.tar.zst",
+        "sha256": "b8cd477152be171a7a651d5446eb25273e2047400b319669c495fa90e4700159",
+        "compressed_bytes": 67356,
+        "uncompressed_sha256": "4436a555e4b9e10aff547d917a3de0f17e0a297416e0aa2bf14982dab3543d39",
+        "compression_level": 22,
+        "aliases": [
+          "f5ba42dceaf8234caed8f2872dae23729ddc32e4e8565247e637543f5715fb1c.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -6110,7 +6160,7 @@
   },
   "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 16,
+  "passed_fixtures": 17,
   "pending_charts": 21,
-  "processed_charts": 37
+  "processed_charts": 38
 }

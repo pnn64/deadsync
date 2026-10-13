@@ -3436,17 +3436,14 @@
       ]
     },
     {
-      "title": "Levels",
+      "title": "Levels (Skrillex Remix)",
       "source_simfile": "Levels/levels-fakemines.ssc",
-      "harness_version": "0.1.0",
-      "archive": "b8cd477152be171a7a651d5446eb25273e2047400b319669c495fa90e4700159.tar.zst",
-      "sha256": "b8cd477152be171a7a651d5446eb25273e2047400b319669c495fa90e4700159",
-      "compressed_bytes": 67356,
-      "uncompressed_sha256": "4436a555e4b9e10aff547d917a3de0f17e0a297416e0aa2bf14982dab3543d39",
-      "compression_level": 22,
-      "aliases": [
-        "f5ba42dceaf8234caed8f2872dae23729ddc32e4e8565247e637543f5715fb1c.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "e9e265da30f50252453800bf851e069bddd0be61be3f62946dfb8bbc7feb9d57.tar.zst",
+      "sha256": "e9e265da30f50252453800bf851e069bddd0be61be3f62946dfb8bbc7feb9d57",
+      "compressed_bytes": 13473916,
+      "uncompressed_sha256": "fd9cc3147104e5999afdae0b8408416ffaac168246b4ad60bb83dd6b1391bc1c",
+      "aliases": []
     },
     {
       "title": "Life Cheating Game",
