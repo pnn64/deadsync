@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "bounded DREAMING-ING conditional subtree repair complete",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "1d6c6e802 / harness b191ebd",
