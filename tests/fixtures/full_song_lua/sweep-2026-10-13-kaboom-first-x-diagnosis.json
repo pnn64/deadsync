@@ -1,0 +1,122 @@
+{
+  "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+  "candidate_sha256": "70d46f8a7297fb5e58d7d19783915d6bb2f9210774da9a8d6f3d1423afd6b419",
+  "native_trace_sha256": "cd1b99822ffab060d4148dd3a492b6b606bebc622a7a1a3c97c00763f8167ce0",
+  "report_sha256": "1aea9fc62743f9c8cc755993687897535e01eefa45125e9290b44e10d8c1369c",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "repair_attempts_spent": 0,
+  "repair_attempts_remaining": 2,
+  "repair_not_started": true,
+  "diagnostic_only": true,
+  "retained_uncompressed_report_and_trace_bytes_verified": true,
+  "first_x_difference": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "def-0343",
+      "args": [
+        3.758695602416992
+      ],
+      "beat": 220.01119995117188,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 2724,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "InitCommand",
+      "definition_id": "def-0355",
+      "detail": {
+        "native_tween_time_left": 0
+      },
+      "kind": "call",
+      "line": 2724,
+      "operation": "Actor.x",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 67.22084045410156,
+      "seq": 542782,
+      "source": "song:/lua/default.lua",
+      "tween_time_left": 0
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "call",
+      "operation": "Actor.x",
+      "source": "song:/lua/default.lua",
+      "line": 2724,
+      "phase": "callback",
+      "beat": 220.01119995117188,
+      "seconds": 67.22084045410156,
+      "args": [
+        32
+      ],
+      "results": [
+        {
+          "actor": "0x58afa2292000",
+          "name": "MultitapP1_1",
+          "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_1"
+        }
+      ],
+      "tween_time_left": 0.0
+    }
+  },
+  "cause": "The independent GetXPos returns only the style base column. The authored chart enables Beat at 200 percent. Native GetXPos adds the current Beat magnitude times the cached per-player Beat factor and the Y-offset sine. ArrowEffects.Update runs after Screen.Update and song callbacks, so the callback reads the preceding frame cache, not a Beat factor calculated from its current beat.",
+  "native_screen_update_order": {
+    "song_position_update": "ScreenGameplay.cpp:1719",
+    "screen_actor_update": "ScreenGameplay.cpp:1722-1728",
+    "arrow_effect_cache_update": "ScreenGameplay.cpp:2064"
+  },
+  "captured_frames": {
+    "preceding": {
+      "beat": 219.97659301757812,
+      "delta": 0.011679000221192837,
+      "scene": 1,
+      "seconds": 67.20897674560547,
+      "sequence": 7609,
+      "wall_seconds": 77.332395
+    },
+    "query_frame": {
+      "beat": 220.01119995117188,
+      "delta": 0.011886999942362309,
+      "scene": 1,
+      "seconds": 67.22084045410156,
+      "sequence": 7610,
+      "wall_seconds": 77.351931
+    }
+  },
+  "exact_scalar_float_reproduction": {
+    "native_y_argument": 376.7939453125,
+    "default_reverse_shift": -135.0,
+    "derived_y_offset": 511.7939453125,
+    "base_column_x": 32.0,
+    "authored_beat_magnitude": 2.0,
+    "beat_offset": 0.0,
+    "beat_mult": 0.0,
+    "beat_period": 0.0,
+    "theme_beat_offset_height": 15.0,
+    "theme_beat_pi_height": 2.0,
+    "cached_beat_factor": 15.592007637023926,
+    "sine_angle": 35.690391540527344,
+    "native_x": 3.758695602416992,
+    "independent_x": 32.0,
+    "incorrect_same_frame_factor_x": -4.174896240234375
+  },
+  "native_source_sha256": {
+    "src/ArrowEffects.cpp": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+    "src/ScreenGameplay.cpp": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+    "Themes/_fallback/metrics.ini": "470ae3b31c17ca4e194530b9ca543a15439c134a3aefa47d6d25dd55d1f5bff5"
+  },
+  "authored_source_sha256": {
+    "lua/default.lua": "314febe722e881c0d1d8ca75c5dadaa32474fba1ae34c418780de978a78f1c80",
+    "lua/multitap_data.lua": "0a52f0b651abd01d0472d5fd606afb37b51eca13ce75e1da93c8e8c6038252de"
+  },
+  "original_selected_independent_source_sha256": {
+    "crates/deadsync-song-lua/src/host.rs": "0cd4110f9c9db0d374f066cb6c480cbbcb74d2ccc024a760b1dc757032af15ef"
+  },
+  "first_x_exactly_explained": true,
+  "all_168_x_differences_verified": false,
+  "required_fix": "Use current owned player modifiers and the production ArrowEffects cache in the native screen update phase. Add controls for zero/nonzero Beat, cached previous-frame phase, multiple columns, Y offsets and modifier approach transitions. Investigate further authored modifiers only where the actual remaining differences require them. Do not substitute captured X values or introduce extra traced internal queries.",
+  "implementation_not_yet_changed": true,
+  "acceptance_comparisons_changed": false,
+  "passing_charts_reopened": false
+}
