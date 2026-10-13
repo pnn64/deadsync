@@ -1,0 +1,47 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "I'm sorry/sm.sm",
+      "acceptance_commit": "7edb8f331",
+      "native_frames": 104203,
+      "replayed_frames": 104203,
+      "compared_stage_fields": 1771,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "cbba33052f6e21bc360acdcfc522172be305b59abfb2ca3fd2032738e865e1ec.tar.zst",
+      "compressed_sha256": "cbba33052f6e21bc360acdcfc522172be305b59abfb2ca3fd2032738e865e1ec",
+      "uncompressed_sha256": "9a71ced6e2fa46ff6059b999bc28322de0744bae0d0cb1b4d53dd05ede7bbacb",
+      "compressed_bytes": 5685923,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.setsize, Actor.xy, GameState.ApplyGameCommand, Screen.AddInputCallback",
+        "native drawable state/resources: Quad"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    },
+    {
+      "source_simfile": "ICON KILLER - [Zaia + StarrySergal + dimo + Brother Mojo]/ICON KILLER.ssc",
+      "acceptance_commit": "3b9c59dda",
+      "native_frames": 53943,
+      "replayed_frames": 53943,
+      "compared_stage_fields": 1188,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "57f694f70fad176cb3c3bbe423bde296847f20af6b87e7377e4c9735160d455d.tar.zst",
+      "compressed_sha256": "57f694f70fad176cb3c3bbe423bde296847f20af6b87e7377e4c9735160d455d",
+      "uncompressed_sha256": "35923b20dc303325f5faf325ba28dd9352c907af8d96f32d207e56d1b5a31b64",
+      "compressed_bytes": 8572072,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.stopeffect",
+        "native drawable state/resources: Quad"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
