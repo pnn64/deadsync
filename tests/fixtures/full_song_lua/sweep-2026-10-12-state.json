@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T14:29:00Z",
-  "previous_goal_turn": "progress: LALA/lala.ssc passed all 28149 native frames and 1639 stage fields with zero mismatches/errors; acceptance 3b26d1e928aa921cf01e16e54c67f9071783e5d7, committed archive 9c77701d228741d2959cb569475615ce0c0ee2690888d7154335048987fb1c49.tar.zst and locally verified uncompressed SHA 777dbe967835f0d698fa0af3a21e23394b8111c2ad69332940369295ce0ef9c2. Marvins Room/MarvinsRoom.sm passed all 140479 native frames and 3399 stage fields with zero mismatches/errors; acceptance 7511d7ef1f9383f7f4bddf4293b1cc8170608b45, committed archive b8a2ebdc37945d168dc5b234d76607356475c281d9f63321310aa486d827e52c.tar.zst and locally verified uncompressed SHA 39b44c3c50b2d2a55932ecf0a5eb7cae17b8afd5ddcd9f3bd67c0752499b0ef2. Levels/levels-fakemines.ssc passed all 41311 native frames and 1540 stage fields with zero mismatches/errors; acceptance 9f470d7e731671d189cdaa4929b8d287be9ae607, committed archive e9e265da30f50252453800bf851e069bddd0be61be3f62946dfb8bbc7feb9d57.tar.zst and locally verified uncompressed SHA fd9cc3147104e5999afdae0b8408416ffaac168246b4ad60bb83dd6b1391bc1c. All three passing fixtures are committed, byte verified, and remain accepted; their coverage is separate. The pinned native table.find helper is fixed as 9bcc50649. It searches pairs, returns the matching key or nil, and retains native Lua equality including false-valued keys. The owned ShowArrow control checks sequence/sparse/string/false keys, type distinctions, nil/no-match, actor and __eq equality, selected columns 2/4, callback continuation and no repeated broadcast. Initial control versions completed the helper checks but included an extra queue/aux assertion that did not pass; its cause was not established and adding a third frame did not fix it. The final helper control is scoped to Lonely actual failure; existing queue controls and full replay comparisons are intact. No chart repair was spent by these controls. Linux passed 815 gameplay, 42 live and 21 native controls plus both executable builds; Windows passed 43 live and 21 native controls plus both builds. The isolated immutable live-draw baseline remains 26 pins; only compat.rs and the new live control changed. Actual source hashes, bundle preimages, host-local mtimes, postbuild pins, helper and all three harness sources were verified before selection and replay. Unselected 874f2e535 theme changes remain excluded. Selected helper fc7e246c948eb5b0ecb64a09b3777c480ac81eb26d2cf232c4ed3d2f8112cdd1 uses table-find-build-v4 and unchanged corrected-schema harness 058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4. Lonely first bounded repair 1 is running from its byte-verified retained 9e8d4731 candidate and 75dfcff6 native trace. Launch 254301 and replay 255275 actual process argv were verified. Full acceptance is not yet decided. Koi SM first rec_print repair remains running and is not repeated. Lake remains pending after its first complete 17472-frame repair with 1507 matching stage fields and no Lua errors but 283158 command differences. Its retained ScreenGameplay GetChildren query verifies 21 named plus 5 unnamed direct actors, while independent ownership has 10. Eleven named missing parents come from native screen transitions, Header/Footer decorations, OniGameOver, steps description, player/song options, active attack lists and lyrics. The five unnamed source additions are toasty, next-course-song and Ready/Go/Failed transitions; individual IDs are not mapped from this inventory. The recursive traversal requires actual types, descendants, metrics, state and ordering before the last allowed repair; no counts or expected events are seeded and attempt2 remains unstarted. Kaboom SSC phase cause is now established: all 1938 native construction versus independent callback differences are 969 GetTopScreen/GetName pairs from the direct NoteField DidTapNote callback. Native NoteField invokes its retained function directly; the unchanged observer wraps ActorFrame update/draw callbacks only. Independent invoke_note_field_tap_callback invents ActorFrame command context around that direct callback. This is separate from the correctly scoped Init-installed update callback. The 193 same-phase value differences comprise six Y, fifteen diffuse, 168 X and four rotationz events. The first Y cause is reproduced from the actual PlayerP1 GetY and decelerate(0.3):addy(-288) tween: native rounds the product before subtraction, while original frozen independent outQuad mul_add rounds the combined expression once. With float duration0.30000001192092896 and left0.2640790343284607, native factor0.22513633966445923 yields751.1607666015625; fused factor0.22513636946678162 yields751.1607055664062. Actual frozen easing body equals current. This establishes the first Y cause only. Other value groups need source diagnosis and meaningful controls before its first repair; no implementation or complete replay was started from a partial cause. Both Kaboom attempts remain unspent. Mountain and other capped charts remain pending without another retry. The single publisher watches 45 streams; original queues and existing bounded repairs continue. Original counts are {'passed': 215, 'pending': 72, 'unprocessed': 214}. All 501 original sources remain byte unchanged; RUNWAY remains outside scope. The goal is active and incomplete. Existing complete uncompressed comparisons are the only acceptance gates, coverage is separate, no pass is reopened and no capped repair is repeated.",
+  "updated_utc": "2026-10-13T15:10:05Z",
+  "previous_goal_turn": "Progress: Limitless/Limitless.ssc passed all 35563 native frames and 1243 stage fields with zero mismatches or Lua errors; accepted as 0874e18546c4e4aa85f7d9cf7b7a9049788c00dc, archive 97a451e724bf932ea6f2575ae3dc23d6392ae3fe5999fd5173991cd81f024a80.tar.zst, uncompressed SHA 517573404863db0c1d6334de1b2cf04b3062ea031d15cb5fcee8af04013d535d, saved and locally byte verified. Its missing coverage remains separate and it stays accepted. The direct NoteField callback scope and native scalar deceleration fixes are committed as d82120e47. Before the fix both targeted controls failed on Linux and Windows for the established bugs. Afterwards Linux passed 815 gameplay, 42 live, one scalar deceleration and 21 native controls plus both executable builds. Windows passed 43 live, one scalar deceleration and 21 native controls plus both builds. The native gameplay-owned tap control verifies construction queries around a nested owned command in callback scope; optional returns, argument contract, errors and prior caller scope are retained. Actual immutable source bundle preimages, all 26 source pins, host-local mtimes and postbuild hashes were checked. The selected Linux helper is 93f59d2cedd99eeeb3e8ec457f3e7cffe3ed04a4f812311fdd8ff85046afb559 from kaboom-controls-green-v1; harness 058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4 and all three harness pins remain verified. Unselected 874f2e535 remains excluded. No running replay was restarted. Kaboom has spent zero repair attempts. The remaining 15 colour differences are exactly explained by extra independent Color.Pink making a nine-entry palette instead of native eight: all 222 RNG-dependent actor calls were reproduced from retained seed1 and all15 predicted differences exactly match the report. That constant fix and its production-path control are still unimplemented. The first X difference exactly reproduces native3.758695602416992 from the preceding-frame cached Beat factor15.592007637023926 and real Y offset511.7939453125; the independent GetXPos returns base32. Computing the current-frame factor yields the wrong -4.174896240234375. The remaining167 X events need verification and production modifier/cache support. The first rotationz difference is recursive tween time, not its equal60 arguments: actual Underlay/NoteFieldContainerP1/ColumnCues/Column4/ColumnFlash has5.485710144042969 seconds remaining, while independent underlay lacks that cue owner and reports its own1-second tween. Deriving native cue data and advancing the actual owned theme tree are still required; allfour tween-time differences are not yet verified. Lonely first table.find repair completed all90583 frames and2706 stage fields with zero Lua errors but196 command differences, all solely tween_time_left. Cached NoteColumnRenderer owners are absent from the compiled live update plan, while native NoteField explicitly updates the column vector after ActorFrame.Update. This source fix and controls must precede its final allowed repair; attempt2 remains unspent. Lake remains pending after attempt1 with missing native screen hierarchy and still has one attempt. Mountain and other capped charts remain pending without another retry. The main original queue, both original partition queues and Koi first repair remain live; the single publisher watches45 streams. All501 original simfiles remain byte unchanged and RUNWAY stays outside original scope. Goal active and incomplete. Existing complete uncompressed replay comparisons remain the only acceptance gates; coverage separate, no passing chart reopened and no capped repair repeated.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,11 +14,12 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "2f59a90d6218dde2237be7de416efdd1540f40bc",
+      "deadsync": "4e61801b17f5693616f19535ab0f477982712320",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
   "validation": {
+    "direct_tap_and_scalar_deceleration": "d82120e47: Linux 815 gameplay, 42 live, 1 rounding and 21 native; Windows 43 live, 1 rounding and 21 native; both executable builds on both hosts, pre-fix red and post-fix green controls; sweep-2026-10-13-kaboom-tap-deceleration-build.json",
     "native_replay_controls": "15 passed on the stage modifier Linux build; stage modifier regression passed on Windows and Linux",
     "native_metric_caller": "regression passed on Windows; all 12 runtime controls passed on Linux",
     "empty_song_tree": "all 15 replay controls passed on Windows and Linux; second bounded Crab replay reuses the original capture",
@@ -71,9 +72,9 @@
       "pending": 44,
       "processed": 64,
       "last_log_lines": [
-        "[1406.5s] replaying every native gameplay frame: frame 9670/121856 (7.9%)",
-        "[1408.5s] replaying every native gameplay frame: frame 9682/121856 (7.9%)",
-        "[1410.5s] replaying every native gameplay frame: frame 9695/121856 (8.0%)"
+        "[3871.5s] replaying every native gameplay frame: frame 23532/121856 (19.3%)",
+        "[3873.5s] replaying every native gameplay frame: frame 23542/121856 (19.3%)",
+        "[3875.5s] replaying every native gameplay frame: frame 23553/121856 (19.3%)"
       ],
       "supervisor_running": true
     },
@@ -82,6 +83,12 @@
     "parallel_queue_receipt": "tests/fixtures/full_song_lua/sweep-2026-10-12-parallel-queues.json",
     "build_transition": "tests/fixtures/full_song_lua/sweep-2026-10-12-build-transition.json",
     "source_scope_audit": "tests/fixtures/full_song_lua/sweep-2026-10-12-original-scope.json",
+    "lonely_column_update_residual": "tests/fixtures/full_song_lua/sweep-2026-10-13-lonely-column-update-diagnosis.json",
+    "kaboom_owned_underlay_cue": "tests/fixtures/full_song_lua/sweep-2026-10-13-kaboom-underlay-cue-diagnosis.json",
+    "kaboom_first_x_cache": "tests/fixtures/full_song_lua/sweep-2026-10-13-kaboom-first-x-diagnosis.json",
+    "kaboom_palette_bound": "tests/fixtures/full_song_lua/sweep-2026-10-13-kaboom-palette-bound-diagnosis.json",
+    "native_tap_deceleration_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-kaboom-tap-deceleration-build.json",
+    "limitless_ssc_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-limitless-ssc-fixture-verification.json",
     "levels_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-levels-fixture-verification.json",
     "kaboom_first_y_rounding": "tests/fixtures/full_song_lua/sweep-2026-10-13-kaboom-first-y-rounding-diagnosis.json",
     "kaboom_direct_note_callback": "tests/fixtures/full_song_lua/sweep-2026-10-13-kaboom-note-callback-diagnosis.json",
@@ -148,14 +155,14 @@
     "bounded_repair_jobs": [
       {
         "job": "lonely-table-find-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
+        "complete": true,
+        "supervisor_running": false,
         "passed": 0,
-        "pending": 0,
-        "processed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "replay",
         "source_simfile": "Lonely/Lonely.sm",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "lake-live-draw-repair-v1",
@@ -547,25 +554,25 @@
         "job": "chart-sweep-parallel-v4-1",
         "complete": false,
         "supervisor_running": true,
-        "passed": 17,
+        "passed": 18,
         "pending": 21,
-        "processed": 38,
-        "last_phase": "capture",
-        "source_simfile": "Limitless/Limitless.ssc",
+        "processed": 39,
+        "last_phase": "replay",
+        "source_simfile": "Lonely/Lonely.ssc",
         "child_running": true,
-        "position": 282
+        "position": 285
       },
       {
         "job": "chart-sweep-parallel-v4-2",
         "complete": false,
         "supervisor_running": true,
         "passed": 15,
-        "pending": 22,
-        "processed": 37,
+        "pending": 23,
+        "processed": 38,
         "last_phase": "replay",
-        "source_simfile": "Life Cheating Game/lifecheatinggame.ssc",
+        "source_simfile": "Lip-Sync [Gpop]/Lip-Sync.ssc",
         "child_running": true,
-        "position": 280
+        "position": 283
       },
       {
         "job": "definition-concat-repair-v1",
@@ -954,11 +961,11 @@
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 68,
-    "new_pending_charts": 71,
-    "new_processed_sources": 139,
+    "new_passed_fixtures": 69,
+    "new_pending_charts": 72,
+    "new_processed_sources": 141,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 214,
+    "unprocessed_sources": 212,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -1516,17 +1523,60 @@
     },
     {
       "source_simfile": "Lonely/Lonely.sm",
-      "repair_attempts": 0,
+      "repair_attempts": 1,
       "failure": null,
-      "errors": [
-        "update function for ActorFrame 'lua' at beat 50.006: ShowArrowMessageCommand failed for ActorFrame 'lua': runtime error: [string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:567: attempt to call field 'find' (a nil value)\nstack traceback:\n\t[C]: in field 'find'\n\t[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:567: in function <[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:557>\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:478: in function <[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:431>\nstack traceback:\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:478: in function <[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:431>\n"
-      ],
-      "mismatch_count": 275039,
+      "errors": [],
+      "mismatch_count": 196,
       "first_mismatch": [
         {
-          "field": "source_broadcast_count",
-          "native": 39,
-          "deadsync": 10360
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0021",
+            "args": [
+              true
+            ],
+            "beat": 50.00551223754883,
+            "caller": {
+              "line": 557,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "ShowArrowMessageCommand",
+            "definition_id": "def-0005",
+            "detail": {
+              "native_tween_time_left": 3.3520548343658447
+            },
+            "kind": "call",
+            "line": 557,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 16.767709732055664,
+            "seq": 91877,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 3.3520548343658447
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/lua/default.lua",
+            "line": 557,
+            "phase": "callback",
+            "beat": 50.00551223754883,
+            "seconds": 16.767709732055664,
+            "args": [
+              true
+            ],
+            "results": [
+              {
+                "actor": "0x61d696a7f0d0",
+                "name": "",
+                "path": "ScreenGameplay/PlayerP1/NoteField"
+              }
+            ],
+            "tween_time_left": 20.0
+          }
         }
       ]
     },
@@ -2468,6 +2518,76 @@
                 "path": "ScreenGameplay/Underlay/P1Score"
               }
             ]
+          }
+        }
+      ]
+    },
+    {
+      "source_simfile": "Life Cheating Game/lifecheatinggame.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 79171,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0011",
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "beat": 0.002668180037289858,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 10,
+              "source": "song:/boys/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              }
+            },
+            "kind": "call",
+            "line": 10,
+            "operation": "Actor.effectmagnitude",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.017800454050302505,
+            "seq": 11,
+            "source": "song:/boys/default.lua",
+            "tween_time_left": {
+              "type": "number",
+              "value": "infinity"
+            }
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.effectmagnitude",
+            "source": "song:/boys/default.lua",
+            "line": 10,
+            "phase": "callback",
+            "beat": 0.002668183296918869,
+            "seconds": 0.017800454050302505,
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "results": [
+              {
+                "actor": "0x5eda9359ec40",
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ],
+            "tween_time_left": 0.0
           }
         }
       ]

@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T14:28:58Z",
+  "updated_utc": "2026-10-13T15:08:56Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 215,
-    "pending": 72,
-    "unprocessed": 214
+    "passed": 216,
+    "pending": 73,
+    "unprocessed": 212
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2405,7 +2405,9 @@
       "position": 280,
       "source_simfile": "Life Cheating Game/lifecheatinggame.ssc",
       "simfile_sha256": "12d76e3e3171fab6fe19a2d94d5462f45d079ec365a6c12d153bd49f22347e7a",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 281,
@@ -2419,7 +2421,9 @@
       "position": 282,
       "source_simfile": "Limitless/Limitless.ssc",
       "simfile_sha256": "228feda0ed2c309235ff9c9af07e4e8c51fe4e8c964b2b99b050956b6ea52582",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 283,
@@ -2432,8 +2436,8 @@
       "source_simfile": "Lonely/Lonely.sm",
       "simfile_sha256": "faff72213058f1e3dfee6fca405836936dcabc5603612b233d8274b3fd2bca82",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-lonely-table-find-repair.json"
     },
     {
       "position": 285,
