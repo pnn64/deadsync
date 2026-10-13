@@ -1379,6 +1379,404 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 192,
+      "source_simfile": "flowers [R.I.G.H.T.S]/flowers.ssc",
+      "simfile_sha256": "52e86ec7daeca20bdb1e49b6af119c898cd07a20a0e3c0b72703ead58af8bdba",
+      "retained_original_archive": "1e3f1e28b29d56eca62ce7c2fd0fb5efbf5960616c2975e0e7137a7b0d177abf.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "874046de12e1da317673ca0da4c84ed09627d58dc6c5595893b0504289560554",
+      "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+      "fix_commit": "4bd354261 / harness 55299c5",
+      "build_proof": "/home/parity/jobs/uptime-pause-build-v2/proof.json",
+      "capture_seconds": 99.72692955899402,
+      "trace_sha256": "9cc2b8ae24aefa0a481bc0b8fac2d3844121a75e63e7db08ef08471854cd2415",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-192/candidates/98832f99930a5a4d037c7156c60dae2791685d683269e6aa3946d95a58f5a7c3.tar",
+      "replay_exit": 2,
+      "replay_seconds": 1021.843993817005,
+      "candidate_sha256": "98832f99930a5a4d037c7156c60dae2791685d683269e6aa3946d95a58f5a7c3",
+      "native_frames": 50828,
+      "replayed_frames": 50828,
+      "compared_stage_fields": 1023,
+      "pending_coverage": [
+        "uncompared song operations: Actor.Draw, Actor.MaskDest, Actor.MaskSource, Actor.SetHeight, Actor.SetWidth, Actor.addy, Actor.align, Actor.blend, Actor.hibernate, Actor.horizalign, Actor.pause, Actor.play, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.smooth, Actor.stoptweening, Actor.vertalign, Actor.xy, ActorFrame.GetChildren, ActorFrame.fov, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.SetTextureName, GameState.GetHumanPlayers, PlayerOptions.CMod, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.Twirl, Song.GetBackgroundPath",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 40226,
+      "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 40263,
+          "deadsync": 40249
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 0,
+            "caller": {
+              "line": 0,
+              "source": "song:/assets/ScreenGameplayAFT.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "results": [
+                {
+                  "song_dir": "song:/",
+                  "type": "Song"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 0,
+            "operation": "GameState.GetCurrentSong",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 13,
+            "source": "song:/assets/ScreenGameplayAFT.lua",
+            "results": [
+              {
+                "song_dir": "song:/",
+                "type": "Song"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetCurrentSong",
+            "source": "song:/./assets/1am/../ScreenGameplayAFT.lua",
+            "line": 0,
+            "phase": "construction",
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": [],
+            "results": [
+              {
+                "type": "Song",
+                "song_dir": "song:/"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0005",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0005",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 56,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 18,
+            "source": "song:/assets/ScreenGameplayAFT.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "InitCommand",
+            "source": "song:/./assets/1am/../ScreenGameplayAFT.lua",
+            "line": 56,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0005",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0005",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 56,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 25,
+            "source": "song:/assets/ScreenGameplayAFT.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "InitCommand",
+            "source": "song:/./assets/1am/../ScreenGameplayAFT.lua",
+            "line": 56,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0039",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0039",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 95,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 26,
+            "source": "song:/assets/1am/1am.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "InitCommand",
+            "source": "song:/./assets/1am/1am.lua",
+            "line": 95,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0039",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0039",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 95,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 29,
+            "source": "song:/assets/1am/1am.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "InitCommand",
+            "source": "song:/./assets/1am/1am.lua",
+            "line": 95,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0040",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0040",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 81,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 30,
+            "source": "song:/assets/1am/1am.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "InitCommand",
+            "source": "song:/./assets/1am/1am.lua",
+            "line": 81,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0040",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0040",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 81,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 32,
+            "source": "song:/assets/1am/1am.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "InitCommand",
+            "source": "song:/./assets/1am/1am.lua",
+            "line": 81,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0043",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0043",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 145,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 33,
+            "source": "song:/assets/1am/1am.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "InitCommand",
+            "source": "song:/./assets/1am/1am.lua",
+            "line": 145,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0043",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0043",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 145,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 41,
+            "source": "song:/assets/1am/1am.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "InitCommand",
+            "source": "song:/./assets/1am/1am.lua",
+            "line": 145,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0045",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0045",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 152,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 42,
+            "source": "song:/assets/1am/1am.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "InitCommand",
+            "source": "song:/./assets/1am/1am.lua",
+            "line": 152,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0045",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0045",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 152,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 49,
+            "source": "song:/assets/1am/1am.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "InitCommand",
+            "source": "song:/./assets/1am/1am.lua",
+            "line": 152,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        }
+      ],
+      "report_sha256": "49c599b6825f88be0f48a4924c24d6cbb1032c40aaa9bfb46b20b7af804fc327"
     }
   ],
   "scope": {
@@ -1388,9 +1786,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "fb0ae8b99391809080b072426dee35d2efe0e64d479b0dff9833bb6e5370848d",
+  "binary_sha256": "874046de12e1da317673ca0da4c84ed09627d58dc6c5595893b0504289560554",
   "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
   "passed_fixtures": 2,
-  "pending_charts": 6,
-  "processed_charts": 8
+  "pending_charts": 7,
+  "processed_charts": 9
 }
