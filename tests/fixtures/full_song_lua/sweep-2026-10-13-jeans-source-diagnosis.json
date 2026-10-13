@@ -1,0 +1,155 @@
+{
+  "source_simfile": "jeans/abj.sm",
+  "position": 255,
+  "repair_attempts": 0,
+  "remaining_repair_attempts": 2,
+  "simfile_sha256": "9c5e808b44a8f6355cff645f400bad14c1cf42e73830d4cb3466a632f3a7454c",
+  "capture_sha256": "5a3c2b6adc7121a4661f17df9b56ff19289039f0926ea3882e0b4bfe8fe05124",
+  "retained_candidate_sha256": "78e3d3d899ed96cea7df7e3645577348710e0a0b64aaa7b8f6abd58f07ebc92b",
+  "initial_failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (2902640) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: multiple native foreground entries need entry-specific ownership\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_foreground_source_sha256": "04655fe3db304e08f8d424ac6a928858b74182f74ba14ceb658b709324153847",
+  "foreground_changes": [
+    [
+      "6.000",
+      "jeans"
+    ],
+    [
+      "7.000",
+      "jeans"
+    ],
+    [
+      "10.000",
+      "jeans"
+    ],
+    [
+      "11.000",
+      "jeans"
+    ],
+    [
+      "12.000",
+      "jeans"
+    ],
+    [
+      "18.000",
+      "jeans"
+    ],
+    [
+      "19.000",
+      "jeans"
+    ],
+    [
+      "22.000",
+      "jeans"
+    ],
+    [
+      "24.000",
+      "jeans"
+    ],
+    [
+      "26.000",
+      "jeans"
+    ],
+    [
+      "28.000",
+      "jeans"
+    ],
+    [
+      "29.000",
+      "jeans"
+    ],
+    [
+      "30.000",
+      "jeans"
+    ],
+    [
+      "31.000",
+      "jeans"
+    ],
+    [
+      "32.000",
+      "jeans"
+    ],
+    [
+      "33.000",
+      "jeans"
+    ],
+    [
+      "34.000",
+      "jeans"
+    ],
+    [
+      "35.000",
+      "jeans"
+    ],
+    [
+      "38.000",
+      "jeans"
+    ],
+    [
+      "42.000",
+      "jeans"
+    ],
+    [
+      "44.000",
+      "jeans"
+    ],
+    [
+      "50.000",
+      "jeans"
+    ],
+    [
+      "54.000",
+      "jeans"
+    ],
+    [
+      "56.000",
+      "jeans"
+    ],
+    [
+      "58.000",
+      "jeans"
+    ],
+    [
+      "60.000",
+      "jeans"
+    ],
+    [
+      "61.000",
+      "jeans"
+    ],
+    [
+      "62.000",
+      "jeans"
+    ],
+    [
+      "63.000",
+      "jeans"
+    ],
+    [
+      "64.000",
+      "jeans"
+    ],
+    [
+      "65.000",
+      "jeans"
+    ],
+    [
+      "66.000",
+      "jeans"
+    ],
+    [
+      "67.000",
+      "jeans"
+    ],
+    [
+      "70.000",
+      "jeans"
+    ]
+  ],
+  "foreground_change_count": 34,
+  "cause": "Replay identity allocation currently rejects more than one instantiated foreground root. The authored simfile repeats foreground changes; pinned Foreground::LoadFromSong independently calls ActorUtil::MakeActor and AddChild for every change, assigns each start beat, then sorts the actor tree by draw order. Repeated filenames remain separate instances.",
+  "required_fix": "Bind each independently created foreground entry to its ordered compile-root ownership slot, with background entry slots retained first. Preserve every native factory identity and its parent-child path; do not merge repeated filenames or copy callback observations into gameplay.",
+  "diagnosis_limit": "Entry counts and ownership mapping must be checked against the retained native factory input records before changing the mapper. No repair replay has been spent or started.",
+  "acceptance": "Existing full replay comparisons unchanged. This is an actual failed replay; passing charts remain accepted."
+}
