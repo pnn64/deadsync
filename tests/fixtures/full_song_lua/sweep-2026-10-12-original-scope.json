@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T00:49:37Z",
+  "updated_utc": "2026-10-13T01:34:57Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -7,13 +7,15 @@
     "historical_unindexed_charts": 18
   },
   "all_original_sources_present": true,
+  "original_source_bytes_unchanged": true,
+  "original_source_hash_baseline_commit": "f7ea01463",
   "current_corpus_files_outside_original_scope": [
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 169,
-    "pending": 22,
-    "unprocessed": 310
+    "passed": 175,
+    "pending": 31,
+    "unprocessed": 295
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1588,8 +1590,8 @@
       "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
       "simfile_sha256": "0e7c2c767ce9e342b4ed9ec53e6c6d5ff4ba6f55acad41173fe9f91cf20360d3",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-dreaming-condition-repairs.json"
     },
     {
       "position": 179,
@@ -1659,7 +1661,9 @@
       "position": 187,
       "source_simfile": "Final Flash Flight/Final Flash Flight.sm",
       "simfile_sha256": "26d967cbef3b221927e25076a0320087e3005edbbb8ef34deac43d1f242ca56f",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 188,
@@ -1681,13 +1685,17 @@
       "position": 190,
       "source_simfile": "flores sulphuris - [Zaia]/flores sulphuris.ssc",
       "simfile_sha256": "63a03a4561753f127f2af0cced67e27d9852bf58e721f46029a74b44c4c7242b",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 191,
       "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
       "simfile_sha256": "77d2aa0a0c7531d3ba01d77c5f9e37f9e24feaf7076b0b0781bff019702a6ddc",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 192,
@@ -1707,7 +1715,9 @@
       "position": 194,
       "source_simfile": "Flying Castle/flying castle.sm",
       "simfile_sha256": "c43b1b0c349e1e296158f197195c06e71c9ec120cf06e966fd4ae36e0ff11fc5",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 195,
@@ -1727,7 +1737,9 @@
       "position": 197,
       "source_simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
       "simfile_sha256": "535ed73ac6613a9c4a4f565cc8496e3c87f3a4825fd023237d7c34afbd5b6025",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 198,
@@ -1747,13 +1759,17 @@
       "position": 200,
       "source_simfile": "freg/freg.sm",
       "simfile_sha256": "c17a176bd2314c4d9e122db759e9377c11096c92b6890431a31c3b781753854f",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 201,
       "source_simfile": "FTW/FTW.sm",
       "simfile_sha256": "aba9ad891fce149bb80286a9b5d9feb06041e9c2f478467c889bbe08d8235790",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 202,
@@ -1765,13 +1781,17 @@
       "position": 203,
       "source_simfile": "Furst/furst-fakemines.sm",
       "simfile_sha256": "56449ae4de315565b9d2702796922aa32beeed27caf5f2545676afa10a78a2d4",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 204,
       "source_simfile": "Furst/furst-fakemines.ssc",
       "simfile_sha256": "1821d6f69d51d3e8095eb1a6e48b7d84ce988a796ed339d2e39cd807f838bdf4",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 205,
@@ -1783,13 +1803,17 @@
       "position": 206,
       "source_simfile": "Gaming in 2018/Gaming in 2018.ssc",
       "simfile_sha256": "786d023994f26f3e5d66f8b0319b0531e77035978cbd3a6ca1df4500d8800381",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 207,
       "source_simfile": "Gangu Kyousou Kyoku -Shuuen-/chart.ssc",
       "simfile_sha256": "09d712b0e5e922f1cb71b3a05bafe84d2b32c493c688e54d23abd6ea365aebd6",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 208,
@@ -1801,13 +1825,17 @@
       "position": 209,
       "source_simfile": "Genshin Quiz/Megaquiz.ssc",
       "simfile_sha256": "18e2165ebaceeae2ac466a114d84fa784f6f3f55f4c845404fdf3d05864f558d",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 210,
       "source_simfile": "Get Into It/GetIntoIt.sm",
       "simfile_sha256": "5577279c57ba4255fcec3f2f7e105c0e2627731193ee239d4ecc2486806027af",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 211,
@@ -1819,13 +1847,17 @@
       "position": 212,
       "source_simfile": "ghost [Telperion]/ghost.ssc",
       "simfile_sha256": "dda0f60cd58a4087f0c02b0bd08cdbe04f037836fe8b1ba07c205e4360ceffc4",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 213,
       "source_simfile": "Girls MIA/girlsmia-fakemines.sm",
       "simfile_sha256": "03da72a8f300a2d2313f2dc4e36be1c25eecbcc289cc506683540c8335838928",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 214,

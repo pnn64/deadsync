@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T00:49:36Z",
-  "previous_goal_turn": "progress: Fiji attempt 1 passed all 93015 frames and 1144 fields and was saved as 8c075d14e; Flying Castle complete fixture saved as 18a1bd764; Electrified passed all 129559 frames and 1804 fields with zero errors or mismatches and was saved as 6ef9e6b2d; Deceive final attempt 2 passed all 43460 frames and 1265 fields with zero errors or mismatches and was saved as f4e7dac4d; LoadActor path collapse fixed as c71e8b4fe and validated with 10 LoadActor and 27 live controls on Windows and Linux plus 17 Linux replay controls; preparation warnings retained as 3c0a6d0b7; harness native-case Lua discovery and dependency lookup fixed as b191ebd and validated with 3 oracle and 12 archive controls on Windows and Linux; feelyourtouch attempt 1 reused its identical native trace and corrected archive, replayed all 7084 frames, and remains pending on source case, command count and one stage-failed observation; Flowers R.I.G.H.T.S attempt 1 replayed all 50828 frames and now remains pending on missing screen actors rather than source path spelling; each retains one final attempt; Condition=false subtrees fixed as 1d6c6e802 after native skipped-actor evidence, with 28 live controls and the subscriber-path regression passing on Windows and Linux plus 17 Linux replay controls; immutable helper 8352032b selected for future charts and DREAMING-ING attempt 1 is running on its retained uncompressed capture; Dreams Bloom attempt 1 failed at frame 18166 because native scene 2 differs from independent scene 1; E2 variant and Freaky Deaky SM initial replays completed and are recorded as pending; the three original queues and single publisher remain active",
+  "updated_utc": "2026-10-13T01:34:55Z",
+  "previous_goal_turn": "progress: six newly completed full replay passes were packed, verified, saved and committed immediately: Furst SSC as aac9cb318, Flying Castle SM as 3183aaf87, Final Flash Flight SM as 252e6d26c, Furst SM as 846038324, Gangu Kyousou Kyoku SSC as e7fdda130, and Girls MIA SM as 1c7a94b05. Actual completed Flowers Cringle, FTW, Fortuna, freg, Gaming in 2018, Genshin Quiz, flores sulphuris and ghost failures were recorded as pending. Feely has exactly 59716 extra internal GetCurrentStyle operations; owned style reads fixed as 21c106cb4 and validated with 18 Windows and Linux replay controls plus 28 Linux live tests; helper 4610c4a selected. DREAMING condition repair attempt 1 replayed all 32257 frames with 3563 mismatches and one actual Sound:get():volume callback error at source line 542, before the missing Update2 queuecommand at 30.723649978637695 seconds. RageSound volume parameter and chain identity fixed as 355263c7e, validated with 29 Windows and Linux live tests plus 18 Linux replay controls, and helper 89059df4 selected. DREAMING final attempt 2 is running on its retained byte-identical uncompressed capture. Player and NoteField zero initial live tween poses were traced to early registration; initialization now uses the existing pose setters and independent context coordinates and theme metrics, fixed as 58fcc8043, with 30 Windows and Linux live tests plus 18 Linux replay controls; immutable helper 668d1aa9 selected for future charts. Flowers Cringle has 160357 extra internal style queries plus observed zero position arguments; its first repair is running on the retained original capture. Feely retains one final attempt for source casing, remaining tween differences and one early failed observation. The three original disjoint sweep queues and single publisher remain active; the original 501-source sweep remains incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "263922a0a61c148d63482c41eb04192176bccd68",
+      "deadsync": "1c7a94b051e50ff9d810e8d83be19d77c0b87545",
       "itgmania_harness": "b191ebd0fcf8b59b5294958d2ffe2939af2d742a"
     }
   },
@@ -35,7 +35,10 @@
     "null_foreground_declarations": "committed as ce20604ea; all 26 Windows and Linux live tests passed; all 17 Linux replay controls and immutable helper validation passed; Fiji attempt 1 passed all 93015 frames and 1144 stage fields with zero mismatches/errors and was saved as 8c075d14e; sweep-2026-10-12-null-foreground-build.json",
     "load_actor_paths": "c71e8b4fe passed 10 LoadActor and 27 live tests on Windows and Linux plus 17 Linux replay controls; Flowers attempt 1 reuses its capture; sweep-2026-10-12-actor-paths-build.json",
     "native_case_lua_dependencies": "harness b191ebd passed 3 oracle and 12 archive controls on Windows and Linux; native trace observer unchanged; feelyourtouch attempt 1 repackages the unchanged capture; sweep-2026-10-12-case-lua-archive-build.json",
-    "conditional_actor_subtrees": "1d6c6e802 passed 28 live tests plus the subscriber-path regression on Windows and Linux and 17 Linux replay controls; the test-support feature guard was corrected before replay; DREAMING-ING attempt 1 reuses its capture; sweep-2026-10-12-condition-build.json",
+    "conditional_actor_subtrees": "1d6c6e802 passed 28 live tests plus the subscriber-path regression on Windows and Linux and 17 Linux replay controls; the test-support feature guard was corrected before replay; DREAMING-ING attempt 1 completed with a nil RageSound volume callback failure; final attempt 2 reuses its capture; sweep-2026-10-12-condition-build.json",
+    "owned_style_reads": "21c106cb4 passed 18 Windows and Linux replay controls plus 28 Linux live tests; retained failed validation revisions were corrected before selection; sweep-2026-10-12-owned-style-build.json",
+    "rage_sound_volume": "355263c7e passed 29 Windows and Linux live tests plus 18 Linux replay controls; DREAMING final attempt 2 runs on the retained uncompressed capture; live audio mixing coverage stays separate; sweep-2026-10-12-sound-volume-build.json",
+    "screen_initial_positions": "58fcc8043 passed 30 Windows and Linux live tests plus 18 Linux replay controls; getters and authored tween origins use independent initial positions; Flowers Cringle attempt 1 runs on the original capture; sweep-2026-10-12-screen-initial-pose-build.json",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved"
   },
   "corpus_transfer": {
@@ -50,18 +53,18 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Flowers [Cringle Desolation]/Flowers.ssc",
-      "position": 191,
+      "current": "Godspeed [TaroNuke]/godspeed.sm",
+      "position": 215,
       "phase": "replay",
-      "pid": 719218,
+      "pid": 1059364,
       "process_matches": true,
-      "passed": 8,
-      "pending": 18,
-      "processed": 26,
+      "passed": 10,
+      "pending": 24,
+      "processed": 34,
       "last_log_lines": [
-        "[2230.4s] replaying every native gameplay frame: 2255 checks completed, 0 failed",
-        "[2232.4s] replaying every native gameplay frame: 2255 checks completed, 0 failed",
-        "[2234.4s] replaying every native gameplay frame: 2255 checks completed, 0 failed"
+        "[36.0s] replaying every native gameplay frame: frame 1018/36822 (2.8%)",
+        "[38.0s] replaying every native gameplay frame: frame 1115/36822 (3.0%)",
+        "[40.0s] replaying every native gameplay frame: frame 1210/36822 (3.3%)"
       ],
       "supervisor_running": true
     },
@@ -75,12 +78,26 @@
     "dig_dug_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-dig-dug-clock-diagnosis.json",
     "dreams_bloom_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-dreams-background-diagnosis.json",
     "deceive_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-deceive-source-diagnosis.json",
+    "feely_owned_style_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-feely-owned-style-diagnosis.json",
+    "dreaming_sound_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-dreaming-sound-volume-diagnosis.json",
+    "initial_screen_pose_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-screen-initial-pose-diagnosis.json",
     "repair_residuals": "tests/fixtures/full_song_lua/sweep-2026-10-12-path-repair-residuals.json",
     "fiji_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-fiji-foreground-diagnosis.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
       {
-        "job": "dreaming-condition-repair-v1",
+        "job": "flowers-cringle-pose-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
+        "child_running": true
+      },
+      {
+        "job": "dreaming-sound-volume-repair-v1",
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
@@ -89,6 +106,17 @@
         "last_phase": "replay",
         "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
         "child_running": true
+      },
+      {
+        "job": "dreaming-condition-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 0,
+        "pending": 1,
+        "processed": 1,
+        "last_phase": "replay",
+        "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
+        "child_running": false
       },
       {
         "job": "feely-case-lua-repair-v1",
@@ -249,25 +277,25 @@
         "job": "chart-sweep-parallel-v4-1",
         "complete": false,
         "supervisor_running": true,
-        "passed": 3,
-        "pending": 8,
-        "processed": 11,
-        "last_phase": "replay",
-        "source_simfile": "FTW/FTW.sm",
-        "child_running": false,
-        "position": 201
+        "passed": 6,
+        "pending": 10,
+        "processed": 16,
+        "last_phase": "capture",
+        "source_simfile": "gone_KidFresino/song.ssc",
+        "child_running": true,
+        "position": 216
       },
       {
         "job": "chart-sweep-parallel-v4-2",
         "complete": false,
         "supervisor_running": true,
-        "passed": 3,
-        "pending": 3,
-        "processed": 6,
-        "last_phase": "capture",
-        "source_simfile": "Final Flash Flight/Final Flash Flight.sm",
+        "passed": 4,
+        "pending": 4,
+        "processed": 8,
+        "last_phase": "replay",
+        "source_simfile": "flowers/flowers.ssc",
         "child_running": true,
-        "position": 187
+        "position": 193
       },
       {
         "job": "definition-concat-repair-v1",
@@ -505,15 +533,29 @@
         "record": "sweep-2026-10-12-dreaming-condition-repairs.json",
         "fix_commit": "1d6c6e802 / harness b191ebd",
         "finish_status": "bounded DREAMING-ING conditional subtree repair complete"
+      },
+      {
+        "name": "dreaming-sound-volume-repair",
+        "remote": "/home/parity/jobs/dreaming-sound-volume-repair-v1",
+        "record": "sweep-2026-10-12-dreaming-sound-volume-repairs.json",
+        "fix_commit": "355263c7e / harness b191ebd",
+        "finish_status": "bounded DREAMING-ING final sound volume repair complete"
+      },
+      {
+        "name": "flowers-cringle-pose-repair",
+        "remote": "/home/parity/jobs/flowers-cringle-pose-repair-v1",
+        "record": "sweep-2026-10-12-flowers-cringle-pose-repairs.json",
+        "fix_commit": "58fcc8043 / harness b191ebd",
+        "finish_status": "bounded Flowers Cringle owned style and initial pose repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 22,
-    "new_pending_charts": 21,
-    "new_processed_sources": 43,
+    "new_passed_fixtures": 28,
+    "new_pending_charts": 30,
+    "new_processed_sources": 58,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 310,
+    "unprocessed_sources": 295,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -786,6 +828,74 @@
       ]
     },
     {
+      "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 607604,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 608498,
+          "deadsync": 765271
+        }
+      ]
+    },
+    {
+      "source_simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
+      "repair_attempts": 0,
+      "failure": "[0.7s] replaying every native gameplay frame\n\nthread 'main' (923739) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "freg/freg.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 2,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 13,
+          "deadsync": 11
+        }
+      ]
+    },
+    {
+      "source_simfile": "Gaming in 2018/Gaming in 2018.ssc",
+      "repair_attempts": 0,
+      "failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (966936) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: multiple native foreground entries need entry-specific ownership\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Genshin Quiz/Megaquiz.ssc",
+      "repair_attempts": 0,
+      "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Genshin Mega Quiz': failed to execute '/tmp/.tmpqRD1jn/song/lua/default.lua': runtime error: [string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: attempt to call global 'DayOfYear' (a nil value)\nstack traceback:\n\t[C]: in global 'DayOfYear'\n\t[string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Genshin Mega Quiz' from '/tmp/.tmpqRD1jn/song/lua/default.lua': failed to execute '/tmp/.tmpqRD1jn/song/lua/default.lua': runtime error: [string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: attempt to call global 'DayOfYear' (a nil value)\nstack traceback:\n\t[C]: in global 'DayOfYear'\n\t[string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (975076) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "ghost [Telperion]/ghost.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [
+        "UpdateCommand failed for ActorFrame: runtime error: [string \"/tmp/.tmpSyNYYb/song/spooky/default.lua\"]:108: attempt to call method 'SetLife' (a nil value)\nstack traceback:\n\t[C]: in method 'SetLife'\n\t[string \"/tmp/.tmpSyNYYb/song/spooky/default.lua\"]:108: in function <[string \"/tmp/.tmpSyNYYb/song/spooky/default.lua\"]:74>"
+      ],
+      "mismatch_count": 2,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 56057,
+          "deadsync": 43482
+        }
+      ]
+    },
+    {
       "source_simfile": "Delightful Day/Delightful Day.sm",
       "repair_attempts": 0,
       "failure": null,
@@ -934,6 +1044,30 @@
       ]
     },
     {
+      "source_simfile": "FTW/FTW.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 143,
+      "first_mismatch": [
+        {
+          "phase": "screen-active",
+          "seconds": -2.2996599674224854,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        }
+      ]
+    },
+    {
+      "source_simfile": "Get Into It/GetIntoIt.sm",
+      "repair_attempts": 0,
+      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[8.5s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Get Into It': failed to execute '/tmp/.tmp1eV1dG/song/lua/bg.lua': runtime error: [string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Get Into It' from '/tmp/.tmp1eV1dG/song/lua/default.lua': failed to execute '/tmp/.tmp1eV1dG/song/lua/default.lua': runtime error: [string \"/tmp/.tmp1eV1dG/song/lua/default.lua\"]:460: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmp1eV1dG/song/lua/default.lua\"]:460: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\ndeadsync_song_lua::playback::prepare: Failed to compile background lua layer for 'Get Into It' from '/tmp/.tmp1eV1dG/song/lua/bg.lua': failed to execute '/tmp/.tmp1eV1dG/song/lua/bg.lua': runtime error: [string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (996272) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[10.0s] replaying every native gameplay frame: frame 0/70013 (0.0%)\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
       "source_simfile": "Delightful Day/Delightful Day.ssc",
       "repair_attempts": 0,
       "failure": null,
@@ -949,12 +1083,12 @@
     },
     {
       "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
-      "repair_attempts": 0,
+      "repair_attempts": 1,
       "failure": null,
       "errors": [
-        "UpdateCommand failed for Quad: missing captured subscriber identity for 1/17/1/5\nstack traceback:\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"/tmp/.tmpjCIS3e/song/lua/default.lua\"]:565: in function <[string \"/tmp/.tmpjCIS3e/song/lua/default.lua\"]:454>\n"
+        "UpdateCommand failed for Quad: runtime error: [string \"/tmp/.tmpr1F6RO/song/lua/default.lua\"]:542: attempt to call method 'volume' (a nil value)\nstack traceback:\n\t[C]: in method 'volume'\n\t[string \"/tmp/.tmpr1F6RO/song/lua/default.lua\"]:542: in function <[string \"/tmp/.tmpr1F6RO/song/lua/default.lua\"]:454>"
       ],
-      "mismatch_count": 10357,
+      "mismatch_count": 3563,
       "first_mismatch": [
         {
           "phase": "screen-end",
@@ -976,6 +1110,22 @@
           "field": "stage_sample_clock",
           "native": 96.25424194335938,
           "deadsync": 96.28983306884766
+        }
+      ]
+    },
+    {
+      "source_simfile": "flores sulphuris - [Zaia]/flores sulphuris.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 1,
+      "first_mismatch": [
+        {
+          "phase": "progress",
+          "seconds": 177.00051879882812,
+          "field": "failed",
+          "native": false,
+          "deadsync": true
         }
       ]
     }
