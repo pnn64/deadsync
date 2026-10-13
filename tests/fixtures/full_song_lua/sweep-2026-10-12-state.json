@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T08:19:13Z",
-  "previous_goal_turn": "progress: Five original queued fixtures passed and were immediately saved: I'm sorry SM 7edb8f331 (104203 frames), ICON KILLER 3b9c59dda (53943), I'm sorry SSC b869cccd6 (114341), Into The Light2 SM 204211b1a (50780), and Into The Light2 SSC 037e8c45e (38737). Every full replay had zero mismatches and Lua errors; all five compressed archives locally decompress to their retained raw hashes. Storage proofs are 61252e375, b5881b86b and sweep-2026-10-13-light-ssc-fixture-verification.json; coverage remains separate. Source fix d851d0c3b adds Simply Love's eligible DensityGraph owned recurring sleep queue, native Song-BPM quantization, current-frame foreground activation and screen Off lifecycle dispatch. Three before-fix live regressions failed while the existing 34 passed. An existing late-start regression caught a missing same-frame callback slot; that failure was retained and corrected, with a fourth control preserving multitap single-update detection. Final Windows validation passed 38 live checks, 21 native controls and both replay executable builds. The first executable build's PDB FILE_SYSTEM failure was retained; lossless compression and expansion of the linker PDB allowed the single-job retry. Fresh Linux validation passed 815 gameplay tests, 38 live checks, 21 native replay controls and both executable builds against 23 frozen source pins with host-local mtimes. Immutable helper 66d32bf5 is selected; proof a69b3d0d2. Freg first repair reused byte-identical raw 4be2dbf1 and native trace 3736aead, completed all 24013 frames and 341 stage fields with no stage differences or Lua errors, and resolved the original DensityGraph timer and command-count failures. It remains pending at repair 1 with only Off begin/end one frame late (native 19.869955, independent 19.894785). Diagnosis 7f7148865 traces the premature autoplay failure flag to theme State::update before Lua, versus native FailOnHoldStart overlay Off after AllFailed is decided. Its final attempt remains unspent until that production phase is corrected and verified. GREAT GREAT stays pending at the two-attempt cap; no third replay or accepted fixture. Three original queues continue with one publisher and 34 streams. All original 501 source bytes remain audited against f7ea01463. Existing full replay acceptance is unchanged and the sweep stays active.",
+  "updated_utc": "2026-10-13T08:54:53Z",
+  "previous_goal_turn": "progress: Four original queued fixtures passed and were immediately saved: Invert SM d07d3e33f (118050 frames), itg bloodrush 2005 c2b170d2e (44818), Jokes 56e5fd329 (85083), and Invert SSC ed68d7f37 (118104). Each full replay had zero mismatches and Lua errors; all four compressed archives locally decompress to retained raw hashes. Storage verification is b0f09eda9, 397ee7a77 and sweep-2026-10-13-jokes-invert-fixture-verification.json. Coverage remains separate. Source fix 874f2e535 models Simply Love's actual autoplay Judgment latch in an owned overlay and applies shared FailPlayer during Off, after LeaveGameplay's AllFailed decision and before foreground Off. The actual PlayerState controller backs IsAutoplay. Linux passed 815 gameplay tests, 39 live controls, 21 production native controls and both executable builds; Windows passed 39 live controls, 21 native controls and both builds. A direct process invocation resolved PowerShell stderr-redirection's nonzero wrapper status; original logs were retained. Immutable helper 7e34d820 was verified against all 23 frozen source pins and native harness bytes before freg's final repair. That replay reused the original byte-identical capture, completed all 24013 frames and 341 stage fields, and resolved the prior Off begin/end clock differences. Freg remains pending at cap two: four failed-flag differences and one actual Judgment callback error for missing captured subscriber identity ScreenGameplay/6/1. The theme listener is absent from the replay's song-owned neutral factory pointer map; retained runtime records lack native pointer fields for assigning its subscriber position. No third freg repair or passing-chart reopening occurred. New-chart selection was restored to immutable helper 66d32bf5, verifying its binary, all four successful checks, all 23 original source pins directly from retained density-graph-sources-v1.tar.gz, and immutable harness SHA; the shared build snapshot contains newer source and is not treated as historical source evidence. Build/residual evidence is sweep-2026-10-13-autoplay-off-build.json and sweep-2026-10-13-freg-final-repair-residual.json. Actual new jeans failure is traced to the mapper rejecting multiple foreground entries: its unchanged simfile has 34 changes and native Foreground independently allocates every entry; neither repair attempt is spent. The single publisher now watches 35 streams. All three disjoint original queues remain live: Koi main, Just a Friend part 1, and Jack The Reaper part 2. The 501-source audit remains unchanged and incomplete; the live goal must continue.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "037e8c45ebbc34bebe7a658041961197643a585a",
+      "deadsync": "e6bcf292268a5471f11db0811ac390a4ea054656",
       "itgmania_harness": "b191ebd0fcf8b59b5294958d2ffe2939af2d742a"
     }
   },
@@ -71,9 +71,9 @@
       "pending": 37,
       "processed": 52,
       "last_log_lines": [
-        "[3668.9s] replaying every native gameplay frame: frame 38583/145074 (26.6%)",
-        "[3670.9s] replaying every native gameplay frame: frame 38611/145074 (26.6%)",
-        "[3672.9s] replaying every native gameplay frame: frame 38639/145074 (26.6%)"
+        "[5809.5s] replaying every native gameplay frame: frame 60453/145074 (41.7%)",
+        "[5811.5s] replaying every native gameplay frame: frame 60475/145074 (41.7%)",
+        "[5813.5s] replaying every native gameplay frame: frame 60494/145074 (41.7%)"
       ],
       "supervisor_running": true
     },
@@ -97,11 +97,25 @@
     "great_final_residual": "tests/fixtures/full_song_lua/sweep-2026-10-12-great-great-final-source-diagnosis.json",
     "freg_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-freg-source-diagnosis.json",
     "freg_first_repair_residual": "tests/fixtures/full_song_lua/sweep-2026-10-13-freg-first-repair-residual.json",
+    "freg_final_repair_residual": "tests/fixtures/full_song_lua/sweep-2026-10-13-freg-final-repair-residual.json",
+    "autoplay_off_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-autoplay-off-build.json",
+    "jeans_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-jeans-source-diagnosis.json",
     "jumper_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-jumper-source-diagnosis.json",
     "repair_residuals": "tests/fixtures/full_song_lua/sweep-2026-10-12-path-repair-residuals.json",
     "fiji_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-fiji-foreground-diagnosis.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
+      {
+        "job": "freg-autoplay-final-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 0,
+        "pending": 1,
+        "processed": 1,
+        "last_phase": "replay",
+        "source_simfile": "freg/freg.sm",
+        "child_running": false
+      },
       {
         "job": "freg-density-repair-v1",
         "complete": true,
@@ -382,25 +396,25 @@
         "job": "chart-sweep-parallel-v4-1",
         "complete": false,
         "supervisor_running": true,
-        "passed": 10,
-        "pending": 17,
-        "processed": 27,
+        "passed": 13,
+        "pending": 18,
+        "processed": 31,
         "last_phase": "replay",
-        "source_simfile": "Invert/invert.sm",
+        "source_simfile": "Just a Friend To  You/Just a Friend To  You.sm",
         "child_running": true,
-        "position": 249
+        "position": 261
       },
       {
         "job": "chart-sweep-parallel-v4-2",
         "complete": false,
         "supervisor_running": true,
-        "passed": 10,
+        "passed": 11,
         "pending": 17,
-        "processed": 27,
-        "last_phase": "capture",
-        "source_simfile": "Invert/invert.ssc",
+        "processed": 28,
+        "last_phase": "replay",
+        "source_simfile": "Jack The Reaper/Jack The Reaper.sm",
         "child_running": true,
-        "position": 250
+        "position": 253
       },
       {
         "job": "definition-concat-repair-v1",
@@ -708,15 +722,22 @@
         "record": "sweep-2026-10-13-freg-density-repairs.json",
         "fix_commit": "d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
         "finish_status": "bounded freg first DensityGraph and foreground lifecycle repair complete"
+      },
+      {
+        "name": "freg-autoplay-final-repair",
+        "remote": "/home/parity/jobs/freg-autoplay-final-repair-v1",
+        "record": "sweep-2026-10-13-freg-autoplay-final-repair.json",
+        "fix_commit": "874f2e535 + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+        "finish_status": "bounded freg final autoplay overlay Off repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 47,
-    "new_pending_charts": 59,
-    "new_processed_sources": 106,
+    "new_passed_fixtures": 51,
+    "new_pending_charts": 60,
+    "new_processed_sources": 111,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 247,
+    "unprocessed_sources": 242,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -996,41 +1017,19 @@
     },
     {
       "source_simfile": "freg/freg.sm",
-      "repair_attempts": 1,
+      "repair_attempts": 2,
       "failure": null,
-      "errors": [],
-      "mismatch_count": 2,
+      "errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 0.002: missing captured subscriber identity for ScreenGameplay/6/1"
+      ],
+      "mismatch_count": 4,
       "first_mismatch": [
         {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0002",
-            "args": [],
-            "beat": 46.32426452636719,
-            "command": "OffCommand",
-            "definition_id": "def-0002",
-            "detail": {
-              "name": "OffCommand"
-            },
-            "kind": "command",
-            "line": 21,
-            "operation": "command.begin",
-            "scene": 1,
-            "seconds": 19.86995506286621,
-            "seq": 12,
-            "source": "song:/c'est business.lua"
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "command",
-            "operation": "command.begin",
-            "command": "OffCommand",
-            "source": "song:/c'est business.lua",
-            "line": 21,
-            "beat": 46.382198333740234,
-            "seconds": 19.894784927368164,
-            "args": null
-          }
+          "phase": "progress",
+          "seconds": 20.000022888183594,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
         }
       ]
     },
@@ -1532,6 +1531,14 @@
       "source_simfile": "Impulse/impulse.ssc",
       "repair_attempts": 0,
       "failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (2667728) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: multiple native foreground entries need entry-specific ownership\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "jeans/abj.sm",
+      "repair_attempts": 0,
+      "failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (2902640) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: multiple native foreground entries need entry-specific ownership\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []

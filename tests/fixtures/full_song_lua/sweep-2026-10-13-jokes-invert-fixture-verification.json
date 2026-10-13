@@ -1,0 +1,46 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Jokes/Write Final Round.ssc",
+      "acceptance_commit": "56e5fd329",
+      "native_frames": 85083,
+      "replayed_frames": 85083,
+      "compared_stage_fields": 1386,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "e2514fd1aa14aa7b969ce0c138c37228a3b78c6361ea2822926fe31a9604e02f.tar.zst",
+      "compressed_sha256": "e2514fd1aa14aa7b969ce0c138c37228a3b78c6361ea2822926fe31a9604e02f",
+      "uncompressed_sha256": "4d2efcfb050fa6c533ceb86be570b3d15f66d95711da178f3c8998b1683aac0a",
+      "compressed_bytes": 7056655,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.CenterX, BitmapText.settext, Screen.AddInputCallback",
+        "native drawable state/resources: BitmapText, Sprite"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    },
+    {
+      "source_simfile": "Invert/invert.ssc",
+      "acceptance_commit": "ed68d7f37",
+      "native_frames": 118104,
+      "replayed_frames": 118104,
+      "compared_stage_fields": 3696,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "e3f01c5af96b14bd0ee9dbcfb93f3df6e270f2423ecba31c780694ef795f76d8.tar.zst",
+      "compressed_sha256": "e3f01c5af96b14bd0ee9dbcfb93f3df6e270f2423ecba31c780694ef795f76d8",
+      "uncompressed_sha256": "121316fceefc39a647074cd93c107e0ee874a2ad734f80b31ecaffeb4c499b58",
+      "compressed_bytes": 38339494,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T08:19:15Z",
+  "updated_utc": "2026-10-13T08:54:53Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 194,
-    "pending": 60,
-    "unprocessed": 247
+    "passed": 198,
+    "pending": 61,
+    "unprocessed": 242
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1766,8 +1766,8 @@
       "source_simfile": "freg/freg.sm",
       "simfile_sha256": "c17a176bd2314c4d9e122db759e9377c11096c92b6890431a31c3b781753854f",
       "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-13-freg-density-repairs.json"
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-13-freg-autoplay-final-repair.json"
     },
     {
       "position": 201,
@@ -2157,13 +2157,17 @@
       "position": 249,
       "source_simfile": "Invert/invert.sm",
       "simfile_sha256": "20c8a2884f29ca6a6cd78601de24e72f3c12ba85c4865c4d78da8c63ed3aa64f",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 250,
       "source_simfile": "Invert/invert.ssc",
       "simfile_sha256": "5c97f248659f6c4c9816d49d3ea43c0bdffc3d913c5f73fa486021a060c2165e",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 251,
@@ -2177,7 +2181,9 @@
       "position": 252,
       "source_simfile": "itg bloodrush 2005/itg bloodrush 2005.sm",
       "simfile_sha256": "5ee202c92af42bcccc50505617f11ce6bc103c966cdc62cf416b8abb3bf988b5",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 253,
@@ -2197,7 +2203,9 @@
       "position": 255,
       "source_simfile": "jeans/abj.sm",
       "simfile_sha256": "9c5e808b44a8f6355cff645f400bad14c1cf42e73830d4cb3466a632f3a7454c",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 256,
@@ -2217,7 +2225,9 @@
       "position": 258,
       "source_simfile": "Jokes/Write Final Round.ssc",
       "simfile_sha256": "b6639bdaa0d426e652286ff4532e470c44130d69a9b2fcf4f48defbf84bec905",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 259,
