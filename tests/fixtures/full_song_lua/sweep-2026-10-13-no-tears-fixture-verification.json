@@ -1,0 +1,26 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "No Tears Left To Cry - [JNero]/No-Tears.sm",
+      "acceptance_commit": "d0a06e8bdeaddacc6a649535ff975d6a704e57f0",
+      "native_frames": 90167,
+      "replayed_frames": 90167,
+      "compared_stage_fields": 1529,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "a706c40ae1f850b05ac41baac33986f5c04a77f35677a36cd8705eb3a2ea25b0.tar.zst",
+      "compressed_sha256": "a706c40ae1f850b05ac41baac33986f5c04a77f35677a36cd8705eb3a2ea25b0",
+      "uncompressed_sha256": "db19fd1f779f943447980ac2a845f74910b9de551598a9250b7936b33ad89e85",
+      "compressed_bytes": 8646770,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.addy, PlayerOptions.Centered",
+        "native drawable state/resources: Quad"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
