@@ -1,0 +1,26 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "jeans/abj.sm",
+      "acceptance_commit": "5dbfd60bd",
+      "native_frames": 27391,
+      "replayed_frames": 27391,
+      "compared_stage_fields": 495,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "f9f961f5835392f63e3b2a8e8c58b00aedab67b42ced6dd21aedad01e4de4f83.tar.zst",
+      "compressed_sha256": "f9f961f5835392f63e3b2a8e8c58b00aedab67b42ced6dd21aedad01e4de4f83",
+      "uncompressed_sha256": "78e3d3d899ed96cea7df7e3645577348710e0a0b64aaa7b8f6abd58f07ebc92b",
+      "compressed_bytes": 7873448,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.skewx, Actor.skewy",
+        "native drawable state/resources: Sprite"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
