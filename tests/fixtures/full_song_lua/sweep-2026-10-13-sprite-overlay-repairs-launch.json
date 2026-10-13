@@ -1,0 +1,198 @@
+{
+  "selected_build": {
+    "build_proof": "/home/parity/jobs/sprite-frames-overlay-green-v2/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "binary_sha256": "5ae071ff2319cc8c107d87763b84978c29b7ecc763fb4de47330fd6287f5b283",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "actual_source_pins": 26,
+  "harness_source_pins": 3,
+  "repairs": [
+    {
+      "position": 210,
+      "source_simfile": "Get Into It/GetIntoIt.sm",
+      "attempt_started": 1,
+      "per_chart_limit": 2,
+      "launch_receipt": {
+        "position": 210,
+        "supervisor_pid": 1793848,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_sprite_overlay_chart_repair_v1.py",
+          "210"
+        ]
+      },
+      "live_observation": {
+        "pid": 1794377,
+        "command": [
+          "/home/parity/jobs/sprite-frames-overlay-green-v2/full-song-lua-stage-modifier-v1",
+          "--archive",
+          "/home/parity/jobs/get-into-it-sm-frames-repair-v1/chart-210/c8525597f7140851887306420f697065b157204649f38c77434fb24b5fa69c27.tar",
+          "--report",
+          "/home/parity/jobs/get-into-it-sm-frames-repair-v1/chart-210/report.json"
+        ],
+        "label": "replay",
+        "source_simfile": "Get Into It/GetIntoIt.sm"
+      },
+      "exact_process_matches": [
+        true,
+        true
+      ],
+      "attempt_start": {
+        "position": 210,
+        "source_simfile": "Get Into It/GetIntoIt.sm",
+        "status": "pending",
+        "repair_attempts": 1,
+        "previous_concrete_failures": [],
+        "previous_errors": [],
+        "previous_failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[8.5s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Get Into It': failed to execute '/tmp/.tmp1eV1dG/song/lua/bg.lua': runtime error: [string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Get Into It' from '/tmp/.tmp1eV1dG/song/lua/default.lua': failed to execute '/tmp/.tmp1eV1dG/song/lua/default.lua': runtime error: [string \"/tmp/.tmp1eV1dG/song/lua/default.lua\"]:460: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmp1eV1dG/song/lua/default.lua\"]:460: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\ndeadsync_song_lua::playback::prepare: Failed to compile background lua layer for 'Get Into It' from '/tmp/.tmp1eV1dG/song/lua/bg.lua': failed to execute '/tmp/.tmp1eV1dG/song/lua/bg.lua': runtime error: [string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (996272) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[10.0s] replaying every native gameplay frame: frame 0/70013 (0.0%)\n",
+        "binary_sha256": "5ae071ff2319cc8c107d87763b84978c29b7ecc763fb4de47330fd6287f5b283",
+        "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+        "candidate_sha256": "c8525597f7140851887306420f697065b157204649f38c77434fb24b5fa69c27",
+        "trace_sha256": "955ef8d80682254161222f06ac6f57ede4122e54d0cba577443e5cb6406e4632",
+        "simfile_sha256": "5577279c57ba4255fcec3f2f7e105c0e2627731193ee239d4ecc2486806027af",
+        "build_proof": "/home/parity/jobs/sprite-frames-overlay-green-v2/proof.json",
+        "fix_commit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+        "native_capture_reused": true,
+        "all_candidate_manifest_members_byte_verified": true
+      },
+      "replay_log_tail": [
+        "[50.0s] replaying every native gameplay frame: frame 364/70013 (0.5%)",
+        "[52.0s] replaying every native gameplay frame: frame 379/70013 (0.5%)",
+        "[54.0s] replaying every native gameplay frame: frame 394/70013 (0.6%)"
+      ],
+      "completed_result": null
+    },
+    {
+      "position": 211,
+      "source_simfile": "Get Into It/GetIntoIt.ssc",
+      "attempt_started": 1,
+      "per_chart_limit": 2,
+      "launch_receipt": {
+        "position": 211,
+        "supervisor_pid": 1793955,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_sprite_overlay_chart_repair_v1.py",
+          "211"
+        ]
+      },
+      "live_observation": {
+        "pid": 1794375,
+        "command": [
+          "/home/parity/jobs/sprite-frames-overlay-green-v2/full-song-lua-stage-modifier-v1",
+          "--archive",
+          "/home/parity/jobs/get-into-it-ssc-frames-repair-v1/chart-211/bc410b2ec660dea177cd25b913edd879070438441184378f20362174d5aed8fa.tar",
+          "--report",
+          "/home/parity/jobs/get-into-it-ssc-frames-repair-v1/chart-211/report.json"
+        ],
+        "label": "replay",
+        "source_simfile": "Get Into It/GetIntoIt.ssc"
+      },
+      "exact_process_matches": [
+        true,
+        true
+      ],
+      "attempt_start": {
+        "position": 211,
+        "source_simfile": "Get Into It/GetIntoIt.ssc",
+        "status": "pending",
+        "repair_attempts": 1,
+        "previous_concrete_failures": [],
+        "previous_errors": [],
+        "previous_failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[7.1s] replaying every native gameplay frame\n[8.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Get Into It (Yuh)': failed to execute '/tmp/.tmpgRWmbz/song/lua/bg.lua': runtime error: [string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Get Into It (Yuh)' from '/tmp/.tmpgRWmbz/song/lua/default.lua': failed to execute '/tmp/.tmpgRWmbz/song/lua/default.lua': runtime error: [string \"/tmp/.tmpgRWmbz/song/lua/default.lua\"]:460: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmpgRWmbz/song/lua/default.lua\"]:460: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\ndeadsync_song_lua::playback::prepare: Failed to compile background lua layer for 'Get Into It (Yuh)' from '/tmp/.tmpgRWmbz/song/lua/bg.lua': failed to execute '/tmp/.tmpgRWmbz/song/lua/bg.lua': runtime error: [string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (1455192) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[10.0s] replaying every native gameplay frame: frame 0/57594 (0.0%)\n",
+        "binary_sha256": "5ae071ff2319cc8c107d87763b84978c29b7ecc763fb4de47330fd6287f5b283",
+        "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+        "candidate_sha256": "bc410b2ec660dea177cd25b913edd879070438441184378f20362174d5aed8fa",
+        "trace_sha256": "4a209e499e1d30cf87f93117723c64f4dc55c9c0604f72683735375a955b60a5",
+        "simfile_sha256": "c13e18cc0089f8bd5f5dbf814ff97ae0fd614856914b8c41b1593a120e9ebed5",
+        "build_proof": "/home/parity/jobs/sprite-frames-overlay-green-v2/proof.json",
+        "fix_commit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+        "native_capture_reused": true,
+        "all_candidate_manifest_members_byte_verified": true
+      },
+      "replay_log_tail": [
+        "[54.0s] replaying every native gameplay frame: frame 390/57594 (0.7%)",
+        "[56.0s] replaying every native gameplay frame: frame 403/57594 (0.7%)",
+        "[58.0s] replaying every native gameplay frame: frame 418/57594 (0.7%)"
+      ],
+      "completed_result": null
+    },
+    {
+      "position": 289,
+      "source_simfile": "Lower Times/Lower Times.ssc",
+      "attempt_started": 2,
+      "per_chart_limit": 2,
+      "launch_receipt": {
+        "position": 289,
+        "supervisor_pid": 1794061,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_sprite_overlay_chart_repair_v1.py",
+          "289"
+        ]
+      },
+      "live_observation": {
+        "pid": 1794169,
+        "command": [
+          "/home/parity/jobs/sprite-frames-overlay-green-v2/full-song-lua-stage-modifier-v1",
+          "--archive",
+          "/home/parity/jobs/lower-ssc-overlay-final-repair-v1/chart-289/f2f5ef47ffbd972a1a82faed813e31cff6b36e3177114c0a8b579b815115cb8b.tar",
+          "--report",
+          "/home/parity/jobs/lower-ssc-overlay-final-repair-v1/chart-289/report.json"
+        ],
+        "label": "replay",
+        "source_simfile": "Lower Times/Lower Times.ssc"
+      },
+      "exact_process_matches": [
+        true,
+        true
+      ],
+      "attempt_start": {
+        "position": 289,
+        "source_simfile": "Lower Times/Lower Times.ssc",
+        "status": "pending",
+        "repair_attempts": 2,
+        "previous_concrete_failures": [
+          {
+            "field": "command_query_count",
+            "native": 93,
+            "deadsync": 88
+          }
+        ],
+        "previous_errors": [],
+        "previous_failure": null,
+        "binary_sha256": "5ae071ff2319cc8c107d87763b84978c29b7ecc763fb4de47330fd6287f5b283",
+        "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+        "candidate_sha256": "f2f5ef47ffbd972a1a82faed813e31cff6b36e3177114c0a8b579b815115cb8b",
+        "trace_sha256": "60becf74ac483841cd11aade35a2a7a1a838e486b72b39294d1c7e4e032a78de",
+        "simfile_sha256": "6ca6a4f70f49b08d05d58bd76d943bfa304378ffc855c7f7dfcee3c677e1f65d",
+        "build_proof": "/home/parity/jobs/sprite-frames-overlay-green-v2/proof.json",
+        "fix_commit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+        "native_capture_reused": true,
+        "all_candidate_manifest_members_byte_verified": true
+      },
+      "replay_log_tail": [
+        "[64.0s] replaying every native gameplay frame: frame 4403/114997 (3.8%)",
+        "[66.0s] replaying every native gameplay frame: frame 4510/114997 (3.9%)",
+        "[68.0s] replaying every native gameplay frame: frame 4618/114997 (4.0%)"
+      ],
+      "completed_result": null
+    }
+  ],
+  "status": "three bounded full repairs launched; results must satisfy the existing complete replay comparisons",
+  "validated_build": "sweep-2026-10-13-sprite-frames-overlay-build.json",
+  "native_capture_reused": true,
+  "all_uncompressed_candidate_members_verified": true,
+  "publisher_streams": 51,
+  "publisher_count": 1,
+  "actual_publisher": {
+    "ProcessId": 60312,
+    "CommandLine": "\"C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe\" -B -X utf8 C:/GitHub/itgmania-harness/target/server-parity/publish_chart_sweep_v1.py"
+  },
+  "comparisons_modified": false,
+  "passing_charts_reopened": false,
+  "lower_attempt2_is_final": true,
+  "get_into_it_attempt1_each": true
+}
