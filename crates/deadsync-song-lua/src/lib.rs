@@ -3439,7 +3439,8 @@ fn overlay_command_ease_factor(easing: Option<&str>, t: f32, opt1: Option<f32>) 
     match easing.unwrap_or("linear") {
         "instant" => 1.0,
         "inQuad" => t * t,
-        "outQuad" => (1.0 - t).mul_add(-(1.0 - t), 1.0),
+        // NativeTween.cpp rounds the scalar multiply before subtraction.
+        "outQuad" => 1.0 - (1.0 - t) * (1.0 - t),
         // ITGmania's fallback smooth(t) uses scalar Bezier {0, 0, 1, 1}.
         "smooth" => t * t * (3.0 - 2.0 * t),
         "inOutQuad" => {
@@ -5591,6 +5592,18 @@ fn column_offset_sample_y(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn native_deceleration_keeps_scalar_float_rounding() {
+        // Retained native Player tween: duration 0.3, Y816 -> Y528.
+        let percent = 1.0_f32 - 0.2640790343284607_f32 / 0.3_f32;
+        let factor = super::overlay_command_ease_factor(Some("outQuad"), percent, None);
+        assert_eq!(factor, 0.22513633966445923_f32);
+        let mut pose = super::SongLuaOverlayState { y: 816.0, ..Default::default() };
+        let target = super::SongLuaOverlayStateDelta { y: Some(528.0), ..Default::default() };
+        super::overlay_state_lerp(&mut pose, &target, factor);
+        assert_eq!(pose.y, 751.1607666015625_f32);
+    }
+
     use chrono::{Datelike, Local};
     use deadlib_present::actors::{TextAlign, TextAttribute};
     use deadlib_present::anim::{EffectClock, EffectMode};

@@ -777,17 +777,23 @@ return Def.ActorFrame {
         self:sleep(60)
         field:SetDidTapNoteCallback(function(column, score, bright)
             assert(column == 1 and score == 'TapNoteScore_W1' and bright == false)
+            local before = GAMESTATE:GetSongBeat()
+            self:playcommand('TapNested')
+            assert(GAMESTATE:GetSongBeat() == before)
             taps = taps + 1
             player:SetLife(0.25)
             assert(meter:GetLife() == 0.25 and stats:GetCurrentLife() == 0.25)
             self:stoptweening():sleep(0.25)
-            MESSAGEMAN:Broadcast('EngineTap', {beat=GAMESTATE:GetSongBeat(),
+            MESSAGEMAN:Broadcast('EngineTap', {beat=before,
                 combo=stats:GetCurrentCombo(), possible=stats:GetCurrentPossibleDancePoints(), left=self:GetTweenTimeLeft()})
             return 2, 'TapNoteScore_W2', true
         end)
         self:SetUpdateFunction(function(self, delta)
             MESSAGEMAN:Broadcast('EngineObserve', {left=self:GetTweenTimeLeft(), taps=taps, delta=delta})
         end)
+    end,
+    TapNestedCommand = function()
+        MESSAGEMAN:Broadcast('EngineTapNested', {beat=GAMESTATE:GetSongBeat()})
     end,
     JudgmentMessageCommand = function(_, params)
         assert(params.Player == PLAYER_1 and params.FirstTrack == 0)
@@ -890,9 +896,12 @@ return Def.ActorFrame {
             output.source_broadcasts.iter().find(|event| event.name == "EngineTap"));
         let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
         let queries: Vec<_> = events.iter().filter(|event| event["operation"] == "GameState.GetSongBeat").collect();
-        assert_eq!(queries.len(), 1);
-        assert_eq!(queries[0]["phase"], "callback");
-        assert_eq!(queries[0]["results"][0], serde_json::json!(expected_beat));
+        assert_eq!(queries.len(), 3);
+        for (query, phase) in queries.iter().zip(["construction", "callback", "construction"]) {
+            assert_eq!(query["phase"], phase,
+                "direct NoteField queries surround the nested owned command without borrowing its scope");
+            assert_eq!(query["results"][0], serde_json::json!(expected_beat));
+        }
         gameplay::update(&mut state, 0.1, GameplayAudioSnapshot {
             stream_clock: GameplayStreamClockSnapshot { music_nanos: tap_time + 100_000_000,
                 has_music_mapping: true, valid_at_host_nanos: 1_100_000_000, ..Default::default() },

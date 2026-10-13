@@ -678,9 +678,7 @@ fn invoke_note_field_tap_callback(
 ) -> mlua::Result<deadsync_gameplay::GameplayNoteFieldTap> {
     // NoteField.cpp passes three arguments without self and reads three optional
     // returns. Each valid return replaces its argument independently.
-    callback_phase(lua, true);
     let result = callback.call::<MultiValue>((tap.column + 1, format!("TapNoteScore_{}", tap.score), tap.bright));
-    callback_phase(lua, false);
     let values = result?;
     if let Some(value) = values.front() {
         if let Some(column) = lua.coerce_number(value.clone())? {
@@ -2358,6 +2356,10 @@ return Def.ActorFrame {
     fn live_note_field_tap_returns_follow_native_optional_conversions() {
         let lua = Lua::new();
         let field = lua.create_table().unwrap();
+        lua.set_app_data(QueryTrace::default());
+        lua.globals().set("CommandDepth", lua.create_function(|lua, ()| {
+            Ok(lua.app_data_ref::<QueryTrace>().expect("observed command scope").commands)
+        }).unwrap()).unwrap();
         let original = deadsync_gameplay::GameplayNoteFieldTap {
             player: 1, column: 3, score: "W3", bright: false,
         };
@@ -2369,6 +2371,7 @@ return Def.ActorFrame {
         ] {
             let callback: Function = lua.load(format!(r#"
 return function(column, score, bright)
+    assert(CommandDepth() == 0, 'direct NoteField callback has no ActorFrame command scope')
     assert(column == 4 and score == 'TapNoteScore_W3' and bright == false)
     {body}
 end
@@ -2381,6 +2384,14 @@ end
         assert_eq!(actual, deadsync_gameplay::GameplayNoteFieldTap { bright: true, ..original });
         assert!(field.raw_get::<bool>("__songlua_did_tap_note_column_error_reported").unwrap());
         assert!(field.raw_get::<bool>("__songlua_did_tap_note_score_error_reported").unwrap());
+        let fails: Function = lua.load("return function() error('authored tap failure') end").eval().unwrap();
+        assert!(invoke_note_field_tap_callback(&lua, &field, &fails, original, 4).is_err());
+        assert_eq!(lua.app_data_ref::<QueryTrace>().unwrap().commands, 0);
+        lua.app_data_mut::<QueryTrace>().unwrap().commands = 2;
+        let nested: Function = lua.load("return function() assert(CommandDepth() == 2); return nil end").eval().unwrap();
+        assert_eq!(invoke_note_field_tap_callback(&lua, &field, &nested, original, 4).unwrap(), original);
+        assert_eq!(lua.app_data_ref::<QueryTrace>().unwrap().commands, 2,
+            "the direct call preserves an already active authored scope");
     }
 
     #[test]
