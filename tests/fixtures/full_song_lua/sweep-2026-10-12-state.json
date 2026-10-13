@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T18:35:58Z",
-  "previous_goal_turn": "Progress: four passing original fixtures were saved and locally byte verified with zero differences and Lua errors: Lonely/Lonely.ssc first repair 1 (93048 frames, 2728 stage fields, acceptance 1b0feb2eb37ebe09b89ec46e72b4c12a386c903a), Marshall Maximizer/marshall maximizer.ssc (92066 frames, 1584 fields, 06f79e75155ab009305475798a1803a38d9d624e), Maware! Setsugetsuka SSC (68523 frames, 1177 fields, 058a3ca1732f33642c4cf52269c8fff3e31a55ca), and mawaru2/mawaru2.sm (103901 frames, 1925 fields, b59d9ddecdcee577c21b6ffd2d2bb02a5095f93f). They remain accepted and coverage stays separate. Lower Times SSC first bounded repair 1 completed its full 114997-frame replay with 2420 compared stage fields, zero errors and one count difference: native 93 versus independent 88. Its retained native capture was reused and all uncompressed candidate/report bytes verified. It remains pending with one repair left; no second attempt has launched. The natural navigation fix 7c8b4c460131bb1c1674813ca53a210e20ff895d passed meaningful pre-fix red and post-fix green production controls on both hosts, but its chart repair did not resolve this remaining count difference. The final native stage sample is failed; the failure exit path is under source investigation, without a claimed repair. Koi SM first repair 1 remains pending after 145074 frames, 2299 compared fields and 3014 command differences with zero errors. Diagnostic alignment of the existing complete report isolates 60 Fish parent paths, 35 missing mine Judgment callbacks and three tap callback clocks, without modifying any acceptance gate. Actor-name fix da708fe8836e33d3095f23be69d9eb9b56db7de4 retains native names independently of Lua attribute writes, preserves loading and foreground naming, and passes meaningful unchanged red/green controls on both hosts. Linux passed 815 gameplay, one new actor-name, one parent-loading, one foreground-name, 44 live, one scalar and 22 native controls plus both executable builds. Windows passed one actor-name, one parent-loading, one foreground-name, 45 live, one scalar and 22 native controls plus both builds. All 26 actual frozen source pins, isolated production preimages, build clocks, logs and native harness's three pins were verified. Selected immutable helper 270fd0d5062daf8b1418e44e81d8a9e6b45d9d830ea84c1ded1081205d620ab7 is actor-name-green-v1. Its receipt and atomic selection use the fixed commit SHA; unselected 874f2e535 remains excluded. Koi has one repair left and no second replay launched. mawaru4 SSC's original startup failure has a concrete source diagnosis: native caches 11 unique BackgroundDefs for 20 authored Lua changes while preparation creates 20 separate containers. Correct repair must preserve the whole change timeline and native identity/focus behavior; no fix or chart repair has been launched. The original main queue and both partitions remain live, with mawaru6, mawaru7 and mawaru3 replaying at this checkpoint; workers were not restarted. Singleton publisher 60312 watches 48 streams. Capped charts remain pending without another retry. All 501 original simfiles remain byte unchanged, RUNWAY stays outside original scope, and the goal is active and incomplete. Existing complete uncompressed replay comparisons remain the sole acceptance gates; no passing chart was reopened.",
+  "updated_utc": "2026-10-13T19:39:02Z",
+  "previous_goal_turn": "Progress: four passing original fixtures were saved and locally byte verified with zero differences and Lua errors: Lonely/Lonely.ssc first repair 1 (93048 frames, 2728 stage fields), Marshall Maximizer SSC (92066 frames,1584 fields), Maware! Setsugetsuka SSC (68523 frames,1177 fields), and mawaru2 SM (103901 frames,1925 fields). They remain accepted and coverage stays separate. Lower Times SSC first repair completed114997 frames and2420 fields with zero errors and one count difference, native93 versus independent88. Paired bounded probes now establish the remaining cause: the frozen Linux helper marked autoplay failed before owned Off, selecting BeginFailed and delaying Off one frame. The existing Windows fix874f2e535 fails judged autoplay inside overlay Off, after exit selection, and dispatches all five terminal End events on the final native frame. Existing fix874f2e535 is now enrolled in Linux through12 isolated verified preimages in six files. Both Get Into It originals fail at startup because Sprite.LinearFrames is absent. New fix06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 installs the native fallback helper and has an unchanged meaningful Sprite control that fails before production on both hosts. A new real autoplay navigation control fails on the excluded Linux baseline and passes with the already fixed Windows source; both controls pass in the combined helper. All10 Linux and9 Windows checks pass, including815 Linux gameplay tests,46 live and23 native controls on both hosts and both executable builds. All26 frozen source pins, logs, isolated edits and the native harness's three pins are byte verified. Selected immutable helper5ae071ff2319cc8c107d87763b84978c29b7ecc763fb4de47330fd6287f5b283 is sprite-frames-overlay-green-v2; atomic selection uses fixed commit SHAs. The first full bounded repair1 for each Get Into It variant and final Lower Times SSC repair2 are running against unchanged native captures; only the existing complete uncompressed comparisons decide acceptance. Koi SM first repair remains pending after145074 frames,2299 fields and3014 command differences with zero errors. Existing diagnostic alignment isolates60 Fish paths,35 missing mine Judgment callbacks and three delayed tap callbacks. Actor-name fixda708fe8836e33d3095f23be69d9eb9b56db7de4 is validated and selected. A new bounded timing probe establishes that all three native clocks already cross the exact authored float beat, while independent nanosecond deadlines lie1319,1320 and5135ns later. Native Player::CrossedRows uses float note rows; controls and a production repair for this timing and the mine callbacks are still required before Koi's one remaining full repair. No second Koi replay has launched. Hold/roll timing windows already include TIMING_WINDOW_ADD_S; no constant change is needed. mawaru4 SSC has11 cached native BackgroundDefs versus20 authored changes; it still needs instance reuse with the complete timeline and native focus behavior. No mawaru4 repair has launched. Original main and both partition workers remain live and were not restarted. Singleton publisher60312 watches51 streams. Capped charts remain pending without another retry. All501 original simfiles remain byte unchanged, RUNWAY stays outside original scope, and the goal is active and incomplete. No passing chart was reopened.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,11 +14,12 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "b2ab7529b351b4561ca8b2817cd2b878fed754ae",
+      "deadsync": "a03cd421dbbba92a2c1f40051a198a457e21f010",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
   "validation": {
+    "sprite_and_overlay_exit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535: meaningful unchanged focused controls; all10 Linux and9 Windows checks pass; 26 actual source and3 native harness pins verified; sprite-frames-overlay-build.json",
     "retained_native_actor_names": "da708fe8836e33d3095f23be69d9eb9b56db7de4: meaningful unchanged actor-name control fails before production and passes after on both hosts; all 8 Linux and 7 Windows checks pass, 26 actual source pins and native 3 harness pins verified; actor-name-build.json",
     "natural_owned_scene_end": "7c8b4c460131bb1c1674813ca53a210e20ff895d: original control fails on both hosts before the fix; failed first green exposes retained SetLife ownership; unchanged control passes with owned meter and all green controls/builds. natural-end-build.json",
     "owned_note_columns_and_native_palette": "21f6e3467 and4d1ed6dd8: meaningful pre-fix red controls and complete green controls on Linux and Windows; all26 source pins and isolated preimages verified, both executable builds, harness058 with three source pins; column-update-build.json and palette-build.json",
@@ -75,9 +76,9 @@
       "pending": 44,
       "processed": 64,
       "last_log_lines": [
-        "[16223.8s] replaying every native gameplay frame: frame 90794/121856 (74.5%)",
-        "[16225.8s] replaying every native gameplay frame: frame 90808/121856 (74.5%)",
-        "[16227.8s] replaying every native gameplay frame: frame 90821/121856 (74.5%)"
+        "[20008.6s] replaying every native gameplay frame: frame 114788/121856 (94.2%)",
+        "[20010.6s] replaying every native gameplay frame: frame 114798/121856 (94.2%)",
+        "[20012.6s] replaying every native gameplay frame: frame 114808/121856 (94.2%)"
       ],
       "supervisor_running": true
     },
@@ -86,6 +87,11 @@
     "parallel_queue_receipt": "tests/fixtures/full_song_lua/sweep-2026-10-12-parallel-queues.json",
     "build_transition": "tests/fixtures/full_song_lua/sweep-2026-10-12-build-transition.json",
     "source_scope_audit": "tests/fixtures/full_song_lua/sweep-2026-10-12-original-scope.json",
+    "koi_native_row_boundary": "tests/fixtures/full_song_lua/sweep-2026-10-13-koi-native-row-boundary.json",
+    "sprite_overlay_repairs_launch": "tests/fixtures/full_song_lua/sweep-2026-10-13-sprite-overlay-repairs-launch.json",
+    "sprite_frames_overlay_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-sprite-frames-overlay-build.json",
+    "sprite_linear_frames_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-sprite-linear-frames-diagnosis.json",
+    "lower_ssc_bounded_lifecycle": "tests/fixtures/full_song_lua/sweep-2026-10-13-lower-ssc-bounded-lifecycle.json",
     "mawaru4_native_background_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-mawaru4-background-diagnosis.json",
     "koi_sm_command_alignment": "tests/fixtures/full_song_lua/sweep-2026-10-13-koi-sm-command-alignment.json",
     "lower_ssc_first_end_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-lower-ssc-end-completion.json",
@@ -182,6 +188,39 @@
     "fiji_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-fiji-foreground-diagnosis.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
+      {
+        "job": "get-into-it-sm-frames-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Get Into It/GetIntoIt.sm",
+        "child_running": true
+      },
+      {
+        "job": "get-into-it-ssc-frames-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Get Into It/GetIntoIt.ssc",
+        "child_running": true
+      },
+      {
+        "job": "lower-ssc-overlay-final-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Lower Times/Lower Times.ssc",
+        "child_running": true
+      },
       {
         "job": "lower-ssc-end-repair-v1",
         "complete": true,
@@ -1040,6 +1079,27 @@
         "record": "sweep-2026-10-13-lower-ssc-end-repair.json",
         "fix_commit": "7c8b4c460131bb1c1674813ca53a210e20ff895d / harness c283a8a",
         "finish_status": "bounded first Lower Times SSC natural End repair complete"
+      },
+      {
+        "name": "get-into-it-sm-frames-repair",
+        "remote": "/home/parity/jobs/get-into-it-sm-frames-repair-v1",
+        "record": "sweep-2026-10-13-get-into-it-sm-frames-repair.json",
+        "fix_commit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044",
+        "finish_status": "bounded first Get Into It Sprite frames repair complete"
+      },
+      {
+        "name": "get-into-it-ssc-frames-repair",
+        "remote": "/home/parity/jobs/get-into-it-ssc-frames-repair-v1",
+        "record": "sweep-2026-10-13-get-into-it-ssc-frames-repair.json",
+        "fix_commit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044",
+        "finish_status": "bounded first Get Into It Sprite frames repair complete"
+      },
+      {
+        "name": "lower-ssc-overlay-final-repair",
+        "remote": "/home/parity/jobs/lower-ssc-overlay-final-repair-v1",
+        "record": "sweep-2026-10-13-lower-ssc-overlay-final-repair.json",
+        "fix_commit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044",
+        "finish_status": "bounded final Lower Times SSC overlay Off repair complete"
       }
     ]
   },
