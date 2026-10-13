@@ -13541,8 +13541,7 @@ pub fn create_top_screen_player_actor(
         actor.raw_set("__songlua_inside_set_life", true)?;
         let result = (|| {
             crate::live::set_player_life(lua, player_index, life)?;
-            let screen: Table = lua.globals().raw_get("__songlua_top_screen")?;
-            let meter: Table = actor_children(lua, &screen)?.raw_get(top_screen_life_meter_name(player_index))?;
+            let meter: Table = actor.raw_get("__songlua_life_meter")?;
             meter.raw_set("__songlua_life", life)?;
             let params = lua.create_table()?;
             params.raw_set("Player", format!("PlayerNumber_P{}", player_index + 1))?;
@@ -13860,6 +13859,8 @@ pub fn create_top_screen_table(
     ];
     for (player_index, player_actor) in player_actors.iter().enumerate() {
         player_actor.set("__songlua_parent", top_screen.clone())?;
+        // Player retains its life meter while its screen dispatches End.
+        player_actor.raw_set("__songlua_life_meter", life_meters[player_index].clone())?;
         install_named_theme_children(lua, player_actor, &["Judgment", "Combo"],
             create_named_child_actor)?;
         install_hold_judgments(lua, player_actor, player_index, &context.style_name, create_dummy_actor)?;

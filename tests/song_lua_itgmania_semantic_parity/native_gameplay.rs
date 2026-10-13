@@ -752,6 +752,103 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn gameplay_natural_navigation_ends_owned_song_actors_once() {
+        use super::{gameplay, paths, GameplayAudioSnapshot, GameplayConfig,
+            GameplaySession, GameplayStreamClockSnapshot, GameplayViewport};
+        use deadsync_song_lua::SongLuaCompileContext;
+        use std::{fs, sync::Arc};
+        paths::init();
+        let dir = std::env::temp_dir().join(format!("deadsync-natural-song-end-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let simfile = dir.join("end.sm");
+        fs::write(&simfile, "#TITLE:Natural owned End;#BPMS:0=60;#FGCHANGES:0=default.lua=1=0=0=1;#NOTES:dance-single:Control:Hard:1:0,0,0,0,0:\n1000\n0000\n0000\n0000\n;").unwrap();
+        fs::write(dir.join("default.lua"), r#"
+local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+local ends = 0
+return Def.ActorFrame {
+    OnCommand = function(self)
+        self:sleep(9999)
+        self:SetDrawFunction(function() MESSAGEMAN:Broadcast('AliveDraw') end)
+    end,
+    OffCommand = function()
+        assert(SCREENMAN:GetTopScreen() ~= nil)
+        MESSAGEMAN:Broadcast('OwnedOff')
+    end,
+    Def.Sprite {
+        OnCommand = function(self) self:sleep(0.125):queuecommand('End') end,
+        EndCommand = function(self)
+            ends = ends + 1
+            local popped = SCREENMAN:GetTopScreen() == nil
+            if popped then player:SetLife(0.375) end
+            self:animate(false):linear(0.25):y(100)
+            if popped then self:queuecommand('AfterEnd') end
+            MESSAGEMAN:Broadcast('OwnedEnd', {count=ends, popped=popped})
+        end,
+        AfterEndCommand = function() MESSAGEMAN:Broadcast('AfterEnd') end,
+    },
+}
+"#).unwrap();
+        let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap());
+        let chart = Arc::new(song.charts[0].clone());
+        let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
+        let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+        let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
+        let mut context = SongLuaCompileContext::new(&dir, "natural owned End");
+        context.live = true;
+        context.defer_initial_live_update = true;
+        context.song_timing = song.song_timing.clone();
+        let prepared = deadsync_song_lua::playback::prepare_song_lua(&song, &context,
+            deadsync_assets::song_lua::compile_song_lua, deadsync_assets::song_lua::compile_song_lua_layers);
+        let mut state = gameplay::init(song, [chart.clone(), chart], [payload.clone(), payload],
+            GameplayViewport::default(), GameplaySession::default(), GameplayConfig::default(),
+            5, 1.0, scroll, profiles, None, None, None, Arc::from("EVENT"), None, None, None,
+            None, None, [deadsync_gameplay::CourseLifeConfig::Bar; 2], false, None, None,
+            [0; 2], prepared, Default::default());
+        let mut effects = Vec::new();
+        let mut ends = Vec::new();
+        let mut lifecycle = Vec::new();
+        let mut after_end = 0;
+        let mut navigated = false;
+        for index in 0..512 {
+            effects.clear();
+            let at = index * 125_000_000;
+            gameplay::update(&mut state, if index == 0 { 0.0 } else { 0.125 }, GameplayAudioSnapshot {
+                stream_clock: GameplayStreamClockSnapshot { music_nanos: at,
+                    has_music_mapping: true, valid_at_host_nanos: at as u64 + 1_000_000_000,
+                    ..Default::default() }, ..Default::default()
+            }, || at as u64 + 1_000_000_000, &mut effects);
+            let output = state.take_song_lua_output();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            for event in &output.source_broadcasts {
+                if event.name == "OwnedEnd" {
+                    let params = event.params.as_ref().unwrap().as_ref().unwrap();
+                    lifecycle.push(format!("End{}", params["count"]));
+                    ends.push(params.clone());
+                }
+                if event.name == "OwnedOff" { lifecycle.push("Off".into()); }
+                after_end += usize::from(event.name == "AfterEnd");
+            }
+            if effects.iter().any(|effect| matches!(effect,
+                deadsync_theme_simply_love::SimplyLoveEffect::NavigateNoFade(deadsync_theme_simply_love::screens::SimplyLoveScreen::Evaluation))) {
+                assert!(!output.source_broadcasts.iter().any(|event| event.name == "AliveDraw"),
+                    "a popped screen is not drawn");
+                navigated = true;
+                break;
+            }
+        }
+        assert_eq!(ends, vec![serde_json::json!({"count":1,"popped":false}), serde_json::json!({"count":2,"popped":true})],
+            "natural navigation dispatches owned End a second time after the authored queue");
+        assert!(navigated, "the real out transition must finish before popping the scene");
+        assert_eq!(lifecycle, ["End1", "Off", "End2"], "Off precedes screen End");
+        assert_eq!(state.gameplay.players()[0].life, 0.375, "End player writes reach the owned gameplay state");
+        assert_eq!(after_end, 0, "screen End does not advance queues it creates");
+        effects.clear();
+        gameplay::update(&mut state, 1.0, GameplayAudioSnapshot::default(), || 100_000_000_000, &mut effects);
+        let output = state.take_song_lua_output();
+        assert!(output.source_broadcasts.is_empty() && effects.is_empty(), "screen End and draw run only once");
+    }
+
+    #[test]
     fn gameplay_note_field_tap_runs_owned_lua_before_actor_update() {
         use super::{gameplay, paths, GameplayAudioSnapshot, GameplayConfig,
             GameplaySession, GameplayStreamClockSnapshot, GameplayViewport};

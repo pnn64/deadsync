@@ -1187,6 +1187,11 @@ impl SongLuaLiveScene {
         }));
     }
 
+    /// LeaveGameplay has dispatched Off; its out transition can now advance.
+    pub fn outro_off_dispatched(&self) -> bool {
+        self.outro_options_reset && !self.outro_off_pending
+    }
+
     pub fn apply_pending_player_writes<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
         &self, game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
     ) {

@@ -962,6 +962,19 @@ impl State {
         Ok(())
     }
 
+    fn end_song_lua(&mut self) -> Result<(), String> {
+        if self.song_lua_ended { return Ok(()); }
+        let Some(scene) = &mut self.song_lua else { return Ok(()); };
+        let output = scene.end().map_err(|error| error.to_string())?;
+        scene.apply_output_player_writes(&output, &mut self.gameplay);
+        self.song_lua_output.append(output);
+        self.song_lua_ended = true;
+        self.gameplay.note_field_tap_callback = None;
+        self.gameplay.tap_row_judgment_callback = None;
+        self.gameplay.hold_judgment_callback = None;
+        Ok(())
+    }
+
     /// The shell drains sounds and requests once after each gameplay frame.
     /// Broadcast listeners have already run in the retained Lua scene.
     pub fn take_song_lua_output(&mut self) -> deadsync_song_lua::SongLuaLiveOutput {
@@ -990,17 +1003,16 @@ impl State {
         // Entry events precede the first real update and must reach the shell
         // exactly once. The shell drains this buffer every frame.
         self.song_lua_output.append(output);
-        if self.song_lua_out.as_mut().is_some_and(|out| out.advance(delta)) {
-            let output = scene.end().map_err(|error| error.to_string())?;
-            scene.apply_output_player_writes(&output, &mut self.gameplay);
-            self.song_lua_output.append(output);
-            self.song_lua_ended = true;
-            self.gameplay.note_field_tap_callback = None;
-            self.gameplay.tap_row_judgment_callback = None;
-            self.gameplay.hold_judgment_callback = None;
+        scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)?;
+        if self.song_lua_out.is_none() && scene.outro_off_dispatched() {
+            // ScreenGameplay handles LeaveGameplay after its actor Update.
+            // The newly started Transition receives its first delta next frame.
+            self.song_lua_out = Some(SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY });
+        } else if self.song_lua_out.as_mut().is_some_and(|out| out.advance(delta)) {
+            self.end_song_lua()?;
             effects.push(ThemeEffect::NavigateNoFade(crate::screens::SimplyLoveScreen::Evaluation));
         }
-        scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)
+        Ok(())
     }
 
     fn draw_song_lua(&mut self) -> Result<(), String> {
@@ -2673,10 +2685,11 @@ pub fn update(
     match action {
         GameplayAction::Navigate(GameplayExit::Complete)
         | GameplayAction::NavigateNoFade(GameplayExit::Complete)
-            if state.song_lua_out.is_some() =>
+            if state.song_lua_out.is_some() || (state.song_lua.is_some()
+                && state.gameplay.progress.stage.song_completed_naturally) =>
         {
-            // Native Transition ignores later StartTransitioning calls while
-            // its out tween is active. Keep its original completion clock.
+            // The owned scene handles NotesEnded, Off and the out transition.
+            // Repeated Core completion requests keep its original clock.
         }
         GameplayAction::None => {
             if let Some(effect) = missed_target_effect(state) {
@@ -2687,8 +2700,13 @@ pub fn update(
     }
     // GameLoop updates the screen manager before drawing. An outgoing screen
     // is already popped; a replacement has not received its first Update yet.
-    let screen_changes = effects[effect_start..].iter().any(|effect| matches!(effect,
-        ThemeEffect::Navigate(_) | ThemeEffect::NavigateNoFade(_)
+    let pops = effects[effect_start..].iter().any(|effect| matches!(effect,
+        ThemeEffect::NavigateNoFade(_)));
+    if pops && let Err(error) = state.end_song_lua() {
+        state.song_lua_output.errors.push(error);
+    }
+    let screen_changes = pops || effects[effect_start..].iter().any(|effect| matches!(effect,
+        ThemeEffect::Navigate(_)
         | ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::ReloadSongLua)));
     if !screen_changes && let Err(error) = state.draw_song_lua() {
         state.song_lua_output.errors.push(error);
@@ -2902,7 +2920,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeE
         let count = state.gameplay.num_players().min(MAX_PLAYERS);
         fail_autoplay_players(&mut state.gameplay.players_runtime.players[..count]);
     }
-    map_gameplay_action(action).append_to(effects);
+    let effect = map_gameplay_action(action);
+    if matches!(&effect, ThemeEffect::NavigateNoFade(_))
+        && let Err(error) = state.end_song_lua()
+    {
+        state.song_lua_output.errors.push(error);
+    }
+    effect.append_to(effects);
 }
 
 thread_local! {
