@@ -3241,17 +3241,14 @@
       ]
     },
     {
-      "title": "Episode 07",
+      "title": "Episode 07 Just A Friend To You",
       "source_simfile": "Just a Friend To  You/Just a Friend To  You.sm",
-      "harness_version": "0.1.0",
-      "archive": "4244a1b7edad4e2e05fb56226e210acb321d4ad39e58cc9a088b2587c0c92edd.tar.zst",
-      "sha256": "4244a1b7edad4e2e05fb56226e210acb321d4ad39e58cc9a088b2587c0c92edd",
-      "compressed_bytes": 5142020,
-      "uncompressed_sha256": "99e2685933b544a2a66ccc8d1efabdd0d2d06a6e316872b8f0197d9962d33f94",
-      "compression_level": 22,
-      "aliases": [
-        "42199401cf88bfda214b8fd5975f26c3fb18f4a9024dcf5095faa8c59ed1ac64.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "40bea54f493972c36aa20edc391d6119c9faa77055a824d8d98d0b2f323692ea.tar.zst",
+      "sha256": "40bea54f493972c36aa20edc391d6119c9faa77055a824d8d98d0b2f323692ea",
+      "compressed_bytes": 9528325,
+      "uncompressed_sha256": "5f4b488c4343e1e877dc2424c5be40df29de8f93ac34e9b85a3f0c5dd700cd06",
+      "aliases": []
     },
     {
       "title": "Episode 07",
