@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T01:34:55Z",
-  "previous_goal_turn": "progress: six newly completed full replay passes were packed, verified, saved and committed immediately: Furst SSC as aac9cb318, Flying Castle SM as 3183aaf87, Final Flash Flight SM as 252e6d26c, Furst SM as 846038324, Gangu Kyousou Kyoku SSC as e7fdda130, and Girls MIA SM as 1c7a94b05. Actual completed Flowers Cringle, FTW, Fortuna, freg, Gaming in 2018, Genshin Quiz, flores sulphuris and ghost failures were recorded as pending. Feely has exactly 59716 extra internal GetCurrentStyle operations; owned style reads fixed as 21c106cb4 and validated with 18 Windows and Linux replay controls plus 28 Linux live tests; helper 4610c4a selected. DREAMING condition repair attempt 1 replayed all 32257 frames with 3563 mismatches and one actual Sound:get():volume callback error at source line 542, before the missing Update2 queuecommand at 30.723649978637695 seconds. RageSound volume parameter and chain identity fixed as 355263c7e, validated with 29 Windows and Linux live tests plus 18 Linux replay controls, and helper 89059df4 selected. DREAMING final attempt 2 is running on its retained byte-identical uncompressed capture. Player and NoteField zero initial live tween poses were traced to early registration; initialization now uses the existing pose setters and independent context coordinates and theme metrics, fixed as 58fcc8043, with 30 Windows and Linux live tests plus 18 Linux replay controls; immutable helper 668d1aa9 selected for future charts. Flowers Cringle has 160357 extra internal style queries plus observed zero position arguments; its first repair is running on the retained original capture. Feely retains one final attempt for source casing, remaining tween differences and one early failed observation. The three original disjoint sweep queues and single publisher remain active; the original 501-source sweep remains incomplete.",
+  "updated_utc": "2026-10-13T02:16:30Z",
+  "previous_goal_turn": "progress: Gossipo Perpetuo SSC passed all 61005 frames and was saved immediately as b458e78e8. FTW source metadata loss was traced to RSSP Unicode trimming versus native ASCII trimming: 142 description stage fields plus one GetCurrentSteps result. SM runtime description, credit and chart name now preserve authored non-ASCII whitespace and escaped text; cache version 64 invalidates old metadata, committed as a45545f0a. The fix passed 17 Windows and Linux song parser tests, one cache rejection control and 18 Linux native replay controls; immutable helper 76f1176f selected. FTW first repair reused the original uncompressed capture and passed all 55351 frames and 1562 stage fields with zero errors or mismatches, saved immediately as 7bf2b1006. DREAMING final attempt 2 completed all 32257 frames with zero Lua errors and one failed-flag mismatch at 48.077754974365234 seconds; it reached the two-attempt cap and remains pending. Directory foreground source names were traced to Native Foreground literal default.lua requests through case-insensitive file lookup; physical file reads are now separate from requested chunk names, with explicitly named file spelling retained, committed as 63e17ffe7. The source fix passed 31 Windows and Linux live tests and 18 Linux native replay controls; the first validation test incorrectly inspected a callback tracing wrapper, and failed validation logs were retained before correction. Immutable helper 6337f9ca is validated and selected for future charts. No new Feely full replay was launched: one final attempt remains, pending gameplay tap callback dispatch and one early failed observation. Flowers Cringle first repair completed all 18924 frames and 2255 stage fields without Lua errors but with 572027 command mismatches: all 160357 extra style queries are gone, and 3584 operations remain missing with a first native P1 X 213.25 versus independent 213.5 input discrepancy. One final attempt remains. Actual new failures for flowers/flowers, Godspeed, Happiness, gone, GREAT GREAT and fof were published as pending. The three fixed disjoint original sweep queues and the single dynamic publisher remain active; all 501 original source bytes are unchanged and the sweep is incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "1c7a94b051e50ff9d810e8d83be19d77c0b87545",
+      "deadsync": "b4a13527dab201f51556e9078351e461c714fc90",
       "itgmania_harness": "b191ebd0fcf8b59b5294958d2ffe2939af2d742a"
     }
   },
@@ -37,8 +37,10 @@
     "native_case_lua_dependencies": "harness b191ebd passed 3 oracle and 12 archive controls on Windows and Linux; native trace observer unchanged; feelyourtouch attempt 1 repackages the unchanged capture; sweep-2026-10-12-case-lua-archive-build.json",
     "conditional_actor_subtrees": "1d6c6e802 passed 28 live tests plus the subscriber-path regression on Windows and Linux and 17 Linux replay controls; the test-support feature guard was corrected before replay; DREAMING-ING attempt 1 completed with a nil RageSound volume callback failure; final attempt 2 reuses its capture; sweep-2026-10-12-condition-build.json",
     "owned_style_reads": "21c106cb4 passed 18 Windows and Linux replay controls plus 28 Linux live tests; retained failed validation revisions were corrected before selection; sweep-2026-10-12-owned-style-build.json",
-    "rage_sound_volume": "355263c7e passed 29 Windows and Linux live tests plus 18 Linux replay controls; DREAMING final attempt 2 runs on the retained uncompressed capture; live audio mixing coverage stays separate; sweep-2026-10-12-sound-volume-build.json",
-    "screen_initial_positions": "58fcc8043 passed 30 Windows and Linux live tests plus 18 Linux replay controls; getters and authored tween origins use independent initial positions; Flowers Cringle attempt 1 runs on the original capture; sweep-2026-10-12-screen-initial-pose-build.json",
+    "rage_sound_volume": "355263c7e passed 29 Windows and Linux live tests plus 18 Linux replay controls; DREAMING final attempt 2 completed all 32257 frames with no Lua errors and one failed-flag mismatch, reaching its two-attempt cap; live audio mixing coverage stays separate; sweep-2026-10-12-sound-volume-build.json",
+    "screen_initial_positions": "58fcc8043 passed 30 Windows and Linux live tests plus 18 Linux replay controls; getters and authored tween origins use independent initial positions; Flowers Cringle attempt 1 completed all 18924 frames with no Lua errors; style queries corrected but 3584 calls remain missing and the first position is off by 0.25; sweep-2026-10-12-screen-initial-pose-build.json",
+    "native_sm_metadata": "a45545f0a passed 17 Windows and Linux parser tests, one cache rejection control and 18 Linux replay controls; FTW attempt 1 passed all 55351 frames and 1562 fields, saved as 7bf2b1006; sweep-2026-10-12-sm-metadata-build.json",
+    "requested_foreground_source": "63e17ffe7 passed 31 Windows and Linux live tests and 18 Linux replay controls; retained failed validation revision was corrected before selection; helper 6337f9ca selected; Feely final attempt not launched; sweep-2026-10-12-foreground-source-build.json",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved"
   },
   "corpus_transfer": {
@@ -53,19 +55,15 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Godspeed [TaroNuke]/godspeed.sm",
-      "position": 215,
-      "phase": "replay",
-      "pid": 1059364,
+      "current": "Hello Gordon [chairodactyl] - Cameron Wiggers/Hello Gordon.ssc",
+      "position": 227,
+      "phase": "capture",
+      "pid": 1235820,
       "process_matches": true,
-      "passed": 10,
-      "pending": 24,
-      "processed": 34,
-      "last_log_lines": [
-        "[36.0s] replaying every native gameplay frame: frame 1018/36822 (2.8%)",
-        "[38.0s] replaying every native gameplay frame: frame 1115/36822 (3.0%)",
-        "[40.0s] replaying every native gameplay frame: frame 1210/36822 (3.3%)"
-      ],
+      "passed": 11,
+      "pending": 27,
+      "processed": 38,
+      "last_log_lines": [],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -81,31 +79,44 @@
     "feely_owned_style_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-feely-owned-style-diagnosis.json",
     "dreaming_sound_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-dreaming-sound-volume-diagnosis.json",
     "initial_screen_pose_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-screen-initial-pose-diagnosis.json",
+    "ftw_metadata_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-ftw-metadata-diagnosis.json",
+    "feely_source_and_callbacks": "tests/fixtures/full_song_lua/sweep-2026-10-12-feely-source-and-callback-diagnosis.json",
     "repair_residuals": "tests/fixtures/full_song_lua/sweep-2026-10-12-path-repair-residuals.json",
     "fiji_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-fiji-foreground-diagnosis.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
       {
-        "job": "flowers-cringle-pose-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "job": "ftw-metadata-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
+        "processed": 1,
+        "last_phase": "pack",
+        "source_simfile": "FTW/FTW.sm",
+        "child_running": false
+      },
+      {
+        "job": "flowers-cringle-pose-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "replay",
         "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "dreaming-sound-volume-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
+        "complete": true,
+        "supervisor_running": false,
         "passed": 0,
-        "pending": 0,
-        "processed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "replay",
         "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "dreaming-condition-repair-v1",
@@ -278,24 +289,24 @@
         "complete": false,
         "supervisor_running": true,
         "passed": 6,
-        "pending": 10,
-        "processed": 16,
+        "pending": 12,
+        "processed": 18,
         "last_phase": "capture",
-        "source_simfile": "gone_KidFresino/song.ssc",
+        "source_simfile": "Happy Now Remastered/Happy Now.sm",
         "child_running": true,
-        "position": 216
+        "position": 222
       },
       {
         "job": "chart-sweep-parallel-v4-2",
         "complete": false,
         "supervisor_running": true,
         "passed": 4,
-        "pending": 4,
-        "processed": 8,
+        "pending": 6,
+        "processed": 10,
         "last_phase": "replay",
-        "source_simfile": "flowers/flowers.ssc",
+        "source_simfile": "Freaky Deaky/Freaky Deaky.ssc",
         "child_running": true,
-        "position": 193
+        "position": 199
       },
       {
         "job": "definition-concat-repair-v1",
@@ -547,15 +558,22 @@
         "record": "sweep-2026-10-12-flowers-cringle-pose-repairs.json",
         "fix_commit": "58fcc8043 / harness b191ebd",
         "finish_status": "bounded Flowers Cringle owned style and initial pose repair complete"
+      },
+      {
+        "name": "ftw-metadata-repair",
+        "remote": "/home/parity/jobs/ftw-metadata-repair-v1",
+        "record": "sweep-2026-10-12-ftw-metadata-repairs.json",
+        "fix_commit": "a45545f0a / harness b191ebd",
+        "finish_status": "bounded FTW native chart metadata repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 28,
-    "new_pending_charts": 30,
-    "new_processed_sources": 58,
+    "new_passed_fixtures": 30,
+    "new_pending_charts": 36,
+    "new_processed_sources": 66,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 295,
+    "unprocessed_sources": 287,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -829,15 +847,15 @@
     },
     {
       "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
-      "repair_attempts": 0,
+      "repair_attempts": 1,
       "failure": null,
       "errors": [],
-      "mismatch_count": 607604,
+      "mismatch_count": 572027,
       "first_mismatch": [
         {
           "field": "command_query_count",
           "native": 608498,
-          "deadsync": 765271
+          "deadsync": 604914
         }
       ]
     },
@@ -894,6 +912,62 @@
           "deadsync": 43482
         }
       ]
+    },
+    {
+      "source_simfile": "Godspeed [TaroNuke]/godspeed.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 311,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0011",
+            "args": [],
+            "beat": 4.360079765319824e-05,
+            "command": "SetMeCommand",
+            "definition_id": "def-0011",
+            "detail": {
+              "name": "SetMeCommand"
+            },
+            "kind": "command",
+            "line": 38,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 0.8230158686637878,
+            "seq": 161,
+            "source": "song:/bg/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "OnCommand",
+            "source": "song:/lua/default.lua",
+            "line": 95,
+            "beat": 4.360079765319824e-05,
+            "seconds": 0.8230158686637878,
+            "args": null
+          }
+        }
+      ]
+    },
+    {
+      "source_simfile": "Happiness/Happiness.ssc",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-1154392-1791856557022276130-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Happy Now/Happy Now.sm",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1172515-1791856811481466840-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1172515-1791856811481466840-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
     },
     {
       "source_simfile": "Delightful Day/Delightful Day.sm",
@@ -1044,28 +1118,68 @@
       ]
     },
     {
-      "source_simfile": "FTW/FTW.sm",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 143,
-      "first_mismatch": [
-        {
-          "phase": "screen-active",
-          "seconds": -2.2996599674224854,
-          "field": "description",
-          "native": "KS+ DS ",
-          "deadsync": "KS+ DS"
-        }
-      ]
-    },
-    {
       "source_simfile": "Get Into It/GetIntoIt.sm",
       "repair_attempts": 0,
       "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[8.5s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Get Into It': failed to execute '/tmp/.tmp1eV1dG/song/lua/bg.lua': runtime error: [string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Get Into It' from '/tmp/.tmp1eV1dG/song/lua/default.lua': failed to execute '/tmp/.tmp1eV1dG/song/lua/default.lua': runtime error: [string \"/tmp/.tmp1eV1dG/song/lua/default.lua\"]:460: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmp1eV1dG/song/lua/default.lua\"]:460: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\ndeadsync_song_lua::playback::prepare: Failed to compile background lua layer for 'Get Into It' from '/tmp/.tmp1eV1dG/song/lua/bg.lua': failed to execute '/tmp/.tmp1eV1dG/song/lua/bg.lua': runtime error: [string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (996272) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[10.0s] replaying every native gameplay frame: frame 0/70013 (0.0%)\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
+    },
+    {
+      "source_simfile": "gone_KidFresino/song.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 65,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0001",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 3,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 1,
+            "source": "song:/./text.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "InitCommand",
+            "source": "song:/text.lua",
+            "line": 3,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        }
+      ]
+    },
+    {
+      "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 21,
+      "first_mismatch": [
+        {
+          "phase": "progress",
+          "seconds": 2.000136137008667,
+          "field": "life_latest",
+          "native": 0.4010000228881836,
+          "deadsync": 0.5
+        }
+      ]
     },
     {
       "source_simfile": "Delightful Day/Delightful Day.ssc",
@@ -1083,19 +1197,17 @@
     },
     {
       "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
-      "repair_attempts": 1,
+      "repair_attempts": 2,
       "failure": null,
-      "errors": [
-        "UpdateCommand failed for Quad: runtime error: [string \"/tmp/.tmpr1F6RO/song/lua/default.lua\"]:542: attempt to call method 'volume' (a nil value)\nstack traceback:\n\t[C]: in method 'volume'\n\t[string \"/tmp/.tmpr1F6RO/song/lua/default.lua\"]:542: in function <[string \"/tmp/.tmpr1F6RO/song/lua/default.lua\"]:454>"
-      ],
-      "mismatch_count": 3563,
+      "errors": [],
+      "mismatch_count": 1,
       "first_mismatch": [
         {
-          "phase": "screen-end",
-          "seconds": 48.47612380981445,
+          "phase": "progress",
+          "seconds": 48.077754974365234,
           "field": "failed",
-          "native": true,
-          "deadsync": false
+          "native": false,
+          "deadsync": true
         }
       ]
     },
@@ -1128,6 +1240,28 @@
           "deadsync": true
         }
       ]
+    },
+    {
+      "source_simfile": "flowers/flowers.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 38059,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 38224,
+          "deadsync": 38211
+        }
+      ]
+    },
+    {
+      "source_simfile": "fof_guys/fof.ssc",
+      "repair_attempts": 0,
+      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.0s] : 0 checks completed, 0 failed\n[16.0s] : 0 checks completed, 0 failed\n[18.0s] : 0 checks completed, 0 failed\n[20.0s] : 0 checks completed, 0 failed\n[22.0s] : 0 checks completed, 0 failed\n[24.0s] : 0 checks completed, 0 failed\n[26.0s] : 0 checks completed, 0 failed\n[28.0s] : 0 checks completed, 0 failed\n[30.0s] : 0 checks completed, 0 failed\n[32.0s] : 0 checks completed, 0 failed\n[34.0s] : 0 checks completed, 0 failed\n[36.0s] : 0 checks completed, 0 failed\n[38.0s] : 0 checks completed, 0 failed\n[40.0s] : 0 checks completed, 0 failed\n[42.0s] : 0 checks completed, 0 failed\n[44.0s] : 0 checks completed, 0 failed\n[46.0s] : 0 checks completed, 0 failed\n[48.0s] : 0 checks completed, 0 failed\n[50.0s] : 0 checks completed, 0 failed\n[52.0s] : 0 checks completed, 0 failed\n[54.0s] : 0 checks completed, 0 failed\n[56.0s] : 0 checks completed, 0 failed\n[58.0s] : 0 checks completed, 0 failed\n[60.0s] : 0 checks completed, 0 failed\n[62.0s] : 0 checks completed, 0 failed\n[64.0s] : 0 checks completed, 0 failed\n[66.0s] : 0 checks completed, 0 failed\n[68.0s] : 0 checks completed, 0 failed\n[70.0s] : 0 checks completed, 0 failed\n[72.0s] : 0 checks completed, 0 failed\n[74.0s] : 0 checks completed, 0 failed\n[76.0s] : 0 checks completed, 0 failed\n[78.0s] : 0 checks completed, 0 failed\n[80.0s] : 0 checks completed, 0 failed\n[82.0s] : 0 checks completed, 0 failed\n[84.0s] : 0 checks completed, 0 failed\n[86.0s] : 0 checks completed, 0 failed\n[88.0s] : 0 checks completed, 0 failed\n[90.0s] : 0 checks completed, 0 failed\n[92.0s] : 0 checks completed, 0 failed\n[94.0s] : 0 checks completed, 0 failed\n[96.0s] : 0 checks completed, 0 failed\n[98.0s] : 0 checks completed, 0 failed\n[100.0s] : 0 checks completed, 0 failed\n[102.1s] : 0 checks completed, 0 failed\n[104.1s] : 0 checks completed, 0 failed\n[106.1s] : 0 checks completed, 0 failed\n[108.1s] : 0 checks completed, 0 failed\n[110.1s] : 0 checks completed, 0 failed\n[112.1s] : 0 checks completed, 0 failed\n[114.2s] : 0 checks completed, 0 failed\n[116.2s] : 0 checks completed, 0 failed\n[118.3s] : 0 checks completed, 0 failed\n[120.4s] : 0 checks completed, 0 failed\n[122.4s] : 0 checks completed, 0 failed\n[124.4s] : 0 checks completed, 0 failed\n[126.4s] : 0 checks completed, 0 failed\n[128.4s] : 0 checks completed, 0 failed\n[130.5s] : 0 checks completed, 0 failed\n[132.5s] : 0 checks completed, 0 failed\n[134.5s] : 0 checks completed, 0 failed\n[136.6s] : 0 checks completed, 0 failed\n[138.6s] : 0 checks completed, 0 failed\n[140.6s] : 0 checks completed, 0 failed\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
     }
   ],
   "historical_concrete_failures": [

@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T01:34:57Z",
+  "updated_utc": "2026-10-13T02:16:32Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 175,
-    "pending": 31,
-    "unprocessed": 295
+    "passed": 177,
+    "pending": 37,
+    "unprocessed": 287
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1590,8 +1590,8 @@
       "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
       "simfile_sha256": "0e7c2c767ce9e342b4ed9ec53e6c6d5ff4ba6f55acad41173fe9f91cf20360d3",
       "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-12-dreaming-condition-repairs.json"
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-12-dreaming-sound-volume-repairs.json"
     },
     {
       "position": 179,
@@ -1694,8 +1694,8 @@
       "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
       "simfile_sha256": "77d2aa0a0c7531d3ba01d77c5f9e37f9e24feaf7076b0b0781bff019702a6ddc",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-flowers-cringle-pose-repairs.json"
     },
     {
       "position": 192,
@@ -1709,7 +1709,9 @@
       "position": 193,
       "source_simfile": "flowers/flowers.ssc",
       "simfile_sha256": "52e86ec7daeca20bdb1e49b6af119c898cd07a20a0e3c0b72703ead58af8bdba",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 194,
@@ -1731,7 +1733,9 @@
       "position": 196,
       "source_simfile": "fof_guys/fof.ssc",
       "simfile_sha256": "a40dbf6a805eb74a544ba1fb6179d15d18c6df1ba2220218e3937e25a82a5fe6",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 197,
@@ -1767,9 +1771,9 @@
       "position": 201,
       "source_simfile": "FTW/FTW.sm",
       "simfile_sha256": "aba9ad891fce149bb80286a9b5d9feb06041e9c2f478467c889bbe08d8235790",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-ftw-metadata-repairs.json"
     },
     {
       "position": 202,
@@ -1869,13 +1873,17 @@
       "position": 215,
       "source_simfile": "Godspeed [TaroNuke]/godspeed.sm",
       "simfile_sha256": "53ae2bcef85290d2cd41a23481eb5b2267ebe45cfcf122f4ad80654037b5739b",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 216,
       "source_simfile": "gone_KidFresino/song.ssc",
       "simfile_sha256": "c234598038035b7d4b5746b75cb7591a07299cf5dc5fd40a99fb6eb6a2b33395",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 217,
@@ -1887,13 +1895,17 @@
       "position": 218,
       "source_simfile": "Gossipo Perpetuo [chairodactyl] - Cameron Wiggers/gossiperpet.ssc",
       "simfile_sha256": "de87ab39c281866fa6c15618481ede1331522ae64cf56f0b43bc6a68457b2d38",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 219,
       "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
       "simfile_sha256": "2d9f60495fe97279a7e5373d970c77cd08bbe9c1d9c1d4362aaad8a3b6d88d57",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 220,
@@ -1905,7 +1917,9 @@
       "position": 221,
       "source_simfile": "Happiness/Happiness.ssc",
       "simfile_sha256": "8efb7562272cde881e6061fecef4aa76c53998620b6006ad2e6182d9d481cb5b",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 222,
@@ -1923,7 +1937,9 @@
       "position": 224,
       "source_simfile": "Happy Now/Happy Now.sm",
       "simfile_sha256": "4b7b4826b11cb66575c6385f0bbce11e377c10ad0f288b308ed0561b1db997fb",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 225,
