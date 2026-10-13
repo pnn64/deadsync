@@ -3,6 +3,25 @@ impl<Profile, OverlayActor, CapturedActor, StateDelta>
 where
     Profile: GameplayProfileData,
 {
+    /// Player::SetLife writes the meter directly, even after stage failure.
+    /// Failure policy is evaluated by the normal screen update afterwards.
+    pub fn set_player_life_from_script(&mut self, player: usize, life: f32) {
+        if player >= self.setup.num_players.min(MAX_PLAYERS) { return; }
+        let seconds = self.current_music_time_seconds();
+        let runtime = &mut self.players_runtime.players[player];
+        let old = runtime.life;
+        runtime.life = life.clamp(0.0, 1.0);
+        deadsync_rules::life::record_life_change(
+            &mut runtime.life_history, seconds, old, runtime.life);
+        self.display.density_graph.life_dirty[player] = true;
+    }
+
+    pub fn mark_player_stage_failed_from_script(&mut self, player: usize) {
+        if player < self.setup.num_players.min(MAX_PLAYERS) {
+            self.players_runtime.players[player].stage_failed = true;
+        }
+    }
+
     #[inline(always)]
     pub fn player_blue_window_ms(&self, player_idx: usize) -> f32 {
         let base = self.default_fa_plus_window_s();

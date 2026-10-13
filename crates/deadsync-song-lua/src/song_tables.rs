@@ -620,7 +620,9 @@ fn create_player_state_table(
     let song_position = create_song_position_table(lua, song_runtime)?;
     let table = lua.create_table()?;
     set_string_method(lua, &table, "GetPlayerController", controller)?;
-    set_string_method(lua, &table, "GetHealthState", health_state)?;
+    table.set("GetHealthState", lua.create_function(move |lua, _args: MultiValue| {
+        Ok(crate::live::player_health_state(lua, player_index).unwrap_or(health_state))
+    })?)?;
     set_string_method(lua, &table, "GetPlayerNumber", player_number)?;
     let options_for_get = options.clone();
     let options_for_current = options[3].clone();

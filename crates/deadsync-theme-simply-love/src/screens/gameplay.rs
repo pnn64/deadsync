@@ -954,6 +954,7 @@ impl State {
             .map_err(|error| error.to_string())?;
         if let Some(scratch) = &mut self.song_scratch { scratch.enable_live_scene(); }
         self.song_lua_output = scene.take_startup_output();
+        scene.apply_output_player_writes(&self.song_lua_output, &mut self.gameplay);
         self.song_lua = Some(scene);
         Ok(())
     }
@@ -966,9 +967,11 @@ impl State {
 
     fn advance_song_lua(&mut self, delta: f32, uptime_seconds: Option<f64>, effects: &mut Vec<ThemeEffect>) -> Result<(), String> {
         let Some(scene) = &mut self.song_lua else { return Ok(()); };
+        scene.apply_pending_player_writes(&mut self.gameplay);
         let mut frame = deadsync_song_lua::SongLuaLiveFrame::from_gameplay(&self.gameplay, delta);
         frame.uptime_seconds = uptime_seconds;
         let output = scene.advance(frame).map_err(|error| error.to_string())?;
+        scene.apply_output_player_writes(&output, &mut self.gameplay);
         let request = output.request.as_ref().or(self.song_lua_output.request.as_ref());
         if matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message)) if message == "SM_DoNextScreen")
             && self.song_lua_out.is_none()
@@ -985,7 +988,9 @@ impl State {
         // exactly once. The shell drains this buffer every frame.
         self.song_lua_output.append(output);
         if self.song_lua_out.as_mut().is_some_and(|out| out.advance(delta)) {
-            self.song_lua_output.append(scene.end().map_err(|error| error.to_string())?);
+            let output = scene.end().map_err(|error| error.to_string())?;
+            scene.apply_output_player_writes(&output, &mut self.gameplay);
+            self.song_lua_output.append(output);
             self.song_lua_ended = true;
             self.gameplay.note_field_tap_callback = None;
             effects.push(ThemeEffect::NavigateNoFade(crate::screens::SimplyLoveScreen::Evaluation));

@@ -1242,9 +1242,11 @@ fn create_stage_stats_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua:
     let song = create_song_table(lua, context)?;
     let players = lua.create_table()?;
     for (index, stats) in player_stats.iter().enumerate() {
+        stats.raw_set("__songlua_player_index", index)?;
         players.raw_set(index + 1, stats.clone())?;
     }
     stage_stats.raw_set("__songlua_player_stats", players)?;
+    crate::live::bind_player_stats(lua, player_stats.clone());
     stage_stats.set(
         "GetPlayerStageStats",
         lua.create_function(move |_, args: MultiValue| {
@@ -1433,6 +1435,9 @@ fn create_player_stage_stats_table(
             let stats = stats.clone();
             move |lua, _args: MultiValue| {
                 stats.set("__songlua_failed", true)?;
+                if let Some(player) = stats.raw_get::<Option<usize>>("__songlua_player_index")? {
+                    crate::live::fail_player(lua, player);
+                }
                 note_song_lua_side_effect(lua)?;
                 Ok(stats.clone())
             }

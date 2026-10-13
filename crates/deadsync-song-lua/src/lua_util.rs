@@ -13367,6 +13367,27 @@ pub fn create_top_screen_player_actor(
     if let Some(path) = &player.judgment_texture {
         actor.set("__songlua_judgment_texture", file_path_string(path))?;
     }
+    actor.set("SetLife", lua.create_function(move |lua, (actor, life): (Table, f32)| {
+        if actor.raw_get::<Option<bool>>("__songlua_inside_set_life")?.unwrap_or(false) {
+            return Err(mlua::Error::runtime("Do not call SetLife from inside LifeChangedMessageCommand because SetLife causes a LifeChangedMessageCommand."));
+        }
+        let life = life.clamp(0.0, 1.0);
+        actor.raw_set("__songlua_inside_set_life", true)?;
+        let result = (|| {
+            crate::live::set_player_life(lua, player_index, life)?;
+            let screen: Table = lua.globals().raw_get("__songlua_top_screen")?;
+            let meter: Table = actor_children(lua, &screen)?.raw_get(top_screen_life_meter_name(player_index))?;
+            meter.raw_set("__songlua_life", life)?;
+            let params = lua.create_table()?;
+            params.raw_set("Player", format!("PlayerNumber_P{}", player_index + 1))?;
+            params.raw_set("LifeMeter", meter)?;
+            broadcast_song_lua_message(lua, "LifeChanged", Some(Value::Table(params)))
+        })();
+        actor.raw_set("__songlua_inside_set_life", false)?;
+        result?;
+        note_song_lua_side_effect(lua)?;
+        Ok(actor)
+    })?)?;
     Ok(actor)
 }
 
@@ -13473,11 +13494,15 @@ pub fn create_life_meter_table(
     let actor = create_dummy_actor(lua, "LifeMeter")?;
     actor.set("Name", name)?;
     actor.set("__songlua_life", SONG_LUA_INITIAL_LIFE)?;
+    let player_index = top_screen_life_meter_index(name);
     actor.set(
         "GetLife",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |lua, _args: MultiValue| {
+                if let Some(life) = player_index.and_then(|player| crate::live::player_life(lua, player)) {
+                    return Ok(life);
+                }
                 Ok(actor
                     .get::<Option<f32>>("__songlua_life")?
                     .unwrap_or(SONG_LUA_INITIAL_LIFE))

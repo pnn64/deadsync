@@ -767,6 +767,8 @@ return Def.ActorFrame{}
         fs::write(&entry, r#"
 local field = SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField')
 local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
+local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+local meter = SCREENMAN:GetTopScreen():GetLifeMeter(PLAYER_1)
 local taps = 0
 return Def.ActorFrame {
     OnCommand = function(self)
@@ -774,6 +776,8 @@ return Def.ActorFrame {
         field:SetDidTapNoteCallback(function(column, score, bright)
             assert(column == 1 and score == 'TapNoteScore_W1' and bright == false)
             taps = taps + 1
+            player:SetLife(0.25)
+            assert(meter:GetLife() == 0.25 and stats:GetCurrentLife() == 0.25)
             self:stoptweening():sleep(0.25)
             MESSAGEMAN:Broadcast('EngineTap', {beat=GAMESTATE:GetSongBeat(),
                 combo=stats:GetCurrentCombo(), possible=stats:GetCurrentPossibleDancePoints()})
@@ -825,6 +829,8 @@ return Def.ActorFrame {
         }, || 1_000_000_000, &mut effects);
         let output = state.take_song_lua_output();
         assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(state.gameplay.players_runtime.players[0].life, 0.25,
+            "synchronous engine callback writes reach gameplay before the foreground update");
         assert_eq!(output.source_broadcasts.iter().filter(|event| event.name == "EngineTap").count(), 1,
             "clock={} notes={:?} scores={:?} scene={} hook={}",
             state.gameplay.clock.song_position.current_music_time_ns,

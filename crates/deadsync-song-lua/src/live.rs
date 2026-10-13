@@ -322,9 +322,96 @@ pub struct SongLuaLivePlayer {
     pub last_judgment: Option<deadsync_gameplay::JudgmentRenderInfo>,
     pub hold_judgments: [Option<deadsync_gameplay::HoldJudgmentRenderInfo>; deadsync_core::input::MAX_COLS],
     pub autoplay: bool,
+    /// Native ScreenGameplay suppresses Dead and Danger when FailType is Off.
+    pub fail_enabled: bool,
 }
 
 pub(crate) struct LivePlayers([SongLuaLivePlayer; LUA_PLAYERS]);
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SongLuaLivePlayerWrite {
+    SetLife { player: usize, life: f32 },
+    Fail { player: usize },
+}
+
+struct PlayerWrites(Vec<SongLuaLivePlayerWrite>);
+struct LiveStats([Table; LUA_PLAYERS]);
+#[derive(Default)]
+struct HealthStates([Option<&'static str>; LUA_PLAYERS]);
+
+pub(crate) fn bind_player_stats(lua: &Lua, players: [Table; LUA_PLAYERS]) {
+    lua.set_app_data(LiveStats(players));
+}
+
+fn queue_player_write(lua: &Lua, write: SongLuaLivePlayerWrite) {
+    if !active(lua) { return; }
+    if let Some(mut writes) = lua.app_data_mut::<PlayerWrites>() {
+        writes.0.push(write);
+    } else {
+        lua.set_app_data(PlayerWrites(vec![write]));
+    }
+}
+
+pub(crate) fn player_life(lua: &Lua, player: usize) -> Option<f32> {
+    lua.app_data_ref::<LivePlayers>().and_then(|players| players.0.get(player).map(|p| p.life))
+}
+
+pub(crate) fn player_health_state(lua: &Lua, player: usize) -> Option<&'static str> {
+    lua.app_data_ref::<HealthStates>().and_then(|states| states.0.get(player).copied().flatten())
+}
+
+pub(crate) fn set_player_life(lua: &Lua, player: usize, life: f32) -> mlua::Result<()> {
+    if let Some(mut values) = lua.app_data_mut::<LivePlayers>()
+        && let Some(value) = values.0.get_mut(player) { value.life = life; }
+    if let Some(stats) = lua.app_data_ref::<LiveStats>()
+        .and_then(|stats| stats.0.get(player).cloned()) {
+        stats.raw_set("__songlua_life", life)?;
+    }
+    queue_player_write(lua, SongLuaLivePlayerWrite::SetLife { player, life });
+    Ok(())
+}
+
+pub(crate) fn fail_player(lua: &Lua, player: usize) {
+    if let Some(mut values) = lua.app_data_mut::<LivePlayers>()
+        && let Some(value) = values.0.get_mut(player) { value.failed = true; }
+    queue_player_write(lua, SongLuaLivePlayerWrite::Fail { player });
+}
+
+fn apply_player_writes<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+    writes: impl IntoIterator<Item = SongLuaLivePlayerWrite>,
+    game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
+) {
+    for write in writes {
+        match write {
+            SongLuaLivePlayerWrite::SetLife { player, life } => game.set_player_life_from_script(player, life),
+            SongLuaLivePlayerWrite::Fail { player } => game.mark_player_stage_failed_from_script(player),
+        }
+    }
+}
+
+fn finish_health_update(lua: &Lua) -> mlua::Result<()> {
+    let screen: Table = lua.globals().raw_get("__songlua_top_screen")?;
+    for player in 0..LUA_PLAYERS {
+        if screen.raw_get::<Option<bool>>(if player == 0 { "__songlua_player1_enabled" }
+            else { "__songlua_player2_enabled" })? == Some(false) { continue; }
+        let Some(value) = lua.app_data_ref::<LivePlayers>().and_then(|values| values.0.get(player).copied())
+            else { continue; };
+        let state = if value.fail_enabled && value.life <= 0.0 { "HealthState_Dead" }
+            else if value.life >= 1.0 { "HealthState_Hot" }
+            else if value.fail_enabled && value.life < crate::SONG_LUA_DANGER_LIFE { "HealthState_Danger" }
+            else { "HealthState_Alive" };
+        let old = player_health_state(lua, player).unwrap_or("HealthState_Alive");
+        if let Some(mut states) = lua.app_data_mut::<HealthStates>() { states.0[player] = Some(state); }
+        if state != old {
+            let params = lua.create_table()?;
+            params.raw_set("PlayerNumber", format!("PlayerNumber_P{}", player + 1))?;
+            params.raw_set("HealthState", state)?;
+            params.raw_set("OldHealthState", old)?;
+            crate::lua_util::broadcast_song_lua_message(lua, "HealthStateChanged", Some(Value::Table(params)))?;
+        }
+    }
+    Ok(())
+}
 
 pub(crate) fn update_player_holds(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let Some(player) = actor.raw_get::<Option<usize>>("__songlua_player_index")? else { return Ok(()); };
@@ -438,6 +525,7 @@ impl SongLuaLivePlayer {
             possible_points, actual_points: player.earned_grade_points,
             current_possible_points: player.current_possible_points,
             life: player.life, failed: player.stage_failed || player.fail_time.is_some(),
+            fail_enabled: player.fail_type != deadsync_gameplay::GameplayFailType::Off,
             combo: player.combo, miss_combo: player.miss_combo,
             tap_scores: [0, player.mines_hit, player.mines_avoided, player.checkpoints_missed,
                 miss, w5, w4, w3, w2, w1, player.checkpoints_hit],
@@ -485,6 +573,9 @@ fn feed_live_stats(stage: &Table, players: &[Table; LUA_PLAYERS], frame: &SongLu
         stats.raw_set("__songlua_current_possible_dance_points", value.current_possible_points)?;
         stats.raw_set("__songlua_failed", value.failed)?;
         stats.raw_set("__songlua_life", value.life)?;
+        if let Some(meter) = stats.raw_get::<Option<Table>>("__songlua_life_meter")? {
+            meter.raw_set("__songlua_life", value.life)?;
+        }
         stats.raw_set("__songlua_combo", value.combo)?;
         stats.raw_set("__songlua_miss_combo", value.miss_combo)?;
         let counts = stats.raw_get::<Table>("__songlua_tap_scores")?;
@@ -576,6 +667,7 @@ pub struct SongLuaLiveOutput {
     pub sounds: Vec<crate::SongLuaSoundEvent>,
     /// Native-style callback errors retain partial state and are reported once.
     pub errors: Vec<String>,
+    pub player_writes: Vec<SongLuaLivePlayerWrite>,
 }
 
 impl SongLuaLiveOutput {
@@ -585,6 +677,7 @@ impl SongLuaLiveOutput {
         self.source_broadcasts.append(&mut next.source_broadcasts);
         self.sounds.append(&mut next.sounds);
         self.errors.append(&mut next.errors);
+        self.player_writes.append(&mut next.player_writes);
     }
 }
 
@@ -643,6 +736,15 @@ impl SongLuaLiveScene {
             stage.get::<Function>("GetPlayerStageStats")?.call::<Table>((stage.clone(), "PlayerNumber_P1"))?,
             stage.get::<Function>("GetPlayerStageStats")?.call::<Table>((stage.clone(), "PlayerNumber_P2"))?,
         ];
+        lua.set_app_data(LiveStats(players.clone()));
+        lua.set_app_data(HealthStates::default());
+        let screen: Table = lua.globals().raw_get("__songlua_top_screen")?;
+        let children = crate::actor_children(&lua, &screen)?;
+        for (player, stats) in players.iter().enumerate() {
+            if let Some(meter) = children.raw_get::<Option<Table>>(format!("LifeP{}", player + 1))? {
+                stats.raw_set("__songlua_life_meter", meter)?;
+            }
+        }
         let registry = crate::song_lua_actor_registry(&lua)?
             .sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>()?;
         crate::lua_util::prepare_live_updates(&lua, &root)?;
@@ -729,6 +831,13 @@ impl SongLuaLiveScene {
         // and commands live in the bounded pending queue; discard old blocks.
         for actor in &self.registry {
             crate::reset_actor_capture(&self.lua, actor)?;
+        }
+        // ScreenGameplay updates health after its actor tree. GetHealthState
+        // during a SetLife/LifeChanged callback still sees the previous state.
+        if let Err(error) = finish_health_update(&self.lua) {
+            let screen: Table = self.lua.globals().raw_get("__songlua_top_screen")?;
+            crate::lua_util::report_update_error(&self.lua, &screen,
+                "__songlua_health_error_reported", "HealthStateChanged", &error)?;
         }
         take_output(&self.lua)
     }
@@ -851,19 +960,35 @@ impl SongLuaLiveScene {
                     || game.effective_visibility_effects_for_player(tap.player).blind != 0.0);
                 invoke_note_field_tap_callback(&lua, field, &callback, native_tap, game.cols_per_player())
             })();
-            match result {
+            let result = match result {
                 Ok(tap) => tap,
                 Err(error) => {
                     let _ = crate::lua_util::report_update_error(&lua, field,
                         "__songlua_did_tap_note_error_reported", "DidTapNote callback", &error);
                     tap
                 }
-            }
+            };
+            let writes = lua.remove_app_data::<PlayerWrites>().map_or_else(Vec::new, |writes| writes.0);
+            apply_player_writes(writes, game);
+            result
         }));
         Ok(())
     }
 
     pub fn context(&self) -> &SongLuaCompileContext { &self.context }
+
+    pub fn apply_pending_player_writes<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+        &self, game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
+    ) {
+        let writes = self.lua.remove_app_data::<PlayerWrites>().map_or_else(Vec::new, |writes| writes.0);
+        apply_player_writes(writes, game);
+    }
+
+    pub fn apply_output_player_writes<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+        &self, output: &SongLuaLiveOutput, game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
+    ) {
+        apply_player_writes(output.player_writes.iter().copied(), game);
+    }
 
     /// Supply neutral native allocations for the next screen epoch during a
     /// replay. A reload installs them when constructing its replacement scene.
@@ -962,7 +1087,8 @@ fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
     if let Some(history) = lua.globals().raw_get::<Option<Table>>(crate::SONG_LUA_BROADCASTS_KEY)? {
         history.clear()?;
     }
-    Ok(SongLuaLiveOutput { request, broadcasts, source_broadcasts, sounds, errors })
+    let player_writes = lua.remove_app_data::<PlayerWrites>().map_or_else(Vec::new, |writes| writes.0);
+    Ok(SongLuaLiveOutput { request, broadcasts, source_broadcasts, sounds, errors, player_writes })
 }
 
 pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
@@ -1024,6 +1150,67 @@ return setmetatable({__songlua_actor_type='ActorFrame',Name='Declared',
         context.music_length_seconds = 60.0;
         crate::compile_song_lua_with_default_host(&entry, &context, SongLuaNoteskinResolver::default(),
             |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).expect("live preparation")
+    }
+
+    #[test]
+    fn live_player_life_setter_updates_shared_meter_and_notifies_synchronously() {
+        let mut compiled = compile("player-life", r#"
+local top = SCREENMAN:GetTopScreen()
+local player = top:GetChild('PlayerP1')
+local meter = top:GetLifeMeter(PLAYER_1)
+local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
+local state = GAMESTATE:GetPlayerState(PLAYER_1)
+local done, changed = false, 0
+HEALTH_CHANGES = 0
+return Def.ActorFrame {
+    OnCommand = function(self)
+        self:sleep(60)
+        self:SetUpdateFunction(function(_, delta)
+            if delta <= 0 or done then return end
+            done = true
+            assert(math.abs(meter:GetLife() - 0.7) < 0.000001)
+            assert(player:SetLife(0.2) == player)
+            assert(math.abs(meter:GetLife() - 0.2) < 0.000001)
+            assert(math.abs(stats:GetCurrentLife() - 0.2) < 0.000001)
+            assert(changed == 1)
+            assert(player:SetLife(2) == player and meter:GetLife() == 1 and meter:IsHot())
+            assert(player:SetLife(-1) == player and meter:GetLife() == 0 and meter:IsFailing())
+            assert(changed == 3)
+            assert(state:GetHealthState() == 'HealthState_Alive')
+            stats:FailPlayer()
+            assert(stats:GetFailed())
+        end)
+    end,
+    LifeChangedMessageCommand = function(_, params)
+        assert(params.Player == PLAYER_1 and params.LifeMeter == meter)
+        assert(params.LifeMeter:GetLife() >= 0 and params.LifeMeter:GetLife() <= 1)
+        assert(state:GetHealthState() == 'HealthState_Alive')
+        changed = changed + 1
+        local ok, err = pcall(function() player:SetLife(0.8) end)
+        assert(not ok and tostring(err):find('LifeChangedMessageCommand'))
+    end,
+    HealthStateChangedMessageCommand = function(_, params)
+        assert(params.PlayerNumber == PLAYER_1)
+        assert(params.OldHealthState == 'HealthState_Alive' and params.HealthState == 'HealthState_Dead')
+        assert(state:GetHealthState() == 'HealthState_Dead')
+        HEALTH_CHANGES = HEALTH_CHANGES + 1
+    end,
+}
+"#);
+        let mut scene = compiled.live_scene.take().expect("owned life scene");
+        let mut frame = SongLuaLiveFrame { screen_seconds: 0.1, music_seconds: 0.1,
+            delta_seconds: 0.1, ..Default::default() };
+        frame.players[0].life = 0.7;
+        frame.players[0].fail_enabled = true;
+        let output = scene.advance(frame).expect("life frame");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(scene.lua.globals().get::<u32>("HEALTH_CHANGES").expect("health change"), 1);
+        assert_eq!(output.player_writes, vec![
+            SongLuaLivePlayerWrite::SetLife { player: 0, life: 0.2 },
+            SongLuaLivePlayerWrite::SetLife { player: 0, life: 1.0 },
+            SongLuaLivePlayerWrite::SetLife { player: 0, life: 0.0 },
+            SongLuaLivePlayerWrite::Fail { player: 0 },
+        ]);
     }
 
     #[test]

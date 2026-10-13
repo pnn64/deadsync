@@ -1051,7 +1051,7 @@ pub struct GameplayNoteFieldTap {
 
 pub type GameplayNoteFieldTapCallback<Profile, OverlayActor, CapturedActor, StateDelta> =
     Box<dyn FnMut(
-        &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
+        &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
         GameplayNoteFieldTap,
     ) -> GameplayNoteFieldTap + Send>;
 
