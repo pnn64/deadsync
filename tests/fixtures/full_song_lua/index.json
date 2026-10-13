@@ -2607,17 +2607,14 @@
       "aliases": []
     },
     {
-      "title": "Gemini in Clockland",
+      "title": "時計の国のジェミニ",
       "source_simfile": "Gemini in Clockland/Gemini in Clockland.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a86f1eeb66ff952810ed8e5588e56ff4ad5769469bc83a2b8a3d4ee2f6c11f3c.tar.zst",
-      "sha256": "a86f1eeb66ff952810ed8e5588e56ff4ad5769469bc83a2b8a3d4ee2f6c11f3c",
-      "compressed_bytes": 1024791,
-      "uncompressed_sha256": "65e7448268674435736e33444a4a5dee7c8ddb46fdc99cebb0721503b9a80312",
-      "compression_level": 22,
-      "aliases": [
-        "ef6a0df670016759a33012a0b0d5963d110d6587faa613a4ceca8aafd4b21250.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "626410ebf541e4c2f2aaa5b61f06371f5c132b09f5812f4c9155b13bfb07ab85.tar.zst",
+      "sha256": "626410ebf541e4c2f2aaa5b61f06371f5c132b09f5812f4c9155b13bfb07ab85",
+      "compressed_bytes": 10498626,
+      "uncompressed_sha256": "752f461726a761c83d8d2476e4b0686c8bba7dfca70cad9daa3a4319b39865fe",
+      "aliases": []
     },
     {
       "title": "Genshin Mega Quiz",

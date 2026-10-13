@@ -2545,6 +2545,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 208,
+      "source_simfile": "Gemini in Clockland/Gemini in Clockland.ssc",
+      "simfile_sha256": "894f635cea6d0b7dac5e5d434ee5b707e756158672cf1681205bbe2649b98dd3",
+      "retained_original_archive": "a86f1eeb66ff952810ed8e5588e56ff4ad5769469bc83a2b8a3d4ee2f6c11f3c.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "63e17ffe7 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/foreground-source-build-v2/proof.json",
+      "capture_seconds": 171.13167450399487,
+      "trace_sha256": "0d55371c6d6584441fe5ecd48cc98ea741ba0145b4c2abc66d9a268ce4dc4bb2",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-208/candidates/752f461726a761c83d8d2476e4b0686c8bba7dfca70cad9daa3a4319b39865fe.tar",
+      "replay_exit": 0,
+      "replay_seconds": 274.43030185099633,
+      "candidate_sha256": "752f461726a761c83d8d2476e4b0686c8bba7dfca70cad9daa3a4319b39865fe",
+      "native_frames": 22526,
+      "replayed_frames": 22526,
+      "compared_stage_fields": 1628,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.SetHeight, Actor.SetTextureFiltering, Actor.SetWidth, Actor.bob, Actor.effectoffset, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.SetTextureName, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.CMod, PlayerOptions.Centered, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Mini, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.XMod",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "66e6eb22e4b290d057a88783a292897dc6f9c1f898aaeaf24c9c99f13964c547",
+      "archive": "626410ebf541e4c2f2aaa5b61f06371f5c132b09f5812f4c9155b13bfb07ab85.tar.zst",
+      "archive_sha256": "626410ebf541e4c2f2aaa5b61f06371f5c132b09f5812f4c9155b13bfb07ab85",
+      "compressed_bytes": 10498626,
+      "pack_seconds": 7.395598082002834,
+      "harness_version": "0.1.80",
+      "title": "時計の国のジェミニ",
+      "retained_original_entry": {
+        "title": "Gemini in Clockland",
+        "source_simfile": "Gemini in Clockland/Gemini in Clockland.ssc",
+        "harness_version": "0.1.0",
+        "archive": "a86f1eeb66ff952810ed8e5588e56ff4ad5769469bc83a2b8a3d4ee2f6c11f3c.tar.zst",
+        "sha256": "a86f1eeb66ff952810ed8e5588e56ff4ad5769469bc83a2b8a3d4ee2f6c11f3c",
+        "compressed_bytes": 1024791,
+        "uncompressed_sha256": "65e7448268674435736e33444a4a5dee7c8ddb46fdc99cebb0721503b9a80312",
+        "compression_level": 22,
+        "aliases": [
+          "ef6a0df670016759a33012a0b0d5963d110d6587faa613a4ceca8aafd4b21250.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -2556,7 +2607,7 @@
   },
   "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 5,
+  "passed_fixtures": 6,
   "pending_charts": 8,
-  "processed_charts": 13
+  "processed_charts": 14
 }
