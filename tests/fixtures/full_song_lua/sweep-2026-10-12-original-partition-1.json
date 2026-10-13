@@ -3564,6 +3564,56 @@
         }
       ],
       "report_sha256": "35c53f4128d5e2a2291d2299b634cd2327eed4d62f1a2201d8263b43a921d46f"
+    },
+    {
+      "position": 231,
+      "source_simfile": "I Like To Move It/I Like To Move It.ssc",
+      "simfile_sha256": "bdc923e7b32ec605442400459621ea1db149e5523a269e2409a83e540c311f61",
+      "retained_original_archive": "44174d5e059b6686f602ffd0a14a56ce064bb7795b3653b9283b415977f7242d.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "63e17ffe7 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/foreground-source-build-v2/proof.json",
+      "capture_seconds": 109.16263083400554,
+      "trace_sha256": "0d7b1113fc9fa8bf71eb7803a0406cf4a32a7ad9f2003e822dd6e3e95d11579a",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-231/candidates/bc2bc62d3acb3e299d1c7d5547e9b24501f4cf9e1733bd4e5e0ea978cd7cc4d6.tar",
+      "replay_exit": 0,
+      "replay_seconds": 446.5892492109997,
+      "candidate_sha256": "bc2bc62d3acb3e299d1c7d5547e9b24501f4cf9e1733bd4e5e0ea978cd7cc4d6",
+      "native_frames": 76150,
+      "replayed_frames": 76150,
+      "compared_stage_fields": 1177,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers, Screen.AddInputCallback"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "fd867164dc231c611daa335eea0b2e02cab2c7f407e8e9a290c81949748916fa",
+      "archive": "ea9eda6ddeef4dce76618614f54c5f1577523e639edefb469f37be097dace0e4.tar.zst",
+      "archive_sha256": "ea9eda6ddeef4dce76618614f54c5f1577523e639edefb469f37be097dace0e4",
+      "compressed_bytes": 4710463,
+      "pack_seconds": 1.4025475620001089,
+      "harness_version": "0.1.80",
+      "title": "I Like To Move It (Wodda Remix)",
+      "retained_original_entry": {
+        "title": "I Like To Move It",
+        "source_simfile": "I Like To Move It/I Like To Move It.ssc",
+        "harness_version": "0.1.0",
+        "archive": "44174d5e059b6686f602ffd0a14a56ce064bb7795b3653b9283b415977f7242d.tar.zst",
+        "sha256": "44174d5e059b6686f602ffd0a14a56ce064bb7795b3653b9283b415977f7242d",
+        "compressed_bytes": 29559,
+        "uncompressed_sha256": "79a8b9102477bf198ecd25ea12d155e330fa6e4fa93428ef037cc8fc23815f9d",
+        "compression_level": 22,
+        "aliases": [
+          "f0af698877950baf66e9521ccfdcb69a0112e3a762284059685a8ddb6d645ce3.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -3575,7 +3625,7 @@
   },
   "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 6,
+  "passed_fixtures": 7,
   "pending_charts": 15,
-  "processed_charts": 21
+  "processed_charts": 22
 }
