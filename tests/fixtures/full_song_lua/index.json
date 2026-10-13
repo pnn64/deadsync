@@ -3340,15 +3340,12 @@
     {
       "title": "Kuru Kuru kururin [MODS]",
       "source_simfile": "Kuru Kuru kururin/Kuru Kuru kururin.ssc",
-      "harness_version": "0.1.0",
-      "archive": "375aaace358488d083a56a5661d444943e0e4ccc879ccfe0a2f9c5c98e941c50.tar.zst",
-      "sha256": "375aaace358488d083a56a5661d444943e0e4ccc879ccfe0a2f9c5c98e941c50",
-      "compressed_bytes": 709806,
-      "uncompressed_sha256": "b59772686dd6ece2bfc99bf1216305c36c01a7c38344f4c8f472240bce4fc1a8",
-      "compression_level": 22,
-      "aliases": [
-        "6eed67bb9b387548991ef58a7bc36e5604f7ea1214817832b88727034577da10.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "6577dfb6182e8590c79d8f57bdb2ef6a9970106c80f30196eeac614ed64ec89f.tar.zst",
+      "sha256": "6577dfb6182e8590c79d8f57bdb2ef6a9970106c80f30196eeac614ed64ec89f",
+      "compressed_bytes": 3424636,
+      "uncompressed_sha256": "ae9f77ebf292815e61f589ae1599e9306241907962e53bf4272cebcff57eaa5b",
+      "aliases": []
     },
     {
       "title": "Lake of Lost Nostalgia",

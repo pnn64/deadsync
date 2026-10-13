@@ -4701,6 +4701,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 271,
+      "source_simfile": "Kuru Kuru kururin/Kuru Kuru kururin.ssc",
+      "simfile_sha256": "c26acc535f8940f9eb9493162fd37fd69285f2d0964c3d9293b81227ff56e189",
+      "retained_original_archive": "375aaace358488d083a56a5661d444943e0e4ccc879ccfe0a2f9c5c98e941c50.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/live-draw-build-v1/proof.json",
+      "capture_seconds": 47.25223761300731,
+      "trace_sha256": "0def9067213adbcb842941d2910e34d9fab7ab0e2fee88ccc61b34531fb8c949",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-271/candidates/ae9f77ebf292815e61f589ae1599e9306241907962e53bf4272cebcff57eaa5b.tar",
+      "replay_exit": 0,
+      "replay_seconds": 310.2289729779877,
+      "candidate_sha256": "ae9f77ebf292815e61f589ae1599e9306241907962e53bf4272cebcff57eaa5b",
+      "native_frames": 20849,
+      "replayed_frames": 20849,
+      "compared_stage_fields": 451,
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.rotationy, PlayerOptions.FromString",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "dc19a45e67714fe7c12330d5fddba3fad02bc6c8a91769db60744f5c2f99f352",
+      "archive": "6577dfb6182e8590c79d8f57bdb2ef6a9970106c80f30196eeac614ed64ec89f.tar.zst",
+      "archive_sha256": "6577dfb6182e8590c79d8f57bdb2ef6a9970106c80f30196eeac614ed64ec89f",
+      "compressed_bytes": 3424636,
+      "pack_seconds": 3.1614634369907435,
+      "harness_version": "0.1.80",
+      "title": "Kuru Kuru kururin [MODS]",
+      "retained_original_entry": {
+        "title": "Kuru Kuru kururin [MODS]",
+        "source_simfile": "Kuru Kuru kururin/Kuru Kuru kururin.ssc",
+        "harness_version": "0.1.0",
+        "archive": "375aaace358488d083a56a5661d444943e0e4ccc879ccfe0a2f9c5c98e941c50.tar.zst",
+        "sha256": "375aaace358488d083a56a5661d444943e0e4ccc879ccfe0a2f9c5c98e941c50",
+        "compressed_bytes": 709806,
+        "uncompressed_sha256": "b59772686dd6ece2bfc99bf1216305c36c01a7c38344f4c8f472240bce4fc1a8",
+        "compression_level": 22,
+        "aliases": [
+          "6eed67bb9b387548991ef58a7bc36e5604f7ea1214817832b88727034577da10.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -4710,9 +4761,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "b370854d414e700640d93484aa612dcdc931af280acf17ee8b30e35b7fd82f7d",
+  "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 14,
+  "passed_fixtures": 15,
   "pending_charts": 20,
-  "processed_charts": 34
+  "processed_charts": 35
 }
