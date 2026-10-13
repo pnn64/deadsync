@@ -3210,15 +3210,12 @@
     {
       "title": "Write Final Round",
       "source_simfile": "Jokes/Write Final Round.ssc",
-      "harness_version": "0.1.0",
-      "archive": "0a234825bf7bba4434680e7614cea08a93527f39195d212be4f9b83a3bd29ebe.tar.zst",
-      "sha256": "0a234825bf7bba4434680e7614cea08a93527f39195d212be4f9b83a3bd29ebe",
-      "compressed_bytes": 244406,
-      "uncompressed_sha256": "a92a1387a28ef8df4c718753c79b6c3f5a4b8c28ff38858de4c42245cb87c700",
-      "compression_level": 22,
-      "aliases": [
-        "267d1d5d068b444fbeaef0f4fcabc6e00a37b4c79f7a652af46236672b4869b5.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "e2514fd1aa14aa7b969ce0c138c37228a3b78c6361ea2822926fe31a9604e02f.tar.zst",
+      "sha256": "e2514fd1aa14aa7b969ce0c138c37228a3b78c6361ea2822926fe31a9604e02f",
+      "compressed_bytes": 7056655,
+      "uncompressed_sha256": "4d2efcfb050fa6c533ceb86be570b3d15f66d95711da178f3c8998b1683aac0a",
+      "aliases": []
     },
     {
       "title": "Jumper",
