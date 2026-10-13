@@ -1,0 +1,666 @@
+{
+  "status": "actual Get Into It SSC first repair startup differences traced to shared native command lookup; final repair not launched",
+  "position": 211,
+  "source_simfile": "Get Into It/GetIntoIt.ssc",
+  "first_repair_result": {
+    "position": 211,
+    "source_simfile": "Get Into It/GetIntoIt.ssc",
+    "status": "pending",
+    "repair_attempts": 1,
+    "previous_concrete_failures": [],
+    "previous_errors": [],
+    "previous_failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[7.1s] replaying every native gameplay frame\n[8.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Get Into It (Yuh)': failed to execute '/tmp/.tmpgRWmbz/song/lua/bg.lua': runtime error: [string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Get Into It (Yuh)' from '/tmp/.tmpgRWmbz/song/lua/default.lua': failed to execute '/tmp/.tmpgRWmbz/song/lua/default.lua': runtime error: [string \"/tmp/.tmpgRWmbz/song/lua/default.lua\"]:460: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmpgRWmbz/song/lua/default.lua\"]:460: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\ndeadsync_song_lua::playback::prepare: Failed to compile background lua layer for 'Get Into It (Yuh)' from '/tmp/.tmpgRWmbz/song/lua/bg.lua': failed to execute '/tmp/.tmpgRWmbz/song/lua/bg.lua': runtime error: [string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (1455192) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[10.0s] replaying every native gameplay frame: frame 0/57594 (0.0%)\n",
+    "binary_sha256": "5ae071ff2319cc8c107d87763b84978c29b7ecc763fb4de47330fd6287f5b283",
+    "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "candidate_sha256": "bc410b2ec660dea177cd25b913edd879070438441184378f20362174d5aed8fa",
+    "trace_sha256": "4a209e499e1d30cf87f93117723c64f4dc55c9c0604f72683735375a955b60a5",
+    "simfile_sha256": "c13e18cc0089f8bd5f5dbf814ff97ae0fd614856914b8c41b1593a120e9ebed5",
+    "build_proof": "/home/parity/jobs/sprite-frames-overlay-green-v2/proof.json",
+    "fix_commit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+    "native_capture_reused": true,
+    "all_candidate_manifest_members_byte_verified": true,
+    "replay_exit": 2,
+    "replay_seconds": 9666.732207847002,
+    "native_frames": 57594,
+    "replayed_frames": 57594,
+    "compared_stage_fields": 1474,
+    "pending_coverage": [
+      "uncompared song operations: Actor.GetX, Actor.GetY, Actor.accelerate, Actor.addx, Actor.bob, Actor.rotationy, Actor.setstate, Actor.wag, ActorSound.get, ActorSound.play, ActorSound.stop, Sprite.LinearFrames, Sprite.setstate",
+      "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+    ],
+    "archive_accepted": false,
+    "errors": [
+      "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 36.012: missing captured subscriber identity for ScreenGameplay/6/1",
+      "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 103.491: missing captured subscriber identity for ScreenGameplay/6/1"
+    ],
+    "mismatch_count": 229455,
+    "concrete_failures": [
+      {
+        "phase": "progress",
+        "seconds": 127.00025177001953,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "phase": "progress",
+        "seconds": 128.00013732910156,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "phase": "screen-end",
+        "seconds": 128.09254455566406,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "phase": "gameplay-exit",
+        "seconds": 128.09254455566406,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "field": "command_query_count",
+        "native": 249634,
+        "deadsync": 249630
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0078",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0078",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 692,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1656,
+          "source": "song:/lua/default.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.begin",
+          "command": "OnCommand",
+          "source": "song:/lua/bg.lua",
+          "line": 3,
+          "beat": 0.0016133059980347753,
+          "seconds": 0.03852607682347298,
+          "args": null
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0078",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0078",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 692,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1657,
+          "source": "song:/lua/default.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.Center",
+          "source": "song:/lua/bg.lua",
+          "line": 3,
+          "phase": "callback",
+          "beat": 0.0016133059980347753,
+          "seconds": 0.03852607682347298,
+          "args": [],
+          "results": [
+            {
+              "actor": "0x5b9082c53270",
+              "name": "",
+              "path": "ScreenGameplay/SongBackground"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0079",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0079",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 700,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1658,
+          "source": "song:/lua/default.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.FullScreen",
+          "source": "song:/lua/bg.lua",
+          "line": 3,
+          "phase": "callback",
+          "beat": 0.0016133059980347753,
+          "seconds": 0.03852607682347298,
+          "args": [],
+          "results": [
+            {
+              "actor": "0x5b9082c53270",
+              "name": "",
+              "path": "ScreenGameplay/SongBackground"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0079",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0079",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 700,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1659,
+          "source": "song:/lua/default.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.diffusealpha",
+          "source": "song:/lua/bg.lua",
+          "line": 3,
+          "phase": "callback",
+          "beat": 0.0016133059980347753,
+          "seconds": 0.03852607682347298,
+          "args": [
+            1
+          ],
+          "results": [
+            {
+              "actor": "0x5b9082c53270",
+              "name": "",
+              "path": "ScreenGameplay/SongBackground"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0002",
+          "args": [],
+          "beat": 0.0016133002936840057,
+          "command": "OnCommand",
+          "definition_id": "def-0002",
+          "detail": {
+            "name": "OnCommand"
+          },
+          "kind": "command",
+          "line": 3,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 0.03852607682347298,
+          "seq": 1664,
+          "source": "song:/lua/bg.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.end",
+          "command": "OnCommand",
+          "source": "song:/lua/bg.lua",
+          "line": 3,
+          "beat": 0.0016133059980347753,
+          "seconds": 0.03852607682347298,
+          "args": null
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0002",
+          "args": [],
+          "beat": 0.0016133002936840057,
+          "caller": {
+            "line": 3,
+            "source": "song:/lua/bg.lua",
+            "tail_call": false
+          },
+          "command": "OnCommand",
+          "definition_id": "def-0002",
+          "detail": {
+            "native_tween_time_left": 0
+          },
+          "kind": "call",
+          "line": 3,
+          "operation": "Actor.Center",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.03852607682347298,
+          "seq": 1665,
+          "source": "song:/lua/bg.lua",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.begin",
+          "command": "OnCommand",
+          "source": "song:/lua/bg.lua",
+          "line": 8,
+          "beat": 0.0016133059980347753,
+          "seconds": 0.03852607682347298,
+          "args": null
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0002",
+          "args": [],
+          "beat": 0.0016133002936840057,
+          "caller": {
+            "line": 3,
+            "source": "song:/lua/bg.lua",
+            "tail_call": false
+          },
+          "command": "OnCommand",
+          "definition_id": "def-0002",
+          "detail": {
+            "native_tween_time_left": 0
+          },
+          "kind": "call",
+          "line": 3,
+          "operation": "Actor.FullScreen",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.03852607682347298,
+          "seq": 1667,
+          "source": "song:/lua/bg.lua",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.sleep",
+          "source": "song:/lua/bg.lua",
+          "line": 8,
+          "phase": "callback",
+          "beat": 0.0016133059980347753,
+          "seconds": 0.03852607682347298,
+          "args": [
+            1000
+          ],
+          "tween_time_left": 1000.0
+        }
+      }
+    ],
+    "report_sha256": "f9c41eceec933dbbca8f91a973cfd9006e190229c00611eceb4b1f6840e2785b"
+  },
+  "bounded_native_capture": {
+    "source_simfile": "Get Into It/GetIntoIt.ssc",
+    "candidate_sha256": "bc410b2ec660dea177cd25b913edd879070438441184378f20362174d5aed8fa",
+    "trace_sha256": "4a209e499e1d30cf87f93117723c64f4dc55c9c0604f72683735375a955b60a5",
+    "simfile_sha256": "c13e18cc0089f8bd5f5dbf814ff97ae0fd614856914b8c41b1593a120e9ebed5",
+    "all_manifest_members_byte_verified": true,
+    "native_frames": 57594,
+    "begin_message_definitions": [],
+    "native_begin_startup_events": [
+      {
+        "actor": "def-0078",
+        "args": [],
+        "beat": 0,
+        "command": "BeginMessageCommand",
+        "definition_id": "def-0078",
+        "detail": {
+          "name": "BeginMessageCommand"
+        },
+        "kind": "command",
+        "line": 692,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 1656,
+        "source": "song:/lua/default.lua"
+      },
+      {
+        "actor": "def-0078",
+        "args": [],
+        "beat": 0,
+        "command": "BeginMessageCommand",
+        "definition_id": "def-0078",
+        "detail": {
+          "name": "BeginMessageCommand"
+        },
+        "kind": "command",
+        "line": 692,
+        "operation": "command.end",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 1657,
+        "source": "song:/lua/default.lua"
+      },
+      {
+        "actor": "def-0079",
+        "args": [],
+        "beat": 0,
+        "command": "BeginMessageCommand",
+        "definition_id": "def-0079",
+        "detail": {
+          "name": "BeginMessageCommand"
+        },
+        "kind": "command",
+        "line": 700,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 1658,
+        "source": "song:/lua/default.lua"
+      },
+      {
+        "actor": "def-0079",
+        "args": [],
+        "beat": 0,
+        "command": "BeginMessageCommand",
+        "definition_id": "def-0079",
+        "detail": {
+          "name": "BeginMessageCommand"
+        },
+        "kind": "command",
+        "line": 700,
+        "operation": "command.end",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 1659,
+        "source": "song:/lua/default.lua"
+      }
+    ],
+    "early_complete_replay_differences": [
+      {
+        "phase": "progress",
+        "seconds": 127.00025177001953,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "phase": "progress",
+        "seconds": 128.00013732910156,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "phase": "screen-end",
+        "seconds": 128.09254455566406,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "phase": "gameplay-exit",
+        "seconds": 128.09254455566406,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "field": "command_query_count",
+        "native": 249634,
+        "deadsync": 249630
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0078",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0078",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 692,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1656,
+          "source": "song:/lua/default.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.begin",
+          "command": "OnCommand",
+          "source": "song:/lua/bg.lua",
+          "line": 3,
+          "beat": 0.0016133059980347753,
+          "seconds": 0.03852607682347298,
+          "args": null
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0078",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0078",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 692,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1657,
+          "source": "song:/lua/default.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.Center",
+          "source": "song:/lua/bg.lua",
+          "line": 3,
+          "phase": "callback",
+          "beat": 0.0016133059980347753,
+          "seconds": 0.03852607682347298,
+          "args": [],
+          "results": [
+            {
+              "actor": "0x5b9082c53270",
+              "name": "",
+              "path": "ScreenGameplay/SongBackground"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0079",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0079",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 700,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1658,
+          "source": "song:/lua/default.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.FullScreen",
+          "source": "song:/lua/bg.lua",
+          "line": 3,
+          "phase": "callback",
+          "beat": 0.0016133059980347753,
+          "seconds": 0.03852607682347298,
+          "args": [],
+          "results": [
+            {
+              "actor": "0x5b9082c53270",
+              "name": "",
+              "path": "ScreenGameplay/SongBackground"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0079",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0079",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 700,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1659,
+          "source": "song:/lua/default.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.diffusealpha",
+          "source": "song:/lua/bg.lua",
+          "line": 3,
+          "phase": "callback",
+          "beat": 0.0016133059980347753,
+          "seconds": 0.03852607682347298,
+          "args": [
+            1
+          ],
+          "results": [
+            {
+              "actor": "0x5b9082c53270",
+              "name": "",
+              "path": "ScreenGameplay/SongBackground"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0002",
+          "args": [],
+          "beat": 0.0016133002936840057,
+          "command": "OnCommand",
+          "definition_id": "def-0002",
+          "detail": {
+            "name": "OnCommand"
+          },
+          "kind": "command",
+          "line": 3,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 0.03852607682347298,
+          "seq": 1664,
+          "source": "song:/lua/bg.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.end",
+          "command": "OnCommand",
+          "source": "song:/lua/bg.lua",
+          "line": 3,
+          "beat": 0.0016133059980347753,
+          "seconds": 0.03852607682347298,
+          "args": null
+        }
+      }
+    ],
+    "existing_subscriber_errors": [
+      "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 36.012: missing captured subscriber identity for ScreenGameplay/6/1",
+      "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 103.491: missing captured subscriber identity for ScreenGameplay/6/1"
+    ],
+    "chart_repair_attempts_spent": 1,
+    "remaining_repairs": 1
+  },
+  "bounded_input_sha256": "be83dc71c691c45e6cf408e40972725b2fea6cdd181ee5f75e8e1641a07a2a6b",
+  "local_source_pins": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Actor.cpp",
+      "sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ActorFrame.cpp",
+      "sha256": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Screen.cpp",
+      "sha256": "d77fc7cd061a7a90584529f95966badc0b5b327438b2b00376c463151fb9ec9a"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Background.cpp",
+      "sha256": "8ac3e579ba9b3adf41acd425c4ad921d0ed17f511761dd9e80301119d76eba2c"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs",
+      "sha256": "7f4791580aa7e7851d2f5d7cb407f236a7fb4f143d050b717d535dde31bd5db9"
+    }
+  ],
+  "concrete_source_cause": "Pinned Actor::LoadFromNode strips Command, then Actor::AddCommand strips Message and stores message handlers in the same command map. Screen::BeginScreen plays Begin; ActorFrame propagates this direct command through screen children. Native capture consequently invokes the two foreground ActorProxy BeginMessageCommand handlers at seconds zero, despite no Begin broadcast and nil player targets. Independent startup explicitly requests BeginCommand and only checks that literal authored field, omitting both handlers and their four begin/end trace events. The remaining callback ordinal differences follow this missing prefix. The two owned sole-subscriber errors and four failed-state differences have a separate already validated fix.",
+  "native_background_owner_scope": "Background cached actors live in m_BGAnimations rather than m_SubActors; screen Begin does not propagate into those cached actor owners. The byte-verified native background BeginMessageCommand has no seconds-zero event. A repair control must preserve this distinction.",
+  "repair_requirement": "Validate shared direct/message command lookup and screen startup propagation over the appropriate owners before spending the one remaining complete replay. Reuse the original capture and keep all comparison fields unchanged.",
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "chart_repair_attempts_spent": 1,
+  "remaining_repairs": 1,
+  "comparisons_modified": false,
+  "passing_charts_reopened": false
+}
