@@ -1,0 +1,169 @@
+{
+  "status": "actual Media Offline original replay failure inspected; shared sole-subscriber control still required",
+  "source_simfile": "media offline/media offline.ssc",
+  "position": 311,
+  "original_result": {
+    "position": 311,
+    "source_simfile": "media offline/media offline.ssc",
+    "simfile_sha256": "62fa6179278daeded2cb031ca8532dd5242ce18331b850d8bed44f516b80a535",
+    "retained_original_archive": "56cdb3466337d06071f38a4fcf1935e95096a63fa175fca57f675daddbbef19e.tar.zst",
+    "status": "pending",
+    "repair_attempts": 0,
+    "binary_sha256": "1df4edb6457cb51a6720afb6f97c47421d2830b23881e133afd0e9821bcaf44c",
+    "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "fix_commit": "9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+    "build_proof": "/home/parity/jobs/koi-judgment-green-v1/proof.json",
+    "capture_seconds": 183.670249969,
+    "trace_sha256": "f7eb43316383f988ea48a6caaa0d22c0a8e90b04bedaa0b9173cf1891f215f44",
+    "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-311/candidates/bac0bf5d49c374f91375c34908defc95e0f4b52eb66f32418e2a68e2d4a1c4c8.tar",
+    "replay_exit": 2,
+    "replay_seconds": 1018.3796493820264,
+    "candidate_sha256": "bac0bf5d49c374f91375c34908defc95e0f4b52eb66f32418e2a68e2d4a1c4c8",
+    "native_frames": 45745,
+    "replayed_frames": 45745,
+    "compared_stage_fields": 1562,
+    "pending_coverage": [
+      "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+    ],
+    "whole_song_parity_proven": false,
+    "archive_accepted": false,
+    "errors": [
+      "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 33.007: missing captured subscriber identity for ScreenGameplay/6/1",
+      "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 55.793: missing captured subscriber identity for ScreenGameplay/6/1",
+      "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 63.013: missing captured subscriber identity for ScreenGameplay/6/1"
+    ],
+    "mismatch_count": 4,
+    "concrete_failures": [
+      {
+        "phase": "progress",
+        "seconds": 135.00112915039062,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "phase": "progress",
+        "seconds": 136.00148010253906,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "phase": "screen-end",
+        "seconds": 136.34828186035156,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "phase": "gameplay-exit",
+        "seconds": 136.34828186035156,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      }
+    ],
+    "report_sha256": "ef70e90919545d89f2e9a1c2f96cd44c0a33cf55d5943274244ab08bffed193a"
+  },
+  "shared_source_diagnosis": "sweep-2026-10-13-wargame-subscriber-diagnosis.json",
+  "bounded_trace_inputs": {
+    "path": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\media-offline-subscriber-inputs-v1.json",
+    "sha256": "8ad2aa075f93d99c3f745da641e5315eee06cebbc19dd344d40828acccbacf22",
+    "raw_trace_sha256_verified": "f7eb43316383f988ea48a6caaa0d22c0a8e90b04bedaa0b9173cf1891f215f44",
+    "data": {
+      "trace_sha256": "f7eb43316383f988ea48a6caaa0d22c0a8e90b04bedaa0b9173cf1891f215f44",
+      "source_definitions": [
+        {
+          "id": "def-0001",
+          "source": "song:/lua/_script.lua",
+          "commands": [
+            "OnCommand"
+          ]
+        },
+        {
+          "id": "def-0002",
+          "source": "song:/lua/_script.lua",
+          "commands": [
+            "InitCommand"
+          ]
+        },
+        {
+          "id": "def-0003",
+          "source": "song:/lua/_script.lua",
+          "commands": [
+            "OnCommand"
+          ]
+        },
+        {
+          "id": "def-0004",
+          "source": "song:/lua/_script.lua",
+          "commands": []
+        },
+        {
+          "id": "def-0005",
+          "source": "=(tail call)",
+          "commands": []
+        }
+      ],
+      "authored_judgment_subscribers": [],
+      "actor_creation_inputs": [
+        {
+          "actor": "def-0005",
+          "before_seq": 13,
+          "definition_id": "def-0005",
+          "ordinal": 1,
+          "parent": "external-0005",
+          "pointer_hex": "5f49567a83a0",
+          "provenance": "native-ActorUtil-before-LoadFromNode",
+          "scene": 1
+        },
+        {
+          "actor": "def-0004",
+          "before_seq": 13,
+          "definition_id": "def-0004",
+          "ordinal": 2,
+          "parent": "def-0005",
+          "pointer_hex": "5f49563f8100",
+          "provenance": "native-ActorUtil-before-LoadFromNode",
+          "scene": 1
+        },
+        {
+          "actor": "def-0001",
+          "before_seq": 13,
+          "definition_id": "def-0001",
+          "ordinal": 3,
+          "parent": "def-0004",
+          "pointer_hex": "5f495683aed0",
+          "provenance": "native-ActorUtil-before-LoadFromNode",
+          "scene": 1
+        },
+        {
+          "actor": "def-0002",
+          "before_seq": 13,
+          "definition_id": "def-0002",
+          "ordinal": 4,
+          "parent": "def-0004",
+          "pointer_hex": "5f49553b1990",
+          "provenance": "native-ActorUtil-before-LoadFromNode",
+          "scene": 1
+        },
+        {
+          "actor": "def-0003",
+          "before_seq": 15,
+          "definition_id": "def-0003",
+          "ordinal": 5,
+          "parent": "def-0004",
+          "pointer_hex": "5f49567cca70",
+          "provenance": "native-ActorUtil-before-LoadFromNode",
+          "scene": 1
+        }
+      ]
+    }
+  },
+  "observations": "Five captured authored definitions include no JudgmentMessageCommand. Tap, avoided-mine and hold Judgment delivery each report the missing owned theme subscriber identity at ScreenGameplay/6/1. The complete replay has four failed-state differences and no other mismatches.",
+  "repair_attempts_spent": 0,
+  "remaining_full_repairs": 2,
+  "comparisons_modified": false,
+  "passing_chart_reopened": false,
+  "capped_lower_times_ssc_reopened": false
+}
