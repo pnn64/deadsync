@@ -2543,15 +2543,12 @@
     {
       "title": "FTW",
       "source_simfile": "FTW/FTW.ssc",
-      "harness_version": "0.1.0",
-      "archive": "7e9f88108e394dda40b5d1757f80d64bdfcd71dc51de6b3c1c26b4f6d3089787.tar.zst",
-      "sha256": "7e9f88108e394dda40b5d1757f80d64bdfcd71dc51de6b3c1c26b4f6d3089787",
-      "compressed_bytes": 82152,
-      "uncompressed_sha256": "cef9c83a5f51ba1b12d5d5ab9c0b3aa69444924f33b85f4ac87f58840b16fe81",
-      "compression_level": 22,
-      "aliases": [
-        "17ed6b0e1759f379f4181b9a8ed816cce2cf6f6e407f4778125aa0b2f57bcd42.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "1fd3994e70780bbd75b687131fbf798c4c30c37f878da889040855df18f61a8d.tar.zst",
+      "sha256": "1fd3994e70780bbd75b687131fbf798c4c30c37f878da889040855df18f61a8d",
+      "compressed_bytes": 17088459,
+      "uncompressed_sha256": "5e35ee6eca02478f22a430afb35c85de6f0d17d7f90c07404718bc37a65e2693",
+      "aliases": []
     },
     {
       "title": "Furst",
