@@ -3812,15 +3812,12 @@
     {
       "title": "media offline",
       "source_simfile": "media offline/media offline.ssc",
-      "harness_version": "0.1.0",
-      "archive": "56cdb3466337d06071f38a4fcf1935e95096a63fa175fca57f675daddbbef19e.tar.zst",
-      "sha256": "56cdb3466337d06071f38a4fcf1935e95096a63fa175fca57f675daddbbef19e",
-      "compressed_bytes": 74833,
-      "uncompressed_sha256": "44993d95ee85ad4201a6d0dbf2e6d2902ce59548ce70f9f557472841d4967158",
-      "compression_level": 22,
-      "aliases": [
-        "7cc0abc2ab2fe3c7d1ab337ae3c2a8212bd1dc69d221b755b2bcc46ad427c757.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b985365bfc1ca6899fe9eb2c8150c7ce740826e76589b9988c0933bb3150c70d.tar.zst",
+      "sha256": "b985365bfc1ca6899fe9eb2c8150c7ce740826e76589b9988c0933bb3150c70d",
+      "compressed_bytes": 15959105,
+      "uncompressed_sha256": "bac0bf5d49c374f91375c34908defc95e0f4b52eb66f32418e2a68e2d4a1c4c8",
+      "aliases": []
     },
     {
       "title": "MEGALOVANIA",
