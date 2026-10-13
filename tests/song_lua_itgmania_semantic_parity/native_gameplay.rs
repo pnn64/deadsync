@@ -727,16 +727,17 @@ local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
 local taps = 0
 return Def.ActorFrame {
     OnCommand = function(self)
+        self:sleep(60)
         field:SetDidTapNoteCallback(function(column, score, bright)
             assert(column == 1 and score == 'TapNoteScore_W1' and bright == false)
             taps = taps + 1
-            field:stoptweening():sleep(0.25)
+            self:stoptweening():sleep(0.25)
             MESSAGEMAN:Broadcast('EngineTap', {beat=GAMESTATE:GetSongBeat(),
                 combo=stats:GetCurrentCombo(), possible=stats:GetCurrentPossibleDancePoints()})
             return 2, 'TapNoteScore_W2', true
         end)
         self:SetUpdateFunction(function(self)
-            self:aux(field:GetTweenTimeLeft()):x(taps)
+            MESSAGEMAN:Broadcast('EngineObserve', {left=self:GetTweenTimeLeft(), taps=taps})
         end)
     end,
 }
@@ -762,14 +763,16 @@ return Def.ActorFrame {
         state.set_live_autoplay_enabled(true);
         state.set_current_music_time_ns(0);
         let mut effects = Vec::new();
+        let tap_time = state.gameplay.chart_runtime.note_time_cache_ns[0];
+        // Foreground uses the music-position delta. Keep successive clock
+        // inputs 100ms apart, as well as their wall-frame delta.
         gameplay::update(&mut state, 0.1, GameplayAudioSnapshot {
-            stream_clock: GameplayStreamClockSnapshot { music_nanos: 0,
+            stream_clock: GameplayStreamClockSnapshot { music_nanos: tap_time - 100_000_000,
                 has_music_mapping: true, valid_at_host_nanos: 900_000_000, ..Default::default() },
             ..Default::default()
         }, || 900_000_000, &mut effects);
         let startup = state.take_song_lua_output();
         assert!(startup.errors.is_empty(), "{:?}", startup.errors);
-        let tap_time = state.gameplay.chart_runtime.note_time_cache_ns[0];
         let expected_beat = context.song_timing.as_ref().unwrap()
             .get_song_position(tap_time as f32 / 1_000_000_000.0).beat;
         gameplay::update(&mut state, 0.1, GameplayAudioSnapshot {
@@ -785,9 +788,13 @@ return Def.ActorFrame {
             state.gameplay.chart_runtime.note_time_cache_ns,
             state.gameplay.chart_runtime.notes.iter().map(|note| note.result).collect::<Vec<_>>(),
             state.song_lua.is_some(), state.gameplay.note_field_tap_callback.is_some());
-        let scene = state.song_lua.as_ref().expect("owned scene");
-        assert_eq!(scene.states()[0].x, 1.0, "callback precedes the authored update");
-        assert!((scene.states()[0].aux - 0.15).abs() < 1e-6, "new tween consumes this frame's delta");
+        // Player.cpp updates its own actor children before judging. Custom
+        // explosions in SongForeground update after that Player callback.
+        let observation = output.source_broadcasts.iter().find(|event| event.name == "EngineObserve")
+            .expect("foreground observer").params.as_ref().unwrap().as_ref().unwrap();
+        assert_eq!(observation["taps"], serde_json::json!(1), "callback precedes the foreground update");
+        assert!((observation["left"].as_f64().unwrap() - 0.15).abs() < 1e-6,
+            "new foreground tween consumes this frame's delta");
         let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
         let queries: Vec<_> = events.iter().filter(|event| event["operation"] == "GameState.GetSongBeat").collect();
         assert_eq!(queries.len(), 1);
