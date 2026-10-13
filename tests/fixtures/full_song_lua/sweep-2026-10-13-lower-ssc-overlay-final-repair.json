@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "bounded final Lower Times SSC overlay Off repair complete",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044",
