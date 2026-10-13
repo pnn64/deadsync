@@ -1,0 +1,60 @@
+{
+  "launch_receipt": {
+    "supervisor_pid": 1260333,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_lower_ssc_end_repair_v1.py"
+    ]
+  },
+  "live_observation": {
+    "pid": 1260439,
+    "command": [
+      "/home/parity/jobs/natural-end-green-v5/full-song-lua-stage-modifier-v1",
+      "--archive",
+      "/home/parity/jobs/lower-ssc-end-repair-v1/chart-289/f2f5ef47ffbd972a1a82faed813e31cff6b36e3177114c0a8b579b815115cb8b.tar",
+      "--report",
+      "/home/parity/jobs/lower-ssc-end-repair-v1/chart-289/report.json"
+    ],
+    "label": "replay",
+    "source_simfile": "Lower Times/Lower Times.ssc"
+  },
+  "exact_process_matches": true,
+  "selected_build": {
+    "build_proof": "/home/parity/jobs/natural-end-green-v5/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "binary_sha256": "47f6ef41978d4b2f60a074e3dbf91ed8bedf705a65f7852e0a7e66f301f4d017",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "actual_source_pins": 26,
+  "candidate_sha256": "f2f5ef47ffbd972a1a82faed813e31cff6b36e3177114c0a8b579b815115cb8b",
+  "native_trace_sha256": "60becf74ac483841cd11aade35a2a7a1a838e486b72b39294d1c7e4e032a78de",
+  "simfile_sha256": "6ca6a4f70f49b08d05d58bd76d943bfa304378ffc855c7f7dfcee3c677e1f65d",
+  "previous_report_sha256": "8cc5ce72ac0620834f586d64cf670fc820638289ad7a6fe9d134215fbd0c3ee8",
+  "replay_log_tail": [
+    "[26.0s] replaying every native gameplay frame: frame 2002/114997 (1.7%)",
+    "[28.0s] replaying every native gameplay frame: frame 2154/114997 (1.9%)",
+    "[30.0s] replaying every native gameplay frame: frame 2303/114997 (2.0%)"
+  ],
+  "status": "first bounded Lower Times SSC repair running; complete replay acceptance not yet decided",
+  "source_fix_commits": [
+    "7c8b4c460131bb1c1674813ca53a210e20ff895d"
+  ],
+  "validated_build": "sweep-2026-10-13-natural-end-build.json",
+  "original_diagnosis": "sweep-2026-10-13-lower-ssc-end-observation.json",
+  "repair_attempts_before_launch": 0,
+  "repair_attempt_started": 1,
+  "per_chart_limit": 2,
+  "native_capture_reused": true,
+  "input_archive_uncompressed_bytes_verified": true,
+  "native_candidate_decompressed_once_without_recapture": true,
+  "publisher_streams": 48,
+  "publisher_count": 1,
+  "actual_publisher": {
+    "ProcessId": 60312,
+    "CommandLine": "\"C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe\" -B -X utf8 C:/GitHub/itgmania-harness/target/server-parity/publish_chart_sweep_v1.py"
+  },
+  "comparisons_modified": false,
+  "acceptance_unchanged": true,
+  "passing_chart_reopened": false
+}
