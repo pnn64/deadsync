@@ -3064,6 +3064,21 @@
       "capture_exit": 1,
       "capture_seconds": 900.1704190510063,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1203129-1791857277402329388-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1203129-1791857277402329388-0\n"
+    },
+    {
+      "position": 225,
+      "source_simfile": "Happy Now/Happy Now.ssc",
+      "simfile_sha256": "9c577d5c3cbbc12ea6b4ed5313ac789e3b3adcd24c0e5a345f4b078292f05740",
+      "retained_original_archive": "abd842dd94c03a23a302ebb3357f6318c068c940aedd16d5760a9179b4b298c2.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "63e17ffe7 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/foreground-source-build-v2/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 53.748120049989666,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-1269178-1791858178162342429-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1269178-1791858178162342429-0\n"
     }
   ],
   "scope": {
@@ -3073,9 +3088,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "76f1176f97fb1c43d5417e1e076c02c4ba3f1e43b57b6a66ac7f4b78f54e9332",
+  "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 6,
-  "pending_charts": 13,
-  "processed_charts": 19
+  "pending_charts": 14,
+  "processed_charts": 20
 }
