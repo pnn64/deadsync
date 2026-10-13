@@ -327,5 +327,7 @@
       "native_source": "ScreenGameplay.cpp:1508-1536 and 1657",
       "status": "The initial foreground On clock precedes the first replayed frame. Confirm the retained epoch input/initial music position and native update ordering before changing replay startup."
     }
-  }
+  },
+  "final_bounded_outcome": "Second repair completed all 8419 frames and 143 stage fields, zero Lua errors and zero stage differences. One PlayerStageStats identity path difference remains; at cap with no third replay.",
+  "final_repair_evidence": "sweep-2026-10-12-great-great-final-source-diagnosis.json"
 }

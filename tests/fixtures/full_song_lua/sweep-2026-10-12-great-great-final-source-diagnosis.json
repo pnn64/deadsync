@@ -1,0 +1,85 @@
+{
+  "diagnostic_only": true,
+  "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
+  "position": 219,
+  "repair_attempts_spent": 2,
+  "repair_attempts_remaining": 0,
+  "at_repair_cap": true,
+  "native_frames": 8419,
+  "replayed_frames": 8419,
+  "compared_stage_fields": 143,
+  "stage_mismatches": 0,
+  "callback_errors": 0,
+  "remaining_mismatches": [
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "stage:current",
+        "args": [
+          "PlayerNumber_P1"
+        ],
+        "beat": 12.502771377563477,
+        "caller": {
+          "line": 30,
+          "source": "song:/.//default.lua",
+          "tail_call": false
+        },
+        "command": "JudgmentMessageCommand",
+        "definition_id": "def-0001",
+        "detail": {
+          "results": [
+            {
+              "path": "stage:current/player:PlayerNumber_P1",
+              "type": "PlayerStageStats"
+            }
+          ]
+        },
+        "kind": "query",
+        "line": 30,
+        "operation": "StageStats.GetPlayerStageStats",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 4.676417350769043,
+        "seq": 207,
+        "source": "song:/.//default.lua",
+        "results": [
+          {
+            "path": "stage:current/player:PlayerNumber_P1",
+            "type": "PlayerStageStats"
+          }
+        ]
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "StageStats.GetPlayerStageStats",
+        "source": "song:/.//default.lua",
+        "line": 30,
+        "phase": "callback",
+        "beat": 12.502771377563477,
+        "seconds": 4.676417350769043,
+        "args": [
+          "PlayerNumber_P1"
+        ],
+        "results": [
+          {
+            "type": "PlayerStageStats",
+            "path": "stage:current/player:P1"
+          }
+        ]
+      }
+    }
+  ],
+  "candidate_sha256": "c0826b85cb615b23b55b45859795e975d859502a02d4066b87d1f382544a8196",
+  "native_trace_sha256": "a29e37ab31bd62f6bd8bc719949da5489f74070e8607cd68273248f3fff2ce3d",
+  "report_byte_sha256": "96bf188ae08970037dddb5eed7f06d0d46e73c25e1cf2faa82ade71089ec44e2",
+  "binary_sha256": "7f64d791484688206a4eeaf9f264d48cf0de71ac73780fc40226f1f74bb473e8",
+  "build_proof": "/home/parity/jobs/startup-provenance-build-v3/proof.json",
+  "source_fix_commit": "34e1a7ba8",
+  "fixed_behavior_proven_by_final_replay": "Native tap and hold life changes, stage failure, literal .// foreground source, first zero-delta On clock and dynamically registered command provenance now compare without differences.",
+  "remaining_source_cause": "SongLuaTrace.lua:600-601 registers the returned PlayerStageStats identity with tostring(args[2]), retaining PlayerNumber_P1. live.rs:290 registers the same shared stats object under the short P1 path. The retained failed query has matching args, source, callback phase, beat and seconds; only its identity path differs.",
+  "bounded_outcome": "Pending at two attempts; no third replay, no accepted fixture, no comparison relaxed and no passing fixture reopened.",
+  "coverage_separate_from_acceptance": [
+    "uncompared song operations: Actor.addcommand, Player.SetLife, PlayerOptions.CMod, PlayerStageStats.FailPlayer, PlayerState.GetHealthState, ScreenGameplay.GetLifeMeter"
+  ]
+}
