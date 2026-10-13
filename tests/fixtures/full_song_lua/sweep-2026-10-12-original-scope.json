@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T07:16:09Z",
+  "updated_utc": "2026-10-13T07:40:57Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 189,
-    "pending": 55,
-    "unprocessed": 257
+    "passed": 191,
+    "pending": 56,
+    "unprocessed": 254
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2037,7 +2037,9 @@
       "position": 234,
       "source_simfile": "I'm sorry/sm.sm",
       "simfile_sha256": "676eb2da583081699939f2de874bb360fb480226230c8a540c7bbc76cb4fd53e",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 235,
@@ -2057,7 +2059,9 @@
       "position": 237,
       "source_simfile": "ICON KILLER - [Zaia + StarrySergal + dimo + Brother Mojo]/ICON KILLER.ssc",
       "simfile_sha256": "ea39003044e3de44607bc670cadfb2594f7d48855c842ff55770fc08936b7f80",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 238,
@@ -2077,7 +2081,9 @@
       "position": 240,
       "source_simfile": "Igaku/Igaku.ssc",
       "simfile_sha256": "5fa5cb72a841765d6e53ba7fd60e1c753653c64d1748543f4e4bc67f72a3a0d2",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 241,
