@@ -6149,6 +6149,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 282,
+      "source_simfile": "Limitless/Limitless.ssc",
+      "simfile_sha256": "228feda0ed2c309235ff9c9af07e4e8c51fe4e8c964b2b99b050956b6ea52582",
+      "retained_original_archive": "31d664d8fad0c6e1aab62c93dda0a28a64e1e5a9b59369edb2544b4dc490b151.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "fc7e246c948eb5b0ecb64a09b3777c480ac81eb26d2cf232c4ed3d2f8112cdd1",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/table-find-build-v4/proof.json",
+      "capture_seconds": 146.63617399899522,
+      "trace_sha256": "02ae6f5c0fcb09e40f9bcf33e595bc9de6f37dbc38f9aeed84b3e57c9141c996",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-282/candidates/517573404863db0c1d6334de1b2cf04b3062ea031d15cb5fcee8af04013d535d.tar",
+      "replay_exit": 0,
+      "replay_seconds": 617.6377993989881,
+      "candidate_sha256": "517573404863db0c1d6334de1b2cf04b3062ea031d15cb5fcee8af04013d535d",
+      "native_frames": 35563,
+      "replayed_frames": 35563,
+      "compared_stage_fields": 1243,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "967f4d95d6254562c0cb7049ae765992f66e045450e2a748ad84ab1d305bdcb5",
+      "archive": "97a451e724bf932ea6f2575ae3dc23d6392ae3fe5999fd5173991cd81f024a80.tar.zst",
+      "archive_sha256": "97a451e724bf932ea6f2575ae3dc23d6392ae3fe5999fd5173991cd81f024a80",
+      "compressed_bytes": 12005699,
+      "pack_seconds": 14.141708641996956,
+      "harness_version": "0.1.80",
+      "title": "Limitless",
+      "retained_original_entry": {
+        "title": "Limitless",
+        "source_simfile": "Limitless/Limitless.ssc",
+        "harness_version": "0.1.0",
+        "archive": "31d664d8fad0c6e1aab62c93dda0a28a64e1e5a9b59369edb2544b4dc490b151.tar.zst",
+        "sha256": "31d664d8fad0c6e1aab62c93dda0a28a64e1e5a9b59369edb2544b4dc490b151",
+        "compressed_bytes": 65569,
+        "uncompressed_sha256": "3248216ac7f854cc8f2f88595b03c0b2a675c59b9ee31d9acc17e7a187d541ca",
+        "compression_level": 22,
+        "aliases": [
+          "cbba0443250da983221860bb17873a873170933aa917716855514584cb30168d.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -6158,9 +6208,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
+  "binary_sha256": "fc7e246c948eb5b0ecb64a09b3777c480ac81eb26d2cf232c4ed3d2f8112cdd1",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 17,
+  "passed_fixtures": 18,
   "pending_charts": 21,
-  "processed_charts": 38
+  "processed_charts": 39
 }

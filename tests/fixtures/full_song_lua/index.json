@@ -3471,15 +3471,12 @@
     {
       "title": "Limitless",
       "source_simfile": "Limitless/Limitless.ssc",
-      "harness_version": "0.1.0",
-      "archive": "31d664d8fad0c6e1aab62c93dda0a28a64e1e5a9b59369edb2544b4dc490b151.tar.zst",
-      "sha256": "31d664d8fad0c6e1aab62c93dda0a28a64e1e5a9b59369edb2544b4dc490b151",
-      "compressed_bytes": 65569,
-      "uncompressed_sha256": "3248216ac7f854cc8f2f88595b03c0b2a675c59b9ee31d9acc17e7a187d541ca",
-      "compression_level": 22,
-      "aliases": [
-        "cbba0443250da983221860bb17873a873170933aa917716855514584cb30168d.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "97a451e724bf932ea6f2575ae3dc23d6392ae3fe5999fd5173991cd81f024a80.tar.zst",
+      "sha256": "97a451e724bf932ea6f2575ae3dc23d6392ae3fe5999fd5173991cd81f024a80",
+      "compressed_bytes": 12005699,
+      "uncompressed_sha256": "517573404863db0c1d6334de1b2cf04b3062ea031d15cb5fcee8af04013d535d",
+      "aliases": []
     },
     {
       "title": "リップシンク",
