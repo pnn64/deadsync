@@ -1,0 +1,146 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "a45545f0a / harness b191ebd",
+  "results": [
+    {
+      "position": 201,
+      "source_simfile": "FTW/FTW.sm",
+      "status": "passed",
+      "repair_attempts": 1,
+      "previous_failure": [],
+      "binary_sha256": "76f1176f97fb1c43d5417e1e076c02c4ba3f1e43b57b6a66ac7f4b78f54e9332",
+      "candidate_sha256": "bb831a9399e2162b88b214b086c08e192062f26cac650f233a3e75ad2a88037b",
+      "simfile_sha256": "aba9ad891fce149bb80286a9b5d9feb06041e9c2f478467c889bbe08d8235790",
+      "fix_commit": "a45545f0a / harness b191ebd",
+      "previous_concrete_failures": [
+        {
+          "phase": "screen-active",
+          "seconds": -2.2996599674224854,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": -2.2996599674224854,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": -1.999342441558838,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": -0.999750554561615,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 0.0006802721181884408,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 1.0070521831512451,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 2.001587390899658,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 3.001473903656006,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 4.000725746154785,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 5.001246929168701,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 6.001972675323486,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 7.000952243804932,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        }
+      ],
+      "build_proof": "/home/parity/jobs/sm-metadata-build-v1/proof.json",
+      "replay_exit": 0,
+      "replay_seconds": 637.4766413189936,
+      "native_frames": 55351,
+      "replayed_frames": 55351,
+      "compared_stage_fields": 1562,
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, ActorFrame.SetDrawByZPosition, GameState.GetCurMusicSeconds, PlayerOptions.FromString",
+        "native drawable state/resources: Sprite"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "6b5a6a7041768e5f886b1770845d97310a2787d9c84d04d17e8d1828e2a7f439",
+      "archive": "e4554a9b96199f0b758716a15a2debcb2f2c54cc54606f41432a8d190dc8a46e.tar.zst",
+      "archive_sha256": "e4554a9b96199f0b758716a15a2debcb2f2c54cc54606f41432a8d190dc8a46e",
+      "compressed_bytes": 17803304,
+      "harness_version": "0.1.80",
+      "title": "FTW",
+      "pack_seconds": 21.023574227001518,
+      "retained_original_entry": {
+        "title": "FTW",
+        "source_simfile": "FTW/FTW.sm",
+        "harness_version": "0.1.0",
+        "archive": "e60fd23f932e586de8a0d5ae931147bdf53d96faabede1a361be436891df3282.tar.zst",
+        "sha256": "e60fd23f932e586de8a0d5ae931147bdf53d96faabede1a361be436891df3282",
+        "compressed_bytes": 81956,
+        "uncompressed_sha256": "56387b2695b1498f83ab28f79642040c062d6faf664fa291a686f1a4e37d60c0",
+        "compression_level": 22,
+        "aliases": [
+          "a81daa5351cdeb78e48f565f76e02fe3a676679d9465c645cbf4a3cdc0161467.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "76f1176f97fb1c43d5417e1e076c02c4ba3f1e43b57b6a66ac7f4b78f54e9332",
+  "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+  "repair": "native ASCII whitespace trimming and shared authored SM chart metadata",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}

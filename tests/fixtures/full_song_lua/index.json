@@ -2533,15 +2533,12 @@
     {
       "title": "FTW",
       "source_simfile": "FTW/FTW.sm",
-      "harness_version": "0.1.0",
-      "archive": "e60fd23f932e586de8a0d5ae931147bdf53d96faabede1a361be436891df3282.tar.zst",
-      "sha256": "e60fd23f932e586de8a0d5ae931147bdf53d96faabede1a361be436891df3282",
-      "compressed_bytes": 81956,
-      "uncompressed_sha256": "56387b2695b1498f83ab28f79642040c062d6faf664fa291a686f1a4e37d60c0",
-      "compression_level": 22,
-      "aliases": [
-        "a81daa5351cdeb78e48f565f76e02fe3a676679d9465c645cbf4a3cdc0161467.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "e4554a9b96199f0b758716a15a2debcb2f2c54cc54606f41432a8d190dc8a46e.tar.zst",
+      "sha256": "e4554a9b96199f0b758716a15a2debcb2f2c54cc54606f41432a8d190dc8a46e",
+      "compressed_bytes": 17803304,
+      "uncompressed_sha256": "bb831a9399e2162b88b214b086c08e192062f26cac650f233a3e75ad2a88037b",
+      "aliases": []
     },
     {
       "title": "FTW",
