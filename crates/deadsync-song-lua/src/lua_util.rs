@@ -13341,8 +13341,10 @@ pub fn create_top_screen_player_actor(
     actor.set("__songlua_player_index", player_index as i64)?;
     actor.set("__songlua_style_name", style_name)?;
     actor.set("__songlua_visible", true)?;
-    actor.set("__songlua_state_x", player.screen_x)?;
-    actor.set("__songlua_state_y", player.screen_y)?;
+    // The dummy has already registered its live tween pose. Native SetX and
+    // PlayerInitCommand initialize that current pose as well as the destination.
+    capture_block_set_f32(lua, &actor, "x", player.screen_x)?;
+    capture_block_set_f32(lua, &actor, "y", player.screen_y)?;
     if let Some(path) = &player.judgment_texture {
         actor.set("__songlua_judgment_texture", file_path_string(path))?;
     }
@@ -13546,12 +13548,12 @@ pub fn create_note_field_actor(
             }
         })?,
     )?;
-    actor.set("__songlua_state_x", 0.0_f32)?;
-    actor.set(
-        "__songlua_state_y",
+    capture_block_set_f32(lua, &actor, "x", 0.0_f32)?;
+    capture_block_set_f32(
+        lua, &actor, "y",
         f32::midpoint(THEME_RECEPTOR_Y_STD, THEME_RECEPTOR_Y_REV),
     )?;
-    actor.set("__songlua_state_z", 0.0_f32)?;
+    capture_block_set_f32(lua, &actor, "z", 0.0_f32)?;
     Ok(actor)
 }
 

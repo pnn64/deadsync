@@ -1997,6 +1997,51 @@ end }
     }
 
     #[test]
+    fn live_screen_positions_survive_registration_and_seed_authored_tweens() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-screen-pose-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("screen position directory");
+        let entry = dir.join("default.lua");
+        fs::write(&entry, r#"
+PLAYER = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+FIELD = PLAYER:GetChild('NoteField')
+START_X, START_Y, START_FIELD_Y = PLAYER:GetX(), PLAYER:GetY(), FIELD:GetY()
+return Def.ActorFrame { OnCommand = function(self)
+    self:SetUpdateFunction(function(self, delta)
+        if delta > 0 and FIRST_X == nil then
+            FIRST_X, FIRST_Y, FIRST_FIELD_Y = PLAYER:GetX(), PLAYER:GetY(), FIELD:GetY()
+        end
+    end)
+end }
+"#).expect("independent position control");
+        let mut context = SongLuaCompileContext::new(&dir, "screen positions");
+        context.live = true;
+        context.players[0].screen_x = 231.25;
+        context.players[0].screen_y = 199.0;
+        context.players[1].screen_x = 620.0;
+        let mut compiled: Compiled = crate::compile_song_lua_with_default_host(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])),
+            |_| None, |_, _| None).expect("configured screen positions");
+        let mut scene = compiled.live_scene.take().expect("retained screen scene");
+        let globals = scene.lua.globals();
+        let field_y = f32::midpoint(crate::THEME_RECEPTOR_Y_STD, crate::THEME_RECEPTOR_Y_REV);
+        for (name, value) in [("START_X", 231.25), ("START_Y", 199.0), ("START_FIELD_Y", field_y)] {
+            assert_eq!(globals.get::<f32>(name).expect("startup getter"), value, "{name}");
+        }
+        let output = scene.advance(SongLuaLiveFrame { screen_seconds: 0.1,
+            delta_seconds: 0.1, ..Default::default() }).expect("first live position frame");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        for (name, value) in [("FIRST_X", 231.25), ("FIRST_Y", 199.0), ("FIRST_FIELD_Y", field_y)] {
+            assert_eq!(globals.get::<f32>(name).expect("positive frame getter"), value, "{name}");
+        }
+        scene.lua.load("PLAYER:linear(0.4):x(431.25)").exec().expect("authored player tween");
+        let output = scene.advance(SongLuaLiveFrame { screen_seconds: 0.2,
+            delta_seconds: 0.1, ..Default::default() }).expect("player tween advances");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        scene.lua.load("assert(math.abs(PLAYER:GetX() - 281.25) < 0.0001); assert(PLAYER:GetDestX() == 431.25)")
+            .exec().expect("tween starts from the initialized pose");
+    }
+
+    #[test]
     fn live_sound_volume_keeps_the_sound_identity_and_owner() {
         let mut compiled = compile("sound-volume", r#"
 local primary = Def.Sound { InitCommand = function(self)
