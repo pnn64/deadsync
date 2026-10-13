@@ -3899,6 +3899,140 @@
       "replay_seconds": 2.234806964996096,
       "candidate_sha256": "b637897cc508ebf3e4149376a02f3445f279d4814d16ddcd22e825a881ca76f0",
       "failure": "[0.7s] replaying every native gameplay frame\n\nthread 'main' (923739) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 200,
+      "source_simfile": "freg/freg.sm",
+      "simfile_sha256": "c17a176bd2314c4d9e122db759e9377c11096c92b6890431a31c3b781753854f",
+      "retained_original_archive": "4fa980e2db74d35f2935d60fa9163d0cceec209fa34b04988388b2f2a04018c4.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "1d6c6e802 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/condition-build-v1/proof.json",
+      "capture_seconds": 30.4889173249976,
+      "trace_sha256": "3736aead13b2e6994859a3380e784f8f600837b50a334d81bcc3b3a2c81db168",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-200/candidates/4be2dbf1ff59a34ff3029c5e9e4ef64991bea951de5abb6395c849bd64bf1f43.tar",
+      "replay_exit": 2,
+      "replay_seconds": 150.00103472900082,
+      "candidate_sha256": "4be2dbf1ff59a34ff3029c5e9e4ef64991bea951de5abb6395c849bd64bf1f43",
+      "native_frames": 24013,
+      "replayed_frames": 24013,
+      "compared_stage_fields": 341,
+      "pending_coverage": [
+        "uncompared song operations: Actor.stoptweening",
+        "native drawable state/resources: Quad"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 2,
+      "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 13,
+          "deadsync": 11
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0017",
+            "args": [
+              false
+            ],
+            "beat": 0.002303175628185272,
+            "caller": {
+              "line": 17,
+              "source": "song:/c'est business.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "native_tween_children": {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 50,
+                                "line": 43,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              },
+                              "On": {
+                                "last_line": 53,
+                                "line": 51,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 0.3232739567756653
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "Init": {
+                        "last_line": 67,
+                        "line": 65,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua"
+                      }
+                    },
+                    "name": "StepStatsPaneP1",
+                    "time_left": 0.3232739567756653
+                  }
+                ],
+                "commands": {
+                  "On": {
+                    "last_line": 60,
+                    "line": 56,
+                    "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/default.lua"
+                  }
+                },
+                "name": "Underlay",
+                "time_left": 0.3232739567756653
+              },
+              "native_tween_time_left": 0.3232739567756653
+            },
+            "kind": "call",
+            "line": 17,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.017687074840068817,
+            "seq": 10,
+            "source": "song:/c'est business.lua",
+            "tween_time_left": 0.3232739567756653
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/c'est business.lua",
+            "line": 17,
+            "phase": "callback",
+            "beat": 0.002303175628185272,
+            "seconds": 0.017687074840068817,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x5d252eeb1b10",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        }
+      ],
+      "report_sha256": "46ab664e4831762b03156e38a7bc389516c653e3b6e0dacd66668ca1cc086a6f"
     }
   ],
   "historical_pending": [
@@ -3925,6 +4059,6 @@
   "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 9,
-  "pending_charts": 20,
-  "processed_charts": 29
+  "pending_charts": 21,
+  "processed_charts": 30
 }
