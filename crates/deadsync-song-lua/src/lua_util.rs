@@ -1408,20 +1408,30 @@ pub(crate) fn load_script_file_with_env(
     song_dir: &Path,
     environment: Option<Table>,
 ) -> mlua::Result<Function> {
+    load_script_file_with_source(lua, path, path, song_dir, environment)
+}
+
+fn load_script_file_with_source(
+    lua: &Lua,
+    path: &Path,
+    source_path: &Path,
+    song_dir: &Path,
+    environment: Option<Table>,
+) -> mlua::Result<Function> {
     let source = fs::read_to_string(path).map_err(mlua::Error::external)?;
     let source = crate::preprocess_lua_cmd_syntax(&source).map_err(mlua::Error::external)?;
     let environment = match environment {
         Some(environment) => environment,
-        None => initial_chunk_environment(lua, path)?,
+        None => initial_chunk_environment(lua, source_path)?,
     };
     let chunk_env = create_chunk_env_proxy(lua, environment)?;
     let chunk = lua
         .load(&source)
-        .set_name(path.to_string_lossy().as_ref())
+        .set_name(source_path.to_string_lossy().as_ref())
         .set_environment(chunk_env.clone());
     let inner = chunk.into_function()?;
-    let script_dir = path.parent().unwrap_or(song_dir).to_path_buf();
-    let script_path = file_path_string(path);
+    let script_dir = source_path.parent().unwrap_or(song_dir).to_path_buf();
+    let script_path = file_path_string(source_path);
     let chunk_env_for_call = chunk_env.clone();
     let wrapper = lua.create_function(move |lua, args: MultiValue| {
         call_with_script_dir(lua, &script_dir, || {
@@ -1439,6 +1449,15 @@ pub(crate) fn load_script_file_with_env(
 pub fn execute_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result<Value> {
     let loader = load_script_file(lua, path, song_dir)?;
     loader.call::<Value>(())
+}
+
+pub(crate) fn execute_script_file_with_source(
+    lua: &Lua,
+    path: &Path,
+    source_path: &Path,
+    song_dir: &Path,
+) -> mlua::Result<Value> {
+    load_script_file_with_source(lua, path, source_path, song_dir, None)?.call::<Value>(())
 }
 
 pub fn create_loader_function(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<Function> {

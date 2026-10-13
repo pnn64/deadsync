@@ -14,7 +14,7 @@ use crate::{
     capture_stable_cross_actor_message_commands, compile_multitap_update_overlays_for_actors,
     compile_perframes, compile_update_functions, create_dummy_actor as create_host_dummy_actor,
     create_named_child_actor as create_host_named_child_actor, ensure_overlay_arrow_visual,
-    entry_file_path, execute_script_file, install_actor_methods as install_host_actor_methods,
+    entry_file_path, install_actor_methods as install_host_actor_methods,
     install_compile_host, log_song_lua_compile_timing, merge_compile_info,
     note_field_column_actors as host_note_field_column_actors, push_startup_message_if_listened,
     push_unique_compile_detail, read_actor_model_layers, read_eases_for_overlay_actors,
@@ -322,7 +322,17 @@ where
                 .map_err(|err| err.to_string())?;
         }
         for (index, entry_path) in entry_paths.iter().enumerate() {
-            let root = execute_script_file(&lua, entry_path, context.song_dir.as_path())
+            // Foreground::LoadFromSong requests the literal "default.lua" for
+            // a directory. The case-insensitive native file driver may read
+            // Default.lua, while Lua keeps the requested chunk source spelling.
+            let source_path = index.checked_sub(context.background_layer_count)
+                .and_then(|index| context.foreground_names.get(index))
+                .map(|name| context.song_dir.join(name))
+                .filter(|path| path.is_dir())
+                .map(|path| path.join("default.lua"))
+                .unwrap_or_else(|| entry_path.clone());
+            let root = crate::lua_util::execute_script_file_with_source(
+                &lua, entry_path, &source_path, context.song_dir.as_path())
                 .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
             let root = crate::lua_util::own_actor_root(&lua, root, install_actor_methods)
                 .map_err(|err| err.to_string())?;

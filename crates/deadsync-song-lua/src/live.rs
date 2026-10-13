@@ -958,6 +958,44 @@ end }
     }
 
     #[test]
+    fn live_foreground_directory_uses_requested_default_chunk_name() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-directory-source-{}", std::process::id()));
+        let folder = dir.join("directory");
+        fs::create_dir_all(&folder).expect("foreground directory");
+        let entry = folder.join("Default.lua");
+        fs::write(&entry, r#"
+CONSTRUCTION_SOURCE = debug.getinfo(1, 'S').source
+local function on(self)
+    self:aux(17)
+end
+CALLBACK_SOURCE = debug.getinfo(on, 'S').source
+return Def.Actor { OnCommand = on }
+"#).expect("case-sensitive physical source");
+        for (name, expected) in [("directory", folder.join("default.lua")),
+            ("directory/Default.lua", entry.clone())] {
+            let mut context = SongLuaCompileContext::new(&dir, "foreground source");
+            context.live = true;
+            context.foreground_names = vec![name.into()];
+            context.layer_start_beats = vec![0.0];
+            let mut compiled: Compiled = crate::compile_song_lua_with_default_host(
+                &entry, &context, SongLuaNoteskinResolver::default(),
+                |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None)
+                .expect("read physical file with native source name");
+            let mut scene = compiled.live_scene.take().expect("retained Lua scene");
+            let output = scene.advance(SongLuaLiveFrame { music_seconds: 0.02, beat: 0.01,
+                screen_seconds: 0.1, delta_seconds: 0.1, ..Default::default() })
+                .expect("foreground callback");
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            for key in ["CONSTRUCTION_SOURCE", "CALLBACK_SOURCE"] {
+                let source = scene.lua.globals().get::<String>(key).expect("Lua source name");
+                assert_eq!(source.trim_start_matches('@').replace('\\', "/"),
+                    crate::file_path_string(&expected));
+            }
+            assert!(scene.states().iter().any(|state| state.aux == 17.0));
+        }
+    }
+
+    #[test]
     fn live_loadactor_collapses_paths_before_loading_and_naming_chunks() {
         let dir = std::env::temp_dir().join(format!("deadsync-live-actor-paths-{}", std::process::id()));
         fs::create_dir_all(dir.join("parts")).expect("actor directory");
