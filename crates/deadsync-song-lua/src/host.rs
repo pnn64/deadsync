@@ -1481,6 +1481,9 @@ pub fn install_game_state_globals(
     )?;
     let current_style = lua.create_table()?;
     current_style.raw_set(1, create_style_table(lua, &context.style_name)?)?;
+    // Engine implementations read the shared style slot directly. Calling
+    // the public Lua getter would manufacture a song query at their caller.
+    gamestate.raw_set("__songlua_current_style", current_style.clone())?;
     gamestate.set(
         "GetCurrentStyle",
         lua.create_function({

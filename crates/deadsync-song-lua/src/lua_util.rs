@@ -2032,7 +2032,11 @@ pub fn table_bool_field(table: &Table, names: &[&str]) -> mlua::Result<Option<bo
 }
 
 pub fn current_song_lua_style_name(lua: &Lua) -> String {
-    let Ok(Value::Table(style)) = current_gamestate_value(lua, "GetCurrentStyle") else {
+    let owned_style = lua.globals().get::<Table>("GAMESTATE").and_then(|state| {
+        state.raw_get::<Table>("__songlua_current_style")?.raw_get::<Value>(1)
+    });
+    let Ok(Value::Table(style)) = owned_style
+        .or_else(|_| current_gamestate_value(lua, "GetCurrentStyle")) else {
         return "single".to_string();
     };
     if let Ok(Some(key)) = style.raw_get::<Option<String>>("__songlua_style_key") { return key; }

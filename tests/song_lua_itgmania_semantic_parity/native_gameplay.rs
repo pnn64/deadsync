@@ -709,6 +709,39 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn arrow_effects_reads_owned_style_without_extra_lua_queries() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver,
+            compile_song_lua_with_default_host};
+        use std::{fs, sync::Arc};
+        super::start_call_log(10_000).expect("observational logger");
+        let dir = std::env::temp_dir().join(format!("deadsync-arrow-style-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("script directory");
+        let entry = dir.join("default.lua");
+        fs::write(&entry, r#"
+local ps = GAMESTATE:GetPlayerState(0)
+assert(GAMESTATE:GetCurrentStyle():GetName() == 'single')
+assert(ArrowEffects.GetXPos(ps, 1, 0) == -96)
+GAMESTATE:SetCurrentStyle('double')
+assert(ArrowEffects.GetXPos(ps, 8, 0) == 224)
+return Def.Actor {}
+"#).expect("style control");
+        let mut context = SongLuaCompileContext::new(&dir, "owned style");
+        context.live = true;
+        compile_song_lua_with_default_host::<(), (), _>(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])),
+            |_| None, |_, _| None).expect("native column positions after style mutation");
+        let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
+        let queries: Vec<_> = events.iter().filter(|event|
+            event["operation"] == "GameState.GetCurrentStyle").collect();
+        assert_eq!(queries.len(), 1, "internal engine reads must not emit Lua queries: {events:?}");
+        assert_eq!(queries[0]["line"], 0, "native constructor query line");
+        assert_eq!(queries[0]["phase"], "construction");
+        assert!(queries[0]["source"].as_str().expect("authored query source")
+            .ends_with("default.lua"));
+        assert_eq!(queries[0]["results"][0]["name"], "single");
+    }
+
+    #[test]
     fn actor_and_query_trace_keep_lua_callers() {
         use super::start_call_log;
         use deadsync_song_lua::{
