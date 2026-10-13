@@ -2503,6 +2503,11 @@ mod runtime_regression_tests {
             .windows_ns[2];
         let baseline_notes_end = state.notes_end_time_ns();
         let baseline_music_end = state.music_end_time_ns();
+        let song_last_second_ns = song_time_ns_from_seconds(state.source.song.precise_last_second());
+        assert_eq!(
+            baseline_music_end,
+            song_last_second_ns + max_step_distance_ns(&state.timing_runtime.timing_profile, 1.0),
+        );
 
         assert!(state.set_music_rate(1.5));
         assert!((state.music_rate() - 1.5).abs() < 1e-6);
@@ -2525,7 +2530,11 @@ mod runtime_regression_tests {
             state.notes_end_time_ns(),
             baseline_notes_end,
         );
-        assert_eq!(state.music_end_time_ns(), baseline_music_end);
+        assert!(state.music_end_time_ns() > baseline_music_end);
+        assert_eq!(
+            state.music_end_time_ns(),
+            song_last_second_ns + max_step_distance_ns(&state.timing_runtime.timing_profile, 1.5),
+        );
 
         assert!(!state.set_music_rate(1.5));
         assert!(state.set_music_rate(f32::NAN));

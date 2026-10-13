@@ -709,6 +709,49 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn gameplay_music_end_uses_the_whole_song_before_the_resolution_window() {
+        use super::{gameplay, paths, GameplayConfig, GameplaySession, GameplayViewport};
+        use std::{fs, sync::Arc};
+        paths::init();
+        let dir = std::env::temp_dir().join(format!("deadsync-whole-song-end-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let simfile = dir.join("end.ssc");
+        // Native Song.cpp includes fake rows on other playable charts in
+        // GetLastSecond, then ScreenGameplay.cpp adds the resolution window.
+        fs::write(&simfile, "#VERSION:0.83;\n#TITLE:Whole song end;\n#BPMS:0=60;\n#FAKES:3=8;\n\
+#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:Selected;\n#DIFFICULTY:Challenge;\n#METER:1;\n#NOTES:\n1000\n0000\n0000\n1000\n;\n\
+#NOTEDATA:;\n#STEPSTYPE:dance-double;\n#DESCRIPTION:Later fake;\n#DIFFICULTY:Challenge;\n#METER:1;\n#NOTES:\n10000000\n00000000\n00000000\n00000000\n,\n10000000\n00000000\n00000000\n00000000\n;\n").unwrap();
+        let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap());
+        assert_eq!(song.precise_last_second(), 4.0);
+        let chart = Arc::new(song.charts[0].clone());
+        let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
+        let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+        let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
+        let mut state = gameplay::init(song, [chart.clone(), chart], [payload.clone(), payload],
+            GameplayViewport::default(), GameplaySession::default(), GameplayConfig::default(),
+            5, 1.0, scroll, profiles, None, None, None, Arc::from("EVENT"),
+            None, None, None, None, None, [deadsync_gameplay::CourseLifeConfig::Bar; 2],
+            false, None, None, [0; 2], Default::default(), Default::default());
+        for rate in [1.0, 1.5, 0.75] {
+            if rate != 1.0 {
+                assert!(state.set_music_rate(rate));
+            }
+            // The native roll window is the largest window in this profile.
+            let expected = 4_000_000_000 +
+                (f64::from(deadsync_rules::note::TIMING_WINDOW_SECONDS_ROLL * rate) * 1e9).round() as i64;
+            assert_eq!(state.music_end_time_ns(), expected);
+            assert!(state.apply_global_offset_delta(0.125));
+            assert_eq!(state.music_end_time_ns(), expected);
+            state.set_current_music_time_ns(expected - 1);
+            assert!(state.finish_gameplay_if_ready(false).is_none());
+        }
+        let end = state.music_end_time_ns();
+        state.set_current_music_time_ns(end);
+        assert!(matches!(state.finish_gameplay_if_ready(false),
+            Some(deadsync_gameplay::GameplayAction::Navigate(deadsync_gameplay::GameplayExit::Complete))));
+    }
+
+    #[test]
     fn gameplay_note_field_tap_runs_owned_lua_before_actor_update() {
         use super::{gameplay, paths, GameplayAudioSnapshot, GameplayConfig,
             GameplaySession, GameplayStreamClockSnapshot, GameplayViewport};

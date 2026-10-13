@@ -866,7 +866,7 @@ where
             &self.chart_runtime.hold_end_time_cache_ns,
             normalized,
             self.clock.end_timing.audio_end_time_ns(),
-            song_time_ns_from_seconds(self.source.song.last_second_hint),
+            song_time_ns_from_seconds(self.source.song.precise_last_second()),
         );
         self.clock
             .end_timing
@@ -918,7 +918,7 @@ where
             &self.chart_runtime.hold_end_time_cache_ns,
             self.music_rate(),
             self.clock.end_timing.audio_end_time_ns(),
-            song_time_ns_from_seconds(self.source.song.last_second_hint),
+            song_time_ns_from_seconds(self.source.song.precise_last_second()),
         );
         self.clock
             .end_timing

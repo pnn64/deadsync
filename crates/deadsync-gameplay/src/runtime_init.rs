@@ -608,7 +608,9 @@ where
         &hold_end_time_cache_ns,
         rate,
         audio_end_time_ns,
-        song_time_ns_from_seconds(song.last_second_hint),
+        // Native GetMusicEndTiming adds the late-resolution window to the
+        // whole Song last second, including later rows on unselected charts.
+        song_time_ns_from_seconds(song.precise_last_second()),
     );
     // ITGmania's ScreenGameplay::StartPlayingSong uses theme metrics
     // MinSecondsToStep / MinSecondsToMusic. Simply Love scales both by
