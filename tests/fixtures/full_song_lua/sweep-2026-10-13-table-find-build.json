@@ -1,0 +1,177 @@
+{
+  "source_fix_commit": "9bcc50649",
+  "source_simfile": "Lonely/Lonely.sm",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "source_cause": "Lonely ShowArrowMessageCommand calls table.find at lua/default.lua:567. Native fallback defines it as a pairs search returning the matching key, or nil. The independent compatibility layer omits it. The first update callback fails at beat 50.006; repeated ShowArrow source broadcasts follow the interrupted callback instead of its intended advance.",
+  "change": "Install the pinned fallback table.find pairs search. Return its matching key or nil, preserving native Lua equality and false-valued keys. Owned actor tables use their existing equality semantics.",
+  "regression_control": "Sequence, sparse numeric/string and false keys, false/nil/no-match values, distinct value types, actor equality and __eq table equality. A real owned ShowArrow broadcast selects only columns 2 and 4, calls their owned actors, returns to its update callback and does not repeat the broadcast across subsequent positive updates.",
+  "control_correction": "Initial control versions completed ShowArrow and passed the helper checks, but included an extra queue/aux assertion that did not pass. Its cause was not established; adding a third frame did not fix it. The final control is scoped to the actual table.find failure, selected columns and callback continuation. Existing queue controls and all complete replay comparisons are unchanged. No production behavior changed between control versions and no chart repair was spent.",
+  "before_fix_evidence": "The byte-verified complete original Lonely replay in sweep-2026-10-13-lonely-table-find-diagnosis.json; no additional pre-fix regression rebuild was run.",
+  "linux_checks": [
+    {
+      "label": "gameplay-tests",
+      "exit_code": 0,
+      "seconds": 63.175748683002894,
+      "results": [
+        "test result: ok. 815 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.11s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 269.5934953800024,
+      "results": [
+        "test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 530 filtered out; finished in 23.69s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 256.1333105579979,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.591523156996118,
+      "results": [
+        "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.30s"
+      ]
+    }
+  ],
+  "windows_checks": [
+    {
+      "label": "live",
+      "exit_code": 0,
+      "passed": 43,
+      "log": "table-find-windows-live-v4.log",
+      "sha256": "46b65a94233b6deb92c40ffee3274ce53d207efec95a2e93b07eab14a3b91b05",
+      "seconds": 298.44685780024156
+    },
+    {
+      "label": "native",
+      "exit_code": 0,
+      "passed": 21,
+      "log": "table-find-windows-native-v4.log",
+      "sha256": "c448e4485e279d23d351950d4fc54053414674477896f579aecc55130bfca493",
+      "seconds": 250.5492023001425
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "passed": null,
+      "log": "table-find-windows-build-v4.log",
+      "sha256": "a1da99ec41698d19161c50cfdc6b28dc2de2438607e2abe171eb404197ffd10d",
+      "seconds": 29.403544100001454
+    }
+  ],
+  "source_provenance": {
+    "baseline_build": "live-draw-build-v1",
+    "baseline_source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "8811b4ed411c8afb48c847db32ff07123a07290673350a0899864a76675d2069",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "0cd4110f9c9db0d374f066cb6c480cbbcb74d2ccc024a760b1dc757032af15ef",
+      "crates/deadsync-song-lua/src/live.rs": "ab3d20ff1a5aa033f7502e2ef64917cd0a7781daae26e10c89203572fb09c749",
+      "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+      "crates/deadsync-song-lua/src/lua_util.rs": "b40e1cc30c5a228a3e01060164a056b5565a4e2cf03068d2e0975a1388aad12b",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "0a9453b0e768b8f8000a6d7ae71595c8ceef54c51ddf85e8e519113454ca90e3",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "93abcc7ff53ad7d72b901dbed62c45edcd87d17c2be7d64168bbcc1b1aacab97",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "1ee26608ce1a38ad2db32580a8ac4d76afceaceb962a72d452e4ace9985939b4",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+      "crates/deadsync-song-lua/src/compat.rs": "2460be1ba151fa6203588de5df1d6b70cdb572ec8fb2e799008119ea6d76ed9e",
+      "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+      "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+    },
+    "baseline_source_bundle_sha256": "26fbcbeb29fdc57757fcb8abbfa293cb9f907a706cc536827b0782079cfddd58",
+    "source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "8811b4ed411c8afb48c847db32ff07123a07290673350a0899864a76675d2069",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "0cd4110f9c9db0d374f066cb6c480cbbcb74d2ccc024a760b1dc757032af15ef",
+      "crates/deadsync-song-lua/src/live.rs": "54e9f24924a4a0dedc542e967014aa71c18fe179dcb15313a04d9e3e6cf3ca85",
+      "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+      "crates/deadsync-song-lua/src/lua_util.rs": "b40e1cc30c5a228a3e01060164a056b5565a4e2cf03068d2e0975a1388aad12b",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "0a9453b0e768b8f8000a6d7ae71595c8ceef54c51ddf85e8e519113454ca90e3",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "93abcc7ff53ad7d72b901dbed62c45edcd87d17c2be7d64168bbcc1b1aacab97",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "1ee26608ce1a38ad2db32580a8ac4d76afceaceb962a72d452e4ace9985939b4",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+      "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+      "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+      "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+    },
+    "changed_sources": [
+      "crates/deadsync-song-lua/src/compat.rs",
+      "crates/deadsync-song-lua/src/live.rs"
+    ],
+    "current_worktree_compat_sha256": "c9f0bb1aa87c1cbe5f2120940271b6862de969073c6cee52b794a5b442df4e13",
+    "current_worktree_definition_sha256": "df4bcf243f23031203b2e6e524b669431297e783a6d759aa94856999f87aa9f3",
+    "current_worktree_control_sha256": "e7f82177e6e67280337c0263a785861caaa78b235048f1b265675e8158f5dcbd",
+    "native_utilities_sha256": "a3b0dfc1b2d20bd8ffdc961a90b4da816fe1a105fabbda2fc267b423a3336793",
+    "source_bundle_sha256": "7aa1e4f56edee997954edb76865d856449f20941b04af7855a8515a5c76d17e3",
+    "unselected_theme_listener": "874f2e535 remains excluded. The current compat source exactly equals the frozen baseline after removing only table.find; only the new live control is inserted into frozen live.rs.",
+    "before_fix_evidence": "Byte-verified complete Lonely original report with actual missing table.find failure: sweep-2026-10-13-lonely-table-find-diagnosis.json.",
+    "repair_attempts_spent_before_launch": 0
+  },
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "8811b4ed411c8afb48c847db32ff07123a07290673350a0899864a76675d2069",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "0cd4110f9c9db0d374f066cb6c480cbbcb74d2ccc024a760b1dc757032af15ef",
+    "crates/deadsync-song-lua/src/live.rs": "54e9f24924a4a0dedc542e967014aa71c18fe179dcb15313a04d9e3e6cf3ca85",
+    "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+    "crates/deadsync-song-lua/src/lua_util.rs": "b40e1cc30c5a228a3e01060164a056b5565a4e2cf03068d2e0975a1388aad12b",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "0a9453b0e768b8f8000a6d7ae71595c8ceef54c51ddf85e8e519113454ca90e3",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "93abcc7ff53ad7d72b901dbed62c45edcd87d17c2be7d64168bbcc1b1aacab97",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+    "crates/deadsync-song-lua/src/lib.rs": "1ee26608ce1a38ad2db32580a8ac4d76afceaceb962a72d452e4ace9985939b4",
+    "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+    "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+    "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+    "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+  },
+  "host_local_mtimes_before_cargo": true,
+  "build_proof": "/home/parity/jobs/table-find-build-v4/proof.json",
+  "binary_sha256": "fc7e246c948eb5b0ecb64a09b3777c480ac81eb26d2cf232c4ed3d2f8112cdd1",
+  "native_harness_byte_verified": true,
+  "repair_attempts_before_launch": 0,
+  "next_repair_attempt": 1,
+  "native_capture_reused": true,
+  "lonely_repair_not_started": true,
+  "acceptance": "Existing full uncompressed replay comparisons unchanged. Coverage separate; no accepted pass reopened."
+}
