@@ -953,6 +953,7 @@ impl State {
         scene.install_note_field_tap_callback(&mut self.gameplay, u32::MAX)
             .map_err(|error| error.to_string())?;
         scene.install_tap_row_judgment_callback(&mut self.gameplay);
+        scene.install_hold_judgment_callback(&mut self.gameplay);
         if let Some(scratch) = &mut self.song_scratch { scratch.enable_live_scene(); }
         self.song_lua_output = scene.take_startup_output();
         scene.apply_output_player_writes(&self.song_lua_output, &mut self.gameplay);
@@ -995,6 +996,7 @@ impl State {
             self.song_lua_ended = true;
             self.gameplay.note_field_tap_callback = None;
             self.gameplay.tap_row_judgment_callback = None;
+            self.gameplay.hold_judgment_callback = None;
             effects.push(ThemeEffect::NavigateNoFade(crate::screens::SimplyLoveScreen::Evaluation));
         }
         scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)

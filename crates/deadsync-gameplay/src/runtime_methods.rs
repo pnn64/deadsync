@@ -534,6 +534,13 @@ where
         self.spawn_tap_explosion(column, "Held", false);
     }
 
+    fn notify_hold_judgment(&mut self, player: usize, note_index: usize, result: HoldResult) {
+        if let Some(mut callback) = self.hold_judgment_callback.take() {
+            callback(self, player, note_index, result);
+            self.hold_judgment_callback = Some(callback);
+        }
+    }
+
     pub fn handle_hold_let_go(
         &mut self,
         column: usize,
@@ -556,6 +563,7 @@ where
         ) else {
             return;
         };
+        self.notify_hold_judgment(player, note_index, update.result);
         let mut player_state = hold_resolution_player_state(&self.players_runtime.players[player]);
         let player_update =
             apply_hold_let_go_player_state(&mut player_state, update.stats_update, scoring_blocked);
@@ -616,6 +624,9 @@ where
         ) else {
             return;
         };
+        // Player::UpdateHoldNotes sends SetHoldJudgment before HandleHoldScore,
+        // even when autoplay suppresses points and normal meter changes.
+        self.notify_hold_judgment(player, note_index, update.result);
         let mut player_state = hold_resolution_player_state(&self.players_runtime.players[player]);
         let player_update = apply_hold_success_player_state(
             &mut player_state,
@@ -666,6 +677,7 @@ where
 
     fn handle_hold_missed(&mut self, column: usize, note_index: usize) {
         let player = self.player_for_col(column);
+        self.notify_hold_judgment(player, note_index, HoldResult::Missed);
         self.mark_autoplay_judged(player);
         let stats_update = hold_result_stats_update(
             self.chart_runtime.notes[note_index].note_type,

@@ -1088,6 +1088,47 @@ impl SongLuaLiveScene {
         }));
     }
 
+    pub fn install_hold_judgment_callback<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+        &self, game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
+    ) {
+        let lua = self.lua.clone();
+        let stage = self.stage.clone();
+        let players = self.players.clone();
+        let song_timing = self.context.song_timing.clone();
+        game.hold_judgment_callback = Some(Box::new(move |game, player, note_index, result| {
+            let dispatched = (|| -> mlua::Result<()> {
+                let frame = SongLuaLiveFrame::from_gameplay(game, 0.0);
+                feed_live_stats(&stage, &players, &frame)?;
+                let beat = song_timing.as_ref().map_or(frame.beat as f32,
+                    |timing| timing.get_song_position(frame.music_seconds as f32).beat);
+                crate::set_compile_song_runtime_values(&lua, beat, frame.music_seconds as f32)?;
+                crate::lua_util::set_live_frame(&lua, frame.screen_seconds, f64::from(beat), 0.0);
+                lua.set_app_data(LivePlayers(frame.players));
+                let note = &game.chart_runtime.notes[note_index];
+                let params = lua.create_table()?;
+                params.raw_set("Player", format!("PlayerNumber_P{}", player + 1))?;
+                params.raw_set("FirstTrack", note.column - player * game.cols_per_player())?;
+                params.raw_set("NumTracks", game.cols_per_player())?;
+                params.raw_set("TapNoteScore", note.result.map_or("TapNoteScore_None", judgment_score))?;
+                params.raw_set("HoldNoteScore", match result {
+                    deadsync_rules::note::HoldResult::Held => "HoldNoteScore_Held",
+                    deadsync_rules::note::HoldResult::LetGo => "HoldNoteScore_LetGo",
+                    deadsync_rules::note::HoldResult::Missed => "HoldNoteScore_MissedHold",
+                })?;
+                params.raw_set("EarlyTapNoteScore", note.early_result.map_or("TapNoteScore_None", judgment_score))?;
+                params.raw_set("TapNote", live_tap_note(&lua, &params, note)?)?;
+                crate::lua_util::broadcast_native_song_lua_message(&lua, "Judgment", Some(Value::Table(params)))
+            })();
+            if let Err(error) = dispatched
+                && let Ok(screen) = lua.globals().raw_get::<Table>("__songlua_top_screen") {
+                let _ = crate::lua_util::report_update_error(&lua, &screen,
+                    "__songlua_hold_judgment_error_reported", "Hold JudgmentMessage", &error);
+            }
+            let writes = lua.remove_app_data::<PlayerWrites>().map_or_else(Vec::new, |writes| writes.0);
+            apply_player_writes(writes, game);
+        }));
+    }
+
     pub fn apply_pending_player_writes<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
         &self, game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
     ) {

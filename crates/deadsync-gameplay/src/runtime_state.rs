@@ -1062,6 +1062,12 @@ pub type GameplayTapRowJudgmentCallback<Profile, OverlayActor, CapturedActor, St
         usize, usize, Judgment,
     ) + Send>;
 
+pub type GameplayHoldJudgmentCallback<Profile, OverlayActor, CapturedActor, StateDelta> =
+    Box<dyn FnMut(
+        &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
+        usize, usize, HoldResult,
+    ) + Send>;
+
 pub struct GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta> {
     pub source: GameplaySourceRuntimeState,
     pub setup: GameplaySetupRuntimeState,
@@ -1083,6 +1089,8 @@ pub struct GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta
         Option<GameplayNoteFieldTapCallback<Profile, OverlayActor, CapturedActor, StateDelta>>,
     pub tap_row_judgment_callback:
         Option<GameplayTapRowJudgmentCallback<Profile, OverlayActor, CapturedActor, StateDelta>>,
+    pub hold_judgment_callback:
+        Option<GameplayHoldJudgmentCallback<Profile, OverlayActor, CapturedActor, StateDelta>>,
 }
 
 pub fn gameplay_runtime_profiles<Profile: GameplayProfileData>(

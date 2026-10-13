@@ -762,7 +762,7 @@ return Def.ActorFrame{}
         let dir = std::env::temp_dir().join(format!("deadsync-engine-tap-{}", std::process::id()));
         fs::create_dir_all(&dir).expect("script directory");
         let simfile = dir.join("tap.sm");
-        fs::write(&simfile, "#TITLE:Engine tap;#BPMS:0=120;#FGCHANGES:0=default.lua=1=0=0=1;#NOTES:dance-single:Control:Hard:1:0,0,0,0,0:\n0000\n1000\n0000\n0000\n;").unwrap();
+        fs::write(&simfile, "#TITLE:Engine tap;#BPMS:0=120;#FGCHANGES:0=default.lua=1=0=0=1;#NOTES:dance-single:Control:Hard:1:0,0,0,0,0:\n0000\n2000\n3000\n0000\n;").unwrap();
         let entry = dir.join("default.lua");
         fs::write(&entry, r#"
 local field = SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField')
@@ -790,8 +790,18 @@ return Def.ActorFrame {
     end,
     JudgmentMessageCommand = function(_, params)
         assert(params.Player == PLAYER_1 and params.FirstTrack == 0)
+        if params.HoldNoteScore then
+            assert(params.HoldNoteScore == 'HoldNoteScore_Held' and params.NumTracks == 4)
+            assert(params.TapNoteScore == 'TapNoteScore_W1' and params.Notes == nil)
+            assert(params.TapNote:GetTapNoteType() == 'TapNoteType_HoldHead')
+            assert(meter:GetLife() == 0.125 and stats:GetCurrentPossibleDancePoints() == 0)
+            player:SetLife(0.0625)
+            MESSAGEMAN:Broadcast('EngineHold', {score=params.HoldNoteScore})
+            return
+        end
         assert(params.TapNoteScore == 'TapNoteScore_W1' and params.HoldNoteScore == nil)
-        assert(params.Notes[1]:GetTapNoteType() == 'TapNoteType_Tap')
+        assert(params.Notes[1]:GetTapNoteType() == 'TapNoteType_HoldHead')
+        assert(params.Notes[1]:GetHoldDuration() == 1)
         assert(params.Notes[1]:GetTapNoteResult():GetTapNoteScore() == 'TapNoteScore_W1')
         assert(type(params.Holds) == 'table' and next(params.Holds) == nil)
         assert(meter:GetLife() == 0.25 and stats:GetCurrentPossibleDancePoints() == 0)
@@ -871,6 +881,18 @@ return Def.ActorFrame {
         assert!(next.errors.is_empty(), "{:?}", next.errors);
         assert!(!next.source_broadcasts.iter().any(|event| event.name == "EngineJudgment"));
         assert_eq!(state.gameplay.players_runtime.players[0].life, 0.125);
+        let hold_time = state.gameplay.chart_runtime.hold_end_time_cache_ns[0];
+        let delta = (hold_time - tap_time - 100_000_000) as f32 / 1_000_000_000.0;
+        gameplay::update(&mut state, delta, GameplayAudioSnapshot {
+            stream_clock: GameplayStreamClockSnapshot { music_nanos: hold_time,
+                has_music_mapping: true, valid_at_host_nanos: 1_500_000_000, ..Default::default() },
+            ..Default::default()
+        }, || 1_500_000_000, &mut effects);
+        let held = state.take_song_lua_output();
+        assert!(held.errors.is_empty(), "{:?}", held.errors);
+        assert_eq!(held.source_broadcasts.iter().filter(|event| event.name == "EngineHold").count(), 1);
+        assert_eq!(state.gameplay.players_runtime.players[0].life, 0.0625,
+            "completed native hold judgments also reach the retained VM during autoplay");
     }
 
     #[test]
