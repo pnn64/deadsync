@@ -1,0 +1,264 @@
+{
+  "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+  "diagnostic_only": true,
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "candidate_sha256": "70d46f8a7297fb5e58d7d19783915d6bb2f9210774da9a8d6f3d1423afd6b419",
+  "native_trace_sha256": "cd1b99822ffab060d4148dd3a492b6b606bebc622a7a1a3c97c00763f8167ce0",
+  "report_sha256": "1aea9fc62743f9c8cc755993687897535e01eefa45125e9290b44e10d8c1369c",
+  "retained_report_and_trace_bytes_verified": true,
+  "repair_attempts_spent": 0,
+  "repair_attempts_remaining": 2,
+  "repair_not_started": true,
+  "first_same_phase_difference": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "def-0353",
+      "args": [
+        751.1607666015625
+      ],
+      "beat": 152.11318969726562,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 2676,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "InitCommand",
+      "definition_id": "def-0355",
+      "detail": {
+        "native_tween_time_left": 0
+      },
+      "kind": "call",
+      "line": 2676,
+      "operation": "Actor.y",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 46.68437576293945,
+      "seq": 401456,
+      "source": "song:/lua/default.lua",
+      "tween_time_left": 0
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "call",
+      "operation": "Actor.y",
+      "source": "song:/lua/default.lua",
+      "line": 2676,
+      "phase": "callback",
+      "beat": 152.11318969726562,
+      "seconds": 46.68437576293945,
+      "args": [
+        751.1607055664062
+      ],
+      "results": [
+        {
+          "actor": "0x58afa2425db0",
+          "name": "",
+          "path": "ScreenGameplay/SongForeground/lua"
+        }
+      ],
+      "tween_time_left": 0.0
+    }
+  },
+  "native_player_y_query_before_copy": {
+    "seq": 401455,
+    "operation": "Actor.GetY",
+    "actor": "external-0241",
+    "phase": "callback",
+    "source": "song:/lua/default.lua",
+    "line": 3007,
+    "caller": {
+      "line": 2676,
+      "source": "song:/lua/default.lua",
+      "tail_call": false
+    },
+    "callback": "SetUpdateFunction",
+    "command": "InitCommand",
+    "definition_id": "def-0355",
+    "seconds": 46.68437576293945,
+    "args": [],
+    "detail": {
+      "native_tween_time_left": 0.2640790343284607,
+      "results": [
+        751.1607666015625
+      ]
+    }
+  },
+  "native_player_tween_calls": [
+    {
+      "seq": 354416,
+      "operation": "Actor.accelerate",
+      "actor": "external-0241",
+      "phase": "callback",
+      "source": "song:/lua/default.lua",
+      "line": 1185,
+      "caller": {
+        "line": 367,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "callback": "SetUpdateFunction",
+      "command": "OnCommand",
+      "definition_id": "def-0263",
+      "seconds": 40.99557876586914,
+      "args": [
+        1
+      ],
+      "detail": {
+        "native_tween_time_left": 1
+      }
+    },
+    {
+      "seq": 354418,
+      "operation": "Actor.addy",
+      "actor": "external-0241",
+      "phase": "callback",
+      "source": "song:/lua/default.lua",
+      "line": 1185,
+      "caller": {
+        "line": 367,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "callback": "SetUpdateFunction",
+      "command": "OnCommand",
+      "definition_id": "def-0263",
+      "seconds": 40.99557876586914,
+      "args": [
+        576
+      ],
+      "detail": {
+        "native_tween_time_left": 1
+      }
+    },
+    {
+      "seq": 401318,
+      "operation": "Actor.decelerate",
+      "actor": "external-0241",
+      "phase": "callback",
+      "source": "song:/lua/default.lua",
+      "line": 1185,
+      "caller": {
+        "line": 378,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "callback": "SetUpdateFunction",
+      "command": "OnCommand",
+      "definition_id": "def-0263",
+      "seconds": 46.64839172363281,
+      "args": [
+        0.3
+      ],
+      "detail": {
+        "native_tween_children": {
+          "children": [],
+          "commands": [],
+          "name": "PlayerP1",
+          "time_left": 0.30000001192092896
+        },
+        "native_tween_time_left": 0.30000001192092896
+      }
+    },
+    {
+      "seq": 401319,
+      "operation": "Actor.addy",
+      "actor": "external-0241",
+      "phase": "callback",
+      "source": "song:/lua/default.lua",
+      "line": 1185,
+      "caller": {
+        "line": 378,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "callback": "SetUpdateFunction",
+      "command": "OnCommand",
+      "definition_id": "def-0263",
+      "seconds": 46.64839172363281,
+      "args": [
+        -288
+      ],
+      "detail": {
+        "native_tween_time_left": 0.30000001192092896
+      }
+    }
+  ],
+  "all_value_difference_groups": {
+    "value_operations": {
+      "Actor.y": 6,
+      "Actor.diffuse": 15,
+      "Actor.x": 168,
+      "Actor.rotationz": 4
+    },
+    "value_sources": [
+      {
+        "source": "song:/lua/default.lua",
+        "line": 2676,
+        "count": 6
+      },
+      {
+        "source": "song:/lua/default.lua",
+        "line": 1946,
+        "count": 15
+      },
+      {
+        "source": "song:/lua/default.lua",
+        "line": 2724,
+        "count": 168
+      },
+      {
+        "source": "song:/lua/default.lua",
+        "line": 613,
+        "count": 1
+      },
+      {
+        "source": "song:/lua/default.lua",
+        "line": 624,
+        "count": 1
+      },
+      {
+        "source": "song:/lua/default.lua",
+        "line": 636,
+        "count": 1
+      },
+      {
+        "source": "song:/lua/default.lua",
+        "line": 647,
+        "count": 1
+      }
+    ]
+  },
+  "source_cause_for_first_y": "The foreground copies PlayerP1 GetY, which is already native751.1607666015625. The prior player tween reaches Y816, then the authored callback appends decelerate(0.3):addy(-288), targeting Y528. At the failing input its native float time left is0.2640790343284607. Native TweenDecelerate computes 1-(1-f)*(1-f), rounding the product before subtraction. The actual original frozen independent outQuad uses mul_add, rounding the combined expression once. That one easing-factor ULP exactly reproduces the observed Y difference after the shared scalar pose lerp.",
+  "numeric_reproduction": {
+    "duration": 0.30000001192092896,
+    "left": 0.2640790343284607,
+    "percent": 0.11973661184310913,
+    "from_y": 816,
+    "to_y": 528,
+    "native_factor": 0.22513633966445923,
+    "independent_fused_factor": 0.22513636946678162,
+    "native_y": 751.1607666015625,
+    "independent_fused_y": 751.1607055664062,
+    "float32_rounding_at_each_native_operation": true,
+    "independent_mul_add_evaluated_as_one_rounded_operation": true
+  },
+  "actual_original_frozen_lib_sha256": "2f1a0e1b3e2cadbc4c5005db6369f5ae6a50994135f2216da556374d9650c19e",
+  "actual_original_easing_body_verified_equal_to_current": true,
+  "required_first_y_control": "Use the native scalar deceleration operation order and a source-derived float control reproducing this owned Player tween pose before a full repair. Do not alter comparison precision or expected events.",
+  "remaining_value_causes": "The full same-phase set has six Y, fifteen diffuse, 168 X and four rotationz differences. This diagnosis reproduces the first Y mismatch; it does not establish all other values. X comes from copy_transforms_arrow definition line2724, diffuse from line1946, and rotationz from lines613/624/636/647. Study and control the actual causes of the remaining groups before spending the first full repair.",
+  "separate_context_cause": "sweep-2026-10-13-kaboom-note-callback-diagnosis.json establishes the 1938 direct NoteField query context differences.",
+  "implementation_started": false,
+  "source_sha256": {
+    "itgmania-harness/vendor/itgmania/src/Tween.cpp": "ae2bcbe0c6e69eaea571467508f8379dd2b8b53b076a9310d300a0c5d9f6d429",
+    "itgmania-harness/vendor/itgmania/src/Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "rework/lua-songs/kaboooooom!/lua/default.lua": "314febe722e881c0d1d8ca75c5dadaa32474fba1ae34c418780de978a78f1c80",
+    "deadsync/crates/deadsync-song-lua/src/lib.rs": "1ee26608ce1a38ad2db32580a8ac4d76afceaceb962a72d452e4ace9985939b4",
+    "deadsync/crates/deadsync-song-lua/src/lua_util.rs": "d1f345d4cb58aaa31530bde9326d9644fab4bd16c02c0b4bbfaca4d1673945c2"
+  },
+  "comparisons_modified": false,
+  "query_results_overridden": false,
+  "expected_events_seeded": false,
+  "coverage_separate": true,
+  "passing_chart_reopened": false
+}
