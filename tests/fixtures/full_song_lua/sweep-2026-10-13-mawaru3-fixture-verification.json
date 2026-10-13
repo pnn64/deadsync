@@ -1,0 +1,26 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "mawaru3/mawaru3.sm",
+      "acceptance_commit": "377276b46650fae6772efa011a3783a4539d66b3",
+      "native_frames": 170536,
+      "replayed_frames": 170536,
+      "compared_stage_fields": 2783,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "93c3db054588763a70e4adb4cd74f66a00b72e1cfabff61bee52ea63d59fb868.tar.zst",
+      "compressed_sha256": "93c3db054588763a70e4adb4cd74f66a00b72e1cfabff61bee52ea63d59fb868",
+      "uncompressed_sha256": "ca79a1990d87c6c35f81044be1a5448fdd947a9ee761a5ebe30ce912ccbd3318",
+      "compressed_bytes": 15951732,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.horizalign, Actor.vertalign, Actor.zoomtowidth",
+        "native drawable state/resources: Sprite"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
