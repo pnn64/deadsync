@@ -2716,6 +2716,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 220,
+      "source_simfile": "Hallways/hallways.ssc",
+      "simfile_sha256": "2f1099184b916460d6d31762b49cac0098a2e26e4a0f57e00a3a2bd8cdafb6bf",
+      "retained_original_archive": "9dfe968d0339658b3ce6cbe82f4f7ce9a6320e00c366cf3ff26d17e7727d56b5.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "63e17ffe7 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/foreground-source-build-v2/proof.json",
+      "capture_seconds": 30.24887609599682,
+      "trace_sha256": "cf5011077ae3431af1d4d1e059f3b00b6f8c09238eebe2ef769b3110aec94ca1",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-220/candidates/25048708fba913d8df34db378b6e74f12d0f2fec932f41544b5fced1ca99b649.tar",
+      "replay_exit": 1,
+      "replay_seconds": 0.3587999899900751,
+      "candidate_sha256": "25048708fba913d8df34db378b6e74f12d0f2fec932f41544b5fced1ca99b649",
+      "failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (1590110) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "scope": {
@@ -2728,6 +2747,6 @@
   "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 8,
-  "pending_charts": 9,
-  "processed_charts": 17
+  "pending_charts": 10,
+  "processed_charts": 18
 }
