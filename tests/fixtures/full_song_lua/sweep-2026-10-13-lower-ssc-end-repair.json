@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "bounded first Lower Times SSC natural End repair complete",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "7c8b4c460131bb1c1674813ca53a210e20ff895d / harness c283a8a",
