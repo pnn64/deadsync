@@ -102,11 +102,20 @@ thread_local! {
 
 impl log::Log for CallLog {
     fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
-        metadata.target() == "deadsync_song_lua::trace"
+        (metadata.target() == "deadsync_song_lua::trace"
+            || metadata.level() == log::Level::Warn
+                && metadata.target().starts_with("deadsync_song_lua::"))
             && CALL_EVENTS.try_with(|capture| capture.borrow().limit > 0).unwrap_or(false)
     }
     fn log(&self, record: &log::Record<'_>) {
         if !self.enabled(record.metadata()) {
+            return;
+        }
+        // Keep the real preparation error visible when the shared-session
+        // fallback cannot retain a scene. Warnings are diagnostic output,
+        // never command observations or new comparison requirements.
+        if record.level() == log::Level::Warn {
+            eprintln!("{}: {}", record.target(), record.args());
             return;
         }
         CALL_EVENTS.with_borrow_mut(|capture| {
