@@ -2576,15 +2576,12 @@
     {
       "title": "Gallium Phosphide",
       "source_simfile": "Gallium Phosphide/Gallium Phosphide.ssc",
-      "harness_version": "0.1.0",
-      "archive": "be5897befda4aaed94e3ac674d78d5af72c6b14a847a2a8585ee59b8f2caaf3d.tar.zst",
-      "sha256": "be5897befda4aaed94e3ac674d78d5af72c6b14a847a2a8585ee59b8f2caaf3d",
-      "compressed_bytes": 210307,
-      "uncompressed_sha256": "585e5b222ee331ddf229dc7d962972b756933c23890172561d68857f850b3155",
-      "compression_level": 22,
-      "aliases": [
-        "5a72ca317654816a858288ce2fd6d9c6b9a1a8c9ca9a1eb0273d492f4cd00104.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "8bbcaf34c198122d9ec6a0ab1000a885d2a7d496a715879b789433edee561c1c.tar.zst",
+      "sha256": "8bbcaf34c198122d9ec6a0ab1000a885d2a7d496a715879b789433edee561c1c",
+      "compressed_bytes": 8898253,
+      "uncompressed_sha256": "4ee7a7c92af3b882b6f6abcacc0277d37b51afa61216e9d0a2feebca6cdd62f3",
+      "aliases": []
     },
     {
       "title": "Gaming in 2018",

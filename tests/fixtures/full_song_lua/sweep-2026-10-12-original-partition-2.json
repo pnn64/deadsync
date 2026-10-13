@@ -2495,6 +2495,56 @@
         }
       ],
       "report_sha256": "a501dc2d85517d9ed929a84f33f2dba7fc20f02465a33a28826c061c6ffee4fe"
+    },
+    {
+      "position": 205,
+      "source_simfile": "Gallium Phosphide/Gallium Phosphide.ssc",
+      "simfile_sha256": "c76b8c1f76163cd87fc702d3cbec68efa50430b4738b108b727578807ac00040",
+      "retained_original_archive": "be5897befda4aaed94e3ac674d78d5af72c6b14a847a2a8585ee59b8f2caaf3d.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "63e17ffe7 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/foreground-source-build-v2/proof.json",
+      "capture_seconds": 203.47741049999604,
+      "trace_sha256": "339db25bd9b899dee96eba4898823adbb12b30413311ad93308c7ce6f21fa2a5",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-205/candidates/4ee7a7c92af3b882b6f6abcacc0277d37b51afa61216e9d0a2feebca6cdd62f3.tar",
+      "replay_exit": 0,
+      "replay_seconds": 447.52133771601075,
+      "candidate_sha256": "4ee7a7c92af3b882b6f6abcacc0277d37b51afa61216e9d0a2feebca6cdd62f3",
+      "native_frames": 31864,
+      "replayed_frames": 31864,
+      "compared_stage_fields": 1518,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "2fe6b1090993959e03a1f062d65321dce4aaa9a0b112ca3b25fff8c42f3614e8",
+      "archive": "8bbcaf34c198122d9ec6a0ab1000a885d2a7d496a715879b789433edee561c1c.tar.zst",
+      "archive_sha256": "8bbcaf34c198122d9ec6a0ab1000a885d2a7d496a715879b789433edee561c1c",
+      "compressed_bytes": 8898253,
+      "pack_seconds": 26.251190757000586,
+      "harness_version": "0.1.80",
+      "title": "Gallium Phosphide",
+      "retained_original_entry": {
+        "title": "Gallium Phosphide",
+        "source_simfile": "Gallium Phosphide/Gallium Phosphide.ssc",
+        "harness_version": "0.1.0",
+        "archive": "be5897befda4aaed94e3ac674d78d5af72c6b14a847a2a8585ee59b8f2caaf3d.tar.zst",
+        "sha256": "be5897befda4aaed94e3ac674d78d5af72c6b14a847a2a8585ee59b8f2caaf3d",
+        "compressed_bytes": 210307,
+        "uncompressed_sha256": "585e5b222ee331ddf229dc7d962972b756933c23890172561d68857f850b3155",
+        "compression_level": 22,
+        "aliases": [
+          "5a72ca317654816a858288ce2fd6d9c6b9a1a8c9ca9a1eb0273d492f4cd00104.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -2506,7 +2556,7 @@
   },
   "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 4,
+  "passed_fixtures": 5,
   "pending_charts": 8,
-  "processed_charts": 12
+  "processed_charts": 13
 }
