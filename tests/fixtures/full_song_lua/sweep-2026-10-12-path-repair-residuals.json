@@ -1,0 +1,200 @@
+{
+  "acceptance": "Existing full_song_lua full comparisons; coverage remains separate",
+  "repairs": [
+    {
+      "source_simfile": "flowers [R.I.G.H.T.S]/flowers.ssc",
+      "repair_attempts": 1,
+      "remaining_attempts": 1,
+      "native_frames": 50828,
+      "replayed_frames": 50828,
+      "errors": [],
+      "mismatch_count": 40098,
+      "first_concrete_failure": {
+        "field": "command_query_event",
+        "native": {
+          "actor": "external-0059",
+          "args": [
+            "Cancel"
+          ],
+          "beat": 0.0004227889294270426,
+          "caller": {
+            "line": 126,
+            "source": "song:/assets/ScreenGameplayAFT.lua",
+            "tail_call": false
+          },
+          "command": "OnCommand",
+          "definition_id": "def-0038",
+          "detail": {
+            "native_tween_time_left": {
+              "type": "number",
+              "value": "infinity"
+            },
+            "results": [
+              {
+                "actor": "external-0068",
+                "name": "Cancel",
+                "path": "ScreenGameplay/Cancel"
+              }
+            ]
+          },
+          "kind": "query",
+          "line": 126,
+          "operation": "ActorFrame.GetChild",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.01725623570382595,
+          "seq": 266,
+          "source": "song:/assets/ScreenGameplayAFT.lua",
+          "results": [
+            {
+              "actor": 7,
+              "name": "Cancel",
+              "path": "ScreenGameplay/Cancel"
+            }
+          ]
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "query",
+          "operation": "ActorFrame.GetChild",
+          "source": "song:/assets/ScreenGameplayAFT.lua",
+          "line": 126,
+          "phase": "callback",
+          "beat": 0.00042279044282622635,
+          "seconds": 0.01725623570382595,
+          "args": [
+            "Cancel"
+          ],
+          "results": [
+            {
+              "type": "nil"
+            }
+          ]
+        }
+      },
+      "native_command_count": 40263,
+      "actual_command_count": 40250,
+      "diagnosis": "LoadActor source paths now match. Native Cancel exists while the independent screen lookup returns nil, omitting its proxy SetTarget. A subsequent OnlyShowFG loop also reaches screen children absent from the independent runtime. The remaining attempt is retained until the actual screen inventory is constructed from engine/theme sources.",
+      "existing_capture_for_next_attempt": "/home/parity/jobs/flowers-cancel-evidence-v1/98832f99930a5a4d037c7156c60dae2791685d683269e6aa3946d95a58f5a7c3.tar",
+      "candidate_sha256": "98832f99930a5a4d037c7156c60dae2791685d683269e6aa3946d95a58f5a7c3",
+      "diagnostic_limit": "Aligns event kind, operation, command, source, line and seconds only. Arguments and non-Cancel results are not acceptance-tested here; existing full replay remains the acceptance criterion.",
+      "local_references": [
+        "../itgmania-harness/vendor/itgmania/src/ScreenWithMenuElements.cpp:80",
+        "../itgmania-harness/vendor/itgmania/src/Transition.cpp:11",
+        "../itgmania-harness/vendor/itgmania/src/ScreenGameplay.cpp:538",
+        "sweep-2026-10-12-cursed-screen-children-diagnosis.json"
+      ]
+    },
+    {
+      "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+      "repair_attempts": 1,
+      "remaining_attempts": 1,
+      "native_frames": 7084,
+      "replayed_frames": 7084,
+      "errors": [],
+      "mismatch_count": 412569,
+      "first_concrete_failures": [
+        {
+          "phase": "progress",
+          "seconds": 121.01800537109375,
+          "field": "failed",
+          "native": false,
+          "deadsync": true
+        },
+        {
+          "field": "command_query_count",
+          "native": 412567,
+          "deadsync": 472283
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              0
+            ],
+            "beat": 0,
+            "caller": {
+              "line": 0,
+              "source": "song:/multitap/default.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "results": [
+                {
+                  "description": "Multitaps",
+                  "difficulty": "Difficulty_Challenge",
+                  "index": 5,
+                  "meter": 10,
+                  "song_dir": "song:/",
+                  "steps_type": "StepsType_Dance_Single",
+                  "type": "Steps"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 0,
+            "operation": "GameState.GetCurrentSteps",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 1,
+            "source": "song:/multitap/default.lua",
+            "results": [
+              {
+                "description": "Multitaps",
+                "difficulty": "Difficulty_Challenge",
+                "index": 5,
+                "meter": 10,
+                "song_dir": "song:/",
+                "steps_type": "StepsType_Dance_Single",
+                "type": "Steps"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetCurrentSteps",
+            "source": "song:/multitap/Default.lua",
+            "line": 0,
+            "phase": "construction",
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": [
+              0
+            ],
+            "results": [
+              {
+                "type": "Steps",
+                "song_dir": "song:/",
+                "index": 5,
+                "steps_type": "StepsType_Dance_Single",
+                "difficulty": "Difficulty_Challenge",
+                "description": "Multitaps",
+                "meter": 10
+              }
+            ]
+          }
+        }
+      ],
+      "native_capture_reused": true,
+      "trace_sha256": "a1d3409f3031764adf333fe8c368cf52a6a7cf9bde4a9c6a389bff7af8662929",
+      "candidate": "/home/parity/jobs/feely-case-lua-repair-v1/chart-185/candidates/a9ae3b3944776d2b894c4d24a9fb2a49f331b7e9ce12448202c9c311665fc787.tar",
+      "candidate_sha256": "a9ae3b3944776d2b894c4d24a9fb2a49f331b7e9ce12448202c9c311665fc787",
+      "diagnosis": "The corrected archive retains the Lua scene and replays all 7084 frames. Native directory resolution names the chunk multitap/default.lua; independent compilation names its physical Default.lua. The command count differs (412567 native versus 472283 actual), and one stage-failed observation differs (native false versus actual true). Those differences must be resolved before the last attempt.",
+      "later_validated_fix_available": "1d6c6e802 excludes Condition=false subtrees; this attempt used the earlier helper ab80853f"
+    },
+    {
+      "source_simfile": "Dreams Bloom After School/Dreams Bloom After School.ssc",
+      "repair_attempts": 1,
+      "remaining_attempts": 1,
+      "failure": "0.7s] replaying every native gameplay frame: frame 17736/120488 (14.7%)\n[3802.7s] replaying every native gameplay frame: frame 17747/120488 (14.7%)\n[3804.7s] replaying every native gameplay frame: frame 17755/120488 (14.7%)\n[3806.7s] replaying every native gameplay frame: frame 17766/120488 (14.7%)\n[3808.7s] replaying every native gameplay frame: frame 17775/120488 (14.8%)\n[3810.7s] replaying every native gameplay frame: frame 17785/120488 (14.8%)\n[3812.7s] replaying every native gameplay frame: frame 17796/120488 (14.8%)\n[3814.7s] replaying every native gameplay frame: frame 17807/120488 (14.8%)\n[3816.7s] replaying every native gameplay frame: frame 17816/120488 (14.8%)\n[3818.7s] replaying every native gameplay frame: frame 17825/120488 (14.8%)\n[3820.7s] replaying every native gameplay frame: frame 17834/120488 (14.8%)\n[3822.7s] replaying every native gameplay frame: frame 17844/120488 (14.8%)\n[3824.7s] replaying every native gameplay frame: frame 17850/120488 (14.8%)\n[3826.7s] replaying every native gameplay frame: frame 17860/120488 (14.8%)\n[3828.7s] replaying every native gameplay frame: frame 17870/120488 (14.8%)\n[3830.7s] replaying every native gameplay frame: frame 17881/120488 (14.8%)\n[3832.7s] replaying every native gameplay frame: frame 17889/120488 (14.8%)\n[3834.7s] replaying every native gameplay frame: frame 17898/120488 (14.9%)\n[3836.7s] replaying every native gameplay frame: frame 17908/120488 (14.9%)\n[3838.7s] replaying every native gameplay frame: frame 17918/120488 (14.9%)\n[3840.7s] replaying every native gameplay frame: frame 17930/120488 (14.9%)\n[3842.7s] replaying every native gameplay frame: frame 17940/120488 (14.9%)\n[3844.7s] replaying every native gameplay frame: frame 17950/120488 (14.9%)\n[3846.7s] replaying every native gameplay frame: frame 17959/120488 (14.9%)\n[3848.7s] replaying every native gameplay frame: frame 17968/120488 (14.9%)\n[3850.7s] replaying every native gameplay frame: frame 17978/120488 (14.9%)\n[3852.7s] replaying every native gameplay frame: frame 17989/120488 (14.9%)\n[3854.7s] replaying every native gameplay frame: frame 17998/120488 (14.9%)\n[3856.7s] replaying every native gameplay frame: frame 18007/120488 (14.9%)\n[3858.7s] replaying every native gameplay frame: frame 18016/120488 (15.0%)\n[3860.7s] replaying every native gameplay frame: frame 18027/120488 (15.0%)\n[3862.7s] replaying every native gameplay frame: frame 18035/120488 (15.0%)\n[3864.7s] replaying every native gameplay frame: frame 18044/120488 (15.0%)\n[3866.7s] replaying every native gameplay frame: frame 18052/120488 (15.0%)\n[3868.7s] replaying every native gameplay frame: frame 18063/120488 (15.0%)\n[3870.7s] replaying every native gameplay frame: frame 18071/120488 (15.0%)\n[3872.7s] replaying every native gameplay frame: frame 18081/120488 (15.0%)\n[3874.7s] replaying every native gameplay frame: frame 18090/120488 (15.0%)\n[3876.7s] replaying every native gameplay frame: frame 18100/120488 (15.0%)\n[3878.7s] replaying every native gameplay frame: frame 18110/120488 (15.0%)\n[3880.7s] replaying every native gameplay frame: frame 18118/120488 (15.0%)\n[3882.7s] replaying every native gameplay frame: frame 18127/120488 (15.0%)\n[3884.7s] replaying every native gameplay frame: frame 18137/120488 (15.1%)\n[3886.7s] replaying every native gameplay frame: frame 18147/120488 (15.1%)\n[3888.7s] replaying every native gameplay frame: frame 18154/120488 (15.1%)\n[3890.7s] replaying every native gameplay frame: frame 18161/120488 (15.1%)\n\nthread 'main' (574222) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native scene 2 differs from independent scene 1 at frame 18166\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[3892.7s] replaying every native gameplay frame: frame 18165/120488 (15.1%)\n[3894.7s] replaying every native gameplay frame: frame 18165/120488 (15.1%)\n[3896.7s] replaying every native gameplay frame: frame 18165/120488 (15.1%)\n",
+      "last_replayed_frame": 18165,
+      "native_capture_frames": 120488,
+      "concrete_failure": "Native scene 2 differs from independent scene 1 at frame 18166; replay panicked before a complete report",
+      "diagnosis": "The retained capture is complete. Independent replay does not reload the gameplay screen on the native frame; diagnose the chronological source request and queue before the final attempt."
+    }
+  ],
+  "passing_charts_reopened": false,
+  "authoritative_counts": "sweep-2026-10-12-original-scope.json"
+}
