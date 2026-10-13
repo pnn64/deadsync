@@ -2144,15 +2144,12 @@
     {
       "title": "Deceive Your Insight",
       "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
-      "harness_version": "0.1.0",
-      "archive": "ec587fb16ade4af56212232791da289a0a1a0ce2f52f7a22a1a7cc297ecbb423.tar.zst",
-      "sha256": "ec587fb16ade4af56212232791da289a0a1a0ce2f52f7a22a1a7cc297ecbb423",
-      "compressed_bytes": 5036627,
-      "uncompressed_sha256": "1a93c130051863e11b65665911dbb933b37117ad30c8c1ac616a161f9559b161",
-      "compression_level": 22,
-      "aliases": [
-        "2d9921ef302c93ed7d7810edf3d810e90ce6423d1ea7618335ad9623d2c4243d.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b8d0ef7f9411c17b3f8ffbd3ab56a4e887feb6ef344925cc46d06713b962c289.tar.zst",
+      "sha256": "b8d0ef7f9411c17b3f8ffbd3ab56a4e887feb6ef344925cc46d06713b962c289",
+      "compressed_bytes": 11122161,
+      "uncompressed_sha256": "325042dfeb464d207fec435da60df268909abd0a727b1a6feae48a82fa149626",
+      "aliases": []
     },
     {
       "title": "Delayed Friend Request",
