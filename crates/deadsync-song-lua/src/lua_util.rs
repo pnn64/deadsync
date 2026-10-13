@@ -12043,18 +12043,13 @@ fn collect_compile_update_jobs(
     if crate::model_texture::contains(lua, actor) {
         jobs.push(SongLuaCompileUpdateJob::Texture { actor: actor.clone() });
     }
-    if actor
-        .get::<Option<Function>>("__songlua_update_function")?
-        .is_some()
-        || actor
-            .get::<Option<Function>>("__songlua_update_previous")?
-            .is_some()
-    {
-        jobs.push(SongLuaCompileUpdateJob::Callback {
-            actor: actor.clone(),
-            order: *order,
-        });
-    }
+    // ActorFrame checks its current update function after its children. On
+    // (or an earlier actor) can install one after this frame's plan is built.
+    // Retain that slot even when the function is initially absent.
+    jobs.push(SongLuaCompileUpdateJob::Callback {
+        actor: actor.clone(),
+        order: *order,
+    });
     Ok(())
 }
 
@@ -12120,13 +12115,21 @@ pub(crate) fn actor_tree_update_only(lua: &Lua, root: &Value, name: &str) -> mlu
             return Ok(false);
         }
     }
-    let mut jobs = jobs.iter().filter(|job| {
-        !matches!(
+    let mut active_jobs = Vec::new();
+    for job in jobs.iter() {
+        if matches!(
             job,
             SongLuaCompileUpdateJob::Advance { .. } | SongLuaCompileUpdateJob::Enter { .. }
                 | SongLuaCompileUpdateJob::Texture { .. } | SongLuaCompileUpdateJob::PlayerFeedback { .. }
-        )
-    });
+        ) { continue; }
+        if let SongLuaCompileUpdateJob::Callback { actor, .. } = job
+            && actor.get::<Option<Function>>("__songlua_update_function")?.is_none()
+            && actor.get::<Option<Function>>("__songlua_update_previous")?.is_none() {
+            continue;
+        }
+        active_jobs.push(job);
+    }
+    let mut jobs = active_jobs.into_iter();
     match (jobs.next(), jobs.next()) {
         (None, None) => Ok(true),
         (Some(SongLuaCompileUpdateJob::Callback { actor, .. }), None) => {
@@ -12442,6 +12445,15 @@ pub fn run_actor_compile_update_functions_with_delta(
     root: &Value,
     delta_seconds: f64,
 ) -> mlua::Result<()> {
+    run_actor_compile_update_functions_with_entry(lua, root, delta_seconds, |_| Ok(()))
+}
+
+pub(crate) fn run_actor_compile_update_functions_with_entry(
+    lua: &Lua,
+    root: &Value,
+    delta_seconds: f64,
+    mut before_enter: impl FnMut(&Table) -> mlua::Result<()>,
+) -> mlua::Result<()> {
     let Value::Table(root) = root else {
         return Ok(());
     };
@@ -12475,6 +12487,7 @@ pub fn run_actor_compile_update_functions_with_delta(
                     parent,
                     wrapper,
                 } => {
+                    before_enter(actor)?;
                     let mut incoming = match parent {
                         Some(parent) => parent.raw_get::<Option<f64>>(if *wrapper {
                             "__songlua_compile_wrapper_delta"
@@ -13268,13 +13281,36 @@ pub fn create_underlay_theme_actor(
         actor_children(lua, &actor)?.set("SongTitle", title)?;
         return Ok(Some(actor));
     }
-    if top_screen_step_stats_pane_index(name).is_some() {
-        return Ok(Some(create_named_actor(
-            lua,
-            "ActorFrame",
-            name,
-            create_dummy_actor,
-        )?));
+    if let Some(player) = top_screen_step_stats_pane_index(name) {
+        let pane = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
+        if simply_love_step_stats_enabled(lua, player)? {
+            // DensityGraph.lua's outer, unnamed ActorFrame owns a real sleep
+            // queue. Its descendants draw the graph but do not own tweens.
+            let graph = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
+            graph.raw_set("__songlua_parent", pane.clone())?;
+            let game: Table = lua.globals().get("GAMESTATE")?;
+            let song: Table = game.get::<Function>("GetCurrentSong")?.call(game)?;
+            let timing: Table = song.get::<Function>("GetTimingData")?.call(song)?;
+            let changes = timing.get::<Function>("HasBPMChanges")?.call::<bool>(timing.clone())?;
+            let bpms: Table = timing.get::<Function>("GetBPMs")?.call(timing)?;
+            let bpm = bpms.raw_get::<f64>(1)?;
+            // CurrentSongChanged quantizes to global Song eighth notes, using
+            // Lua doubles. Actor::Sleep converts the duration to a float.
+            let interval = if !changes && bpm >= 60.0 {
+                let eighth = (60.0 / bpm) / 2.0;
+                eighth * (0.25 / eighth).ceil()
+            } else { 0.25 };
+            graph.raw_set("UpdateCommand", lua.create_function(move |_, actor: Table| {
+                actor.get::<Function>("sleep")?.call::<()>((actor.clone(), interval))?;
+                actor.get::<Function>("queuecommand")?.call::<()>((actor, "Update"))
+            })?)?;
+            // Native Init queues the first Update at time zero; it runs on
+            // the first positive actor delta, retaining that frame's remainder.
+            graph.get::<Function>("queuecommand")?.call::<()>((graph.clone(), "Update"))?;
+            push_sequence_child_once(&pane, graph.clone())?;
+            actor_children(lua, &pane)?.raw_set("", graph)?;
+        }
+        return Ok(Some(pane));
     }
     if top_screen_danger_index(name).is_some() || name.eq_ignore_ascii_case("Header") {
         return Ok(Some(create_named_actor(
@@ -13285,6 +13321,39 @@ pub fn create_underlay_theme_actor(
         )?));
     }
     Ok(None)
+}
+
+fn simply_love_step_stats_enabled(lua: &Lua, player: usize) -> mlua::Result<bool> {
+    // StepStatistics/default.lua excludes these layouts before loading the
+    // DensityGraph. Use the host's actual layout and profile values.
+    let globals = lua.globals();
+    let sl: Table = globals.get("SL")?;
+    let mods: Table = sl.get::<Table>(if player == 0 { "P1" } else { "P2" })?.get("ActiveModifiers")?;
+    if mods.get::<String>("DataVisualizations")? != "Step Statistics"
+        || sl.get::<Table>("Global")?.get::<String>("GameMode")? == "Casual" {
+        return Ok(false);
+    }
+    let game: Table = globals.get("GAMESTATE")?;
+    let style: Table = game.get::<Function>("GetCurrentStyle")?.call(game)?;
+    let style = style.get::<Function>("GetName")?.call::<String>(style)?;
+    let width = globals.get::<f32>("SCREEN_WIDTH")?;
+    let height = globals.get::<f32>("SCREEN_HEIGHT")?;
+    let ultra_wide = width / height > 21.0 / 9.0;
+    let field_width = globals.get::<Function>("GetNotefieldWidth")?.call::<f32>(())?;
+    let field_x = globals.get::<Function>("GetNotefieldX")?
+        .call::<f32>(format!("PlayerNumber_P{}", player + 1))?;
+    let wide = globals.get::<Function>("IsUsingWideScreen")?.call::<bool>(())?;
+    let pref = |name: &str| -> mlua::Result<Value> {
+        if let Some(prefs) = globals.get::<Option<Table>>("ThemePrefs")? {
+            prefs.get::<Function>("Get")?.call(name)
+        } else { crate::theme_pref_default(lua, name) }
+    };
+    Ok(!((!ultra_wide && style == "versus")
+        || (truthy(&pref("EnableTournamentMode")?) && read_string(pref("StepStats")?).as_deref() == Some("Hide"))
+        || (field_width > width / 2.0 && style != "double")
+        || (field_x == width / 2.0 && !wide)
+        || (!ultra_wide && style != "single" && style != "double")
+        || (ultra_wide && style != "single" && style != "versus")))
 }
 
 pub fn create_screen_timer_actor(
@@ -13472,6 +13541,10 @@ pub fn install_underlay_theme_children(
             }
         }
         let child = create_named_child_actor(lua, underlay, name)?;
+        if top_screen_step_stats_pane_index(name).is_some() {
+            // Named lookup and screen Update share the same pane owner.
+            push_sequence_child_once(underlay, child.clone())?;
+        }
         children.set(name, child)?;
     }
     Ok(())

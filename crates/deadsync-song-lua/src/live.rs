@@ -789,6 +789,7 @@ pub struct SongLuaLiveScene {
     pub(crate) startup_output: SongLuaLiveOutput,
     outro_started: bool,
     outro_options_reset: bool,
+    outro_off_pending: bool,
     ended: bool,
 }
 
@@ -852,7 +853,7 @@ impl SongLuaLiveScene {
         Ok(Self { lua, root, stage, players, actors, states, tracked, registry,
             targets: Vec::new(), context, entry_paths, primary_index, last_beat,
             last_music_seconds: -9999.0, backgrounds, foregrounds, startup_output,
-            outro_started: false, outro_options_reset: false, ended: false })
+            outro_started: false, outro_options_reset: false, outro_off_pending: false, ended: false })
     }
 
     pub fn advance(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {
@@ -883,9 +884,14 @@ impl SongLuaLiveScene {
         self.lua.set_app_data(LivePlayers(frame.players));
         crate::song_tables::advance_option_levels(&self.lua, frame.screen_seconds)?;
         self.advance_backgrounds(beat as f32, frame.music_seconds as f32)?;
-        self.advance_foregrounds(beat as f32, frame.music_seconds as f32)?;
-        crate::lua_util::run_actor_compile_update_functions_with_delta(
-            &self.lua, &self.root, frame.delta_seconds)?;
+        let lua = self.lua.clone();
+        let root = self.root.clone();
+        crate::lua_util::run_actor_compile_update_functions_with_entry(
+            &lua, &root, frame.delta_seconds, |actor| {
+                // Foreground is sorted after the screen's underlay and Player
+                // actors. Its On callbacks observe their current-frame queues.
+                self.advance_foreground(actor, beat as f32, frame.music_seconds as f32)
+            })?;
         for foreground in &mut self.foregrounds {
             if foreground.started && !foreground.finished && beat as f32 > foreground.stop_beat {
                 foreground.actor.get::<Function>("visible")?.call::<()>((foreground.actor.clone(), false))?;
@@ -897,9 +903,23 @@ impl SongLuaLiveScene {
         // dispatches it after the following actor Update, then LeaveGameplay
         // removes attacks. Authored callbacks first see the rebuilt options
         // on the next frame. Use the gameplay boundary, not a trace timestamp.
+        if self.outro_off_pending {
+            self.tween_off_screen()?;
+            self.outro_off_pending = false;
+        }
         if self.outro_started && !self.outro_options_reset {
             crate::song_tables::clear_active_attack_options(&self.lua)?;
             self.outro_options_reset = true;
+            // LeaveGameplay tweens successful screens off immediately. For
+            // AllFailed it posts BeginFailed, handled after the next Update.
+            let mut all_failed = true;
+            for (player, context) in self.players.iter().zip(&self.context.players) {
+                if context.enabled && !player.raw_get::<bool>("__songlua_failed")? {
+                    all_failed = false;
+                }
+            }
+            if all_failed { self.outro_off_pending = true; }
+            else { self.tween_off_screen()?; }
         }
         self.outro_started |= frame.gameplay_outro;
         self.last_music_seconds = frame.music_seconds as f32;
@@ -958,8 +978,10 @@ impl SongLuaLiveScene {
         Ok(())
     }
 
-    fn advance_foregrounds(&mut self, beat: f32, music_seconds: f32) -> mlua::Result<()> {
-        if self.foregrounds.is_empty() { return Ok(()); }
+    fn advance_foreground(&mut self, actor: &Table, beat: f32, music_seconds: f32) -> mlua::Result<()> {
+        let Some(foreground) = self.foregrounds.iter_mut()
+            .find(|foreground| foreground.actor.to_pointer() == actor.to_pointer())
+            else { return Ok(()); };
         let prefs = self.lua.globals().get::<Table>("PREFSMAN")?;
         let rate_tweens = prefs.get::<Function>("GetPreference")?
             .call::<Option<bool>>((prefs, "RateModsAffectFGChanges"))?.unwrap_or(false);
@@ -967,10 +989,10 @@ impl SongLuaLiveScene {
         let options = game.get::<Function>("GetSongOptionsObject")?
             .call::<Table>((game, "ModsLevel_Current"))?;
         let rate = if rate_tweens { 1.0 } else { options.get::<Function>("MusicRate")?.call::<f32>(options)? };
-        for foreground in &mut self.foregrounds {
+        {
             let inactive = foreground.finished || beat < foreground.start_beat;
             foreground.actor.raw_set("__songlua_live_inactive", inactive)?;
-            if inactive { continue; }
+            if inactive { return Ok(()); }
             let visible = foreground.actor.get::<Function>("GetVisible")?.call::<bool>(foreground.actor.clone())?;
             let delta = if !visible {
                 foreground.actor.get::<Function>("visible")?.call::<()>((foreground.actor.clone(), true))?;
@@ -1001,6 +1023,12 @@ impl SongLuaLiveScene {
 
     fn feed_stats(&self, frame: &SongLuaLiveFrame) -> mlua::Result<()> {
         feed_live_stats(&self.stage, &self.players, frame)
+    }
+
+    fn tween_off_screen(&self) -> mlua::Result<()> {
+        let screen: Table = self.lua.globals().raw_get("__songlua_top_screen")?;
+        crate::lua_util::run_named_command_on_children_recursively(
+            &self.lua, &screen, "OffCommand", None)
     }
 
     /// Share the retained VM with the gameplay thread's synchronous NoteField
@@ -1293,6 +1321,10 @@ return setmetatable({__songlua_actor_type='ActorFrame',Name='Declared',
     type Compiled = crate::CompiledSongLua<SongLuaOverlayActor<SongLuaOverlayKind<(), (), deadlib_present::actors::TextAttribute>>>;
 
     fn compile(name: &str, source: &str) -> Compiled {
+        compile_with_context(name, source, |_| {})
+    }
+
+    fn compile_with_context(name: &str, source: &str, configure: impl FnOnce(&mut SongLuaCompileContext)) -> Compiled {
         let dir = std::env::temp_dir().join(format!("deadsync-live-{name}-{}", std::process::id()));
         fs::create_dir_all(&dir).expect("test directory");
         let entry = dir.join("default.lua");
@@ -1300,8 +1332,150 @@ return setmetatable({__songlua_actor_type='ActorFrame',Name='Declared',
         let mut context = SongLuaCompileContext::new(&dir, name);
         context.live = true;
         context.music_length_seconds = 60.0;
+        configure(&mut context);
         crate::compile_song_lua_with_default_host(&entry, &context, SongLuaNoteskinResolver::default(),
             |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).expect("live preparation")
+    }
+
+    #[test]
+    fn live_foreground_on_observes_updated_underlay() {
+        let mut compiled = compile_with_context("foreground-underlay-order", r#"
+local underlay = SCREENMAN:GetTopScreen():GetChild('Underlay')
+return Def.ActorFrame {
+    InitCommand = function(self) underlay:sleep(0.5) end,
+    OnCommand = function(self)
+        self:aux(underlay:GetTweenTimeLeft()):sleep(10)
+    end,
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.layer_start_beats = vec![0.0];
+        });
+        let mut scene = compiled.live_scene.take().expect("scene");
+        scene.advance(SongLuaLiveFrame { music_seconds: -0.5, beat: -1.0,
+            screen_seconds: 0.125, delta_seconds: 0.125, ..Default::default() }).expect("dormant foreground");
+        scene.advance(SongLuaLiveFrame { music_seconds: 0.0625, beat: 0.125,
+            screen_seconds: 0.1875, delta_seconds: 0.0625, ..Default::default() }).expect("foreground enters");
+        assert_eq!(scene.states()[0].aux, 0.3125,
+            "Foreground::Update sends On after this frame's underlay update");
+    }
+
+    #[test]
+    fn live_empty_callback_slots_preserve_single_update_detection() {
+        let mut compiled = compile("callback-slots", r#"
+return Def.ActorFrame {
+    Def.ActorFrame { Name = 'Update',
+        InitCommand = function(self) self:SetUpdateFunction(function() end) end,
+        Def.Quad {},
+    },
+}
+"#);
+        let scene = compiled.live_scene.take().expect("scene");
+        assert!(crate::lua_util::actor_tree_update_only(&scene.lua, &scene.root, "Update")
+            .expect("only the current update callback counts"));
+        let root: Table = scene.root.as_table().expect("session roots").raw_get(1).expect("authored root");
+        root.get::<Function>("SetUpdateFunction").expect("update setter")
+            .call::<()>((root, scene.lua.create_function(|_, _: MultiValue| Ok(())).expect("extra update")))
+            .expect("install second callback");
+        assert!(!crate::lua_util::actor_tree_update_only(&scene.lua, &scene.root, "Update")
+            .expect("additional callbacks still prevent substitution"));
+    }
+
+    #[test]
+    fn live_density_graph_owns_quantized_recurring_sleep() {
+        for (name, bpms, rate, expected_period) in [
+            ("constant", vec![(0.0, 140.0)], 1.0, (30.0_f64 / 140.0 * 2.0) as f32),
+            ("changes", vec![(0.0, 140.0), (8.0, 160.0)], 1.0, 0.25),
+            ("slow", vec![(0.0, 30.0)], 1.0, 0.25),
+            ("rate", vec![(0.0, 140.0)], 2.0, (30.0_f64 / 140.0 * 2.0) as f32),
+        ] {
+            let mut compiled = compile_with_context(&format!("density-{name}"),
+                "return Def.ActorFrame { OnCommand = function(self) self:sleep(10) end }", |context| {
+                    context.defer_initial_live_update = true;
+                    context.screen_width = 854.0;
+                    context.players[0].screen_x = 213.5;
+                    context.players[1].enabled = false;
+                    context.song_timing_bpms = bpms;
+                    context.song_music_rate = rate;
+                    context.player_timing[0] = Some(deadsync_rules::timing::TimingData::from_segments(
+                        0.0, 0.0, &deadsync_rules::timing::TimingSegments {
+                            bpms: vec![(0.0, 300.0)], ..Default::default()
+                        }, &[]));
+                });
+            let mut scene = compiled.live_scene.take().expect("scene");
+            let underlay: Table = crate::actor_children(&scene.lua,
+                &scene.lua.globals().get::<Table>("__songlua_top_screen").expect("screen"))
+                .expect("screen children").raw_get("Underlay").expect("underlay");
+            let pane: Table = crate::actor_children(&scene.lua, &underlay).expect("underlay children")
+                .raw_get("StepStatsPaneP1").expect("enabled pane");
+            let mut left = 0.0_f32;
+            let mut screen = 0.0;
+            for delta in [0.0_f32, 0.01, 0.2, 0.3, 0.02] {
+                let mut remaining = delta;
+                while remaining > 0.0 {
+                    if left == 0.0 { left = expected_period; }
+                    if remaining < left { left -= remaining; break; }
+                    remaining -= left;
+                    left = 0.0;
+                }
+                screen += f64::from(delta);
+                scene.advance(SongLuaLiveFrame { screen_seconds: screen,
+                    music_seconds: -1.0 + screen, beat: -2.0 + screen * 2.0,
+                    delta_seconds: f64::from(delta), ..Default::default() }).expect("density frame");
+                assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &pane).expect("pane queue"),
+                    left, "{name}: native float queue after delta {delta}");
+                assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &underlay).expect("underlay queue"),
+                    left, "ancestor reports its owned descendant");
+            }
+        }
+        for (name, width, style) in [("narrow-centered", 640.0, "single"), ("versus", 854.0, "versus")] {
+            let mut compiled = compile_with_context(&format!("density-excluded-{name}"), "return Def.ActorFrame {}", |context| {
+                context.defer_initial_live_update = true;
+                context.screen_width = width;
+                context.style_name = style.into();
+            });
+            let mut scene = compiled.live_scene.take().expect("excluded layout");
+            scene.advance(SongLuaLiveFrame { delta_seconds: 0.01, ..Default::default() }).expect("layout frame");
+            let screen: Table = scene.lua.globals().get("__songlua_top_screen").expect("screen");
+            let underlay: Table = crate::actor_children(&scene.lua, &screen).expect("screen children")
+                .raw_get("Underlay").expect("underlay");
+            assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &underlay).expect("excluded graph"), 0.0,
+                "{name}: excluded StepStatistics layouts create no recurring queue");
+        }
+    }
+
+    #[test]
+    fn live_outro_dispatches_off_after_actor_update_once() {
+        for failed in [false, true] {
+            let mut compiled = compile_with_context(&format!("outro-off-{failed}"), r#"
+OFFS, SEEN = 0, {}
+return Def.ActorFrame {
+    OnCommand = function(self)
+        self:sleep(10):SetUpdateFunction(function(_, delta)
+            if delta > 0 then SEEN[#SEEN + 1] = OFFS end
+        end)
+    end,
+    OffCommand = function(self) OFFS = OFFS + 1; self:stoptweening() end,
+    EndCommand = function(self) self:aux(23) end,
+}
+"#, |context| context.players[1].enabled = false);
+            let mut scene = compiled.live_scene.take().expect("scene");
+            let mut frame = SongLuaLiveFrame { delta_seconds: 0.125, ..Default::default() };
+            frame.players[0].failed = failed;
+            for index in 0..5 {
+                frame.screen_seconds = (index + 1) as f64 * 0.125;
+                frame.gameplay_outro = index >= 1;
+                scene.advance(frame).expect("outro frame");
+                let expected = i64::from(index >= if failed { 3 } else { 2 });
+                assert_eq!(scene.lua.globals().get::<i64>("OFFS").expect("Off count"), expected,
+                    "NotesEnded dispatches after actors; BeginFailed waits another update");
+            }
+            let seen: Table = scene.lua.globals().get("SEEN").expect("callback observations");
+            assert_eq!(seen.raw_get::<i64>(if failed { 4 } else { 3 }).expect("same-frame observation"), 0);
+            assert_eq!(seen.raw_get::<i64>(5).expect("following-frame observation"), 1);
+            scene.end().expect("End is separate");
+            assert_eq!(scene.lua.globals().get::<i64>("OFFS").expect("no repeated Off"), 1);
+        }
     }
 
     #[test]
