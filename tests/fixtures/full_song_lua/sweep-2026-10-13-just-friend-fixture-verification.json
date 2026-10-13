@@ -1,0 +1,26 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Just a Friend To  You/Just a Friend To  You.ssc",
+      "acceptance_commit": "1619f528abdced3f4168ca46ab3a0f8198ba109e",
+      "native_frames": 103852,
+      "replayed_frames": 103852,
+      "compared_stage_fields": 1826,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "2c628286c6b868fdc0d7381ed3dc47843c67d1f5c561160ca0d78fefcfbfc58f.tar.zst",
+      "compressed_sha256": "2c628286c6b868fdc0d7381ed3dc47843c67d1f5c561160ca0d78fefcfbfc58f",
+      "uncompressed_sha256": "2206ba3466a82ff664c0a428ad754eeaf16a96929ed2337295d1c8deb5a37d84",
+      "compressed_bytes": 9896730,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.xy, GameState.GetHumanPlayers, PlayerOptions.Mini",
+        "native drawable state/resources: Sprite"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
