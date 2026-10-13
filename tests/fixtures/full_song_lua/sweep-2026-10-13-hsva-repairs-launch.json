@@ -1,0 +1,171 @@
+{
+  "selected_build": {
+    "build_proof": "/home/parity/jobs/hsva-green-v2/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "binary_sha256": "13910428be95f3669acf1ad4f85fc2098557c84a66ca66606780bedd9c5f2b0c",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "actual_source_pins": 28,
+  "harness_source_pins": 3,
+  "repairs": [
+    {
+      "position": 323,
+      "source_simfile": "Myths You Forgot/Myths You Forgot.ssc",
+      "attempt_started": 1,
+      "per_chart_limit": 2,
+      "remaining_repairs_after_this_attempt": 1,
+      "launch_receipt": {
+        "position": 323,
+        "supervisor_pid": 2585676,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_hsva_validated_chart_repair_v1.py",
+          "323"
+        ]
+      },
+      "live_observation": {
+        "pid": 2586910,
+        "command": [
+          "/home/parity/jobs/hsva-green-v2/full-song-lua-stage-modifier-v1",
+          "--archive",
+          "/home/parity/jobs/myths-single-subscriber-repair-v1/chart-323/95c43ceb59efa3dc19a01f750d3b141ca0d03d9a88b0b7eb0ba60baf499784b6.tar",
+          "--report",
+          "/home/parity/jobs/myths-single-subscriber-repair-v1/chart-323/report.json"
+        ],
+        "label": "replay",
+        "source_simfile": "Myths You Forgot/Myths You Forgot.ssc"
+      },
+      "exact_process_matches": [
+        true,
+        true
+      ],
+      "attempt_start": {
+        "position": 323,
+        "source_simfile": "Myths You Forgot/Myths You Forgot.ssc",
+        "status": "pending",
+        "repair_attempts": 1,
+        "previous_concrete_failures": [
+          {
+            "phase": "progress",
+            "seconds": 126.00186157226562,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "progress",
+            "seconds": 127.00174713134766,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "screen-end",
+            "seconds": 127.28995513916016,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "gameplay-exit",
+            "seconds": 127.28995513916016,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          }
+        ],
+        "previous_errors": [
+          "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 15.006: missing captured subscriber identity for ScreenGameplay/6/1",
+          "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 32.744: missing captured subscriber identity for ScreenGameplay/6/1",
+          "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 82.396: missing captured subscriber identity for ScreenGameplay/6/1"
+        ],
+        "previous_failure": null,
+        "binary_sha256": "13910428be95f3669acf1ad4f85fc2098557c84a66ca66606780bedd9c5f2b0c",
+        "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+        "candidate_sha256": "95c43ceb59efa3dc19a01f750d3b141ca0d03d9a88b0b7eb0ba60baf499784b6",
+        "trace_sha256": "4b70cf60a7fa521498d196bdd88e448139b92982bfff0c6a8b0a85c86f5d41a7",
+        "simfile_sha256": "ffc2b7b1ca7a865af390a5b9bba87322e84ba056a3c999cbd26e50fe28c0b25e",
+        "build_proof": "/home/parity/jobs/hsva-green-v2/proof.json",
+        "fix_commit": "ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+        "native_capture_reused": true,
+        "all_candidate_manifest_members_byte_verified": true
+      },
+      "replay_log_tail": [
+        "[12.0s] replaying every native gameplay frame: frame 118/40940 (0.3%)",
+        "[14.0s] replaying every native gameplay frame: frame 250/40940 (0.6%)",
+        "[16.0s] replaying every native gameplay frame: frame 376/40940 (0.9%)"
+      ],
+      "completed_result": null
+    },
+    {
+      "position": 326,
+      "source_simfile": "new earth/new earth.ssc",
+      "attempt_started": 1,
+      "per_chart_limit": 2,
+      "remaining_repairs_after_this_attempt": 1,
+      "launch_receipt": {
+        "position": 326,
+        "supervisor_pid": 2585734,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_hsva_validated_chart_repair_v1.py",
+          "326"
+        ]
+      },
+      "live_observation": {
+        "pid": 2585991,
+        "command": [
+          "/home/parity/jobs/hsva-green-v2/full-song-lua-stage-modifier-v1",
+          "--archive",
+          "/home/parity/jobs/new-earth-hsva-repair-v1/chart-326/1cf42f912b0caf2c3c0d9ba3f17a640ffd9313f9a353d4c4f4bcb076c5c1b1ab.tar",
+          "--report",
+          "/home/parity/jobs/new-earth-hsva-repair-v1/chart-326/report.json"
+        ],
+        "label": "replay",
+        "source_simfile": "new earth/new earth.ssc"
+      },
+      "exact_process_matches": [
+        true,
+        true
+      ],
+      "attempt_start": {
+        "position": 326,
+        "source_simfile": "new earth/new earth.ssc",
+        "status": "pending",
+        "repair_attempts": 1,
+        "previous_concrete_failures": [],
+        "previous_errors": [],
+        "previous_failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'new earth': failed to run actor init commands for '/tmp/.tmpuDkUwQ/song/lua/default.lua': InitCommand failed for ActorMultiVertex 'SpaceshipTrailP1': runtime error: [string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: attempt to call global 'HSVA' (a nil value)\nstack traceback:\n\t[C]: in global 'HSVA'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: in upvalue 'makeSpaceshipTrail'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:152: in function <[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:151>; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'new earth' from '/tmp/.tmpuDkUwQ/song/lua/default.lua': failed to run actor init commands for '/tmp/.tmpuDkUwQ/song/lua/default.lua': InitCommand failed for ActorMultiVertex 'SpaceshipTrailP1': runtime error: [string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: attempt to call global 'HSVA' (a nil value)\nstack traceback:\n\t[C]: in global 'HSVA'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: in upvalue 'makeSpaceshipTrail'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:152: in function <[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:151>\n\nthread 'main' (2316501) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+        "binary_sha256": "13910428be95f3669acf1ad4f85fc2098557c84a66ca66606780bedd9c5f2b0c",
+        "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+        "candidate_sha256": "1cf42f912b0caf2c3c0d9ba3f17a640ffd9313f9a353d4c4f4bcb076c5c1b1ab",
+        "trace_sha256": "5142c22ee3a02a750a5bf8de5aea44b4eeaa1ed26dff9a6889614801e61444d4",
+        "simfile_sha256": "614f29f557e0e936a2650122071d9d408eaaa46690031b08dddb471f694a4abb",
+        "build_proof": "/home/parity/jobs/hsva-green-v2/proof.json",
+        "fix_commit": "ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+        "native_capture_reused": true,
+        "all_candidate_manifest_members_byte_verified": true
+      },
+      "replay_log_tail": [
+        "[28.0s] replaying every native gameplay frame: frame 851/89954 (0.9%)",
+        "[30.0s] replaying every native gameplay frame: frame 923/89954 (1.0%)",
+        "[32.0s] replaying every native gameplay frame: frame 995/89954 (1.1%)"
+      ],
+      "completed_result": null
+    }
+  ],
+  "status": "first bounded Myths and New Earth repairs launched; existing complete replay comparisons determine acceptance",
+  "validated_build": "sweep-2026-10-13-hsva-build.json",
+  "native_capture_reused": true,
+  "all_uncompressed_candidate_members_verified": true,
+  "publisher_streams": 58,
+  "publisher_count": 1,
+  "actual_publisher": {
+    "ProcessId": 60312,
+    "CommandLine": "\"C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe\" -B -X utf8 C:/GitHub/itgmania-harness/target/server-parity/publish_chart_sweep_v1.py"
+  },
+  "comparisons_modified": false,
+  "passing_charts_reopened": false,
+  "capped_lower_ssc_not_retried": true
+}
