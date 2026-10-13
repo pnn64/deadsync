@@ -1,0 +1,15 @@
+{
+  "separate_from_acceptance": true,
+  "acceptance_gate_added": false,
+  "implemented_by_this_fix": [
+    "Player:SetLife",
+    "shared LifeMeter:GetLife",
+    "PlayerStageStats:FailPlayer propagation",
+    "post-actor health change"
+  ],
+  "remaining_coverage": [
+    "Player:ChangeLife uses additional native drain, merciful, progressive and recovery rules and is not implemented by this direct setter fix.",
+    "The production integration control covers SetLife during the synchronous NoteField tap callback. Native judgment-message dispatch is an actual GREAT GREAT failure diagnosed separately above."
+  ],
+  "passing_charts_reopened": false
+}

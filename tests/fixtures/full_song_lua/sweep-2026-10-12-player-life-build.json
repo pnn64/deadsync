@@ -1,0 +1,113 @@
+{
+  "source_fix_commit": "6470fdd9d",
+  "source_confirmed_cause": "Player:SetLife was absent, LifeMeter:GetLife retained its initial value, and stage-stat FailPlayer did not propagate to gameplay. Ghost errors at spooky/default.lua:108; GREAT GREAT uses the shared life value and stage failure in its judgment handler.",
+  "observed_failures": [
+    {
+      "position": 212,
+      "source_simfile": "ghost [Telperion]/ghost.ssc",
+      "failure": "UpdateCommand attempts absent SetLife; native 56057 command/query observations versus 43482 independent observations.",
+      "candidate_sha256": "46be94f83929984401e91b03311437f417c4fdbd3327f1d3aa3604d650986102",
+      "trace_sha256": "11f62197b1696902cd4fbc3851c7b34c957e7552c78a102855d618316ad25b00"
+    },
+    {
+      "position": 219,
+      "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
+      "failure": "21 life/failure mismatches across all 8419 frames. At 2.000136137 seconds native life is 0.4010000229 and independent life is 0.5.",
+      "candidate_sha256": "c0826b85cb615b23b55b45859795e975d859502a02d4066b87d1f382544a8196",
+      "remaining_source_confirmed_cause": "Player.cpp:2853-2899 broadcasts Judgment before HandleTapRowScore even with autoplay. Gameplay currently updates the judgment sprite without sending that message to the retained VM. No repair replay is launched for GREAT GREAT until this dispatch is implemented and validated."
+    }
+  ],
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_simply_love_commit": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+  "native_sources": [
+    "Player.cpp:1912-1961",
+    "Player.cpp:3652-3673",
+    "LifeMeterBar.cpp:297-317",
+    "ScreenGameplay.cpp:1756-1785",
+    "PlayerStageStats.cpp:932-935"
+  ],
+  "independent_behavior": "SetLife clamps and shares the meter, current stage life and queued gameplay writes. LifeChanged runs synchronously with Player and the same LifeMeter identity; recursive SetLife reports the native error. FailPlayer writes the stage failure flag only. HealthState changes after the actor update and not during LifeChanged. Engine tap callbacks apply writes before returning to gameplay.",
+  "regressions": [
+    "The retained life scene reads incoming 0.7, sets 0.2, clamps 2 to 1 and -1 to 0, observes each synchronous notification, rejects recursive writes, and sees HealthState_Dead only after actor updates.",
+    "The existing production gameplay tap control calls SetLife(0.25), reads shared meter/stats immediately, and verifies actual gameplay life before the foreground update."
+  ],
+  "baseline_failure_log": "player-life-windows-before-fix-v1.log",
+  "windows_checks": [
+    {
+      "log": "player-life-windows-gameplay-v1.log",
+      "passed": 815,
+      "failed": 0,
+      "sha256": "fb04b3dbfb9b1491cebab94fba7b5ae187a8345ce3e75c2f0af673dece4a0b2a"
+    },
+    {
+      "log": "player-life-windows-live-v2.log",
+      "passed": 33,
+      "failed": 0,
+      "sha256": "40bca9cf370b93e6dc76215185655941d35a0586ba9654810b46c049b5f12737"
+    },
+    {
+      "log": "player-life-windows-native-v1.log",
+      "passed": 20,
+      "failed": 0,
+      "sha256": "ff5bf5ae290ea37b32a65fb337d9146df9fa10f20b0689f1bbbac2f763b58c4b"
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "gameplay-tests",
+      "exit_code": 0,
+      "seconds": 46.64703217300121,
+      "results": [
+        "test result: ok. 815 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.11s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 198.65166315299575,
+      "results": [
+        "test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 530 filtered out; finished in 0.66s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 242.71210897300625,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.1742881530080922,
+      "results": [
+        "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.24s"
+      ]
+    }
+  ],
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "b7290301b41472a87236fe90399893048b4711d332c1d157f8ce30de74ded4a1",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "ccecdf07dae6378a7df8c94152537d0bab63651b2d193a496aaff3a40d2447dd",
+    "crates/deadsync-song-lua/src/live.rs": "ac18e6f90dfd62c9954b642623716184f37b4f33f1bfb39162dfe48afe69c5f7",
+    "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+    "crates/deadsync-song-lua/src/lua_util.rs": "e5bc5925d9cd1952b005d85f26795e001363f0a4b51c8366e3908ca3b5e66509",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "6661a9d4ae81ff30591f87cacc41eff9954496b6a5b6885be34e35ae87f30c48",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "a74fd311aae4ae6176f3193b691a8e50639933f473c40db73d81eee1cc37e65c",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "ce593f5e8827088d78665d5a821bb6b35dad8c1f0466f6d4e3c0647f2216e5e2",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "4cf4acbd2870323761c3925f1808bd2eb0f4e64939cf82ca61d5459723e18078",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "104c7cd6a9bb370cf4ddb8ab18907e2b9eb3fea840dd52dc383314ff06e589dc",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0"
+  },
+  "build_proof": "/home/parity/jobs/player-life-build-v1/proof.json",
+  "binary_sha256": "10129cec94b2f0170d2cee65343498037b79435bf7ffee01f5c98200ed18d9a1",
+  "acceptance": "Existing whole replay comparisons unchanged. Passing charts remain accepted. Ghost first repair will reuse its byte-identical uncompressed capture."
+}
