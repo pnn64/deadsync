@@ -322,17 +322,16 @@ where
                 .map_err(|err| err.to_string())?;
         }
         for (index, entry_path) in entry_paths.iter().enumerate() {
-            // Foreground::LoadFromSong requests the literal "default.lua" for
-            // a directory. The case-insensitive native file driver may read
-            // Default.lua, while Lua keeps the requested chunk source spelling.
+            // Foreground::LoadFromSong concatenates the raw authored name.
+            // Its directory default.lua and direct-file fallback both retain
+            // that spelling as the Lua chunk name, including "./" and slashes.
             let source_path = index.checked_sub(context.background_layer_count)
                 .and_then(|index| context.foreground_names.get(index))
-                .filter(|name| context.song_dir.join(name).is_dir())
-                // Native concatenates SongDir + authored name + "/default.lua".
-                // Keep a trailing authored slash, including "./", in the
-                // chunk name even though physical path lookup normalizes it.
-                .map(|name| std::path::PathBuf::from(format!("{}/{name}/default.lua",
-                    crate::file_path_string(&context.song_dir).trim_end_matches('/'))))
+                .map(|name| {
+                    let suffix = if context.song_dir.join(name).is_dir() { "/default.lua" } else { "" };
+                    std::path::PathBuf::from(format!("{}/{name}{suffix}",
+                        crate::file_path_string(&context.song_dir).trim_end_matches('/')))
+                })
                 .unwrap_or_else(|| entry_path.clone());
             let root = crate::lua_util::execute_script_file_with_source(
                 &lua, entry_path, &source_path, context.song_dir.as_path())

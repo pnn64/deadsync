@@ -1672,6 +1672,8 @@ return Def.Actor { OnCommand = on }
             ("directory/", format!("{}//default.lua", crate::file_path_string(&folder))),
             ("./", format!("{}/.//default.lua", crate::file_path_string(&dir))),
             ("directory/Default.lua", crate::file_path_string(&entry)),
+            ("./directory/Default.lua", format!("{}/./directory/Default.lua", crate::file_path_string(&dir))),
+            ("directory//Default.lua", format!("{}/directory//Default.lua", crate::file_path_string(&dir))),
         ] {
             let physical_entry = if name == "./" {
                 let root_entry = dir.join("Default.lua");
