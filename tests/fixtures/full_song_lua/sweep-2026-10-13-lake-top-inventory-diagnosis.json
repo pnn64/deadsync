@@ -1,0 +1,287 @@
+{
+  "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
+  "diagnostic_only": true,
+  "repair_attempts_spent": 1,
+  "repair_attempts_remaining": 1,
+  "second_repair_started": false,
+  "retained_capture_sha256": "d78b8d9bafa72c56258292e677f939aec2629fb3895b20cff5f5a7bf5720a095",
+  "native_trace_sha256": "6d08d1e7c74a97b57bb2c5a59bd53020f789d6f9bf33ea1548ee27364899f075",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_first_get_children": {
+    "actor": "external-0010",
+    "args": [],
+    "beat": -2.1418426036834717,
+    "caller": {
+      "line": 446,
+      "source": "song:/code/update.lua",
+      "tail_call": false
+    },
+    "command": "OnCommand",
+    "definition_id": "def-0002",
+    "detail": {
+      "native_tween_time_left": {
+        "type": "number",
+        "value": "infinity"
+      },
+      "results": [
+        {
+          "": [
+            {
+              "actor": "external-0037",
+              "name": "",
+              "path": "ScreenGameplay"
+            },
+            {
+              "actor": "external-0038",
+              "name": "",
+              "path": "ScreenGameplay"
+            },
+            {
+              "actor": "external-0039",
+              "name": "",
+              "path": "ScreenGameplay"
+            },
+            {
+              "actor": "external-0040",
+              "name": "",
+              "path": "ScreenGameplay"
+            },
+            {
+              "actor": "external-0041",
+              "name": "",
+              "path": "ScreenGameplay"
+            }
+          ],
+          "ActiveAttackListP1": {
+            "actor": "external-0029",
+            "name": "ActiveAttackListP1",
+            "path": "ScreenGameplay/ActiveAttackListP1"
+          },
+          "ActiveAttackListP2": {
+            "actor": "external-0025",
+            "name": "ActiveAttackListP2",
+            "path": "ScreenGameplay/ActiveAttackListP2"
+          },
+          "Cancel": {
+            "actor": "external-0021",
+            "name": "Cancel",
+            "path": "ScreenGameplay/Cancel"
+          },
+          "Debug": {
+            "actor": "external-0026",
+            "name": "Debug",
+            "path": "ScreenGameplay/Debug"
+          },
+          "Footer": {
+            "actor": "external-0034",
+            "name": "Footer",
+            "path": "ScreenGameplay/Footer"
+          },
+          "Header": {
+            "actor": "external-0033",
+            "name": "Header",
+            "path": "ScreenGameplay/Header"
+          },
+          "In": {
+            "actor": "external-0028",
+            "name": "In",
+            "path": "ScreenGameplay/In"
+          },
+          "LifeP1": {
+            "actor": "external-0012",
+            "name": "LifeP1",
+            "path": "ScreenGameplay/LifeP1"
+          },
+          "LyricDisplay": {
+            "actor": "external-0024",
+            "name": "LyricDisplay",
+            "path": "ScreenGameplay/LyricDisplay"
+          },
+          "OniGameOverP1": {
+            "actor": "external-0022",
+            "name": "OniGameOverP1",
+            "path": "ScreenGameplay/OniGameOverP1"
+          },
+          "Out": {
+            "actor": "external-0027",
+            "name": "Out",
+            "path": "ScreenGameplay/Out"
+          },
+          "Overlay": {
+            "actor": "external-0032",
+            "name": "Overlay",
+            "path": "ScreenGameplay/Overlay"
+          },
+          "PlayerOptionsP1": {
+            "actor": "external-0036",
+            "name": "PlayerOptionsP1",
+            "path": "ScreenGameplay/PlayerOptionsP1"
+          },
+          "PlayerP1": {
+            "actor": "external-0011",
+            "name": "PlayerP1",
+            "path": "ScreenGameplay/PlayerP1"
+          },
+          "ScoreP1": {
+            "actor": "external-0023",
+            "name": "ScoreP1",
+            "path": "ScreenGameplay/ScoreP1"
+          },
+          "SongBackground": {
+            "actor": "external-0042",
+            "name": "SongBackground",
+            "path": "ScreenGameplay/SongBackground"
+          },
+          "SongForeground": {
+            "actor": "external-0005",
+            "name": "SongForeground",
+            "path": "ScreenGameplay/SongForeground"
+          },
+          "SongOptions": {
+            "actor": "external-0020",
+            "name": "SongOptions",
+            "path": "ScreenGameplay/SongOptions"
+          },
+          "StepsDescriptionP1": {
+            "actor": "external-0035",
+            "name": "StepsDescriptionP1",
+            "path": "ScreenGameplay/StepsDescriptionP1"
+          },
+          "StepsDisplayP1": {
+            "actor": "external-0031",
+            "name": "StepsDisplayP1",
+            "path": "ScreenGameplay/StepsDisplayP1"
+          },
+          "Underlay": {
+            "actor": "external-0030",
+            "name": "Underlay",
+            "path": "ScreenGameplay/Underlay"
+          }
+        }
+      ]
+    },
+    "kind": "query",
+    "line": 49,
+    "operation": "ActorFrame.GetChildren",
+    "phase": "callback",
+    "scene": 1,
+    "seconds": -1.9999773502349854,
+    "seq": 99,
+    "source": "song:/.//default.lua"
+  },
+  "native_direct_children": 26,
+  "native_named_children": 21,
+  "native_unnamed_children": 5,
+  "independent_actual_direct_children": 10,
+  "missing_named_top_children": [
+    "ActiveAttackListP1",
+    "ActiveAttackListP2",
+    "Cancel",
+    "Footer",
+    "Header",
+    "LyricDisplay",
+    "OniGameOverP1",
+    "Out",
+    "PlayerOptionsP1",
+    "SongOptions",
+    "StepsDescriptionP1"
+  ],
+  "engine_child_source_locations": {
+    "Out": {
+      "source": "itgmania/src/ScreenWithMenuElements.cpp",
+      "line": 114
+    },
+    "Cancel": {
+      "source": "itgmania/src/ScreenWithMenuElements.cpp",
+      "line": 120
+    },
+    "OniGameOverP1": {
+      "source": "itgmania/src/ScreenGameplay.cpp",
+      "line": 625
+    },
+    "StepsDescriptionP1": {
+      "source": "itgmania/src/ScreenGameplay.cpp",
+      "line": 727
+    },
+    "PlayerOptionsP1": {
+      "source": "itgmania/src/ScreenGameplay.cpp",
+      "line": 737
+    },
+    "SongOptions": {
+      "source": "itgmania/src/ScreenGameplay.cpp",
+      "line": 773
+    },
+    "ActiveAttackListP1": {
+      "source": "itgmania/src/ScreenGameplay.cpp",
+      "line": 779
+    },
+    "ActiveAttackListP2": {
+      "source": "itgmania/src/ScreenGameplay.cpp",
+      "line": 779
+    },
+    "LyricDisplay": {
+      "source": "itgmania/src/ScreenGameplay.cpp",
+      "line": 791
+    }
+  },
+  "decorations_source": "Simply Love ScreenWithMenuElements decorations.lua returns Header and Footer via StandardDecorationFromFile. Native ScreenWithMenuElements::Init flattens that ActorFrame into direct screen children; fallback ActorDef.lua installs their names and metrics.",
+  "unnamed_source_additions": [
+    {
+      "role": "toasty",
+      "source": "ScreenGameplay.cpp",
+      "line": 563,
+      "condition": "not demonstration/jukebox",
+      "theme_actor": "Simply Love toasty.lua returns an unnamed Actor with visible(false)"
+    },
+    {
+      "role": "next course song",
+      "source": "ScreenGameplay.cpp",
+      "line": 635,
+      "condition": "unconditional",
+      "theme_actor": "Simply Love next course song/default.lua returns an unnamed ActorFrame with Quad and Sprite; optional course-only child"
+    },
+    {
+      "role": "ready",
+      "source": "ScreenGameplay.cpp",
+      "line": 800,
+      "condition": "not demonstration/jukebox",
+      "owned_type": "Transition"
+    },
+    {
+      "role": "go",
+      "source": "ScreenGameplay.cpp",
+      "line": 803,
+      "condition": "not demonstration/jukebox",
+      "owned_type": "Transition"
+    },
+    {
+      "role": "failed",
+      "source": "ScreenGameplay.cpp",
+      "line": 806,
+      "condition": "not demonstration/jukebox",
+      "owned_type": "Transition"
+    }
+  ],
+  "unnamed_identity_limit": "These five native source additions explain the anonymous top-level multiplicity. This observation does not map individual external actor IDs to those roles.",
+  "active_attack_condition": "Native uses FOREACH_VisiblePlayerInfo, whose predicate is Player::HasVisibleParts (a NoteField pointer), rather than enabled-player iteration. The actual capture contains both ActiveAttackListP1 and P2. The independent enabled-player predicate must not be reused without this source distinction.",
+  "independent_cause": "install_top_screen_theme_children declares ten possible names and omits the eleven named native children above plus all five anonymous source additions. GetNumChildren already counts actual owned direct children. Ownership construction, type, descendants, native metrics and ordering need implementation; hardcoded expected counts cannot repair the recursive traversal.",
+  "remaining_work_before_final_attempt": "The song recursively enumerates GetChildren and inspects actor types, textures, text, wrapper state and descendant names. This top-level inventory establishes missing ownership but does not control the complete recursive hierarchy or all remaining ordered-event causes. No final repair is started from parent inventory alone.",
+  "source_sha256": {
+    "itgmania-harness/vendor/itgmania/src/ScreenWithMenuElements.cpp": "88f95ddf0c66f672f3fa79ab26be6925f1dce019b7544a710e9593c60da7e3ba",
+    "itgmania-harness/vendor/itgmania/src/ScreenGameplay.cpp": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+    "itgmania-harness/vendor/itgmania/src/ScreenGameplayNormal.cpp": "29816f59bea20f0c6640d835608466f37f8400de95b731d9660c4ab0f2c6fcaf",
+    "itgmania-harness/vendor/itgmania/src/Player.h": "aae6099628d6b79ba1a4f4753ac004821405ec1efa6f55e537faf53929da9bb4",
+    "itgmania-harness/vendor/itgmania/src/Transition.cpp": "b8262c86c0656fa5c9c31ecbc95db81c0232d60cbb55add41d297a4e3d5e41f9",
+    "itgmania-harness/vendor/simply-love/metrics.ini": "221b449c94e5ed38bbdfb4cee157582f20c85ffa8e234398309768945b370a80",
+    "itgmania-harness/vendor/simply-love/BGAnimations/ScreenWithMenuElements decorations.lua": "d2a818281d38db5afbb064fac49499a2fa55efd8e277e851231120e77a1a873f",
+    "itgmania-harness/vendor/simply-love/BGAnimations/ScreenGameplay toasty.lua": "079a6656e9f3025978c50c57a53c102e5d8656274d1da0534a1a15e0f3381c79",
+    "itgmania-harness/vendor/simply-love/BGAnimations/ScreenGameplay next course song/default.lua": "d06349c6f9a6659360e54367518184055820ea8d6b00f2149cafff4e1249311b",
+    "itgmania-harness/vendor/itgmania/Themes/_fallback/Scripts/02 ActorDef.lua": "e146db352c0328d94e5225b4a7705abb4cc7253b81cf217c2bea3f6f7f7cd093",
+    "deadsync/crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "deadsync/crates/deadsync-song-lua/src/lua_util.rs": "d1f345d4cb58aaa31530bde9326d9644fab4bd16c02c0b4bbfaca4d1673945c2"
+  },
+  "source_bytes_used_as_runtime_expected_data": false,
+  "comparisons_modified": false,
+  "coverage_separate": true,
+  "passing_chart_reopened": false
+}
