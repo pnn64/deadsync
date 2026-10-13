@@ -1,0 +1,51 @@
+{
+  "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+  "position": 185,
+  "scope": "entry diagnostic only; cannot accept an archive; not a whole-chart repair attempt",
+  "original_repair_attempts": 0,
+  "candidate": "/home/parity/jobs/feely-preparation-diagnostic-v1/5be4c12c6a91e1dbf9a0158cc313090e7473cea1f629a393d94df4cf7b407ebe.tar",
+  "candidate_sha256": "5be4c12c6a91e1dbf9a0158cc313090e7473cea1f629a393d94df4cf7b407ebe",
+  "build_proof": "/home/parity/jobs/actor-paths-build-v1/proof.json",
+  "binary_sha256": "ab80853f896e96fcde3099428398a9dddc7e0f75a3646ef99297bc553cd861af",
+  "exit_code": 1,
+  "seconds": 63.94175379400258,
+  "native_frames": 7084,
+  "foreground_tags": [
+    "#FGCHANGES:0.000000=multitap=1.000000=0=0=1;"
+  ],
+  "multitap_archive_members": [],
+  "native_song_sources": {
+    "song:/multitap/default.lua": 1565215
+  },
+  "source_confirmed_cause": "Native RageFile FilenameDB resolves case-insensitively and executes multitap/default.lua from physical Default.lua. Harness root discovery tested only default.lua with is_file(), and archive Lua-reference lookup was also case-sensitive. The generated archive omitted the entry and all multitap Lua dependencies, leaving no foreground for preparation.",
+  "local_references": [
+    "../itgmania-harness/vendor/itgmania/src/ActorUtil.cpp:113",
+    "../itgmania-harness/vendor/itgmania/src/RageUtil_FileDB.cpp:178",
+    "../itgmania-harness/vendor/itgmania/src/RageUtil_FileDB.h:44",
+    "../itgmania-harness/src/song_lua_oracle.rs:56",
+    "../itgmania-harness/src/song_lua_archive.rs:516",
+    "crates/deadsync-song-lua/src/playback/prepare.rs:375"
+  ],
+  "fix_commit": "harness b191ebd",
+  "windows_validation": [
+    {
+      "filter": "song_lua_oracle::tests",
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "filter": "song_lua_archive::tests",
+      "passed": 12,
+      "failed": 0
+    }
+  ],
+  "bounded_repair": {
+    "job": "/home/parity/jobs/feely-case-lua-repair-v1",
+    "attempt": 1,
+    "recapture": false,
+    "repackage_reason": "Missing required Lua files in the original candidate",
+    "native_trace_sha256_must_remain_identical": true,
+    "compares_uncompressed_data": true
+  },
+  "acceptance": "Existing full_song_lua full replay; preparation diagnostic cannot accept a fixture; coverage stays separate"
+}
