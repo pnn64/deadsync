@@ -1,0 +1,499 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "harness b191ebd / deadsync c71e8b4fe",
+  "results": [
+    {
+      "position": 185,
+      "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+      "simfile_sha256": "66db5c1884fb2b633bfd26de2f32825a27f7fd9e8e08a0ae89d1ec4f27b8d645",
+      "status": "pending",
+      "repair_attempts": 1,
+      "previous_failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.0s] : 0 checks completed, 0 failed\n[16.0s] : 0 checks completed, 0 failed\n[18.0s] : 0 checks completed, 0 failed\n[20.0s] : 0 checks completed, 0 failed\n[22.0s] : 0 checks completed, 0 failed\n[24.0s] : 0 checks completed, 0 failed\n[25.2s] replaying every native gameplay frame\n[26.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[28.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n\nthread 'main' (625454) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[30.0s] replaying every native gameplay frame: frame 0/7084 (0.0%)\n[32.0s] replaying every native gameplay frame: frame 0/7084 (0.0%)\n[34.0s] replaying every native gameplay frame: frame 0/7084 (0.0%)\n[36.0s] replaying every native gameplay frame: frame 0/7084 (0.0%)\n",
+      "previous_candidate_sha256": "5be4c12c6a91e1dbf9a0158cc313090e7473cea1f629a393d94df4cf7b407ebe",
+      "trace_sha256": "a1d3409f3031764adf333fe8c368cf52a6a7cf9bde4a9c6a389bff7af8662929",
+      "native_capture_reused": true,
+      "repackage_reason": "Native case-insensitive Lua paths omitted by the old dependency closure",
+      "binary_sha256": "ab80853f896e96fcde3099428398a9dddc7e0f75a3646ef99297bc553cd861af",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "build_proof": "/home/parity/jobs/actor-paths-build-v1/proof.json",
+      "harness_proof": "/home/parity/jobs/case-lua-archive-build-v1/proof.json",
+      "fix_commit": "harness b191ebd / deadsync c71e8b4fe",
+      "candidate": "/home/parity/jobs/feely-case-lua-repair-v1/chart-185/candidates/a9ae3b3944776d2b894c4d24a9fb2a49f331b7e9ce12448202c9c311665fc787.tar",
+      "candidate_sha256": "a9ae3b3944776d2b894c4d24a9fb2a49f331b7e9ce12448202c9c311665fc787",
+      "candidate_seconds": 72.72926601799554,
+      "replay_exit": 2,
+      "replay_seconds": 948.6805354649987,
+      "native_frames": 7084,
+      "replayed_frames": 7084,
+      "compared_stage_fields": 1408,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.rotationx, Actor.rotationy, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: BitmapText, Model, Sprite"
+      ],
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 412569,
+      "concrete_failures": [
+        {
+          "phase": "progress",
+          "seconds": 121.01800537109375,
+          "field": "failed",
+          "native": false,
+          "deadsync": true
+        },
+        {
+          "field": "command_query_count",
+          "native": 412567,
+          "deadsync": 472283
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              0
+            ],
+            "beat": 0,
+            "caller": {
+              "line": 0,
+              "source": "song:/multitap/default.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "results": [
+                {
+                  "description": "Multitaps",
+                  "difficulty": "Difficulty_Challenge",
+                  "index": 5,
+                  "meter": 10,
+                  "song_dir": "song:/",
+                  "steps_type": "StepsType_Dance_Single",
+                  "type": "Steps"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 0,
+            "operation": "GameState.GetCurrentSteps",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 1,
+            "source": "song:/multitap/default.lua",
+            "results": [
+              {
+                "description": "Multitaps",
+                "difficulty": "Difficulty_Challenge",
+                "index": 5,
+                "meter": 10,
+                "song_dir": "song:/",
+                "steps_type": "StepsType_Dance_Single",
+                "type": "Steps"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetCurrentSteps",
+            "source": "song:/multitap/Default.lua",
+            "line": 0,
+            "phase": "construction",
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": [
+              0
+            ],
+            "results": [
+              {
+                "type": "Steps",
+                "song_dir": "song:/",
+                "index": 5,
+                "steps_type": "StepsType_Dance_Single",
+                "difficulty": "Difficulty_Challenge",
+                "description": "Multitaps",
+                "meter": 10
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 0,
+            "caller": {
+              "line": 0,
+              "source": "song:/multitap/default.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "results": [
+                "StepsType_Dance_Single"
+              ]
+            },
+            "kind": "query",
+            "line": 0,
+            "operation": "Steps.GetStepsType",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 2,
+            "source": "song:/multitap/default.lua",
+            "results": [
+              "StepsType_Dance_Single"
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Steps.GetStepsType",
+            "source": "song:/multitap/Default.lua",
+            "line": 0,
+            "phase": "construction",
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": [],
+            "results": [
+              "StepsType_Dance_Single"
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 0,
+            "caller": {
+              "line": 0,
+              "source": "song:/multitap/default.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "results": [
+                {
+                  "song_dir": "song:/",
+                  "type": "Song"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 0,
+            "operation": "GameState.GetCurrentSong",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 3,
+            "source": "song:/multitap/default.lua",
+            "results": [
+              {
+                "song_dir": "song:/",
+                "type": "Song"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetCurrentSong",
+            "source": "song:/multitap/Default.lua",
+            "line": 0,
+            "phase": "construction",
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": [],
+            "results": [
+              {
+                "type": "Song",
+                "song_dir": "song:/"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 0,
+            "caller": {
+              "line": 0,
+              "source": "song:/multitap/default.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "results": [
+                "song:/"
+              ]
+            },
+            "kind": "query",
+            "line": 0,
+            "operation": "Song.GetSongDir",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 4,
+            "source": "song:/multitap/default.lua",
+            "results": [
+              "song:/"
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Song.GetSongDir",
+            "source": "song:/multitap/Default.lua",
+            "line": 0,
+            "phase": "construction",
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": [],
+            "results": [
+              "song:/"
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "beat": 0,
+            "caller": {
+              "line": 0,
+              "source": "song:/multitap/default.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "results": [
+                {
+                  "path": "player-state:PlayerNumber_P1",
+                  "type": "PlayerState"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 0,
+            "operation": "GameState.GetPlayerState",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 6,
+            "source": "song:/multitap/default.lua",
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P1",
+                "type": "PlayerState"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetPlayerState",
+            "source": "song:/multitap/Default.lua",
+            "line": 0,
+            "phase": "construction",
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "results": [
+              {
+                "type": "PlayerState",
+                "path": "player-state:PlayerNumber_P1"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "player-state:PlayerNumber_P1",
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "beat": 0,
+            "caller": {
+              "line": 0,
+              "source": "song:/multitap/default.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "results": [
+                {
+                  "path": "player-state:PlayerNumber_P1/options:ModsLevel_Song",
+                  "type": "PlayerOptions"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 0,
+            "operation": "PlayerState.GetPlayerOptions",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 7,
+            "source": "song:/multitap/default.lua",
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P1/options:ModsLevel_Song",
+                "type": "PlayerOptions"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "PlayerState.GetPlayerOptions",
+            "source": "song:/multitap/Default.lua",
+            "line": 0,
+            "phase": "construction",
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "results": [
+              {
+                "type": "PlayerOptions",
+                "path": "player-state:PlayerNumber_P1/options:ModsLevel_Song"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0003",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 1057,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 57,
+            "source": "song:/multitap/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "InitCommand",
+            "source": "song:/multitap/Default.lua",
+            "line": 1057,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0003",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 1057,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 58,
+            "source": "song:/multitap/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "InitCommand",
+            "source": "song:/multitap/Default.lua",
+            "line": 1057,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0022",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0022",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 1057,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 107,
+            "source": "song:/multitap/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "InitCommand",
+            "source": "song:/multitap/Default.lua",
+            "line": 1057,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0022",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0022",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 1057,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 108,
+            "source": "song:/multitap/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "InitCommand",
+            "source": "song:/multitap/Default.lua",
+            "line": 1057,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        }
+      ],
+      "report_sha256": "168cdbcbad752ab915188f45ffd13ae69429c41add313f1e4852e308cd767a1c"
+    }
+  ],
+  "repair": "Case-insensitive required Lua dependencies; no native recapture",
+  "passed_fixtures": 0,
+  "pending_charts": 1,
+  "processed_charts": 1
+}
