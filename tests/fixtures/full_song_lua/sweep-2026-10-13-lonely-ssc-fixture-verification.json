@@ -1,0 +1,26 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Lonely/Lonely.ssc",
+      "acceptance_commit": "1b0feb2eb37ebe09b89ec46e72b4c12a386c903a",
+      "native_frames": 93048,
+      "replayed_frames": 93048,
+      "compared_stage_fields": 2728,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "2be8be74e06c09d191b8056b5a6e850ff910a10b148784e619dd8a8c7ca5573d.tar.zst",
+      "compressed_sha256": "2be8be74e06c09d191b8056b5a6e850ff910a10b148784e619dd8a8c7ca5573d",
+      "uncompressed_sha256": "168904618cd51ba2aee74126daf1556fae2889e7f0c54a867ba0d4b2a8ae00dc",
+      "compressed_bytes": 12616959,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.smooth, GameState.GetCurrentGame, GameState.GetHumanPlayers, GameState.GetMasterPlayerNumber, GameState.GetSongBPS, PlayerOptions.CMod, PlayerOptions.Dark1, PlayerOptions.Dark2, PlayerOptions.Dark3, PlayerOptions.Dark4, PlayerState.GetSongPosition",
+        "native drawable state/resources: ActorProxy, Quad"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
