@@ -3236,17 +3236,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 07",
+      "title": "Episode 07 Just A Friend To You",
       "source_simfile": "Just a Friend To  You/Just a Friend To  You.ssc",
-      "harness_version": "0.1.0",
-      "archive": "62a7aa6b55a58855174df91c8ead9f4ea60762f6a9bb0c26418b65e0fe0e76c9.tar.zst",
-      "sha256": "62a7aa6b55a58855174df91c8ead9f4ea60762f6a9bb0c26418b65e0fe0e76c9",
-      "compressed_bytes": 5143246,
-      "uncompressed_sha256": "8818a1187a01e1f2061ef96d2c00a2e264fd6623e453d7bfd2621cdd24b2c9af",
-      "compression_level": 22,
-      "aliases": [
-        "c4338f26ff6deb127c2b6d42f9946358c91d41933c3b2023d4f5fd59bdc2a10e.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "2c628286c6b868fdc0d7381ed3dc47843c67d1f5c561160ca0d78fefcfbfc58f.tar.zst",
+      "sha256": "2c628286c6b868fdc0d7381ed3dc47843c67d1f5c561160ca0d78fefcfbfc58f",
+      "compressed_bytes": 9896730,
+      "uncompressed_sha256": "2206ba3466a82ff664c0a428ad754eeaf16a96929ed2337295d1c8deb5a37d84",
+      "aliases": []
     },
     {
       "title": "K-Pop Foxture",

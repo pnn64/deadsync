@@ -3964,6 +3964,57 @@
         }
       ],
       "report_sha256": "e262d84f5f90baf6f7afa78d831c118d19ed9830a8804b552da249e53b96f726"
+    },
+    {
+      "position": 262,
+      "source_simfile": "Just a Friend To  You/Just a Friend To  You.ssc",
+      "simfile_sha256": "3b414c9ff913b21adca9fc0d86123363459ad5ffb9122bf6437b63d8ba567bad",
+      "retained_original_archive": "62a7aa6b55a58855174df91c8ead9f4ea60762f6a9bb0c26418b65e0fe0e76c9.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "4713556073fc219eef2dd0db6fbb496506cdfa4f49c27f62d6427ec63f95ab84",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/fg-filename-build-v1/proof.json",
+      "capture_seconds": 168.16598608701315,
+      "trace_sha256": "77038a6370994531609ab47041faae16fa8eb7affa5c0b62aa4055f9ceff0220",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-262/candidates/2206ba3466a82ff664c0a428ad754eeaf16a96929ed2337295d1c8deb5a37d84.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1196.0737973689975,
+      "candidate_sha256": "2206ba3466a82ff664c0a428ad754eeaf16a96929ed2337295d1c8deb5a37d84",
+      "native_frames": 103852,
+      "replayed_frames": 103852,
+      "compared_stage_fields": 1826,
+      "pending_coverage": [
+        "uncompared song operations: Actor.xy, GameState.GetHumanPlayers, PlayerOptions.Mini",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "8a220a00db6956d335d41534cba645376b0efc067bb559eaa98b01914341dd9b",
+      "archive": "2c628286c6b868fdc0d7381ed3dc47843c67d1f5c561160ca0d78fefcfbfc58f.tar.zst",
+      "archive_sha256": "2c628286c6b868fdc0d7381ed3dc47843c67d1f5c561160ca0d78fefcfbfc58f",
+      "compressed_bytes": 9896730,
+      "pack_seconds": 1.6873746769997524,
+      "harness_version": "0.1.80",
+      "title": "Episode 07 Just A Friend To You",
+      "retained_original_entry": {
+        "title": "Episode 07",
+        "source_simfile": "Just a Friend To  You/Just a Friend To  You.ssc",
+        "harness_version": "0.1.0",
+        "archive": "62a7aa6b55a58855174df91c8ead9f4ea60762f6a9bb0c26418b65e0fe0e76c9.tar.zst",
+        "sha256": "62a7aa6b55a58855174df91c8ead9f4ea60762f6a9bb0c26418b65e0fe0e76c9",
+        "compressed_bytes": 5143246,
+        "uncompressed_sha256": "8818a1187a01e1f2061ef96d2c00a2e264fd6623e453d7bfd2621cdd24b2c9af",
+        "compression_level": 22,
+        "aliases": [
+          "c4338f26ff6deb127c2b6d42f9946358c91d41933c3b2023d4f5fd59bdc2a10e.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -3973,9 +4024,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
-  "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 12,
+  "binary_sha256": "4713556073fc219eef2dd0db6fbb496506cdfa4f49c27f62d6427ec63f95ab84",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "passed_fixtures": 13,
   "pending_charts": 19,
-  "processed_charts": 31
+  "processed_charts": 32
 }
