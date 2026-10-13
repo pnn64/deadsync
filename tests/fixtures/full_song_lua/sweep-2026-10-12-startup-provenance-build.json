@@ -1,0 +1,117 @@
+{
+  "source_fix_commit": "34e1a7ba8",
+  "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
+  "position": 219,
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_trace_sha256": "a29e37ab31bd62f6bd8bc719949da5489f74070e8607cd68273248f3fff2ce3d",
+  "repair_attempts_spent": 1,
+  "final_repair_launched": false,
+  "actual_failure": "The first repair completed every 8419 input frame with 50 mismatches and no Lua errors. Besides the independently fixed hold message, Init/On source names, On clock, and dynamic Set command provenance differed.",
+  "literal_directory_source": {
+    "native_source": "Foreground.cpp:37-43 concatenates SongDir + filename + /default.lua; GREAT GREAT authors ./, so the chunk name contains .//default.lua.",
+    "fix": "Physical file resolution stays separate from the literal requested chunk name. Regression covers directory, directory/, ./ and an explicit Default.lua filename."
+  },
+  "dynamic_command_provenance": {
+    "native_observer": "probe_theme/SongLuaTrace.lua:329-358 and 451-469 wrap Def declaration functions; Actor:addcommand installs later functions without adding that wrapper.",
+    "fix": "Retain actor/name/function registration provenance and snapshot it before dispatch. The dynamic callback runs without invented command events; its direct query is construction, and its nested declared callback still has normal begin/end and callback phase."
+  },
+  "first_input_clock": {
+    "native_source": "ScreenGameplay.cpp:1719 updates song position before Screen::Update(0); Foreground.cpp:92-107 activates On and consumes elapsed music even on that frame.",
+    "retained_input_frames": [
+      {
+        "sequence": 1,
+        "delta": 0,
+        "seconds": -4.492290019989014
+      },
+      {
+        "sequence": 2,
+        "delta": 0.004129999782890081,
+        "seconds": -4.488644123077393
+      }
+    ],
+    "fix": "Defer preparation placeholder Update(0) for recorded replay. Feed every recorded clock frame, including delta zero, through the production gameplay entry point. No native query result, expected timestamp, beat or stage observation initializes runtime state.",
+    "regression": "A live update counter stays zero after preparation, then advances once at the supplied negative clock and once at the next input. The actual engine control activates the -24 foreground at -0.25 seconds on Update(0), before independently resolving a head and hold."
+  },
+  "retained_before_fix_logs": [
+    "startup-provenance-windows-dynamic-before-v1.log",
+    "startup-provenance-windows-live-before-v1.log"
+  ],
+  "windows_checks": [
+    {
+      "log": "startup-provenance-windows-live-v1.log",
+      "passed": 34,
+      "sha256": "b379707aa2e71f4dff89ded2add3fe23d6c1efd3460647db14e65be39e56def5"
+    },
+    {
+      "log": "startup-provenance-windows-native-v3.log",
+      "passed": 21,
+      "sha256": "20ede5833cd984532d970a48d9391d6b3bb73c2dc927fcb6773270c598d0431e"
+    },
+    {
+      "log": "startup-provenance-windows-build-v3.log",
+      "passed": null,
+      "sha256": "924b6f97913bfd4fb2ed4034e7db8b44c6ded9b7e136ea9bb1ddcedb30d2ce47"
+    }
+  ],
+  "windows_gameplay_validation": "Previous 815-passed hold-judgment validation reused; all gameplay source pins are byte-identical.",
+  "linux_checks": [
+    {
+      "label": "gameplay-tests",
+      "exit_code": 0,
+      "seconds": 40.02944525900239,
+      "results": [
+        "test result: ok. 815 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.09s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 204.54282759899797,
+      "results": [
+        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 530 filtered out; finished in 0.63s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 232.76075900701107,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 2.0684044269873993,
+      "results": [
+        "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.31s"
+      ]
+    }
+  ],
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "1110d3a86320d3d077599ccc08371471a532ae5486ee3191090388ee9235e865",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "ccecdf07dae6378a7df8c94152537d0bab63651b2d193a496aaff3a40d2447dd",
+    "crates/deadsync-song-lua/src/live.rs": "1de024f96f95b20f718d8d8cbdce15bbefab5cfd0dc3000754fa28a9fe654eb2",
+    "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+    "crates/deadsync-song-lua/src/lua_util.rs": "984b80cd0f9cfe115f2279b75110b05538833c48fa83a7356de6d9ec371a7d81",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "d6516441dcc76f586cb577537c01a8d8647c2e01e77fa9651c52e3c9f252d613",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "550e88db1af4b38baf2e9c2465729fd1c3cab50ad66dc76a762f464bad9970e7",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+    "crates/deadsync-song-lua/src/lib.rs": "2f1a0e1b3e2cadbc4c5005db6369f5ae6a50994135f2216da556374d9650c19e"
+  },
+  "build_proof": "/home/parity/jobs/startup-provenance-build-v3/proof.json",
+  "binary_sha256": "7f64d791484688206a4eeaf9f264d48cf0de71ac73780fc40226f1f74bb473e8",
+  "retained_tooling_failures": "Build v1 retained an obsolete expected control count and JSON integer/float assertion; v2 retained a stale Cargo test binary caused by workstation/server mtime differences. Windows v2 and engine diagnostic v4 also retained the rejected anomalous 1.4-second first-frame jump. The final control supplies a valid negative clock; build v3 assigns all 22 pinned files host-local mtimes before Cargo and independently verifies 815/34/21. Windows live checks reuse v1 because their source bytes are unchanged.",
+  "acceptance": "Whole replay comparisons unchanged; no passing chart reopened and no acceptance gate added."
+}

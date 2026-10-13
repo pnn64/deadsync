@@ -1,0 +1,9 @@
+{
+  "separate_from_acceptance": true,
+  "acceptance_gate_added": false,
+  "passing_charts_reopened": false,
+  "remaining_coverage": [
+    "Aliases created by passing an existing declaration command function through addcommand are not certified by the newly-created dynamic-function regression.",
+    "Native mine messages, joined hold groups and all TapNote/HoldResult fields remain separate coverage items."
+  ]
+}
