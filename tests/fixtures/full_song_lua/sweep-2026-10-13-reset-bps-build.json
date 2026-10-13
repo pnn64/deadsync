@@ -1,0 +1,288 @@
+{
+  "status": "validated native construction BPS; New Earth final chart repair not yet launched",
+  "source_fix_commit": "76ec2f609c495f809cb012c2759ee6bf937b33f8",
+  "source_diagnoses": [
+    "sweep-2026-10-13-new-earth-reset-bps-diagnosis.json"
+  ],
+  "prior_validated_build": "sweep-2026-10-13-begin-message-build.json",
+  "binary_sha256": "80852434eb3c1dc7c06a2a42523e35674f0b6c663c095b6f16a4ee8b0265adc6",
+  "binary_path": "/home/parity/jobs/reset-bps-green-v1/full-song-lua-stage-modifier-v1",
+  "linux_checks": [
+    {
+      "label": "reset-bps",
+      "exit_code": 0,
+      "seconds": 244.0209714960074,
+      "log_sha256": "5eba6a0280a8f6ab713d2196325f0ab5fc5520fce92c1a83c4749a1a26349391",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 584 filtered out; finished in 0.37s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 32.93364041400491,
+      "log_sha256": "ce0a301ab29dba0628d1c53ba6fa8f5b78972f0882b35f2d73f3c9800ff95c04",
+      "results": [
+        "test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 533 filtered out; finished in 31.88s"
+      ]
+    },
+    {
+      "label": "captured-order-control",
+      "exit_code": 0,
+      "seconds": 1.5141562030185014,
+      "log_sha256": "58e6059c7d9bfb7accced1cfe3321f6667e61a6ea6c351a2bd35120daef7e81a",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 584 filtered out; finished in 0.55s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 250.7724901890033,
+      "log_sha256": "265918a5690f5517870f04d872b8ea7fc491059f5c26ce0872c5ae41acb45c51",
+      "results": [
+        "test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.52s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 51.825473281001905,
+      "log_sha256": "33a87629308abb4e36583cac770f9d1983546ffb39089fb84f91852ce211aff7",
+      "results": []
+    }
+  ],
+  "windows_checks": [
+    {
+      "label": "reset-bps",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "reset-bps-green-v1-windows-reset-bps-v1.log",
+      "sha256": "376c55ff5ee9da63af5e3aaa017dc0b06fef64c57741a7a53cd3abf33f574e8a",
+      "seconds": 398.4087530998513
+    },
+    {
+      "label": "live-controls",
+      "passed": 52,
+      "exit_code": 0,
+      "log": "reset-bps-green-v1-windows-live-controls-v1.log",
+      "sha256": "608cfd6a2948502016bdea5b698b54a8cc2d0b844dbebc8c684e7967e6a34add",
+      "seconds": 30.289698099717498
+    },
+    {
+      "label": "captured-order-control",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "reset-bps-green-v1-windows-captured-order-control-v1.log",
+      "sha256": "d32d86b83fe52f27f8bd78f20db1c6f50993c7bb2ef8055498de7b50b680c96b",
+      "seconds": 2.320460599847138
+    },
+    {
+      "label": "replay-controls",
+      "passed": 26,
+      "exit_code": 0,
+      "log": "reset-bps-green-v1-windows-replay-controls-v1.log",
+      "sha256": "320113d7f01875f4ceef7d06771875fdc6449de2b9619cea1d8ba2f4d610fb2e",
+      "seconds": 219.70512779988348
+    },
+    {
+      "label": "build",
+      "passed": null,
+      "exit_code": 0,
+      "log": "reset-bps-green-v1-windows-build-v1.log",
+      "sha256": "741bb4c30250bd2b8289e880635e12b0c072dee119ad7c6ac56a62f59e0c98ba",
+      "seconds": 17.19373010005802
+    }
+  ],
+  "meaningful_red_controls": {
+    "linux": [
+      {
+        "label": "reset-bps",
+        "exit_code": 101,
+        "expected_failure": true,
+        "log_sha256": "12654dc09cf8a8fa38e62a018b7dc970d80a4e3ff07f1fdfbdd8439cf69a589d",
+        "seconds": 248.5708182749804
+      }
+    ],
+    "windows": [
+      {
+        "label": "reset-bps",
+        "exit_code": 101,
+        "expected_failure": true,
+        "log": "reset-bps-red-v1-windows-reset-bps-v1.log",
+        "log_sha256": "9580fc952888e9920193d50213aeae523f366d2a8f91cc32d595706c3432bb83",
+        "seconds": 416.46508480003104
+      }
+    ]
+  },
+  "isolated_control_edits": {
+    "crates/deadsync-song-lua/src/live.rs": [
+      [
+        "\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn live_screen_begin_reaches_message_commands_only_in_screen_children() {\n        let dir = std::env::temp_dir().join(format!(\"deadsync-live-begin-message-{}\", std::process::id()));\n",
+        "\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn live_initial_song_bps_uses_native_reset_before_timing_update() {\n        for timing_clock in [false, true] {\n            let mut compiled = compile_with_context(&format!(\"reset-bps-{timing_clock}\"), r#\"\nINIT_CLOCKS = {}\nlocal function init(self)\n    INIT_CLOCKS[#INIT_CLOCKS + 1] = {GAMESTATE:GetSongBPS(),\n        GAMESTATE:GetSongPosition():GetCurBPS(), GAMESTATE:GetSongBeat(),\n        GAMESTATE:GetCurMusicSeconds()}\n    self:effectperiod(4.0 / GAMESTATE:GetSongBPS())\nend\nreturn Def.ActorFrame {\n    Def.Sprite {InitCommand = init}, Def.Sprite {InitCommand = init},\n    OnCommand = function(self)\n        self:SetUpdateFunction(function()\n            CLOCK = {GAMESTATE:GetSongBPS(), GAMESTATE:GetSongPosition():GetCurBPS()}\n        end)\n    end,\n}\n\"#, |context| {\n                context.defer_initial_live_update = true;\n                context.song_display_bpms = [135.0; 2];\n                context.song_timing_bpms = vec![(0.0, 135.0), (4.0, 180.0)];\n                if timing_clock {\n                    context.song_timing = Some(deadsync_rules::timing::TimingData::from_segments(\n                        0.0, 0.0, &deadsync_rules::timing::TimingSegments {\n                            bpms: context.song_timing_bpms.clone(), ..Default::default()\n                        }, &[]));\n                }\n            });\n            let mut scene = compiled.live_scene.take().expect(\"owned initial song clock\");\n            let startup = scene.take_startup_output();\n            assert!(startup.errors.is_empty(), \"{:?}\", startup.errors);\n            let clocks = scene.lua.globals().get::<Table>(\"INIT_CLOCKS\").unwrap();\n            assert_eq!(clocks.raw_len(), 2);\n            for clock in clocks.sequence_values::<Table>() {\n                let clock = clock.unwrap();\n                for index in [1, 2] {\n                    assert_eq!(clock.get::<f64>(index).unwrap(), 10.0,\n                        \"live Init sees native SongPosition Reset BPS before first timing update\");\n                }\n                for index in [3, 4] { assert_eq!(clock.get::<f64>(index).unwrap(), 0.0); }\n            }\n            for (beat, seconds, bps) in [(2.25, 1.0, 2.25), (4.75, 2.0277778, 3.0)] {\n                let output = scene.advance(SongLuaLiveFrame { beat, music_seconds: seconds,\n                    screen_seconds: seconds, delta_seconds: 0.01, ..Default::default() }).unwrap();\n                assert!(output.errors.is_empty(), \"{:?}\", output.errors);\n                let clock = scene.lua.globals().get::<Table>(\"CLOCK\").unwrap();\n                for index in [1, 2] { assert_eq!(clock.get::<f64>(index).unwrap(), bps); }\n            }\n        }\n        let lua = mlua::Lua::new();\n        let mut preview = SongLuaCompileContext::new(\".\", \"preview BPS\");\n        preview.song_display_bpms = [135.0; 2];\n        let runtime = crate::create_song_runtime_table(&lua, &preview).unwrap();\n        assert_eq!(runtime.get::<f64>(crate::SONG_LUA_RUNTIME_BPS_KEY).unwrap(), 2.25,\n            \"nonlive preview retains display BPS\");\n    }\n\n    #[test]\n    fn live_screen_begin_reaches_message_commands_only_in_screen_children() {\n        let dir = std::env::temp_dir().join(format!(\"deadsync-live-begin-message-{}\", std::process::id()));\n"
+      ]
+    ]
+  },
+  "isolated_production_edits": {
+    "crates/deadsync-song-lua/src/live.rs": [
+      [
+        "            runtime.set(crate::SONG_LUA_RUNTIME_BPS_KEY, position.bpm / 60.0)?;\n            runtime.set(\"__songlua_freeze\", position.is_in_freeze)?;\n            runtime.set(\"__songlua_delay\", position.is_in_delay)?;\n        }\n        crate::set_compile_song_runtime_delta_values(&self.lua,\n            (beat - self.last_beat) as f32, frame.delta_seconds as f32)?;\n",
+        "            runtime.set(crate::SONG_LUA_RUNTIME_BPS_KEY, position.bpm / 60.0)?;\n            runtime.set(\"__songlua_freeze\", position.is_in_freeze)?;\n            runtime.set(\"__songlua_delay\", position.is_in_delay)?;\n        } else {\n            runtime.set(crate::SONG_LUA_RUNTIME_BPS_KEY, crate::song_bps_at_beat(beat as f32, &self.context))?;\n        }\n        crate::set_compile_song_runtime_delta_values(&self.lua,\n            (beat - self.last_beat) as f32, frame.delta_seconds as f32)?;\n"
+      ]
+    ],
+    "crates/deadsync-song-lua/src/runtime.rs": [
+      [
+        "    table.set(SONG_LUA_RUNTIME_SECONDS_KEY, 0_i64)?;\n    table.set(SONG_LUA_RUNTIME_DELTA_BEAT_KEY, 0_i64)?;\n    table.set(SONG_LUA_RUNTIME_DELTA_SECONDS_KEY, 0_i64)?;\n    table.set(SONG_LUA_RUNTIME_BPS_KEY, song_display_bps(context))?;\n    table.set(SONG_LUA_RUNTIME_RATE_KEY, song_music_rate(context))?;\n    table.set(\"__songlua_freeze\", false)?;\n    table.set(\"__songlua_delay\", false)?;\n",
+        "    table.set(SONG_LUA_RUNTIME_SECONDS_KEY, 0_i64)?;\n    table.set(SONG_LUA_RUNTIME_DELTA_BEAT_KEY, 0_i64)?;\n    table.set(SONG_LUA_RUNTIME_DELTA_SECONDS_KEY, 0_i64)?;\n    // SongPosition::Reset runs before live actors load. Song timing replaces\n    // its native construction BPS on the first gameplay update.\n    table.set(SONG_LUA_RUNTIME_BPS_KEY, if context.live { 10.0 } else { song_display_bps(context) })?;\n    table.set(SONG_LUA_RUNTIME_RATE_KEY, song_music_rate(context))?;\n    table.set(\"__songlua_freeze\", false)?;\n    table.set(\"__songlua_delay\", false)?;\n"
+      ]
+    ]
+  },
+  "control_unchanged_from_meaningful_red": true,
+  "native_load_next_song_resets_position_before_authored_actor_load": true,
+  "live_native_constructor_bps_10_verified": true,
+  "full_clock_and_fallback_bps_updates_verified": true,
+  "nonlive_display_bps_preserved": true,
+  "unchanged_runtime_baseline_verified": {
+    "source": "crates/deadsync-song-lua/src/runtime.rs",
+    "baseline_commit": "0734d61e5c63f18ce447e6d1284a42058d8cc218",
+    "windows_sha256": "f520af148c0beadff9736de4fc9fe9d89d5bb474faac881f0498b6a9b78efb9a",
+    "linux_sha256": "f520af148c0beadff9736de4fc9fe9d89d5bb474faac881f0498b6a9b78efb9a",
+    "normalized_committed_baseline_verified_both_hosts": true
+  },
+  "local_source_pins": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\SongPosition.h",
+      "sha256": "bdbb3a0ebbd0ffb932ce48a4b46720c4472fe2cbe38fd118b6880532f36528a6"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\GameState.cpp",
+      "sha256": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77"
+    },
+    {
+      "path": "C:\\GitHub\\rework\\lua-songs\\new earth\\lua\\default.lua",
+      "sha256": "e54e380437643b6ce566893aaf29764676c1d3727137387685eeca4d6291f21b"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ScreenGameplay.cpp",
+      "sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+      "source_reason": "LoadNextSong resets SongPosition before background and foreground LoadFromSong"
+    }
+  ],
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "frozen_source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "8670cd6bf70ccb2b6a21a3898b94e9dea6816c84723bf626318a64766e1205d1",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "b3b021737261adaaa280c222cc1e4156a1c1ed1b173a0962bbab9f4e834da395",
+    "crates/deadsync-song-lua/src/live.rs": "673dc26e8cb8ae023c9cc386c9f1c06354e5fbc55194d988820d70b05847ceec",
+    "crates/deadsync-song-lua/src/song_tables.rs": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182",
+    "crates/deadsync-song-lua/src/lua_util.rs": "7db2984cb21002d9c5bbe53393ce2150e70beac1b7822902a26925ff34dfd3c7",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "090ee7ef08a554972b5bba9fb72d2bb51d065cd5e324427a9a256e417735c10d",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "97daffd286446f03438c58211da793f27c864401ad0c4e35fc65443b7b44740f",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "6a52092c53d4441b96c609aafc3fdc315fb6d8988ae04d0c3133d5e243651673",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "642ff0d5ed5f9365bdc1c9c54c2353bf293c21b813fdd967bb8511fe52c256bd",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "aacfd41959a6c1795ffd9a3854c25f161dde783d0e40dee8dc1aec5368b06470",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "3d4e4ec033727d60449713937a5dc2506b3d3402d6570f4033a0a3be75e85722",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+    "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+    "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+    "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+    "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+    "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879",
+    "crates/deadsync-song-lua/src/playback/prepare.rs": "67eb64b772ede170e6dfe28158a70d66d7c9cd0246e61479494b4569b5c7ae2d",
+    "crates/deadsync-song-lua/src/theme_colors.rs": "56dccc788960021d78e9fc2c8933ad2d15a5f87830268779b2132e1467010a69",
+    "crates/deadsync-song-lua/src/runtime.rs": "8e3a8101d520d8d21e1c7cd40233e257fefd001a6a911cd8864d0e7539e73567"
+  },
+  "windows_root_source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "f9a66ab7c351f1a934d45e602663e909b02b1c88f10f63991e926539cfb7439c",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "48c2ea7a0c031cb5c4b5cfd72e0e0bcb5ef5c62884916c4883866e74fcdd2a70",
+    "crates/deadsync-song-lua/src/live.rs": "673dc26e8cb8ae023c9cc386c9f1c06354e5fbc55194d988820d70b05847ceec",
+    "crates/deadsync-song-lua/src/song_tables.rs": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182",
+    "crates/deadsync-song-lua/src/lua_util.rs": "7db2984cb21002d9c5bbe53393ce2150e70beac1b7822902a26925ff34dfd3c7",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "090ee7ef08a554972b5bba9fb72d2bb51d065cd5e324427a9a256e417735c10d",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "97daffd286446f03438c58211da793f27c864401ad0c4e35fc65443b7b44740f",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "61ec0b8c848d0ef4a78ebe4e3d19dc9e316e0cd900c1464e5dd2f79904b4dbb2",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "642ff0d5ed5f9365bdc1c9c54c2353bf293c21b813fdd967bb8511fe52c256bd",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "aacfd41959a6c1795ffd9a3854c25f161dde783d0e40dee8dc1aec5368b06470",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "3d4e4ec033727d60449713937a5dc2506b3d3402d6570f4033a0a3be75e85722",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+    "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+    "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+    "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+    "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+    "crates/deadsync-song-lua/src/draw_capture.rs": "9dd81bb6c6f5ae211d7243cba5d070570abf279a0b7c0f9121b689091c2d8594",
+    "crates/deadsync-song-lua/src/playback/prepare.rs": "67eb64b772ede170e6dfe28158a70d66d7c9cd0246e61479494b4569b5c7ae2d",
+    "crates/deadsync-song-lua/src/theme_colors.rs": "56dccc788960021d78e9fc2c8933ad2d15a5f87830268779b2132e1467010a69",
+    "crates/deadsync-song-lua/src/runtime.rs": "8e3a8101d520d8d21e1c7cd40233e257fefd001a6a911cd8864d0e7539e73567"
+  },
+  "source_bundle_sha256": "c5e1f6b5a2215710f508791b4648fa296db6009767bfdcf9516de55e1691ae6c",
+  "native_harness": {
+    "source_sha256": {
+      "src/song_lua_archive.rs": "97cf09add0cec5b48e007a6ac50a46ae423bf684c661f52754f6d5b35086f603",
+      "src/song_lua_oracle.rs": "e0a18b177b501a8bc7feafe0540a929abcc8dbbc66e35c2d7cdd14725a0c282c",
+      "probe_theme/SongLuaTrace.lua": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f"
+    },
+    "checks": [
+      {
+        "label": "oracle-path-tests",
+        "exit_code": 0,
+        "seconds": 26.568072756999754,
+        "results": [
+          "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 199 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "label": "archive-tests",
+        "exit_code": 0,
+        "seconds": 0.8939706840028521,
+        "results": [
+          "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 0.65s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "label": "build",
+        "exit_code": 0,
+        "seconds": 0.18723358200804796,
+        "results": []
+      }
+    ],
+    "binary": "/home/parity/jobs/listed-lua-schema-build-v1/harness",
+    "binary_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "fix_commit": "c283a8a",
+    "native_capture_instrumentation": "Unchanged from byte-verified case-lua-archive-build-v1; only Rust archive collection changed",
+    "acceptance": "Unchanged full-song replay and pack comparisons"
+  },
+  "selection_before": {
+    "build_proof": "/home/parity/jobs/begin-message-green-v1/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "validation_scope": "Use native SongPosition Reset BPS 10 for live construction only, then update ordinary full-clock and fallback segment timing. Preserve nonlive display BPS. Validate the unchanged real Sprite Init construction and timing transition control, all 52 live controls, captured subscriber ordering, all 26 native gameplay controls and both executable builds. Gameplay rules and comparison fields are unchanged.",
+  "chart_repair_attempts_spent": 0,
+  "comparisons_modified": false,
+  "passing_chart_reopened": false
+}
