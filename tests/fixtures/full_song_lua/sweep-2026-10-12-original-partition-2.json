@@ -2765,6 +2765,25 @@
       "capture_exit": 1,
       "capture_seconds": 125.13577945499856,
       "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-1654183-1791863671879384563-0\n"
+    },
+    {
+      "position": 229,
+      "source_simfile": "HOPE/HOPE.ssc",
+      "simfile_sha256": "40320b6ae63e366213e7fbb060fc36beadd09fa2bb33be032bc9177e8a7b023d",
+      "retained_original_archive": "1dbc6fe1a4a00c04b98bb4d3d03fdfdcb4bf44b6f46d87738e2fbff1ff0c3f0d.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "56c7f5ad7480dc190223b46f68cd1f78d172e09431fc49d6eb9a095937789469",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+      "build_proof": "/home/parity/jobs/tap-callback-and-margins-build-v2/proof.json",
+      "capture_seconds": 219.9036380569887,
+      "trace_sha256": "88b20e678a79afd20607bb861bde142f73c817749b04504b84ae23314ceb89d6",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-229/candidates/131158cdb6bad30509de8dd452f771c8b12582c3ad86ea9b37a1fa46d4153919.tar",
+      "replay_exit": 1,
+      "replay_seconds": 36.3360360529914,
+      "candidate_sha256": "131158cdb6bad30509de8dd452f771c8b12582c3ad86ea9b37a1fa46d4153919",
+      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.0s] : 0 checks completed, 0 failed\n[14.5s] replaying every native gameplay frame\n[16.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'HOPE': failed to run actor init commands for '/tmp/.tmpswNxBW/song/default.lua': InitCommand failed for ActorFrame: runtime error: script '/tmp/.tmpswNxBW/song/sm5/modules/eases.lua' not found relative to '/tmp/.tmpswNxBW/song'\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'error'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:32: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:26>\n\t(...tail calls...)\n\t[string \"/tmp/.tmpswNxBW/song/sm5/core/main.lua\"]:17: in main chunk\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:44: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:42>\nstack traceback:\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:44: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:42>\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'HOPE' from '/tmp/.tmpswNxBW/song/default.lua': failed to run actor init commands for '/tmp/.tmpswNxBW/song/default.lua': InitCommand failed for ActorFrame: runtime error: script '/tmp/.tmpswNxBW/song/sm5/modules/eases.lua' not found relative to '/tmp/.tmpswNxBW/song'\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'error'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:32: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:26>\n\t(...tail calls...)\n\t[string \"/tmp/.tmpswNxBW/song/sm5/core/main.lua\"]:17: in main chunk\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:44: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:42>\nstack traceback:\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:44: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:42>\n\n\nthread 'main' (1684281) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[18.0s] replaying every native gameplay frame: frame 0/20574 (0.0%)\n"
     }
   ],
   "scope": {
@@ -2777,6 +2796,6 @@
   "binary_sha256": "56c7f5ad7480dc190223b46f68cd1f78d172e09431fc49d6eb9a095937789469",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 8,
-  "pending_charts": 12,
-  "processed_charts": 20
+  "pending_charts": 13,
+  "processed_charts": 21
 }
