@@ -1,0 +1,363 @@
+{
+  "source_simfile": "jeans/abj.sm",
+  "position": 255,
+  "repair_attempts": 0,
+  "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-255/source-inspection-v1/78e3d3d899ed96cea7df7e3645577348710e0a0b64aaa7b8f6abd58f07ebc92b.tar",
+  "candidate_sha256": "78e3d3d899ed96cea7df7e3645577348710e0a0b64aaa7b8f6abd58f07ebc92b",
+  "native_trace_sha256": "5a3c2b6adc7121a4661f17df9b56ff19289039f0926ea3882e0b4bfe8fe05124",
+  "foreground_root_count": 34,
+  "foreground_root_inputs": [
+    {
+      "actor": "def-0003",
+      "before_seq": 1,
+      "definition_id": "def-0003",
+      "ordinal": 1,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82b3dc70",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0006",
+      "before_seq": 15,
+      "definition_id": "def-0006",
+      "ordinal": 4,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82b45f00",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0009",
+      "before_seq": 29,
+      "definition_id": "def-0009",
+      "ordinal": 7,
+      "parent": "external-0005",
+      "pointer_hex": "60cc81e56bd0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0012",
+      "before_seq": 43,
+      "definition_id": "def-0012",
+      "ordinal": 10,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82aa66d0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0015",
+      "before_seq": 57,
+      "definition_id": "def-0015",
+      "ordinal": 13,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82b13780",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0018",
+      "before_seq": 71,
+      "definition_id": "def-0018",
+      "ordinal": 16,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82b0e930",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0021",
+      "before_seq": 85,
+      "definition_id": "def-0021",
+      "ordinal": 19,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82b09ae0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0024",
+      "before_seq": 99,
+      "definition_id": "def-0024",
+      "ordinal": 22,
+      "parent": "external-0005",
+      "pointer_hex": "60cc828ee6e0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0027",
+      "before_seq": 113,
+      "definition_id": "def-0027",
+      "ordinal": 25,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82a31dd0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0030",
+      "before_seq": 127,
+      "definition_id": "def-0030",
+      "ordinal": 28,
+      "parent": "external-0005",
+      "pointer_hex": "60cc824d99a0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0033",
+      "before_seq": 141,
+      "definition_id": "def-0033",
+      "ordinal": 31,
+      "parent": "external-0005",
+      "pointer_hex": "60cc8279e050",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0036",
+      "before_seq": 155,
+      "definition_id": "def-0036",
+      "ordinal": 34,
+      "parent": "external-0005",
+      "pointer_hex": "60cc81a5bdb0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0039",
+      "before_seq": 169,
+      "definition_id": "def-0039",
+      "ordinal": 37,
+      "parent": "external-0005",
+      "pointer_hex": "60cc8173e4c0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0042",
+      "before_seq": 183,
+      "definition_id": "def-0042",
+      "ordinal": 40,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82ad5b40",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0045",
+      "before_seq": 197,
+      "definition_id": "def-0045",
+      "ordinal": 43,
+      "parent": "external-0005",
+      "pointer_hex": "60cc829f9c70",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0048",
+      "before_seq": 211,
+      "definition_id": "def-0048",
+      "ordinal": 46,
+      "parent": "external-0005",
+      "pointer_hex": "60cc81e07f60",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0051",
+      "before_seq": 225,
+      "definition_id": "def-0051",
+      "ordinal": 49,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82ad0b30",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0054",
+      "before_seq": 239,
+      "definition_id": "def-0054",
+      "ordinal": 52,
+      "parent": "external-0005",
+      "pointer_hex": "60cc8151fce0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0057",
+      "before_seq": 253,
+      "definition_id": "def-0057",
+      "ordinal": 55,
+      "parent": "external-0005",
+      "pointer_hex": "60cc81ad85b0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0060",
+      "before_seq": 267,
+      "definition_id": "def-0060",
+      "ordinal": 58,
+      "parent": "external-0005",
+      "pointer_hex": "60cc81fa71d0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0063",
+      "before_seq": 281,
+      "definition_id": "def-0063",
+      "ordinal": 61,
+      "parent": "external-0005",
+      "pointer_hex": "60cc81c7e150",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0066",
+      "before_seq": 295,
+      "definition_id": "def-0066",
+      "ordinal": 64,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82822360",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0069",
+      "before_seq": 309,
+      "definition_id": "def-0069",
+      "ordinal": 67,
+      "parent": "external-0005",
+      "pointer_hex": "60cc828e65d0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0072",
+      "before_seq": 323,
+      "definition_id": "def-0072",
+      "ordinal": 70,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82b47620",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0075",
+      "before_seq": 337,
+      "definition_id": "def-0075",
+      "ordinal": 73,
+      "parent": "external-0005",
+      "pointer_hex": "60cc829c3270",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0078",
+      "before_seq": 351,
+      "definition_id": "def-0078",
+      "ordinal": 76,
+      "parent": "external-0005",
+      "pointer_hex": "60cc8272bee0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0081",
+      "before_seq": 365,
+      "definition_id": "def-0081",
+      "ordinal": 79,
+      "parent": "external-0005",
+      "pointer_hex": "60cc81a6fdf0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0084",
+      "before_seq": 379,
+      "definition_id": "def-0084",
+      "ordinal": 82,
+      "parent": "external-0005",
+      "pointer_hex": "60cc829e06c0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0087",
+      "before_seq": 393,
+      "definition_id": "def-0087",
+      "ordinal": 85,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82b49390",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0090",
+      "before_seq": 407,
+      "definition_id": "def-0090",
+      "ordinal": 88,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82b11d50",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0093",
+      "before_seq": 421,
+      "definition_id": "def-0093",
+      "ordinal": 91,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82b9a1c0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0096",
+      "before_seq": 435,
+      "definition_id": "def-0096",
+      "ordinal": 94,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82bb7cc0",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0099",
+      "before_seq": 449,
+      "definition_id": "def-0099",
+      "ordinal": 97,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82bd6b90",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0102",
+      "before_seq": 463,
+      "definition_id": "def-0102",
+      "ordinal": 100,
+      "parent": "external-0005",
+      "pointer_hex": "60cc82bf5210",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    }
+  ],
+  "total_neutral_creation_inputs": 102,
+  "capture_reused": true,
+  "original_capture_and_candidate_byte_verified": true,
+  "native_stage_and_callback_results_used_to_seed_gameplay": false,
+  "source_fix_commit": "be2565b8d524cdb0bee87facfd37fc0d5dd4300a",
+  "source_fix": "native_creation_order_for_entries now gives each separately constructed foreground root its own prepared slot after the background entries; descendants keep parent-specific child paths.",
+  "regressions": "Existing native controls include two independent foreground allocations using the same definition IDs, background slot offsets, independent descendant ownership, and changed callback observations that cannot affect allocation paths.",
+  "native_source": "Pinned ITGmania Foreground.cpp LoadFromSong allocates every foreground change independently; no deduplication by filename.",
+  "original_failure": "multiple native foreground entries need entry-specific ownership",
+  "repair_launched": false,
+  "acceptance_unchanged": true,
+  "passing_charts_reopened": false
+}
