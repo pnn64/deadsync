@@ -1,0 +1,250 @@
+{
+  "source_fix_commits": [
+    "9e0511014",
+    "8f91878dc",
+    "b29bff67c"
+  ],
+  "foreground_control_commit": "5e84abcd4",
+  "proof": "/home/parity/jobs/tap-callback-and-margins-build-v2/proof.json",
+  "binary": "/home/parity/jobs/tap-callback-and-margins-build-v2/full-song-lua-stage-modifier-v1",
+  "binary_sha256": "56c7f5ad7480dc190223b46f68cd1f78d172e09431fc49d6eb9a095937789469",
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "b7290301b41472a87236fe90399893048b4711d332c1d157f8ce30de74ded4a1",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "ccecdf07dae6378a7df8c94152537d0bab63651b2d193a496aaff3a40d2447dd",
+    "crates/deadsync-song-lua/src/live.rs": "dcb81a8286fa799cbc613e32f9d14e948a8ce7f8881cdac69f1507b0db91b6c1",
+    "crates/deadsync-song-lua/src/song_tables.rs": "3af70eef6c3e9b53eae43811a8a641dc1d8e3e9648a053ca8678302463732e19",
+    "crates/deadsync-song-lua/src/lua_util.rs": "3c3a417f11402f896b639fd42baacbb051748448f1371aed264ab69aa66b7b2b",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "52a1a400f480fc41a03c2bf963f6c31a333ccdc19158e9a262b15e626b907b5f",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "04dabfa7e50c1426aae3b5cb55395d86032d4f4b69e9b453599c82f587f596dd",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "fda6b4c90dadc3be5765b7a32a2adf1a70a15936b8983c63411b4a15bd0943a5",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "8d71ce3a02f666210fa9ea2b50d6ce7b41e625f4a952adff105b3f4022ad401e",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "a77c10452e9426f81c4c9f7b90d33092b6c6819fcf9bbb2b1f446a59528abb43",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "d78b38def14129c9db5898fa7c6fe216e2037d44fb84d1a8f9d4c7050edc2b74",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305"
+  },
+  "linux_checks": [
+    {
+      "label": "gameplay-tap-control",
+      "exit_code": 0,
+      "seconds": 0.5065124190005008,
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 815 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "player-margin-control",
+      "exit_code": 0,
+      "seconds": 0.6823024780023843,
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-tests",
+      "exit_code": 0,
+      "seconds": 0.7002054909971775,
+      "results": [
+        "test result: ok. 18 passed; 0 failed; 1 ignored; 0 measured; 251 filtered out; finished in 0.02s"
+      ]
+    },
+    {
+      "label": "cache-control",
+      "exit_code": 0,
+      "seconds": 0.6854994029999943,
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 269 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "stage-test",
+      "exit_code": 0,
+      "seconds": 1.2655267700029071,
+      "results": [
+        "test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 530 filtered out; finished in 0.53s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 62.897895920003066,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.2074127070081886,
+      "results": [
+        "test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.30s"
+      ]
+    }
+  ],
+  "windows_checks": [
+    {
+      "label": "engine dispatch and return conversions",
+      "passed": 2,
+      "failed": 0,
+      "log": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\windows-note-field-tap-v1.log"
+    },
+    {
+      "label": "retained live scenes",
+      "passed": 32,
+      "failed": 0,
+      "log": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\windows-note-field-tap-live-v1.log"
+    },
+    {
+      "label": "replay controls at tap callback commit",
+      "passed": 19,
+      "failed": 0,
+      "log": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\windows-note-field-tap-controls-v1.log"
+    },
+    {
+      "label": "foreground callback ordering and latest replay controls",
+      "passed": 19,
+      "failed": 0,
+      "log": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\windows-note-field-tap-native-v8.log"
+    },
+    {
+      "label": "native integer margins",
+      "passed": 1,
+      "failed": 0,
+      "log": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\windows-player-margin-control-v1.log"
+    },
+    {
+      "label": "song parser tests",
+      "passed": 18,
+      "failed": 0,
+      "log": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\windows-ssc-description-v3.log"
+    },
+    {
+      "label": "old cache rejection",
+      "passed": 1,
+      "failed": 0,
+      "log": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\windows-ssc-description-cache-v1.log"
+    }
+  ],
+  "native_pins": {
+    "itgmania": "5c737928d93778c2c9f68e276052b220b43a468f",
+    "simply_love": "dd06138b15492f4136796dfe4b6708ced0f7b9eb"
+  },
+  "source_evidence": [
+    {
+      "file": "../itgmania-harness/vendor/itgmania/src/NoteField.cpp",
+      "line": 1223,
+      "behavior": "The engine invokes the callback synchronously before the ghost, with one-based column, TapNoteScore and brightness, and honors three optional return values."
+    },
+    {
+      "file": "../itgmania-harness/vendor/itgmania/src/EnumHelper.h",
+      "line": 142,
+      "behavior": "Returned scores accept exact enum strings, legacy short names case-insensitively, or numeric enum values."
+    },
+    {
+      "file": "../itgmania-harness/vendor/itgmania/src/Player.cpp",
+      "line": 3019,
+      "behavior": "Completed tap rows dispatch NoteField events; the unsigned bright threshold uses combo or Blind. Mine events at line 2943 remain dim."
+    },
+    {
+      "file": "../itgmania-harness/vendor/simply-love/metrics.ini",
+      "line": 2309,
+      "behavior": "Player BrightGhostComboThreshold is -1, compared unsigned by Player.cpp."
+    },
+    {
+      "file": "../itgmania-harness/vendor/itgmania/Themes/_fallback/Scripts/03 Gameplay.lua",
+      "line": 41,
+      "behavior": "GameplayMargins derives outer and combined center margins using fake style width 272 and the Simply Love X metrics."
+    },
+    {
+      "file": "../itgmania-harness/vendor/itgmania/src/GameplayHelpers.cpp",
+      "line": 46,
+      "behavior": "SafeFArg truncates the outer margins and combined center margin before splitting the latter in half."
+    },
+    {
+      "file": "../itgmania-harness/vendor/itgmania/src/LuaManager.h",
+      "line": 276,
+      "behavior": "SafeFArg returns int despite its name."
+    },
+    {
+      "file": "../itgmania-harness/vendor/itgmania/src/ScreenGameplay.cpp",
+      "line": 605,
+      "behavior": "The actual Player position uses the converted margins. At width 854, P1 is 213.25 and P2 is 640.75."
+    },
+    {
+      "file": "../itgmania-harness/vendor/itgmania/src/NotesLoaderSSC.cpp",
+      "line": 304,
+      "behavior": "Modern SSC descriptions use ASCII-only Trim. Before version 0.74 DESCRIPTION names the chart instead."
+    }
+  ],
+  "regressions": [
+    "A callback runs before visual masking and every same-column ghost, remapping score, column and brightness.",
+    "Suppressing a mine ghost does not suppress its original hit sound.",
+    "Optional Lua returns follow native numeric, enum and boolean conversions independently.",
+    "Production gameplay autoplay invokes the retained Lua callback before Actor Update, feeds the current song clock and stage stats, and the new foreground tween consumes that frame delta.",
+    "Player margins cover cabinet sides, two players, centered single/double play, four widths and the authored field offset.",
+    "File and memory SSC parsing preserve non-ASCII description whitespace and escaped colon, keep independent credit/name fields and retain legacy description handling. Cache version 65 invalidates old metadata."
+  ],
+  "retained_validation_failures": {
+    "tap_callback_controls": [
+      "../itgmania-harness/target/server-parity/windows-note-field-tap-native-v1.log",
+      "../itgmania-harness/target/server-parity/windows-note-field-tap-native-v2.log",
+      "../itgmania-harness/target/server-parity/windows-note-field-tap-native-v3.log",
+      "../itgmania-harness/target/server-parity/windows-note-field-tap-native-v4.log"
+    ],
+    "corrections": "Missing test imports were fixed. The judgment input uses its independently computed note time (508ms with the production sync offset), rather than the earlier synthetic 500ms input.",
+    "parser_fixture_logs": [
+      "../itgmania-harness/target/server-parity/windows-ssc-description-v1.log",
+      "../itgmania-harness/target/server-parity/windows-ssc-description-v2.log"
+    ],
+    "parser_fixture_correction": "The regression now uses ordinary per-line SSC metadata and a single-line DESCRIPTION as in the failing chart.",
+    "full_disk_log": "../itgmania-harness/target/server-parity/windows-player-margin-v1.log",
+    "disk_recovery": "NTFS compressed the rebuildable incremental cache without deleting files. 17052995918 logical bytes occupy 9221651897 bytes.",
+    "broader_profile_suite": {
+      "log": "../itgmania-harness/target/server-parity/windows-player-margin-v2.log",
+      "passed": 17,
+      "failed": 2,
+      "baseline": {
+        "baseline_commit": "9e0511014",
+        "restored_file": "crates/deadsync-profile-gameplay/src/lib.rs",
+        "checks": [
+          {
+            "test": "transform_ease_fixture_reaches_runtime_windows",
+            "exit_code": 101,
+            "unchanged_error": "attempt to index global 'ease'",
+            "log": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\windows-player-margin-baseline-transform_ease_fixture_reaches_runtime_windows.log"
+          },
+          {
+            "test": "riddle_option_writes_keep_swaps_discrete_and_merge_gradual",
+            "exit_code": 101,
+            "unchanged_error": "attempt to index a number value",
+            "log": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\windows-player-margin-baseline-riddle_option_writes_keep_swaps_discrete_and_merge_gradual.log"
+          }
+        ],
+        "source_restored_sha256": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68"
+      },
+      "scope": "Both unchanged Lua fixture failures reproduce with the pre-margin lib.rs; the margin regression passes. They do not call the modified position helper."
+    },
+    "chart_repairs_consumed_by_validation": 0
+  },
+  "validation_scope_correction": "Revision 1 animated NoteField itself. Player.cpp:911 updates that actor subtree before judging. Revision 2 animates an owned foreground actor, matching the affected custom explosions. Foreground.cpp:70-122 advances it by the music-position delta. The corrected control retains the foreground with an initial sleep and uses successive input clocks 100ms apart, then observes its 250ms pulse after the native 100ms music delta.",
+  "windows_final_control": {
+    "log": "../itgmania-harness/target/server-parity/windows-note-field-tap-native-v8.log",
+    "passed": 19,
+    "failed": 0,
+    "build_config": "profile.dev.package.deadsync.debug=0 avoids the incidental application PDB link limit.",
+    "retained_logs": [
+      "../itgmania-harness/target/server-parity/windows-note-field-tap-native-v6.log",
+      "../itgmania-harness/target/server-parity/windows-note-field-tap-native-v7.log"
+    ]
+  },
+  "retained_unselected_revision_1_proof": "/home/parity/jobs/tap-callback-and-margins-build-v1/proof.json",
+  "bounded_repair_plan": {
+    "Flowers [Cringle Desolation]/Flowers.ssc": "Final attempt 2 on its unchanged retained capture.",
+    "FTW/FTW.ssc": "First attempt 1 on its unchanged retained capture.",
+    "feelyourtouch e.d.e.n/feelyourtouch eden.ssc": "Final attempt withheld while the early failed observation remains unresolved."
+  },
+  "acceptance": "Existing full_song_lua whole replay comparisons unchanged; coverage stays separate"
+}
