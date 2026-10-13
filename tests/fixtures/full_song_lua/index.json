@@ -2680,15 +2680,12 @@
     {
       "title": "Girls MIA",
       "source_simfile": "Girls MIA/girlsmia-fakemines.sm",
-      "harness_version": "0.1.0",
-      "archive": "4a10e51819601a4617d8758c2d1e747e520a3e4e3a5efa19f7641a54959d294a.tar.zst",
-      "sha256": "4a10e51819601a4617d8758c2d1e747e520a3e4e3a5efa19f7641a54959d294a",
-      "compressed_bytes": 71567,
-      "uncompressed_sha256": "f661fd16504c14d23e05920ed4a7b4c05f5358362211d947d1ea1ce2cc714d1c",
-      "compression_level": 22,
-      "aliases": [
-        "3e9e7b27ad34fc2ed230a24f4f61942ed2a740de7c28fd62b7b181b0914ec500.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "46d882db8903f4988ff5cae946fb6eef9a5489e3543893502c1c40bbe9ba0f80.tar.zst",
+      "sha256": "46d882db8903f4988ff5cae946fb6eef9a5489e3543893502c1c40bbe9ba0f80",
+      "compressed_bytes": 15705746,
+      "uncompressed_sha256": "957d12c4dd35db83daee27c9fb6ae53dda4417e2cbc8bd8a6c36280b0b49722b",
+      "aliases": []
     },
     {
       "title": "Girls MIA",
