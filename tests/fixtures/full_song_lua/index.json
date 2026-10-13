@@ -3584,17 +3584,14 @@
       ]
     },
     {
-      "title": "ロウワー",
+      "title": "ロウワー [Tier 3]",
       "source_simfile": "Lower/Lower.ssc",
-      "harness_version": "0.1.0",
-      "archive": "b519752a2a57dd6ae6d278842a52a573b0f0325a6486fff479b0b2cb442b2337.tar.zst",
-      "sha256": "b519752a2a57dd6ae6d278842a52a573b0f0325a6486fff479b0b2cb442b2337",
-      "compressed_bytes": 63852,
-      "uncompressed_sha256": "aaa1d63574cc46fcc60b9c0b2cddbae8ccd152f420c065422c99a5607a0d6d61",
-      "compression_level": 22,
-      "aliases": [
-        "d56a637724fe785bdb96503bb23440d48689b917a9e6a6e76f125296da6536e5.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b3fd3ed82ed17fb6405efb027841dfe87e904415c5cf2dc0c93286135793fde2.tar.zst",
+      "sha256": "b3fd3ed82ed17fb6405efb027841dfe87e904415c5cf2dc0c93286135793fde2",
+      "compressed_bytes": 4533525,
+      "uncompressed_sha256": "f1271a8a4f616e75a8e996633466923058c0c85c7941d4d73150e37010826e0b",
+      "aliases": []
     },
     {
       "title": "Loyal Divide",

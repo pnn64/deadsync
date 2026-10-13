@@ -8076,6 +8076,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 290,
+      "source_simfile": "Lower/Lower.ssc",
+      "simfile_sha256": "8b86f76809bc27f0a5ec3ad7d29cd08cf52c5932904bcf5fe02428ca58ba700c",
+      "retained_original_archive": "b519752a2a57dd6ae6d278842a52a573b0f0325a6486fff479b0b2cb442b2337.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "b370854d414e700640d93484aa612dcdc931af280acf17ee8b30e35b7fd82f7d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/screen-loading-build-v1/proof.json",
+      "capture_seconds": 120.74954158499895,
+      "trace_sha256": "22b7849c890e31e486cbec52515997743d6d89b85c1a3df5b1165205e1625ec9",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-290/candidates/f1271a8a4f616e75a8e996633466923058c0c85c7941d4d73150e37010826e0b.tar",
+      "replay_exit": 0,
+      "replay_seconds": 625.883326775991,
+      "candidate_sha256": "f1271a8a4f616e75a8e996633466923058c0c85c7941d4d73150e37010826e0b",
+      "native_frames": 65040,
+      "replayed_frames": 65040,
+      "compared_stage_fields": 1232,
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Beat, PlayerOptions.Dark, PlayerOptions.Flip, PlayerOptions.Tiny"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "27fe0004e4265c0bc1e1e5af5fbfe5983dad61fdf7ac5c5dae6b61748fa7b864",
+      "archive": "b3fd3ed82ed17fb6405efb027841dfe87e904415c5cf2dc0c93286135793fde2.tar.zst",
+      "archive_sha256": "b3fd3ed82ed17fb6405efb027841dfe87e904415c5cf2dc0c93286135793fde2",
+      "compressed_bytes": 4533525,
+      "pack_seconds": 4.08085370399931,
+      "harness_version": "0.1.80",
+      "title": "ロウワー [Tier 3]",
+      "retained_original_entry": {
+        "title": "ロウワー",
+        "source_simfile": "Lower/Lower.ssc",
+        "harness_version": "0.1.0",
+        "archive": "b519752a2a57dd6ae6d278842a52a573b0f0325a6486fff479b0b2cb442b2337.tar.zst",
+        "sha256": "b519752a2a57dd6ae6d278842a52a573b0f0325a6486fff479b0b2cb442b2337",
+        "compressed_bytes": 63852,
+        "uncompressed_sha256": "aaa1d63574cc46fcc60b9c0b2cddbae8ccd152f420c065422c99a5607a0d6d61",
+        "compression_level": 22,
+        "aliases": [
+          "d56a637724fe785bdb96503bb23440d48689b917a9e6a6e76f125296da6536e5.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -8099,9 +8149,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "e1e574aa62e36912260a8bcf656514c334db73a3cf6188c0d21242b688406793",
+  "binary_sha256": "b370854d414e700640d93484aa612dcdc931af280acf17ee8b30e35b7fd82f7d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 17,
+  "passed_fixtures": 18,
   "pending_charts": 42,
-  "processed_charts": 59
+  "processed_charts": 60
 }
