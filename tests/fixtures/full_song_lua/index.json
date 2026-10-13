@@ -3017,15 +3017,12 @@
     {
       "title": "Impulse",
       "source_simfile": "Impulse/impulse.sm",
-      "harness_version": "0.1.0",
-      "archive": "39768cac5a58e3432b0f4b2bf8af2ec4ab4a2fdc5187b67b5e01555afa609dda.tar.zst",
-      "sha256": "39768cac5a58e3432b0f4b2bf8af2ec4ab4a2fdc5187b67b5e01555afa609dda",
-      "compressed_bytes": 2254738,
-      "uncompressed_sha256": "c561c8159356c449e868578d9f78d7383975a5b6ee7e9820590c4eb406d533d6",
-      "compression_level": 22,
-      "aliases": [
-        "005f2941257f415294123077461e43657d2da033bea44eb076492b1418c4c400.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "282ed14b580c66d51ab533abda29e2291ff297742acb493d0fb31aeabf4c70b6.tar.zst",
+      "sha256": "282ed14b580c66d51ab533abda29e2291ff297742acb493d0fb31aeabf4c70b6",
+      "compressed_bytes": 14025628,
+      "uncompressed_sha256": "22a93ce3af5e412a02225b9840a7ed00c5bd78ec4e24ebe2e4139432de4eb74c",
+      "aliases": []
     },
     {
       "title": "Impulse",
