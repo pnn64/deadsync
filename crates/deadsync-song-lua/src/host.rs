@@ -878,7 +878,11 @@ pub fn install_screen_manager_globals(
     screenman.set(
         "GetTopScreen",
         lua.create_function(move |lua, _args: MultiValue| {
-            lua.globals().raw_get::<Value>("__songlua_top_screen")
+            if lua.globals().raw_get::<Option<bool>>("__songlua_screen_loading")?.unwrap_or(false) {
+                Ok(Value::Nil)
+            } else {
+                lua.globals().raw_get::<Value>("__songlua_top_screen")
+            }
         })?,
     )?;
     screenman.set(

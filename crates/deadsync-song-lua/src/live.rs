@@ -1654,6 +1654,55 @@ end }
     }
 
     #[test]
+    fn live_loading_screen_is_unavailable_until_begin() {
+        for loading in [false, true] {
+            let mut compiled = compile_with_context(if loading { "loading-screen" } else { "active-screen" }, r#"
+CONSTRUCTION_TOP = SCREENMAN:GetTopScreen()
+return Def.ActorFrame {
+    InitCommand = function(self)
+        INIT_TOP = SCREENMAN:GetTopScreen()
+        INIT_PARENT_SCREEN = self:GetParent():GetParent()
+    end,
+    BeginCommand = function(self) BEGIN_TOP = SCREENMAN:GetTopScreen() end,
+    OnCommand = function(self)
+        ON_TOP = SCREENMAN:GetTopScreen()
+        self:aux(17)
+    end,
+    EndCommand = function(self) END_TOP = SCREENMAN:GetTopScreen() end,
+}
+"#, |context| {
+                context.screen_loading = loading;
+                context.defer_initial_live_update = true;
+                context.layer_start_beats = vec![0.0];
+            });
+            let mut scene = compiled.live_scene.take().expect("screen lifecycle scene");
+            let globals = scene.lua.globals();
+            let screen = globals.raw_get::<Table>("__songlua_top_screen").unwrap();
+            for name in ["CONSTRUCTION_TOP", "INIT_TOP"] {
+                let top = globals.raw_get::<Option<Table>>(name).unwrap();
+                if loading {
+                    assert!(top.is_none(), "{name} must not expose a screen before it is pushed");
+                } else {
+                    assert_eq!(top.unwrap().to_pointer(), screen.to_pointer());
+                }
+            }
+            assert_eq!(globals.raw_get::<Table>("INIT_PARENT_SCREEN").unwrap().to_pointer(), screen.to_pointer(),
+                "the loading screen owns its actors before it becomes the top screen");
+            assert_eq!(globals.raw_get::<Table>("BEGIN_TOP").unwrap().to_pointer(), screen.to_pointer());
+            let output = scene.advance(SongLuaLiveFrame {
+                music_seconds: 0.1, beat: 0.1, screen_seconds: 0.1, delta_seconds: 0.1,
+                ..Default::default()
+            }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            assert_eq!(globals.raw_get::<Table>("ON_TOP").unwrap().to_pointer(), screen.to_pointer());
+            assert_eq!(scene.states()[0].aux, 17.0);
+            scene.end().unwrap();
+            assert!(globals.raw_get::<Option<Table>>("END_TOP").unwrap().is_none(),
+                "ScreenManager pops the screen before End");
+        }
+    }
+
+    #[test]
     fn live_rec_print_table_handles_owned_actor_values_and_depth() {
         let mut compiled = compile_with_context("recursive-debug-table", r#"
 return Def.ActorFrame {

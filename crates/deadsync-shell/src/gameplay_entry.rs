@@ -222,6 +222,7 @@ pub fn song_lua_context(
     );
     context.random_seed = random_seed;
     context.live = live;
+    context.screen_loading = live;
     let mut timings = deadsync_simfile::app_runtime::load_chart_timings(song, config.global_offset_seconds)?;
     let sync_offset = if config.machine_pack_ini_offsets {
         deadsync_chart::song::sync_pref_offset(

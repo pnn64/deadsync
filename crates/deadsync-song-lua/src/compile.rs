@@ -300,6 +300,8 @@ where
     let (root, screen_layer_states, mut captured_startup, initialized_global_actions,
         initialized_global_perframes, initialized_global_mods, initialized_global_mod_eases) = loop {
         let context = &scene_context;
+        lua.globals().raw_set("__songlua_screen_loading", context.screen_loading)
+            .map_err(|err| err.to_string())?;
         #[cfg(feature = "test-support")]
         if let Some(mut capture) = lua.app_data_mut::<crate::song_tables::SongLuaSkinWrites>() {
             capture.active = true;
@@ -427,6 +429,9 @@ where
         let root = Value::Table(roots);
         // Startup queues and the initial update can consume one-shot broadcasts
         // before the sampled replay starts. Retain their events as well.
+        // PushLoadedScreen makes the initialized screen visible to Begin.
+        lua.globals().raw_set("__songlua_screen_loading", false)
+            .map_err(|err| err.to_string())?;
         crate::lua_util::begin_overlay_update_capture_from_indices(&lua, std::iter::empty());
         let captured_startup = run_actor_startup_commands(&lua, &root, initial_actor_states, context)
             .map_err(|err| {

@@ -1423,6 +1423,10 @@ pub struct SongLuaCompileContext {
     /// Let the caller supply the first live Update(0) clock after preparation.
     /// Recorded gameplay replay uses this instead of a placeholder clock.
     pub defer_initial_live_update: bool,
+    /// Load a gameplay screen before it is pushed onto SCREENMAN's stack.
+    /// Construction and Init see no top screen; Begin sees the loaded screen.
+    /// Standalone actor compilation uses its already active host by default.
+    pub screen_loading: bool,
     /// Session entry paths list backgrounds first, then foregrounds.
     /// A single-entry compile defaults to the foreground layer.
     pub background_layer_count: usize,
@@ -1484,6 +1488,7 @@ impl SongLuaCompileContext {
             foreground_names: Vec::new(),
             live: false,
             defer_initial_live_update: false,
+            screen_loading: false,
             song_dir: song_dir.into(),
             main_title: main_title.into(),
             song_display_bpms: [60.0, 60.0],
