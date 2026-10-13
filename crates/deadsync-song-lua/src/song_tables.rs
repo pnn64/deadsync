@@ -600,7 +600,7 @@ fn create_player_state_table(
     player_index: usize,
     song_runtime: &Table,
 ) -> mlua::Result<(Table, [Table; 4])> {
-    let controller = if player.enabled {
+    let controller = if player.enabled && player.autoplay == 0.0 {
         "PlayerController_Human"
     } else {
         "PlayerController_Autoplay"
@@ -619,7 +619,10 @@ fn create_player_state_table(
     ];
     let song_position = create_song_position_table(lua, song_runtime)?;
     let table = lua.create_table()?;
-    set_string_method(lua, &table, "GetPlayerController", controller)?;
+    table.set("GetPlayerController", lua.create_function(move |lua, _args: MultiValue| {
+        Ok(crate::live::player_autoplay(lua, player_index).map_or(controller, |autoplay|
+            if autoplay { "PlayerController_Autoplay" } else { "PlayerController_Human" }))
+    })?)?;
     table.set("GetHealthState", lua.create_function(move |lua, _args: MultiValue| {
         Ok(crate::live::player_health_state(lua, player_index).unwrap_or(health_state))
     })?)?;

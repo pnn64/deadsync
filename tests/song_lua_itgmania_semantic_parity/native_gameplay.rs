@@ -791,6 +791,7 @@ return Def.ActorFrame {
     end,
     JudgmentMessageCommand = function(_, params)
         assert(params.Player == PLAYER_1 and params.FirstTrack == 0)
+        assert(IsAutoplay(params.Player))
         if params.HoldNoteScore then
             assert(params.HoldNoteScore == 'HoldNoteScore_Held' and params.NumTracks == 4)
             assert(params.TapNoteScore == 'TapNoteScore_W1' and params.Notes == nil)
@@ -809,6 +810,11 @@ return Def.ActorFrame {
         player:SetLife(0.125)
         judgments = judgments + 1
         MESSAGEMAN:Broadcast('EngineJudgment', {judgments=judgments})
+    end,
+    OffCommand = function(self)
+        assert(not IsAutoplay(PLAYER_1))
+        assert(stats:GetFailed())
+        MESSAGEMAN:Broadcast('EngineOff', {music=GAMESTATE:GetCurMusicSeconds()})
     end,
 }
 "#).unwrap();
@@ -908,6 +914,24 @@ return Def.ActorFrame {
         assert_eq!(held.source_broadcasts.iter().filter(|event| event.name == "EngineHold").count(), 1);
         assert_eq!(state.gameplay.players_runtime.players[0].life, 0.0625,
             "completed native hold judgments also reach the retained VM during autoplay");
+        state.set_live_autoplay_enabled(false);
+        let end = state.gameplay.music_end_time_ns();
+        for (index, music) in [end, end + 100_000_000, end + 200_000_000].into_iter().enumerate() {
+            gameplay::update(&mut state, 0.1, GameplayAudioSnapshot {
+                stream_clock: GameplayStreamClockSnapshot { music_nanos: music,
+                    has_music_mapping: true, valid_at_host_nanos: 2_000_000_000 + index as u64 * 100_000_000,
+                    ..Default::default() }, ..Default::default()
+            }, || 2_000_000_000, &mut effects);
+            let output = state.take_song_lua_output();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            let offs: Vec<_> = output.source_broadcasts.iter().filter(|event| event.name == "EngineOff").collect();
+            assert_eq!(offs.len(), usize::from(index == 1), "Off runs on LeaveGameplay, after one actor update");
+            assert_eq!(state.gameplay.players_runtime.players[0].stage_failed, index >= 1,
+                "the actual overlay Off writes shared Core failure after the exit decision");
+            if let Some(off) = offs.first() {
+                assert_eq!(off.music_seconds, f64::from((music as f64 / 1_000_000_000.0) as f32));
+            }
+        }
     }
 
     #[test]

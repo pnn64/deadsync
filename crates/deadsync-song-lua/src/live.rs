@@ -356,6 +356,10 @@ pub(crate) fn player_life(lua: &Lua, player: usize) -> Option<f32> {
     lua.app_data_ref::<LivePlayers>().and_then(|players| players.0.get(player).map(|p| p.life))
 }
 
+pub(crate) fn player_autoplay(lua: &Lua, player: usize) -> Option<bool> {
+    lua.app_data_ref::<LivePlayers>().and_then(|players| players.0.get(player).map(|p| p.autoplay))
+}
+
 pub(crate) fn player_health_state(lua: &Lua, player: usize) -> Option<&'static str> {
     lua.app_data_ref::<HealthStates>().and_then(|states| states.0.get(player).copied().flatten())
 }
@@ -1441,6 +1445,50 @@ return Def.ActorFrame {
                 .raw_get("Underlay").expect("underlay");
             assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &underlay).expect("excluded graph"), 0.0,
                 "{name}: excluded StepStatistics layouts create no recurring queue");
+        }
+    }
+
+    #[test]
+    fn live_overlay_fails_judged_autoplay_during_off_after_exit_decision() {
+        for (name, autoplay, judgment) in [("used", true, true), ("unused", true, false), ("human", false, true)] {
+            let mut compiled = compile_with_context(&format!("overlay-failure-{name}"), r#"
+OFFS, FAILED_AT_OFF = 0, false
+return Def.ActorFrame { OffCommand = function(self)
+    OFFS = OFFS + 1
+    FAILED_AT_OFF = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1):GetFailed()
+end }
+"#, |context| {
+                context.defer_initial_live_update = true;
+                context.players[1].enabled = false;
+            });
+            let mut scene = compiled.live_scene.take().expect("owned scene");
+            let mut frame = SongLuaLiveFrame { delta_seconds: 0.1, ..Default::default() };
+            frame.players[0].autoplay = autoplay;
+            scene.advance(frame).expect("controller frame");
+            assert_eq!(scene.lua.load("return IsAutoplay(PLAYER_1)").eval::<bool>().unwrap(), autoplay);
+            if judgment {
+                let params = scene.lua.create_table().unwrap();
+                params.raw_set("Player", crate::player_number_name(0)).unwrap();
+                crate::lua_util::broadcast_native_song_lua_message(&scene.lua, "Judgment", Some(Value::Table(params))).unwrap();
+            }
+            // The overlay remembers actual Judgment use, even after autoplay
+            // is disabled. Merely selecting autoplay does not fail a player.
+            frame.players[0].autoplay = false;
+            frame.gameplay_outro = true;
+            let boundary = scene.advance(frame).expect("NotesEnded posted");
+            assert!(boundary.player_writes.is_empty());
+            assert_eq!(scene.lua.globals().get::<i64>("OFFS").unwrap(), 0);
+            let off = scene.advance(frame).expect("LeaveGameplay after actor update");
+            assert_eq!(scene.lua.globals().get::<i64>("OFFS").unwrap(), 1,
+                "autoplay fails inside successful Off, without posting BeginFailed");
+            assert_eq!(scene.lua.globals().get::<bool>("FAILED_AT_OFF").unwrap(), autoplay && judgment,
+                "overlay Off precedes foreground Off");
+            assert_eq!(off.player_writes, if autoplay && judgment {
+                vec![SongLuaLivePlayerWrite::Fail { player: 0 }]
+            } else { vec![] });
+            frame.players[0].failed = autoplay && judgment;
+            assert!(scene.advance(frame).unwrap().player_writes.is_empty(), "Off runs once");
+            assert_eq!(scene.lua.globals().get::<i64>("OFFS").unwrap(), 1);
         }
     }
 

@@ -13221,6 +13221,42 @@ pub fn create_top_screen_theme_actor(
             actor.set("__songlua_top_screen_child_name", "Underlay")?;
             install_underlay_theme_children(lua, &actor, create_named_child_actor)?;
         }
+        if name.eq_ignore_ascii_case("Overlay") {
+            // Simply Love's FailOnHoldStart owns its judgment latch under
+            // the overlay. Its Off runs after LeaveGameplay's AllFailed
+            // decision and before SongForeground (DRAW_ORDER_OVERLAY + 1).
+            let fail = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
+            fail.raw_set("__songlua_parent", actor.clone())?;
+            let commands = lua.load(r#"
+local usedAutoplay = {}
+return {
+    JudgmentMessageCommand = function(self, params)
+        if params.Player == nil then return end
+        if IsAutoplay(params.Player) then usedAutoplay[params.Player] = true end
+    end,
+    OffCommand = function(self)
+        local stage = STATSMAN:GetCurStageStats()
+        local fail = false
+        if stage.GaveUp then fail = stage:GaveUp()
+        else fail = GAMESTATE:GetCurMusicSeconds() < GAMESTATE:GetCurrentSong():GetLastSecond() end
+        if GAMESTATE:IsCourseMode() then
+            local course = GAMESTATE:GetCurrentCourse()
+            if GAMESTATE:GetCourseSongIndex() + 1 < course:GetNumCourseEntries() then fail = true end
+        end
+        for player in ivalues(GAMESTATE:GetEnabledPlayers()) do
+            if fail or usedAutoplay[player] then
+                STATSMAN:GetCurStageStats():GetPlayerStageStats(player):FailPlayer()
+            end
+        end
+    end,
+}
+"#).set_name("@theme:/BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua").eval::<Table>()?;
+            for command in ["JudgmentMessageCommand", "OffCommand"] {
+                fail.raw_set(command, commands.raw_get::<Function>(command)?)?;
+            }
+            push_sequence_child_once(&actor, fail.clone())?;
+            actor_children(lua, &actor)?.raw_set("", fail)?;
+        }
         return Ok(Some(actor));
     }
     if top_screen_steps_display_index(name).is_some() {
@@ -13518,6 +13554,15 @@ pub fn install_top_screen_theme_children(
             child.raw_set("__songlua_theme_hibernating", true)?;
         }
         children.set(name, child)?;
+    }
+    // ActorFrame traverses its ordered actor tree. Named lookup aliases must
+    // not let Lua hash order place foreground Off before the theme overlay.
+    for name in ["SongBackground", "Underlay", "PlayerP1", "PlayerP2",
+        "ScoreP1", "ScoreP2", "StepsDisplayP1", "StepsDisplayP2",
+        "Overlay", "SongForeground", "In", "Debug"] {
+        if let Some(child) = children.raw_get::<Option<Table>>(name)? {
+            push_sequence_child_once(top_screen, child)?;
+        }
     }
     Ok(())
 }

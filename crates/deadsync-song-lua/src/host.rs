@@ -1537,7 +1537,10 @@ pub fn install_game_state_globals(
     )?;
     globals.set(
         "IsAutoplay",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        // SL-Helpers.lua compares the actual PlayerState controller, rather
+        // than the preferred PlayerAutoPlay option (which can change in play).
+        lua.load("return function(player) return GAMESTATE:GetPlayerState(player):GetPlayerController() == 'PlayerController_Autoplay' end")
+            .set_name("@theme:/Scripts/SL-Helpers.lua").eval::<Function>()?,
     )?;
     globals.set(
         "IsW0Judgment",

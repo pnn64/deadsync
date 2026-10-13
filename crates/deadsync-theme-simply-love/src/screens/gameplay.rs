@@ -979,8 +979,6 @@ impl State {
             && self.song_lua_out.is_none()
         {
             self.gameplay.progress.stage.song_completed_naturally = true;
-            let count = self.gameplay.num_players().min(MAX_PLAYERS);
-            fail_autoplay_players(&mut self.gameplay.players_runtime.players[..count]);
             self.song_lua_out = Some(SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY });
         }
         if matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen)) if screen == "ScreenGameplay") {
@@ -2634,7 +2632,7 @@ pub fn update(
 ) {
     if state.song_lua_ended { return; }
     let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);
-    if matches!(action, GameplayAction::Navigate(GameplayExit::Complete)
+    if state.song_lua.is_none() && matches!(action, GameplayAction::Navigate(GameplayExit::Complete)
         | GameplayAction::NavigateNoFade(GameplayExit::Complete)) {
         let count = state.gameplay.num_players().min(MAX_PLAYERS);
         fail_autoplay_players(&mut state.gameplay.players_runtime.players[..count]);
