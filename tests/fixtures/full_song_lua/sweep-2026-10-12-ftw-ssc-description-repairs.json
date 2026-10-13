@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "bounded FTW SSC first description repair complete",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
