@@ -6414,6 +6414,57 @@
         }
       ],
       "report_sha256": "8cc5ce72ac0620834f586d64cf670fc820638289ad7a6fe9d134215fbd0c3ee8"
+    },
+    {
+      "position": 292,
+      "source_simfile": "Macarena/Macarena.ssc",
+      "simfile_sha256": "5afeb0613ed57cf9b133675b7fe8c48829f5b5e7bff694e1c4a5adccc7ac0d84",
+      "retained_original_archive": "40772b13724c906ebf7b42e305577a4bb4572fd6273bfd4a5de7cde2389da317.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "a334f4b34605d7423de871ec305ba3961595409868dd4226ba1ea53c0eeacee7",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/column-update-green-v1/proof.json",
+      "capture_seconds": 97.2976454210002,
+      "trace_sha256": "28f06518525a2503e219dab0eb78615028b9f5d6cf44214cd214e594fb1a163e",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-292/candidates/61fd6405690b271eee9f87453e0dbdd64b26d114baa45b77338cd7c5efa9686c.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1018.4133885379997,
+      "candidate_sha256": "61fd6405690b271eee9f87453e0dbdd64b26d114baa45b77338cd7c5efa9686c",
+      "native_frames": 71667,
+      "replayed_frames": 71667,
+      "compared_stage_fields": 1056,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.accelerate, Actor.addrotationz, Actor.addx, Actor.addy, Actor.setsize, Actor.stopeffect, Actor.xy, PlayerOptions.Mini",
+        "native drawable state/resources: Quad"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "f791a792be22697a26cd4c39054bc9b03454772c61566cb54af94cc25b23b166",
+      "archive": "d154e6667bb11fc1ad9b4b68a45deecf7f07bd016160d2686afbfd0d2c1f2f1d.tar.zst",
+      "archive_sha256": "d154e6667bb11fc1ad9b4b68a45deecf7f07bd016160d2686afbfd0d2c1f2f1d",
+      "compressed_bytes": 4167922,
+      "pack_seconds": 2.2601653419987997,
+      "harness_version": "0.1.80",
+      "title": "Macarena",
+      "retained_original_entry": {
+        "title": "Macarena",
+        "source_simfile": "Macarena/Macarena.ssc",
+        "harness_version": "0.1.0",
+        "archive": "40772b13724c906ebf7b42e305577a4bb4572fd6273bfd4a5de7cde2389da317.tar.zst",
+        "sha256": "40772b13724c906ebf7b42e305577a4bb4572fd6273bfd4a5de7cde2389da317",
+        "compressed_bytes": 99666,
+        "uncompressed_sha256": "0fba62019bbc18ee1c1a9d4c74068d0ddd772d5b34ed4daea8984ecb18b08cfe",
+        "compression_level": 22,
+        "aliases": [
+          "2977f0dcf620485058048cd92b37f9e9dea97e56bf867baaa567ce6671bbd7e8.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -6423,9 +6474,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "93f59d2cedd99eeeb3e8ec457f3e7cffe3ed04a4f812311fdd8ff85046afb559",
+  "binary_sha256": "a334f4b34605d7423de871ec305ba3961595409868dd4226ba1ea53c0eeacee7",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 16,
+  "passed_fixtures": 17,
   "pending_charts": 25,
-  "processed_charts": 41
+  "processed_charts": 42
 }

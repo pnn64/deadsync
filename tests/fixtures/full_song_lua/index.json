@@ -3593,15 +3593,12 @@
     {
       "title": "Macarena",
       "source_simfile": "Macarena/Macarena.ssc",
-      "harness_version": "0.1.0",
-      "archive": "40772b13724c906ebf7b42e305577a4bb4572fd6273bfd4a5de7cde2389da317.tar.zst",
-      "sha256": "40772b13724c906ebf7b42e305577a4bb4572fd6273bfd4a5de7cde2389da317",
-      "compressed_bytes": 99666,
-      "uncompressed_sha256": "0fba62019bbc18ee1c1a9d4c74068d0ddd772d5b34ed4daea8984ecb18b08cfe",
-      "compression_level": 22,
-      "aliases": [
-        "2977f0dcf620485058048cd92b37f9e9dea97e56bf867baaa567ce6671bbd7e8.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "d154e6667bb11fc1ad9b4b68a45deecf7f07bd016160d2686afbfd0d2c1f2f1d.tar.zst",
+      "sha256": "d154e6667bb11fc1ad9b4b68a45deecf7f07bd016160d2686afbfd0d2c1f2f1d",
+      "compressed_bytes": 4167922,
+      "uncompressed_sha256": "61fd6405690b271eee9f87453e0dbdd64b26d114baa45b77338cd7c5efa9686c",
+      "aliases": []
     },
     {
       "title": "Magic Torus",
