@@ -5856,6 +5856,57 @@
         }
       ],
       "report_sha256": "bd55b508342bae50ec0448a081ab465c791fff14a656fc6a3bd9931637ce010d"
+    },
+    {
+      "position": 263,
+      "source_simfile": "K-Pop Foxture/K-Pop Foxture.ssc",
+      "simfile_sha256": "b0b0e52b83437135340f40a9a4d1016331e6db3a1ce39f1d582e6932ff2aa9c0",
+      "retained_original_archive": "2eecbbfe99728c2b59f485b9461d1b481b549b3c69b82978dbeebe17ab654bbf.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "bd9bdd3d7818ac8895ce3fbe58e73d984227d46f6d6a6753deb56cdc4503d035",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+      "build_proof": "/home/parity/jobs/hold-judgment-build-v1/proof.json",
+      "capture_seconds": 160.634686305988,
+      "trace_sha256": "afb5c889233c742789bf754548569ea21fcc0d1ee8eb17e6619edfb7ef545507",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-263/candidates/39ae432709d0d23a5d80aa1c98bc57aa27226ffe7654647f715d68df4541d9eb.tar",
+      "replay_exit": 0,
+      "replay_seconds": 890.3516860040108,
+      "candidate_sha256": "39ae432709d0d23a5d80aa1c98bc57aa27226ffe7654647f715d68df4541d9eb",
+      "native_frames": 111052,
+      "replayed_frames": 111052,
+      "compared_stage_fields": 1749,
+      "pending_coverage": [
+        "uncompared song operations: Actor.bob, Actor.xy",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "99647c422c0a4e3aa377f9a7ef1331a72d632f913057ec6034d42f67814626b6",
+      "archive": "33cd1658f0e05c90641e0a67495924d0e7e65d9dae0230255e4778eaad246be4.tar.zst",
+      "archive_sha256": "33cd1658f0e05c90641e0a67495924d0e7e65d9dae0230255e4778eaad246be4",
+      "compressed_bytes": 9101260,
+      "pack_seconds": 1.8018713479978032,
+      "harness_version": "0.1.80",
+      "title": "K-Pop Foxture",
+      "retained_original_entry": {
+        "title": "K-Pop Foxture",
+        "source_simfile": "K-Pop Foxture/K-Pop Foxture.ssc",
+        "harness_version": "0.1.0",
+        "archive": "2eecbbfe99728c2b59f485b9461d1b481b549b3c69b82978dbeebe17ab654bbf.tar.zst",
+        "sha256": "2eecbbfe99728c2b59f485b9461d1b481b549b3c69b82978dbeebe17ab654bbf",
+        "compressed_bytes": 1963582,
+        "uncompressed_sha256": "b4fa3efececfd5f96121969179b8edd41e8bac832ace03f5e81c04711dd65132",
+        "compression_level": 22,
+        "aliases": [
+          "da6e010224900e9236362bd42d946045c84e23d1deeb18efe63278f6b30d4a7f.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -5879,9 +5930,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "261394c0b377727a495efc0635ceb40a9d8242d235ffe502adfa93054408f5e3",
+  "binary_sha256": "bd9bdd3d7818ac8895ce3fbe58e73d984227d46f6d6a6753deb56cdc4503d035",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 13,
+  "passed_fixtures": 14,
   "pending_charts": 37,
-  "processed_charts": 50
+  "processed_charts": 51
 }
