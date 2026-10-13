@@ -3847,17 +3847,12 @@
     {
       "title": "Midnight Madness",
       "source_simfile": "Midnight Madness/midnight.sm",
-      "harness_version": "0.1.6",
-      "archive": "455f21464f636b3a35fe11a9fc1c8842eee2a467c78af915875e70c9eab8bed4.tar.zst",
-      "sha256": "455f21464f636b3a35fe11a9fc1c8842eee2a467c78af915875e70c9eab8bed4",
-      "compressed_bytes": 12331,
-      "uncompressed_sha256": "3027b6210cc610f3ccf65dbd6b413b1eb102686cfc6e7aa723d3bfd44341c5cb",
-      "compression_level": 22,
-      "aliases": [
-        "f01f6c4342b52537e95274e2b0e710e0b502eb2ecb9bec0aa9b5274e15e79eb2.tar.zst",
-        "75928cbda69e03ed729d8bf8dd0f4e0717f6f75f0dc83dca2d41176b24505fa4.tar.zst",
-        "1d397eca76ea49b4d3e2784431949abef34fc67a3230b5cbc33beb0f645bc724.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "3adb8fdec8997e7ac138bbf4ce49f8cd61de1163cb79759c1de721208457ae2a.tar.zst",
+      "sha256": "3adb8fdec8997e7ac138bbf4ce49f8cd61de1163cb79759c1de721208457ae2a",
+      "compressed_bytes": 1174294,
+      "uncompressed_sha256": "7800e1c6d93bdbdd8a220697e94021e54e6b57948c8677f2ba3dc567c2000e80",
+      "aliases": []
     },
     {
       "title": "minefield surfing",
