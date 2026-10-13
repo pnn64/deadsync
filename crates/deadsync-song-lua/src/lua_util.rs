@@ -10138,8 +10138,15 @@ fn compact_actor_children(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     for index in indices {
         actor.raw_set(index, Value::Nil)?;
     }
-    for (index, (_, child)) in children.into_iter().enumerate() {
-        actor.raw_set(index + 1, child)?;
+    let mut index = 1;
+    for (_, child) in children {
+        // ActorUtil::LoadFromNode returns null for Condition=false before
+        // constructing or initializing any actor in that subtree.
+        if matches!(child.raw_get::<Value>("Condition")?, Value::Boolean(false)) {
+            continue;
+        }
+        actor.raw_set(index, child)?;
+        index += 1;
     }
     Ok(())
 }

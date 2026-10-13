@@ -1997,6 +1997,54 @@ end }
     }
 
     #[test]
+    fn live_false_condition_skips_subtree_and_compacts_subscriber_paths() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-condition-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("condition directory");
+        let entry = dir.join("default.lua");
+        fs::write(&entry, r#"
+local function excluded() error('excluded actor must never run') end
+local function received(self) self:aux(self:getaux() + 1) end
+return Def.ActorFrame {
+    InitCommand = function(self)
+        assert(self:GetNumChildren() == 2)
+        local children = self:GetChildren()
+        assert(children.Excluded == nil)
+        assert(children.Group:GetNumChildren() == 1)
+    end,
+    OnCommand = function(self)
+        MESSAGEMAN:Broadcast('Probe')
+        assert(self:GetChild('First'):getaux() == 1)
+        assert(self:GetChild('Group'):GetChild('Last'):getaux() == 1)
+    end,
+    Def.Quad { Name = 'Excluded', Condition = false, InitCommand = excluded,
+        OnCommand = excluded, ProbeMessageCommand = excluded },
+    Def.Actor { Name = 'First', Condition = 0, ProbeMessageCommand = received },
+    Def.ActorFrame { Condition = false, InitCommand = excluded,
+        Def.Quad { ProbeMessageCommand = excluded, OnCommand = excluded } },
+    Def.ActorFrame { Name = 'Group',
+        Def.Quad { Condition = false, InitCommand = excluded, ProbeMessageCommand = excluded },
+        Def.Actor { Name = 'Last', Condition = true, ProbeMessageCommand = received } },
+}
+"#).expect("conditional actor tree");
+        let mut context = SongLuaCompileContext::new(&dir, "conditional children");
+        context.live = true;
+        #[cfg(feature = "test-support")]
+        {
+            context.message_actor_order = [("1", 10), ("1/1", 20), ("1/2", 30), ("1/2/1", 40)]
+                .into_iter().map(|(path, rank)| (path.into(), rank)).collect();
+        }
+        let mut compiled: Compiled = crate::compile_song_lua_with_default_host(
+            &entry, &context, SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None)
+            .expect("skip excluded initialization and broadcast subscriptions");
+        let mut scene = compiled.live_scene.take().expect("retained active scene");
+        let output = scene.advance(SongLuaLiveFrame { screen_seconds: 0.1,
+            delta_seconds: 0.1, ..Default::default() }).expect("active conditional tree");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert!(!compiled.overlays.iter().any(|actor| actor.name.as_deref() == Some("Excluded")));
+    }
+
+    #[test]
     fn live_requests() {
         let mut compiled = compile("transition", r#"
 return Def.ActorFrame {
