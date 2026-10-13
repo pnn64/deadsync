@@ -6465,6 +6465,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 295,
+      "source_simfile": "Marshall Maximizer/marshall maximizer.ssc",
+      "simfile_sha256": "c561d16c6246303fad1ab5559e9c97cfcde29a36b1078d48813a171186ab7077",
+      "retained_original_archive": "5ace89aa08a222d02b905c67ea465a175c627d46f988e9a7b4527cb11fd252ec.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "a334f4b34605d7423de871ec305ba3961595409868dd4226ba1ea53c0eeacee7",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/column-update-green-v1/proof.json",
+      "capture_seconds": 149.74448254299932,
+      "trace_sha256": "33bba28bb7f8a664fe1771ced19eb8ff0481a0b4a1b4b942ca3f6ac209230e37",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-295/candidates/5a3e9184e13cf6bbff10e79dffbba513113c219d1d61db2aa79f17c814a7ef82.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1476.3078530689963,
+      "candidate_sha256": "5a3e9184e13cf6bbff10e79dffbba513113c219d1d61db2aa79f17c814a7ef82",
+      "native_frames": 92066,
+      "replayed_frames": 92066,
+      "compared_stage_fields": 1584,
+      "pending_coverage": [
+        "uncompared song operations: Player.SetLife, ScreenGameplay.GetLifeMeter"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "1326798c4daf230c6cb6ae4620d74370761ff1b6c3104f08817d7e9e65dafebe",
+      "archive": "3c61c5dcdf2dd2444d730096674aa784a0452c6ffc22e48867d42d3173f7755a.tar.zst",
+      "archive_sha256": "3c61c5dcdf2dd2444d730096674aa784a0452c6ffc22e48867d42d3173f7755a",
+      "compressed_bytes": 6394340,
+      "pack_seconds": 3.6191742079972755,
+      "harness_version": "0.1.80",
+      "title": "マーシャル・マキシマイザー",
+      "retained_original_entry": {
+        "title": "マーシャル・マキシマイザー",
+        "source_simfile": "Marshall Maximizer/marshall maximizer.ssc",
+        "harness_version": "0.1.0",
+        "archive": "5ace89aa08a222d02b905c67ea465a175c627d46f988e9a7b4527cb11fd252ec.tar.zst",
+        "sha256": "5ace89aa08a222d02b905c67ea465a175c627d46f988e9a7b4527cb11fd252ec",
+        "compressed_bytes": 74596,
+        "uncompressed_sha256": "84dc5ac1225b4f3fe31d37b4f8285dd48ba0207442fc402dadd9f0d45fcd9f04",
+        "compression_level": 22,
+        "aliases": [
+          "0472ec86a1e764c3f7bfc901de1a70764d29a5d326af7defd0314deb1f3497fb.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -6476,7 +6526,7 @@
   },
   "binary_sha256": "a334f4b34605d7423de871ec305ba3961595409868dd4226ba1ea53c0eeacee7",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 17,
+  "passed_fixtures": 18,
   "pending_charts": 25,
-  "processed_charts": 42
+  "processed_charts": 43
 }

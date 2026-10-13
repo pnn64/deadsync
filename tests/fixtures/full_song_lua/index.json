@@ -3623,15 +3623,12 @@
     {
       "title": "マーシャル・マキシマイザー",
       "source_simfile": "Marshall Maximizer/marshall maximizer.ssc",
-      "harness_version": "0.1.0",
-      "archive": "5ace89aa08a222d02b905c67ea465a175c627d46f988e9a7b4527cb11fd252ec.tar.zst",
-      "sha256": "5ace89aa08a222d02b905c67ea465a175c627d46f988e9a7b4527cb11fd252ec",
-      "compressed_bytes": 74596,
-      "uncompressed_sha256": "84dc5ac1225b4f3fe31d37b4f8285dd48ba0207442fc402dadd9f0d45fcd9f04",
-      "compression_level": 22,
-      "aliases": [
-        "0472ec86a1e764c3f7bfc901de1a70764d29a5d326af7defd0314deb1f3497fb.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "3c61c5dcdf2dd2444d730096674aa784a0452c6ffc22e48867d42d3173f7755a.tar.zst",
+      "sha256": "3c61c5dcdf2dd2444d730096674aa784a0452c6ffc22e48867d42d3173f7755a",
+      "compressed_bytes": 6394340,
+      "uncompressed_sha256": "5a3e9184e13cf6bbff10e79dffbba513113c219d1d61db2aa79f17c814a7ef82",
+      "aliases": []
     },
     {
       "title": "Episode 11 Marvin's Room",
