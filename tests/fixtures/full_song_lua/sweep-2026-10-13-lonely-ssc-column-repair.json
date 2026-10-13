@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "bounded first Lonely SSC owned column update repair complete",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "21f6e34679ef7262f98619bb432d205d820e11f3 + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 / harness c283a8a",
