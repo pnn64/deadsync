@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T13:34:49Z",
+  "updated_utc": "2026-10-13T14:21:22Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 212,
-    "pending": 67,
-    "unprocessed": 222
+    "passed": 214,
+    "pending": 72,
+    "unprocessed": 215
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2349,13 +2349,17 @@
       "position": 273,
       "source_simfile": "LALA/lala.ssc",
       "simfile_sha256": "a00082473023b82b885ff973ba533069a5ce891b3c89e89d81fa268f5d0f21b8",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 274,
       "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
       "simfile_sha256": "ddcc948b1b0fb8f936faf2cc1c8e3556149e9305db7d8eaaf7347724aeb3aeea",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 275,
@@ -2369,13 +2373,17 @@
       "position": 276,
       "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.sm",
       "simfile_sha256": "54828cc3cb04d0df7df9f9886a29670cf9e19185c3f5c4758309ce105f6e9145",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 277,
       "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.ssc",
       "simfile_sha256": "e008bc1e32614bb02ae854f73c994f3d0a8043797b0c027b9757ef0e86275417",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 278,
@@ -2501,7 +2509,9 @@
       "position": 296,
       "source_simfile": "Marvins Room/MarvinsRoom.sm",
       "simfile_sha256": "a28eb7e23666c0232a77bcf94ed6f77d57aff79e629a0c59d609312a87d3c938",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 297,
@@ -2519,7 +2529,9 @@
       "position": 299,
       "source_simfile": "mawaru1/mawaru.sm",
       "simfile_sha256": "cb10489b3cf018ea822152693fe3d682db32e0319d1169cc826e6ae110c9ae5d",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 300,
@@ -2537,7 +2549,9 @@
       "position": 302,
       "source_simfile": "mawaru4/mawaru4.sm",
       "simfile_sha256": "598278a7dd8b93988b17fcdcbd3c560428fcca536324dc9654b0d42b23ffd411",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 303,
