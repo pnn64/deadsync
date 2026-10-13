@@ -1,0 +1,343 @@
+{
+  "source_fix_commit": "d851d0c3b",
+  "source_simfile": "freg/freg.sm",
+  "position": 200,
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "simply_love_commit": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+  "repair_attempts_spent": 1,
+  "first_repair_launched": true,
+  "repair_observation": {
+    "status": "running",
+    "repair": "first bounded freg repair: native DensityGraph sleep queue, foreground activation after underlay update, and NotesEnded Off dispatch",
+    "binary_sha256": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
+    "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+    "results": [
+      {
+        "position": 200,
+        "source_simfile": "freg/freg.sm",
+        "status": "pending",
+        "repair_attempts": 1,
+        "previous_failure": [],
+        "binary_sha256": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
+        "candidate_sha256": "4be2dbf1ff59a34ff3029c5e9e4ef64991bea951de5abb6395c849bd64bf1f43",
+        "trace_sha256": "3736aead13b2e6994859a3380e784f8f600837b50a334d81bcc3b3a2c81db168",
+        "native_capture_reused": true,
+        "simfile_sha256": "c17a176bd2314c4d9e122db759e9377c11096c92b6890431a31c3b781753854f",
+        "fix_commit": "d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+        "previous_concrete_failures": [
+          {
+            "field": "command_query_count",
+            "native": 13,
+            "deadsync": 11
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "external-0017",
+              "args": [
+                false
+              ],
+              "beat": 0.002303175628185272,
+              "caller": {
+                "line": 17,
+                "source": "song:/c'est business.lua",
+                "tail_call": false
+              },
+              "command": "OnCommand",
+              "definition_id": "def-0002",
+              "detail": {
+                "native_tween_children": {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            {
+                              "children": [],
+                              "commands": {
+                                "Init": {
+                                  "last_line": 50,
+                                  "line": 43,
+                                  "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                                },
+                                "On": {
+                                  "last_line": 53,
+                                  "line": 51,
+                                  "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                                }
+                              },
+                              "name": "",
+                              "time_left": 0.3232739567756653
+                            }
+                          ]
+                        }
+                      ],
+                      "commands": {
+                        "Init": {
+                          "last_line": 67,
+                          "line": 65,
+                          "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua"
+                        }
+                      },
+                      "name": "StepStatsPaneP1",
+                      "time_left": 0.3232739567756653
+                    }
+                  ],
+                  "commands": {
+                    "On": {
+                      "last_line": 60,
+                      "line": 56,
+                      "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/default.lua"
+                    }
+                  },
+                  "name": "Underlay",
+                  "time_left": 0.3232739567756653
+                },
+                "native_tween_time_left": 0.3232739567756653
+              },
+              "kind": "call",
+              "line": 17,
+              "operation": "Actor.visible",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0.017687074840068817,
+              "seq": 10,
+              "source": "song:/c'est business.lua",
+              "tween_time_left": 0.3232739567756653
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.visible",
+              "source": "song:/c'est business.lua",
+              "line": 17,
+              "phase": "callback",
+              "beat": 0.002303175628185272,
+              "seconds": 0.017687074840068817,
+              "args": [
+                false
+              ],
+              "results": [
+                {
+                  "actor": "0x5d252eeb1b10",
+                  "name": "Underlay",
+                  "path": "ScreenGameplay/Underlay"
+                }
+              ],
+              "tween_time_left": 0.0
+            }
+          }
+        ],
+        "build_proof": "/home/parity/jobs/density-graph-build-v1/proof.json",
+        "replay_exit": 2,
+        "replay_seconds": 181.49529675100348,
+        "native_frames": 24013,
+        "replayed_frames": 24013,
+        "compared_stage_fields": 341,
+        "pending_coverage": [
+          "uncompared song operations: Actor.stoptweening",
+          "native drawable state/resources: Quad"
+        ],
+        "archive_accepted": false,
+        "errors": [],
+        "mismatch_count": 2,
+        "concrete_failures": [
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0002",
+              "args": [],
+              "beat": 46.32426452636719,
+              "command": "OffCommand",
+              "definition_id": "def-0002",
+              "detail": {
+                "name": "OffCommand"
+              },
+              "kind": "command",
+              "line": 21,
+              "operation": "command.begin",
+              "scene": 1,
+              "seconds": 19.86995506286621,
+              "seq": 12,
+              "source": "song:/c'est business.lua"
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "command",
+              "operation": "command.begin",
+              "command": "OffCommand",
+              "source": "song:/c'est business.lua",
+              "line": 21,
+              "beat": 46.382198333740234,
+              "seconds": 19.894784927368164,
+              "args": null
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0002",
+              "args": [],
+              "beat": 46.32426452636719,
+              "command": "OffCommand",
+              "definition_id": "def-0002",
+              "detail": {
+                "name": "OffCommand"
+              },
+              "kind": "command",
+              "line": 21,
+              "operation": "command.end",
+              "scene": 1,
+              "seconds": 19.86995506286621,
+              "seq": 14,
+              "source": "song:/c'est business.lua"
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "command",
+              "operation": "command.end",
+              "command": "OffCommand",
+              "source": "song:/c'est business.lua",
+              "line": 21,
+              "beat": 46.382198333740234,
+              "seconds": 19.894784927368164,
+              "args": null
+            }
+          }
+        ],
+        "report_sha256": "5eda9910a155372d7722305d60b6f5ee3d7b3cdad624e19b708167e7b734fb9b"
+      }
+    ],
+    "passed_fixtures": 0,
+    "pending_charts": 1
+  },
+  "diagnosis": "sweep-2026-10-13-freg-source-diagnosis.json",
+  "changes": [
+    "Use SL_Init default Step Statistics; create the eligible DensityGraph ActorFrame and its sleep/queuecommand cycle in the same owned underlay tree. Quantize from global Song BPM using Lua double arithmetic and native float sleep durations.",
+    "Activate a foreground at its actor-tree entry after this frame's underlay and Player updates. Retain callback slots so On-installed update functions run in that same frame; ignore empty slots when recognizing a single multitap Update callback.",
+    "Dispatch screen Off after the queued NotesEnded/LeaveGameplay boundary, once. AllFailed posts BeginFailed and waits one more actor update. End remains a separate screen-pop command."
+  ],
+  "regressions": [
+    "Global Song versus selected Steps timing; constant and changing BPMs, low BPM, music rate, zero and positive deltas, float remainders, owned ancestor timers, and excluded narrow-centered/versus layouts.",
+    "Foreground On observes the underlay after its current delta; existing late-start callbacks still consume the initial music remainder.",
+    "Successful and failed outro Off dispatches occur after actor callbacks, once; empty callback slots preserve single-update detection."
+  ],
+  "retained_before_fix_logs": [
+    {
+      "log": "density-graph-windows-before-fix-v1.log",
+      "sha256": "b3e475253bc4acb42286ee5f41625d5323473956ea7e65a15ac3565cb5988798",
+      "passed": 34,
+      "failed": 3
+    }
+  ],
+  "retained_implementation_failure": {
+    "command": "cargo test --locked -p deadsync-song-lua --lib live_",
+    "exit_code": 101,
+    "passed": 36,
+    "failed": 1,
+    "new_regressions_passed": [
+      "live_foreground_on_observes_updated_underlay",
+      "live_density_graph_owns_quantized_recurring_sleep",
+      "live_outro_dispatches_off_after_actor_update_once"
+    ],
+    "failed_existing_control": "live_foreground_late_start",
+    "observed_messages": [
+      "Later"
+    ],
+    "expected_messages": [
+      "Later",
+      "Delta:0.125"
+    ],
+    "cause": "The frame plan was built before Foreground On installed its update function; a missing callback job deferred that function until the following frame.",
+    "chart_repair_attempt_spent": false,
+    "helper_selected": false,
+    "record_type": "Explicit excerpt of the retained tool output, not a copied Cargo log."
+  },
+  "retained_build_failure": {
+    "log": "density-graph-windows-build-v1.log",
+    "sha256": "9abf66e4c49060b1a2ba32afc030f4a197bfcc5da2bbd91ff238275322e1c7f3",
+    "error": "Windows LINK LNK1318 FILE_SYSTEM while writing deadsync.pdb; artifacts retained. Completed files were losslessly compressed and the linker PDB expanded before the single-job retry."
+  },
+  "windows_checks": [
+    {
+      "log": "density-graph-windows-live-v2.log",
+      "passed": 38,
+      "sha256": "4274494f603c12b262c38580695fedfaf9e6db0019601930d208eea0b9e34bea"
+    },
+    {
+      "log": "density-graph-windows-native-v2.log",
+      "passed": 21,
+      "sha256": "60d679aa50e7446831e2ba991d71cdce4027db75b9ae1971be1111f696d3abdb"
+    },
+    {
+      "log": "density-graph-windows-build-v2.log",
+      "passed": null,
+      "sha256": "b4c1f510b0396a4ccf793bb1ec4805c1e93863314177464fa093fd16fb7d098c"
+    }
+  ],
+  "windows_gameplay_validation": "Previous 815-passed validation reused; every gameplay source pin remains byte-identical.",
+  "linux_checks": [
+    {
+      "label": "gameplay-tests",
+      "exit_code": 0,
+      "seconds": 42.229736713998136,
+      "results": [
+        "test result: ok. 815 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.11s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 209.8508956500009,
+      "results": [
+        "test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 530 filtered out; finished in 0.96s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 226.7798678399995,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.1224264000047697,
+      "results": [
+        "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.25s"
+      ]
+    }
+  ],
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "1110d3a86320d3d077599ccc08371471a532ae5486ee3191090388ee9235e865",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "ccecdf07dae6378a7df8c94152537d0bab63651b2d193a496aaff3a40d2447dd",
+    "crates/deadsync-song-lua/src/live.rs": "940b3bf28663ea719fd5c848100aa6ce87844e6296ba5d17a84227338d450ac4",
+    "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+    "crates/deadsync-song-lua/src/lua_util.rs": "8577249fcae4a1d51f6d4620783d5794ddbfc03e1780dacaa91913e2b9641c62",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "d6516441dcc76f586cb577537c01a8d8647c2e01e77fa9651c52e3c9f252d613",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "550e88db1af4b38baf2e9c2465729fd1c3cab50ad66dc76a762f464bad9970e7",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+    "crates/deadsync-song-lua/src/lib.rs": "2f1a0e1b3e2cadbc4c5005db6369f5ae6a50994135f2216da556374d9650c19e",
+    "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f"
+  },
+  "build_proof": "/home/parity/jobs/density-graph-build-v1/proof.json",
+  "binary_sha256": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
+  "host_local_mtimes_before_cargo": true,
+  "separate_coverage": [
+    "DensityGraph vertex drawing and the complete StepStatsPane child inventory are not certified by these queue and lifecycle controls."
+  ],
+  "acceptance": "Existing complete replay comparisons unchanged; no passing chart reopened and no new acceptance gate."
+}
