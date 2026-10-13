@@ -4113,17 +4113,12 @@
     {
       "title": "Oil Ocean Zone Act 2",
       "source_simfile": "Oil Ocean Act 2/steps.sm",
-      "harness_version": "0.1.6",
-      "archive": "5e21ad2cbaf342b90f71d856bc3c82543a58209717936f44683a7c7bf38fde20.tar.zst",
-      "sha256": "5e21ad2cbaf342b90f71d856bc3c82543a58209717936f44683a7c7bf38fde20",
-      "compressed_bytes": 48147,
-      "uncompressed_sha256": "9d457d2f4fc55788a0bd751221ed3df01342f28d0510a47de6906b329bb31ed8",
-      "compression_level": 22,
-      "aliases": [
-        "d15ccbb7d8989d80c785ff8ff3cd89e350d9086857dc5bf992e17b0f1c1c83cf.tar.zst",
-        "5771c08b68b2a9c55e3424909b6fb651c154ce51b93147b462d7b080d7a0517a.tar.zst",
-        "76df1fa9497edd71b4489e55214c0db9286367cf22681d0b0e7525063c630df9.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "dbd4c1382a54e6ebe36d913d72d2c18f2509155f85fe51282dce773a02e2fc55.tar.zst",
+      "sha256": "dbd4c1382a54e6ebe36d913d72d2c18f2509155f85fe51282dce773a02e2fc55",
+      "compressed_bytes": 6144528,
+      "uncompressed_sha256": "d37f1ffcdf0e2b8626c362511fdff1c06a74376d91132ec1e345b0725653bfff",
+      "aliases": []
     },
     {
       "title": "OK",

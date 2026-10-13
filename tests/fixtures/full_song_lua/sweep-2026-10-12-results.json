@@ -9562,6 +9562,58 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 335,
+      "source_simfile": "Oil Ocean Act 2/steps.sm",
+      "simfile_sha256": "73a35a516658cc511871ea4b2997fef3234eca60eb3e63a5c92a37bf8f5447b4",
+      "retained_original_archive": "5e21ad2cbaf342b90f71d856bc3c82543a58209717936f44683a7c7bf38fde20.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "6a912f949896b963329aaa0cde4ea6c5fbc86bf6368091a1a6974d2b22629114",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/empty-layers-green-v2/proof.json",
+      "capture_seconds": 164.37577648399747,
+      "trace_sha256": "64626c87259b769d444d12e05f93acf033ff4ca899f5f6d92889e82229140b6d",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-335/candidates/d37f1ffcdf0e2b8626c362511fdff1c06a74376d91132ec1e345b0725653bfff.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1152.2236786010035,
+      "candidate_sha256": "d37f1ffcdf0e2b8626c362511fdff1c06a74376d91132ec1e345b0725653bfff",
+      "native_frames": 89481,
+      "replayed_frames": 89481,
+      "compared_stage_fields": 1793,
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "81d7af322c3ce4691d431ec59c7c9c21ab5a6a1abe87ad37c13a5dfa497c22bd",
+      "archive": "dbd4c1382a54e6ebe36d913d72d2c18f2509155f85fe51282dce773a02e2fc55.tar.zst",
+      "archive_sha256": "dbd4c1382a54e6ebe36d913d72d2c18f2509155f85fe51282dce773a02e2fc55",
+      "compressed_bytes": 6144528,
+      "pack_seconds": 2.3716722569952253,
+      "harness_version": "0.1.80",
+      "title": "Oil Ocean Zone Act 2",
+      "retained_original_entry": {
+        "title": "Oil Ocean Zone Act 2",
+        "source_simfile": "Oil Ocean Act 2/steps.sm",
+        "harness_version": "0.1.6",
+        "archive": "5e21ad2cbaf342b90f71d856bc3c82543a58209717936f44683a7c7bf38fde20.tar.zst",
+        "sha256": "5e21ad2cbaf342b90f71d856bc3c82543a58209717936f44683a7c7bf38fde20",
+        "compressed_bytes": 48147,
+        "uncompressed_sha256": "9d457d2f4fc55788a0bd751221ed3df01342f28d0510a47de6906b329bb31ed8",
+        "compression_level": 22,
+        "aliases": [
+          "d15ccbb7d8989d80c785ff8ff3cd89e350d9086857dc5bf992e17b0f1c1c83cf.tar.zst",
+          "5771c08b68b2a9c55e3424909b6fb651c154ce51b93147b462d7b080d7a0517a.tar.zst",
+          "76df1fa9497edd71b4489e55214c0db9286367cf22681d0b0e7525063c630df9.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -9587,7 +9639,7 @@
   },
   "binary_sha256": "6a912f949896b963329aaa0cde4ea6c5fbc86bf6368091a1a6974d2b22629114",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 21,
+  "passed_fixtures": 22,
   "pending_charts": 53,
-  "processed_charts": 74
+  "processed_charts": 75
 }
