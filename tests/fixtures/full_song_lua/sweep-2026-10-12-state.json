@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T23:28:33Z",
-  "previous_goal_turn": "No Tears first repair 1 passed all 90167 frames and 1529 fields with zero errors and differences; fixture committed d0a06e8bdeaddacc6a649535ff975d6a704e57f0 and local compressed/decompressed bytes verified. Other Guy original passed 75298 frames and 1727 fields and is byte verified. Myths, Oil Ocean, Number 9, Midnight, Mawaru3 and prior passing fixtures remain saved without reopening. Get Into It SM and SSC final repairs 2 run with immutable begin-message-green-v1 helper da08513ccd2d9d12b208ce9af2691b0853cfe3c4112ae37a1e3e18bd7210822e, source 0734d61e5c63f18ce447e6d1284a42058d8cc218. Their original partition captures and all manifest members are byte verified and reused. Actual supervisor and replay child commands match both receipts. Initial v1 bootstrap receipts are preserved and excluded: wrong main-queue capture path, failed before stage creation, zero frames and zero full repairs spent. Selected Begin build passed meaningful unchanged red/green control on both hosts and all five green checks each host including 51 live and 26 native controls; all 28 physical source pins and three unchanged harness pins verified. Startup aliases reach owned foreground screen children and exclude cached background owners, matching pinned native source and both startup traces. Existing diagnostic command alignment removed only four startup events in temporary memory and found no other event differences; it is not acceptance. New Earth first repair 1 completed 89954 frames and 1408 fields with zero errors and two effectperiod differences. Direct captured GetSongBPS reads are 10 at construction: native SongPosition Reset defaults BPS to 10, while independent initial runtime uses 2.25 song display BPS. One final repair remains and needs a meaningful real Init control before fixing runtime construction; ordinary timing updates and nonlive preview must be preserved. MODULO actual bounded trace identifies lost infinite sleep shortening foreground lifetime and stopping reload callbacks; both full repairs remain. Mawaru6 first repair 1, Koi SM final repair 2, original main and both partition workers continue without restart. Mawaru4 and Mawaru5 cached BackgroundDef ownership need fixes; neither spent a repair. My Exes Bestfriend wider native zero tween cause remains unestablished. Capped charts remain pending without another retry. Singleton publisher 60312 watches 63 preserved streams, including the two excluded bootstrap streams. Existing complete uncompressed replay comparisons determine acceptance; missing coverage stays separate. All 501 original simfiles remain byte unchanged, RUNWAY is outside scope, and the goal remains active and incomplete.",
+  "updated_utc": "2026-10-13T23:50:05Z",
+  "previous_goal_turn": "No Tears first repair 1 passed all 90167 frames and 1529 fields with zero differences and errors; its fixture is saved, committed and locally byte verified. Other Guy original and previous passing charts remain saved without reopening. Get Into It SM and SSC final repairs 2 continue with their immutable Begin helper da08513ccd2d9d12b208ce9af2691b0853cfe3c4112ae37a1e3e18bd7210822e. Both actual supervisors and replay children were verified; the wrong-path v1 bootstrap receipts are preserved and excluded with zero replay frames and zero full repair spend. New Earth first repair 1 completed 89954 frames and 1408 fields with zero errors and two effectperiod differences caused by initial GetSongBPS 2.25 versus captured native 10. Native LoadNextSong resets SongPosition before background and foreground loading. Source fix 76ec2f609c495f809cb012c2759ee6bf937b33f8 sets live construction BPS 10, retains nonlive display BPS and supplies ordinary BPS at the first and subsequent song timing updates. Its real two-Sprite Init control meaningfully failed 2.25 versus 10 on both hosts before the fix and remained unchanged for green. All five checks pass on each host: the focused construction/full-clock/fallback/preview control, all 52 live controls, captured subscriber ordering, all 26 native gameplay controls and both executable builds. All 29 physical source pins, the new unchanged runtime baseline on both hosts, three unchanged native harness pins, source bundles, logs and immutable binary 80852434eb3c1dc7c06a2a42523e35674f0b6c663c095b6f16a4ee8b0265adc6 are verified. New Earth final repair 2 now runs with that helper and the exact original byte-verified capture, inheriting the validated native HSVA initializer. No further full repair remains for that chart. MODULO's bounded actual trace identifies discarded positive infinite sleep shortening foreground lifetime and stopping sibling reload queues; both full repairs remain and a real foreground infinity control is staged only. Mawaru6 first repair 1, Koi SM final repair 2, original main and both partition workers continue without restart. Mawaru4 and Mawaru5 need cached BackgroundDef ownership fixes; neither has spent a repair. My Exes Bestfriend's wider zero native tween cause remains unestablished. Capped charts remain pending without another retry. Singleton publisher 60312 watches 64 streams including the two preserved excluded Get Into It bootstrap streams. Existing complete uncompressed comparisons determine acceptance, missing coverage stays separate, all 501 original simfiles remain byte unchanged, RUNWAY stays outside scope, and the goal is active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,11 +14,12 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "f608570bc2918febe032ba7f1116662eee85d461",
+      "deadsync": "5625ac8cf4d5242a752895ecf5297436c48e827e",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
   "validation": {
+    "native_constructor_bps": "76ec2f609c495f809cb012c2759ee6bf937b33f8: unchanged meaningful real Sprite Init control red/green both hosts; five checks each host pass, 52 live and 26 native controls; new unchanged runtime baseline and all 29 source/three harness pins verified; reset-bps-build.json",
     "native_begin_message_aliases": "0734d61e5c63f18ce447e6d1284a42058d8cc218: meaningful unchanged screen startup control red/green both hosts; five checks each host pass, 51 live and 26 native controls; 28 physical source pins and three native harness pins verified; begin-message-build.json",
     "native_option_query_paths": "0b637312ab477d59cc8b1aa086c3df92f85f6d4f: meaningful real alias control red/green both hosts; five fresh checks each host pass with 50 live and 26 native controls; all source/harness pins verified; initial test fixture race retained and excluded; option-path-build.json",
     "native_hsva_colors": "ec04bf2e0224c9320d86d84c2a44bec5a38f87f8: corrected meaningful real vertex control fails before and passes after on both hosts with unchanged body; all five checks each host pass; 28 source and three native harness pins verified; first invalid mesh assumption and pre-Cargo filename bootstrap excluded; hsva-build.json",
@@ -70,6 +71,8 @@
     "transfer_verified": true
   },
   "worker": {
+    "new_earth_final_bps_launch": "tests/fixtures/full_song_lua/sweep-2026-10-13-reset-bps-final-repair-launch.json",
+    "reset_bps_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-reset-bps-build.json",
     "no_tears_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-no-tears-fixture-verification.json",
     "no_tears_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-no-tears-option-path-repair.json",
     "other_guy_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-other-guy-fixture-verification.json",
@@ -101,9 +104,9 @@
       "pending": 53,
       "processed": 76,
       "last_log_lines": [
-        "[382.1s] replaying every native gameplay frame: frame 657/5075 (12.9%)",
-        "[384.1s] replaying every native gameplay frame: frame 660/5075 (13.0%)",
-        "[386.1s] replaying every native gameplay frame: frame 664/5075 (13.1%)"
+        "[1674.7s] replaying every native gameplay frame: frame 3151/5075 (62.1%)",
+        "[1676.7s] replaying every native gameplay frame: frame 3153/5075 (62.1%)",
+        "[1678.7s] replaying every native gameplay frame: frame 3158/5075 (62.2%)"
       ],
       "supervisor_running": true
     },
@@ -241,6 +244,17 @@
     "fiji_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-fiji-foreground-diagnosis.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
+      {
+        "job": "new-earth-reset-bps-final-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "new earth/new earth.ssc",
+        "child_running": true
+      },
       {
         "job": "get-into-it-ssc-begin-final-repair-v2",
         "complete": false,
@@ -1362,6 +1376,13 @@
         "remote": "/home/parity/jobs/get-into-it-ssc-begin-final-repair-v2",
         "record": "sweep-2026-10-13-get-into-it-ssc-begin-final-repair-v2.json",
         "fix_commit": "0734d61e5c63f18ce447e6d1284a42058d8cc218",
+        "finish_status": "bounded final observed failure repair complete"
+      },
+      {
+        "name": "new-earth-reset-bps-final-repair",
+        "remote": "/home/parity/jobs/new-earth-reset-bps-final-repair-v1",
+        "record": "sweep-2026-10-13-new-earth-reset-bps-final-repair.json",
+        "fix_commit": "76ec2f609c495f809cb012c2759ee6bf937b33f8",
         "finish_status": "bounded final observed failure repair complete"
       }
     ]
