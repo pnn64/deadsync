@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Invert/invert.sm",
+      "acceptance_commit": "d07d3e33f",
+      "native_frames": 118050,
+      "replayed_frames": 118050,
+      "compared_stage_fields": 3696,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "b88f821df058ee4e0e7824590376d8f5fb4068ee6a1577a00e8fccc327ffbf88.tar.zst",
+      "compressed_sha256": "b88f821df058ee4e0e7824590376d8f5fb4068ee6a1577a00e8fccc327ffbf88",
+      "uncompressed_sha256": "2bfbf1d8df437f58ec82910d26a3dbbd381e8cc3f0fd56ce020e176fa5e78d7c",
+      "compressed_bytes": 38374940,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
