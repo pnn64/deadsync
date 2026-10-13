@@ -1,0 +1,309 @@
+{
+  "status": "bounded actual MODULO replay isolates discarded infinite sleep and premature foreground lifetime; no full repair launched",
+  "position": 317,
+  "source_simfile": "MODULO/modulo.ssc",
+  "bounded_replay": {
+    "excluded_first_invocation": {
+      "stage": "modulo-request-cutoff-v1",
+      "reason": "compressed archive filename was not its content address; rejected before replay",
+      "frames_replayed": 0,
+      "complete_chart_repairs_spent": 0
+    },
+    "diagnostic_only": true,
+    "complete_chart_repairs_spent": 0,
+    "chart_repair_attempts_remain": 2,
+    "exit_code": 2,
+    "seconds": 207.80389466599445,
+    "binary_sha256": "13910428be95f3669acf1ad4f85fc2098557c84a66ca66606780bedd9c5f2b0c",
+    "immutable_build_proof": "/home/parity/jobs/hsva-green-v2/proof.json",
+    "source_simfile": "MODULO/modulo.ssc",
+    "candidate_sha256": "1656e72fc18dcd4daf1fc5c2316e242df3ec0703d5a65d54e2cc4cf942c3f006",
+    "trace_sha256": "5c2e4ad31164c75384e68e8b68680db692ea18e474285dbe78bef29f07a41164",
+    "simfile_sha256": "b0333bc4289473ed6ba3116ff13f169ebf313c93994d35eece21451ceef6d941",
+    "input_sha256": "f99977f816171826b56a3f7147fb6e2f369f0e09d47f89273fe91cf75e88a1ea",
+    "report_sha256": "633a06a439823a8f83baa07c2fee76cef3531632cbd5a266a7c09f1119dbce80",
+    "replayed_frames": 11255,
+    "native_frames": 69793,
+    "errors": [],
+    "lua_requests": [],
+    "first_differences": [
+      {
+        "phase": "screen-end",
+        "seconds": 12.491405487060547,
+        "field": "difficulty",
+        "native": "Difficulty_Edit",
+        "deadsync": "Difficulty_Challenge"
+      },
+      {
+        "phase": "screen-end",
+        "seconds": 12.491405487060547,
+        "field": "description",
+        "native": "y = 0",
+        "deadsync": "Where were we again?"
+      },
+      {
+        "phase": "screen-end",
+        "seconds": 12.491405487060547,
+        "field": "meter",
+        "native": 9,
+        "deadsync": 1
+      },
+      {
+        "field": "command_query_count",
+        "native": 18466,
+        "deadsync": 50
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0001",
+          "args": [
+            {
+              "type": "number",
+              "value": "infinity"
+            }
+          ],
+          "beat": 0.002589734271168709,
+          "caller": {
+            "line": 51,
+            "source": "song:/lua/default.lua",
+            "tail_call": false
+          },
+          "command": "OnCommand",
+          "definition_id": "def-0001",
+          "detail": {
+            "native_tween_time_left": {
+              "type": "number",
+              "value": "infinity"
+            }
+          },
+          "kind": "call",
+          "line": 51,
+          "operation": "Actor.sleep",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": -2.3179819583892822,
+          "seq": 4,
+          "source": "song:/lua/default.lua",
+          "tween_time_left": {
+            "type": "number",
+            "value": "infinity"
+          }
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.sleep",
+          "source": "song:/lua/default.lua",
+          "line": 51,
+          "phase": "callback",
+          "beat": 0.002589734271168709,
+          "seconds": -2.3179819583892822,
+          "args": [
+            null
+          ],
+          "tween_time_left": 0.0
+        }
+      }
+    ],
+    "mismatch_count": 5,
+    "command_query_counts": {
+      "native": 18466,
+      "deadsync": 50
+    },
+    "native_infinite_sleep": {
+      "actor": "def-0001",
+      "args": [
+        {
+          "type": "number",
+          "value": "infinity"
+        }
+      ],
+      "beat": 0.002589734271168709,
+      "caller": {
+        "line": 51,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "detail": {
+        "native_tween_time_left": {
+          "type": "number",
+          "value": "infinity"
+        }
+      },
+      "kind": "call",
+      "line": 51,
+      "operation": "Actor.sleep",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -2.3179819583892822,
+      "seq": 4,
+      "source": "song:/lua/default.lua",
+      "tween_time_left": {
+        "type": "number",
+        "value": "infinity"
+      }
+    },
+    "actual_infinite_sleep": {
+      "scene": 1,
+      "kind": "call",
+      "operation": "Actor.sleep",
+      "source": "song:/lua/default.lua",
+      "line": 51,
+      "phase": "callback",
+      "beat": 0.002589734271168709,
+      "seconds": -2.3179819583892822,
+      "args": [
+        null
+      ],
+      "tween_time_left": 0.0
+    },
+    "actual_command_callbacks": [
+      {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "OnCommand",
+        "source": "song:/lua/default.lua",
+        "line": 51,
+        "beat": 0.002589734271168709,
+        "seconds": -2.3179819583892822,
+        "args": null
+      },
+      {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "OnCommand",
+        "source": "song:/lua/default.lua",
+        "line": 58,
+        "beat": 0.002589734271168709,
+        "seconds": -2.3179819583892822,
+        "args": null
+      },
+      {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "OnCommand",
+        "source": "song:/lua/default.lua",
+        "line": 75,
+        "beat": 0.002589734271168709,
+        "seconds": -2.3179819583892822,
+        "args": null
+      },
+      {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "OnCommand",
+        "source": "song:/lua/default.lua",
+        "line": 92,
+        "beat": 0.002589734271168709,
+        "seconds": -2.3179819583892822,
+        "args": null
+      },
+      {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "OnCommand",
+        "source": "song:/lua/default.lua",
+        "line": 105,
+        "beat": 0.002589734271168709,
+        "seconds": -2.3179819583892822,
+        "args": null
+      },
+      {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "WaitFadeCommand",
+        "source": "song:/lua/default.lua",
+        "line": 61,
+        "beat": 0.002589734271168709,
+        "seconds": -2.3179819583892822,
+        "args": null
+      },
+      {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "NumberWaitCommand",
+        "source": "song:/lua/default.lua",
+        "line": 78,
+        "beat": 0.002589734271168709,
+        "seconds": -2.3179819583892822,
+        "args": null
+      },
+      {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "OverlayWaitCommand",
+        "source": "song:/lua/default.lua",
+        "line": 95,
+        "beat": 0.002589734271168709,
+        "seconds": -2.3179819583892822,
+        "args": null
+      },
+      {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "MessageWaitCommand",
+        "source": "song:/lua/default.lua",
+        "line": 108,
+        "beat": 0.002589734271168709,
+        "seconds": -2.3179819583892822,
+        "args": null
+      }
+    ],
+    "native_first_post_activation_callback": {
+      "actor": "def-0002",
+      "args": [],
+      "beat": 0.04269053414463997,
+      "command": "WaitFadeCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "name": "WaitFadeCommand"
+      },
+      "kind": "command",
+      "line": 61,
+      "operation": "command.begin",
+      "scene": 1,
+      "seconds": -2.2867345809936523,
+      "seq": 67,
+      "source": "song:/lua/default.lua"
+    }
+  },
+  "local_source_pins": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Actor.cpp",
+      "sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Foreground.cpp",
+      "sha256": "04655fe3db304e08f8d424ac6a928858b74182f74ba14ceb658b709324153847"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\values.rs",
+      "sha256": "a42aeb6f17e7225059305991e64e744f5d4a836db26f47f7e5202ed068be6d57"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs",
+      "sha256": "7f4791580aa7e7851d2f5d7cb407f236a7fb4f143d050b717d535dde31bd5db9"
+    }
+  ],
+  "immutable_source_build": "sweep-2026-10-13-hsva-build.json",
+  "source_fix_commit": "ec04bf2e0224c9320d86d84c2a44bec5a38f87f8",
+  "concrete_source_cause": "The bounded existing diagnostic replays every frame through native first reload request, retaining all 11255 frames. It has zero callback errors and no independent request. Both sides load the Challenge intro and activate at the same native quantized time. Native Actor.sleep(math.huge) records an infinite duration and infinite tween time; independent tracing records a null numeric argument and zero tween time because read_f64/read_f32 reject the Lua Number infinity. Pinned Actor::Sleep retains the nonnegative infinite tween, and Foreground activation computes its stop from descendant GetTweenTimeLeft. Discarding this persistent child gives the independent foreground a finite stop from the other one-second tween. Its trace has only the 50 initial activation callbacks versus 18466 native events, so it stops the queued MessageHide/SongWait/WaitToAct chain before SetCurrentSteps and SetNewScreen. The earlier bounded float queue model alone did not identify this lifetime loss.",
+  "repair_requirement": "A real owned foreground control must retain an infinite child sleep, allow finite sibling queues to continue across frames, and preserve native infinite number trace values. Validate before spending a complete replay. Reuse the original capture and keep comparisons unchanged.",
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "chart_repair_attempts_spent": 0,
+  "remaining_repairs": 2,
+  "comparisons_modified": false,
+  "passing_charts_reopened": false
+}
