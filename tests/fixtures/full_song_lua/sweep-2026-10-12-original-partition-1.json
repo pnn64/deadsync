@@ -3049,6 +3049,21 @@
         }
       ],
       "report_sha256": "ff05a65824116d972225d165cac4bb2435cf7e7d6b76cf1afe407f31d0fc1de2"
+    },
+    {
+      "position": 222,
+      "source_simfile": "Happy Now Remastered/Happy Now.sm",
+      "simfile_sha256": "88dccb258ff2b8a2254c64f461b3ab0dd1d4c78c669d77495e0ec4394a9d94e7",
+      "retained_original_archive": "1247a360a459ff78cde41474fdbd6636f386b3e5628984373aaf206aa2a9b78f.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "76f1176f97fb1c43d5417e1e076c02c4ba3f1e43b57b6a66ac7f4b78f54e9332",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "a45545f0a / harness b191ebd",
+      "build_proof": "/home/parity/jobs/sm-metadata-build-v1/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 900.1704190510063,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1203129-1791857277402329388-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1203129-1791857277402329388-0\n"
     }
   ],
   "scope": {
@@ -3061,6 +3076,6 @@
   "binary_sha256": "76f1176f97fb1c43d5417e1e076c02c4ba3f1e43b57b6a66ac7f4b78f54e9332",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 6,
-  "pending_charts": 12,
-  "processed_charts": 18
+  "pending_charts": 13,
+  "processed_charts": 19
 }
