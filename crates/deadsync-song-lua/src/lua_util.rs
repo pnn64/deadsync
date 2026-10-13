@@ -5908,6 +5908,21 @@ fn install_sound_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         return Ok(());
     }
     let sound = lua.create_table()?;
+    sound.raw_set("__songlua_volume", 1.0_f32)?;
+    sound.set(
+        "volume",
+        lua.create_function({
+            let sound = sound.clone();
+            move |_, args: MultiValue| {
+                // LunaRageSound::volume stores FArg(1) without clamping and
+                // returns the same RageSound, rather than its owning Actor.
+                let volume = method_arg(&args, 0).cloned().and_then(read_f32)
+                    .ok_or_else(|| mlua::Error::runtime("Expected volume number"))?;
+                sound.raw_set("__songlua_volume", volume)?;
+                Ok(sound.clone())
+            }
+        })?,
+    )?;
     sound.set(
         "get_length",
         lua.create_function({

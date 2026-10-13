@@ -1997,6 +1997,41 @@ end }
     }
 
     #[test]
+    fn live_sound_volume_keeps_the_sound_identity_and_owner() {
+        let mut compiled = compile("sound-volume", r#"
+local primary = Def.Sound { InitCommand = function(self)
+    PRIMARY_SOUND = self:get()
+    assert(PRIMARY_SOUND == self:get())
+    assert(PRIMARY_SOUND:volume('1.5') == PRIMARY_SOUND)
+    assert(not pcall(PRIMARY_SOUND.volume, PRIMARY_SOUND, {}))
+end }
+local other = Def.Sound { InitCommand = function(self) OTHER_SOUND = self:get() end }
+return Def.ActorFrame { primary, other,
+    OnCommand = function(self)
+        self:SetUpdateFunction(function(self, delta)
+            if delta > 0 then
+                assert(PRIMARY_SOUND:volume(0.25) == PRIMARY_SOUND)
+                self:aux(19)
+            end
+        end)
+    end,
+}
+"#);
+        let mut scene = compiled.live_scene.take().expect("retained sound scene");
+        let primary: Table = scene.lua.globals().get("PRIMARY_SOUND").expect("primary sound");
+        let other: Table = scene.lua.globals().get("OTHER_SOUND").expect("other sound");
+        assert_ne!(primary.to_pointer(), other.to_pointer());
+        assert_eq!(primary.raw_get::<f32>("__songlua_volume").expect("unclamped native parameter"), 1.5);
+        assert_eq!(other.raw_get::<f32>("__songlua_volume").expect("default sound parameter"), 1.0);
+        let output = scene.advance(SongLuaLiveFrame { screen_seconds: 0.1,
+            delta_seconds: 0.1, ..Default::default() }).expect("volume callback");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(primary.raw_get::<f32>("__songlua_volume").expect("updated sound parameter"), 0.25);
+        assert_eq!(other.raw_get::<f32>("__songlua_volume").expect("independent other sound"), 1.0);
+        assert!(scene.states().iter().any(|state| state.aux == 19.0), "callback continues after volume");
+    }
+
+    #[test]
     fn live_false_condition_skips_subtree_and_compacts_subscriber_paths() {
         let dir = std::env::temp_dir().join(format!("deadsync-live-condition-{}", std::process::id()));
         fs::create_dir_all(&dir).expect("condition directory");
