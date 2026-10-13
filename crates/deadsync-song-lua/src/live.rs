@@ -1344,6 +1344,59 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "test-support")]
+    #[test]
+    fn live_single_judgment_subscriber_needs_no_captured_sort_rank() {
+        let mut compiled = compile_with_context("sole-native-judgment-subscriber",
+            "return Def.Actor{}", |context| {
+                context.defer_initial_live_update = true;
+                context.message_actor_order = vec![("1".into(), 10)];
+            });
+        let mut scene = compiled.live_scene.take().expect("retained theme observer");
+        let mut frame = SongLuaLiveFrame {
+            music_seconds: 60.0, screen_seconds: 60.0, beat: 120.0,
+            delta_seconds: 0.01, ..Default::default()
+        };
+        frame.players[0].life = 0.5;
+        frame.players[0].autoplay = true;
+        frame.players[0].fail_enabled = true;
+        let output = scene.advance(frame).expect("owned gameplay frame");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        let subscribers = crate::song_lua_actor_registry(&scene.lua).unwrap()
+            .sequence_values::<Table>().filter(|actor|
+                matches!(actor.as_ref().unwrap().raw_get::<Value>("JudgmentMessageCommand").unwrap(), Value::Function(_)))
+            .count();
+        assert_eq!(subscribers, 1, "only the owned FailOnHoldStart listener subscribes");
+        let params = scene.lua.create_table().unwrap();
+        params.raw_set("Player", "PlayerNumber_P1").unwrap();
+        let result = crate::lua_util::broadcast_native_song_lua_message(
+            &scene.lua, "Judgment", Some(Value::Table(params)));
+        assert!(result.is_ok(),
+            "a lone native Judgment subscriber is dispatched without a sort rank: {result:?}");
+        scene.lua.load("SCREENMAN:GetTopScreen():GetChild('Overlay'):playcommand('Off')")
+            .exec().expect("owned overlay Off");
+        assert_eq!(take_output(&scene.lua).unwrap().player_writes,
+            vec![SongLuaLivePlayerWrite::Fail { player: 0 }],
+            "the real Judgment latch fails autoplay during overlay Off");
+
+        let mut compiled = compile_with_context("multiple-captured-subscribers", r#"
+CALLS = 0
+return Def.ActorFrame {
+    ProbeMessageCommand = function() CALLS = CALLS + 1 end,
+    Def.Actor {ProbeMessageCommand = function() CALLS = CALLS + 1 end},
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.message_actor_order = vec![("1".into(), 10)];
+        });
+        let scene = compiled.live_scene.take().unwrap();
+        let result = crate::lua_util::broadcast_native_song_lua_message(&scene.lua, "Probe", None);
+        assert!(result.unwrap_err().to_string().contains("missing captured subscriber identity"),
+            "multiple subscribers still require every captured ordering identity");
+        assert_eq!(scene.lua.globals().get::<u32>("CALLS").unwrap(), 0,
+            "missing ordering information must be reported before either callback");
+    }
+
     #[test]
     fn live_foreground_start_time_uses_native_note_row() {
         let mut compiled = compile_with_context("foreground-rounded-start", r#"

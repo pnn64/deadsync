@@ -3212,10 +3212,18 @@ fn broadcast_song_lua_message_impl(
             if !matches!(actor.get::<Value>(command.as_str())?, Value::Function(_)) {
                 continue;
             }
-            actors.push((message_actor_identity(lua, &actor)?, actor));
+            actors.push((0, actor));
         }
         // MessageManager.cpp stores subscribers in an identity-ordered set.
         // Tree construction and definition-table order do not define delivery.
+        // A set with one subscriber has only one delivery order, so its rank
+        // cannot affect dispatch. Multiple subscribers still need every rank
+        // before running any callback.
+        if actors.len() > 1 {
+            for (identity, actor) in &mut actors {
+                *identity = message_actor_identity(lua, actor)?;
+            }
+        }
         actors.sort_unstable_by_key(|(identity, _)| *identity);
         let params = if normalize { normalize_broadcast_params(lua, message, params)? } else { params };
         // Drain in place so consuming the snapshot does not move its inline buffer.
