@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T08:54:53Z",
-  "previous_goal_turn": "progress: Four original queued fixtures passed and were immediately saved: Invert SM d07d3e33f (118050 frames), itg bloodrush 2005 c2b170d2e (44818), Jokes 56e5fd329 (85083), and Invert SSC ed68d7f37 (118104). Each full replay had zero mismatches and Lua errors; all four compressed archives locally decompress to retained raw hashes. Storage verification is b0f09eda9, 397ee7a77 and sweep-2026-10-13-jokes-invert-fixture-verification.json. Coverage remains separate. Source fix 874f2e535 models Simply Love's actual autoplay Judgment latch in an owned overlay and applies shared FailPlayer during Off, after LeaveGameplay's AllFailed decision and before foreground Off. The actual PlayerState controller backs IsAutoplay. Linux passed 815 gameplay tests, 39 live controls, 21 production native controls and both executable builds; Windows passed 39 live controls, 21 native controls and both builds. A direct process invocation resolved PowerShell stderr-redirection's nonzero wrapper status; original logs were retained. Immutable helper 7e34d820 was verified against all 23 frozen source pins and native harness bytes before freg's final repair. That replay reused the original byte-identical capture, completed all 24013 frames and 341 stage fields, and resolved the prior Off begin/end clock differences. Freg remains pending at cap two: four failed-flag differences and one actual Judgment callback error for missing captured subscriber identity ScreenGameplay/6/1. The theme listener is absent from the replay's song-owned neutral factory pointer map; retained runtime records lack native pointer fields for assigning its subscriber position. No third freg repair or passing-chart reopening occurred. New-chart selection was restored to immutable helper 66d32bf5, verifying its binary, all four successful checks, all 23 original source pins directly from retained density-graph-sources-v1.tar.gz, and immutable harness SHA; the shared build snapshot contains newer source and is not treated as historical source evidence. Build/residual evidence is sweep-2026-10-13-autoplay-off-build.json and sweep-2026-10-13-freg-final-repair-residual.json. Actual new jeans failure is traced to the mapper rejecting multiple foreground entries: its unchanged simfile has 34 changes and native Foreground independently allocates every entry; neither repair attempt is spent. The single publisher now watches 35 streams. All three disjoint original queues remain live: Koi main, Just a Friend part 1, and Jack The Reaper part 2. The 501-source audit remains unchanged and incomplete; the live goal must continue.",
+  "updated_utc": "2026-10-13T10:45:05Z",
+  "previous_goal_turn": "progress: Just a Friend, Jerk and Kita passed their original full replays and were immediately saved and committed; storage bytes locally verified in 0a040cd4b. Coverage remained separate. Mapper fix be2565b8d preserves the independent ownership slots and descendants of every native foreground entry, including repeated filenames and definition IDs. Fresh Linux 815 gameplay, 38 live and 21 native controls plus both builds verified helper 95e3f733 against all 23 source pins and the immutable native harness. Jeans first repair passed all 27391 frames and 495 stage fields with zero mismatches and errors; fixture acceptance 5dbfd60bd and local compressed/decompressed-byte proof 90304442a. Its 34 captured roots and 102 neutral allocations were reused, without recapture. Gaming's first repair completed all 26294 frames and 363 fields with no errors; only 18 literal ./foreground filename differences remained. Primary pinned Foreground.cpp concatenates the raw authored direct-file name. Fix 469d6157b retains that spelling while reading the already resolved file. The existing control failed before the fix, then complete Windows 39 live/21 native and Linux 815/38/21 controls and both executable builds passed. Helper 4713556073fc219eef2dd0db6fbb496506cdfa4f49c27f62d6427ec63f95ab84 was rehashed with all 23 actual frozen source inputs and immutable harness before selection. The helper retains the previously selected baseline and only changes the compiler and existing source-name control from helper 95; the uncaptured theme listener from 874f2e535 remains unselected. Gaming final repair 2 finished 26294/26294 frames and 363 stage fields; status passed, 0 mismatches and 0 Lua errors. The accepted fixture was immediately published and committed; its compressed bytes and decompressed original hash are locally verified. Impulse SM first repair completed all 156090 frames and 2222 stage fields with zero Lua errors and exactly 39 direct ./default.lua source differences; all other compared fields match. Diagnosis 695ec1783; its final attempt 2 is running with the verified filename helper and reused raw capture. Impulse SSC first repair is still running; inspect its complete actual residuals before any final attempt. Freg remains pending at cap two; no third attempt or passing-chart reopening. The single publisher watches 39 streams. Latest original-scope counts are {'passed': 203, 'pending': 61, 'unprocessed': 237}; all 501 original source bytes remain unchanged, and the goal remains active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "e6bcf292268a5471f11db0811ac390a4ea054656",
+      "deadsync": "6b8a544d66c3f81335f70c3406b9fd006944b49b",
       "itgmania_harness": "b191ebd0fcf8b59b5294958d2ffe2939af2d742a"
     }
   },
@@ -71,9 +71,9 @@
       "pending": 37,
       "processed": 52,
       "last_log_lines": [
-        "[5809.5s] replaying every native gameplay frame: frame 60453/145074 (41.7%)",
-        "[5811.5s] replaying every native gameplay frame: frame 60475/145074 (41.7%)",
-        "[5813.5s] replaying every native gameplay frame: frame 60494/145074 (41.7%)"
+        "[12419.5s] replaying every native gameplay frame: frame 128863/145074 (88.8%)",
+        "[12421.5s] replaying every native gameplay frame: frame 128879/145074 (88.8%)",
+        "[12423.5s] replaying every native gameplay frame: frame 128896/145074 (88.8%)"
       ],
       "supervisor_running": true
     },
@@ -82,6 +82,13 @@
     "parallel_queue_receipt": "tests/fixtures/full_song_lua/sweep-2026-10-12-parallel-queues.json",
     "build_transition": "tests/fixtures/full_song_lua/sweep-2026-10-12-build-transition.json",
     "source_scope_audit": "tests/fixtures/full_song_lua/sweep-2026-10-12-original-scope.json",
+    "gaming_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-gaming-fixture-verification.json",
+    "impulse_sm_first_residual": "tests/fixtures/full_song_lua/sweep-2026-10-13-impulse-sm-first-residual.json",
+    "foreground_filename_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-fg-filename-build.json",
+    "gaming_first_residual": "tests/fixtures/full_song_lua/sweep-2026-10-13-gaming-first-ownership-residual.json",
+    "jeans_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-jeans-fixture-verification.json",
+    "jeans_neutral_inputs": "tests/fixtures/full_song_lua/sweep-2026-10-13-jeans-neutral-creation-inputs.json",
+    "foreground_entry_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-fg-entry-build.json",
     "cursed_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-cursed-screen-children-diagnosis.json",
     "dimmadome_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-dimmadome-background-diagnosis.json",
     "dig_dug_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-dig-dug-clock-diagnosis.json",
@@ -105,6 +112,50 @@
     "fiji_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-fiji-foreground-diagnosis.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
+      {
+        "job": "impulse-sm-fg-filename-final-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Impulse/impulse.sm",
+        "child_running": true
+      },
+      {
+        "job": "gaming-fg-filename-final-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
+        "pending": 0,
+        "processed": 1,
+        "last_phase": "pack",
+        "source_simfile": "Gaming in 2018/Gaming in 2018.ssc",
+        "child_running": false
+      },
+      {
+        "job": "fg-entry-family-repairs-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 2,
+        "processed": 2,
+        "last_phase": "replay",
+        "source_simfile": "Impulse/impulse.ssc",
+        "child_running": true
+      },
+      {
+        "job": "jeans-fg-entry-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
+        "pending": 0,
+        "processed": 1,
+        "last_phase": "pack",
+        "source_simfile": "jeans/abj.sm",
+        "child_running": false
+      },
       {
         "job": "freg-autoplay-final-repair-v1",
         "complete": true,
@@ -396,25 +447,25 @@
         "job": "chart-sweep-parallel-v4-1",
         "complete": false,
         "supervisor_running": true,
-        "passed": 13,
-        "pending": 18,
-        "processed": 31,
+        "passed": 15,
+        "pending": 19,
+        "processed": 34,
         "last_phase": "replay",
-        "source_simfile": "Just a Friend To  You/Just a Friend To  You.sm",
+        "source_simfile": "Koi [UPS2016]/koi.ssc",
         "child_running": true,
-        "position": 261
+        "position": 270
       },
       {
         "job": "chart-sweep-parallel-v4-2",
         "complete": false,
         "supervisor_running": true,
-        "passed": 11,
-        "pending": 17,
-        "processed": 28,
+        "passed": 12,
+        "pending": 18,
+        "processed": 30,
         "last_phase": "replay",
-        "source_simfile": "Jack The Reaper/Jack The Reaper.sm",
+        "source_simfile": "Jumper/Jumper.sm",
         "child_running": true,
-        "position": 253
+        "position": 259
       },
       {
         "job": "definition-concat-repair-v1",
@@ -729,15 +780,43 @@
         "record": "sweep-2026-10-13-freg-autoplay-final-repair.json",
         "fix_commit": "874f2e535 + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
         "finish_status": "bounded freg final autoplay overlay Off repair complete"
+      },
+      {
+        "name": "jeans-fg-entry-repair",
+        "remote": "/home/parity/jobs/jeans-fg-entry-repair-v1",
+        "record": "sweep-2026-10-13-jeans-fg-entry-repair.json",
+        "fix_commit": "be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+        "finish_status": "bounded jeans first foreground entry ownership repair complete"
+      },
+      {
+        "name": "fg-entry-family-repairs",
+        "remote": "/home/parity/jobs/fg-entry-family-repairs-v1",
+        "record": "sweep-2026-10-13-fg-entry-family-repairs.json",
+        "fix_commit": "be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+        "finish_status": "bounded first repeated foreground ownership repairs complete"
+      },
+      {
+        "name": "gaming-fg-filename-final-repair",
+        "remote": "/home/parity/jobs/gaming-fg-filename-final-repair-v1",
+        "record": "sweep-2026-10-13-gaming-fg-filename-final-repair.json",
+        "fix_commit": "469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 / harness b191ebd",
+        "finish_status": "bounded final Gaming foreground filename repair complete"
+      },
+      {
+        "name": "impulse-sm-fg-filename-final-repair",
+        "remote": "/home/parity/jobs/impulse-sm-fg-filename-final-repair-v1",
+        "record": "sweep-2026-10-13-impulse-sm-fg-filename-final-repair.json",
+        "fix_commit": "469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 / harness b191ebd",
+        "finish_status": "bounded final Impulse SM foreground filename repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 51,
+    "new_passed_fixtures": 56,
     "new_pending_charts": 60,
-    "new_processed_sources": 111,
+    "new_processed_sources": 116,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 242,
+    "unprocessed_sources": 237,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -1034,14 +1113,6 @@
       ]
     },
     {
-      "source_simfile": "Gaming in 2018/Gaming in 2018.ssc",
-      "repair_attempts": 0,
-      "failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (966936) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: multiple native foreground entries need entry-specific ownership\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
-    },
-    {
       "source_simfile": "Genshin Quiz/Megaquiz.ssc",
       "repair_attempts": 0,
       "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Genshin Mega Quiz': failed to execute '/tmp/.tmpqRD1jn/song/lua/default.lua': runtime error: [string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: attempt to call global 'DayOfYear' (a nil value)\nstack traceback:\n\t[C]: in global 'DayOfYear'\n\t[string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Genshin Mega Quiz' from '/tmp/.tmpqRD1jn/song/lua/default.lua': failed to execute '/tmp/.tmpqRD1jn/song/lua/default.lua': runtime error: [string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: attempt to call global 'DayOfYear' (a nil value)\nstack traceback:\n\t[C]: in global 'DayOfYear'\n\t[string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (975076) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
@@ -1167,11 +1238,43 @@
     },
     {
       "source_simfile": "Impulse/impulse.sm",
-      "repair_attempts": 0,
-      "failure": "[0.5s] replaying every native gameplay frame\n\nthread 'main' (1482632) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: multiple native foreground entries need entry-specific ownership\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "repair_attempts": 1,
+      "failure": null,
       "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
+      "mismatch_count": 39,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0001",
+            "args": [],
+            "beat": 128.0001220703125,
+            "command": "OnCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 5,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 60.017051696777344,
+            "seq": 1,
+            "source": "song:/./default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "OnCommand",
+            "source": "song:/default.lua",
+            "line": 5,
+            "beat": 128.0001220703125,
+            "seconds": 60.017051696777344,
+            "args": null
+          }
+        }
+      ]
     },
     {
       "source_simfile": "INAZUMA (Gio)/INAZUMA.ssc",
@@ -1536,12 +1639,67 @@
       "first_mismatch": []
     },
     {
-      "source_simfile": "jeans/abj.sm",
+      "source_simfile": "kaboooooom!/KABOOOOOM!!!!.sm",
       "repair_attempts": 0,
-      "failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (2902640) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: multiple native foreground entries need entry-specific ownership\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "failure": null,
       "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
+      "mismatch_count": 2371,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 32.01356887817383,
+            "caller": {
+              "line": 38,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "results": [
+                {
+                  "actor": "external-0240",
+                  "name": "ScreenGameplay",
+                  "path": "ScreenGameplay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 38,
+            "operation": "ScreenManager.GetTopScreen",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 10.984081268310547,
+            "seq": 129970,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ScreenManager.GetTopScreen",
+            "source": "song:/lua/default.lua",
+            "line": 38,
+            "phase": "callback",
+            "beat": 32.01356887817383,
+            "seconds": 10.984081268310547,
+            "args": [],
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "source_simfile": "Delightful Day/Delightful Day.ssc",
@@ -1797,6 +1955,25 @@
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
+    },
+    {
+      "source_simfile": "Jack The Reaper/Jack The Reaper.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 20.002: missing captured subscriber identity for ScreenGameplay/6/1",
+        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 37.750: missing captured subscriber identity for ScreenGameplay/6/1"
+      ],
+      "mismatch_count": 4,
+      "first_mismatch": [
+        {
+          "phase": "progress",
+          "seconds": 110.00029754638672,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        }
+      ]
     }
   ],
   "historical_concrete_failures": [

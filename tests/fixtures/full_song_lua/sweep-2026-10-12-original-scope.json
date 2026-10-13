@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T08:54:53Z",
+  "updated_utc": "2026-10-13T10:45:02Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 198,
+    "passed": 203,
     "pending": 61,
-    "unprocessed": 242
+    "unprocessed": 237
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1813,9 +1813,9 @@
       "position": 206,
       "source_simfile": "Gaming in 2018/Gaming in 2018.ssc",
       "simfile_sha256": "786d023994f26f3e5d66f8b0319b0531e77035978cbd3a6ca1df4500d8800381",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-13-gaming-fg-filename-final-repair.json"
     },
     {
       "position": 207,
@@ -2102,8 +2102,8 @@
       "source_simfile": "Impulse/impulse.sm",
       "simfile_sha256": "4202087684d63c9525e824368b4e2c021070b3c7bfd01409db460d94823392b4",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-fg-entry-family-repairs.json"
     },
     {
       "position": 243,
@@ -2189,7 +2189,9 @@
       "position": 253,
       "source_simfile": "Jack The Reaper/Jack The Reaper.sm",
       "simfile_sha256": "04baaf73d0577eff9e4316a41ac80ed5238bd4da0168929ac3591aea8c548723",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 254,
@@ -2203,15 +2205,17 @@
       "position": 255,
       "source_simfile": "jeans/abj.sm",
       "simfile_sha256": "9c5e808b44a8f6355cff645f400bad14c1cf42e73830d4cb3466a632f3a7454c",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-jeans-fg-entry-repair.json"
     },
     {
       "position": 256,
       "source_simfile": "Jerk/Jerk.ssc",
       "simfile_sha256": "8bacf34206a523bcea241f51884181a80dfcba955786b1a1ed7cff536a473e6f",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 257,
@@ -2247,7 +2251,9 @@
       "position": 261,
       "source_simfile": "Just a Friend To  You/Just a Friend To  You.sm",
       "simfile_sha256": "980749e25adccf105714ee29e65a465c9d4e54d59fdfc6bce9f69cbdf8687744",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 262,
@@ -2267,7 +2273,9 @@
       "position": 264,
       "source_simfile": "kaboooooom!/KABOOOOOM!!!!.sm",
       "simfile_sha256": "3a8ee5ff1309e650c94a22dcb1864c00ff2ce81ae6d3c57e9509633eaa9917d5",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 265,
@@ -2287,7 +2295,9 @@
       "position": 267,
       "source_simfile": "Kita Saitama 2000/Kita Saitama 2000.ssc",
       "simfile_sha256": "c5e17e8777a3fe392638dfae654ae7c7649c4312c73e444fd7a777d599de8b60",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 268,
