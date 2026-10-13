@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Impulse/impulse.ssc",
+      "acceptance_commit": "6125f3989cce3db02371bb4d135c77fbf853c18a",
+      "native_frames": 124609,
+      "replayed_frames": 124609,
+      "compared_stage_fields": 2222,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "3acd381df54e1a78b79a245136461482bc085b4b96743f67fa3475ddf60e5965.tar.zst",
+      "compressed_sha256": "3acd381df54e1a78b79a245136461482bc085b4b96743f67fa3475ddf60e5965",
+      "uncompressed_sha256": "9e432f156449c43b317a020b0d37083da89413bd6538691d0f5f6708dc170417",
+      "compressed_bytes": 13435752,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "native drawable state/resources: Sprite"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
