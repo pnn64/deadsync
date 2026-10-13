@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T12:07:37Z",
+  "updated_utc": "2026-10-13T13:11:40Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 206,
-    "pending": 64,
-    "unprocessed": 231
+    "passed": 210,
+    "pending": 66,
+    "unprocessed": 225
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2261,7 +2261,9 @@
       "position": 262,
       "source_simfile": "Just a Friend To  You/Just a Friend To  You.ssc",
       "simfile_sha256": "3b414c9ff913b21adca9fc0d86123363459ad5ffb9122bf6437b63d8ba567bad",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 263,
@@ -2283,7 +2285,9 @@
       "position": 265,
       "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
       "simfile_sha256": "5dc405cf822d42dfb048108ee96adacc1ff741021f027ee1bdd6abc68fadfcb4",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 266,
@@ -2411,7 +2415,9 @@
       "position": 284,
       "source_simfile": "Lonely/Lonely.sm",
       "simfile_sha256": "faff72213058f1e3dfee6fca405836936dcabc5603612b233d8274b3fd2bca82",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 285,
@@ -2429,7 +2435,9 @@
       "position": 287,
       "source_simfile": "Loop/loop.ssc",
       "simfile_sha256": "4b54b8d229402da08496d958dd47ce987d54d4fd03a9fc21dc23a8d861c45377",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 288,
@@ -2447,7 +2455,9 @@
       "position": 290,
       "source_simfile": "Lower/Lower.ssc",
       "simfile_sha256": "8b86f76809bc27f0a5ec3ad7d29cd08cf52c5932904bcf5fe02428ca58ba700c",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 291,
@@ -2465,7 +2475,9 @@
       "position": 293,
       "source_simfile": "Magic Torus/torus3.sm",
       "simfile_sha256": "53ad240c0fc4d238518c7fda7a429e5cc1a74799c0cd4fa683ced552ae0aed66",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 294,

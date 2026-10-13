@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T12:07:38Z",
-  "previous_goal_turn": "progress: Impulse SSC final repair 2 passed every one of 124609 frames and 2222 stage fields with zero mismatches and Lua errors; accepted fixture commit 6125f3989, completion a7805b30f, local decompression proof 7c1a20c05. Limitless original replay passed all 37926 frames and 1243 stage fields with zero mismatches/errors; accepted 080bd3bb2, storage proof 2be0336dc. Coverage remains separate and neither pass was reopened. Koi SM missing rec_print_table is fixed as 0505ad8a0 using pinned fallback 02 Utilities.lua:399 behavior for indentation, depth and recursive ordinary tables. Owned actor handles retain native userdata semantics inside this helper, using actual ownership marker __songlua_def_owned, so internal actor cycles are not traversed. A real owned actor callback reproduced the missing global before implementation. The final control defers foreground activation until the first frame so Trace can be observed; it exercises nil, nested ordinary tables, depth-zero cycles, depths one/two, boolean values, allocated actor cycles, nested actor values and the following queued command. Windows passed all 40 live controls, 21 native replay controls and both executable builds; fresh Linux passed 815 gameplay, 39 live, 21 replay controls and both builds. The new frozen helper uses the immutable fg-filename 23-source baseline plus compat.rs as an explicit 24th source pin, with only the new live control inserted into baseline live.rs; unselected 874f2e535 theme listener remains outside it. Existing compat LF baseline was separately verified on Linux and from the local Git source. Host-local mtimes precede Cargo; all 24 actual sources, frozen bundles and actual executable were verified after build and before selection and replay. Helper e1e574aa62e36912260a8bcf656514c334db73a3cf6188c0d21242b688406793 is selected with corrected-schema harness 058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4 and unchanged native observer. Build proof 2b088e024; Koi SM first repair 1 now replays the retained byte-identical 4d39fd73 candidate and eefd0696 native trace under exact live process checks. Launch f671e9db2; supervisor 3805009, replay 3805229. Its complete acceptance has not yet been decided. Mountain final repair 2 completed all 56068 frames and 1100 stage fields with no Lua errors. Complete physical namespace 61 Lua files resolves the original omitted-59-puzzle-files failure, and the existing schema tag remains unchanged. The remaining existing comparison fails on command_query_count: native 1429 versus independent 715, with no event-field mismatch among compared pairs. It remains pending at its two-attempt cap, recorded f6d492db8, completion c0d909ada and verified residual f671e9db2; no third repair is started. Lake of Lost Nostalgia completed all 17472 frames with no Lua errors but 41368 command differences. Source diagnosis 0d5474a0f verifies its raw report and actual frozen helper source, native nil GetTopScreen during Init versus independent ScreenGameplay, and native SetDrawFunction callbacks missing from independent live advance. Both Lake repair attempts remain available; startup screen availability and the native render boundary require source-backed controls before its first repair. DoorOpen completed 59710 frames with five command-event differences and no Lua errors. Lesson by DJ native capture was killed by SIGKILL before writing a trace. Jumper SM also completed and remains pending; retained concrete failures are in the sweep record. The single publisher watches 43 streams. All three original queues and the Koi SM first repair remain live. Original counts are {'passed': 206, 'pending': 64, 'unprocessed': 231}. All 501 original source bytes remain unchanged. The goal is active and incomplete; coverage is separate, comparisons are unchanged, no accepted pass is reopened and no capped third repair is started.",
+  "updated_utc": "2026-10-13T13:14:38Z",
+  "previous_goal_turn": "progress: Just a Friend To  You passed all 103852 native frames and 1826 stage fields with zero mismatches/errors; accepted 1619f528a, decompressed storage proof 6ebf27288. Loop passed all 14674 native frames and 1485 fields with zero mismatches/errors; accepted 4991919d1, storage proof 119b04d32. Lower passed all 65040 native frames and 1232 fields with zero mismatches/errors; accepted 2cae5210e, storage proof 22819d3be. Magic Torus passed all 30590 native frames and 869 fields with zero mismatches/errors; accepted 6f4d9e462, storage proof f5f2d0d98. All four fixture archives are committed and byte verified, coverage remains separate, and no pass was reopened. Lake startup screen availability is fixed as 8cb4b7633: its actual gameplay loading context returns nil GetTopScreen through construction/Init, retains owned parent handles, and exposes the pushed screen before Begin. The active-host standalone context remains explicit; End sees the popped screen. Both-host validated helper proof 14eb8b346 includes the actual 25-source immutable baseline and the shell gameplay context source as a new pin. Lake draw clock diagnosis 1b95f1106 verified the unchanged retained trace: 17471 authored draw passes match the first 17471 of 17472 recorded input frames; the final update exits gameplay before a further draw. No native expected commands or timestamps were fed into runtime. Owned live draw execution is fixed as 04899487a. Scene update is separate from draw; production draws after the complete update and health, and independently skips outgoing/replacement screen boundaries. A simple owned control reproduced zero callbacks instead of one before the fix. The strengthened control covers nested explicit Draw, update/health order, replacing automatic children, draw-queued commands awaiting the following Update, visibility, hibernation, diffuse/glow opacity, wrapper visibility, callback removal/replacement, visual pose changes, 2000 frames retaining only the current draw stack, and no draw after End. Windows passed 42 live controls and 21 replay controls and both executable builds; Linux passed 815 gameplay, 41 live, 21 replay controls and both builds. The fresh frozen helper adds draw_capture.rs as the explicit 26th source pin. Only isolated new edits and the owned control are applied to the immutable screen-loading bundle; unselected 874f2e535 theme listeners remain excluded. Actual source bytes, bundle patches, postbuild source hashes, host-local mtimes and the helper executable were checked before selection and replay. Helper c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2 is selected with unchanged corrected-schema harness 058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4. Lake first bounded repair 1 now replays the byte-identical retained d78b8d9b candidate and 6d08d1e7 native trace under exact supervisor/child argv checks. Complete acceptance is not yet decided. Koi SM first rec_print_table repair remains in progress and is not repeated. Mountain remains pending after its complete final attempt 2 with 56068 frames, 1100 matching stage fields, no Lua errors and the residual command_query_count native1429 versus independent715. Its cap is exhausted; no third repair. Lonely original replay completed 90583 frames and 2706 stage fields, with one concrete missing table.find callback error at lua/default.lua:567 and 275039 broadcast/command differences. Diagnosis e7948856f verifies the raw report and pinned fallback Utilities.lua:113 pairs/key-return helper; the actual original helper was 471355, not rec_print. Both Lonely repair attempts remain unspent. kaboooooom SSC also completed and is retained as pending ce1ef3af5; its concrete existing failures are in the sweep record. The single publisher watches 44 streams; original queues and bounded Koi/Lake repairs continue. Original counts are {'passed': 210, 'pending': 66, 'unprocessed': 225}. All 501 original sources remain byte unchanged. The goal is active and incomplete, all existing full uncompressed comparisons remain the only acceptance gates, coverage is separate, no pass is reopened and no capped repair is repeated.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "f671e9db240f0d10ed54f9b8b030bfedc88e3e66",
+      "deadsync": "f5f2d0d980a276e4275ee6783ba7e2b56efe687a",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -62,19 +62,15 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Lonely/Lonely.sm",
-      "position": 284,
-      "phase": "replay",
-      "pid": 3800856,
+      "current": "Marvins Room/MarvinsRoom.sm",
+      "position": 296,
+      "phase": "capture",
+      "pid": 4122851,
       "process_matches": true,
-      "passed": 16,
-      "pending": 41,
-      "processed": 57,
-      "last_log_lines": [
-        "[504.2s] replaying every native gameplay frame: frame 43881/90583 (48.4%)",
-        "[506.2s] replaying every native gameplay frame: frame 44122/90583 (48.7%)",
-        "[508.2s] replaying every native gameplay frame: frame 44393/90583 (49.0%)"
-      ],
+      "passed": 19,
+      "pending": 42,
+      "processed": 61,
+      "last_log_lines": [],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -82,6 +78,15 @@
     "parallel_queue_receipt": "tests/fixtures/full_song_lua/sweep-2026-10-12-parallel-queues.json",
     "build_transition": "tests/fixtures/full_song_lua/sweep-2026-10-12-build-transition.json",
     "source_scope_audit": "tests/fixtures/full_song_lua/sweep-2026-10-12-original-scope.json",
+    "magic_torus_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-magic-torus-fixture-verification.json",
+    "lonely_table_find_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-lonely-table-find-diagnosis.json",
+    "lake_first_draw_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-13-lake-live-draw-launch.json",
+    "lake_native_draw_clocks": "tests/fixtures/full_song_lua/sweep-2026-10-13-lake-draw-clock-diagnosis.json",
+    "owned_live_draw_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-live-draw-build.json",
+    "screen_loading_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-screen-loading-build.json",
+    "lower_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-lower-fixture-verification.json",
+    "loop_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-loop-fixture-verification.json",
+    "just_friend_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-just-friend-fixture-verification.json",
     "lake_draw_startup_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-lake-draw-startup-diagnosis.json",
     "mountain_final_residual": "tests/fixtures/full_song_lua/sweep-2026-10-13-mountain-final-residual.json",
     "koi_sm_first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-13-koi-sm-rec-print-launch.json",
@@ -125,6 +130,17 @@
     "fiji_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-fiji-foreground-diagnosis.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
+      {
+        "job": "lake-live-draw-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
+        "child_running": true
+      },
       {
         "job": "koi-sm-rec-print-repair-v1",
         "complete": false,
@@ -516,13 +532,13 @@
         "job": "chart-sweep-parallel-v4-2",
         "complete": false,
         "supervisor_running": true,
-        "passed": 12,
-        "pending": 19,
-        "processed": 31,
+        "passed": 13,
+        "pending": 20,
+        "processed": 33,
         "last_phase": "replay",
-        "source_simfile": "Just a Friend To  You/Just a Friend To  You.ssc",
+        "source_simfile": "Kizuato - [Zaia]/Kizuato.ssc",
         "child_running": true,
-        "position": 262
+        "position": 268
       },
       {
         "job": "definition-concat-repair-v1",
@@ -893,15 +909,22 @@
         "record": "sweep-2026-10-13-koi-sm-rec-print-repair.json",
         "fix_commit": "0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b / harness c283a8a",
         "finish_status": "bounded first Koi SM recursive debug helper repair complete"
+      },
+      {
+        "name": "lake-live-draw-repair",
+        "remote": "/home/parity/jobs/lake-live-draw-repair-v1",
+        "record": "sweep-2026-10-13-lake-live-draw-repair.json",
+        "fix_commit": "04899487a + 8cb4b7633 + 0505ad8a0 / harness c283a8a",
+        "finish_status": "bounded first Lake native loading/draw repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 59,
-    "new_pending_charts": 63,
-    "new_processed_sources": 122,
+    "new_passed_fixtures": 63,
+    "new_pending_charts": 65,
+    "new_processed_sources": 128,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 231,
+    "unprocessed_sources": 225,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -1456,6 +1479,22 @@
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
+    },
+    {
+      "source_simfile": "Lonely/Lonely.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [
+        "update function for ActorFrame 'lua' at beat 50.006: ShowArrowMessageCommand failed for ActorFrame 'lua': runtime error: [string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:567: attempt to call field 'find' (a nil value)\nstack traceback:\n\t[C]: in field 'find'\n\t[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:567: in function <[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:557>\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:478: in function <[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:431>\nstack traceback:\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:478: in function <[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:431>\n"
+      ],
+      "mismatch_count": 275039,
+      "first_mismatch": [
+        {
+          "field": "source_broadcast_count",
+          "native": 39,
+          "deadsync": 10360
+        }
+      ]
     },
     {
       "source_simfile": "Delightful Day/Delightful Day.sm",
@@ -2127,6 +2166,69 @@
           "field": "life_latest",
           "native": 0,
           "deadsync": 0.5
+        }
+      ]
+    },
+    {
+      "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 2131,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 32.007293701171875,
+            "caller": {
+              "line": 38,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "results": [
+                {
+                  "actor": "external-0240",
+                  "name": "ScreenGameplay",
+                  "path": "ScreenGameplay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 38,
+            "operation": "ScreenManager.GetTopScreen",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 10.99092960357666,
+            "seq": 129874,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ScreenManager.GetTopScreen",
+            "source": "song:/lua/default.lua",
+            "line": 38,
+            "phase": "callback",
+            "beat": 32.007293701171875,
+            "seconds": 10.99092960357666,
+            "args": [],
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          }
         }
       ]
     }
