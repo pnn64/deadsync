@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T15:08:56Z",
+  "updated_utc": "2026-10-13T16:28:50Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 216,
-    "pending": 73,
-    "unprocessed": 212
+    "passed": 220,
+    "pending": 78,
+    "unprocessed": 203
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2318,8 +2318,8 @@
       "source_simfile": "Koi [UPS2016]/koi.sm",
       "simfile_sha256": "4d5cbb5b95ac61be0a56f3eec6013904e68a04aefc279d4439a697c628a91bdc",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-koi-sm-rec-print-repair.json"
     },
     {
       "position": 270,
@@ -2429,27 +2429,33 @@
       "position": 283,
       "source_simfile": "Lip-Sync [Gpop]/Lip-Sync.ssc",
       "simfile_sha256": "1c5b9ddf0999dc96563c83095dccabd8b7bc0f14fc9c0da8684209869720fa42",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 284,
       "source_simfile": "Lonely/Lonely.sm",
       "simfile_sha256": "faff72213058f1e3dfee6fca405836936dcabc5603612b233d8274b3fd2bca82",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-13-lonely-table-find-repair.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-13-lonely-column-final-repair.json"
     },
     {
       "position": 285,
       "source_simfile": "Lonely/Lonely.ssc",
       "simfile_sha256": "7d4a0c9d176a875d7e4b4c75ede165c591807996e40591522ad9570dbc80ba4f",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 286,
       "source_simfile": "Longinus - [Zaia]/Longinus.sm",
       "simfile_sha256": "c95e7f1e7d82078d37b387f357822305bb0233bfb4adb7c881848f6bb8bb82af",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 287,
@@ -2463,13 +2469,17 @@
       "position": 288,
       "source_simfile": "LORELEI/LORELEI.ssc",
       "simfile_sha256": "ff15d9b5b73d09fb5a23a2df9be6d1943d21dcb865814565245fb4f2539d390f",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 289,
       "source_simfile": "Lower Times/Lower Times.ssc",
       "simfile_sha256": "6ca6a4f70f49b08d05d58bd76d943bfa304378ffc855c7f7dfcee3c677e1f65d",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 290,
@@ -2483,13 +2493,17 @@
       "position": 291,
       "source_simfile": "Loyal Divide [TaroNuke]/Loyal Divide.sm",
       "simfile_sha256": "1f9fcf1a405c0ef368adde7cb67e14f0eb96b6d4885a6748f650596aa528b825",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 292,
       "source_simfile": "Macarena/Macarena.ssc",
       "simfile_sha256": "5afeb0613ed57cf9b133675b7fe8c48829f5b5e7bff694e1c4a5adccc7ac0d84",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 293,
@@ -2503,7 +2517,9 @@
       "position": 294,
       "source_simfile": "Mamono/sm.sm",
       "simfile_sha256": "dc3e958992a6e5d75f2e28c7e4faccc8e8629a2af158abc72df610b7de893f0e",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 295,
@@ -2523,7 +2539,9 @@
       "position": 297,
       "source_simfile": "Marvins Room/MarvinsRoom.ssc",
       "simfile_sha256": "122969227756f0a04900e566d1d8c7199a065dd6313c93aa4f3407b45e0a7d7a",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 298,

@@ -244,10 +244,11 @@
     "src/Screen.cpp": "d77fc7cd061a7a90584529f95966badc0b5b327438b2b00376c463151fb9ec9a",
     "src/ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac"
   },
-  "production_source_sha256": {
+  "current_root_source_sha256": {
     "crates/deadsync-song-lua/src/live.rs": "f93a487ddf2e39087ea9f6fb4ddc302043cbd41644c37483e98027b747dbb752",
     "crates/deadsync-song-lua/src/lua_util.rs": "0aac60afb2242b3a78421f5297eab24e69ea594c0cdf93b45d254baef2134523"
   },
+  "original_replay_binary_sha256": "93f59d2cedd99eeeb3e8ec457f3e7cffe3ed04a4f812311fdd8ff85046afb559",
   "unresolved_source_cause": "Trace the production shutdown path and its retained foreground owners to establish why the second jmouth EndCommand is absent. The independent end_actor_scene dispatches End recursively from its supplied root; the original chart does not have a missing theme listener event in this retained tail. A focused owned-foreground End control is required before a repair.",
   "production_implementation_not_changed": true,
   "repair_attempts_spent": 0,
