@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T11:26:49Z",
-  "previous_goal_turn": "progress: Impulse SM final repair 2 passed all 156090 native frames and 2222 stage fields with zero mismatches and Lua errors. It reused the original capture, was immediately saved and committed as 933965f8c, and its compressed/decompressed bytes were locally verified in 5fee2da39. Drawable Sprite coverage remains separate. Impulse SSC first repair completed all 124609 frames and 2222 fields with zero Lua errors; exactly 39 literal ./default.lua differences remained, with every other compared field matching. Diagnosis cf4539a39; its final repair 2 is running on immutable helper 4713556073 with the unchanged capture. Mountain King's original replay failed at default.lua:106 because the archive omitted all 59 data-only Lua puzzle files. Primary pinned RageFileManager enumerates the physical directory. Harness fix 79bb77d archives the complete song Lua input namespace while retaining static dependencies and assets. The regression failed before the fix; both hosts passed 12 archive and 3 path controls and built the harness. A copied Feely-only preparation assertion stopped before any replay; the corrected resume reused the generated archive and verified every prior member, all 61 physical Lua files and byte-identical native trace. First repair 1 then rejected a changed lua_closure.strategy label at the existing reader assertion before replaying frames. The attempt remains counted. c283a8a restores the required schema tag while preserving the complete inputs; neither the reader nor any comparison gate changed. The original byte-verified harness was selected during rebuild, with its old archive source rechecked from b191ebd and actual checkout line endings. Fresh corrected-schema checks passed 12/3 controls and builds on both hosts, with host-local Linux mtimes and all three source pins and actual binary hashes verified. Corrected harness 058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4 is now selected; native observer SHA remains 399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f. Mountain final repair 2 is running with all 61 Lua files, no additional change to prior archive members, and the original native trace; no third repair is permitted. Koi SM original replay completed all 145074 frames and 2299 stage fields. All stage fields match, but one actual AddFishCommand Lua error names missing rec_print_table and 1940 command comparisons remain (one count and 1939 events). Pinned fallback 02 Utilities.lua supplies the recursive table/depth/non-table helper; actor handles are native userdata. Source diagnosis 85032bcc4 retains the original report and requires a complete helper plus a real owned-actor control before the first repair; neither Koi repair attempt is spent. The single publisher watches 42 streams. Original queues and the two final repair children remain live; current original counts are {'passed': 204, 'pending': 61, 'unprocessed': 236}. All 501 original source bytes remain unchanged, and the goal remains active and incomplete. No passing chart was reopened and no capped third repair started.",
+  "updated_utc": "2026-10-13T11:28:03Z",
+  "previous_goal_turn": "progress: Impulse SM final repair 2 passed all 156090 native frames and 2222 stage fields with zero mismatches and Lua errors. It reused the original capture, was immediately saved and committed as 933965f8c, and its compressed/decompressed bytes were locally verified in 5fee2da39. Drawable Sprite coverage remains separate. Impulse SSC first repair completed all 124609 frames and 2222 fields with zero Lua errors; exactly 39 literal ./default.lua differences remained, with every other compared field matching. Diagnosis cf4539a39; its final repair 2 is running on immutable helper 4713556073 with the unchanged capture. Mountain King's original replay failed at default.lua:106 because the archive omitted all 59 data-only Lua puzzle files. Primary pinned RageFileManager enumerates the physical directory. Harness fix 79bb77d archives the complete song Lua input namespace while retaining static dependencies and assets. The regression failed before the fix; both hosts passed 12 archive and 3 path controls and built the harness. A copied Feely-only preparation assertion stopped before any replay; the corrected resume reused the generated archive and verified every prior member, all 61 physical Lua files and byte-identical native trace. First repair 1 then rejected a changed lua_closure.strategy label at the existing reader assertion before replaying frames. The attempt remains counted. c283a8a restores the required schema tag while preserving the complete inputs; neither the reader nor any comparison gate changed. The original byte-verified harness was selected during rebuild, with its old archive source rechecked from b191ebd and actual checkout line endings. Fresh corrected-schema checks passed 12/3 controls and builds on both hosts, with host-local Linux mtimes and all three source pins and actual binary hashes verified. Corrected harness 058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4 is now selected; native observer SHA remains 399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f. Mountain final repair 2 is running with all 61 Lua files, no additional change to prior archive members, and the original native trace; no third repair is permitted. Koi SM original replay completed all 145074 frames and 2299 stage fields. All stage fields match, but one actual AddFishCommand Lua error names missing rec_print_table and 1940 command comparisons remain (one count and 1939 events). Pinned fallback 02 Utilities.lua supplies the recursive table/depth/non-table helper; actor handles are native userdata. Source diagnosis 85032bcc4 retains the original report and requires a complete helper plus a real owned-actor control before the first repair; neither Koi repair attempt is spent. The single publisher watches 42 streams. Original queues and the two final repair children remain live; current original counts are {'passed': 204, 'pending': 62, 'unprocessed': 235}. All 501 original source bytes remain unchanged, and the goal remains active and incomplete. No passing chart was reopened and no capped third repair started.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "85032bcc432e8227d4325f4b9800e50cab6b864f",
+      "deadsync": "c1803d799d12ee7837872cd290e11ca459834a60",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -64,13 +64,17 @@
       "status": "running",
       "current": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.ssc",
       "position": 275,
-      "phase": "candidate",
-      "pid": 3654959,
+      "phase": "replay",
+      "pid": 3655319,
       "process_matches": true,
       "passed": 15,
       "pending": 39,
       "processed": 54,
-      "last_log_lines": [],
+      "last_log_lines": [
+        "[54.0s] replaying every native gameplay frame: frame 3354/59710 (5.6%)",
+        "[56.0s] replaying every native gameplay frame: frame 3496/59710 (5.9%)",
+        "[58.0s] replaying every native gameplay frame: frame 3640/59710 (6.1%)"
+      ],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",

@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T11:16:25Z",
+  "updated_utc": "2026-10-13T11:28:02Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -14,8 +14,8 @@
   ],
   "counts": {
     "passed": 204,
-    "pending": 61,
-    "unprocessed": 236
+    "pending": 62,
+    "unprocessed": 235
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2329,7 +2329,9 @@
       "position": 272,
       "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
       "simfile_sha256": "8cf411edce220fdb7f0d1a7fadc5e9ea6e5123f1eb21a4b29a9ddc738b2c4beb",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 273,
