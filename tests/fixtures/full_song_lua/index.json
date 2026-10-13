@@ -2341,15 +2341,12 @@
     {
       "title": "​#feelyourtouch e.d.e.n",
       "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
-      "harness_version": "0.1.0",
-      "archive": "1fc4cfc27eb767f668f752ff9c327a3ccc9f9aeac16ebac527581527c67690fa.tar.zst",
-      "sha256": "1fc4cfc27eb767f668f752ff9c327a3ccc9f9aeac16ebac527581527c67690fa",
-      "compressed_bytes": 864135,
-      "uncompressed_sha256": "29c11314856ff694d61da1a02d326c51bb370f287a13dd1be86c0529fc093d4c",
-      "compression_level": 22,
-      "aliases": [
-        "a24aacea2493a936336a4a6bd6493d780400b5724213b58aed53608ee2f7e72e.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "183e11280dfa7d18d444a5cc63f16ccbbc4f4d4fb2f9b81fefefde2de778b9e0.tar.zst",
+      "sha256": "183e11280dfa7d18d444a5cc63f16ccbbc4f4d4fb2f9b81fefefde2de778b9e0",
+      "compressed_bytes": 15184071,
+      "uncompressed_sha256": "a9ae3b3944776d2b894c4d24a9fb2a49f331b7e9ce12448202c9c311665fc787",
+      "aliases": []
     },
     {
       "title": "Fiji (Lange Remix)",
