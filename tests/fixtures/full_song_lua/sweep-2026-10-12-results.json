@@ -4776,6 +4776,21 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 221,
+      "source_simfile": "Happiness/Happiness.ssc",
+      "simfile_sha256": "8efb7562272cde881e6061fecef4aa76c53998620b6006ad2e6182d9d481cb5b",
+      "retained_original_archive": "8e48a72f9a686fd35d01d3e2497686d50a8ad30332660add585dbc758097c631.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "76f1176f97fb1c43d5417e1e076c02c4ba3f1e43b57b6a66ac7f4b78f54e9332",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "a45545f0a / harness b191ebd",
+      "build_proof": "/home/parity/jobs/sm-metadata-build-v1/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 253.81632231699768,
+      "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-1154392-1791856557022276130-0\n"
     }
   ],
   "historical_pending": [
@@ -4799,9 +4814,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "668d1aa95b614dec4d2e3d598e68d2d0be065a583bdd856fbbc19232bf3682c3",
+  "binary_sha256": "76f1176f97fb1c43d5417e1e076c02c4ba3f1e43b57b6a66ac7f4b78f54e9332",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 11,
-  "pending_charts": 25,
-  "processed_charts": 36
+  "pending_charts": 26,
+  "processed_charts": 37
 }
