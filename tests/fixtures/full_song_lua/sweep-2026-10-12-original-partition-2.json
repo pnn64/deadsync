@@ -2060,6 +2060,25 @@
         }
       ],
       "report_sha256": "ad596d550915f25a252ddf135c269e759dabfe486afc7d7b5f4565fef66375ba"
+    },
+    {
+      "position": 196,
+      "source_simfile": "fof_guys/fof.ssc",
+      "simfile_sha256": "a40dbf6a805eb74a544ba1fb6179d15d18c6df1ba2220218e3937e25a82a5fe6",
+      "retained_original_archive": "fec59a2d8c1d08ac1580b4d8ea632933208cb30a64fd2971396ab5b9f1b1c35f.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "668d1aa95b614dec4d2e3d598e68d2d0be065a583bdd856fbbc19232bf3682c3",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "58fcc8043 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/screen-initial-pose-build-v1/proof.json",
+      "capture_seconds": 713.8508436340053,
+      "trace_sha256": "b8fbb68f3cf04dabe5f802e7fcc257fc85e536c0e79b63261eaef892f00a07c3",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-196/candidates/756b2e53aa3fbe0d7c26f686475280fbca81789d88c58ba1e63b93a9ba6a017d.tar",
+      "replay_exit": -9,
+      "replay_seconds": 354.83451906000846,
+      "candidate_sha256": "756b2e53aa3fbe0d7c26f686475280fbca81789d88c58ba1e63b93a9ba6a017d",
+      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.0s] : 0 checks completed, 0 failed\n[16.0s] : 0 checks completed, 0 failed\n[18.0s] : 0 checks completed, 0 failed\n[20.0s] : 0 checks completed, 0 failed\n[22.0s] : 0 checks completed, 0 failed\n[24.0s] : 0 checks completed, 0 failed\n[26.0s] : 0 checks completed, 0 failed\n[28.0s] : 0 checks completed, 0 failed\n[30.0s] : 0 checks completed, 0 failed\n[32.0s] : 0 checks completed, 0 failed\n[34.0s] : 0 checks completed, 0 failed\n[36.0s] : 0 checks completed, 0 failed\n[38.0s] : 0 checks completed, 0 failed\n[40.0s] : 0 checks completed, 0 failed\n[42.0s] : 0 checks completed, 0 failed\n[44.0s] : 0 checks completed, 0 failed\n[46.0s] : 0 checks completed, 0 failed\n[48.0s] : 0 checks completed, 0 failed\n[50.0s] : 0 checks completed, 0 failed\n[52.0s] : 0 checks completed, 0 failed\n[54.0s] : 0 checks completed, 0 failed\n[56.0s] : 0 checks completed, 0 failed\n[58.0s] : 0 checks completed, 0 failed\n[60.0s] : 0 checks completed, 0 failed\n[62.0s] : 0 checks completed, 0 failed\n[64.0s] : 0 checks completed, 0 failed\n[66.0s] : 0 checks completed, 0 failed\n[68.0s] : 0 checks completed, 0 failed\n[70.0s] : 0 checks completed, 0 failed\n[72.0s] : 0 checks completed, 0 failed\n[74.0s] : 0 checks completed, 0 failed\n[76.0s] : 0 checks completed, 0 failed\n[78.0s] : 0 checks completed, 0 failed\n[80.0s] : 0 checks completed, 0 failed\n[82.0s] : 0 checks completed, 0 failed\n[84.0s] : 0 checks completed, 0 failed\n[86.0s] : 0 checks completed, 0 failed\n[88.0s] : 0 checks completed, 0 failed\n[90.0s] : 0 checks completed, 0 failed\n[92.0s] : 0 checks completed, 0 failed\n[94.0s] : 0 checks completed, 0 failed\n[96.0s] : 0 checks completed, 0 failed\n[98.0s] : 0 checks completed, 0 failed\n[100.0s] : 0 checks completed, 0 failed\n[102.1s] : 0 checks completed, 0 failed\n[104.1s] : 0 checks completed, 0 failed\n[106.1s] : 0 checks completed, 0 failed\n[108.1s] : 0 checks completed, 0 failed\n[110.1s] : 0 checks completed, 0 failed\n[112.1s] : 0 checks completed, 0 failed\n[114.2s] : 0 checks completed, 0 failed\n[116.2s] : 0 checks completed, 0 failed\n[118.3s] : 0 checks completed, 0 failed\n[120.4s] : 0 checks completed, 0 failed\n[122.4s] : 0 checks completed, 0 failed\n[124.4s] : 0 checks completed, 0 failed\n[126.4s] : 0 checks completed, 0 failed\n[128.4s] : 0 checks completed, 0 failed\n[130.5s] : 0 checks completed, 0 failed\n[132.5s] : 0 checks completed, 0 failed\n[134.5s] : 0 checks completed, 0 failed\n[136.6s] : 0 checks completed, 0 failed\n[138.6s] : 0 checks completed, 0 failed\n[140.6s] : 0 checks completed, 0 failed\n"
     }
   ],
   "scope": {
@@ -2069,9 +2088,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "4610c4a91d914dbd7346486ef8c1583fd388003dab6c6013e583961b5b01363b",
+  "binary_sha256": "668d1aa95b614dec4d2e3d598e68d2d0be065a583bdd856fbbc19232bf3682c3",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 4,
-  "pending_charts": 5,
-  "processed_charts": 9
+  "pending_charts": 6,
+  "processed_charts": 10
 }
