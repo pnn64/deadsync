@@ -1,0 +1,497 @@
+{
+  "result": {
+    "position": 200,
+    "source_simfile": "freg/freg.sm",
+    "status": "pending",
+    "repair_attempts": 1,
+    "previous_failure": [],
+    "binary_sha256": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
+    "candidate_sha256": "4be2dbf1ff59a34ff3029c5e9e4ef64991bea951de5abb6395c849bd64bf1f43",
+    "trace_sha256": "3736aead13b2e6994859a3380e784f8f600837b50a334d81bcc3b3a2c81db168",
+    "native_capture_reused": true,
+    "simfile_sha256": "c17a176bd2314c4d9e122db759e9377c11096c92b6890431a31c3b781753854f",
+    "fix_commit": "d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+    "previous_concrete_failures": [
+      {
+        "field": "command_query_count",
+        "native": 13,
+        "deadsync": 11
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "external-0017",
+          "args": [
+            false
+          ],
+          "beat": 0.002303175628185272,
+          "caller": {
+            "line": 17,
+            "source": "song:/c'est business.lua",
+            "tail_call": false
+          },
+          "command": "OnCommand",
+          "definition_id": "def-0002",
+          "detail": {
+            "native_tween_children": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "children": [],
+                          "commands": {
+                            "Init": {
+                              "last_line": 50,
+                              "line": 43,
+                              "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                            },
+                            "On": {
+                              "last_line": 53,
+                              "line": 51,
+                              "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                            }
+                          },
+                          "name": "",
+                          "time_left": 0.3232739567756653
+                        }
+                      ]
+                    }
+                  ],
+                  "commands": {
+                    "Init": {
+                      "last_line": 67,
+                      "line": 65,
+                      "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua"
+                    }
+                  },
+                  "name": "StepStatsPaneP1",
+                  "time_left": 0.3232739567756653
+                }
+              ],
+              "commands": {
+                "On": {
+                  "last_line": 60,
+                  "line": 56,
+                  "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/default.lua"
+                }
+              },
+              "name": "Underlay",
+              "time_left": 0.3232739567756653
+            },
+            "native_tween_time_left": 0.3232739567756653
+          },
+          "kind": "call",
+          "line": 17,
+          "operation": "Actor.visible",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.017687074840068817,
+          "seq": 10,
+          "source": "song:/c'est business.lua",
+          "tween_time_left": 0.3232739567756653
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.visible",
+          "source": "song:/c'est business.lua",
+          "line": 17,
+          "phase": "callback",
+          "beat": 0.002303175628185272,
+          "seconds": 0.017687074840068817,
+          "args": [
+            false
+          ],
+          "results": [
+            {
+              "actor": "0x5d252eeb1b10",
+              "name": "Underlay",
+              "path": "ScreenGameplay/Underlay"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      }
+    ],
+    "build_proof": "/home/parity/jobs/density-graph-build-v1/proof.json",
+    "replay_exit": 2,
+    "replay_seconds": 181.49529675100348,
+    "native_frames": 24013,
+    "replayed_frames": 24013,
+    "compared_stage_fields": 341,
+    "pending_coverage": [
+      "uncompared song operations: Actor.stoptweening",
+      "native drawable state/resources: Quad"
+    ],
+    "archive_accepted": false,
+    "errors": [],
+    "mismatch_count": 2,
+    "concrete_failures": [
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0002",
+          "args": [],
+          "beat": 46.32426452636719,
+          "command": "OffCommand",
+          "definition_id": "def-0002",
+          "detail": {
+            "name": "OffCommand"
+          },
+          "kind": "command",
+          "line": 21,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 19.86995506286621,
+          "seq": 12,
+          "source": "song:/c'est business.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.begin",
+          "command": "OffCommand",
+          "source": "song:/c'est business.lua",
+          "line": 21,
+          "beat": 46.382198333740234,
+          "seconds": 19.894784927368164,
+          "args": null
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0002",
+          "args": [],
+          "beat": 46.32426452636719,
+          "command": "OffCommand",
+          "definition_id": "def-0002",
+          "detail": {
+            "name": "OffCommand"
+          },
+          "kind": "command",
+          "line": 21,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 19.86995506286621,
+          "seq": 14,
+          "source": "song:/c'est business.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.end",
+          "command": "OffCommand",
+          "source": "song:/c'est business.lua",
+          "line": 21,
+          "beat": 46.382198333740234,
+          "seconds": 19.894784927368164,
+          "args": null
+        }
+      }
+    ],
+    "report_sha256": "5eda9910a155372d7722305d60b6f5ee3d7b3cdad624e19b708167e7b734fb9b"
+  },
+  "report_sha256": "5eda9910a155372d7722305d60b6f5ee3d7b3cdad624e19b708167e7b734fb9b",
+  "residuals": [
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0002",
+        "args": [],
+        "beat": 46.32426452636719,
+        "command": "OffCommand",
+        "definition_id": "def-0002",
+        "detail": {
+          "name": "OffCommand"
+        },
+        "kind": "command",
+        "line": 21,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": 19.86995506286621,
+        "seq": 12,
+        "source": "song:/c'est business.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "OffCommand",
+        "source": "song:/c'est business.lua",
+        "line": 21,
+        "beat": 46.382198333740234,
+        "seconds": 19.894784927368164,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0002",
+        "args": [],
+        "beat": 46.32426452636719,
+        "command": "OffCommand",
+        "definition_id": "def-0002",
+        "detail": {
+          "name": "OffCommand"
+        },
+        "kind": "command",
+        "line": 21,
+        "operation": "command.end",
+        "scene": 1,
+        "seconds": 19.86995506286621,
+        "seq": 14,
+        "source": "song:/c'est business.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.end",
+        "command": "OffCommand",
+        "source": "song:/c'est business.lua",
+        "line": 21,
+        "beat": 46.382198333740234,
+        "seconds": 19.894784927368164,
+        "args": null
+      }
+    }
+  ],
+  "boundary_input_frames": [
+    {
+      "beat": 46.31960678100586,
+      "delta": 0.0009410000056959689,
+      "scene": 1,
+      "seconds": 19.86795997619629,
+      "sequence": 22402,
+      "wall_seconds": 27.930503
+    },
+    {
+      "beat": 46.32198715209961,
+      "delta": 0.001032999949529767,
+      "scene": 1,
+      "seconds": 19.868980407714844,
+      "sequence": 22403,
+      "wall_seconds": 27.931502
+    },
+    {
+      "beat": 46.32426452636719,
+      "delta": 0.0009800000116229057,
+      "scene": 1,
+      "seconds": 19.86995506286621,
+      "sequence": 22404,
+      "wall_seconds": 27.9324
+    },
+    {
+      "beat": 46.382198333740234,
+      "delta": 0.02445800043642521,
+      "scene": 1,
+      "seconds": 19.894784927368164,
+      "sequence": 22405,
+      "wall_seconds": 27.957595
+    },
+    {
+      "beat": 46.385108947753906,
+      "delta": 0.0016049999976530671,
+      "scene": 1,
+      "seconds": 19.896032333374023,
+      "sequence": 22406,
+      "wall_seconds": 27.958897
+    }
+  ],
+  "native_stage_near_exit": [
+    {
+      "beat": 41.96315383911133,
+      "gameplay_seconds": 24.761249542236328,
+      "phase": "progress",
+      "players": [
+        {
+          "actual": 0,
+          "alive_seconds": 24.761249542236328,
+          "autoplay": 1,
+          "current_max_score": 0,
+          "current_possible": 0,
+          "description": "Hyperhero2",
+          "difficulty": "Difficulty_Challenge",
+          "failed": false,
+          "life_begin": 0.5,
+          "life_latest": 0.5,
+          "meter": 7,
+          "misses": 0,
+          "player": "PlayerNumber_P1",
+          "possible": 415,
+          "score": 0,
+          "w1": 0,
+          "w2": 0
+        }
+      ],
+      "scene": 1,
+      "seconds": 18.00090789794922
+    },
+    {
+      "beat": 44.295005798339844,
+      "gameplay_seconds": 25.760604858398438,
+      "phase": "progress",
+      "players": [
+        {
+          "actual": 0,
+          "alive_seconds": 25.760604858398438,
+          "autoplay": 1,
+          "current_max_score": 0,
+          "current_possible": 0,
+          "description": "Hyperhero2",
+          "difficulty": "Difficulty_Challenge",
+          "failed": false,
+          "life_begin": 0.5,
+          "life_latest": 0.5,
+          "meter": 7,
+          "misses": 0,
+          "player": "PlayerNumber_P1",
+          "possible": 415,
+          "score": 0,
+          "w1": 0,
+          "w2": 0
+        }
+      ],
+      "scene": 1,
+      "seconds": 19.000272750854492
+    },
+    {
+      "beat": 46.62775421142578,
+      "gameplay_seconds": 26.63035774230957,
+      "phase": "progress",
+      "players": [
+        {
+          "actual": 0,
+          "alive_seconds": 26.63035774230957,
+          "autoplay": 1,
+          "current_max_score": 0,
+          "current_possible": 0,
+          "description": "Hyperhero2",
+          "difficulty": "Difficulty_Challenge",
+          "failed": true,
+          "life_begin": 0.5,
+          "life_latest": 0.5,
+          "meter": 7,
+          "misses": 0,
+          "player": "PlayerNumber_P1",
+          "possible": 415,
+          "score": 0,
+          "w1": 0,
+          "w2": 0
+        }
+      ],
+      "scene": 1,
+      "seconds": 20.000022888183594
+    },
+    {
+      "beat": 48.962623596191406,
+      "gameplay_seconds": 26.63035774230957,
+      "phase": "progress",
+      "players": [
+        {
+          "actual": 0,
+          "alive_seconds": 26.63035774230957,
+          "autoplay": 1,
+          "current_max_score": 0,
+          "current_possible": 0,
+          "description": "Hyperhero2",
+          "difficulty": "Difficulty_Challenge",
+          "failed": true,
+          "life_begin": 0.5,
+          "life_latest": 0.5,
+          "meter": 7,
+          "misses": 0,
+          "player": "PlayerNumber_P1",
+          "possible": 415,
+          "score": 0,
+          "w1": 0,
+          "w2": 0
+        }
+      ],
+      "scene": 1,
+      "seconds": 21.000680923461914
+    },
+    {
+      "beat": 49.82775115966797,
+      "gameplay_seconds": 26.63035774230957,
+      "phase": "screen-end",
+      "players": [
+        {
+          "actual": 0,
+          "alive_seconds": 26.63035774230957,
+          "autoplay": 1,
+          "current_max_score": 0,
+          "current_possible": 0,
+          "description": "Hyperhero2",
+          "difficulty": "Difficulty_Challenge",
+          "failed": true,
+          "life_begin": 0.5,
+          "life_latest": 0.5,
+          "meter": 7,
+          "misses": 0,
+          "player": "PlayerNumber_P1",
+          "possible": 415,
+          "score": 0,
+          "w1": 0,
+          "w2": 0
+        }
+      ],
+      "scene": 1,
+      "seconds": 21.371450424194336
+    },
+    {
+      "beat": 49.82775115966797,
+      "gameplay_seconds": 26.63035774230957,
+      "phase": "gameplay-exit",
+      "players": [
+        {
+          "actual": 0,
+          "alive_seconds": 26.63035774230957,
+          "autoplay": 1,
+          "current_max_score": 0,
+          "current_possible": 0,
+          "description": "Hyperhero2",
+          "difficulty": "Difficulty_Challenge",
+          "failed": true,
+          "life_begin": 0.5,
+          "life_latest": 0.5,
+          "meter": 7,
+          "misses": 0,
+          "player": "PlayerNumber_P1",
+          "possible": 415,
+          "score": 0,
+          "w1": 0,
+          "w2": 0
+        }
+      ],
+      "scene": 1,
+      "seconds": 21.371450424194336
+    }
+  ],
+  "repair_attempts_spent": 1,
+  "repair_attempts_remaining": 1,
+  "diagnostic_only": true,
+  "fixed_original_failures": [
+    "The Underlay DensityGraph descendant timer now exactly matches native.",
+    "The command/query event count now matches."
+  ],
+  "observed_failure": "Only OffCommand begin/end differ, each by one recorded input frame: native 19.86995506286621, independent 19.894784927368164. All stage comparisons and callback errors remain clear.",
+  "source_ordering": {
+    "native": "ScreenGameplay.cpp:2824-2845 tests AllFailed before TweenOffScreen. Simply Love overlay/FailOnHoldStart.lua records autoplay during Judgment and calls FailPlayer inside OffCommand, after that decision.",
+    "independent": "Simply Love State::update in gameplay.rs calls update_core, then fail_autoplay_players for Navigate(Complete), before advance_song_lua. SongLuaLiveScene waits for the queued outro boundary and reads the already-failed shared stage flags when choosing the BeginFailed delay.",
+    "concrete_cause": "Autoplay stage failure is applied before the native Off decision. It incorrectly selects the extra BeginFailed actor update, explaining the exact one-frame delay.",
+    "required_repair": "Model the Simply Love autoplay failure at the actual overlay Off phase, using independently derived judgment state and shared PlayerStageStats/Core writes. Keep preexisting failure separate for the native AllFailed branch. Verify through a production gameplay control before the final bounded replay; do not substitute the observed clock."
+  },
+  "primary_policy_sha256": "ffcd8705267aa7f299ce65970810d74de1db24c821c8a21baa6b9a547d70a269",
+  "independent_source_sha256": {
+    "crates/deadsync-song-lua/src/live.rs": "940b3bf28663ea719fd5c848100aa6ce87844e6296ba5d17a84227338d450ac4",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "d6516441dcc76f586cb577537c01a8d8647c2e01e77fa9651c52e3c9f252d613",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856"
+  },
+  "second_repair_launched": false,
+  "acceptance_unchanged": true,
+  "passing_charts_reopened": false
+}
