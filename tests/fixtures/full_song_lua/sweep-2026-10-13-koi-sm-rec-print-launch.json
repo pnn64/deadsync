@@ -1,0 +1,51 @@
+{
+  "launch_receipt": {
+    "supervisor_pid": 3805009,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_koi_sm_rec_print_repair_v1.py"
+    ]
+  },
+  "live_observation": {
+    "pid": 3805229,
+    "command": [
+      "/home/parity/jobs/rec-print-build-v1/full-song-lua-stage-modifier-v1",
+      "--archive",
+      "/home/parity/jobs/koi-sm-rec-print-repair-v1/chart-269/4d39fd730470637e80f595cac7581a1d3cb2861c0824090536c7c608668ad7f6.tar",
+      "--report",
+      "/home/parity/jobs/koi-sm-rec-print-repair-v1/chart-269/report.json"
+    ],
+    "label": "replay",
+    "source_simfile": "Koi [UPS2016]/koi.sm"
+  },
+  "exact_process_matches": true,
+  "selected_build": {
+    "build_proof": "/home/parity/jobs/rec-print-build-v1/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "binary_sha256": "e1e574aa62e36912260a8bcf656514c334db73a3cf6188c0d21242b688406793",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "actual_source_pins": 24,
+  "candidate_sha256": "4d39fd730470637e80f595cac7581a1d3cb2861c0824090536c7c608668ad7f6",
+  "native_trace_sha256": "eefd069616db4eb3e759a2469ad10f81f79c1a6a0f4168a97c79e4e050a3d839",
+  "replay_log_tail": [
+    "[362.1s] replaying every native gameplay frame: frame 3282/145074 (2.3%)",
+    "[364.1s] replaying every native gameplay frame: frame 3300/145074 (2.3%)",
+    "[366.1s] replaying every native gameplay frame: frame 3317/145074 (2.3%)"
+  ],
+  "status": "first bounded Koi SM repair running; complete replay acceptance not yet decided",
+  "source_fix_commit": "0505ad8a0",
+  "validated_build": "sweep-2026-10-13-rec-print-build.json",
+  "original_diagnosis": "sweep-2026-10-13-koi-sm-debug-helper-diagnosis.json",
+  "repair_attempts_before_launch": 0,
+  "repair_attempt_started": 1,
+  "per_chart_limit": 2,
+  "native_capture_reused": true,
+  "input_archive_uncompressed_bytes_verified": true,
+  "publisher_streams": 43,
+  "publisher_count": 1,
+  "comparisons_modified": false,
+  "acceptance_unchanged": true,
+  "passing_chart_reopened": false
+}

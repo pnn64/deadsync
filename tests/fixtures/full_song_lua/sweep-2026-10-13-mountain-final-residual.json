@@ -1,0 +1,70 @@
+{
+  "result": {
+    "position": 244,
+    "source_simfile": "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc",
+    "simfile_sha256": "fa95ab0c13007ddba2a9c4f194258e939fa9f802880a12ef90dc13a7552666d6",
+    "status": "pending",
+    "repair_attempts": 2,
+    "previous_failure": "\nthread 'main' (3539087) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:350:5:\nassertion `left == right` failed\n  left: \"complete-song-lua-plus-executed-and-static-loads\"\n right: \"executed-sources-plus-static-loads\"\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+    "previous_candidate_sha256": "c00b572452b89a55e158c2777f76a03e50e42d4206d279900f21f72456939512",
+    "trace_sha256": "5d1e5319e5144035216f9c2095f3210c165de93be3b02654d6df04e0d8304890",
+    "native_capture_reused": true,
+    "repackage_reason": "Restore the existing archive schema tag; retain the complete 61-file physical Lua namespace",
+    "binary_sha256": "4713556073fc219eef2dd0db6fbb496506cdfa4f49c27f62d6427ec63f95ab84",
+    "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "build_proof": "/home/parity/jobs/fg-filename-build-v1/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "harness c283a8a + 79bb77d / deadsync 469d6157b + be2565b8d + d851d0c3b",
+    "original_archive_members_byte_identical": true,
+    "added_puzzle_lua_files": 0,
+    "retained_puzzle_lua_files": 59,
+    "physical_lua_files": 61,
+    "candidate": "/home/parity/jobs/mountain-listed-lua-final-repair-v1/chart-244/candidates/0d4d14881bf71b4e9baab9d6c7f90fbbd6a961a7771567146236736eeb5ab8cd.tar",
+    "candidate_sha256": "0d4d14881bf71b4e9baab9d6c7f90fbbd6a961a7771567146236736eeb5ab8cd",
+    "candidate_seconds": 0.6677778919984121,
+    "replay_exit": 2,
+    "replay_seconds": 2988.078518047987,
+    "native_frames": 56068,
+    "replayed_frames": 56068,
+    "compared_stage_fields": 1100,
+    "pending_coverage": [
+      "uncompared song operations: Actor.halign, Actor.valign, Actor.xy, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetLineWidth, ActorMultiVertex.SetNumVertices, ActorMultiVertex.SetVertices, GameState.GetHumanPlayers, Screen.AddInputCallback",
+      "native drawable state/resources: ActorMultiVertex, Quad, Sprite"
+    ],
+    "archive_accepted": false,
+    "errors": [],
+    "mismatch_count": 1,
+    "concrete_failures": [
+      {
+        "field": "command_query_count",
+        "native": 1429,
+        "deadsync": 715
+      }
+    ],
+    "report_sha256": "388f828c338f60aa4edc199e491d5438e09a513b5ffa15286032a295d158bdb7"
+  },
+  "report_uncompressed_bytes_verified": true,
+  "compressed_report_bytes_verified": true,
+  "candidate_and_native_trace_bytes_verified": true,
+  "physical_lua_files": 61,
+  "status": "pending at the two-repair limit; continue the sweep",
+  "full_replay_completed": true,
+  "all_compared_stage_fields_match": true,
+  "retained_mismatches": [
+    {
+      "field": "command_query_count",
+      "native": 1429,
+      "deadsync": 715
+    }
+  ],
+  "repair_attempts_spent": 2,
+  "repair_attempts_remaining": 0,
+  "original_archive_failure_resolved": "The complete 61-file physical song Lua namespace prevents the original empty puzzle listing and math.random interval error. The existing schema tag is retained. The final replay completed every frame with zero Lua errors.",
+  "concrete_remaining_failure": "The existing command_query_count comparison fails: native 1429 versus independent 715. No event-field mismatch is reported for the compared event pairs. The count mismatch remains an acceptance failure.",
+  "residual_source_cause": "The cause of the 714 missing compared command events is not yet established. No further repair is started in this sweep.",
+  "native_capture_reused": true,
+  "comparisons_modified": false,
+  "acceptance_unchanged": true,
+  "passing_chart_reopened": false,
+  "third_repair_started": false
+}
