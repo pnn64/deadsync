@@ -6358,6 +6358,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 286,
+      "source_simfile": "Longinus - [Zaia]/Longinus.sm",
+      "simfile_sha256": "c95e7f1e7d82078d37b387f357822305bb0233bfb4adb7c881848f6bb8bb82af",
+      "retained_original_archive": "130bf8daad51399eabf6a5bd26afdc90173cc76c67da654a96a06ab176fdd3eb.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "93f59d2cedd99eeeb3e8ec457f3e7cffe3ed04a4f812311fdd8ff85046afb559",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/kaboom-controls-green-v1/proof.json",
+      "capture_seconds": 290.2878415000014,
+      "trace_sha256": "2995cd52f40a8de1c2924a3c3872cc2ef0c9fe2c372dceb2b351141bcfdd35c0",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-286/candidates/abe6d301ae65dbf4d720012c50e20255fa278137fc6dd923da774feba9777c77.tar",
+      "replay_exit": 1,
+      "replay_seconds": 2.2749820580065716,
+      "candidate_sha256": "abe6d301ae65dbf4d720012c50e20255fa278137fc6dd923da774feba9777c77",
+      "failure": "[0.6s] replaying every native gameplay frame\n\nthread 'main' (514836) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "scope": {
@@ -6367,9 +6386,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "fc7e246c948eb5b0ecb64a09b3777c480ac81eb26d2cf232c4ed3d2f8112cdd1",
+  "binary_sha256": "93f59d2cedd99eeeb3e8ec457f3e7cffe3ed04a4f812311fdd8ff85046afb559",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 16,
-  "pending_charts": 23,
-  "processed_charts": 39
+  "pending_charts": 24,
+  "processed_charts": 40
 }
