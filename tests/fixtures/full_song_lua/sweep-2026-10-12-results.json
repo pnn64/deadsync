@@ -8266,6 +8266,278 @@
       "replay_seconds": 2.081070487998659,
       "candidate_sha256": "1607561d59af9e72612fce2e935cf8f45fa67b674646158fd0f02d83df14dfad",
       "failure": "[0.7s] replaying every native gameplay frame\n\nthread 'main' (152150) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 305,
+      "source_simfile": "mawaru6/mawaru6.sm",
+      "simfile_sha256": "394d4b03ce745a22d46dfef9bf581301840ee654ebd382d2c76412260694c37c",
+      "retained_original_archive": "91656989a3f606655a16d576d510c9e010bfb7c61dc8d48880fa9314b0ae1f3c.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/live-draw-build-v1/proof.json",
+      "capture_seconds": 338.05382028699387,
+      "trace_sha256": "4d205ed710879e4011d75fc735b3ae9fa7e9e9b6c53eb81873b64fff35771b7f",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-305/candidates/2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb.tar",
+      "replay_exit": 2,
+      "replay_seconds": 21461.279957548002,
+      "candidate_sha256": "2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb",
+      "native_frames": 121856,
+      "replayed_frames": 121856,
+      "compared_stage_fields": 2992,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.accelerate, Actor.addx, Actor.addy, Actor.blend, Actor.bob, Actor.bounce, Actor.bouncebegin, Actor.bounceend, Actor.croptop, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.fadetop, Actor.finishtweening, Actor.glowshift, Actor.horizalign, Actor.rotationx, Actor.rotationy, Actor.shadowlength, Actor.stopeffect, Actor.vertalign, Actor.wag, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, Actor.zoomz, Actor.ztest, Actor.zwrite, ActorFrame.fov, BitmapText.maxwidth, BitmapText.settext, GameState.PlayerIsUsingModifier, PlayerOptions.Beat, PlayerOptions.CMod, PlayerOptions.Centered, PlayerOptions.Flip, PlayerOptions.Stealth, PlayerOptions.XMod, Screen.AddInputCallback, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: BitmapText, Model, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 505260,
+      "concrete_failures": [
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 15.584239959716797,
+            "beat": 31.003353118896484,
+            "name": "Close",
+            "args": [
+              "Close"
+            ]
+          },
+          "deadsync": {
+            "seconds": 15.592312812805176,
+            "beat": 31.020843505859375,
+            "name": "Close",
+            "args": [
+              "Close"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 16.518434524536133,
+            "beat": 33.027442932128906,
+            "name": "Game1",
+            "args": [
+              "Game1"
+            ]
+          },
+          "deadsync": {
+            "seconds": 16.525056838989258,
+            "beat": 33.04179000854492,
+            "name": "Game1",
+            "args": [
+              "Game1"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 18.585147857666016,
+            "beat": 37.50532150268555,
+            "name": "Open",
+            "args": [
+              "Open"
+            ]
+          },
+          "deadsync": {
+            "seconds": 18.589523315429688,
+            "beat": 37.514801025390625,
+            "name": "Open",
+            "args": [
+              "Open"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 26.675668716430664,
+            "beat": 55.034786224365234,
+            "name": "Close",
+            "args": [
+              "Close"
+            ]
+          },
+          "deadsync": {
+            "seconds": 26.662857055664062,
+            "beat": 55.00702667236328,
+            "name": "Close",
+            "args": [
+              "Close"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 27.59151840209961,
+            "beat": 57.019126892089844,
+            "name": "Game2",
+            "args": [
+              "Game2"
+            ]
+          },
+          "deadsync": {
+            "seconds": 27.59678077697754,
+            "beat": 57.0305290222168,
+            "name": "Game2",
+            "args": [
+              "Game2"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 29.89151954650879,
+            "beat": 62.00246047973633,
+            "name": "Open",
+            "args": [
+              "Open"
+            ]
+          },
+          "deadsync": {
+            "seconds": 29.89891242980957,
+            "beat": 62.01847839355469,
+            "name": "Open",
+            "args": [
+              "Open"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 38.20990753173828,
+            "beat": 80.02564239501953,
+            "name": "Close",
+            "args": [
+              "Close"
+            ]
+          },
+          "deadsync": {
+            "seconds": 38.19809341430664,
+            "beat": 80.00004577636719,
+            "name": "Close",
+            "args": [
+              "Close"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 40.059478759765625,
+            "beat": 84.03304290771484,
+            "name": "ShowScore",
+            "args": [
+              "ShowScore"
+            ]
+          },
+          "deadsync": {
+            "seconds": 40.04843521118164,
+            "beat": 84.00911712646484,
+            "name": "ShowScore",
+            "args": [
+              "ShowScore"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 40.059478759765625,
+            "beat": 84.03304290771484,
+            "name": "CheckGame1",
+            "args": [
+              "CheckGame1"
+            ]
+          },
+          "deadsync": {
+            "seconds": 40.04843521118164,
+            "beat": 84.00911712646484,
+            "name": "CheckGame1",
+            "args": [
+              "CheckGame1"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 41.906917572021484,
+            "beat": 88.03858947753906,
+            "name": "SpeedUp",
+            "args": [
+              "SpeedUp"
+            ]
+          },
+          "deadsync": {
+            "seconds": 41.894535064697266,
+            "beat": 88.00968933105469,
+            "name": "SpeedUp",
+            "args": [
+              "SpeedUp"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 41.906917572021484,
+            "beat": 88.03858947753906,
+            "name": "Game3",
+            "args": [
+              "Game3"
+            ]
+          },
+          "deadsync": {
+            "seconds": 41.894535064697266,
+            "beat": 88.00968933105469,
+            "name": "Game3",
+            "args": [
+              "Game3"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 43.83195114135742,
+            "beat": 92.53033447265625,
+            "name": "Open",
+            "args": [
+              "Open"
+            ]
+          },
+          "deadsync": {
+            "seconds": 43.82285690307617,
+            "beat": 92.50910949707031,
+            "name": "Open",
+            "args": [
+              "Open"
+            ],
+            "params_error": null
+          }
+        }
+      ],
+      "report_sha256": "6ac89d9bdfb0ca08a00b954b5265259c010016ab7a4acd3bf0eeaa7c13e5995e"
     }
   ],
   "historical_pending": [
@@ -8292,6 +8564,6 @@
   "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 20,
-  "pending_charts": 44,
-  "processed_charts": 64
+  "pending_charts": 45,
+  "processed_charts": 65
 }
