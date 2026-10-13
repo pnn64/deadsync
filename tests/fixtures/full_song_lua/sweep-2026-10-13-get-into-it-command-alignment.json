@@ -1,0 +1,201 @@
+{
+  "diagnostic_only": true,
+  "original_reports_byte_verified": true,
+  "original_capture_bytes_unchanged": true,
+  "diagnostic_scope": "Compare the retained first-repair command streams after excluding only the four diagnosed native startup callbacks from a temporary in-memory list. Preserve the existing comparator keys, array numeric tolerance, object equality and clock tolerance. This is not an acceptance result; the unchanged complete replay remains required.",
+  "acceptance_modified": false,
+  "passing_chart_reopened": false,
+  "complete_chart_repairs_spent_by_diagnostic": 0,
+  "charts": [
+    {
+      "position": 210,
+      "source_simfile": "Get Into It/GetIntoIt.sm",
+      "report_sha256": "98323b46c180c2992001aa137154b4abba018ea43742d31009c8adab7d9919ea",
+      "candidate_sha256": "c8525597f7140851887306420f697065b157204649f38c77434fb24b5fa69c27",
+      "native_event_count": 293754,
+      "actual_event_count": 293750,
+      "removed_expected_startup_events": [
+        {
+          "actor": "def-0078",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0078",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 692,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1656,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0078",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0078",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 692,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1657,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0079",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0079",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 700,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1658,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0079",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0079",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 700,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1659,
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "aligned_event_pairs": 293750,
+      "remaining_event_differences": 0,
+      "first_remaining_event_differences": [],
+      "existing_callback_errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 36.003: missing captured subscriber identity for ScreenGameplay/6/1",
+        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 103.493: missing captured subscriber identity for ScreenGameplay/6/1"
+      ],
+      "native_capabilities_used": {
+        "native_constructor_queries": true,
+        "native_modifier_results": true
+      },
+      "chart_repair_attempts_spent": 1,
+      "remaining_full_repairs": 1
+    },
+    {
+      "position": 211,
+      "source_simfile": "Get Into It/GetIntoIt.ssc",
+      "report_sha256": "f9c41eceec933dbbca8f91a973cfd9006e190229c00611eceb4b1f6840e2785b",
+      "candidate_sha256": "bc410b2ec660dea177cd25b913edd879070438441184378f20362174d5aed8fa",
+      "native_event_count": 249634,
+      "actual_event_count": 249630,
+      "removed_expected_startup_events": [
+        {
+          "actor": "def-0078",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0078",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 692,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1656,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0078",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0078",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 692,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1657,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0079",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0079",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 700,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1658,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0079",
+          "args": [],
+          "beat": 0,
+          "command": "BeginMessageCommand",
+          "definition_id": "def-0079",
+          "detail": {
+            "name": "BeginMessageCommand"
+          },
+          "kind": "command",
+          "line": 700,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1659,
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "aligned_event_pairs": 249630,
+      "remaining_event_differences": 0,
+      "first_remaining_event_differences": [],
+      "existing_callback_errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 36.012: missing captured subscriber identity for ScreenGameplay/6/1",
+        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 103.491: missing captured subscriber identity for ScreenGameplay/6/1"
+      ],
+      "native_capabilities_used": {
+        "native_constructor_queries": true,
+        "native_modifier_results": true
+      },
+      "chart_repair_attempts_spent": 1,
+      "remaining_full_repairs": 1
+    }
+  ],
+  "bounded_input_sha256": "ddf454b648c6a79e070fc5562f79ee1b9a502942d045a48210d539877abf278a",
+  "diagnostic_script_sha256": "eaa3478c2d8d725e9d38c4343136e062bdb20bac6bff2a1c52ccc0bc8f129523",
+  "existing_comparator_source_sha256": "97daffd286446f03438c58211da793f27c864401ad0c4e35fc65443b7b44740f",
+  "source_diagnoses": [
+    "sweep-2026-10-13-get-into-it-begin-diagnosis.json",
+    "sweep-2026-10-13-get-into-it-sm-begin-diagnosis.json"
+  ],
+  "source_fix_not_yet_accepted_by_complete_chart_replay": true
+}
