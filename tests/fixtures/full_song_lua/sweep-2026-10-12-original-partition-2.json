@@ -3221,6 +3221,25 @@
         }
       ],
       "report_sha256": "1b9a76e5bfc1b2b92fe85840d14cd2a9351c523e49c1adc3683bc6c9ca4e6321"
+    },
+    {
+      "position": 244,
+      "source_simfile": "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc",
+      "simfile_sha256": "fa95ab0c13007ddba2a9c4f194258e939fa9f802880a12ef90dc13a7552666d6",
+      "retained_original_archive": "0cc72e88f7d3817ceaecf12b2d973af098e004c89e55432acb95ff1730c8d829.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "7f64d791484688206a4eeaf9f264d48cf0de71ac73780fc40226f1f74bb473e8",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+      "build_proof": "/home/parity/jobs/startup-provenance-build-v3/proof.json",
+      "capture_seconds": 99.33828412099683,
+      "trace_sha256": "5d1e5319e5144035216f9c2095f3210c165de93be3b02654d6df04e0d8304890",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-244/candidates/5a12b3ce2bafa95e1a4eeba5100c4069e5a483bb4115d8f24379413fa5a33116.tar",
+      "replay_exit": 1,
+      "replay_seconds": 8.406106003996683,
+      "candidate_sha256": "5a12b3ce2bafa95e1a4eeba5100c4069e5a483bb4115d8f24379413fa5a33116",
+      "failure": "[0.2s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: frame 293/56068 (0.5%)\n[4.0s] replaying every native gameplay frame: frame 675/56068 (1.2%)\n[6.0s] replaying every native gameplay frame: frame 1036/56068 (1.8%)\n\nthread 'main' (2778362) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: failed to execute '/tmp/.tmpO4LgxL/song/default.lua': runtime error: interval is empty\nstack traceback:\n\t[C]: in function 'math.random'\n\t[string \"/tmp/.tmpO4LgxL/song/default.lua\"]:106: in main chunk\n\t>[C]: in ?\n\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[8.0s] replaying every native gameplay frame: frame 1354/56068 (2.4%)\n"
     }
   ],
   "scope": {
@@ -3233,6 +3252,6 @@
   "binary_sha256": "7f64d791484688206a4eeaf9f264d48cf0de71ac73780fc40226f1f74bb473e8",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 9,
-  "pending_charts": 16,
-  "processed_charts": 25
+  "pending_charts": 17,
+  "processed_charts": 26
 }
