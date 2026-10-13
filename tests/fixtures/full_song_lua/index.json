@@ -3309,15 +3309,12 @@
     {
       "title": "Kita Saitama 2000",
       "source_simfile": "Kita Saitama 2000/Kita Saitama 2000.ssc",
-      "harness_version": "0.1.0",
-      "archive": "e30f7a23efb6897e17bd55a014026f58303d23bc566f29708bf4b6c9b0c35a2b.tar.zst",
-      "sha256": "e30f7a23efb6897e17bd55a014026f58303d23bc566f29708bf4b6c9b0c35a2b",
-      "compressed_bytes": 518652,
-      "uncompressed_sha256": "68d9607429dad299ce20615915103741ae4430d5f59f444d6416b9d66cd61e10",
-      "compression_level": 22,
-      "aliases": [
-        "98e24106b569ee7c334d42011e52e4f50153f801c432bb166ee7bd2791a024ae.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b2ef051cb9f03c73c2b4631fdd96d444f06afb81cb101c73fbda3a637c936f60.tar.zst",
+      "sha256": "b2ef051cb9f03c73c2b4631fdd96d444f06afb81cb101c73fbda3a637c936f60",
+      "compressed_bytes": 3946897,
+      "uncompressed_sha256": "7777fa2b70d8b7e03dc03883abc76ad610d74f1e25bab208ea035972847956d8",
+      "aliases": []
     },
     {
       "title": "傷跡",

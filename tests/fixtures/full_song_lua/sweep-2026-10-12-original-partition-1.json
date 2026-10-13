@@ -4978,6 +4978,56 @@
         }
       ],
       "report_sha256": "fa196d1ef78346aeffbd8b0e9f9409fc17c9ab8a538da334b838ade94b081177"
+    },
+    {
+      "position": 267,
+      "source_simfile": "Kita Saitama 2000/Kita Saitama 2000.ssc",
+      "simfile_sha256": "c5e17e8777a3fe392638dfae654ae7c7649c4312c73e444fd7a777d599de8b60",
+      "retained_original_archive": "e30f7a23efb6897e17bd55a014026f58303d23bc566f29708bf4b6c9b0c35a2b.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+      "build_proof": "/home/parity/jobs/density-graph-build-v1/proof.json",
+      "capture_seconds": 128.2218735110073,
+      "trace_sha256": "c3ffb4e24b1f0fe1282df0aa6298679163662648893631d978c09354565303de",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-267/candidates/7777fa2b70d8b7e03dc03883abc76ad610d74f1e25bab208ea035972847956d8.tar",
+      "replay_exit": 0,
+      "replay_seconds": 342.6438628199976,
+      "candidate_sha256": "7777fa2b70d8b7e03dc03883abc76ad610d74f1e25bab208ea035972847956d8",
+      "native_frames": 63491,
+      "replayed_frames": 63491,
+      "compared_stage_fields": 1397,
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "ccbaecec8df79636120b63e95a9d95cc07ece1dcd4371f9f7328450542b3f2c1",
+      "archive": "b2ef051cb9f03c73c2b4631fdd96d444f06afb81cb101c73fbda3a637c936f60.tar.zst",
+      "archive_sha256": "b2ef051cb9f03c73c2b4631fdd96d444f06afb81cb101c73fbda3a637c936f60",
+      "compressed_bytes": 3946897,
+      "pack_seconds": 1.4040444529964589,
+      "harness_version": "0.1.80",
+      "title": "Kita Saitama 2000",
+      "retained_original_entry": {
+        "title": "Kita Saitama 2000",
+        "source_simfile": "Kita Saitama 2000/Kita Saitama 2000.ssc",
+        "harness_version": "0.1.0",
+        "archive": "e30f7a23efb6897e17bd55a014026f58303d23bc566f29708bf4b6c9b0c35a2b.tar.zst",
+        "sha256": "e30f7a23efb6897e17bd55a014026f58303d23bc566f29708bf4b6c9b0c35a2b",
+        "compressed_bytes": 518652,
+        "uncompressed_sha256": "68d9607429dad299ce20615915103741ae4430d5f59f444d6416b9d66cd61e10",
+        "compression_level": 22,
+        "aliases": [
+          "98e24106b569ee7c334d42011e52e4f50153f801c432bb166ee7bd2791a024ae.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -4989,7 +5039,7 @@
   },
   "binary_sha256": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 14,
+  "passed_fixtures": 15,
   "pending_charts": 19,
-  "processed_charts": 33
+  "processed_charts": 34
 }
