@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "LALA/lala.ssc",
+      "acceptance_commit": "3b26d1e928aa921cf01e16e54c67f9071783e5d7",
+      "native_frames": 28149,
+      "replayed_frames": 28149,
+      "compared_stage_fields": 1639,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "9c77701d228741d2959cb569475615ce0c0ee2690888d7154335048987fb1c49.tar.zst",
+      "compressed_sha256": "9c77701d228741d2959cb569475615ce0c0ee2690888d7154335048987fb1c49",
+      "uncompressed_sha256": "777dbe967835f0d698fa0af3a21e23394b8111c2ad69332940369295ce0ef9c2",
+      "compressed_bytes": 6920772,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Wave"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
