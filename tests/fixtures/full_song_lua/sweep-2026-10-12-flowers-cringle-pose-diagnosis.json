@@ -132,5 +132,134 @@
     "compares_uncompressed_data": true,
     "awaits_validated_helper": true
   },
-  "acceptance": "Existing full_song_lua full comparisons remain unchanged; coverage stays separate"
+  "acceptance": "Existing full_song_lua full comparisons remain unchanged; coverage stays separate",
+  "first_bounded_result": {
+    "status": "pending",
+    "repair_attempts": 1,
+    "native_frames": 18924,
+    "replayed_frames": 18924,
+    "errors": [],
+    "mismatch_count": 572027,
+    "compared_stage_fields": 2255,
+    "command_query_counts": {
+      "native": 608498,
+      "independent": 604914,
+      "extra_internal_style_queries_removed": 160357,
+      "remaining_missing_operations": 3584
+    },
+    "first_concrete_failures": [
+      {
+        "field": "command_query_count",
+        "native": 608498,
+        "deadsync": 604914
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0162",
+          "args": [
+            213.25
+          ],
+          "beat": 0.0008829782600514591,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 1743,
+            "source": "song:/lua/default.lua",
+            "tail_call": false
+          },
+          "command": "InitCommand",
+          "definition_id": "def-0171",
+          "detail": {
+            "native_tween_time_left": 0
+          },
+          "kind": "call",
+          "line": 1743,
+          "operation": "Actor.x",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.09244897961616516,
+          "seq": 1289,
+          "source": "song:/lua/default.lua",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.x",
+          "source": "song:/lua/default.lua",
+          "line": 1743,
+          "phase": "callback",
+          "beat": 0.0008829929283820093,
+          "seconds": 0.09244897961616516,
+          "args": [
+            213.5
+          ],
+          "results": [
+            {
+              "actor": "0x5be7fd8bf8a0",
+              "name": "",
+              "path": "ScreenGameplay/SongForeground/lua"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0162",
+          "args": [
+            213.25
+          ],
+          "beat": 0.26060783863067627,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 1743,
+            "source": "song:/lua/default.lua",
+            "tail_call": false
+          },
+          "command": "InitCommand",
+          "definition_id": "def-0171",
+          "detail": {
+            "native_tween_time_left": 0
+          },
+          "kind": "call",
+          "line": 1743,
+          "operation": "Actor.x",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.2245124727487564,
+          "seq": 1401,
+          "source": "song:/lua/default.lua",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.x",
+          "source": "song:/lua/default.lua",
+          "line": 1743,
+          "phase": "callback",
+          "beat": 0.26060786843299866,
+          "seconds": 0.2245124727487564,
+          "args": [
+            213.5
+          ],
+          "results": [
+            {
+              "actor": "0x5be7fd8bf8a0",
+              "name": "",
+              "path": "ScreenGameplay/SongForeground/lua"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      }
+    ],
+    "candidate_sha256": "8b80d71c87d7021ef5195e0c057d16bd590c3dd3843e16e6748dac056f3d75c0",
+    "binary_sha256": "668d1aa95b614dec4d2e3d598e68d2d0be065a583bdd856fbbc19232bf3682c3",
+    "evidence": "sweep-2026-10-12-flowers-cringle-pose-repairs.json",
+    "remaining_attempts": 1,
+    "next_source_work": "Trace independent player-position preparation: native copied P1 X is 213.25, independent is 213.5. Establish the 3584 missing operations before using the final full replay. Do not substitute native expected coordinates or calls."
+  }
 }
