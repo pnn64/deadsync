@@ -1,0 +1,285 @@
+{
+  "status": "validated native screen startup message aliases; final chart repairs not yet launched",
+  "source_fix_commit": "0734d61e5c63f18ce447e6d1284a42058d8cc218",
+  "source_diagnoses": [
+    "sweep-2026-10-13-get-into-it-begin-diagnosis.json",
+    "sweep-2026-10-13-get-into-it-sm-begin-diagnosis.json"
+  ],
+  "prior_validated_build": "sweep-2026-10-13-option-path-build.json",
+  "binary_sha256": "da08513ccd2d9d12b208ce9af2691b0853cfe3c4112ae37a1e3e18bd7210822e",
+  "binary_path": "/home/parity/jobs/begin-message-green-v1/full-song-lua-stage-modifier-v1",
+  "linux_checks": [
+    {
+      "label": "begin-message",
+      "exit_code": 0,
+      "seconds": 211.92424176100758,
+      "log_sha256": "e68c964d7d334ef4e28cef555f36adc01133a9b55d018fc77a96e6f9e225f4a6",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 583 filtered out; finished in 0.17s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 32.70733595901402,
+      "log_sha256": "d8bd63f02276d6480cdc1d9aece0a13e33853f5944890db33d4405624576800d",
+      "results": [
+        "test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 533 filtered out; finished in 31.81s"
+      ]
+    },
+    {
+      "label": "captured-order-control",
+      "exit_code": 0,
+      "seconds": 1.3988246440130752,
+      "log_sha256": "39b406b7981d38787a3ee4ebb6615f8b160fbc6848c8cc3eb9fa8cfc2522b277",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 583 filtered out; finished in 0.51s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 263.0921295120206,
+      "log_sha256": "0dd65f5057032c56e5ead78666f08640c47586b9f1e9327e32993d5491bace6a",
+      "results": [
+        "test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.49s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 50.067205030005425,
+      "log_sha256": "5bb7b458083c81d0cbe9077d9141174f32846ab827b71515265889bbb2e50b13",
+      "results": []
+    }
+  ],
+  "windows_checks": [
+    {
+      "label": "begin-message",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "begin-message-green-v1-windows-begin-message-v1.log",
+      "sha256": "7cddf62c05b7d9cee0776dc708001aade564c56242eb987fa8acbb4bfe997e11",
+      "seconds": 485.42699969979003
+    },
+    {
+      "label": "live-controls",
+      "passed": 51,
+      "exit_code": 0,
+      "log": "begin-message-green-v1-windows-live-controls-v1.log",
+      "sha256": "195d434f58fd47b61dfa997c169eeef474bab4c6a778b230c41da5a55bac4977",
+      "seconds": 36.95588759984821
+    },
+    {
+      "label": "captured-order-control",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "begin-message-green-v1-windows-captured-order-control-v1.log",
+      "sha256": "0d692fd38ddfab0d827623d82e834ef980205c5d4b83ade6aa3c41ecca3ce201",
+      "seconds": 1.9865695000626147
+    },
+    {
+      "label": "replay-controls",
+      "passed": 26,
+      "exit_code": 0,
+      "log": "begin-message-green-v1-windows-replay-controls-v1.log",
+      "sha256": "e68388c3deb6e7b69bc081e6c89f56b4be0a313052e1c959a4a0eda50eef02fd",
+      "seconds": 249.7235632003285
+    },
+    {
+      "label": "build",
+      "passed": null,
+      "exit_code": 0,
+      "log": "begin-message-green-v1-windows-build-v1.log",
+      "sha256": "49fe35abffef09c169308578f83ad776e9fa0b0d2bae0528710f91d748c2d074",
+      "seconds": 18.92218130035326
+    }
+  ],
+  "meaningful_red_controls": {
+    "linux": [
+      {
+        "label": "begin-message",
+        "exit_code": 101,
+        "expected_failure": true,
+        "log_sha256": "46009548d0d2679d5bb0675e2dc46fab703dba048b7dcfd0197d04dd83c602e6",
+        "seconds": 230.32608726000763
+      }
+    ],
+    "windows": [
+      {
+        "label": "begin-message",
+        "exit_code": 101,
+        "expected_failure": true,
+        "log": "begin-message-red-v1-windows-begin-message-v1.log",
+        "log_sha256": "b7ded5b4853ddfa177a2e15275d5efb82006e0c538307ca6df7938460837bace",
+        "seconds": 406.0201446004212
+      }
+    ]
+  },
+  "isolated_control_edits": {
+    "crates/deadsync-song-lua/src/live.rs": [
+      [
+        "\n#[cfg(test)]\nmod tests {\n    #[cfg(feature = \"test-support\")]\n    #[test]\n    fn live_numeric_option_getter_retains_native_argument_path() {\n",
+        "\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn live_screen_begin_reaches_message_commands_only_in_screen_children() {\n        let dir = std::env::temp_dir().join(format!(\"deadsync-live-begin-message-{}\", std::process::id()));\n        fs::create_dir_all(&dir).expect(\"begin message directory\");\n        let background = dir.join(\"background.lua\");\n        let foreground = dir.join(\"foreground.lua\");\n        fs::write(&background, r#\"\nBG_BEGIN = 0\nreturn Def.ActorFrame { Def.Actor {\n    BeginMessageCommand = function() BG_BEGIN = BG_BEGIN + 1 end,\n} }\n\"#).unwrap();\n        fs::write(&foreground, r#\"\nFG_BEGIN, TARGETS = 0, 0\nlocal proxy = Def.ActorProxy {\n    InitCommand = function(self) PROXY = self end,\n    BeginMessageCommand = function(self)\n        FG_BEGIN = FG_BEGIN + 1\n        if TARGET then self:SetTarget(TARGET); TARGETS = TARGETS + 1 end\n    end,\n}\nreturn Def.ActorFrame { proxy, Def.ActorProxy {\n    BeginMessageCommand = function(self) FG_BEGIN = FG_BEGIN + 1 end,\n} }\n\"#).unwrap();\n        let mut context = SongLuaCompileContext::new(&dir, \"native begin aliases\");\n        context.live = true;\n        context.background_layer_count = 1;\n        context.layer_start_beats = vec![0.0, 0.0];\n        context.foreground_names = vec![\"foreground\".into()];\n        let mut layers: Vec<Compiled> = crate::compile_song_lua_layers_with_default_host(\n            &[&background, &foreground], 1, &context, SongLuaNoteskinResolver::default(),\n            |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).expect(\"owned background and foreground\");\n        let mut scene = layers[1].live_scene.take().expect(\"primary scene\");\n        let startup = scene.take_startup_output();\n        assert!(startup.errors.is_empty(), \"{:?}\", startup.errors);\n        let globals = scene.lua.globals();\n        assert_eq!(globals.get::<u32>(\"FG_BEGIN\").unwrap(), 2,\n            \"screen Begin invokes native foreground BeginMessageCommand aliases\");\n        assert_eq!(globals.get::<u32>(\"BG_BEGIN\").unwrap(), 0,\n            \"cached background owners are outside screen Begin propagation\");\n        assert_eq!(globals.get::<u32>(\"TARGETS\").unwrap(), 0);\n        assert!(scene.lua.load(\"return type(PROXY:GetCommand('Begin')) == 'function'\").eval::<bool>().unwrap());\n        scene.lua.load(\"PROXY:playcommand('Begin')\").exec().unwrap();\n        assert_eq!(globals.get::<u32>(\"FG_BEGIN\").unwrap(), 3);\n        assert_eq!(globals.get::<u32>(\"BG_BEGIN\").unwrap(), 0);\n        assert!(startup.broadcasts.iter().all(|(_, name, _)| name != \"Begin\"),\n            \"direct screen command creates no synthetic Begin broadcast\");\n    }\n\n    #[cfg(feature = \"test-support\")]\n    #[test]\n    fn live_numeric_option_getter_retains_native_argument_path() {\n"
+      ]
+    ]
+  },
+  "isolated_production_edits": {
+    "crates/deadsync-song-lua/src/lua_util.rs": [
+      [
+        "    run_actor_named_command_with_drain_and_params(lua, actor, name, drain_queue, None)\n}\n\npub fn run_actor_named_command_with_drain_and_params(\n    lua: &Lua,\n    actor: &Table,\n",
+        "    run_actor_named_command_with_drain_and_params(lua, actor, name, drain_queue, None)\n}\n\n// Message handlers share the native direct command map. Retain their\n// authored field name when a direct command executes them in the live trace.\nfn lookup_actor_named_command<'a>(\n    actor: &Table,\n    name: &'a str,\n) -> mlua::Result<Option<(Function, std::borrow::Cow<'a, str>)>> {\n    if let Some(command) = actor.get::<Option<Function>>(name)? {\n        return Ok(Some((command, std::borrow::Cow::Borrowed(name))));\n    }\n    let Some(base) = name.strip_suffix(\"Command\").filter(|base| !base.ends_with(\"Message\")) else {\n        return Ok(None);\n    };\n    let field = format!(\"{base}MessageCommand\");\n    Ok(actor.get::<Option<Function>>(field.as_str())?\n        .map(|command| (command, std::borrow::Cow::Owned(field))))\n}\n\npub fn run_actor_named_command_with_drain_and_params(\n    lua: &Lua,\n    actor: &Table,\n"
+      ],
+      [
+        "    drain_queue: bool,\n    params: Option<Value>,\n) -> mlua::Result<()> {\n    let Some(command) = actor.get::<Option<Function>>(name)? else {\n        return Ok(());\n    };\n    run_guarded_actor_command(lua, actor, name, &command, drain_queue, params)\n}\n\nfn run_actor_message_with_params(\n",
+        "    drain_queue: bool,\n    params: Option<Value>,\n) -> mlua::Result<()> {\n    let Some((command, field)) = lookup_actor_named_command(actor, name)? else {\n        return Ok(());\n    };\n    run_guarded_actor_command(lua, actor, field.as_ref(), &command, drain_queue, params)\n}\n\nfn run_actor_message_with_params(\n"
+      ],
+      [
+        "                let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) else {\n                    return Ok(Value::Nil);\n                };\n                Ok(actor\n                    .get::<Option<Function>>(ActorCommandName::new(&name, \"Command\"))?\n                    .map_or(Value::Nil, Value::Function))\n            }\n        })?,\n    )?;\n",
+        "                let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) else {\n                    return Ok(Value::Nil);\n                };\n                Ok(lookup_actor_named_command(&actor, &ActorCommandName::new(&name, \"Command\"))?\n                    .map_or(Value::Nil, |(command, _)| Value::Function(command)))\n            }\n        })?,\n    )?;\n"
+      ],
+      [
+        "    }\n    // Screen::BeginScreen propagates Begin before Foreground::Update sends On.\n    // This root is the session loader list, so dispatch to its actor children.\n    run_named_command_on_children_recursively(lua, root, \"BeginCommand\", None)?;\n    // LoadDelayedScreen broadcasts after activation, before Update(0) sends On.\n    crate::record_song_lua_broadcast(lua, \"ScreenChanged\", false)?;\n    broadcast_song_lua_message(lua, \"ScreenChanged\", None)?;\n",
+        "    }\n    // Screen::BeginScreen propagates Begin before Foreground::Update sends On.\n    // This root is the session loader list, so dispatch to its actor children.\n    for child in actor_direct_children(lua, root)? {\n        // Native Background keeps its cached actors outside the screen's\n        // propagated command children. Foreground actors receive Begin.\n        if child.raw_get::<Option<f32>>(\"__songlua_background_start_beat\")?.is_some() {\n            continue;\n        }\n        run_actor_named_command(lua, &child, \"BeginCommand\")?;\n        run_named_command_on_children_recursively(lua, &child, \"BeginCommand\", None)?;\n    }\n    // LoadDelayedScreen broadcasts after activation, before Update(0) sends On.\n    crate::record_song_lua_broadcast(lua, \"ScreenChanged\", false)?;\n    broadcast_song_lua_message(lua, \"ScreenChanged\", None)?;\n"
+      ]
+    ]
+  },
+  "control_unchanged_from_meaningful_red": true,
+  "foreground_begin_message_aliases_verified": true,
+  "cached_background_owners_excluded_from_begin": true,
+  "direct_get_command_and_play_command_verified": true,
+  "synthetic_begin_broadcast_added": false,
+  "local_source_pins": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Actor.cpp",
+      "sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ActorFrame.cpp",
+      "sha256": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Screen.cpp",
+      "sha256": "d77fc7cd061a7a90584529f95966badc0b5b327438b2b00376c463151fb9ec9a"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Background.cpp",
+      "sha256": "8ac3e579ba9b3adf41acd425c4ad921d0ed17f511761dd9e80301119d76eba2c"
+    }
+  ],
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "frozen_source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "8670cd6bf70ccb2b6a21a3898b94e9dea6816c84723bf626318a64766e1205d1",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "b3b021737261adaaa280c222cc1e4156a1c1ed1b173a0962bbab9f4e834da395",
+    "crates/deadsync-song-lua/src/live.rs": "8da98c38bfc059a0ed2385dfdc66dac98c2cc787e6180f67c4e3fc5fc32bc128",
+    "crates/deadsync-song-lua/src/song_tables.rs": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182",
+    "crates/deadsync-song-lua/src/lua_util.rs": "7db2984cb21002d9c5bbe53393ce2150e70beac1b7822902a26925ff34dfd3c7",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "090ee7ef08a554972b5bba9fb72d2bb51d065cd5e324427a9a256e417735c10d",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "97daffd286446f03438c58211da793f27c864401ad0c4e35fc65443b7b44740f",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "6a52092c53d4441b96c609aafc3fdc315fb6d8988ae04d0c3133d5e243651673",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "642ff0d5ed5f9365bdc1c9c54c2353bf293c21b813fdd967bb8511fe52c256bd",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "aacfd41959a6c1795ffd9a3854c25f161dde783d0e40dee8dc1aec5368b06470",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "3d4e4ec033727d60449713937a5dc2506b3d3402d6570f4033a0a3be75e85722",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+    "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+    "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+    "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+    "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+    "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879",
+    "crates/deadsync-song-lua/src/playback/prepare.rs": "67eb64b772ede170e6dfe28158a70d66d7c9cd0246e61479494b4569b5c7ae2d",
+    "crates/deadsync-song-lua/src/theme_colors.rs": "56dccc788960021d78e9fc2c8933ad2d15a5f87830268779b2132e1467010a69"
+  },
+  "windows_root_source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "f9a66ab7c351f1a934d45e602663e909b02b1c88f10f63991e926539cfb7439c",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "48c2ea7a0c031cb5c4b5cfd72e0e0bcb5ef5c62884916c4883866e74fcdd2a70",
+    "crates/deadsync-song-lua/src/live.rs": "8da98c38bfc059a0ed2385dfdc66dac98c2cc787e6180f67c4e3fc5fc32bc128",
+    "crates/deadsync-song-lua/src/song_tables.rs": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182",
+    "crates/deadsync-song-lua/src/lua_util.rs": "7db2984cb21002d9c5bbe53393ce2150e70beac1b7822902a26925ff34dfd3c7",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "090ee7ef08a554972b5bba9fb72d2bb51d065cd5e324427a9a256e417735c10d",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "97daffd286446f03438c58211da793f27c864401ad0c4e35fc65443b7b44740f",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "61ec0b8c848d0ef4a78ebe4e3d19dc9e316e0cd900c1464e5dd2f79904b4dbb2",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "642ff0d5ed5f9365bdc1c9c54c2353bf293c21b813fdd967bb8511fe52c256bd",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "aacfd41959a6c1795ffd9a3854c25f161dde783d0e40dee8dc1aec5368b06470",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "3d4e4ec033727d60449713937a5dc2506b3d3402d6570f4033a0a3be75e85722",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+    "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+    "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+    "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+    "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+    "crates/deadsync-song-lua/src/draw_capture.rs": "9dd81bb6c6f5ae211d7243cba5d070570abf279a0b7c0f9121b689091c2d8594",
+    "crates/deadsync-song-lua/src/playback/prepare.rs": "67eb64b772ede170e6dfe28158a70d66d7c9cd0246e61479494b4569b5c7ae2d",
+    "crates/deadsync-song-lua/src/theme_colors.rs": "56dccc788960021d78e9fc2c8933ad2d15a5f87830268779b2132e1467010a69"
+  },
+  "source_bundle_sha256": "7ba99e143f0408c63ace7a6478be04f13e4bc9baf7bb8364642d372f4ea21c40",
+  "native_harness": {
+    "source_sha256": {
+      "src/song_lua_archive.rs": "97cf09add0cec5b48e007a6ac50a46ae423bf684c661f52754f6d5b35086f603",
+      "src/song_lua_oracle.rs": "e0a18b177b501a8bc7feafe0540a929abcc8dbbc66e35c2d7cdd14725a0c282c",
+      "probe_theme/SongLuaTrace.lua": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f"
+    },
+    "checks": [
+      {
+        "label": "oracle-path-tests",
+        "exit_code": 0,
+        "seconds": 26.568072756999754,
+        "results": [
+          "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 199 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "label": "archive-tests",
+        "exit_code": 0,
+        "seconds": 0.8939706840028521,
+        "results": [
+          "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 0.65s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "label": "build",
+        "exit_code": 0,
+        "seconds": 0.18723358200804796,
+        "results": []
+      }
+    ],
+    "binary": "/home/parity/jobs/listed-lua-schema-build-v1/harness",
+    "binary_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "fix_commit": "c283a8a",
+    "native_capture_instrumentation": "Unchanged from byte-verified case-lua-archive-build-v1; only Rust archive collection changed",
+    "acceptance": "Unchanged full-song replay and pack comparisons"
+  },
+  "selection_before": {
+    "build_proof": "/home/parity/jobs/option-path-green-v2/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "validation_scope": "Resolve the observed message handler alias for native direct command execution and GetCommand, retaining its authored trace field name. Scope screen Begin to attached owners, excluding cached background actors. Validate the unchanged real foreground/background Begin control, all 51 live controls, captured subscriber ordering, all 26 native gameplay controls and both executable builds. Gameplay rules and comparison fields are unchanged.",
+  "chart_repair_attempts_spent": 0,
+  "comparisons_modified": false,
+  "passing_chart_reopened": false
+}
