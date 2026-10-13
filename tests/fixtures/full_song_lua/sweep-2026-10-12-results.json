@@ -8177,6 +8177,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 296,
+      "source_simfile": "Marvins Room/MarvinsRoom.sm",
+      "simfile_sha256": "a28eb7e23666c0232a77bcf94ed6f77d57aff79e629a0c59d609312a87d3c938",
+      "retained_original_archive": "cf3c7bd09a2e46afdecb553941c5ab87f2953b4f81faccf97b5cb00f6e7626cb.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/live-draw-build-v1/proof.json",
+      "capture_seconds": 368.3311881550035,
+      "trace_sha256": "47ff40f273ef18fb2bc19cda3c310260a947d459dfbdc05eef3fb6dc6d64c134",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-296/candidates/39b44c3c50b2d2a55932ecf0a5eb7cae17b8afd5ddcd9f3bd67c0752499b0ef2.tar",
+      "replay_exit": 0,
+      "replay_seconds": 2096.417644276007,
+      "candidate_sha256": "39b44c3c50b2d2a55932ecf0a5eb7cae17b8afd5ddcd9f3bd67c0752499b0ef2",
+      "native_frames": 140479,
+      "replayed_frames": 140479,
+      "compared_stage_fields": 3399,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY",
+        "native drawable state/resources: Quad"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "c894d19087418ef31a0b72ef31f41b29a92d4862585bebd6f5fea677863a9a3e",
+      "archive": "b8a2ebdc37945d168dc5b234d76607356475c281d9f63321310aa486d827e52c.tar.zst",
+      "archive_sha256": "b8a2ebdc37945d168dc5b234d76607356475c281d9f63321310aa486d827e52c",
+      "compressed_bytes": 25033571,
+      "pack_seconds": 17.314366354999947,
+      "harness_version": "0.1.80",
+      "title": "Episode 11 Marvin's Room",
+      "retained_original_entry": {
+        "title": "Episode 11",
+        "source_simfile": "Marvins Room/MarvinsRoom.sm",
+        "harness_version": "0.1.0",
+        "archive": "cf3c7bd09a2e46afdecb553941c5ab87f2953b4f81faccf97b5cb00f6e7626cb.tar.zst",
+        "sha256": "cf3c7bd09a2e46afdecb553941c5ab87f2953b4f81faccf97b5cb00f6e7626cb",
+        "compressed_bytes": 67036,
+        "uncompressed_sha256": "278ab49e47d06cb48c9a3372574433aa842485a7285d31527b8650f23ca42528",
+        "compression_level": 22,
+        "aliases": [
+          "8c3bc3203ce9dea93f2d3b3ed6f86ee5ddc4492fc7b84c88fdb75f73fec6be94.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -8200,9 +8251,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "b370854d414e700640d93484aa612dcdc931af280acf17ee8b30e35b7fd82f7d",
+  "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 19,
+  "passed_fixtures": 20,
   "pending_charts": 42,
-  "processed_charts": 61
+  "processed_charts": 62
 }

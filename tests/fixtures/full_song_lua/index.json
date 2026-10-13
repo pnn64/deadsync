@@ -3649,17 +3649,14 @@
       ]
     },
     {
-      "title": "Episode 11",
+      "title": "Episode 11 Marvin's Room",
       "source_simfile": "Marvins Room/MarvinsRoom.sm",
-      "harness_version": "0.1.0",
-      "archive": "cf3c7bd09a2e46afdecb553941c5ab87f2953b4f81faccf97b5cb00f6e7626cb.tar.zst",
-      "sha256": "cf3c7bd09a2e46afdecb553941c5ab87f2953b4f81faccf97b5cb00f6e7626cb",
-      "compressed_bytes": 67036,
-      "uncompressed_sha256": "278ab49e47d06cb48c9a3372574433aa842485a7285d31527b8650f23ca42528",
-      "compression_level": 22,
-      "aliases": [
-        "8c3bc3203ce9dea93f2d3b3ed6f86ee5ddc4492fc7b84c88fdb75f73fec6be94.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b8a2ebdc37945d168dc5b234d76607356475c281d9f63321310aa486d827e52c.tar.zst",
+      "sha256": "b8a2ebdc37945d168dc5b234d76607356475c281d9f63321310aa486d827e52c",
+      "compressed_bytes": 25033571,
+      "uncompressed_sha256": "39b44c3c50b2d2a55932ecf0a5eb7cae17b8afd5ddcd9f3bd67c0752499b0ef2",
+      "aliases": []
     },
     {
       "title": "Episode 11",
