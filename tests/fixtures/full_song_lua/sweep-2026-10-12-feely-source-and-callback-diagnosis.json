@@ -18,7 +18,16 @@
       "failed": 0
     },
     "build_proof": "/home/parity/jobs/foreground-source-build-v2/proof.json",
-    "validation_revision": "First Windows and Linux validation logs retained. The first test inspected a callback stack wrapper; revision 2 checks the callback prototype and verifies its actual invocation. No chart repair was launched."
+    "validation_revision": "First Windows and Linux validation logs retained. The first test inspected a callback stack wrapper; revision 2 checks the callback prototype and verifies its actual invocation. No chart repair was launched.",
+    "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+    "linux_live_tests": {
+      "passed": 31,
+      "failed": 0
+    },
+    "linux_replay_controls": {
+      "passed": 18,
+      "failed": 0
+    }
   },
   "already_validated_shared_fixes": [
     "21c106cb4 owned style reads",
