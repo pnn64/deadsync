@@ -1,0 +1,213 @@
+{
+  "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+  "candidate_sha256": "70d46f8a7297fb5e58d7d19783915d6bb2f9210774da9a8d6f3d1423afd6b419",
+  "native_trace_sha256": "cd1b99822ffab060d4148dd3a492b6b606bebc622a7a1a3c97c00763f8167ce0",
+  "report_sha256": "1aea9fc62743f9c8cc755993687897535e01eefa45125e9290b44e10d8c1369c",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_simply_love_commit": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+  "repair_attempts_spent": 0,
+  "repair_attempts_remaining": 2,
+  "diagnostic_only": true,
+  "retained_uncompressed_report_and_trace_bytes_verified": true,
+  "observation_sha256": "e8846d1a3ad9127580c6761c629c83352726dd38ea4df350d244779f62a1fcce",
+  "all_six_y_differences_exactly_explained": true,
+  "y_values": {
+    "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+    "all_six_exactly_reproduced": true,
+    "reproduction": [
+      {
+        "seq": 401456,
+        "query_beat": 152.11318969726562,
+        "authored_tween_beat": 152,
+        "duration": 0.30000001192092896,
+        "left": 0.2640790343284607,
+        "start_y": 816,
+        "target_y": 528,
+        "percent": 0.11973661184310913,
+        "native_scalar_factor": 0.22513633966445923,
+        "independent_old_fused_factor": 0.22513636946678162,
+        "native_y": 751.1607666015625,
+        "independent_old_y": 751.1607055664062
+      },
+      {
+        "seq": 401840,
+        "query_beat": 152.29116821289062,
+        "authored_tween_beat": 152,
+        "duration": 0.30000001192092896,
+        "left": 0.20290005207061768,
+        "start_y": 816,
+        "target_y": 528,
+        "percent": 0.323666512966156,
+        "native_scalar_factor": 0.5425729751586914,
+        "independent_old_fused_factor": 0.5425730347633362,
+        "native_y": 659.739013671875,
+        "independent_old_y": 659.7389526367188
+      },
+      {
+        "seq": 403772,
+        "query_beat": 153.1002197265625,
+        "authored_tween_beat": 153,
+        "duration": 0.30000001192092896,
+        "left": 0.2714030146598816,
+        "start_y": 528,
+        "target_y": 336,
+        "percent": 0.09532332420349121,
+        "native_scalar_factor": 0.18156009912490845,
+        "independent_old_fused_factor": 0.18156011402606964,
+        "native_y": 493.1404724121094,
+        "independent_old_y": 493.14044189453125
+      },
+      {
+        "seq": 404348,
+        "query_beat": 153.33091735839844,
+        "authored_tween_beat": 153,
+        "duration": 0.30000001192092896,
+        "left": 0.1922900229692459,
+        "start_y": 528,
+        "target_y": 336,
+        "percent": 0.3590332865715027,
+        "native_scalar_factor": 0.5891616344451904,
+        "independent_old_fused_factor": 0.5891616940498352,
+        "native_y": 414.8809814453125,
+        "independent_old_y": 414.8809509277344
+      },
+      {
+        "seq": 404636,
+        "query_beat": 153.4397735595703,
+        "authored_tween_beat": 153,
+        "duration": 0.30000001192092896,
+        "left": 0.15506502985954285,
+        "start_y": 528,
+        "target_y": 336,
+        "percent": 0.4831165671348572,
+        "native_scalar_factor": 0.7328314781188965,
+        "independent_old_fused_factor": 0.7328315377235413,
+        "native_y": 387.2963562011719,
+        "independent_old_y": 387.29632568359375
+      },
+      {
+        "seq": 407452,
+        "query_beat": 163.42269897460938,
+        "authored_tween_beat": 155,
+        "duration": 0.30000001192092896,
+        "left": 0.19200602173805237,
+        "start_y": 288,
+        "target_y": 240,
+        "percent": 0.35997992753982544,
+        "native_scalar_factor": 0.5903743505477905,
+        "independent_old_fused_factor": 0.5903742909431458,
+        "native_y": 259.6620178222656,
+        "independent_old_y": 259.66204833984375
+      }
+    ],
+    "source_fix_commit": "d82120e47",
+    "chart_repair_attempts_spent": 0
+  },
+  "y_source_cause": "Native scalar float deceleration rounds the squared inverse before subtracting it from one. The former fused independent operation differs by one factor ulp. The native Actor float lerp reproduces all six observed Y differences exactly, including the post-warp sample.",
+  "y_fix_commit": "d82120e47",
+  "y_validation": "sweep-2026-10-13-kaboom-tap-deceleration-build.json",
+  "all_four_rotation_tween_differences_established": true,
+  "rotation_tween_differences": [
+    {
+      "native_event_seq": 834511,
+      "tree_event_seq": 834510,
+      "beat": 340.00433349609375,
+      "seconds": 102.87562561035156,
+      "equal_rotation_arguments": [
+        60
+      ],
+      "native_recursive_tween_time_left": 5.485710144042969,
+      "independent_own_tween_time_left": 1.0,
+      "longest_native_owned_leaf": {
+        "path": "Underlay/NoteFieldContainerP1/0/0/Column4/ColumnFlash",
+        "time_left": 5.485710144042969,
+        "commands": {
+          "Init": {
+            "last_line": 170,
+            "line": 159,
+            "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+          }
+        }
+      }
+    },
+    {
+      "native_event_seq": 859975,
+      "tree_event_seq": 859974,
+      "beat": 350.5088806152344,
+      "seconds": 106.47718811035156,
+      "equal_rotation_arguments": [
+        0
+      ],
+      "native_recursive_tween_time_left": 1.866728663444519,
+      "independent_own_tween_time_left": 1.25,
+      "longest_native_owned_leaf": {
+        "path": "Underlay/NoteFieldContainerP1/0/0/Column4/ColumnFlash",
+        "time_left": 1.866728663444519,
+        "commands": {
+          "Init": {
+            "last_line": 170,
+            "line": 159,
+            "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+          }
+        }
+      }
+    },
+    {
+      "native_event_seq": 1569108,
+      "tree_event_seq": 1569107,
+      "beat": 624.500244140625,
+      "seconds": 192.18850708007812,
+      "equal_rotation_arguments": [
+        60
+      ],
+      "native_recursive_tween_time_left": 5.4857177734375,
+      "independent_own_tween_time_left": 1.0,
+      "longest_native_owned_leaf": {
+        "path": "Underlay/NoteFieldContainerP1/0/0/Column1/ColumnFlash",
+        "time_left": 5.4857177734375,
+        "commands": {
+          "Init": {
+            "last_line": 170,
+            "line": 159,
+            "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+          }
+        }
+      }
+    },
+    {
+      "native_event_seq": 1586522,
+      "tree_event_seq": 1586521,
+      "beat": 632.006103515625,
+      "seconds": 194.76194763183594,
+      "equal_rotation_arguments": [
+        0
+      ],
+      "native_recursive_tween_time_left": 2.6271307468414307,
+      "independent_own_tween_time_left": 1.5,
+      "longest_native_owned_leaf": {
+        "path": "Underlay/NoteFieldContainerP1/0/0/Column1/ColumnFlash",
+        "time_left": 2.6271307468414307,
+        "commands": {
+          "Init": {
+            "last_line": 170,
+            "line": 159,
+            "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+          }
+        }
+      }
+    }
+  ],
+  "rotation_source_cause": "SL ColumnCues.Update reads the player visible music time and authored steps:GetColumnCues(1.5). For an eligible cue it runs the owned ColumnFlash Flash command: stoptweening, decelerate(0.15), diffuse, sleep(duration-0.30), accelerate(0.15), diffuse transparent. Parent tween time is the maximum of actual descendants.",
+  "cue_implementation_not_yet_changed": true,
+  "required_cue_fix": "Construct the actual enabled-player NoteField container and cue actors from source, derive cue data from the selected simfile and player timing, and advance their real queues in native underlay order. Verify pause, time/rate scaling, multiple columns, recurring cues and recursive tween time before spending a repair attempt. Do not inject the observed duration, synthesize a fixed parent timer, or add empty count placeholders.",
+  "native_cue_source_sha256": {
+    "BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua": "47231e3ffed11e082b553364d53eea72c7f677e37ee2c8a9080773a58d5b86c2",
+    "BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua": "9dc23ded0fe7e29541b383ad5a3b7dc04d9e3257ab5305a8995c228b5549642e",
+    "Scripts/SL-ChartParser.lua": "6ca623b3676a72ed95e67aab8a2fd62ec954b962ae906f2106c1d7ff28bab4ab"
+  },
+  "native_capture_reused": true,
+  "chart_repair_not_started": true,
+  "acceptance_comparisons_changed": false,
+  "passing_charts_reopened": false,
+  "full_repair_replay_still_required": true
+}
