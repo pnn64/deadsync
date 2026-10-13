@@ -97,9 +97,27 @@
   "bounded_repair": {
     "attempt": 1,
     "job": "/home/parity/jobs/ftw-ssc-description-repair-v1",
-    "status": "running",
+    "status": "passed",
     "reuses_original_capture": true,
     "compares_uncompressed_data": true
   },
-  "acceptance": "Existing whole replay comparisons unchanged; coverage remains separate."
+  "acceptance": "Existing whole replay comparisons unchanged; coverage remains separate.",
+  "first_bounded_result": {
+    "status": "passed",
+    "repair_attempts": 1,
+    "native_frames": 51154,
+    "replayed_frames": 51154,
+    "compared_stage_fields": 1573,
+    "mismatch_count": 0,
+    "errors": [],
+    "candidate_sha256": "5e35ee6eca02478f22a430afb35c85de6f0d17d7f90c07404718bc37a65e2693",
+    "archive": "1fd3994e70780bbd75b687131fbf798c4c30c37f878da889040855df18f61a8d.tar.zst",
+    "archive_sha256": "1fd3994e70780bbd75b687131fbf798c4c30c37f878da889040855df18f61a8d",
+    "compressed_bytes": 17088459,
+    "local_archive_verified": true,
+    "evidence": "sweep-2026-10-12-ftw-ssc-description-repairs.json",
+    "acceptance_commit": "1918f8e67",
+    "lossless_pack_verification": "Packed archive filename SHA and decompressed bytes SHA both verified before publication.",
+    "coverage_evidence": "The passing replay report records pending coverage separately; it is not an acceptance gate."
+  }
 }
