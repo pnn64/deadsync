@@ -3961,15 +3961,12 @@
     {
       "title": "Myths You Forgot",
       "source_simfile": "Myths You Forgot/Myths You Forgot.ssc",
-      "harness_version": "0.1.0",
-      "archive": "eb9ec0cc567a02617f99dad8503fc22278f3c0d03cad9d935e5bd7156a31add8.tar.zst",
-      "sha256": "eb9ec0cc567a02617f99dad8503fc22278f3c0d03cad9d935e5bd7156a31add8",
-      "compressed_bytes": 61414,
-      "uncompressed_sha256": "5431d5691bcf387ce0756a8756cf7e8b9e0ee7796e488dbe970926908fdbf034",
-      "compression_level": 22,
-      "aliases": [
-        "ee74ddb5c37b0900a429100558513f1e6b350458095d9bae4f56594814442d06.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "6b36e2c44e4ac70868685760bd8d57274e7d4bf01af1996f53b89aff35a85022.tar.zst",
+      "sha256": "6b36e2c44e4ac70868685760bd8d57274e7d4bf01af1996f53b89aff35a85022",
+      "compressed_bytes": 10409746,
+      "uncompressed_sha256": "95c43ceb59efa3dc19a01f750d3b141ca0d03d9a88b0b7eb0ba60baf499784b6",
+      "aliases": []
     },
     {
       "title": "NEGATOR",
