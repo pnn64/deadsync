@@ -163,10 +163,7 @@ fn query_value(lua: &Lua, value: &Value, depth: usize) -> mlua::Result<serde_jso
 }
 
 fn query_actor_name(actor: &Table) -> mlua::Result<String> {
-    match actor.raw_get::<Option<String>>("__songlua_load_name")? {
-        Some(name) => Ok(name),
-        None => Ok(actor.raw_get::<Option<String>>("Name")?.unwrap_or_default()),
-    }
+    crate::lua_util::actor_name(actor)
 }
 
 fn query_details(lua: &Lua, args: &MultiValue, result: &mlua::Result<MultiValue>) -> mlua::Result<serde_json::Value> {
@@ -1315,6 +1312,40 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn live_actor_name_ignores_lua_attribute_writes() {
+        let mut compiled = compile("native-actor-name", r#"
+return Def.ActorFrame{Name='Root',
+ Def.ActorFrame{InitCommand=function(self) self.Name='Fish_001' end},
+ Def.Actor{Name='Declared',InitCommand=function(self) self.Name='Attribute' end},
+ OnCommand=function(self)
+  local unnamed=self:GetChildren()['']
+  assert(unnamed and unnamed:GetName()=='', 'runtime actor name ignores Lua Name attribute')
+  assert(unnamed.Name=='Fish_001')
+  assert(self:GetChild('Fish_001')==nil)
+  local declared=self:GetChild('Declared')
+  assert(declared and declared:GetName()=='Declared')
+  assert(declared.Name=='Attribute' and self:GetChild('Attribute')==nil)
+  unnamed:name('RuntimeFish')
+  assert(unnamed:GetName()=='RuntimeFish' and unnamed.Name=='Fish_001')
+  assert(self:GetChild('RuntimeFish')==unnamed)
+  unnamed.Name='AnotherAttribute'
+  assert(unnamed:GetName()=='RuntimeFish')
+  self:aux(1)
+ end,
+}
+"#);
+        let mut scene = compiled.live_scene.take().expect("owned scene");
+        let output = scene.advance(SongLuaLiveFrame::default()).expect("owned update");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        let root: Table = scene.root.as_table().expect("session roots").raw_get(1).expect("root");
+        assert_eq!(root.get::<Function>("getaux").unwrap().call::<f32>(root.clone()).unwrap(), 1.0);
+        let fish: Table = root.raw_get(1).expect("same retained fish");
+        let observed = query_value(&scene.lua, &Value::Table(fish), 0).expect("query identity");
+        assert_eq!(observed["name"], "RuntimeFish");
+        assert_eq!(observed["path"], "ScreenGameplay/SongForeground/Root/RuntimeFish");
+    }
+
     #[test]
     fn actor_query_loading_names() {
         let lua = Lua::new();

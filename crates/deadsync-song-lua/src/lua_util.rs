@@ -1956,6 +1956,7 @@ fn clone_actor_def(
                 "__songlua_def_owned"
                     | "__songlua_parent"
                     | "__songlua_load_name"
+                    | "__songlua_native_name"
                     | "__songlua_init_commands_ran"
                     | "__songlua_startup_commands_ran"
                     | "__songlua_startup_command_started"
@@ -2142,6 +2143,23 @@ pub fn actor_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     Ok(children)
 }
 
+pub(crate) fn actor_name(actor: &Table) -> mlua::Result<String> {
+    if let Some(name) = actor.raw_get::<Option<String>>("__songlua_load_name")? {
+        return Ok(name);
+    }
+    if let Some(name) = actor.raw_get::<Option<String>>("__songlua_native_name")? {
+        return Ok(name);
+    }
+    Ok(actor.raw_get::<Option<String>>("Name")?.unwrap_or_default())
+}
+
+pub(crate) fn set_actor_name(actor: &Table, name: mlua::String) -> mlua::Result<()> {
+    if !matches!(actor.raw_get::<Value>("__songlua_load_name")?, Value::Nil) {
+        actor.raw_set("__songlua_load_name", name.clone())?;
+    }
+    actor.raw_set("__songlua_native_name", name)
+}
+
 pub fn actor_named_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     let children = lua.create_table()?;
     let source = actor_children(lua, actor)?;
@@ -2183,7 +2201,7 @@ pub fn actor_named_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
         let Value::Table(child) = child? else {
             continue;
         };
-        let name = child.get::<Option<String>>("Name")?.unwrap_or_default();
+        let name = actor_name(&child)?;
         match children.raw_get::<Value>(name.as_str())? {
             Value::Table(group) if actor_is_child_group(&group)? => {
                 push_sequence_child_once(&group, child)?;
@@ -2295,9 +2313,7 @@ pub fn remove_actor_child(lua: &Lua, actor: &Table, name: &str) -> mlua::Result<
     for read in 1..=actor.raw_len() {
         let value = actor.raw_get::<Value>(read)?;
         let remove = match &value {
-            Value::Table(child) => child
-                .get::<Option<String>>("Name")?
-                .is_some_and(|child_name| child_name == name),
+            Value::Table(child) => actor_name(child)? == name,
             _ => false,
         };
         if remove {
@@ -2568,6 +2584,7 @@ fn is_actor_mutable_state_key(key: &str) -> bool {
         || matches!(
             key,
             "__songlua_visible"
+                | "__songlua_native_name"
                 | "__songlua_wrappers"
                 | "__songlua_hibernate_seconds"
                 | "__songlua_theme_hibernating"
@@ -9847,10 +9864,7 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
                 let Some(name) = lua.coerce_string(value)? else {
                     return Err(mlua::Error::runtime("name: string expected"));
                 };
-                if !matches!(actor.raw_get::<Value>("__songlua_load_name")?, Value::Nil) {
-                    actor.raw_set("__songlua_load_name", name.clone())?;
-                }
-                actor.raw_set("Name", name)?;
+                set_actor_name(&actor, name)?;
                 Ok(actor.clone())
             }
         })?,
@@ -9867,10 +9881,7 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
         lua.create_function({
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
-                let name = match actor.raw_get::<Option<String>>("__songlua_load_name")? {
-                    Some(name) => name,
-                    None => actor.get::<Option<String>>("Name")?.unwrap_or_default(),
-                };
+                let name = actor_name(&actor)?;
                 Ok(Value::String(lua.create_string(name)?))
             }
         })?,
@@ -10237,6 +10248,10 @@ pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resu
     // Keep the authored attribute separate from the observable loading name;
     // a child's Init may rename its parent before that attribute is applied.
     let name = actor.raw_get::<Value>("Name")?;
+    // Actor::m_sName is separate from userdata attributes such as self.Name.
+    // Retain that native name after loading so later attribute writes cannot
+    // rename actors or change GetChild/GetChildren and observed ancestry.
+    actor.raw_set("__songlua_native_name", "")?;
     actor.raw_set("__songlua_load_name", "")?;
     // Def tables are constructed children first. Native actors subscribe as
     // the definition tree loads, with parents before their children.
@@ -10254,7 +10269,10 @@ pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resu
         run_actor_init_commands_for_table(lua, &child)?;
     }
     if !matches!(name, Value::Nil) {
+        actor.raw_set("__songlua_native_name", name.clone())?;
         actor.raw_set("Name", name)?;
+    } else {
+        actor.raw_set("__songlua_native_name", actor.raw_get::<Value>("__songlua_load_name")?)?;
     }
     actor.raw_set("__songlua_load_name", Value::Nil)?;
     // ActorFrame::LoadFromNode initializes its children before Actor runs Init.
@@ -13085,6 +13103,7 @@ pub fn create_named_actor(
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
 ) -> mlua::Result<Table> {
     let actor = create_dummy_actor(lua, actor_type)?;
+    set_actor_name(&actor, lua.create_string(name)?)?;
     actor.set("Name", name)?;
     Ok(actor)
 }
@@ -13182,6 +13201,7 @@ pub fn create_named_child_actor(
     } else {
         create_dummy_actor(lua, "ChildActor")?
     };
+    set_actor_name(&child, lua.create_string(name)?)?;
     child.set("Name", name)?;
     copy_dummy_actor_tags(parent, &child)?;
     child.set("__songlua_parent", parent.clone())?;

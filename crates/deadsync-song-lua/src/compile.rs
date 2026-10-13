@@ -390,6 +390,8 @@ where
                     // Foreground::LoadFromSong overwrites an authored or
                     // Init-assigned name after MakeActor, before On activation.
                     if let Some(name) = context.foreground_names.get(index - context.background_layer_count) {
+                        crate::lua_util::set_actor_name(actor, lua.create_string(name.as_str())
+                            .map_err(|err| err.to_string())?).map_err(|err| err.to_string())?;
                         actor.raw_set("Name", name.as_str()).map_err(|err| err.to_string())?;
                     }
                     // Foreground::LoadFromSong hides the actor after MakeActor
