@@ -1,0 +1,60 @@
+{
+  "launch_receipt": {
+    "supervisor_pid": 667994,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_lonely_column_final_repair_v1.py"
+    ]
+  },
+  "live_observation": {
+    "pid": 669170,
+    "command": [
+      "/home/parity/jobs/column-update-green-v1/full-song-lua-stage-modifier-v1",
+      "--archive",
+      "/home/parity/jobs/lonely-table-find-repair-v1/chart-284/9e8d473175281b2fc8028dea5c02deceed55cf3af101dc1d0e347f2ed8dcd431.tar",
+      "--report",
+      "/home/parity/jobs/lonely-column-final-repair-v1/chart-284/report.json"
+    ],
+    "label": "replay",
+    "source_simfile": "Lonely/Lonely.sm"
+  },
+  "exact_process_matches": true,
+  "selected_build": {
+    "build_proof": "/home/parity/jobs/column-update-green-v1/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "binary_sha256": "a334f4b34605d7423de871ec305ba3961595409868dd4226ba1ea53c0eeacee7",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "actual_source_pins": 26,
+  "candidate_sha256": "9e8d473175281b2fc8028dea5c02deceed55cf3af101dc1d0e347f2ed8dcd431",
+  "native_trace_sha256": "75dfcff68a91d32ad4ec911fb53afc9d819cd09fbaa4ffa34de7092a591af20b",
+  "simfile_sha256": "faff72213058f1e3dfee6fca405836936dcabc5603612b233d8274b3fd2bca82",
+  "previous_report_sha256": "402362731d9d7cc294f970c3ea12e51132911a5f673d61d3e59acc39e995c186",
+  "replay_log_tail": [
+    "[12.0s] : 0 checks completed, 0 failed",
+    "[12.7s] replaying every native gameplay frame",
+    "[14.0s] replaying every native gameplay frame: 0 checks completed, 0 failed"
+  ],
+  "status": "final bounded Lonely repair running; complete replay acceptance not yet decided",
+  "source_fix_commits": [
+    "21f6e34679ef7262f98619bb432d205d820e11f3"
+  ],
+  "validated_build": "sweep-2026-10-13-column-update-build.json",
+  "original_diagnosis": "sweep-2026-10-13-lonely-column-update-diagnosis.json",
+  "repair_attempts_before_launch": 1,
+  "repair_attempt_started": 2,
+  "per_chart_limit": 2,
+  "native_capture_reused": true,
+  "input_archive_uncompressed_bytes_verified": true,
+  "retained_uncompressed_candidate_reused_without_recapture_or_decompression": true,
+  "publisher_streams": 46,
+  "publisher_count": 1,
+  "actual_publisher": {
+    "ProcessId": 60312,
+    "CommandLine": "\"C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe\" -B -X utf8 C:/GitHub/itgmania-harness/target/server-parity/publish_chart_sweep_v1.py"
+  },
+  "comparisons_modified": false,
+  "acceptance_unchanged": true,
+  "passing_chart_reopened": false
+}
