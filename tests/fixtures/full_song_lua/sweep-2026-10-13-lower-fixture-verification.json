@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Lower/Lower.ssc",
+      "acceptance_commit": "2cae5210e952023f8a6551dec4fb2ad1b5c142af",
+      "native_frames": 65040,
+      "replayed_frames": 65040,
+      "compared_stage_fields": 1232,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "b3fd3ed82ed17fb6405efb027841dfe87e904415c5cf2dc0c93286135793fde2.tar.zst",
+      "compressed_sha256": "b3fd3ed82ed17fb6405efb027841dfe87e904415c5cf2dc0c93286135793fde2",
+      "uncompressed_sha256": "f1271a8a4f616e75a8e996633466923058c0c85c7941d4d73150e37010826e0b",
+      "compressed_bytes": 4533525,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: PlayerOptions.Beat, PlayerOptions.Dark, PlayerOptions.Flip, PlayerOptions.Tiny"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
