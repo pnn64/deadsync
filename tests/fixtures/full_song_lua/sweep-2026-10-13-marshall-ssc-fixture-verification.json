@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Marshall Maximizer/marshall maximizer.ssc",
+      "acceptance_commit": "06f79e75155ab009305475798a1803a38d9d624e",
+      "native_frames": 92066,
+      "replayed_frames": 92066,
+      "compared_stage_fields": 1584,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "3c61c5dcdf2dd2444d730096674aa784a0452c6ffc22e48867d42d3173f7755a.tar.zst",
+      "compressed_sha256": "3c61c5dcdf2dd2444d730096674aa784a0452c6ffc22e48867d42d3173f7755a",
+      "uncompressed_sha256": "5a3e9184e13cf6bbff10e79dffbba513113c219d1d61db2aa79f17c814a7ef82",
+      "compressed_bytes": 6394340,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Player.SetLife, ScreenGameplay.GetLifeMeter"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
