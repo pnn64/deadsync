@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Number 9/1556 - Number 9.sm",
+      "acceptance_commit": "ac175992856a8b2d0bea8671e8b95000cbe0e85b",
+      "native_frames": 84399,
+      "replayed_frames": 84399,
+      "compared_stage_fields": 1408,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "b16bd29c6db728568d34679b0eeafc4048a5197a43af784f354d8c14bd73df72.tar.zst",
+      "compressed_sha256": "b16bd29c6db728568d34679b0eeafc4048a5197a43af784f354d8c14bd73df72",
+      "uncompressed_sha256": "ff6fc8aa7326a92b8de6a0043cc84d3886cf3e180d2709a7ad7e29bb495d0c9b",
+      "compressed_bytes": 4294815,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "native actor definitions are missing"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
