@@ -1,0 +1,331 @@
+{
+  "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+  "diagnostic_only": true,
+  "candidate_sha256": "70d46f8a7297fb5e58d7d19783915d6bb2f9210774da9a8d6f3d1423afd6b419",
+  "native_trace_sha256": "cd1b99822ffab060d4148dd3a492b6b606bebc622a7a1a3c97c00763f8167ce0",
+  "report_sha256": "1aea9fc62743f9c8cc755993687897535e01eefa45125e9290b44e10d8c1369c",
+  "retained_uncompressed_report_and_trace_bytes_verified": true,
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "repair_attempts_spent": 0,
+  "repair_attempts_remaining": 2,
+  "repair_not_started": true,
+  "phase_groups": {
+    "construction_operations": {
+      "ScreenManager.GetTopScreen": 969,
+      "Actor.GetName": 969
+    },
+    "construction_sources": [
+      {
+        "source": "song:/lua/default.lua",
+        "line": 38,
+        "count": 1938
+      }
+    ]
+  },
+  "native_first_phase_neighbors": {
+    "neighbors": [
+      {
+        "seq": 129868,
+        "operation": "GameState.GetSongBeat",
+        "phase": "callback",
+        "source": "song:/lua/default.lua",
+        "line": 1185,
+        "caller": {
+          "line": 1079,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "callback": "SetUpdateFunction",
+        "command": "OnCommand",
+        "definition_id": "def-0263",
+        "seconds": 10.983651161193848,
+        "args": []
+      },
+      {
+        "seq": 129869,
+        "operation": "GameState.GetSongPosition",
+        "phase": "callback",
+        "source": "song:/lua/default.lua",
+        "line": 1185,
+        "caller": {
+          "line": 101,
+          "source": "@/Themes/_fallback/Scripts/01 alias.lua",
+          "tail_call": false
+        },
+        "callback": "SetUpdateFunction",
+        "command": "OnCommand",
+        "definition_id": "def-0263",
+        "seconds": 10.983651161193848,
+        "args": []
+      },
+      {
+        "seq": 129870,
+        "operation": "GameState.GetSongBeat",
+        "phase": "callback",
+        "source": "song:/lua/default.lua",
+        "line": 1185,
+        "caller": {
+          "line": 1079,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "callback": "SetUpdateFunction",
+        "command": "OnCommand",
+        "definition_id": "def-0263",
+        "seconds": 10.983651161193848,
+        "args": []
+      },
+      {
+        "seq": 129871,
+        "operation": "GameState.GetSongPosition",
+        "phase": "callback",
+        "source": "song:/lua/default.lua",
+        "line": 1185,
+        "caller": {
+          "line": 101,
+          "source": "@/Themes/_fallback/Scripts/01 alias.lua",
+          "tail_call": false
+        },
+        "callback": "SetUpdateFunction",
+        "command": "OnCommand",
+        "definition_id": "def-0263",
+        "seconds": 10.983651161193848,
+        "args": []
+      },
+      {
+        "seq": 129872,
+        "operation": "GameState.GetSongBeat",
+        "phase": "callback",
+        "source": "song:/lua/default.lua",
+        "line": 1185,
+        "caller": {
+          "line": 1079,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "callback": "SetUpdateFunction",
+        "command": "OnCommand",
+        "definition_id": "def-0263",
+        "seconds": 10.983651161193848,
+        "args": []
+      },
+      {
+        "seq": 129873,
+        "operation": "GameState.GetSongPosition",
+        "phase": "callback",
+        "source": "song:/lua/default.lua",
+        "line": 1185,
+        "caller": {
+          "line": 101,
+          "source": "@/Themes/_fallback/Scripts/01 alias.lua",
+          "tail_call": false
+        },
+        "callback": "SetUpdateFunction",
+        "command": "OnCommand",
+        "definition_id": "def-0263",
+        "seconds": 10.983651161193848,
+        "args": []
+      },
+      {
+        "seq": 129874,
+        "operation": "ScreenManager.GetTopScreen",
+        "phase": "construction",
+        "source": "song:/lua/default.lua",
+        "line": 38,
+        "caller": {
+          "line": 38,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "seconds": 10.99092960357666,
+        "args": []
+      },
+      {
+        "seq": 129875,
+        "operation": "Actor.GetName",
+        "actor": "external-0240",
+        "phase": "construction",
+        "source": "song:/lua/default.lua",
+        "line": 38,
+        "caller": {
+          "line": 38,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "seconds": 10.99092960357666,
+        "args": []
+      },
+      {
+        "seq": 129876,
+        "operation": "ActorFrame.propagatecommand",
+        "actor": "def-0265",
+        "phase": "construction",
+        "source": "song:/lua/default.lua",
+        "line": 2511,
+        "caller": {
+          "line": 2511,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "seconds": 10.99092960357666,
+        "args": [
+          "Judgment"
+        ]
+      },
+      {
+        "seq": 129877,
+        "operation": "command.begin",
+        "actor": "def-0269",
+        "source": "@/NoteSkins/dance/cel/Fallback Explosion.lua",
+        "line": 29,
+        "command": "JudgmentCommand",
+        "definition_id": "def-0269",
+        "seconds": 10.99092960357666,
+        "args": []
+      },
+      {
+        "seq": 129878,
+        "operation": "Actor.finishtweening",
+        "actor": "def-0269",
+        "phase": "callback",
+        "source": "@/NoteSkins/dance/cel/Fallback Explosion.lua",
+        "line": 29,
+        "caller": {
+          "line": 29,
+          "source": "@/NoteSkins/dance/cel/Fallback Explosion.lua",
+          "tail_call": false
+        },
+        "command": "JudgmentCommand",
+        "definition_id": "def-0269",
+        "seconds": 10.99092960357666,
+        "args": []
+      },
+      {
+        "seq": 129879,
+        "operation": "command.end",
+        "actor": "def-0269",
+        "source": "@/NoteSkins/dance/cel/Fallback Explosion.lua",
+        "line": 29,
+        "command": "JudgmentCommand",
+        "definition_id": "def-0269",
+        "seconds": 10.99092960357666,
+        "args": []
+      }
+    ],
+    "last_commands": [
+      {
+        "seq": 1192,
+        "operation": "command.begin",
+        "actor": "def-0350",
+        "source": "song:/lua/default.lua",
+        "line": 2966,
+        "command": "OnCommand",
+        "definition_id": "def-0350",
+        "seconds": 0.017029479146003723,
+        "args": []
+      },
+      {
+        "seq": 1194,
+        "operation": "command.end",
+        "actor": "def-0350",
+        "source": "song:/lua/default.lua",
+        "line": 2966,
+        "command": "OnCommand",
+        "definition_id": "def-0350",
+        "seconds": 0.017029479146003723,
+        "args": []
+      },
+      {
+        "seq": 1195,
+        "operation": "command.begin",
+        "actor": "def-0351",
+        "source": "song:/lua/default.lua",
+        "line": 2985,
+        "command": "OnCommand",
+        "definition_id": "def-0351",
+        "seconds": 0.017029479146003723,
+        "args": []
+      },
+      {
+        "seq": 1199,
+        "operation": "command.end",
+        "actor": "def-0351",
+        "source": "song:/lua/default.lua",
+        "line": 2985,
+        "command": "OnCommand",
+        "definition_id": "def-0351",
+        "seconds": 0.017029479146003723,
+        "args": []
+      }
+    ]
+  },
+  "source_cause": "The mismatching IsEditMode queries run in the direct NoteField DidTapNote callback, not the installed ActorFrame update callback. The authored song installs multitap_note_callback_P1/P2 through NoteField.SetDidTapNoteCallback; those functions call IsEditMode then propagate explosion commands. The retained first phase query is immediately followed by that propagatecommand at callback definition line2511. All 1938 phase mismatches are exactly 969 GetTopScreen/GetName pairs at IsEditMode definition line38.",
+  "native_execution": "NoteField.cpp:1223 invokes the retained DidTapNote function through Lua RunScriptOnStack with three arguments and optional returns. The unchanged observer only wraps SetUpdateFunction and SetDrawFunction. It does not wrap NoteField callbacks, so their direct queries observe construction phase; propagated wrapped actor commands still establish their own callback context.",
+  "independent_execution": "live.rs invoke_note_field_tap_callback unconditionally increments QueryTrace command context before invoking the direct callback and decrements afterward. This adds callback provenance absent in the unchanged native observer. The existing argument/optional-return semantics are independent of this trace-context increment.",
+  "required_fix_and_control": "Invoke direct NoteField tap callbacks without inventing ActorFrame callback context. Preserve their actual arguments, optional results, errors and any already active authored context; let nested owned commands establish and restore their own scope. Control direct query scope and nested command scope using the real owned callback path before a full repair.",
+  "separate_value_failure": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "def-0353",
+      "args": [
+        751.1607666015625
+      ],
+      "beat": 152.11318969726562,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 2676,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "InitCommand",
+      "definition_id": "def-0355",
+      "detail": {
+        "native_tween_time_left": 0
+      },
+      "kind": "call",
+      "line": 2676,
+      "operation": "Actor.y",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 46.68437576293945,
+      "seq": 401456,
+      "source": "song:/lua/default.lua",
+      "tween_time_left": 0
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "call",
+      "operation": "Actor.y",
+      "source": "song:/lua/default.lua",
+      "line": 2676,
+      "phase": "callback",
+      "beat": 152.11318969726562,
+      "seconds": 46.68437576293945,
+      "args": [
+        751.1607055664062
+      ],
+      "results": [
+        {
+          "actor": "0x58afa2425db0",
+          "name": "",
+          "path": "ScreenGameplay/SongForeground/lua"
+        }
+      ],
+      "tween_time_left": 0.0
+    }
+  },
+  "same_phase_value_difference_count": 193,
+  "value_cause_status": "Not yet established. The first difference is Actor.y in copy_transforms_player, native751.1607666015625 versus independent751.1607055664062. Both value and context causes require controls before the first full retained-capture repair.",
+  "implementation_started": false,
+  "source_sha256": {
+    "itgmania-harness/probe_theme/SongLuaTrace.lua": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f",
+    "itgmania-harness/vendor/itgmania/src/NoteField.cpp": "a08c46e722bfc727158caab50ad0c753ac93e9a2521c73e46182e9693ad02c74",
+    "rework/lua-songs/kaboooooom!/lua/default.lua": "314febe722e881c0d1d8ca75c5dadaa32474fba1ae34c418780de978a78f1c80",
+    "deadsync/crates/deadsync-song-lua/src/live.rs": "eeaf7551dcc9a0e762ddaed689f8354d84dfbec192f19d8ed88d18cd347ed35b"
+  },
+  "comparisons_modified": false,
+  "query_results_overridden": false,
+  "expected_events_seeded": false,
+  "coverage_separate": true,
+  "passing_chart_reopened": false
+}
