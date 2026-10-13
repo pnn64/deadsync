@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T22:55:58Z",
-  "previous_goal_turn": "Myths You Forgot first repair 1 passed 40940 frames and 1463 fields. Oil Ocean Act 2 original passed 89481 frames and 1793 fields. Number 9 original passed 84399 frames and 1408 fields. Their fixtures have zero differences and errors, are compressed, committed and locally byte verified; no passing chart was reopened. Earlier accepted Wargame SSC, Media Offline SSC, Midnight Madness, Mawaru3 and other passing fixtures remain saved. No Tears first repair 1 runs with immutable option-path-green-v2 helper e088cf95a7e244ad9bd09186d0469a62488d3627ae13d9f31cefa49c0e33a7cc, source fix 0b637312ab477d59cc8b1aa086c3df92f85f6d4f, reusing the byte-identical original capture and all verified candidate members. Its only original differences were four numeric GetPlayerOptions(3) result labels. The fix refreshes the existing option object's raw getter argument path without changing identity or option state. Meaningful focused controls failed before production on both hosts; their bodies remained unchanged for green. Fresh v2 passes five checks on both hosts: focused numeric/symbolic alias control, all 50 live controls, captured subscriber ordering, all 26 native gameplay controls and both executable builds. All 28 physical source pins and three unchanged native harness pins, logs, bundles and immutable binaries are verified. First green passed the focused, live and ordering controls but both hosts exposed the same temporary simfile race between the two natural end controls. Opposite sibling controls failed No matching steps before Lua. Those logs are retained and excluded; independent test fixture isolation fix 59c365a8e07a518a786fa951df5a263b3b6f9295 gives each autoplay case its own directory. Production and focused control bytes were unchanged for fresh v2. No chart repair was spent on validation. New Earth first repair 1 continues with validated hsva-green-v2; its missing native HSVA initializer is fixed, and a full pass remains required. Get Into It SM first repair 1 completed 70013 frames and 1496 fields with two sole-subscriber errors and 273569 differences. SSC first repair 1 completed 57594 frames and 1474 fields with two errors and 229455 differences. Both byte-verified native captures invoke two foreground BeginMessageCommand handlers during screen startup, yielding four begin/end events absent from independent startup. Pinned Actor::AddCommand stores MessageCommand handlers in the direct command map; Screen Begin propagates through foreground screen children, while cached background owners are outside that propagation. Each Get Into It chart has one final repair remaining; no final replay has launched. Mawaru6 first repair 1 and Koi SM final repair 2 continue without restart. MODULO's existing diagnostic cutoff retained 11255 frames through the first native request with no independent callback errors or reload request. Native sleep(math.huge) retains infinite tween time; independent read_f64/read_f32 discard it, shortening the foreground lifetime and stopping its queued reload callbacks. Its bounded actual trace has 50 activation events versus 18466 native events. The initial diagnostic filename rejection ran zero frames and was retained; a fresh content-addressed diagnostic reused the exact original capture. Both full repairs remain; an infinite sleep foreground control is required before repair. Mawaru4 and Mawaru5 still need native cached BackgroundDef ownership and focus/change behavior; neither has spent a repair. My Exes Bestfriend's wider zero native tween time cause remains unestablished. Capped charts remain pending without another retry. Original main and both partition workers continue. Singleton publisher 60312 watches 59 streams. Existing complete uncompressed comparisons determine acceptance, missing coverage stays separate, all 501 original simfiles remain byte unchanged, RUNWAY stays outside scope, and the goal is active and incomplete.",
+  "updated_utc": "2026-10-13T23:28:33Z",
+  "previous_goal_turn": "No Tears first repair 1 passed all 90167 frames and 1529 fields with zero errors and differences; fixture committed d0a06e8bdeaddacc6a649535ff975d6a704e57f0 and local compressed/decompressed bytes verified. Other Guy original passed 75298 frames and 1727 fields and is byte verified. Myths, Oil Ocean, Number 9, Midnight, Mawaru3 and prior passing fixtures remain saved without reopening. Get Into It SM and SSC final repairs 2 run with immutable begin-message-green-v1 helper da08513ccd2d9d12b208ce9af2691b0853cfe3c4112ae37a1e3e18bd7210822e, source 0734d61e5c63f18ce447e6d1284a42058d8cc218. Their original partition captures and all manifest members are byte verified and reused. Actual supervisor and replay child commands match both receipts. Initial v1 bootstrap receipts are preserved and excluded: wrong main-queue capture path, failed before stage creation, zero frames and zero full repairs spent. Selected Begin build passed meaningful unchanged red/green control on both hosts and all five green checks each host including 51 live and 26 native controls; all 28 physical source pins and three unchanged harness pins verified. Startup aliases reach owned foreground screen children and exclude cached background owners, matching pinned native source and both startup traces. Existing diagnostic command alignment removed only four startup events in temporary memory and found no other event differences; it is not acceptance. New Earth first repair 1 completed 89954 frames and 1408 fields with zero errors and two effectperiod differences. Direct captured GetSongBPS reads are 10 at construction: native SongPosition Reset defaults BPS to 10, while independent initial runtime uses 2.25 song display BPS. One final repair remains and needs a meaningful real Init control before fixing runtime construction; ordinary timing updates and nonlive preview must be preserved. MODULO actual bounded trace identifies lost infinite sleep shortening foreground lifetime and stopping reload callbacks; both full repairs remain. Mawaru6 first repair 1, Koi SM final repair 2, original main and both partition workers continue without restart. Mawaru4 and Mawaru5 cached BackgroundDef ownership need fixes; neither spent a repair. My Exes Bestfriend wider native zero tween cause remains unestablished. Capped charts remain pending without another retry. Singleton publisher 60312 watches 63 preserved streams, including the two excluded bootstrap streams. Existing complete uncompressed replay comparisons determine acceptance; missing coverage stays separate. All 501 original simfiles remain byte unchanged, RUNWAY is outside scope, and the goal remains active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,11 +14,12 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "8714fe584a7199b09887e3b1afa788eb460a6476",
+      "deadsync": "f608570bc2918febe032ba7f1116662eee85d461",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
   "validation": {
+    "native_begin_message_aliases": "0734d61e5c63f18ce447e6d1284a42058d8cc218: meaningful unchanged screen startup control red/green both hosts; five checks each host pass, 51 live and 26 native controls; 28 physical source pins and three native harness pins verified; begin-message-build.json",
     "native_option_query_paths": "0b637312ab477d59cc8b1aa086c3df92f85f6d4f: meaningful real alias control red/green both hosts; five fresh checks each host pass with 50 live and 26 native controls; all source/harness pins verified; initial test fixture race retained and excluded; option-path-build.json",
     "native_hsva_colors": "ec04bf2e0224c9320d86d84c2a44bec5a38f87f8: corrected meaningful real vertex control fails before and passes after on both hosts with unchanged body; all five checks each host pass; 28 source and three native harness pins verified; first invalid mesh assumption and pre-Cargo filename bootstrap excluded; hsva-build.json",
     "empty_declared_layers": "d4c07384681a2a717183a702403b52b53357ef37: unchanged meaningful empty-layer gameplay control fails before and passes after on both hosts; all five checks each host pass; 27 source and three native harness pins verified; initial compile-only and pre-Cargo bootstrap failures excluded; empty-layers-build.json",
@@ -69,6 +70,14 @@
     "transfer_verified": true
   },
   "worker": {
+    "no_tears_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-no-tears-fixture-verification.json",
+    "no_tears_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-no-tears-option-path-repair.json",
+    "other_guy_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-other-guy-fixture-verification.json",
+    "new_earth_reset_bps_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-new-earth-reset-bps-diagnosis.json",
+    "new_earth_hsva_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-new-earth-hsva-repair.json",
+    "get_into_it_command_alignment": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-command-alignment.json",
+    "begin_message_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-13-begin-message-final-repairs-launch.json",
+    "begin_message_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-begin-message-build.json",
     "modulo_infinite_sleep_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-modulo-infinite-sleep-diagnosis.json",
     "get_into_it_sm_frames_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-frames-repair.json",
     "get_into_it_sm_begin_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-diagnosis.json",
@@ -83,18 +92,18 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Other Guy/Other Guy.ssc",
-      "position": 338,
+      "current": "Paint the Town Red/PaintTheTownRed.ssc",
+      "position": 341,
       "phase": "replay",
-      "pid": 2704136,
+      "pid": 2866010,
       "process_matches": true,
-      "passed": 22,
+      "passed": 23,
       "pending": 53,
-      "processed": 75,
+      "processed": 76,
       "last_log_lines": [
-        "[430.1s] replaying every native gameplay frame: frame 26884/75298 (35.7%)",
-        "[432.1s] replaying every native gameplay frame: frame 27006/75298 (35.9%)",
-        "[434.1s] replaying every native gameplay frame: frame 27127/75298 (36.0%)"
+        "[382.1s] replaying every native gameplay frame: frame 657/5075 (12.9%)",
+        "[384.1s] replaying every native gameplay frame: frame 660/5075 (13.0%)",
+        "[386.1s] replaying every native gameplay frame: frame 664/5075 (13.1%)"
       ],
       "supervisor_running": true
     },
@@ -233,26 +242,64 @@
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
       {
-        "job": "no-tears-option-path-repair-v1",
+        "job": "get-into-it-ssc-begin-final-repair-v2",
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
         "pending": 0,
         "processed": 0,
         "last_phase": "replay",
-        "source_simfile": "No Tears Left To Cry - [JNero]/No-Tears.sm",
+        "source_simfile": "Get Into It/GetIntoIt.ssc",
         "child_running": true
       },
       {
-        "job": "new-earth-hsva-repair-v1",
+        "job": "get-into-it-sm-begin-final-repair-v2",
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
         "pending": 0,
         "processed": 0,
         "last_phase": "replay",
-        "source_simfile": "new earth/new earth.ssc",
+        "source_simfile": "Get Into It/GetIntoIt.sm",
         "child_running": true
+      },
+      {
+        "job": "get-into-it-ssc-begin-final-repair-v1",
+        "complete": false,
+        "supervisor_running": false,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0
+      },
+      {
+        "job": "get-into-it-sm-begin-final-repair-v1",
+        "complete": false,
+        "supervisor_running": false,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0
+      },
+      {
+        "job": "no-tears-option-path-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
+        "pending": 0,
+        "processed": 1,
+        "last_phase": "pack",
+        "source_simfile": "No Tears Left To Cry - [JNero]/No-Tears.sm",
+        "child_running": false
+      },
+      {
+        "job": "new-earth-hsva-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 0,
+        "pending": 1,
+        "processed": 1,
+        "last_phase": "replay",
+        "source_simfile": "new earth/new earth.ssc",
+        "child_running": false
       },
       {
         "job": "myths-single-subscriber-repair-v1",
@@ -1288,15 +1335,43 @@
         "record": "sweep-2026-10-13-no-tears-option-path-repair.json",
         "fix_commit": "0b637312ab477d59cc8b1aa086c3df92f85f6d4f",
         "finish_status": "bounded first observed failure repair complete"
+      },
+      {
+        "name": "get-into-it-sm-begin-final-repair",
+        "remote": "/home/parity/jobs/get-into-it-sm-begin-final-repair-v1",
+        "record": "sweep-2026-10-13-get-into-it-sm-begin-final-repair.json",
+        "fix_commit": "0734d61e5c63f18ce447e6d1284a42058d8cc218",
+        "finish_status": "bounded final observed failure repair complete"
+      },
+      {
+        "name": "get-into-it-ssc-begin-final-repair",
+        "remote": "/home/parity/jobs/get-into-it-ssc-begin-final-repair-v1",
+        "record": "sweep-2026-10-13-get-into-it-ssc-begin-final-repair.json",
+        "fix_commit": "0734d61e5c63f18ce447e6d1284a42058d8cc218",
+        "finish_status": "bounded final observed failure repair complete"
+      },
+      {
+        "name": "get-into-it-sm-begin-final-repair-v2",
+        "remote": "/home/parity/jobs/get-into-it-sm-begin-final-repair-v2",
+        "record": "sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
+        "fix_commit": "0734d61e5c63f18ce447e6d1284a42058d8cc218",
+        "finish_status": "bounded final observed failure repair complete"
+      },
+      {
+        "name": "get-into-it-ssc-begin-final-repair-v2",
+        "remote": "/home/parity/jobs/get-into-it-ssc-begin-final-repair-v2",
+        "record": "sweep-2026-10-13-get-into-it-ssc-begin-final-repair-v2.json",
+        "fix_commit": "0734d61e5c63f18ce447e6d1284a42058d8cc218",
+        "finish_status": "bounded final observed failure repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 84,
-    "new_pending_charts": 83,
-    "new_processed_sources": 167,
+    "new_passed_fixtures": 86,
+    "new_pending_charts": 82,
+    "new_processed_sources": 168,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 186,
+    "unprocessed_sources": 185,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -1925,73 +2000,59 @@
     },
     {
       "source_simfile": "new earth/new earth.ssc",
-      "repair_attempts": 0,
-      "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'new earth': failed to run actor init commands for '/tmp/.tmpuDkUwQ/song/lua/default.lua': InitCommand failed for ActorMultiVertex 'SpaceshipTrailP1': runtime error: [string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: attempt to call global 'HSVA' (a nil value)\nstack traceback:\n\t[C]: in global 'HSVA'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: in upvalue 'makeSpaceshipTrail'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:152: in function <[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:151>; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'new earth' from '/tmp/.tmpuDkUwQ/song/lua/default.lua': failed to run actor init commands for '/tmp/.tmpuDkUwQ/song/lua/default.lua': InitCommand failed for ActorMultiVertex 'SpaceshipTrailP1': runtime error: [string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: attempt to call global 'HSVA' (a nil value)\nstack traceback:\n\t[C]: in global 'HSVA'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: in upvalue 'makeSpaceshipTrail'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:152: in function <[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:151>\n\nthread 'main' (2316501) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
-    },
-    {
-      "source_simfile": "No Tears Left To Cry - [JNero]/No-Tears.sm",
-      "repair_attempts": 0,
+      "repair_attempts": 1,
       "failure": null,
       "errors": [],
-      "mismatch_count": 4,
+      "mismatch_count": 2,
       "first_mismatch": [
         {
           "field": "command_query_event",
           "native": {
-            "actor": "player-state:PlayerNumber_P1",
+            "actor": "def-0017",
             "args": [
-              3
+              0.4
             ],
             "beat": 0,
             "caller": {
-              "line": 0,
-              "source": "song:/PickinItUp/PickinItUp.lua",
+              "line": 171,
+              "source": "song:/lua/default.lua",
               "tail_call": false
             },
+            "command": "InitCommand",
+            "definition_id": "def-0017",
             "detail": {
-              "results": [
-                {
-                  "path": "player-state:PlayerNumber_P1/options:3",
-                  "type": "PlayerOptions"
-                }
-              ]
+              "native_tween_time_left": 0
             },
-            "kind": "query",
-            "line": 0,
-            "operation": "PlayerState.GetPlayerOptions",
-            "phase": "construction",
+            "kind": "call",
+            "line": 171,
+            "operation": "Actor.effectperiod",
+            "phase": "callback",
             "scene": 1,
             "seconds": 0,
-            "seq": 4,
-            "source": "song:/PickinItUp/PickinItUp.lua",
-            "results": [
-              {
-                "path": "player-state:PlayerNumber_P1/options:3",
-                "type": "PlayerOptions"
-              }
-            ]
+            "seq": 87,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
           },
           "deadsync": {
             "scene": 1,
-            "kind": "query",
-            "operation": "PlayerState.GetPlayerOptions",
-            "source": "song:/PickinItUp/PickinItUp.lua",
-            "line": 0,
-            "phase": "construction",
+            "kind": "call",
+            "operation": "Actor.effectperiod",
+            "source": "song:/lua/default.lua",
+            "line": 171,
+            "phase": "callback",
             "beat": 0.0,
             "seconds": 0.0,
             "args": [
-              3
+              1.7777777777777777
             ],
             "results": [
               {
-                "type": "PlayerOptions",
-                "path": "player-state:PlayerNumber_P1/options:ModsLevel_Current"
+                "actor": "0x5b14ede87940",
+                "name": "SpaceshipSpriteP1",
+                "path": "ScreenGameplay/SongForeground/SpaceshipSpriteP1"
               }
-            ]
+            ],
+            "tween_time_left": 0.0
           }
         }
       ]

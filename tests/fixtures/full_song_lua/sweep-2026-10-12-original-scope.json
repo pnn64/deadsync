@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T22:55:55Z",
+  "updated_utc": "2026-10-13T23:28:31Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 231,
-    "pending": 84,
-    "unprocessed": 186
+    "passed": 233,
+    "pending": 83,
+    "unprocessed": 185
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2746,8 +2746,8 @@
       "source_simfile": "new earth/new earth.ssc",
       "simfile_sha256": "614f29f557e0e936a2650122071d9d408eaaa46690031b08dddb471f694a4abb",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-new-earth-hsva-repair.json"
     },
     {
       "position": 327,
@@ -2765,9 +2765,9 @@
       "position": 329,
       "source_simfile": "No Tears Left To Cry - [JNero]/No-Tears.sm",
       "simfile_sha256": "fd2ce941afcd084fbd937ef465715c2bc7cc7e6058526b8bc8abb8c430b4f980",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-no-tears-option-path-repair.json"
     },
     {
       "position": 330,
@@ -2825,7 +2825,9 @@
       "position": 338,
       "source_simfile": "Other Guy/Other Guy.ssc",
       "simfile_sha256": "bb022c4cc72ac6c22eafecda132775b6c58dc0da3e939a12bab7d2c6aef5283b",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 339,
