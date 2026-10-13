@@ -1,0 +1,66 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Just a Friend To  You/Just a Friend To  You.sm",
+      "acceptance_commit": "4422656e7",
+      "native_frames": 85743,
+      "replayed_frames": 85743,
+      "compared_stage_fields": 1826,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "40bea54f493972c36aa20edc391d6119c9faa77055a824d8d98d0b2f323692ea.tar.zst",
+      "compressed_sha256": "40bea54f493972c36aa20edc391d6119c9faa77055a824d8d98d0b2f323692ea",
+      "uncompressed_sha256": "5f4b488c4343e1e877dc2424c5be40df29de8f93ac34e9b85a3f0c5dd700cd06",
+      "compressed_bytes": 9528325,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.xy, GameState.GetHumanPlayers, PlayerOptions.Mini",
+        "native drawable state/resources: Sprite"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    },
+    {
+      "source_simfile": "Jerk/Jerk.ssc",
+      "acceptance_commit": "1b2fca097",
+      "native_frames": 33791,
+      "replayed_frames": 33791,
+      "compared_stage_fields": 1529,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "cedb801f2816f9abc020d1a4d2d451d11fd84aa29695c9d4e746bd133bcf22b1.tar.zst",
+      "compressed_sha256": "cedb801f2816f9abc020d1a4d2d451d11fd84aa29695c9d4e746bd133bcf22b1",
+      "uncompressed_sha256": "a3ff4641ddd429e630f4de1c3681a65e112ab257dcee65fdea830fe503eff595",
+      "compressed_bytes": 7947437,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    },
+    {
+      "source_simfile": "Kita Saitama 2000/Kita Saitama 2000.ssc",
+      "acceptance_commit": "2f8ab5a68",
+      "native_frames": 63491,
+      "replayed_frames": 63491,
+      "compared_stage_fields": 1397,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "b2ef051cb9f03c73c2b4631fdd96d444f06afb81cb101c73fbda3a637c936f60.tar.zst",
+      "compressed_sha256": "b2ef051cb9f03c73c2b4631fdd96d444f06afb81cb101c73fbda3a637c936f60",
+      "uncompressed_sha256": "7777fa2b70d8b7e03dc03883abc76ad610d74f1e25bab208ea035972847956d8",
+      "compressed_bytes": 3946897,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "native actor definitions are missing"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
