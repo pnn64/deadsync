@@ -946,7 +946,7 @@ return Def.ActorFrame {
         use deadsync_song_lua::SongLuaCompileContext;
         use std::{fs, sync::Arc};
         paths::init();
-        let dir = std::env::temp_dir().join(format!("deadsync-natural-song-end-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("deadsync-natural-song-end-{}-{autoplay}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let simfile = dir.join("end.sm");
         fs::write(&simfile, "#TITLE:Natural owned End;#BPMS:0=60;#FGCHANGES:0=default.lua=1=0=0=1;#NOTES:dance-single:Control:Hard:1:0,0,0,0,0:\n1000\n0000\n0000\n0000\n;").unwrap();
