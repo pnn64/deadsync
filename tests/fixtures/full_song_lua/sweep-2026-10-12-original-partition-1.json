@@ -5749,6 +5749,56 @@
         }
       ],
       "report_sha256": "dbf993eb53f764fbcb54292c388d86cd330b5d8927f342dfe1ae419f15af3e5e"
+    },
+    {
+      "position": 273,
+      "source_simfile": "LALA/lala.ssc",
+      "simfile_sha256": "a00082473023b82b885ff973ba533069a5ce891b3c89e89d81fa268f5d0f21b8",
+      "retained_original_archive": "4905f15918585093a8a51c74f1ba76222cdfe84140aeff9118de0035859d4e16.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/live-draw-build-v1/proof.json",
+      "capture_seconds": 174.52495041101065,
+      "trace_sha256": "038140cd64bf4a033c700494e00abfdf0702f50ca98d05bca9ab59088fdd3983",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-273/candidates/777dbe967835f0d698fa0af3a21e23394b8111c2ad69332940369295ce0ef9c2.tar",
+      "replay_exit": 0,
+      "replay_seconds": 411.4559692710027,
+      "candidate_sha256": "777dbe967835f0d698fa0af3a21e23394b8111c2ad69332940369295ce0ef9c2",
+      "native_frames": 28149,
+      "replayed_frames": 28149,
+      "compared_stage_fields": 1639,
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Wave"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "6ef591734617c5c6ab5c751028bc32491c60c2040799f0408d27cc5b66f4fba6",
+      "archive": "9c77701d228741d2959cb569475615ce0c0ee2690888d7154335048987fb1c49.tar.zst",
+      "archive_sha256": "9c77701d228741d2959cb569475615ce0c0ee2690888d7154335048987fb1c49",
+      "compressed_bytes": 6920772,
+      "pack_seconds": 7.5376518569974,
+      "harness_version": "0.1.80",
+      "title": "LALA [Tier 3]",
+      "retained_original_entry": {
+        "title": "LALA",
+        "source_simfile": "LALA/lala.ssc",
+        "harness_version": "0.1.0",
+        "archive": "4905f15918585093a8a51c74f1ba76222cdfe84140aeff9118de0035859d4e16.tar.zst",
+        "sha256": "4905f15918585093a8a51c74f1ba76222cdfe84140aeff9118de0035859d4e16",
+        "compressed_bytes": 189023,
+        "uncompressed_sha256": "c7c0c1b31b3fec55ba44a78d24273bee8b5814be343f171d3c75f18519c95c5d",
+        "compression_level": 22,
+        "aliases": [
+          "263f9b4b230795897b8a02a1b88f7f7c3c67ebe3ebc6b168691e36028f73fba9.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -5758,9 +5808,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
-  "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 15,
+  "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "passed_fixtures": 16,
   "pending_charts": 20,
-  "processed_charts": 35
+  "processed_charts": 36
 }

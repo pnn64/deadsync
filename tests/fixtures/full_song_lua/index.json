@@ -3361,17 +3361,14 @@
       ]
     },
     {
-      "title": "LALA",
+      "title": "LALA [Tier 3]",
       "source_simfile": "LALA/lala.ssc",
-      "harness_version": "0.1.0",
-      "archive": "4905f15918585093a8a51c74f1ba76222cdfe84140aeff9118de0035859d4e16.tar.zst",
-      "sha256": "4905f15918585093a8a51c74f1ba76222cdfe84140aeff9118de0035859d4e16",
-      "compressed_bytes": 189023,
-      "uncompressed_sha256": "c7c0c1b31b3fec55ba44a78d24273bee8b5814be343f171d3c75f18519c95c5d",
-      "compression_level": 22,
-      "aliases": [
-        "263f9b4b230795897b8a02a1b88f7f7c3c67ebe3ebc6b168691e36028f73fba9.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "9c77701d228741d2959cb569475615ce0c0ee2690888d7154335048987fb1c49.tar.zst",
+      "sha256": "9c77701d228741d2959cb569475615ce0c0ee2690888d7154335048987fb1c49",
+      "compressed_bytes": 6920772,
+      "uncompressed_sha256": "777dbe967835f0d698fa0af3a21e23394b8111c2ad69332940369295ce0ef9c2",
+      "aliases": []
     },
     {
       "title": "Episode 06",
