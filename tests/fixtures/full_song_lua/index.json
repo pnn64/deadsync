@@ -2652,15 +2652,12 @@
     {
       "title": "IT'S A GHOST!!!!! AAAAAaAAAaAAaAaAAaAaAAAA",
       "source_simfile": "ghost [Telperion]/ghost.ssc",
-      "harness_version": "0.1.0",
-      "archive": "80b5192b76a55669ed09cc499613e08113f95713c3965edaa2d9b758a417a96a.tar.zst",
-      "sha256": "80b5192b76a55669ed09cc499613e08113f95713c3965edaa2d9b758a417a96a",
-      "compressed_bytes": 182175,
-      "uncompressed_sha256": "acc98568f54229b7efe980b758ab64b9e38ac8094b93344571bbc082487041c2",
-      "compression_level": 22,
-      "aliases": [
-        "831b721024a3afe94e15032d23ceaae4aba8cbaad8b6d8ccdeef8dff4f416943.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "e2f20092230970522ee43f269037e8492099765fcfe52d7664f397595164fac3.tar.zst",
+      "sha256": "e2f20092230970522ee43f269037e8492099765fcfe52d7664f397595164fac3",
+      "compressed_bytes": 6902682,
+      "uncompressed_sha256": "46be94f83929984401e91b03311437f417c4fdbd3327f1d3aa3604d650986102",
+      "aliases": []
     },
     {
       "title": "Girls MIA",
