@@ -1,0 +1,26 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Marvins Room/MarvinsRoom.sm",
+      "acceptance_commit": "7511d7ef1f9383f7f4bddf4293b1cc8170608b45",
+      "native_frames": 140479,
+      "replayed_frames": 140479,
+      "compared_stage_fields": 3399,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "b8a2ebdc37945d168dc5b234d76607356475c281d9f63321310aa486d827e52c.tar.zst",
+      "compressed_sha256": "b8a2ebdc37945d168dc5b234d76607356475c281d9f63321310aa486d827e52c",
+      "uncompressed_sha256": "39b44c3c50b2d2a55932ecf0a5eb7cae17b8afd5ddcd9f3bd67c0752499b0ef2",
+      "compressed_bytes": 25033571,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY",
+        "native drawable state/resources: Quad"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
