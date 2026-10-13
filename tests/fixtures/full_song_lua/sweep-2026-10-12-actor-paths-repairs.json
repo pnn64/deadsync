@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "bounded Flowers LoadActor path repair complete",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "c71e8b4fe + 3c0a6d0b7 / harness 55299c5",
