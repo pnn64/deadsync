@@ -5690,6 +5690,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 257,
+      "source_simfile": "Jesus He Knows me/jesusheknowsme.ssc",
+      "simfile_sha256": "c87ddc3da7a9dbc3b933227af7d6ddd919eee618da23e70c7083635bb30970ca",
+      "retained_original_archive": "fbe09097e3af4f4ccb773d4ea28201210433ae0d1b34d1610cd8df558dd9719b.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "56c7f5ad7480dc190223b46f68cd1f78d172e09431fc49d6eb9a095937789469",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+      "build_proof": "/home/parity/jobs/tap-callback-and-margins-build-v2/proof.json",
+      "capture_seconds": 193.57826729699445,
+      "trace_sha256": "eca8db1ac561ef33951290bc2a76cc76a541fd0d314151121b5d8ee881eb4339",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-257/candidates/433b6977726a9d8ee00b3fbf3995036ddfbd555b7e2ecae5e9583eb63e80d4c4.tar",
+      "replay_exit": 0,
+      "replay_seconds": 548.7688484180107,
+      "candidate_sha256": "433b6977726a9d8ee00b3fbf3995036ddfbd555b7e2ecae5e9583eb63e80d4c4",
+      "native_frames": 58336,
+      "replayed_frames": 58336,
+      "compared_stage_fields": 1540,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "31d4f59e3affd2475f497c2b7672bdb77f2e3755007dbed240649a61b26ad174",
+      "archive": "70b97027059bba1365ce1867a9abfb893c071480f2a75bd86d7897e5c4219bc4.tar.zst",
+      "archive_sha256": "70b97027059bba1365ce1867a9abfb893c071480f2a75bd86d7897e5c4219bc4",
+      "compressed_bytes": 16362953,
+      "pack_seconds": 20.2905846460053,
+      "harness_version": "0.1.80",
+      "title": "[08] Jesus He Knows Me (Medium)",
+      "retained_original_entry": {
+        "title": "[08] Jesus He Knows Me (Medium)",
+        "source_simfile": "Jesus He Knows me/jesusheknowsme.ssc",
+        "harness_version": "0.1.0",
+        "archive": "fbe09097e3af4f4ccb773d4ea28201210433ae0d1b34d1610cd8df558dd9719b.tar.zst",
+        "sha256": "fbe09097e3af4f4ccb773d4ea28201210433ae0d1b34d1610cd8df558dd9719b",
+        "compressed_bytes": 73605,
+        "uncompressed_sha256": "fdb6addcd255672cf48ee35772d607428f5394594f5d07650f51df3b2a4bb8a2",
+        "compression_level": 22,
+        "aliases": [
+          "373e274d7a32fb8a80e87fe86cfc6c233bd58c981ed4b3980dd2127d0297b753.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -5715,7 +5765,7 @@
   },
   "binary_sha256": "56c7f5ad7480dc190223b46f68cd1f78d172e09431fc49d6eb9a095937789469",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 12,
+  "passed_fixtures": 13,
   "pending_charts": 36,
-  "processed_charts": 48
+  "processed_charts": 49
 }

@@ -3227,15 +3227,12 @@
     {
       "title": "[08] Jesus He Knows Me (Medium)",
       "source_simfile": "Jesus He Knows me/jesusheknowsme.ssc",
-      "harness_version": "0.1.0",
-      "archive": "fbe09097e3af4f4ccb773d4ea28201210433ae0d1b34d1610cd8df558dd9719b.tar.zst",
-      "sha256": "fbe09097e3af4f4ccb773d4ea28201210433ae0d1b34d1610cd8df558dd9719b",
-      "compressed_bytes": 73605,
-      "uncompressed_sha256": "fdb6addcd255672cf48ee35772d607428f5394594f5d07650f51df3b2a4bb8a2",
-      "compression_level": 22,
-      "aliases": [
-        "373e274d7a32fb8a80e87fe86cfc6c233bd58c981ed4b3980dd2127d0297b753.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "70b97027059bba1365ce1867a9abfb893c071480f2a75bd86d7897e5c4219bc4.tar.zst",
+      "sha256": "70b97027059bba1365ce1867a9abfb893c071480f2a75bd86d7897e5c4219bc4",
+      "compressed_bytes": 16362953,
+      "uncompressed_sha256": "433b6977726a9d8ee00b3fbf3995036ddfbd555b7e2ecae5e9583eb63e80d4c4",
+      "aliases": []
     },
     {
       "title": "Write Final Round",
