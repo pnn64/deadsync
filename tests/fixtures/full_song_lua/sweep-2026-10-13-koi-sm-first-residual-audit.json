@@ -1,0 +1,186 @@
+{
+  "source_simfile": "Koi [UPS2016]/koi.sm",
+  "report_sha256": "6512abe289fb43bd959d690ad1abfcfd79e67689c9102e4b77428995656b8ec8",
+  "full_uncompressed_report_bytes_verified": true,
+  "full_result": {
+    "native_frames": 145074,
+    "replayed_frames": 145074,
+    "compared_stage_fields": 2299,
+    "mismatch_count": 3014,
+    "errors": []
+  },
+  "mismatch_fields": {
+    "command_query_count": 1,
+    "command_query_event": 3013
+  },
+  "event_dimensions": {
+    "results": 60,
+    "line,beat,seconds,args": 757,
+    "kind,operation,line,phase,beat,seconds,args": 787,
+    "operation,line,beat,seconds,args,results": 12,
+    "operation,line,beat,seconds,args": 234,
+    "kind,operation,line,phase,beat,seconds,args,results": 94,
+    "beat,seconds,args": 826,
+    "kind,operation,phase,beat,seconds,args": 26,
+    "kind,operation,phase,beat,seconds,args,results": 2,
+    "operation,beat,seconds,args": 212,
+    "beat,seconds": 3
+  },
+  "operation_pairs": [
+    {
+      "native": "command.begin",
+      "deadsync": "command.begin",
+      "count": 788
+    },
+    {
+      "native": "command.end",
+      "deadsync": "command.end",
+      "count": 787
+    },
+    {
+      "native": "command.begin",
+      "deadsync": "command.end",
+      "count": 216
+    },
+    {
+      "native": "command.end",
+      "deadsync": "command.begin",
+      "count": 205
+    },
+    {
+      "native": "Actor.queuecommand",
+      "deadsync": "command.begin",
+      "count": 157
+    },
+    {
+      "native": "command.begin",
+      "deadsync": "Actor.queuecommand",
+      "count": 146
+    },
+    {
+      "native": "command.end",
+      "deadsync": "Actor.queuecommand",
+      "count": 114
+    },
+    {
+      "native": "Actor.queuecommand",
+      "deadsync": "command.end",
+      "count": 95
+    },
+    {
+      "native": "Actor.sleep",
+      "deadsync": "command.end",
+      "count": 78
+    },
+    {
+      "native": "command.end",
+      "deadsync": "Actor.sleep",
+      "count": 73
+    },
+    {
+      "native": "ActorFrame.GetChild",
+      "deadsync": "ActorFrame.GetChild",
+      "count": 60
+    },
+    {
+      "native": "command.end",
+      "deadsync": "Actor.linear",
+      "count": 48
+    },
+    {
+      "native": "command.begin",
+      "deadsync": "Actor.diffusealpha",
+      "count": 48
+    },
+    {
+      "native": "Actor.linear",
+      "deadsync": "command.end",
+      "count": 46
+    },
+    {
+      "native": "Actor.diffusealpha",
+      "deadsync": "command.begin",
+      "count": 46
+    }
+  ],
+  "count_difference": [
+    {
+      "field": "command_query_count",
+      "native": 4909,
+      "deadsync": 4839
+    }
+  ],
+  "repair_attempts_spent": 1,
+  "repair_attempts_remaining": 1,
+  "diagnostic_only": true,
+  "authored_source_sha256": "4ca701fda58f7c93b6c3bde65fcdb7a012258e8524f549d23d655167eb5fd303",
+  "path_difference_example": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "def-0005",
+      "args": [
+        "FishOverlay"
+      ],
+      "beat": 0.003014946123585105,
+      "caller": {
+        "line": 176,
+        "source": "song:/lua/koi.lua",
+        "tail_call": false
+      },
+      "command": "InitPositionCommand",
+      "definition_id": "def-0005",
+      "detail": {
+        "native_tween_time_left": 1,
+        "results": [
+          {
+            "actor": "def-0004",
+            "name": "FishOverlay",
+            "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 176,
+      "operation": "ActorFrame.GetChild",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 0.4272562265396118,
+      "seq": 1753,
+      "source": "song:/lua/koi.lua",
+      "results": [
+        {
+          "actor": 1,
+          "name": "FishOverlay",
+          "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+        }
+      ]
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "query",
+      "operation": "ActorFrame.GetChild",
+      "source": "song:/lua/koi.lua",
+      "line": 176,
+      "phase": "callback",
+      "beat": 0.003014946123585105,
+      "seconds": 0.4272562265396118,
+      "args": [
+        "FishOverlay"
+      ],
+      "results": [
+        {
+          "actor": 1,
+          "name": "FishOverlay",
+          "path": "ScreenGameplay/SongForeground/lua/koi.lua/Fish_001/FishOverlay"
+        }
+      ]
+    }
+  },
+  "observations": "The complete first repair has no Lua errors and all3014 differences are command comparisons. Sixty event pairs differ only in results; the retained example adds Fish_001 to the independent parent path while the native unnamed actor path omits it. The authored Init assigns self.Name as a Lua attribute. Other pairs differ in command operation, phase or clock values; the count is4909 versus4839.",
+  "source_cause_not_yet_complete": "Trace native allocated actor names versus Lua attributes, then audit actual queue order and clocks behind the remaining command alignment. No claim that the name-path observation explains all3013 event differences.",
+  "native_capture_reused": true,
+  "production_implementation_changed": false,
+  "additional_repair_launched": false,
+  "acceptance_comparisons_changed": false,
+  "passing_charts_reopened": false
+}
