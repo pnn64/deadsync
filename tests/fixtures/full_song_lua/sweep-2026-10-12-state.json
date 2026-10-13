@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T14:25:51Z",
-  "previous_goal_turn": "progress: LALA/lala.ssc passed all 28149 native frames and 1639 stage fields with zero mismatches/errors; acceptance 3b26d1e928aa921cf01e16e54c67f9071783e5d7, committed archive 9c77701d228741d2959cb569475615ce0c0ee2690888d7154335048987fb1c49.tar.zst and locally verified uncompressed SHA 777dbe967835f0d698fa0af3a21e23394b8111c2ad69332940369295ce0ef9c2. Marvins Room/MarvinsRoom.sm passed all 140479 native frames and 3399 stage fields with zero mismatches/errors; acceptance 7511d7ef1f9383f7f4bddf4293b1cc8170608b45, committed archive b8a2ebdc37945d168dc5b234d76607356475c281d9f63321310aa486d827e52c.tar.zst and locally verified uncompressed SHA 39b44c3c50b2d2a55932ecf0a5eb7cae17b8afd5ddcd9f3bd67c0752499b0ef2. Both passing fixtures are committed, byte verified, and remain accepted; their coverage is separate. The pinned native table.find helper is fixed as 9bcc50649. It searches pairs, returns the matching key or nil, and retains native Lua equality including false-valued keys. The owned ShowArrow control checks sequence/sparse/string/false keys, type distinctions, nil/no-match, actor and __eq equality, selected columns 2/4, callback continuation and no repeated broadcast. Initial control versions completed the helper checks but included an extra queue/aux assertion that did not pass; its cause was not established and adding a third frame did not fix it. The final helper control is scoped to Lonely actual failure; existing queue controls and full replay comparisons are intact. No chart repair was spent by these controls. Linux passed 815 gameplay, 42 live and 21 native controls plus both executable builds; Windows passed 43 live and 21 native controls plus both builds. The isolated immutable live-draw baseline remains 26 pins; only compat.rs and the new live control changed. Actual source hashes, bundle preimages, host-local mtimes, postbuild pins, helper and all three harness sources were verified before selection and replay. Unselected 874f2e535 theme changes remain excluded. Selected helper fc7e246c948eb5b0ecb64a09b3777c480ac81eb26d2cf232c4ed3d2f8112cdd1 uses table-find-build-v4 and unchanged corrected-schema harness 058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4. Lonely first bounded repair 1 is running from its byte-verified retained 9e8d4731 candidate and 75dfcff6 native trace. Launch 254301 and replay 255275 actual process argv were verified. Full acceptance is not yet decided. Koi SM first rec_print repair remains running and is not repeated. Lake remains pending after its first complete 17472-frame repair with 1507 matching stage fields and no Lua errors but 283158 command differences. Its retained ScreenGameplay GetChildren query verifies 21 named plus 5 unnamed direct actors, while independent ownership has 10. Eleven named missing parents come from native screen transitions, Header/Footer decorations, OniGameOver, steps description, player/song options, active attack lists and lyrics. The five unnamed source additions are toasty, next-course-song and Ready/Go/Failed transitions; individual IDs are not mapped from this inventory. The recursive traversal requires actual types, descendants, metrics, state and ordering before the last allowed repair; no counts or expected events are seeded and attempt2 remains unstarted. Kaboom SSC phase cause is now established: all 1938 native construction versus independent callback differences are 969 GetTopScreen/GetName pairs from the direct NoteField DidTapNote callback. Native NoteField invokes its retained function directly; the unchanged observer wraps ActorFrame update/draw callbacks only. Independent invoke_note_field_tap_callback invents ActorFrame command context around that direct callback. This is separate from the correctly scoped Init-installed update callback. The 193 same-phase value differences comprise six Y, fifteen diffuse, 168 X and four rotationz events. The first Y cause is reproduced from the actual PlayerP1 GetY and decelerate(0.3):addy(-288) tween: native rounds the product before subtraction, while original frozen independent outQuad mul_add rounds the combined expression once. With float duration0.30000001192092896 and left0.2640790343284607, native factor0.22513633966445923 yields751.1607666015625; fused factor0.22513636946678162 yields751.1607055664062. Actual frozen easing body equals current. This establishes the first Y cause only. Other value groups need source diagnosis and meaningful controls before its first repair; no implementation or complete replay was started from a partial cause. Both Kaboom attempts remain unspent. Mountain and other capped charts remain pending without another retry. The single publisher watches 45 streams; original queues and existing bounded repairs continue. Original counts are {'passed': 214, 'pending': 72, 'unprocessed': 215}. All 501 original sources remain byte unchanged; RUNWAY remains outside scope. The goal is active and incomplete. Existing complete uncompressed comparisons are the only acceptance gates, coverage is separate, no pass is reopened and no capped repair is repeated.",
+  "updated_utc": "2026-10-13T14:29:00Z",
+  "previous_goal_turn": "progress: LALA/lala.ssc passed all 28149 native frames and 1639 stage fields with zero mismatches/errors; acceptance 3b26d1e928aa921cf01e16e54c67f9071783e5d7, committed archive 9c77701d228741d2959cb569475615ce0c0ee2690888d7154335048987fb1c49.tar.zst and locally verified uncompressed SHA 777dbe967835f0d698fa0af3a21e23394b8111c2ad69332940369295ce0ef9c2. Marvins Room/MarvinsRoom.sm passed all 140479 native frames and 3399 stage fields with zero mismatches/errors; acceptance 7511d7ef1f9383f7f4bddf4293b1cc8170608b45, committed archive b8a2ebdc37945d168dc5b234d76607356475c281d9f63321310aa486d827e52c.tar.zst and locally verified uncompressed SHA 39b44c3c50b2d2a55932ecf0a5eb7cae17b8afd5ddcd9f3bd67c0752499b0ef2. Levels/levels-fakemines.ssc passed all 41311 native frames and 1540 stage fields with zero mismatches/errors; acceptance 9f470d7e731671d189cdaa4929b8d287be9ae607, committed archive e9e265da30f50252453800bf851e069bddd0be61be3f62946dfb8bbc7feb9d57.tar.zst and locally verified uncompressed SHA fd9cc3147104e5999afdae0b8408416ffaac168246b4ad60bb83dd6b1391bc1c. All three passing fixtures are committed, byte verified, and remain accepted; their coverage is separate. The pinned native table.find helper is fixed as 9bcc50649. It searches pairs, returns the matching key or nil, and retains native Lua equality including false-valued keys. The owned ShowArrow control checks sequence/sparse/string/false keys, type distinctions, nil/no-match, actor and __eq equality, selected columns 2/4, callback continuation and no repeated broadcast. Initial control versions completed the helper checks but included an extra queue/aux assertion that did not pass; its cause was not established and adding a third frame did not fix it. The final helper control is scoped to Lonely actual failure; existing queue controls and full replay comparisons are intact. No chart repair was spent by these controls. Linux passed 815 gameplay, 42 live and 21 native controls plus both executable builds; Windows passed 43 live and 21 native controls plus both builds. The isolated immutable live-draw baseline remains 26 pins; only compat.rs and the new live control changed. Actual source hashes, bundle preimages, host-local mtimes, postbuild pins, helper and all three harness sources were verified before selection and replay. Unselected 874f2e535 theme changes remain excluded. Selected helper fc7e246c948eb5b0ecb64a09b3777c480ac81eb26d2cf232c4ed3d2f8112cdd1 uses table-find-build-v4 and unchanged corrected-schema harness 058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4. Lonely first bounded repair 1 is running from its byte-verified retained 9e8d4731 candidate and 75dfcff6 native trace. Launch 254301 and replay 255275 actual process argv were verified. Full acceptance is not yet decided. Koi SM first rec_print repair remains running and is not repeated. Lake remains pending after its first complete 17472-frame repair with 1507 matching stage fields and no Lua errors but 283158 command differences. Its retained ScreenGameplay GetChildren query verifies 21 named plus 5 unnamed direct actors, while independent ownership has 10. Eleven named missing parents come from native screen transitions, Header/Footer decorations, OniGameOver, steps description, player/song options, active attack lists and lyrics. The five unnamed source additions are toasty, next-course-song and Ready/Go/Failed transitions; individual IDs are not mapped from this inventory. The recursive traversal requires actual types, descendants, metrics, state and ordering before the last allowed repair; no counts or expected events are seeded and attempt2 remains unstarted. Kaboom SSC phase cause is now established: all 1938 native construction versus independent callback differences are 969 GetTopScreen/GetName pairs from the direct NoteField DidTapNote callback. Native NoteField invokes its retained function directly; the unchanged observer wraps ActorFrame update/draw callbacks only. Independent invoke_note_field_tap_callback invents ActorFrame command context around that direct callback. This is separate from the correctly scoped Init-installed update callback. The 193 same-phase value differences comprise six Y, fifteen diffuse, 168 X and four rotationz events. The first Y cause is reproduced from the actual PlayerP1 GetY and decelerate(0.3):addy(-288) tween: native rounds the product before subtraction, while original frozen independent outQuad mul_add rounds the combined expression once. With float duration0.30000001192092896 and left0.2640790343284607, native factor0.22513633966445923 yields751.1607666015625; fused factor0.22513636946678162 yields751.1607055664062. Actual frozen easing body equals current. This establishes the first Y cause only. Other value groups need source diagnosis and meaningful controls before its first repair; no implementation or complete replay was started from a partial cause. Both Kaboom attempts remain unspent. Mountain and other capped charts remain pending without another retry. The single publisher watches 45 streams; original queues and existing bounded repairs continue. Original counts are {'passed': 215, 'pending': 72, 'unprocessed': 214}. All 501 original sources remain byte unchanged; RUNWAY remains outside scope. The goal is active and incomplete. Existing complete uncompressed comparisons are the only acceptance gates, coverage is separate, no pass is reopened and no capped repair is repeated.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "f103a89dd94ee9087a1ee34fa6912e23b8cb7a3a",
+      "deadsync": "2f59a90d6218dde2237be7de416efdd1540f40bc",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -71,9 +71,9 @@
       "pending": 44,
       "processed": 64,
       "last_log_lines": [
-        "[1218.4s] replaying every native gameplay frame: frame 8451/121856 (6.9%)",
-        "[1220.4s] replaying every native gameplay frame: frame 8464/121856 (6.9%)",
-        "[1222.4s] replaying every native gameplay frame: frame 8476/121856 (7.0%)"
+        "[1406.5s] replaying every native gameplay frame: frame 9670/121856 (7.9%)",
+        "[1408.5s] replaying every native gameplay frame: frame 9682/121856 (7.9%)",
+        "[1410.5s] replaying every native gameplay frame: frame 9695/121856 (8.0%)"
       ],
       "supervisor_running": true
     },
@@ -82,6 +82,7 @@
     "parallel_queue_receipt": "tests/fixtures/full_song_lua/sweep-2026-10-12-parallel-queues.json",
     "build_transition": "tests/fixtures/full_song_lua/sweep-2026-10-12-build-transition.json",
     "source_scope_audit": "tests/fixtures/full_song_lua/sweep-2026-10-12-original-scope.json",
+    "levels_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-levels-fixture-verification.json",
     "kaboom_first_y_rounding": "tests/fixtures/full_song_lua/sweep-2026-10-13-kaboom-first-y-rounding-diagnosis.json",
     "kaboom_direct_note_callback": "tests/fixtures/full_song_lua/sweep-2026-10-13-kaboom-note-callback-diagnosis.json",
     "lake_missing_top_inventory": "tests/fixtures/full_song_lua/sweep-2026-10-13-lake-top-inventory-diagnosis.json",
@@ -546,13 +547,13 @@
         "job": "chart-sweep-parallel-v4-1",
         "complete": false,
         "supervisor_running": true,
-        "passed": 16,
+        "passed": 17,
         "pending": 21,
-        "processed": 37,
-        "last_phase": "replay",
-        "source_simfile": "Levels/levels-fakemines.ssc",
+        "processed": 38,
+        "last_phase": "capture",
+        "source_simfile": "Limitless/Limitless.ssc",
         "child_running": true,
-        "position": 279
+        "position": 282
       },
       {
         "job": "chart-sweep-parallel-v4-2",
@@ -953,11 +954,11 @@
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 67,
+    "new_passed_fixtures": 68,
     "new_pending_charts": 71,
-    "new_processed_sources": 138,
+    "new_processed_sources": 139,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 215,
+    "unprocessed_sources": 214,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },

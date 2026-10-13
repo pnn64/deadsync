@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T14:21:22Z",
+  "updated_utc": "2026-10-13T14:28:58Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 214,
+    "passed": 215,
     "pending": 72,
-    "unprocessed": 215
+    "unprocessed": 214
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2397,7 +2397,9 @@
       "position": 279,
       "source_simfile": "Levels/levels-fakemines.ssc",
       "simfile_sha256": "2c6fc66bb92d32944bed3aca2a7eb0a1df1686a8791458738c843081ae1db732",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 280,
