@@ -11950,6 +11950,13 @@ pub fn run_actor_update_functions_with_delta(
     run_actor_update_functions_for_table(lua, root, delta_seconds)
 }
 
+#[derive(Clone, Copy)]
+enum SongLuaCompileParentDelta {
+    Children,
+    Wrappers,
+    NoteColumns,
+}
+
 #[derive(Clone)]
 enum SongLuaCompileUpdateJob {
     PlayerFeedback {
@@ -11958,7 +11965,7 @@ enum SongLuaCompileUpdateJob {
     Enter {
         actor: Table,
         parent: Option<Table>,
-        wrapper: bool,
+        delta_source: SongLuaCompileParentDelta,
     },
     Advance {
         actor: Table,
@@ -11990,7 +11997,7 @@ fn collect_compile_update_jobs(
     lua: &Lua,
     actor: &Table,
     parent: Option<&Table>,
-    wrapper: bool,
+    delta_source: SongLuaCompileParentDelta,
     jobs: &mut Vec<SongLuaCompileUpdateJob>,
     order: &mut usize,
 ) -> mlua::Result<()> {
@@ -11999,13 +12006,13 @@ fn collect_compile_update_jobs(
     jobs.push(SongLuaCompileUpdateJob::Enter {
         actor: actor.clone(),
         parent: parent.cloned(),
-        wrapper,
+        delta_source,
     });
     // Actor::Update advances wrappers before the wrapped actor. A wrapper
     // receives its owner's delta, before ActorFrame's child update rate.
     if let Some(wrappers) = actor.get::<Option<Table>>("__songlua_wrappers")? {
         for wrapper in wrappers.sequence_values::<Table>() {
-            collect_compile_update_jobs(lua, &wrapper?, Some(actor), true, jobs, order)?;
+            collect_compile_update_jobs(lua, &wrapper?, Some(actor), SongLuaCompileParentDelta::Wrappers, jobs, order)?;
         }
     }
     *order += 1;
@@ -12035,10 +12042,10 @@ fn collect_compile_update_jobs(
             continue;
         };
         adopt_actor_child(actor, &child)?;
-        collect_compile_update_jobs(lua, &child, Some(actor), false, jobs, order)?;
+        collect_compile_update_jobs(lua, &child, Some(actor), SongLuaCompileParentDelta::Children, jobs, order)?;
     }
     if let Some(stream) = song_meter_stream_child(lua, actor)? {
-        collect_compile_update_jobs(lua, &stream, Some(actor), false, jobs, order)?;
+        collect_compile_update_jobs(lua, &stream, Some(actor), SongLuaCompileParentDelta::Children, jobs, order)?;
     }
     if crate::model_texture::contains(lua, actor) {
         jobs.push(SongLuaCompileUpdateJob::Texture { actor: actor.clone() });
@@ -12050,6 +12057,15 @@ fn collect_compile_update_jobs(
         actor: actor.clone(),
         order: *order,
     });
+    // NoteField::Update runs its column vector after ActorFrame::Update.
+    // These Actor owners receive the original field delta, outside that
+    // ActorFrame's update rate and hibernation gate, and are not its children.
+    if let Some(columns) = actor.raw_get::<Option<Table>>("__songlua_note_columns")? {
+        for column in columns.sequence_values::<Table>() {
+            collect_compile_update_jobs(lua, &column?, Some(actor),
+                SongLuaCompileParentDelta::NoteColumns, jobs, order)?;
+        }
+    }
     Ok(())
 }
 
@@ -12067,14 +12083,14 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
             // root below; traversing its child aliases would update them twice.
             for name in ["Underlay", "Overlay", "In", "Debug"] {
                 if let Some(actor) = children.raw_get::<Option<Table>>(name)? {
-                    collect_compile_update_jobs(lua, &actor, None, false, &mut jobs, &mut order)?;
+                    collect_compile_update_jobs(lua, &actor, None, SongLuaCompileParentDelta::Children, &mut jobs, &mut order)?;
                 }
             }
         }
         for key in ["__songlua_top_screen_player_1", "__songlua_top_screen_player_2"] {
             // Player actors advance native time even without NoteField wrappers.
             if let Some(player) = lua.globals().raw_get::<Option<Table>>(key)? {
-                collect_compile_update_jobs(lua, &player, None, false, &mut jobs, &mut order)?;
+                collect_compile_update_jobs(lua, &player, None, SongLuaCompileParentDelta::Children, &mut jobs, &mut order)?;
                 // Player::Update runs ActorFrame::Update first, then emits
                 // Judgment while processing rows. Song callbacks follow it.
                 if crate::live::active(lua) {
@@ -12082,7 +12098,7 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
                 }
             }
         }
-        collect_compile_update_jobs(lua, root, None, false, &mut jobs, &mut order)?;
+        collect_compile_update_jobs(lua, root, None, SongLuaCompileParentDelta::Children, &mut jobs, &mut order)?;
         lua.set_app_data(SongLuaCompileUpdatePlan { jobs: jobs.into() });
     }
     Ok(lua
@@ -12485,23 +12501,23 @@ pub(crate) fn run_actor_compile_update_functions_with_entry(
                 SongLuaCompileUpdateJob::Enter {
                     actor,
                     parent,
-                    wrapper,
+                    delta_source,
                 } => {
                     before_enter(actor)?;
+                    let (delta_key, span_key) = match delta_source {
+                        SongLuaCompileParentDelta::Children =>
+                            ("__songlua_compile_update_delta", "__songlua_compile_update_span"),
+                        SongLuaCompileParentDelta::Wrappers =>
+                            ("__songlua_compile_wrapper_delta", "__songlua_compile_wrapper_span"),
+                        SongLuaCompileParentDelta::NoteColumns =>
+                            ("__songlua_compile_input_delta", "__songlua_compile_input_span"),
+                    };
                     let mut incoming = match parent {
-                        Some(parent) => parent.raw_get::<Option<f64>>(if *wrapper {
-                            "__songlua_compile_wrapper_delta"
-                        } else {
-                            "__songlua_compile_update_delta"
-                        })?,
+                        Some(parent) => parent.raw_get::<Option<f64>>(delta_key)?,
                         None => Some(delta_seconds),
                     };
                     let mut span = match parent {
-                        Some(parent) => parent.raw_get::<Option<f32>>(if *wrapper {
-                            "__songlua_compile_wrapper_span"
-                        } else {
-                            "__songlua_compile_update_span"
-                        })?,
+                        Some(parent) => parent.raw_get::<Option<f32>>(span_key)?,
                         None => Some(delta_seconds as f32),
                     };
                     // A scheduled foreground's whole subtree uses its native
@@ -12513,6 +12529,8 @@ pub(crate) fn run_actor_compile_update_functions_with_entry(
                         incoming = Some(delta);
                         span = Some(delta as f32);
                     }
+                    actor.raw_set("__songlua_compile_input_delta", incoming)?;
+                    actor.raw_set("__songlua_compile_input_span", span)?;
                     // Model::Update passes the original delta to its materials
                     // after Actor::Update, even if that Actor is hibernating.
                     crate::model_texture::begin(lua, actor, incoming);
@@ -13759,6 +13777,9 @@ pub fn create_note_field_actor(
         f32::midpoint(THEME_RECEPTOR_Y_STD, THEME_RECEPTOR_Y_REV),
     )?;
     capture_block_set_f32(lua, &actor, "z", 0.0_f32)?;
+    // Native NoteField::InitColumnRenderers owns the complete style vector
+    // before gameplay updates, including columns Lua has never looked up.
+    note_field_column_actors(lua, &actor, create_dummy_actor)?;
     Ok(actor)
 }
 
@@ -13789,6 +13810,7 @@ pub fn note_field_column_actors(
         columns.raw_set(column_index + 1, column)?;
     }
     note_field.set("__songlua_note_columns", columns.clone())?;
+    invalidate_compile_update_plan(lua);
     Ok(columns)
 }
 

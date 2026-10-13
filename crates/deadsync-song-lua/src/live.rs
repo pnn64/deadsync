@@ -2398,6 +2398,7 @@ end
     fn live_named_notefield_advances_once() {
         let mut compiled = compile("named-notefield-once", r#"
 local field = SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField')
+FIELD = field
 return Def.ActorFrame {
     OnCommand = function(self)
         field:sleep(0.5)
@@ -2409,6 +2410,67 @@ return Def.ActorFrame {
         scene.advance(SongLuaLiveFrame { screen_seconds: 0.125, delta_seconds: 0.125,
             ..Default::default() }).expect("one native child update");
         assert!((scene.states()[0].aux - 0.375).abs() < 1e-6, "NoteField does not receive an extra special update");
+        scene.lua.load(r#"
+local before = FIELD:GetNumChildren()
+COL = FIELD:GetColumnActors()[2]
+assert(COL == FIELD:get_column_actors()[2])
+assert(FIELD:GetNumChildren() == before, 'column vector is separate from ActorFrame children')
+COL:x(0):linear(1):x(100):queuecommand('ColumnDone')
+COL:addcommand('ColumnDone', function(self) COLUMN_DONE = (COLUMN_DONE or 0) + 1 end)
+FIELD:SetUpdateFunction(function() COLUMN_BEFORE = COL:GetTweenTimeLeft() end)
+"#).exec().expect("owned column commands");
+        let column: Table = scene.lua.globals().get("COL").unwrap();
+        let left = |actor: &Table| crate::lua_util::actor_tween_time_left(&scene.lua, actor).unwrap();
+        assert_eq!(left(&column), 1.0);
+        let mut input = SongLuaLiveFrame { screen_seconds: 0.25, delta_seconds: 0.125,
+            ..Default::default() };
+        scene.advance(input).expect("column update after the field callback");
+        assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.875,
+            "NoteField's owned column vector advances once per screen update");
+        assert_eq!(scene.lua.globals().get::<f32>("COLUMN_BEFORE").unwrap(), 1.0);
+        let x = column.get::<Function>("GetX").unwrap().call::<f32>(column.clone()).unwrap();
+        assert_eq!(x, 12.5, "the real column tween updates its authored pose");
+        input.delta_seconds = 0.0;
+        scene.advance(input).expect("zero delta preserves the column queue");
+        assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.875);
+        scene.lua.load("FIELD:SetUpdateRate(3); WRAP = COL:AddWrapperState():sleep(1)")
+            .exec().expect("field rate and column wrapper");
+        let wrapper: Table = scene.lua.globals().get("WRAP").unwrap();
+        input.delta_seconds = 0.125;
+        input.screen_seconds += 0.125;
+        scene.advance(input).expect("columns use the field's original delta");
+        assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.75);
+        assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &wrapper).unwrap(), 0.875);
+        scene.lua.load("FIELD:hibernate(0.25)").exec().unwrap();
+        input.screen_seconds += 0.125;
+        scene.advance(input).expect("NoteField still updates columns while its ActorFrame sleeps");
+        assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.625);
+        let player: Table = scene.lua.globals().get("__songlua_top_screen_player_1").unwrap();
+        player.get::<Function>("hibernate").unwrap().call::<()>((player.clone(), 0.25)).unwrap();
+        for _ in 0..2 {
+            input.screen_seconds += 0.125;
+            scene.advance(input).expect("hibernating ancestor skips the field; wake has zero overshoot");
+            assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.625);
+        }
+        input.screen_seconds += 0.125;
+        scene.advance(input).expect("field wake and column vector receive the original delta");
+        assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.5);
+        player.get::<Function>("SetUpdateRate").unwrap().call::<()>((player.clone(), 2.0)).unwrap();
+        input.screen_seconds += 0.125;
+        scene.advance(input).expect("column vector inherits its ancestor's rate");
+        assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.25);
+        column.get::<Function>("hibernate").unwrap().call::<()>((column.clone(), 0.125)).unwrap();
+        input.screen_seconds += 0.125;
+        scene.advance(input).expect("column hibernation passes only its wake overshoot to wrappers");
+        assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.125);
+        assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &wrapper).unwrap(), 0.25);
+        for _ in 0..2 {
+            input.screen_seconds += 0.125;
+            scene.advance(input).expect("column tween and queued command complete");
+        }
+        assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.0);
+        assert_eq!(column.get::<Function>("GetX").unwrap().call::<f32>(column).unwrap(), 100.0);
+        assert_eq!(scene.lua.globals().get::<u32>("COLUMN_DONE").unwrap(), 1);
     }
 
     #[test]
