@@ -3105,15 +3105,12 @@
     {
       "title": "Invert",
       "source_simfile": "Invert/invert.sm",
-      "harness_version": "0.1.0",
-      "archive": "3e85150285f218ef64a0d76f96afbcae0be388f5131ff05aff18d49b900af17f.tar.zst",
-      "sha256": "3e85150285f218ef64a0d76f96afbcae0be388f5131ff05aff18d49b900af17f",
-      "compressed_bytes": 140586,
-      "uncompressed_sha256": "af3c0205801d1e5303e6736cf633367d50c1393e40fe16bd0ef2024f8502a3dd",
-      "compression_level": 22,
-      "aliases": [
-        "eddaae996c917040429f67b46d92f7af393dec312d6c9cde80a065bdafe1b6cf.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b88f821df058ee4e0e7824590376d8f5fb4068ee6a1577a00e8fccc327ffbf88.tar.zst",
+      "sha256": "b88f821df058ee4e0e7824590376d8f5fb4068ee6a1577a00e8fccc327ffbf88",
+      "compressed_bytes": 38374940,
+      "uncompressed_sha256": "2bfbf1d8df437f58ec82910d26a3dbbd381e8cc3f0fd56ce020e176fa5e78d7c",
+      "aliases": []
     },
     {
       "title": "Invert",
