@@ -8126,6 +8126,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 293,
+      "source_simfile": "Magic Torus/torus3.sm",
+      "simfile_sha256": "53ad240c0fc4d238518c7fda7a429e5cc1a74799c0cd4fa683ced552ae0aed66",
+      "retained_original_archive": "a0091cd989760f56f50b9412f107b00ab325da8960c68e15884bda864abef8c9.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "b370854d414e700640d93484aa612dcdc931af280acf17ee8b30e35b7fd82f7d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/screen-loading-build-v1/proof.json",
+      "capture_seconds": 90.4002226240118,
+      "trace_sha256": "2301df0b6e4bd702de9b0b035b4030d9027b1e929f2505f22f1500b09e537aee",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-293/candidates/2246f8e01472c6aca28b75ab5ac2204a4a31e7ca89838eaead24ee23c1e4f90a.tar",
+      "replay_exit": 0,
+      "replay_seconds": 277.2619047670014,
+      "candidate_sha256": "2246f8e01472c6aca28b75ab5ac2204a4a31e7ca89838eaead24ee23c1e4f90a",
+      "native_frames": 30590,
+      "replayed_frames": 30590,
+      "compared_stage_fields": 869,
+      "pending_coverage": [
+        "uncompared song operations: Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.spring, Actor.stoptweening, Actor.zoomy, Actor.zoomz",
+        "native drawable state/resources: Quad"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "5649733f5e9f1373bb883b245617cbc9b7292a78eea1a42e16c2a7bf08084b7d",
+      "archive": "321534ef07de7b5527467bedf0dddfb72fa8b45466dbce0ac8e00c6c1a878f79.tar.zst",
+      "archive_sha256": "321534ef07de7b5527467bedf0dddfb72fa8b45466dbce0ac8e00c6c1a878f79",
+      "compressed_bytes": 3460826,
+      "pack_seconds": 4.524210093994043,
+      "harness_version": "0.1.80",
+      "title": "Magic Torus",
+      "retained_original_entry": {
+        "title": "Magic Torus",
+        "source_simfile": "Magic Torus/torus3.sm",
+        "harness_version": "0.1.0",
+        "archive": "a0091cd989760f56f50b9412f107b00ab325da8960c68e15884bda864abef8c9.tar.zst",
+        "sha256": "a0091cd989760f56f50b9412f107b00ab325da8960c68e15884bda864abef8c9",
+        "compressed_bytes": 94634,
+        "uncompressed_sha256": "b27e3b0de210f82459df5917402a8cf394180da902cf0b59ee7e2da66df4d7f4",
+        "compression_level": 22,
+        "aliases": [
+          "9ea57410ff6dc094e34a87796a27bc46d786b95920684ec28860831703a69b8a.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -8151,7 +8202,7 @@
   },
   "binary_sha256": "b370854d414e700640d93484aa612dcdc931af280acf17ee8b30e35b7fd82f7d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 18,
+  "passed_fixtures": 19,
   "pending_charts": 42,
-  "processed_charts": 60
+  "processed_charts": 61
 }

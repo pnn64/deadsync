@@ -3624,15 +3624,12 @@
     {
       "title": "Magic Torus",
       "source_simfile": "Magic Torus/torus3.sm",
-      "harness_version": "0.1.0",
-      "archive": "a0091cd989760f56f50b9412f107b00ab325da8960c68e15884bda864abef8c9.tar.zst",
-      "sha256": "a0091cd989760f56f50b9412f107b00ab325da8960c68e15884bda864abef8c9",
-      "compressed_bytes": 94634,
-      "uncompressed_sha256": "b27e3b0de210f82459df5917402a8cf394180da902cf0b59ee7e2da66df4d7f4",
-      "compression_level": 22,
-      "aliases": [
-        "9ea57410ff6dc094e34a87796a27bc46d786b95920684ec28860831703a69b8a.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "321534ef07de7b5527467bedf0dddfb72fa8b45466dbce0ac8e00c6c1a878f79.tar.zst",
+      "sha256": "321534ef07de7b5527467bedf0dddfb72fa8b45466dbce0ac8e00c6c1a878f79",
+      "compressed_bytes": 3460826,
+      "uncompressed_sha256": "2246f8e01472c6aca28b75ab5ac2204a4a31e7ca89838eaead24ee23c1e4f90a",
+      "aliases": []
     },
     {
       "title": "Hustle Beach",
