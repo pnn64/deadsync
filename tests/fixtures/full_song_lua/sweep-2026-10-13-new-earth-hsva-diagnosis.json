@@ -1,0 +1,943 @@
+{
+  "status": "actual New Earth startup failure traced to missing native fallback HSVA; focused control and repair still required",
+  "source_simfile": "new earth/new earth.ssc",
+  "position": 326,
+  "original_result": {
+    "position": 326,
+    "source_simfile": "new earth/new earth.ssc",
+    "simfile_sha256": "614f29f557e0e936a2650122071d9d408eaaa46690031b08dddb471f694a4abb",
+    "retained_original_archive": "e1fc74644895f1995a6d30caebef17d5b1cedc773397874cbdd43a442579c157.tar.zst",
+    "status": "pending",
+    "repair_attempts": 0,
+    "binary_sha256": "49482e042c5a60991fd859ab5d1ee6b5eeb64b6511ea2320dcb850abc06f1f78",
+    "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "fix_commit": "402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+    "build_proof": "/home/parity/jobs/subscriber-single-green-v1/proof.json",
+    "capture_seconds": 129.4404728980153,
+    "trace_sha256": "5142c22ee3a02a750a5bf8de5aea44b4eeaa1ed26dff9a6889614801e61444d4",
+    "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-326/candidates/1cf42f912b0caf2c3c0d9ba3f17a640ffd9313f9a353d4c4f4bcb076c5c1b1ab.tar",
+    "replay_exit": 1,
+    "replay_seconds": 1.604174715001136,
+    "candidate_sha256": "1cf42f912b0caf2c3c0d9ba3f17a640ffd9313f9a353d4c4f4bcb076c5c1b1ab",
+    "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'new earth': failed to run actor init commands for '/tmp/.tmpuDkUwQ/song/lua/default.lua': InitCommand failed for ActorMultiVertex 'SpaceshipTrailP1': runtime error: [string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: attempt to call global 'HSVA' (a nil value)\nstack traceback:\n\t[C]: in global 'HSVA'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: in upvalue 'makeSpaceshipTrail'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:152: in function <[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:151>; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'new earth' from '/tmp/.tmpuDkUwQ/song/lua/default.lua': failed to run actor init commands for '/tmp/.tmpuDkUwQ/song/lua/default.lua': InitCommand failed for ActorMultiVertex 'SpaceshipTrailP1': runtime error: [string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: attempt to call global 'HSVA' (a nil value)\nstack traceback:\n\t[C]: in global 'HSVA'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:132: in upvalue 'makeSpaceshipTrail'\n\t[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:152: in function <[string \"/tmp/.tmpuDkUwQ/song/lua/default.lua\"]:151>\n\nthread 'main' (2316501) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+  },
+  "bounded_native_capture": {
+    "source_simfile": "new earth/new earth.ssc",
+    "candidate_sha256": "1cf42f912b0caf2c3c0d9ba3f17a640ffd9313f9a353d4c4f4bcb076c5c1b1ab",
+    "trace_sha256": "5142c22ee3a02a750a5bf8de5aea44b4eeaa1ed26dff9a6889614801e61444d4",
+    "simfile_sha256": "614f29f557e0e936a2650122071d9d408eaaa46690031b08dddb471f694a4abb",
+    "all_manifest_members_byte_verified": true,
+    "definition": {
+      "children": [],
+      "class": "ActorMultiVertex",
+      "commands": [
+        {
+          "last_line": 159,
+          "line": 151,
+          "name": "InitCommand",
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "last_line": 166,
+          "line": 160,
+          "name": "RainbowMessageCommand",
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "id": "def-0016",
+      "layer_index": 1,
+      "line": 149,
+      "name": "SpaceshipTrailP1",
+      "parent_id": "def-0018",
+      "properties": [],
+      "runtime_actors": [
+        "def-0016"
+      ],
+      "source": "song:/lua/default.lua"
+    },
+    "first_native_vertex_calls": [
+      {
+        "actor": "def-0016",
+        "args": [
+          [
+            [
+              [
+                -0.5,
+                0,
+                0
+              ],
+              [
+                1,
+                0,
+                0,
+                1
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.08333333333333333,
+                0
+              ],
+              [
+                1,
+                0,
+                0.5,
+                0.9166666666666666
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.08333333333333333,
+                0
+              ],
+              [
+                1,
+                0,
+                0.5,
+                0.9166666666666666
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0,
+                0
+              ],
+              [
+                1,
+                0,
+                0,
+                1
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.08333333333333333,
+                0
+              ],
+              [
+                1,
+                0,
+                0.5,
+                0.9166666666666666
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.16666666666666666,
+                0
+              ],
+              [
+                1,
+                0,
+                1,
+                0.8333333333333334
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.16666666666666666,
+                0
+              ],
+              [
+                1,
+                0,
+                1,
+                0.8333333333333334
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.08333333333333333,
+                0
+              ],
+              [
+                1,
+                0,
+                0.5,
+                0.9166666666666666
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.16666666666666666,
+                0
+              ],
+              [
+                1,
+                0,
+                1,
+                0.8333333333333334
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.25,
+                0
+              ],
+              [
+                0.5,
+                0,
+                1,
+                0.75
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.25,
+                0
+              ],
+              [
+                0.5,
+                0,
+                1,
+                0.75
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.16666666666666666,
+                0
+              ],
+              [
+                1,
+                0,
+                1,
+                0.8333333333333334
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.25,
+                0
+              ],
+              [
+                0.5,
+                0,
+                1,
+                0.75
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.3333333333333333,
+                0
+              ],
+              [
+                0,
+                0,
+                1,
+                0.6666666666666667
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.3333333333333333,
+                0
+              ],
+              [
+                0,
+                0,
+                1,
+                0.6666666666666667
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.25,
+                0
+              ],
+              [
+                0.5,
+                0,
+                1,
+                0.75
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.3333333333333333,
+                0
+              ],
+              [
+                0,
+                0,
+                1,
+                0.6666666666666667
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.4166666666666667,
+                0
+              ],
+              [
+                0,
+                0.5,
+                1,
+                0.5833333333333333
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.4166666666666667,
+                0
+              ],
+              [
+                0,
+                0.5,
+                1,
+                0.5833333333333333
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.3333333333333333,
+                0
+              ],
+              [
+                0,
+                0,
+                1,
+                0.6666666666666667
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.4166666666666667,
+                0
+              ],
+              [
+                0,
+                0.5,
+                1,
+                0.5833333333333333
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.5,
+                0
+              ],
+              [
+                0,
+                1,
+                1,
+                0.5
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.5,
+                0
+              ],
+              [
+                0,
+                1,
+                1,
+                0.5
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.4166666666666667,
+                0
+              ],
+              [
+                0,
+                0.5,
+                1,
+                0.5833333333333333
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.5,
+                0
+              ],
+              [
+                0,
+                1,
+                1,
+                0.5
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.5833333333333334,
+                0
+              ],
+              [
+                0,
+                1,
+                0.5,
+                0.41666666666666663
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.5833333333333334,
+                0
+              ],
+              [
+                0,
+                1,
+                0.5,
+                0.41666666666666663
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.5,
+                0
+              ],
+              [
+                0,
+                1,
+                1,
+                0.5
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.5833333333333334,
+                0
+              ],
+              [
+                0,
+                1,
+                0.5,
+                0.41666666666666663
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.6666666666666666,
+                0
+              ],
+              [
+                0,
+                1,
+                0,
+                0.33333333333333337
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.6666666666666666,
+                0
+              ],
+              [
+                0,
+                1,
+                0,
+                0.33333333333333337
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.5833333333333334,
+                0
+              ],
+              [
+                0,
+                1,
+                0.5,
+                0.41666666666666663
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.6666666666666666,
+                0
+              ],
+              [
+                0,
+                1,
+                0,
+                0.33333333333333337
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.75,
+                0
+              ],
+              [
+                0.5,
+                1,
+                0,
+                0.25
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.75,
+                0
+              ],
+              [
+                0.5,
+                1,
+                0,
+                0.25
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.6666666666666666,
+                0
+              ],
+              [
+                0,
+                1,
+                0,
+                0.33333333333333337
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.75,
+                0
+              ],
+              [
+                0.5,
+                1,
+                0,
+                0.25
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.8333333333333334,
+                0
+              ],
+              [
+                1,
+                1,
+                0,
+                0.16666666666666663
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.8333333333333334,
+                0
+              ],
+              [
+                1,
+                1,
+                0,
+                0.16666666666666663
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.75,
+                0
+              ],
+              [
+                0.5,
+                1,
+                0,
+                0.25
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.8333333333333334,
+                0
+              ],
+              [
+                1,
+                1,
+                0,
+                0.16666666666666663
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.9166666666666666,
+                0
+              ],
+              [
+                1,
+                0.5,
+                0,
+                0.08333333333333337
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.9166666666666666,
+                0
+              ],
+              [
+                1,
+                0.5,
+                0,
+                0.08333333333333337
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.8333333333333334,
+                0
+              ],
+              [
+                1,
+                1,
+                0,
+                0.16666666666666663
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                0.9166666666666666,
+                0
+              ],
+              [
+                1,
+                0.5,
+                0,
+                0.08333333333333337
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                -0.5,
+                1,
+                0
+              ],
+              [
+                1,
+                0,
+                0,
+                0
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                1,
+                0
+              ],
+              [
+                1,
+                0,
+                0,
+                0
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              [
+                0.5,
+                0.9166666666666666,
+                0
+              ],
+              [
+                1,
+                0.5,
+                0,
+                0.08333333333333337
+              ],
+              [
+                0,
+                0
+              ]
+            ]
+          ]
+        ],
+        "beat": 0,
+        "caller": {
+          "line": 151,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "InitCommand",
+        "definition_id": "def-0016",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 151,
+        "operation": "ActorMultiVertex.SetVertices",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 72,
+        "source": "song:/lua/default.lua"
+      }
+    ],
+    "total_native_vertex_calls_for_actor": 1,
+    "native_frames": 89954,
+    "first_frame": {
+      "beat": -4.4331583976745605,
+      "delta": 0,
+      "scene": 1,
+      "seconds": -1.9012925624847412,
+      "sequence": 1,
+      "wall_seconds": 2.662326
+    },
+    "completion": {
+      "next_screen": "ScreenEvaluationStage",
+      "reason": "gameplay-exit",
+      "stage_committed": true,
+      "stages_played_after": 1,
+      "stages_played_before": 0
+    }
+  },
+  "bounded_input_sha256": "f095e1ccd9f1fde06502c94b5cb1567e70c6d5b45e07ab536239075c85bd63b7",
+  "source_pins": {
+    "authored_lua": {
+      "path": "C:\\GitHub\\rework\\lua-songs\\new earth\\lua\\default.lua",
+      "sha256": "e54e380437643b6ce566893aaf29764676c1d3727137387685eeca4d6291f21b"
+    },
+    "native_colors": {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\Scripts\\02 Colors.lua",
+      "sha256": "3396661905e5cd2c6715d903d59a433ead2eca78709724358c3545c320a17294"
+    },
+    "owned_color_globals": {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\theme_colors.rs",
+      "sha256": "a0b962f9b5bb4483a35c057154166c110d2cc5c599acdf06c9c027805f9f9f63"
+    }
+  },
+  "concrete_source_cause": "SpaceshipTrailP1 Init calls makeSpaceshipTrail, which builds each vertex color with HSVA. Native fallback 02 Colors.lua defines HSVA through HSVToColor; the owned host does not define it. Both shared and separate preparation stop before retaining a scene because that global is nil.",
+  "native_conversion_requirements": "Hue is divided by 60 directly; the fallback branches on the floored sector and does not normalize hue or clamp saturation/value. Alpha is preserved when present; HSVToColor otherwise uses zero. Keep these native Lua semantics.",
+  "control_requirement": "A real ActorMultiVertex Init must call the native-compatible HSVA helper and validate its resulting colors before a full repair.",
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "chart_repair_attempts_spent": 0,
+  "remaining_repairs": 2,
+  "comparisons_modified": false,
+  "passing_charts_reopened": false
+}
