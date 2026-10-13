@@ -2449,15 +2449,12 @@
     {
       "title": "Flying Castle",
       "source_simfile": "Flying Castle/flying castle.sm",
-      "harness_version": "0.1.0",
-      "archive": "8da165a20c2cc09293ed4939ba6b102f59de9be92582bcd6deb1b995fb3b23dd.tar.zst",
-      "sha256": "8da165a20c2cc09293ed4939ba6b102f59de9be92582bcd6deb1b995fb3b23dd",
-      "compressed_bytes": 120074,
-      "uncompressed_sha256": "46a4e4c1333f4d2c77884f12b4ae242229bc78e5a082abd3c8f810ae4ee5a282",
-      "compression_level": 22,
-      "aliases": [
-        "5b76556d78649022a4d76a92d65a5d5d3da54b7aece595a8c2be72218d960ff2.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "c25c168d7593bc49f9af8254ac3a2bc1241d49a591a9fd4b5a8fbb43e903be3c.tar.zst",
+      "sha256": "c25c168d7593bc49f9af8254ac3a2bc1241d49a591a9fd4b5a8fbb43e903be3c",
+      "compressed_bytes": 6803015,
+      "uncompressed_sha256": "19f3fe02a2149a10de7f7edee6eff881e28bb4ccf2b7fed7a37cf48cc2171887",
+      "aliases": []
     },
     {
       "title": "Flying Castle",
