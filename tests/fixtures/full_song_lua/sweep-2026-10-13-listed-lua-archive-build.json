@@ -1,0 +1,80 @@
+{
+  "source_sha256": {
+    "src/song_lua_archive.rs": "8a78ca696a44fddbe20a0303feb178960cb1a5cc7c1ed94b22854aad786d11d7",
+    "src/song_lua_oracle.rs": "e0a18b177b501a8bc7feafe0540a929abcc8dbbc66e35c2d7cdd14725a0c282c",
+    "probe_theme/SongLuaTrace.lua": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f"
+  },
+  "checks": [
+    {
+      "label": "oracle-path-tests",
+      "exit_code": 0,
+      "seconds": 26.214628553992952,
+      "results": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 199 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "archive-tests",
+      "exit_code": 0,
+      "seconds": 0.8735000979941105,
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 0.65s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 0.17329419899033383,
+      "results": []
+    }
+  ],
+  "binary": "/home/parity/jobs/listed-lua-archive-build-v1/harness",
+  "binary_sha256": "3bcd72a60a21f651ffbdcafdf2f3d4327cb9863f3f473803ecf05332f646e3b9",
+  "fix_commit": "79bb77d",
+  "native_capture_instrumentation": "Unchanged from byte-verified case-lua-archive-build-v1; only Rust archive collection changed",
+  "acceptance": "Unchanged full-song replay and pack comparisons",
+  "windows_checks": [
+    {
+      "label": "archive",
+      "exit_code": 0,
+      "passed": 12,
+      "log": "listed-lua-windows-controls-v1.log",
+      "sha256": "f1bad57945b8dabddee575618638518caa9d4afdecbf4e77377a79c0ba60d1bd"
+    },
+    {
+      "label": "oracle",
+      "exit_code": 0,
+      "passed": 3,
+      "log": "listed-lua-windows-oracle-v1.log",
+      "sha256": "c69976f4961844978d4ed72908a1dff1b073538cebbd310fdd37fcc033af0fde",
+      "seconds": 0.58694770000875
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "passed": null,
+      "log": "listed-lua-windows-build-v1.log",
+      "sha256": "5604fc8f0c276397a55db4bd7008236712075c0ad37d3b3a0f1fe362b1b85a36",
+      "seconds": 0.3435796997509897
+    }
+  ],
+  "host_local_mtimes_before_cargo": true,
+  "before_fix_regression_sha256": "a15f0ad1823286a74f63fd8cf0b6438fce662cd57b855e903e008d7c3dc9ef75",
+  "before_fix_regression_exit_code": 101,
+  "regression": "The existing static dependency control now uses a physical listing and a dynamic Lua filename. It proves both nested data files, including uppercase .LUA, are retained when no native call names them; unrelated non-Lua files are excluded.",
+  "source_cause": "sweep-2026-10-13-mountain-archive-diagnosis.json",
+  "source_fix": "Complete physical song Lua inputs augment executed/static source discovery. Ordinary dependency and asset handling remains active; no gameplay expectations are synthesized.",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_observer_sha256_unchanged": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f",
+  "passing_charts_reopened": false,
+  "acceptance_unchanged": true,
+  "next_repair": "Mountain King first repair reuses its byte-identical native capture and original members, adding the 59 omitted puzzle input files."
+}
