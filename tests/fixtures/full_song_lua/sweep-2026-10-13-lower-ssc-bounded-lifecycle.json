@@ -185,7 +185,7 @@
     "native_expected_stats_or_calls_imported": false,
     "original_simfile_and_authored_lua_used": true,
     "fresh_scene_not_original_full_prefix_state": true,
-    "result": "Real core and live scene dispatch Off at native frame 113724; the concrete theme emits NavigateNoFade(Evaluation) on exact final native frame 114997 without errors. This does not explain the full first repair count difference and is not an acceptance result.",
+    "result": "The Windows concrete theme emits all five missing authored End events and NavigateNoFade on the exact final native frame. The matched Linux probe reproduces a one-frame-late Off and no End by that frame. These bounded diagnostics explain the first full repair residual but are not acceptance results.",
     "windows_exploratory_source_graph": "Current validated Windows actor-name source includes unselected 874f2e535; the Linux selected 26-source graph is restored and immutable."
   },
   "diagnostic_logs": {
@@ -215,10 +215,178 @@
   "additional_full_chart_repair_launched": false,
   "new_acceptance_gate": false,
   "passing_chart_reopened": false,
-  "next_work": "The remaining full-replay lifecycle/state difference is unestablished; retain the last bounded chart repair until a source-backed change or reproduction addresses it.",
+  "next_work": "Add a focused production control for the failed-flag boundary and validate isolated enrollment of the existing 874f2e535 overlay fix in the frozen Linux graph. Select only after all controls and both host builds pass, then use the one remaining full Lower Times repair with its original capture.",
   "local_source_sha256": {
     "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
     "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "366ae906ee2b7b5cfb89a0a34c4dc0ebf437bd873db5e764fc454fdad25f62cb",
     "crates/deadsync-song-lua/src/live.rs": "0699b9cd1584a424c2681e22cd5eec4148db58c067d636f99a69161fe0984d66"
+  },
+  "concrete_cause_established": "The selected Linux source graph excludes overlay Off fix 874f2e535 and still marks judged autoplay failed immediately on Core Complete. SongLuaLiveScene therefore selects AllFailed and postpones Off for a BeginFailed update. Windows includes 874f2e535 and fails used autoplay during overlay Off after the success/failure exit decision. The Linux one-frame delay pushes its out completion beyond native final frame 114997, removing the five jmouth screen-End events from the full first repair.",
+  "paired_bounded_source_probes": {
+    "native_clock_tail_frames": 1643,
+    "same_original_song_and_lua": true,
+    "imports_native_expected_stats_or_calls": false,
+    "full_chart_replay": false,
+    "full_prefix_replayed": false,
+    "linux_overlay_fix_excluded": {
+      "first_core_complete_frame": 113723,
+      "failed_before_off": true,
+      "off_frame": 113725,
+      "navigation_or_final_end_events_by_native_last_frame": false,
+      "log": "actual_theme_init notes_end_ns=208519742349 music_end_ns=208519742349\nframe=113723 seconds=208.52029418945313 cleared=true off=false failed=true effects=[] errors=[]\nframe=113725 seconds=208.52455139160156 cleared=true off=true failed=true effects=[] errors=[]\n\n",
+      "log_sha256": "c3fdb61a4f4ae3bebd57eba0d6ea3d35a1e6e874a7b4a98a23339bdb6ddaa9eb",
+      "proof": {
+        "source_graph": "Latest native integration dependency graph, unselected 874f2e535 excluded",
+        "input_test_fingerprint": "/home/parity/build/deadsync-v1/debug/.fingerprint/deadsync-455b2f98583f9179/test-integration-test-song_lua_itgmania_semantic_parity.json",
+        "dependency_rlibs": {
+          "deadsync_simfile": {
+            "rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_simfile-e8155e0dd2c226f4.rlib",
+            "sha256": "0d5ee5eef82fc634b4b77082cd727aa26ad3226e7fc8aa96f7fcfebb89e05006"
+          },
+          "deadsync_gameplay": {
+            "rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_gameplay-9467e7b0400d21d8.rlib",
+            "sha256": "6481f97bcda83a64dec67722cd56f782b1df1abda60b6e4da8f2a34e65cf7e9c"
+          },
+          "deadsync_chart": {
+            "rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_chart-7849460d3dc650be.rlib",
+            "sha256": "b3f81f36e396ceed9e483fee53312f44765bd89afcff24bbd86b05392f7b693e"
+          },
+          "deadsync_profile": {
+            "rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_profile-c7eefbf058e10bec.rlib",
+            "sha256": "a9dc9115d9338c517561d13c470d123e1b39b4f6684b51a1c07ca29cf7e5238c"
+          },
+          "deadsync_song_lua": {
+            "rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_song_lua-7900725451b2e5eb.rlib",
+            "sha256": "630b91fad73f86f7fd28726b5bf3c7b182f16d3d23e42954f9d52f1325162295"
+          },
+          "deadsync_theme_simply_love": {
+            "rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_theme_simply_love-1d2cb7b53e464805.rlib",
+            "sha256": "01b95621954b2c9b667bbeec95fa1ca63621fb7129c3cd54f8fcaefeedada290"
+          },
+          "deadsync_shell": {
+            "rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_shell-ce0b5e4e8c166b1d.rlib",
+            "sha256": "887646007aa5aec6c48ba8e58c5f8fbcff4d35d1c9e9922b6c92fe3da0b46de7"
+          },
+          "deadsync_config": {
+            "rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_config-84ecc64bfc2e9880.rlib",
+            "sha256": "c4bd1442040308cd822a81a406d95319a0341e71585630a67bc113f9a42690a1"
+          },
+          "deadsync_assets": {
+            "rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_assets-795cf1d743c4da77.rlib",
+            "sha256": "d7d5fe9f841d42002c14f86835334852507afcf4f3970433b3352c185e126bec"
+          },
+          "serde_json": {
+            "rlib": "/home/parity/build/deadsync-v1/debug/deps/libserde_json-8137c1765cdb7c2b.rlib",
+            "sha256": "0a2d8696dd89acd1cb5d4971df04e8c81932e2044d054d273289486f6b580e1d"
+          },
+          "log": {
+            "rlib": "/home/parity/build/deadsync-v1/debug/deps/liblog-7a81501c6c9a5ccd.rlib",
+            "sha256": "c1cb71571e79b48cb9be87911d341293de1ecaa2c4fd5f04e90384877fa2f0b7"
+          }
+        },
+        "source_sha256": "222de0dd6ac38572bc38454faca9ca8178f6a270ec59e3f15878080ad3c3edd2",
+        "binary_sha256": "625194104bb5963c2e36548e4ba9381cee265f93dfe84d98a71204dcf04691f0",
+        "exit_code": 0,
+        "output_sha256": "21d8a8e5d06d3fe842582af3cc4d4c4433f8b9ebd5ba5031eec08da1af35f2bf",
+        "full_chart_repair": false,
+        "original_tail_frames": 1643
+      }
+    },
+    "windows_overlay_fix_present": {
+      "first_core_complete_frame": 113723,
+      "failed_before_off": false,
+      "off_frame": 113724,
+      "navigation_frame": 114997,
+      "final_authored_events": [
+        {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.begin",
+          "command": "EndCommand",
+          "source": "C:/GitHub/rework/lua-songs/Lower Times/endroll/default.lua",
+          "line": 41,
+          "beat": 465.1004943847656,
+          "seconds": 210.0229034423828
+        },
+        {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.animate",
+          "source": "C:/GitHub/rework/lua-songs/Lower Times/endroll/default.lua",
+          "line": 41,
+          "phase": "callback",
+          "beat": 465.1004943847656,
+          "seconds": 210.0229034423828,
+          "args": [
+            false
+          ],
+          "results": [
+            {
+              "actor": "0x15b44f77160",
+              "name": "jmouth",
+              "path": "ScreenGameplay/SongForeground/endroll/jmouth"
+            }
+          ],
+          "tween_time_left": 0.0
+        },
+        {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.linear",
+          "source": "C:/GitHub/rework/lua-songs/Lower Times/endroll/default.lua",
+          "line": 41,
+          "phase": "callback",
+          "beat": 465.1004943847656,
+          "seconds": 210.0229034423828,
+          "args": [
+            2.3587223587223587
+          ],
+          "results": [
+            {
+              "actor": "0x15b44f77160",
+              "name": "jmouth",
+              "path": "ScreenGameplay/SongForeground/endroll/jmouth"
+            }
+          ],
+          "tween_time_left": 2.358722448348999
+        },
+        {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.y",
+          "source": "C:/GitHub/rework/lua-songs/Lower Times/endroll/default.lua",
+          "line": 41,
+          "phase": "callback",
+          "beat": 465.1004943847656,
+          "seconds": 210.0229034423828,
+          "args": [
+            730
+          ],
+          "results": [
+            {
+              "actor": "0x15b44f77160",
+              "name": "jmouth",
+              "path": "ScreenGameplay/SongForeground/endroll/jmouth"
+            }
+          ],
+          "tween_time_left": 2.358722448348999
+        },
+        {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.end",
+          "command": "EndCommand",
+          "source": "C:/GitHub/rework/lua-songs/Lower Times/endroll/default.lua",
+          "line": 41,
+          "beat": 465.1004943847656,
+          "seconds": 210.0229034423828
+        }
+      ],
+      "log": "actual_theme_init notes_end_ns=208519742349 music_end_ns=208519742349\nframe=113723 seconds=208.52029418945313 cleared=true off=false failed=false effects=[] errors=[]\nframe=113724 seconds=208.52163696289065 cleared=true off=true failed=true effects=[] errors=[]\nframe=114997 seconds=210.0229034423828 cleared=true off=true failed=true effects=[NavigateNoFade(Evaluation)] errors=[]\nfinal_authored_event={\"scene\":1,\"kind\":\"command\",\"operation\":\"command.begin\",\"command\":\"EndCommand\",\"source\":\"C:/GitHub/rework/lua-songs/Lower Times/endroll/default.lua\",\"line\":41,\"beat\":465.1004943847656,\"seconds\":210.0229034423828}\nfinal_authored_event={\"scene\":1,\"kind\":\"call\",\"operation\":\"Actor.animate\",\"source\":\"C:/GitHub/rework/lua-songs/Lower Times/endroll/default.lua\",\"line\":41,\"phase\":\"callback\",\"beat\":465.1004943847656,\"seconds\":210.0229034423828,\"args\":[false],\"results\":[{\"actor\":\"0x15b44f77160\",\"name\":\"jmouth\",\"path\":\"ScreenGameplay/SongForeground/endroll/jmouth\"}],\"tween_time_left\":0.0}\nfinal_authored_event={\"scene\":1,\"kind\":\"call\",\"operation\":\"Actor.linear\",\"source\":\"C:/GitHub/rework/lua-songs/Lower Times/endroll/default.lua\",\"line\":41,\"phase\":\"callback\",\"beat\":465.1004943847656,\"seconds\":210.0229034423828,\"args\":[2.3587223587223587],\"results\":[{\"actor\":\"0x15b44f77160\",\"name\":\"jmouth\",\"path\":\"ScreenGameplay/SongForeground/endroll/jmouth\"}],\"tween_time_left\":2.358722448348999}\nfinal_authored_event={\"scene\":1,\"kind\":\"call\",\"operation\":\"Actor.y\",\"source\":\"C:/GitHub/rework/lua-songs/Lower Times/endroll/default.lua\",\"line\":41,\"phase\":\"callback\",\"beat\":465.1004943847656,\"seconds\":210.0229034423828,\"args\":[730],\"results\":[{\"actor\":\"0x15b44f77160\",\"name\":\"jmouth\",\"path\":\"ScreenGameplay/SongForeground/endroll/jmouth\"}],\"tween_time_left\":2.358722448348999}\nfinal_authored_event={\"scene\":1,\"kind\":\"command\",\"operation\":\"command.end\",\"command\":\"EndCommand\",\"source\":\"C:/GitHub/rework/lua-songs/Lower Times/endroll/default.lua\",\"line\":41,\"beat\":465.1004943847656,\"seconds\":210.0229034423828}\n",
+      "log_sha256": "eaa341470c66bd73531abaa7ad854ae6676b94512ca3d48ac0ad2e8a9888832e",
+      "binary_sha256": "6a9290bd04fec88a78c265fb64c3f7a898e74e80a973c989a1188246a9d768c4"
+    },
+    "existing_source_fix_commit": "874f2e535ad5a3ce39394ddb03c49600c20e2044",
+    "source_contract": "ScreenGameplay::LeaveGameplay chooses AllFailed before TweenOffScreen; Simply Love FailOnHoldStart.lua fails used autoplay during overlay Off, not before that decision."
   }
 }
