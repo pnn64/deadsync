@@ -1502,6 +1502,28 @@ end}
         assert_eq!(super::native_creation_order_for_entries(&background, 1, 1)
             .expect("background children and second entry foreground"),
             vec![("1/1".into(), 80), ("2".into(), 32), ("2/1".into(), 16)]);
+        // A repeated foreground filename still creates an independent root
+        // and subtree. Declaration IDs alone cannot identify those instances.
+        let mut repeated = background.clone();
+        repeated["runtime_actors"].as_array_mut().unwrap().extend([
+            json!({"id":"repeat-root", "definition_id":"root"}),
+            json!({"id":"repeat-child", "definition_id":"child"})]);
+        repeated["actor_creation_inputs"].as_array_mut().unwrap().extend([
+            json!({"actor":"repeat-root","definition_id":"root","parent":"fg-parent",
+                "pointer_hex":"40","ordinal":4,"scene":1,"before_seq":1,
+                "provenance":"native-ActorUtil-before-LoadFromNode"}),
+            json!({"actor":"repeat-child","definition_id":"child","parent":"repeat-root",
+                "pointer_hex":"30","ordinal":5,"scene":1,"before_seq":1,
+                "provenance":"native-ActorUtil-before-LoadFromNode"})]);
+        assert_eq!(super::native_creation_order_for_entries(&repeated, 1, 1)
+            .expect("every repeated foreground owns its own prepared slot"),
+            vec![("1/1".into(), 80), ("2".into(), 32), ("2/1".into(), 16),
+                 ("3".into(), 64), ("3/1".into(), 48)]);
+        repeated["events"] = json!([{"operation":"command.begin","actor":"repeat-child"},
+            {"operation":"command.begin","actor":"b"}]);
+        assert_eq!(super::native_creation_order_for_entries(&repeated, 1, 0)
+            .expect("handler observations cannot seed the entry ownership"),
+            vec![("1".into(), 32), ("1/1".into(), 16), ("2".into(), 64), ("2/1".into(), 48)]);
         let mut reload = trace.clone();
         reload["actor_definitions"].as_array_mut().unwrap().extend([
             json!({"id":"next-root", "children":[{"layer_index":1,"definition_id":"next-child"}]}),
@@ -1795,10 +1817,12 @@ fn native_creation_order_for_entries(trace: &Value, scene: u64, background_entri
             && record["definition_id"].is_null() && record["path"] == "SongForeground"))
         .map(|input| input["actor"].as_str().ok_or("invalid native foreground identity"))
         .collect::<Result<Vec<_>, _>>()?;
-    if foreground_roots.len() > 1 {
-        return Err("multiple native foreground entries need entry-specific ownership".into());
-    }
-    let foreground_root = foreground_roots.first().copied();
+    // Foreground::LoadFromSong calls MakeActor for each change, even when
+    // several changes load the same filename or declaration. Construction
+    // input order identifies the independent prepared entry slots.
+    let foreground_roots: BTreeMap<_, _> = foreground_roots.into_iter().enumerate()
+        .map(|(index, actor)| (actor, (background_entries + index + 1).to_string()))
+        .collect();
     let mut observed = BTreeSet::new();
     let mut paths = BTreeMap::new();
     let mut background_roots = BTreeMap::new();
@@ -1875,13 +1899,15 @@ fn native_creation_order_for_entries(trace: &Value, scene: u64, background_entri
         if input["scene"].as_u64() != Some(scene) { continue; }
         if !pointers.insert(pointer) { return Err("duplicate native subscriber pointer in scene".into()); }
         if background_effects.contains(actor) { continue; }
-        if foreground_root.is_some_and(|root| actor != root)
+        if !foreground_roots.is_empty() && !foreground_roots.contains_key(actor)
             && !background_roots.contains_key(actor)
             && input["parent"].as_str().is_none_or(|parent| !paths.contains_key(parent))
         {
             continue;
         }
-        let path = if let Some(path) = background_roots.get(actor) {
+        let path = if let Some(path) = foreground_roots.get(actor) {
+            path.clone()
+        } else if let Some(path) = background_roots.get(actor) {
             path.clone()
         } else if let Some(parent) = input["parent"].as_str().filter(|parent| paths.contains_key(parent)) {
             let parent_path: &String = paths.get(parent).ok_or("native factory parent is outside this scene or not yet created")?;
@@ -1895,7 +1921,7 @@ fn native_creation_order_for_entries(trace: &Value, scene: u64, background_entri
             if !input["parent"].is_null() && !runtime.iter().any(|record| record["id"] == input["parent"]) {
                 return Err("native factory parent has no runtime identity".into());
             }
-            if !result.is_empty() && foreground_root != Some(actor) {
+            if !result.is_empty() {
                 return Err("native subscriber ownership needs a single instantiated root per scene".into());
             }
             (background_entries + 1).to_string()
