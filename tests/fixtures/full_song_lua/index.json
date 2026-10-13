@@ -3648,17 +3648,14 @@
       "aliases": []
     },
     {
-      "title": "回レ！雪月花",
+      "title": "回レ！雪月花 (ric3show3r bootleg)",
       "source_simfile": "Maware! Setsugetsuka (ric3show3r bootleg)/maware ric3show3r.ssc",
-      "harness_version": "0.1.0",
-      "archive": "6f079cd61544f4ae39e7cb4cb2a51cf065f340b0ad973ffdb9568031110f82a3.tar.zst",
-      "sha256": "6f079cd61544f4ae39e7cb4cb2a51cf065f340b0ad973ffdb9568031110f82a3",
-      "compressed_bytes": 72805,
-      "uncompressed_sha256": "623791cbdbcbe86edfc34de80fbcaf9fe5e0a54a322dbe95a0a862add9c2f305",
-      "compression_level": 22,
-      "aliases": [
-        "0614bd4fc5bb142317e944345c652111054c7ecc9cd96d07e34da31f663a7652.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b2428de4259cab7685983984ffaf5b972033e7bc2bb56b09baf9f7acd4f1a4ba.tar.zst",
+      "sha256": "b2428de4259cab7685983984ffaf5b972033e7bc2bb56b09baf9f7acd4f1a4ba",
+      "compressed_bytes": 6142342,
+      "uncompressed_sha256": "a14d746f7f78d76efb5de199acb98cd651acbf837a8628721e7bbd8cbe1cb017",
+      "aliases": []
     },
     {
       "title": "MAWARU",

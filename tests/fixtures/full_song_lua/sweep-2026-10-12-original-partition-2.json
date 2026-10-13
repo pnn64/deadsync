@@ -6515,6 +6515,54 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 298,
+      "source_simfile": "Maware! Setsugetsuka (ric3show3r bootleg)/maware ric3show3r.ssc",
+      "simfile_sha256": "a6c8ac02a9eac6281723ac28ffabe444cad982929ade5766509aa64208cce800",
+      "retained_original_archive": "6f079cd61544f4ae39e7cb4cb2a51cf065f340b0ad973ffdb9568031110f82a3.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "dc33e10eb25790fe5f57e0adf311eb04f8029fa0983e22ce00e25f125eb8111c",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/palette-green-v1/proof.json",
+      "capture_seconds": 111.39154918900749,
+      "trace_sha256": "238d51ab8e72ecfe08620e6e1b0354e3ef5b510d5928a394fe015a245a20f410",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-298/candidates/a14d746f7f78d76efb5de199acb98cd651acbf837a8628721e7bbd8cbe1cb017.tar",
+      "replay_exit": 0,
+      "replay_seconds": 840.8950631579937,
+      "candidate_sha256": "a14d746f7f78d76efb5de199acb98cd651acbf837a8628721e7bbd8cbe1cb017",
+      "native_frames": 68523,
+      "replayed_frames": 68523,
+      "compared_stage_fields": 1177,
+      "pending_coverage": [],
+      "whole_song_parity_proven": true,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "d197dc7f70ef10cca1b5c1893c44e23752795f443971b846b3fd68525569e1b9",
+      "archive": "b2428de4259cab7685983984ffaf5b972033e7bc2bb56b09baf9f7acd4f1a4ba.tar.zst",
+      "archive_sha256": "b2428de4259cab7685983984ffaf5b972033e7bc2bb56b09baf9f7acd4f1a4ba",
+      "compressed_bytes": 6142342,
+      "pack_seconds": 2.828740885001025,
+      "harness_version": "0.1.80",
+      "title": "回レ！雪月花 (ric3show3r bootleg)",
+      "retained_original_entry": {
+        "title": "回レ！雪月花",
+        "source_simfile": "Maware! Setsugetsuka (ric3show3r bootleg)/maware ric3show3r.ssc",
+        "harness_version": "0.1.0",
+        "archive": "6f079cd61544f4ae39e7cb4cb2a51cf065f340b0ad973ffdb9568031110f82a3.tar.zst",
+        "sha256": "6f079cd61544f4ae39e7cb4cb2a51cf065f340b0ad973ffdb9568031110f82a3",
+        "compressed_bytes": 72805,
+        "uncompressed_sha256": "623791cbdbcbe86edfc34de80fbcaf9fe5e0a54a322dbe95a0a862add9c2f305",
+        "compression_level": 22,
+        "aliases": [
+          "0614bd4fc5bb142317e944345c652111054c7ecc9cd96d07e34da31f663a7652.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -6524,9 +6572,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "a334f4b34605d7423de871ec305ba3961595409868dd4226ba1ea53c0eeacee7",
+  "binary_sha256": "dc33e10eb25790fe5f57e0adf311eb04f8029fa0983e22ce00e25f125eb8111c",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 18,
+  "passed_fixtures": 19,
   "pending_charts": 25,
-  "processed_charts": 43
+  "processed_charts": 44
 }
