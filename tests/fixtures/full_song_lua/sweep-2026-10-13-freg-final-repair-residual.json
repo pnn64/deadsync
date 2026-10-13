@@ -1,0 +1,159 @@
+{
+  "result": {
+    "position": 200,
+    "source_simfile": "freg/freg.sm",
+    "status": "pending",
+    "repair_attempts": 2,
+    "previous_failure": [],
+    "binary_sha256": "7e34d8209408e9eb2bccb138914e8b03961806dbeb884a48f88cd340b165d8ec",
+    "candidate_sha256": "4be2dbf1ff59a34ff3029c5e9e4ef64991bea951de5abb6395c849bd64bf1f43",
+    "trace_sha256": "3736aead13b2e6994859a3380e784f8f600837b50a334d81bcc3b3a2c81db168",
+    "native_capture_reused": true,
+    "simfile_sha256": "c17a176bd2314c4d9e122db759e9377c11096c92b6890431a31c3b781753854f",
+    "fix_commit": "874f2e535 + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+    "previous_concrete_failures": [
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0002",
+          "args": [],
+          "beat": 46.32426452636719,
+          "command": "OffCommand",
+          "definition_id": "def-0002",
+          "detail": {
+            "name": "OffCommand"
+          },
+          "kind": "command",
+          "line": 21,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 19.86995506286621,
+          "seq": 12,
+          "source": "song:/c'est business.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.begin",
+          "command": "OffCommand",
+          "source": "song:/c'est business.lua",
+          "line": 21,
+          "beat": 46.382198333740234,
+          "seconds": 19.894784927368164,
+          "args": null
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0002",
+          "args": [],
+          "beat": 46.32426452636719,
+          "command": "OffCommand",
+          "definition_id": "def-0002",
+          "detail": {
+            "name": "OffCommand"
+          },
+          "kind": "command",
+          "line": 21,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 19.86995506286621,
+          "seq": 14,
+          "source": "song:/c'est business.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.end",
+          "command": "OffCommand",
+          "source": "song:/c'est business.lua",
+          "line": 21,
+          "beat": 46.382198333740234,
+          "seconds": 19.894784927368164,
+          "args": null
+        }
+      }
+    ],
+    "build_proof": "/home/parity/jobs/autoplay-off-build-v1/proof.json",
+    "replay_exit": 2,
+    "replay_seconds": 200.03676943200117,
+    "native_frames": 24013,
+    "replayed_frames": 24013,
+    "compared_stage_fields": 341,
+    "pending_coverage": [
+      "uncompared song operations: Actor.stoptweening",
+      "native drawable state/resources: Quad"
+    ],
+    "archive_accepted": false,
+    "errors": [
+      "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 0.002: missing captured subscriber identity for ScreenGameplay/6/1"
+    ],
+    "mismatch_count": 4,
+    "concrete_failures": [
+      {
+        "phase": "progress",
+        "seconds": 20.000022888183594,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "phase": "progress",
+        "seconds": 21.000680923461914,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "phase": "screen-end",
+        "seconds": 21.371450424194336,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      },
+      {
+        "phase": "gameplay-exit",
+        "seconds": 21.371450424194336,
+        "field": "failed",
+        "native": true,
+        "deadsync": false
+      }
+    ],
+    "report_sha256": "46e0e1f4b9942363992fce7c5b399fbce5391344b7bad3768944a7c54bdf49df"
+  },
+  "runtime_actor_records_have_native_pointer_fields": false,
+  "runtime_actor_count": 34,
+  "native_creation_input_count": 3,
+  "native_creation_input_fields": [
+    "actor",
+    "before_seq",
+    "definition_id",
+    "ordinal",
+    "parent",
+    "pointer_hex",
+    "provenance",
+    "scene"
+  ],
+  "repair_attempts_spent": 2,
+  "repair_attempts_remaining": 0,
+  "native_capture_reused": true,
+  "passing_charts_reopened": false,
+  "resolved_first_repair_residual": "Existing command/query comparison now has no differences; Off begin/end timestamps match the native frame.",
+  "residual": "Four actual stage failure-flag differences remain (20.000023, 21.000681, screen-end and gameplay-exit at 21.371450). Native is true; independent is false. One real Judgment callback error prevents the new overlay autoplay latch from receiving the judgment.",
+  "concrete_cause": "Captured-order replay installs subscriber identities only for observed song-owned factory allocations. The new theme-owned overlay listener has no identity in that map. Strict message dispatch rejects ScreenGameplay/6/1 before invoking subscribers. Runtime actor records do not carry neutral native pointer fields for adding this theme listener to that identity map.",
+  "source_evidence": {
+    "identity_requirement": "crates/deadsync-song-lua/src/lua_util.rs:message_actor_identity requires every listener path to exist when SongLuaMessageOrder is installed.",
+    "registration": "create_top_screen_theme_actor adds the owned overlay JudgmentMessageCommand; generic broadcast_song_lua_message_impl sorts every listener by captured identity.",
+    "replay_map": "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs:native_creation_order_for_entries maps observed song-owned constructor allocations."
+  },
+  "next_source_work": "Keep the real autoplay judgment latch and Off phase while modeling theme-owned internal judgment handling without inventing a captured subscriber pointer or seeding failure from native stage observations. Add a production control with captured song subscriber ordering enabled. No third freg replay is allowed in this sweep.",
+  "selected_helper_restored": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
+  "restored_helper_validation": "Actual immutable binary SHA, all four retained successful checks, all 23 original source pins rechecked from retained density-graph-sources-v1.tar.gz, and immutable native harness SHA. The shared snapshot now contains newer source and is not used to assert historical source identity.",
+  "coverage_separate": [
+    "uncompared song operations: Actor.stoptweening",
+    "native drawable state/resources: Quad"
+  ],
+  "acceptance_unchanged": true,
+  "final_replay_report_sha256": "46e0e1f4b9942363992fce7c5b399fbce5391344b7bad3768944a7c54bdf49df"
+}
