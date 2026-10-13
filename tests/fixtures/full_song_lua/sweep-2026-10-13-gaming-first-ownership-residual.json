@@ -1,0 +1,1148 @@
+{
+  "result": {
+    "position": 206,
+    "source_simfile": "Gaming in 2018/Gaming in 2018.ssc",
+    "status": "pending",
+    "repair_attempts": 1,
+    "previous_failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (966936) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: multiple native foreground entries need entry-specific ownership\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+    "binary_sha256": "95e3f733cc48097962e0edd8e17315ce590631e2b45a59bb61683d581b97b6fe",
+    "candidate_sha256": "55a78928607c6930accfaf6696355229a72580c749ce9191898415eb6a8b484f",
+    "trace_sha256": "97aca2ef66fe8a3921322784d089d4b6289189476bf6d1b7b59cb95334e74ca7",
+    "native_capture_reused": true,
+    "simfile_sha256": "786d023994f26f3e5d66f8b0319b0531e77035978cbd3a6ca1df4500d8800381",
+    "fix_commit": "be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+    "previous_concrete_failures": [],
+    "build_proof": "/home/parity/jobs/fg-entry-build-v1/proof.json",
+    "neutral_foreground_root_count": 2,
+    "replay_exit": 2,
+    "replay_seconds": 234.09989255899563,
+    "native_frames": 26294,
+    "replayed_frames": 26294,
+    "compared_stage_fields": 363,
+    "pending_coverage": [
+      "native drawable state/resources: BitmapText"
+    ],
+    "archive_accepted": false,
+    "errors": [],
+    "mismatch_count": 18,
+    "concrete_failures": [
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0001",
+          "args": [],
+          "beat": 0,
+          "command": "InitCommand",
+          "definition_id": "def-0001",
+          "detail": {
+            "name": "InitCommand"
+          },
+          "kind": "command",
+          "line": 17,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 1,
+          "source": "song:/./sorry.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.begin",
+          "command": "InitCommand",
+          "source": "song:/sorry.lua",
+          "line": 17,
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": null
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0001",
+          "args": [
+            2
+          ],
+          "beat": 0,
+          "caller": {
+            "line": 17,
+            "source": "song:/./sorry.lua",
+            "tail_call": false
+          },
+          "command": "InitCommand",
+          "definition_id": "def-0001",
+          "detail": {
+            "native_tween_time_left": 0
+          },
+          "kind": "call",
+          "line": 17,
+          "operation": "Actor.zoom",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 2,
+          "source": "song:/./sorry.lua",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.zoom",
+          "source": "song:/sorry.lua",
+          "line": 17,
+          "phase": "callback",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [
+            2
+          ],
+          "results": [
+            {
+              "actor": "0x61a73037aed0",
+              "name": "Message",
+              "path": "ScreenGameplay/SongForeground/Message"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0001",
+          "args": [],
+          "beat": 0,
+          "caller": {
+            "line": 17,
+            "source": "song:/./sorry.lua",
+            "tail_call": false
+          },
+          "command": "InitCommand",
+          "definition_id": "def-0001",
+          "detail": {
+            "native_tween_time_left": 0
+          },
+          "kind": "call",
+          "line": 17,
+          "operation": "Actor.Center",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 3,
+          "source": "song:/./sorry.lua",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.Center",
+          "source": "song:/sorry.lua",
+          "line": 17,
+          "phase": "callback",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [],
+          "results": [
+            {
+              "actor": "0x61a73037aed0",
+              "name": "Message",
+              "path": "ScreenGameplay/SongForeground/Message"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0001",
+          "args": [],
+          "beat": 0,
+          "command": "InitCommand",
+          "definition_id": "def-0001",
+          "detail": {
+            "name": "InitCommand"
+          },
+          "kind": "command",
+          "line": 17,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 5,
+          "source": "song:/./sorry.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.end",
+          "command": "InitCommand",
+          "source": "song:/sorry.lua",
+          "line": 17,
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": null
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0002",
+          "args": [],
+          "beat": 0,
+          "command": "InitCommand",
+          "definition_id": "def-0002",
+          "detail": {
+            "name": "InitCommand"
+          },
+          "kind": "command",
+          "line": 29,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 6,
+          "source": "song:/./sorry.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.begin",
+          "command": "InitCommand",
+          "source": "song:/sorry.lua",
+          "line": 29,
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": null
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0002",
+          "args": [
+            2.4024024024024024
+          ],
+          "beat": 0,
+          "caller": {
+            "line": 29,
+            "source": "song:/./sorry.lua",
+            "tail_call": false
+          },
+          "command": "InitCommand",
+          "definition_id": "def-0002",
+          "detail": {
+            "native_tween_time_left": 2.402402400970459
+          },
+          "kind": "call",
+          "line": 29,
+          "operation": "Actor.sleep",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 7,
+          "source": "song:/./sorry.lua",
+          "tween_time_left": 2.402402400970459
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.sleep",
+          "source": "song:/sorry.lua",
+          "line": 29,
+          "phase": "callback",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [
+            2.4024024024024024
+          ],
+          "tween_time_left": 2.402402400970459
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0002",
+          "args": [],
+          "beat": 0,
+          "command": "InitCommand",
+          "definition_id": "def-0002",
+          "detail": {
+            "name": "InitCommand"
+          },
+          "kind": "command",
+          "line": 29,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 8,
+          "source": "song:/./sorry.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.end",
+          "command": "InitCommand",
+          "source": "song:/sorry.lua",
+          "line": 29,
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": null
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 0,
+          "command": "InitCommand",
+          "definition_id": "def-0004",
+          "detail": {
+            "name": "InitCommand"
+          },
+          "kind": "command",
+          "line": 17,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 9,
+          "source": "song:/./sorry2.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.begin",
+          "command": "InitCommand",
+          "source": "song:/sorry2.lua",
+          "line": 17,
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": null
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0004",
+          "args": [
+            2
+          ],
+          "beat": 0,
+          "caller": {
+            "line": 17,
+            "source": "song:/./sorry2.lua",
+            "tail_call": false
+          },
+          "command": "InitCommand",
+          "definition_id": "def-0004",
+          "detail": {
+            "native_tween_time_left": 0
+          },
+          "kind": "call",
+          "line": 17,
+          "operation": "Actor.zoom",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 10,
+          "source": "song:/./sorry2.lua",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.zoom",
+          "source": "song:/sorry2.lua",
+          "line": 17,
+          "phase": "callback",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [
+            2
+          ],
+          "results": [
+            {
+              "actor": "0x61a732478d90",
+              "name": "Message",
+              "path": "ScreenGameplay/SongForeground/Message"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 0,
+          "caller": {
+            "line": 17,
+            "source": "song:/./sorry2.lua",
+            "tail_call": false
+          },
+          "command": "InitCommand",
+          "definition_id": "def-0004",
+          "detail": {
+            "native_tween_time_left": 0
+          },
+          "kind": "call",
+          "line": 17,
+          "operation": "Actor.Center",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 11,
+          "source": "song:/./sorry2.lua",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.Center",
+          "source": "song:/sorry2.lua",
+          "line": 17,
+          "phase": "callback",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [],
+          "results": [
+            {
+              "actor": "0x61a732478d90",
+              "name": "Message",
+              "path": "ScreenGameplay/SongForeground/Message"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 0,
+          "command": "InitCommand",
+          "definition_id": "def-0004",
+          "detail": {
+            "name": "InitCommand"
+          },
+          "kind": "command",
+          "line": 17,
+          "operation": "command.end",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 13,
+          "source": "song:/./sorry2.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.end",
+          "command": "InitCommand",
+          "source": "song:/sorry2.lua",
+          "line": 17,
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": null
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0005",
+          "args": [],
+          "beat": 0,
+          "command": "InitCommand",
+          "definition_id": "def-0005",
+          "detail": {
+            "name": "InitCommand"
+          },
+          "kind": "command",
+          "line": 29,
+          "operation": "command.begin",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 14,
+          "source": "song:/./sorry2.lua"
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "command",
+          "operation": "command.begin",
+          "command": "InitCommand",
+          "source": "song:/sorry2.lua",
+          "line": 29,
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": null
+        }
+      }
+    ],
+    "report_sha256": "f44a12f97cd1aec938e87b62501bfb83dca2193af9cb1777e70b0e7ae543878b"
+  },
+  "residuals": [
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0001",
+        "args": [],
+        "beat": 0,
+        "command": "InitCommand",
+        "definition_id": "def-0001",
+        "detail": {
+          "name": "InitCommand"
+        },
+        "kind": "command",
+        "line": 17,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 1,
+        "source": "song:/./sorry.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "InitCommand",
+        "source": "song:/sorry.lua",
+        "line": 17,
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0001",
+        "args": [
+          2
+        ],
+        "beat": 0,
+        "caller": {
+          "line": 17,
+          "source": "song:/./sorry.lua",
+          "tail_call": false
+        },
+        "command": "InitCommand",
+        "definition_id": "def-0001",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 17,
+        "operation": "Actor.zoom",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 2,
+        "source": "song:/./sorry.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.zoom",
+        "source": "song:/sorry.lua",
+        "line": 17,
+        "phase": "callback",
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": [
+          2
+        ],
+        "results": [
+          {
+            "actor": "0x61a73037aed0",
+            "name": "Message",
+            "path": "ScreenGameplay/SongForeground/Message"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0001",
+        "args": [],
+        "beat": 0,
+        "caller": {
+          "line": 17,
+          "source": "song:/./sorry.lua",
+          "tail_call": false
+        },
+        "command": "InitCommand",
+        "definition_id": "def-0001",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 17,
+        "operation": "Actor.Center",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 3,
+        "source": "song:/./sorry.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.Center",
+        "source": "song:/sorry.lua",
+        "line": 17,
+        "phase": "callback",
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": [],
+        "results": [
+          {
+            "actor": "0x61a73037aed0",
+            "name": "Message",
+            "path": "ScreenGameplay/SongForeground/Message"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0001",
+        "args": [],
+        "beat": 0,
+        "command": "InitCommand",
+        "definition_id": "def-0001",
+        "detail": {
+          "name": "InitCommand"
+        },
+        "kind": "command",
+        "line": 17,
+        "operation": "command.end",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 5,
+        "source": "song:/./sorry.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.end",
+        "command": "InitCommand",
+        "source": "song:/sorry.lua",
+        "line": 17,
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0002",
+        "args": [],
+        "beat": 0,
+        "command": "InitCommand",
+        "definition_id": "def-0002",
+        "detail": {
+          "name": "InitCommand"
+        },
+        "kind": "command",
+        "line": 29,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 6,
+        "source": "song:/./sorry.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "InitCommand",
+        "source": "song:/sorry.lua",
+        "line": 29,
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0002",
+        "args": [
+          2.4024024024024024
+        ],
+        "beat": 0,
+        "caller": {
+          "line": 29,
+          "source": "song:/./sorry.lua",
+          "tail_call": false
+        },
+        "command": "InitCommand",
+        "definition_id": "def-0002",
+        "detail": {
+          "native_tween_time_left": 2.402402400970459
+        },
+        "kind": "call",
+        "line": 29,
+        "operation": "Actor.sleep",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 7,
+        "source": "song:/./sorry.lua",
+        "tween_time_left": 2.402402400970459
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.sleep",
+        "source": "song:/sorry.lua",
+        "line": 29,
+        "phase": "callback",
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": [
+          2.4024024024024024
+        ],
+        "tween_time_left": 2.402402400970459
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0002",
+        "args": [],
+        "beat": 0,
+        "command": "InitCommand",
+        "definition_id": "def-0002",
+        "detail": {
+          "name": "InitCommand"
+        },
+        "kind": "command",
+        "line": 29,
+        "operation": "command.end",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 8,
+        "source": "song:/./sorry.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.end",
+        "command": "InitCommand",
+        "source": "song:/sorry.lua",
+        "line": 29,
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0004",
+        "args": [],
+        "beat": 0,
+        "command": "InitCommand",
+        "definition_id": "def-0004",
+        "detail": {
+          "name": "InitCommand"
+        },
+        "kind": "command",
+        "line": 17,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 9,
+        "source": "song:/./sorry2.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "InitCommand",
+        "source": "song:/sorry2.lua",
+        "line": 17,
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0004",
+        "args": [
+          2
+        ],
+        "beat": 0,
+        "caller": {
+          "line": 17,
+          "source": "song:/./sorry2.lua",
+          "tail_call": false
+        },
+        "command": "InitCommand",
+        "definition_id": "def-0004",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 17,
+        "operation": "Actor.zoom",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 10,
+        "source": "song:/./sorry2.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.zoom",
+        "source": "song:/sorry2.lua",
+        "line": 17,
+        "phase": "callback",
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": [
+          2
+        ],
+        "results": [
+          {
+            "actor": "0x61a732478d90",
+            "name": "Message",
+            "path": "ScreenGameplay/SongForeground/Message"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0004",
+        "args": [],
+        "beat": 0,
+        "caller": {
+          "line": 17,
+          "source": "song:/./sorry2.lua",
+          "tail_call": false
+        },
+        "command": "InitCommand",
+        "definition_id": "def-0004",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 17,
+        "operation": "Actor.Center",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 11,
+        "source": "song:/./sorry2.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.Center",
+        "source": "song:/sorry2.lua",
+        "line": 17,
+        "phase": "callback",
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": [],
+        "results": [
+          {
+            "actor": "0x61a732478d90",
+            "name": "Message",
+            "path": "ScreenGameplay/SongForeground/Message"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0004",
+        "args": [],
+        "beat": 0,
+        "command": "InitCommand",
+        "definition_id": "def-0004",
+        "detail": {
+          "name": "InitCommand"
+        },
+        "kind": "command",
+        "line": 17,
+        "operation": "command.end",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 13,
+        "source": "song:/./sorry2.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.end",
+        "command": "InitCommand",
+        "source": "song:/sorry2.lua",
+        "line": 17,
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0005",
+        "args": [],
+        "beat": 0,
+        "command": "InitCommand",
+        "definition_id": "def-0005",
+        "detail": {
+          "name": "InitCommand"
+        },
+        "kind": "command",
+        "line": 29,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 14,
+        "source": "song:/./sorry2.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "InitCommand",
+        "source": "song:/sorry2.lua",
+        "line": 29,
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0005",
+        "args": [
+          2.4024024024024024
+        ],
+        "beat": 0,
+        "caller": {
+          "line": 29,
+          "source": "song:/./sorry2.lua",
+          "tail_call": false
+        },
+        "command": "InitCommand",
+        "definition_id": "def-0005",
+        "detail": {
+          "native_tween_time_left": 2.402402400970459
+        },
+        "kind": "call",
+        "line": 29,
+        "operation": "Actor.sleep",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 15,
+        "source": "song:/./sorry2.lua",
+        "tween_time_left": 2.402402400970459
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.sleep",
+        "source": "song:/sorry2.lua",
+        "line": 29,
+        "phase": "callback",
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": [
+          2.4024024024024024
+        ],
+        "tween_time_left": 2.402402400970459
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0005",
+        "args": [],
+        "beat": 0,
+        "command": "InitCommand",
+        "definition_id": "def-0005",
+        "detail": {
+          "name": "InitCommand"
+        },
+        "kind": "command",
+        "line": 29,
+        "operation": "command.end",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 16,
+        "source": "song:/./sorry2.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.end",
+        "command": "InitCommand",
+        "source": "song:/sorry2.lua",
+        "line": 29,
+        "beat": 0.0,
+        "seconds": 0.0,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0003",
+        "args": [],
+        "beat": 28.000102996826172,
+        "command": "OnCommand",
+        "definition_id": "def-0003",
+        "detail": {
+          "name": "OnCommand"
+        },
+        "kind": "command",
+        "line": 9,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": 16.833877563476562,
+        "seq": 17,
+        "source": "song:/./sorry.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "OnCommand",
+        "source": "song:/sorry.lua",
+        "line": 9,
+        "beat": 28.000102996826172,
+        "seconds": 16.833877563476562,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0003",
+        "args": [],
+        "beat": 28.000102996826172,
+        "command": "OnCommand",
+        "definition_id": "def-0003",
+        "detail": {
+          "name": "OnCommand"
+        },
+        "kind": "command",
+        "line": 9,
+        "operation": "command.end",
+        "scene": 1,
+        "seconds": 16.833877563476562,
+        "seq": 18,
+        "source": "song:/./sorry.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.end",
+        "command": "OnCommand",
+        "source": "song:/sorry.lua",
+        "line": 9,
+        "beat": 28.000102996826172,
+        "seconds": 16.833877563476562,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0006",
+        "args": [],
+        "beat": 32.000972747802734,
+        "command": "OnCommand",
+        "definition_id": "def-0006",
+        "detail": {
+          "name": "OnCommand"
+        },
+        "kind": "command",
+        "line": 9,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": 19.23680305480957,
+        "seq": 19,
+        "source": "song:/./sorry2.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "OnCommand",
+        "source": "song:/sorry2.lua",
+        "line": 9,
+        "beat": 32.000972747802734,
+        "seconds": 19.23680305480957,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0006",
+        "args": [],
+        "beat": 32.000972747802734,
+        "command": "OnCommand",
+        "definition_id": "def-0006",
+        "detail": {
+          "name": "OnCommand"
+        },
+        "kind": "command",
+        "line": 9,
+        "operation": "command.end",
+        "scene": 1,
+        "seconds": 19.23680305480957,
+        "seq": 20,
+        "source": "song:/./sorry2.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.end",
+        "command": "OnCommand",
+        "source": "song:/sorry2.lua",
+        "line": 9,
+        "beat": 32.000972747802734,
+        "seconds": 19.23680305480957,
+        "args": null
+      }
+    }
+  ],
+  "repair_attempts_spent": 1,
+  "repair_attempts_remaining": 1,
+  "diagnosis": "Only authored foreground chunk spelling remains different. Native uses song:/./sorry.lua and song:/./sorry2.lua; independent uses song:/sorry.lua and song:/sorry2.lua. All clocks, operations, line numbers and supplied arguments match in these 18 residual events.",
+  "primary_source": "Pinned Foreground.cpp concatenates SongDir and the raw foreground name when the directory default.lua does not exist, then passes that literal to MakeActor. The directory-only source override in compile.rs otherwise falls back to the normalized physical entry path.",
+  "required_fix": "Keep the raw requested foreground filename as the Lua chunk name as well as the directory default.lua spelling; read bytes from the existing resolved physical file. Preserve normal LoadActor path collapsing separately.",
+  "primary_source_sha256": "04655fe3db304e08f8d424ac6a928858b74182f74ba14ceb658b709324153847",
+  "before_fix_compile_sha256": "1110d3a86320d3d077599ccc08371471a532ae5486ee3191090388ee9235e865",
+  "diagnostic_only": true,
+  "acceptance_unchanged": true,
+  "passing_charts_reopened": false,
+  "comparisons_modified": false,
+  "report_bytes_modified": false
+}
