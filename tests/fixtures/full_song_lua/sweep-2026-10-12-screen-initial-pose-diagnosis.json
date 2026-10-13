@@ -1,5 +1,5 @@
 {
-  "status": "source fix committed; Windows controls passed; Linux validation and first Flowers repair queued",
+  "status": "source fix validated on Windows and Linux; first Flowers repair bound to immutable helper",
   "actual_failing_sources": [
     "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
     "Flowers [Cringle Desolation]/Flowers.ssc"
@@ -135,5 +135,14 @@
     "passed": 30,
     "failed": 0
   },
-  "build_proof": "/home/parity/jobs/screen-initial-pose-build-v1/proof.json"
+  "build_proof": "/home/parity/jobs/screen-initial-pose-build-v1/proof.json",
+  "binary_sha256": "668d1aa95b614dec4d2e3d598e68d2d0be065a583bdd856fbbc19232bf3682c3",
+  "linux_live_controls": {
+    "passed": 30,
+    "failed": 0
+  },
+  "linux_replay_controls": {
+    "passed": 18,
+    "failed": 0
+  }
 }
