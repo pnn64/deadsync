@@ -3774,17 +3774,14 @@
       ]
     },
     {
-      "title": "MAX 300",
+      "title": "MAX 300 (BlaZe MIX)",
       "source_simfile": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc",
-      "harness_version": "0.1.0",
-      "archive": "ebf9644db80ec47e8dc40ac42c6eeba9b27d9de80da4380be783c15a97a3a0f4.tar.zst",
-      "sha256": "ebf9644db80ec47e8dc40ac42c6eeba9b27d9de80da4380be783c15a97a3a0f4",
-      "compressed_bytes": 42927,
-      "uncompressed_sha256": "c8ed171af0d4a24e4ae57bbb3aa1d766c3ea3cdedd110f0497380e5aab392dfe",
-      "compression_level": 22,
-      "aliases": [
-        "3a48207faa9424a509c4bad8e8fe4f9db8e0822d807f6ae6941e25b4b946d886.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "a9387070a544652edf75948d85b482a0a6f00381ec959f00b10110cc7c7d80ec.tar.zst",
+      "sha256": "a9387070a544652edf75948d85b482a0a6f00381ec959f00b10110cc7c7d80ec",
+      "compressed_bytes": 2708185,
+      "uncompressed_sha256": "b0add8db6ca7f8c6988d2037c193335e899a12b0e4719cd38cece20154c2e950",
+      "aliases": []
     },
     {
       "title": "MAX 300",
