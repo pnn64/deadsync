@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T07:13:36Z",
+  "updated_utc": "2026-10-13T07:16:09Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 188,
+    "passed": 189,
     "pending": 55,
-    "unprocessed": 258
+    "unprocessed": 257
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2249,7 +2249,9 @@
       "position": 266,
       "source_simfile": "Karachi/Jorts - Karachi.ssc",
       "simfile_sha256": "ac9bf1049c1ab311cb95a1fa1b86606f23c46ebe26972e65f9bdf0ee124b7650",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 267,

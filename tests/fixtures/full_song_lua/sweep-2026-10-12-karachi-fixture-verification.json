@@ -1,0 +1,24 @@
+{
+  "source_simfile": "Karachi/Jorts - Karachi.ssc",
+  "position": 266,
+  "acceptance_commit": "075202309",
+  "native_frames": 32245,
+  "replayed_frames": 32245,
+  "compared_stage_fields": 1474,
+  "mismatches": 0,
+  "callback_errors": 0,
+  "binary_sha256": "7f64d791484688206a4eeaf9f264d48cf0de71ac73780fc40226f1f74bb473e8",
+  "build_proof": "/home/parity/jobs/startup-provenance-build-v3/proof.json",
+  "archive": "05c2b66a59e1287df8fcb20f506f2458874ff4ea1160f49d54394dddec62b24a.tar.zst",
+  "compressed_sha256": "05c2b66a59e1287df8fcb20f506f2458874ff4ea1160f49d54394dddec62b24a",
+  "uncompressed_sha256": "1ecc3eb73f0d8bfdb3932b5a6438fd3d734545d3b686a33b66bfd52c67ec1c78",
+  "compressed_bytes": 8113289,
+  "local_decompression_byte_verified": true,
+  "native_capture_reused": true,
+  "separate_coverage": [
+    "uncompared song operations: Actor.zoomy, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Roll, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave"
+  ],
+  "acceptance_gate_added": false,
+  "passing_chart_reopened": false,
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons."
+}
