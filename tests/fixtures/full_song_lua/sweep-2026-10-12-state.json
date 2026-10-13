@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T04:14:32Z",
-  "previous_goal_turn": "progress: FTW SSC first repair passed all 51154 frames and 1573 stage checks with zero errors or mismatches using its retained uncompressed capture; the compressed fixture was decompressed and byte-verified before immediate publication as 1918f8e67. Modern SSC DESCRIPTION lost authored NBSP through RSSP Unicode trimming; native ASCII-only trimming is preserved in b29bff67c and cache version 65. Synchronous gameplay tap callbacks now invoke the same retained Lua VM before the ghost with native column/enum return conversions and bright policy, committed as 9e0511014. Simply Love player margins now reproduce native SafeFArg integer truncation, committed as 8f91878dc, yielding P1 213.25 and P2 640.75 at logical width 854. The corrected production foreground-clock callback control is committed as 5e84abcd4. The seven-check immutable helper 56c7f5ad passed Windows and Linux controls and was selected; Flowers Cringle final attempt 2 is running from the same candidate after its first repair removed all 160357 extra style queries but left 3584 missing calls and 0.25 player-position differences. Feely early failed at 121.01800537109375 was traced to its unselected playable double fake row ending at beat 312 while selected single ends at 311: native adds the late-resolution window after whole Song.GetLastSecond; gameplay previously applied it only to selected rows and LASTSECONDHINT. Fix 43dae3f20 now seeds initial, rate-change and offset-refresh bounds with the independently parsed whole-song end; all 815 gameplay tests and 20 native replay controls pass on Windows and Linux. Failed validation revisions and the Windows disk-space failure are retained; NTFS build-artifact compression recovered space without deleting evidence. Immutable helper 261394c0 is verified and selected for future charts. Feely final attempt 2 is running from the byte-identical case-corrected candidate with the unchanged native trace. A later-edit summary fallback found in an expanded synthetic control is recorded separately as coverage and did not add an acceptance gate or reopen passing fixtures. I Like To Move It and Jack The Reaper passed and were immediately saved as 08fee2846 and c839658de; the original three fixed disjoint queues and single dynamic publisher remain active. All 501 original source bytes are unchanged; the sweep is incomplete.",
+  "updated_utc": "2026-10-13T04:52:14Z",
+  "previous_goal_turn": "progress: Feely final attempt 2 passed all 7084 frames and 1408 stage checks with zero errors or mismatches. Its compressed fixture was decompressed, byte-verified and immediately committed as de1ea067f. Flowers Cringle final attempt 2 completed all 18924 frames with zero Lua errors and 128831 command/query mismatches, reaching its two-attempt cap; the first remaining difference is Lua reconstruction phase at beat 17. Player SetLife shared meter/stats state, synchronous LifeChanged, clamping, recursion rejection, stage FailPlayer propagation and post-actor health update are committed as 6470fdd9d. Windows and Linux passed 815 gameplay tests, 33 live Lua checks and 20 native replay controls; the immutable player-life helper pins all 21 source files. Ghost first repair reuses its byte-identical uncompressed native capture. GREAT GREAT has a separate source-confirmed missing engine JudgmentMessage dispatch before row scoring; no repair replay was spent before implementing that dispatch. The three original queues continue with the single publisher; no passing chart is reopened, no acceptance gate added, and this remains an incomplete 501-source sweep.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "edc6075a6a3cb9f90526c48c32ec4941be7ce050",
+      "deadsync": "16341ff5cf934b0567ad97ad0d7017fd747d2091",
       "itgmania_harness": "b191ebd0fcf8b59b5294958d2ffe2939af2d742a"
     }
   },
@@ -40,9 +40,10 @@
     "rage_sound_volume": "355263c7e passed 29 Windows and Linux live tests plus 18 Linux replay controls; DREAMING final attempt 2 completed all 32257 frames with no Lua errors and one failed-flag mismatch, reaching its two-attempt cap; live audio mixing coverage stays separate; sweep-2026-10-12-sound-volume-build.json",
     "screen_initial_positions": "58fcc8043 passed 30 Windows and Linux live tests plus 18 Linux replay controls; getters and authored tween origins use independent initial positions; Flowers Cringle attempt 1 completed all 18924 frames with no Lua errors; style queries corrected but 3584 calls remain missing and the first position is off by 0.25; sweep-2026-10-12-screen-initial-pose-build.json",
     "native_sm_metadata": "a45545f0a passed 17 Windows and Linux parser tests, one cache rejection control and 18 Linux replay controls; FTW attempt 1 passed all 55351 frames and 1562 fields, saved as 7bf2b1006; sweep-2026-10-12-sm-metadata-build.json",
-    "requested_foreground_source": "63e17ffe7 passed 31 Windows and Linux live tests and 18 Linux replay controls; retained failed validation revision was corrected before selection; helper 6337f9ca source revision verified; Feely final 2 now running after validated callback and whole-song end fixes; sweep-2026-10-12-foreground-source-build.json",
-    "tap_callbacks_margins_and_ssc": "9e0511014, 8f91878dc, b29bff67c and foreground control 5e84abcd4 passed the seven-check Windows/Linux validation; immutable helper 56c7f5ad; FTW SSC passed as 1918f8e67 and Flowers final 2 is running; sweep-2026-10-12-tap-callback-and-margins-build.json",
-    "whole_song_end_window": "43dae3f20 passed all 815 gameplay tests and 20 native replay controls on Windows and Linux; immutable helper 261394c0 selected; Feely final 2 reuses unchanged native capture; sweep-2026-10-12-whole-song-end-build.json",
+    "requested_foreground_source": "63e17ffe7 passed 31 Windows/Linux live tests and 18 Linux controls; Feely final 2 now passed with validated callbacks and whole-song end as de1ea067f; sweep-2026-10-12-foreground-source-build.json",
+    "tap_callbacks_margins_and_ssc": "9e0511014, 8f91878dc, b29bff67c and 5e84abcd4 passed seven-check Windows/Linux validation; FTW SSC passed as 1918f8e67; Flowers final 2 completed with remaining reconstruction-phase command mismatches at its cap; sweep-2026-10-12-tap-callback-and-margins-build.json",
+    "whole_song_end_window": "43dae3f20 passed 815 gameplay tests and 20 controls on Windows/Linux; Feely final 2 passed all 7084 frames using its unchanged native capture; sweep-2026-10-12-whole-song-end-build.json",
+    "player_life_writes": "6470fdd9d passed 815 gameplay, 33 live and 20 native controls on Windows/Linux; Ghost first retained-capture repair launched; GREAT GREAT still needs engine judgment dispatch; sweep-2026-10-12-player-life-build.json",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved"
   },
   "corpus_transfer": {
@@ -59,13 +60,17 @@
       "status": "running",
       "current": "Jumper/Jumper.ssc",
       "position": 260,
-      "phase": "capture",
-      "pid": 1735580,
+      "phase": "replay",
+      "pid": 1749562,
       "process_matches": true,
       "passed": 13,
       "pending": 36,
       "processed": 49,
-      "last_log_lines": [],
+      "last_log_lines": [
+        "[2120.6s] replaying every native gameplay frame: frame 36253/169429 (21.4%)",
+        "[2122.6s] replaying every native gameplay frame: frame 36297/169429 (21.4%)",
+        "[2124.6s] replaying every native gameplay frame: frame 36339/169429 (21.4%)"
+      ],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -90,15 +95,26 @@
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
       {
-        "job": "flowers-cringle-tap-and-margins-repair-v1",
+        "job": "ghost-player-life-repair-v1",
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
         "pending": 0,
         "processed": 0,
         "last_phase": "replay",
-        "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
+        "source_simfile": "ghost [Telperion]/ghost.ssc",
         "child_running": true
+      },
+      {
+        "job": "flowers-cringle-tap-and-margins-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 0,
+        "pending": 1,
+        "processed": 1,
+        "last_phase": "replay",
+        "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
+        "child_running": false
       },
       {
         "job": "ftw-ssc-description-repair-v1",
@@ -113,14 +129,14 @@
       },
       {
         "job": "feely-final-song-end-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "ftw-metadata-repair-v1",
@@ -623,12 +639,19 @@
         "record": "sweep-2026-10-12-feely-final-song-end-repairs.json",
         "fix_commit": "43dae3f20 + 63e17ffe7 + 9e0511014 + 8f91878dc / harness b191ebd",
         "finish_status": "bounded feelyourtouch final source callback and whole-song end repair complete"
+      },
+      {
+        "name": "ghost-player-life-repair",
+        "remote": "/home/parity/jobs/ghost-player-life-repair-v1",
+        "record": "sweep-2026-10-12-ghost-player-life-repairs.json",
+        "fix_commit": "6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+        "finish_status": "bounded Ghost shared player life first repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 38,
-    "new_pending_charts": 55,
+    "new_passed_fixtures": 39,
+    "new_pending_charts": 54,
     "new_processed_sources": 93,
     "charts_in_remaining_queue": 353,
     "unprocessed_sources": 260,
@@ -888,32 +911,16 @@
       "first_mismatch": []
     },
     {
-      "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
-      "repair_attempts": 1,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 412569,
-      "first_mismatch": [
-        {
-          "phase": "progress",
-          "seconds": 121.01800537109375,
-          "field": "failed",
-          "native": false,
-          "deadsync": true
-        }
-      ]
-    },
-    {
       "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
-      "repair_attempts": 1,
+      "repair_attempts": 2,
       "failure": null,
       "errors": [],
-      "mismatch_count": 572027,
+      "mismatch_count": 128831,
       "first_mismatch": [
         {
           "field": "command_query_count",
           "native": 608498,
-          "deadsync": 604914
+          "deadsync": 605974
         }
       ]
     },

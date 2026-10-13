@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T04:14:31Z",
+  "updated_utc": "2026-10-13T04:48:43Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,8 +13,8 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 185,
-    "pending": 56,
+    "passed": 186,
+    "pending": 55,
     "unprocessed": 260
   },
   "complete": false,
@@ -1645,9 +1645,9 @@
       "position": 185,
       "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
       "simfile_sha256": "66db5c1884fb2b633bfd26de2f32825a27f7fd9e8e08a0ae89d1ec4f27b8d645",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-12-feely-case-lua-repairs.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-12-feely-final-song-end-repairs.json"
     },
     {
       "position": 186,
@@ -1694,8 +1694,8 @@
       "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
       "simfile_sha256": "77d2aa0a0c7531d3ba01d77c5f9e37f9e24feaf7076b0b0781bff019702a6ddc",
       "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-12-flowers-cringle-pose-repairs.json"
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-12-flowers-cringle-tap-and-margins-repairs.json"
     },
     {
       "position": 192,
