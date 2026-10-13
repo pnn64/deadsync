@@ -1,0 +1,252 @@
+{
+  "status": "validated single-subscriber dispatch fix; chart repairs not yet launched",
+  "source_fix_commit": "402a3854bf58c4b4dd460c4098fa0baf8a927885",
+  "source_diagnoses": [
+    "sweep-2026-10-13-wargame-subscriber-diagnosis.json",
+    "sweep-2026-10-13-media-offline-subscriber-diagnosis.json"
+  ],
+  "prior_validated_build": "sweep-2026-10-13-foreground-row-build.json",
+  "binary_sha256": "49482e042c5a60991fd859ab5d1ee6b5eeb64b6511ea2320dcb850abc06f1f78",
+  "binary_path": "/home/parity/jobs/subscriber-single-green-v1/full-song-lua-stage-modifier-v1",
+  "linux_checks": [
+    {
+      "label": "sole-subscriber-control",
+      "exit_code": 0,
+      "seconds": 251.94798039400484,
+      "log_sha256": "be64f9a34ffe6bcd73f379cf951ced88319f94feeae876bbec8a27d8a18b5012",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 580 filtered out; finished in 0.38s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 41.08780976998969,
+      "log_sha256": "7d43e49dc2a68d2a67400952d67fc4a4028f93e0d0696b1085fa6c23935d3c38",
+      "results": [
+        "test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 533 filtered out; finished in 40.08s"
+      ]
+    },
+    {
+      "label": "captured-order-control",
+      "exit_code": 0,
+      "seconds": 1.5938233209890313,
+      "log_sha256": "01dd12449f38fc1f3fbe9da2ae3b9bf6faeee35bcf57d9611dd0b7d1043b80d7",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 580 filtered out; finished in 0.57s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 283.6900471409899,
+      "log_sha256": "87ce9e8484e60ffc6cd5a8aad1495c102b47217c27ee01c0209b83b7326a9f60",
+      "results": [
+        "test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.52s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 52.786670476984,
+      "log_sha256": "117d67f548d99b31ba8149febda7f2c87603e4453e748f69e2cbca47e7115d9a",
+      "results": []
+    }
+  ],
+  "windows_checks": [
+    {
+      "label": "sole-subscriber-control",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "subscriber-single-green-v1-windows-sole-subscriber-control-v1.log",
+      "sha256": "f7015afac4ad6dbb0d479fb00ee25eb8d49978359849addba2d2a56b2973da51",
+      "seconds": 506.4373657000251
+    },
+    {
+      "label": "live-controls",
+      "passed": 48,
+      "exit_code": 0,
+      "log": "subscriber-single-green-v1-windows-live-controls-v1.log",
+      "sha256": "b7561d29d103912730743fad3c244d4499e812424a7c350468436317f693cd4d",
+      "seconds": 32.921466699801385
+    },
+    {
+      "label": "captured-order-control",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "subscriber-single-green-v1-windows-captured-order-control-v1.log",
+      "sha256": "17d2e9ea9e43ac510d9dc9857579864af04003a284b89d99f34b76b21e7f52c2",
+      "seconds": 2.441005799919367
+    },
+    {
+      "label": "replay-controls",
+      "passed": 25,
+      "exit_code": 0,
+      "log": "subscriber-single-green-v1-windows-replay-controls-v1.log",
+      "sha256": "3e2f01e96b2f476242346e3756426624c58f8c5e19e421f5d9b5a466b57fdb51",
+      "seconds": 246.16090739984065
+    },
+    {
+      "label": "build",
+      "passed": null,
+      "exit_code": 0,
+      "log": "subscriber-single-green-v1-windows-build-v1.log",
+      "sha256": "dfb9f3dc9a85ccffd64a226fe449b6bcdfeefb6470e5c35253477fbd93ee41d1",
+      "seconds": 17.93209289992228
+    }
+  ],
+  "meaningful_red_controls": {
+    "linux": [
+      {
+        "label": "sole-subscriber",
+        "exit_code": 101,
+        "expected_failure": true,
+        "log_sha256": "677d8b3e4a149576e906faabebb888e191bdb95c678dec7d4b0eee5a7340f019",
+        "seconds": 222.53127092099749
+      }
+    ],
+    "windows": [
+      {
+        "label": "sole-subscriber",
+        "exit_code": 101,
+        "expected_failure": true,
+        "log": "subscriber-single-red-v2-windows-sole-subscriber-v1.log",
+        "log_sha256": "68ba7f9393763b9824c4f66669fb0232d0dca308b54586708a06e9ff55a5ec2f",
+        "seconds": 651.6833323999308
+      }
+    ]
+  },
+  "excluded_compile_only_controls": {
+    "reason": "The initial control did not enable test-support and could not compile message_actor_order. No behavioral test or full chart repair ran. The test body is unchanged; v2 gates it and enables test-support on both hosts.",
+    "linux_log_sha256": "77d76b416febbf663c1b9c13e223cf728ad18424096361badbac4035f47d8188",
+    "windows_log_sha256": "f2a4f24bcd26c729899e8b1a8589b30578030d39d002016cd650631f0e2a20b5"
+  },
+  "isolated_control_edits": {
+    "crates/deadsync-song-lua/src/live.rs": [
+      [
+        "\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn live_foreground_start_time_uses_native_note_row() {\n        let mut compiled = compile_with_context(\"foreground-rounded-start\", r#\"\n",
+        "\n#[cfg(test)]\nmod tests {\n    #[cfg(feature = \"test-support\")]\n    #[test]\n    fn live_single_judgment_subscriber_needs_no_captured_sort_rank() {\n        let mut compiled = compile_with_context(\"sole-native-judgment-subscriber\",\n            \"return Def.Actor{}\", |context| {\n                context.defer_initial_live_update = true;\n                context.message_actor_order = vec![(\"1\".into(), 10)];\n            });\n        let mut scene = compiled.live_scene.take().expect(\"retained theme observer\");\n        let mut frame = SongLuaLiveFrame {\n            music_seconds: 60.0, screen_seconds: 60.0, beat: 120.0,\n            delta_seconds: 0.01, ..Default::default()\n        };\n        frame.players[0].life = 0.5;\n        frame.players[0].autoplay = true;\n        frame.players[0].fail_enabled = true;\n        let output = scene.advance(frame).expect(\"owned gameplay frame\");\n        assert!(output.errors.is_empty(), \"{:?}\", output.errors);\n        let subscribers = crate::song_lua_actor_registry(&scene.lua).unwrap()\n            .sequence_values::<Table>().filter(|actor|\n                matches!(actor.as_ref().unwrap().raw_get::<Value>(\"JudgmentMessageCommand\").unwrap(), Value::Function(_)))\n            .count();\n        assert_eq!(subscribers, 1, \"only the owned FailOnHoldStart listener subscribes\");\n        let params = scene.lua.create_table().unwrap();\n        params.raw_set(\"Player\", \"PlayerNumber_P1\").unwrap();\n        let result = crate::lua_util::broadcast_native_song_lua_message(\n            &scene.lua, \"Judgment\", Some(Value::Table(params)));\n        assert!(result.is_ok(),\n            \"a lone native Judgment subscriber is dispatched without a sort rank: {result:?}\");\n        scene.lua.load(\"SCREENMAN:GetTopScreen():GetChild('Overlay'):playcommand('Off')\")\n            .exec().expect(\"owned overlay Off\");\n        assert_eq!(take_output(&scene.lua).unwrap().player_writes,\n            vec![SongLuaLivePlayerWrite::Fail { player: 0 }],\n            \"the real Judgment latch fails autoplay during overlay Off\");\n\n        let mut compiled = compile_with_context(\"multiple-captured-subscribers\", r#\"\nCALLS = 0\nreturn Def.ActorFrame {\n    ProbeMessageCommand = function() CALLS = CALLS + 1 end,\n    Def.Actor {ProbeMessageCommand = function() CALLS = CALLS + 1 end},\n}\n\"#, |context| {\n            context.defer_initial_live_update = true;\n            context.message_actor_order = vec![(\"1\".into(), 10)];\n        });\n        let scene = compiled.live_scene.take().unwrap();\n        let result = crate::lua_util::broadcast_native_song_lua_message(&scene.lua, \"Probe\", None);\n        assert!(result.unwrap_err().to_string().contains(\"missing captured subscriber identity\"),\n            \"multiple subscribers still require every captured ordering identity\");\n        assert_eq!(scene.lua.globals().get::<u32>(\"CALLS\").unwrap(), 0,\n            \"missing ordering information must be reported before either callback\");\n    }\n\n    #[test]\n    fn live_foreground_start_time_uses_native_note_row() {\n        let mut compiled = compile_with_context(\"foreground-rounded-start\", r#\"\n"
+      ]
+    ]
+  },
+  "isolated_production_edits": {
+    "crates/deadsync-song-lua/src/lua_util.rs": [
+      [
+        "            if !matches!(actor.get::<Value>(command.as_str())?, Value::Function(_)) {\n                continue;\n            }\n            actors.push((message_actor_identity(lua, &actor)?, actor));\n        }\n        // MessageManager.cpp stores subscribers in an identity-ordered set.\n        // Tree construction and definition-table order do not define delivery.\n        actors.sort_unstable_by_key(|(identity, _)| *identity);\n        let params = if normalize { normalize_broadcast_params(lua, message, params)? } else { params };\n        // Drain in place so consuming the snapshot does not move its inline buffer.\n",
+        "            if !matches!(actor.get::<Value>(command.as_str())?, Value::Function(_)) {\n                continue;\n            }\n            actors.push((0, actor));\n        }\n        // MessageManager.cpp stores subscribers in an identity-ordered set.\n        // Tree construction and definition-table order do not define delivery.\n        // A set with one subscriber has only one delivery order, so its rank\n        // cannot affect dispatch. Multiple subscribers still need every rank\n        // before running any callback.\n        if actors.len() > 1 {\n            for (identity, actor) in &mut actors {\n                *identity = message_actor_identity(lua, actor)?;\n            }\n        }\n        actors.sort_unstable_by_key(|(identity, _)| *identity);\n        let params = if normalize { normalize_broadcast_params(lua, message, params)? } else { params };\n        // Drain in place so consuming the snapshot does not move its inline buffer.\n"
+      ]
+    ]
+  },
+  "control_unchanged_from_meaningful_red": true,
+  "multiple_subscribers_still_require_every_identity_before_any_callback": true,
+  "frozen_source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "9ce955f9e2eb4e15cbac37a9bb3c70c1ed7196ffee1b8d31f077043263e1f421",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "b3b021737261adaaa280c222cc1e4156a1c1ed1b173a0962bbab9f4e834da395",
+    "crates/deadsync-song-lua/src/live.rs": "5b23277f845b1afeda3945a62b9a4b61eed22b30f46927c8f9faa4960650645c",
+    "crates/deadsync-song-lua/src/song_tables.rs": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182",
+    "crates/deadsync-song-lua/src/lua_util.rs": "7f4791580aa7e7851d2f5d7cb407f236a7fb4f143d050b717d535dde31bd5db9",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "090ee7ef08a554972b5bba9fb72d2bb51d065cd5e324427a9a256e417735c10d",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "ad214e4cd9f8bd32529f8b69391f5ed6bde49295c71bc80bf8bd630217f79a04",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "6a52092c53d4441b96c609aafc3fdc315fb6d8988ae04d0c3133d5e243651673",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "642ff0d5ed5f9365bdc1c9c54c2353bf293c21b813fdd967bb8511fe52c256bd",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "aacfd41959a6c1795ffd9a3854c25f161dde783d0e40dee8dc1aec5368b06470",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "3d4e4ec033727d60449713937a5dc2506b3d3402d6570f4033a0a3be75e85722",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+    "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+    "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+    "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+    "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+    "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+  },
+  "windows_root_source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "848206cee042fff73bf80da62f9c287a538c3f805dd2b790367766050fecc1a2",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "48c2ea7a0c031cb5c4b5cfd72e0e0bcb5ef5c62884916c4883866e74fcdd2a70",
+    "crates/deadsync-song-lua/src/live.rs": "bdde88d10145adc281a459e86207b2870e90729422d396e6d8c6bf4343bcb143",
+    "crates/deadsync-song-lua/src/song_tables.rs": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182",
+    "crates/deadsync-song-lua/src/lua_util.rs": "7f4791580aa7e7851d2f5d7cb407f236a7fb4f143d050b717d535dde31bd5db9",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "090ee7ef08a554972b5bba9fb72d2bb51d065cd5e324427a9a256e417735c10d",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "ad214e4cd9f8bd32529f8b69391f5ed6bde49295c71bc80bf8bd630217f79a04",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "61ec0b8c848d0ef4a78ebe4e3d19dc9e316e0cd900c1464e5dd2f79904b4dbb2",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "642ff0d5ed5f9365bdc1c9c54c2353bf293c21b813fdd967bb8511fe52c256bd",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "aacfd41959a6c1795ffd9a3854c25f161dde783d0e40dee8dc1aec5368b06470",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "3d4e4ec033727d60449713937a5dc2506b3d3402d6570f4033a0a3be75e85722",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+    "crates/deadsync-song-lua/src/lib.rs": "e12f0d745ce2d257d4c621c7200659371f7706ffd23eed27b416c3bd9a87e65c",
+    "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+    "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+    "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+    "crates/deadsync-song-lua/src/draw_capture.rs": "9dd81bb6c6f5ae211d7243cba5d070570abf279a0b7c0f9121b689091c2d8594"
+  },
+  "source_bundle_sha256": "c5bfff1d94dc90c8b8d48ef47f8bd64378e89704d17a211e6295aff5add29ef2",
+  "native_harness": {
+    "source_sha256": {
+      "src/song_lua_archive.rs": "97cf09add0cec5b48e007a6ac50a46ae423bf684c661f52754f6d5b35086f603",
+      "src/song_lua_oracle.rs": "e0a18b177b501a8bc7feafe0540a929abcc8dbbc66e35c2d7cdd14725a0c282c",
+      "probe_theme/SongLuaTrace.lua": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f"
+    },
+    "checks": [
+      {
+        "label": "oracle-path-tests",
+        "exit_code": 0,
+        "seconds": 26.568072756999754,
+        "results": [
+          "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 199 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "label": "archive-tests",
+        "exit_code": 0,
+        "seconds": 0.8939706840028521,
+        "results": [
+          "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 0.65s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "label": "build",
+        "exit_code": 0,
+        "seconds": 0.18723358200804796,
+        "results": []
+      }
+    ],
+    "binary": "/home/parity/jobs/listed-lua-schema-build-v1/harness",
+    "binary_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "fix_commit": "c283a8a",
+    "native_capture_instrumentation": "Unchanged from byte-verified case-lua-archive-build-v1; only Rust archive collection changed",
+    "acceptance": "Unchanged full-song replay and pack comparisons"
+  },
+  "selection_before": {
+    "build_proof": "/home/parity/jobs/foreground-row-green-v1/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "validation_scope": "Message dispatch changes only single-subscriber ordering lookup. Validate the unchanged single-subscriber control, existing captured pointer ordering control, all live controls, native owned replay controls and both executable builds. Gameplay source remains unchanged from the validated Koi build.",
+  "chart_repair_attempts_spent": 0,
+  "comparisons_modified": false,
+  "passing_chart_reopened": false
+}
