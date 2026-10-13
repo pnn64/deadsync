@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Lip-Sync [Gpop]/Lip-Sync.ssc",
+      "acceptance_commit": "23f3467f349edc926698cc23b7c35a29a358af99",
+      "native_frames": 88261,
+      "replayed_frames": 88261,
+      "compared_stage_fields": 1518,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "c1be008f5949bd1bd0d9648c674e587a666eab9bf954cb3c42bf15d98997531b.tar.zst",
+      "compressed_sha256": "c1be008f5949bd1bd0d9648c674e587a666eab9bf954cb3c42bf15d98997531b",
+      "uncompressed_sha256": "60a52fea52e1e79fadff9a0ef70e4725b6f9a4d6b89efdcbf2f318a40115726c",
+      "compressed_bytes": 6314201,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: PlayerOptions.Beat, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Stealth, PlayerOptions.Tipsy"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
