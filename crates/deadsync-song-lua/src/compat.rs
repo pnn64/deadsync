@@ -402,6 +402,34 @@ pub fn install_stdlib_compat(
     // _fallback/Scripts/02 Utilities.lua: preserve actor and shared-name walks.
     lua.load(
         r#"
+-- Allocated native actors are userdata. Their independent handles use tables,
+-- so this debug walk must not traverse the owned actor's internal cycles.
+local function rec_print_type(value)
+    local kind = type(value)
+    if kind == "table" and rawget(value, "__songlua_def_owned") == true then
+        return "userdata"
+    end
+    return kind
+end
+function rec_print_table(t, indent, depth_remaining)
+    if not indent then indent = "" end
+    if rec_print_type(t) ~= "table" then
+        Trace(indent .. "rec_print_table passed a " .. rec_print_type(t))
+        return
+    end
+    depth_remaining = depth_remaining or -1
+    if depth_remaining == 0 then return end
+    for k, v in pairs(t) do
+        if rec_print_type(v) == "table" then
+            Trace(indent .. k .. ": table")
+            rec_print_table(v, indent .. "  ", depth_remaining - 1)
+        else
+            Trace(indent .. "(" .. rec_print_type(k) .. ")" .. k .. ": " ..
+                "(" .. rec_print_type(v) .. ")" .. tostring(v))
+        end
+    end
+    Trace(indent .. "end")
+end
 function rec_print_children(parent, indent)
     indent = indent or ""
     if #parent > 0 and type(parent) == "table" then

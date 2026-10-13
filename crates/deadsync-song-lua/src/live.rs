@@ -1654,6 +1654,61 @@ end }
     }
 
     #[test]
+    fn live_rec_print_table_handles_owned_actor_values_and_depth() {
+        let mut compiled = compile_with_context("recursive-debug-table", r#"
+return Def.ActorFrame {
+    OnCommand = function(self)
+        rec_print_table(nil, 'outer>')
+        local cycle = {}; cycle.child = cycle
+        rec_print_table(cycle, nil, 0)
+        rec_print_table({child={leaf=4}}, '>', 1)
+        rec_print_table({child={leaf=4}}, '>', 2)
+        rec_print_table({enabled=false})
+        local fish = self:GetChild('Fish')
+        rec_print_table(fish, 'fish>')
+        rec_print_table({item=fish}, 'nested>', 1)
+        self:queuecommand('AfterDebug')
+    end,
+    AfterDebugCommand = function(self) self:aux(19) end,
+    Def.Actor { Name='Fish', InitCommand=function(self)
+        self.loop = self
+        self.parent = self:GetParent()
+    end },
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.layer_start_beats = vec![0.0];
+        });
+        let mut scene = compiled.live_scene.take().expect("owned debug scene");
+        let messages = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let traced = messages.clone();
+        scene.lua.globals().set("Trace", scene.lua.create_function(move |_, message: String| {
+            traced.lock().unwrap().push(message);
+            Ok(())
+        }).expect("trace observer")).expect("observe fallback debug output");
+        for seconds in [0.1, 0.2] {
+            let output = scene.advance(SongLuaLiveFrame {
+                music_seconds: seconds, beat: seconds, screen_seconds: seconds, delta_seconds: 0.1,
+                ..Default::default()
+            }).expect("debug callback frame");
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+        }
+        assert!(scene.states().iter().any(|state| state.aux == 19.0),
+            "the command after the debug helper runs");
+        let messages = messages.lock().unwrap();
+        assert_eq!(&messages[..10], [
+            "outer>rec_print_table passed a nil", ">child: table", ">end",
+            ">child: table", ">  (string)leaf: (number)4", ">  end", ">end",
+            "(string)enabled: (boolean)false", "end",
+            "fish>rec_print_table passed a userdata",
+        ]);
+        assert!(messages[10].starts_with("nested>(string)item: (userdata)Actor"),
+            "{:?}", messages);
+        assert_eq!(messages[11], "nested>end");
+        assert_eq!(messages.len(), 12);
+    }
+
+    #[test]
     fn live_foreground_directory_uses_requested_default_chunk_name() {
         let dir = std::env::temp_dir().join(format!("deadsync-live-directory-source-{}", std::process::id()));
         let folder = dir.join("directory");
