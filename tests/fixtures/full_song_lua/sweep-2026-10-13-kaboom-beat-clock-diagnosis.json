@@ -1,0 +1,83 @@
+{
+  "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+  "candidate_sha256": "70d46f8a7297fb5e58d7d19783915d6bb2f9210774da9a8d6f3d1423afd6b419",
+  "native_trace_sha256": "cd1b99822ffab060d4148dd3a492b6b606bebc622a7a1a3c97c00763f8167ce0",
+  "report_sha256": "1aea9fc62743f9c8cc755993687897535e01eefa45125e9290b44e10d8c1369c",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "repair_attempts_spent": 0,
+  "repair_attempts_remaining": 2,
+  "diagnostic_only": true,
+  "retained_uncompressed_report_and_trace_bytes_verified": true,
+  "native_modifier_destination_change": {
+    "seq": 565837,
+    "operation": "PlayerState.SetPlayerOptions",
+    "actor": "player-state:PlayerNumber_P1",
+    "source": "song:/lua/default.lua",
+    "line": 1185,
+    "caller": {
+      "line": 1032,
+      "source": "song:/lua/default.lua",
+      "tail_call": false
+    },
+    "phase": "callback",
+    "args": [
+      "ModsLevel_Song",
+      "NoHideLights, 200% Beat, PlayerAutoPlay, Overhead, *1 no Beat, no Bumpy"
+    ],
+    "detail": {
+      "results": []
+    },
+    "seconds": 69.96099853515625,
+    "beat": 228.00332641601562
+  },
+  "native_source_cause": "ModsGroup.Update overrides its input delta with its own RageTimer.GetDeltaTime. PlayerState updates this Current-to-Song approach before Screen actor callbacks. ArrowEffects.Update caches Beat after those callbacks. A callback changing the Song destination begins approaching at the next GameState update.",
+  "rejected_hypothesis": "The cached previous-frame Beat factor, current captured Y plus the default reverse shift, and Current Beat approached using the Actor frame delta are insufficient to reproduce every observed X argument.",
+  "rejected_prediction_exact_matches": 97,
+  "rejected_prediction_total": 168,
+  "rejected_examples": [
+    {
+      "seq": 554198,
+      "beat": 224.07296752929688,
+      "frame_sequence": 7701,
+      "previous_beat": 224.0076141357422,
+      "frame_delta": 0.022400999441742897,
+      "current_beat_magnitude": 2.0,
+      "cached_factor": 19.98712730407715,
+      "native_y": 116.5810546875,
+      "derived_y_offset": 251.5810546875,
+      "sine_angle": 18.342866897583008,
+      "predicted_x": 12.601095199584961,
+      "native_x": 12.601097106933594
+    },
+    {
+      "seq": 565892,
+      "beat": 228.0682830810547,
+      "frame_sequence": 7796,
+      "previous_beat": 228.00332641601562,
+      "frame_delta": 0.022237999364733696,
+      "current_beat_magnitude": 1.97776198387146,
+      "cached_factor": 19.99754524230957,
+      "native_y": -128.228515625,
+      "derived_y_offset": 6.771484375,
+      "sine_angle": 2.022228717803955,
+      "predicted_x": 67.58834838867188,
+      "native_x": 67.5877914428711
+    }
+  ],
+  "native_source_sha256": {
+    "src/ModsGroup.h": "69eed3b53a0781add857158dae13e47804d287a57047a41cadf3c50dedb321a0",
+    "src/PlayerOptions.cpp": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+    "src/PlayerState.cpp": "d54ad94985f1917627af53a55d96986777c9c0b3949768d7822074b09b796280",
+    "src/GameLoop.cpp": "84692b23c40c2de0bbcee22e027e1440b3777cacf0d012ae398fe9db328dc732",
+    "src/RageTimer.cpp": "2542029c6c12fbd560a3b65808a5bdccb14756350331bbe276ae79e2326cf553",
+    "src/ScreenGameplay.cpp": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+    "src/ArrowEffects.cpp": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8"
+  },
+  "source_input_limits": "The captured overlay wall timestamp occurs after earlier actor callbacks. It is not the exact private PlayerState ModsGroup timer sample. Reconstructing a GetXPos input by inverting the rounded GetYPos output also needs further float precision analysis.",
+  "unresolved": "Establish the original Y-offset precision and the owned modifier clock input for all remaining X samples before a production cache/GetXPos repair. Do not infer production modifier magnitudes from native X results or seed captured X values.",
+  "production_x_implementation_not_yet_changed": true,
+  "all_168_x_differences_verified": false,
+  "chart_repair_not_started": true,
+  "acceptance_comparisons_changed": false,
+  "passing_charts_reopened": false
+}
