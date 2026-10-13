@@ -5028,6 +5028,727 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 270,
+      "source_simfile": "Koi [UPS2016]/koi.ssc",
+      "simfile_sha256": "2efedac6dcecd6354ba67a65cc0f0732260d4f37536fe2522a6ee6402a7be205",
+      "retained_original_archive": "a6d6cdfb7b7256f722f5671ce623642e239fb27e59f5be8c9dd4b74483078a67.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+      "build_proof": "/home/parity/jobs/density-graph-build-v1/proof.json",
+      "capture_seconds": 210.0056058249902,
+      "trace_sha256": "6313db510762c74890eb62402b84caaa99fcde9a9507b1e9eac6fdc4199bdd42",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-270/candidates/42f964c593f8f62d2731bb51dccf610fda9e4dd8e5c3c85385db8d9d787e9667.tar",
+      "replay_exit": 2,
+      "replay_seconds": 12218.738814778,
+      "candidate_sha256": "42f964c593f8f62d2731bb51dccf610fda9e4dd8e5c3c85385db8d9d787e9667",
+      "native_frames": 116240,
+      "replayed_frames": 116240,
+      "compared_stage_fields": 2299,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetDestX, Actor.GetDestY, Actor.MaskDest, Actor.MaskSource, Actor.clearzbuffer, Actor.cropright",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [
+        "AddFishCommand failed for Actor: runtime error: [string \"/tmp/.tmpFifKup/song/lua/koi.lua\"]:241: attempt to call global 'rec_print_table' (a nil value)\nstack traceback:\n\t[C]: in global 'rec_print_table'\n\t[string \"/tmp/.tmpFifKup/song/lua/koi.lua\"]:241: in function <[string \"/tmp/.tmpFifKup/song/lua/koi.lua\"]:234>"
+      ],
+      "mismatch_count": 1940,
+      "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 4909,
+          "deadsync": 3694
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0005",
+            "args": [
+              "FishOverlay"
+            ],
+            "beat": 0.001991844270378351,
+            "caller": {
+              "line": 176,
+              "source": "song:/lua/koi.lua",
+              "tail_call": false
+            },
+            "command": "InitPositionCommand",
+            "definition_id": "def-0005",
+            "detail": {
+              "native_tween_time_left": 1,
+              "results": [
+                {
+                  "actor": "def-0004",
+                  "name": "FishOverlay",
+                  "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 176,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.4348299205303192,
+            "seq": 1753,
+            "source": "song:/lua/koi.lua",
+            "results": [
+              {
+                "actor": 1,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/lua/koi.lua",
+            "line": 176,
+            "phase": "callback",
+            "beat": 0.001991844270378351,
+            "seconds": 0.4348299205303192,
+            "args": [
+              "FishOverlay"
+            ],
+            "results": [
+              {
+                "actor": 1,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/Fish_001/FishOverlay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0009",
+            "args": [
+              "FishOverlay"
+            ],
+            "beat": 0.001991844270378351,
+            "caller": {
+              "line": 176,
+              "source": "song:/lua/koi.lua",
+              "tail_call": false
+            },
+            "command": "InitPositionCommand",
+            "definition_id": "def-0009",
+            "detail": {
+              "native_tween_time_left": 1,
+              "results": [
+                {
+                  "actor": "def-0008",
+                  "name": "FishOverlay",
+                  "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 176,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.4348299205303192,
+            "seq": 1763,
+            "source": "song:/lua/koi.lua",
+            "results": [
+              {
+                "actor": 2,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/lua/koi.lua",
+            "line": 176,
+            "phase": "callback",
+            "beat": 0.001991844270378351,
+            "seconds": 0.4348299205303192,
+            "args": [
+              "FishOverlay"
+            ],
+            "results": [
+              {
+                "actor": 2,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/Fish_002/FishOverlay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0013",
+            "args": [
+              "FishOverlay"
+            ],
+            "beat": 0.001991844270378351,
+            "caller": {
+              "line": 176,
+              "source": "song:/lua/koi.lua",
+              "tail_call": false
+            },
+            "command": "InitPositionCommand",
+            "definition_id": "def-0013",
+            "detail": {
+              "native_tween_time_left": 1,
+              "results": [
+                {
+                  "actor": "def-0012",
+                  "name": "FishOverlay",
+                  "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 176,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.4348299205303192,
+            "seq": 1773,
+            "source": "song:/lua/koi.lua",
+            "results": [
+              {
+                "actor": 3,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/lua/koi.lua",
+            "line": 176,
+            "phase": "callback",
+            "beat": 0.001991844270378351,
+            "seconds": 0.4348299205303192,
+            "args": [
+              "FishOverlay"
+            ],
+            "results": [
+              {
+                "actor": 3,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/Fish_003/FishOverlay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0017",
+            "args": [
+              "FishOverlay"
+            ],
+            "beat": 0.001991844270378351,
+            "caller": {
+              "line": 176,
+              "source": "song:/lua/koi.lua",
+              "tail_call": false
+            },
+            "command": "InitPositionCommand",
+            "definition_id": "def-0017",
+            "detail": {
+              "native_tween_time_left": 1,
+              "results": [
+                {
+                  "actor": "def-0016",
+                  "name": "FishOverlay",
+                  "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 176,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.4348299205303192,
+            "seq": 1783,
+            "source": "song:/lua/koi.lua",
+            "results": [
+              {
+                "actor": 4,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/lua/koi.lua",
+            "line": 176,
+            "phase": "callback",
+            "beat": 0.001991844270378351,
+            "seconds": 0.4348299205303192,
+            "args": [
+              "FishOverlay"
+            ],
+            "results": [
+              {
+                "actor": 4,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/Fish_004/FishOverlay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0021",
+            "args": [
+              "FishOverlay"
+            ],
+            "beat": 0.001991844270378351,
+            "caller": {
+              "line": 176,
+              "source": "song:/lua/koi.lua",
+              "tail_call": false
+            },
+            "command": "InitPositionCommand",
+            "definition_id": "def-0021",
+            "detail": {
+              "native_tween_time_left": 1,
+              "results": [
+                {
+                  "actor": "def-0020",
+                  "name": "FishOverlay",
+                  "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 176,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.4348299205303192,
+            "seq": 1793,
+            "source": "song:/lua/koi.lua",
+            "results": [
+              {
+                "actor": 5,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/lua/koi.lua",
+            "line": 176,
+            "phase": "callback",
+            "beat": 0.001991844270378351,
+            "seconds": 0.4348299205303192,
+            "args": [
+              "FishOverlay"
+            ],
+            "results": [
+              {
+                "actor": 5,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/Fish_005/FishOverlay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0025",
+            "args": [
+              "FishOverlay"
+            ],
+            "beat": 0.001991844270378351,
+            "caller": {
+              "line": 176,
+              "source": "song:/lua/koi.lua",
+              "tail_call": false
+            },
+            "command": "InitPositionCommand",
+            "definition_id": "def-0025",
+            "detail": {
+              "native_tween_time_left": 1,
+              "results": [
+                {
+                  "actor": "def-0024",
+                  "name": "FishOverlay",
+                  "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 176,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.4348299205303192,
+            "seq": 1803,
+            "source": "song:/lua/koi.lua",
+            "results": [
+              {
+                "actor": 6,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/lua/koi.lua",
+            "line": 176,
+            "phase": "callback",
+            "beat": 0.001991844270378351,
+            "seconds": 0.4348299205303192,
+            "args": [
+              "FishOverlay"
+            ],
+            "results": [
+              {
+                "actor": 6,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/Fish_006/FishOverlay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0029",
+            "args": [
+              "FishOverlay"
+            ],
+            "beat": 0.001991844270378351,
+            "caller": {
+              "line": 176,
+              "source": "song:/lua/koi.lua",
+              "tail_call": false
+            },
+            "command": "InitPositionCommand",
+            "definition_id": "def-0029",
+            "detail": {
+              "native_tween_time_left": 1,
+              "results": [
+                {
+                  "actor": "def-0028",
+                  "name": "FishOverlay",
+                  "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 176,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.4348299205303192,
+            "seq": 1813,
+            "source": "song:/lua/koi.lua",
+            "results": [
+              {
+                "actor": 7,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/lua/koi.lua",
+            "line": 176,
+            "phase": "callback",
+            "beat": 0.001991844270378351,
+            "seconds": 0.4348299205303192,
+            "args": [
+              "FishOverlay"
+            ],
+            "results": [
+              {
+                "actor": 7,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/Fish_007/FishOverlay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0033",
+            "args": [
+              "FishOverlay"
+            ],
+            "beat": 0.001991844270378351,
+            "caller": {
+              "line": 176,
+              "source": "song:/lua/koi.lua",
+              "tail_call": false
+            },
+            "command": "InitPositionCommand",
+            "definition_id": "def-0033",
+            "detail": {
+              "native_tween_time_left": 1,
+              "results": [
+                {
+                  "actor": "def-0032",
+                  "name": "FishOverlay",
+                  "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 176,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.4348299205303192,
+            "seq": 1823,
+            "source": "song:/lua/koi.lua",
+            "results": [
+              {
+                "actor": 8,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/lua/koi.lua",
+            "line": 176,
+            "phase": "callback",
+            "beat": 0.001991844270378351,
+            "seconds": 0.4348299205303192,
+            "args": [
+              "FishOverlay"
+            ],
+            "results": [
+              {
+                "actor": 8,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/Fish_008/FishOverlay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0037",
+            "args": [
+              "FishOverlay"
+            ],
+            "beat": 0.001991844270378351,
+            "caller": {
+              "line": 176,
+              "source": "song:/lua/koi.lua",
+              "tail_call": false
+            },
+            "command": "InitPositionCommand",
+            "definition_id": "def-0037",
+            "detail": {
+              "native_tween_time_left": 1,
+              "results": [
+                {
+                  "actor": "def-0036",
+                  "name": "FishOverlay",
+                  "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 176,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.4348299205303192,
+            "seq": 1833,
+            "source": "song:/lua/koi.lua",
+            "results": [
+              {
+                "actor": 9,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/lua/koi.lua",
+            "line": 176,
+            "phase": "callback",
+            "beat": 0.001991844270378351,
+            "seconds": 0.4348299205303192,
+            "args": [
+              "FishOverlay"
+            ],
+            "results": [
+              {
+                "actor": 9,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/Fish_009/FishOverlay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0041",
+            "args": [
+              "FishOverlay"
+            ],
+            "beat": 0.001991844270378351,
+            "caller": {
+              "line": 176,
+              "source": "song:/lua/koi.lua",
+              "tail_call": false
+            },
+            "command": "InitPositionCommand",
+            "definition_id": "def-0041",
+            "detail": {
+              "native_tween_time_left": 1,
+              "results": [
+                {
+                  "actor": "def-0040",
+                  "name": "FishOverlay",
+                  "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 176,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.4348299205303192,
+            "seq": 1843,
+            "source": "song:/lua/koi.lua",
+            "results": [
+              {
+                "actor": 10,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/lua/koi.lua",
+            "line": 176,
+            "phase": "callback",
+            "beat": 0.001991844270378351,
+            "seconds": 0.4348299205303192,
+            "args": [
+              "FishOverlay"
+            ],
+            "results": [
+              {
+                "actor": 10,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/Fish_010/FishOverlay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0045",
+            "args": [
+              "FishOverlay"
+            ],
+            "beat": 0.001991844270378351,
+            "caller": {
+              "line": 176,
+              "source": "song:/lua/koi.lua",
+              "tail_call": false
+            },
+            "command": "InitPositionCommand",
+            "definition_id": "def-0045",
+            "detail": {
+              "native_tween_time_left": 1,
+              "results": [
+                {
+                  "actor": "def-0044",
+                  "name": "FishOverlay",
+                  "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 176,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.4348299205303192,
+            "seq": 1853,
+            "source": "song:/lua/koi.lua",
+            "results": [
+              {
+                "actor": 11,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/FishOverlay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/lua/koi.lua",
+            "line": 176,
+            "phase": "callback",
+            "beat": 0.001991844270378351,
+            "seconds": 0.4348299205303192,
+            "args": [
+              "FishOverlay"
+            ],
+            "results": [
+              {
+                "actor": 11,
+                "name": "FishOverlay",
+                "path": "ScreenGameplay/SongForeground/lua/koi.lua/Fish_011/FishOverlay"
+              }
+            ]
+          }
+        }
+      ],
+      "report_sha256": "dbf993eb53f764fbcb54292c388d86cd330b5d8927f342dfe1ae419f15af3e5e"
     }
   ],
   "scope": {
@@ -5040,6 +5761,6 @@
   "binary_sha256": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 15,
-  "pending_charts": 19,
-  "processed_charts": 34
+  "pending_charts": 20,
+  "processed_charts": 35
 }
