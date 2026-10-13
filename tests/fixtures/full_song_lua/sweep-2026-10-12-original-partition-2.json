@@ -3402,6 +3402,56 @@
         }
       ],
       "report_sha256": "b5cf3a8e6fab063e2f8cec2770b393c65a9ad174e3a21890be02b465752939a9"
+    },
+    {
+      "position": 256,
+      "source_simfile": "Jerk/Jerk.ssc",
+      "simfile_sha256": "8bacf34206a523bcea241f51884181a80dfcba955786b1a1ed7cff536a473e6f",
+      "retained_original_archive": "4f3bbf96067625b9beda7233d1b106dd2af165c5be6940db1711fa6fd3845363.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+      "build_proof": "/home/parity/jobs/density-graph-build-v1/proof.json",
+      "capture_seconds": 168.24257923298865,
+      "trace_sha256": "6d392ea214bf7ef76d5cc292392c3103f0730ca3ef44c5e4c29c05ea0c5d2ba4",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-256/candidates/a3ff4641ddd429e630f4de1c3681a65e112ab257dcee65fdea830fe503eff595.tar",
+      "replay_exit": 0,
+      "replay_seconds": 318.33661723499245,
+      "candidate_sha256": "a3ff4641ddd429e630f4de1c3681a65e112ab257dcee65fdea830fe503eff595",
+      "native_frames": 33791,
+      "replayed_frames": 33791,
+      "compared_stage_fields": 1529,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "344c424f443270922496f60ee5a7170f25ef4773eb7e768d671ef46610cc2597",
+      "archive": "cedb801f2816f9abc020d1a4d2d451d11fd84aa29695c9d4e746bd133bcf22b1.tar.zst",
+      "archive_sha256": "cedb801f2816f9abc020d1a4d2d451d11fd84aa29695c9d4e746bd133bcf22b1",
+      "compressed_bytes": 7947437,
+      "pack_seconds": 11.377458022994688,
+      "harness_version": "0.1.80",
+      "title": "Jerk",
+      "retained_original_entry": {
+        "title": "Jerk",
+        "source_simfile": "Jerk/Jerk.ssc",
+        "harness_version": "0.1.0",
+        "archive": "4f3bbf96067625b9beda7233d1b106dd2af165c5be6940db1711fa6fd3845363.tar.zst",
+        "sha256": "4f3bbf96067625b9beda7233d1b106dd2af165c5be6940db1711fa6fd3845363",
+        "compressed_bytes": 59541,
+        "uncompressed_sha256": "d6a456494930c66d9a2ebd8d1d72d174e3242683020192ba74927d0242a69de9",
+        "compression_level": 22,
+        "aliases": [
+          "906e4e19e4eb2e92f66f5f659bd896b0309c6bf6c56f4dfc5c02814d28021a25.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -3411,9 +3461,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "7e34d8209408e9eb2bccb138914e8b03961806dbeb884a48f88cd340b165d8ec",
+  "binary_sha256": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 11,
+  "passed_fixtures": 12,
   "pending_charts": 18,
-  "processed_charts": 29
+  "processed_charts": 30
 }

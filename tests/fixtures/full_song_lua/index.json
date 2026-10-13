@@ -3184,15 +3184,12 @@
     {
       "title": "Jerk",
       "source_simfile": "Jerk/Jerk.ssc",
-      "harness_version": "0.1.0",
-      "archive": "4f3bbf96067625b9beda7233d1b106dd2af165c5be6940db1711fa6fd3845363.tar.zst",
-      "sha256": "4f3bbf96067625b9beda7233d1b106dd2af165c5be6940db1711fa6fd3845363",
-      "compressed_bytes": 59541,
-      "uncompressed_sha256": "d6a456494930c66d9a2ebd8d1d72d174e3242683020192ba74927d0242a69de9",
-      "compression_level": 22,
-      "aliases": [
-        "906e4e19e4eb2e92f66f5f659bd896b0309c6bf6c56f4dfc5c02814d28021a25.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "cedb801f2816f9abc020d1a4d2d451d11fd84aa29695c9d4e746bd133bcf22b1.tar.zst",
+      "sha256": "cedb801f2816f9abc020d1a4d2d451d11fd84aa29695c9d4e746bd133bcf22b1",
+      "compressed_bytes": 7947437,
+      "uncompressed_sha256": "a3ff4641ddd429e630f4de1c3681a65e112ab257dcee65fdea830fe503eff595",
+      "aliases": []
     },
     {
       "title": "[08] Jesus He Knows Me (Medium)",
