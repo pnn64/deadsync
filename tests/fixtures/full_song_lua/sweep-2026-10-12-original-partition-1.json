@@ -7520,6 +7520,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 300,
+      "source_simfile": "mawaru2/mawaru2.sm",
+      "simfile_sha256": "ea69873e0a9324e201f367a79bc110c6712b33ecd456a62f023fbf4b937df994",
+      "retained_original_archive": "a45dc34b15cbef9fafc9bcc9da7359e74b48b87fb74c8225cbdbec14ff3b28bb.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "dc33e10eb25790fe5f57e0adf311eb04f8029fa0983e22ce00e25f125eb8111c",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/palette-green-v1/proof.json",
+      "capture_seconds": 178.62094800299383,
+      "trace_sha256": "d7fabbf02c62046e540997d948c87bdf80278d653f8a8d433fc01fc269e98010",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-300/candidates/a997f99959ab10c870fd27a72bc001aea4e698dedeb2e232d680ac505214fe6b.tar",
+      "replay_exit": 0,
+      "replay_seconds": 3211.7746110559965,
+      "candidate_sha256": "a997f99959ab10c870fd27a72bc001aea4e698dedeb2e232d680ac505214fe6b",
+      "native_frames": 103901,
+      "replayed_frames": 103901,
+      "compared_stage_fields": 1925,
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.horizalign, Actor.vertalign",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "27f5d95bd7f9992c6f6c8007d47176a47b0bc22bc6d6757177ad8133c0c09ceb",
+      "archive": "35819d6ac6271b00f66bf76bfbd23de6d3453f529255c98259b142439ce6af39.tar.zst",
+      "archive_sha256": "35819d6ac6271b00f66bf76bfbd23de6d3453f529255c98259b142439ce6af39",
+      "compressed_bytes": 5350206,
+      "pack_seconds": 2.372467624998535,
+      "harness_version": "0.1.80",
+      "title": "MAWARU 2 THE REVENGE",
+      "retained_original_entry": {
+        "title": "MAWARU 2",
+        "source_simfile": "mawaru2/mawaru2.sm",
+        "harness_version": "0.1.0",
+        "archive": "a45dc34b15cbef9fafc9bcc9da7359e74b48b87fb74c8225cbdbec14ff3b28bb.tar.zst",
+        "sha256": "a45dc34b15cbef9fafc9bcc9da7359e74b48b87fb74c8225cbdbec14ff3b28bb",
+        "compressed_bytes": 290929,
+        "uncompressed_sha256": "d1908439f6f3195310b0567f7fa98e6fa665b7d188af35a0741f0a6faaab8ae6",
+        "compression_level": 22,
+        "aliases": [
+          "7d8f87f1c292ae9f3f56502300f8b504c613f66a2cc381fecb72b1a9f3bde842.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -7529,9 +7580,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "93f59d2cedd99eeeb3e8ec457f3e7cffe3ed04a4f812311fdd8ff85046afb559",
+  "binary_sha256": "dc33e10eb25790fe5f57e0adf311eb04f8029fa0983e22ce00e25f125eb8111c",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 19,
+  "passed_fixtures": 20,
   "pending_charts": 25,
-  "processed_charts": 44
+  "processed_charts": 45
 }

@@ -3673,17 +3673,14 @@
       ]
     },
     {
-      "title": "MAWARU 2",
+      "title": "MAWARU 2 THE REVENGE",
       "source_simfile": "mawaru2/mawaru2.sm",
-      "harness_version": "0.1.0",
-      "archive": "a45dc34b15cbef9fafc9bcc9da7359e74b48b87fb74c8225cbdbec14ff3b28bb.tar.zst",
-      "sha256": "a45dc34b15cbef9fafc9bcc9da7359e74b48b87fb74c8225cbdbec14ff3b28bb",
-      "compressed_bytes": 290929,
-      "uncompressed_sha256": "d1908439f6f3195310b0567f7fa98e6fa665b7d188af35a0741f0a6faaab8ae6",
-      "compression_level": 22,
-      "aliases": [
-        "7d8f87f1c292ae9f3f56502300f8b504c613f66a2cc381fecb72b1a9f3bde842.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "35819d6ac6271b00f66bf76bfbd23de6d3453f529255c98259b142439ce6af39.tar.zst",
+      "sha256": "35819d6ac6271b00f66bf76bfbd23de6d3453f529255c98259b142439ce6af39",
+      "compressed_bytes": 5350206,
+      "uncompressed_sha256": "a997f99959ab10c870fd27a72bc001aea4e698dedeb2e232d680ac505214fe6b",
+      "aliases": []
     },
     {
       "title": "MAWARU 3 ~SURViVOR~",
