@@ -1437,6 +1437,56 @@
         }
       ],
       "report_sha256": "7b098400f34b98f21e386b2624aa1a5aa4b977c27e5a9c7b7e451372696a837e"
+    },
+    {
+      "position": 184,
+      "source_simfile": "Electrified/Electrified cut.ssc",
+      "simfile_sha256": "8d3dc20a2f554ebf2f445c48e48c5a1e13a709538f0afa4075ba5f8289d99cf0",
+      "retained_original_archive": "1e3502c5a8a99a03b8fd571510c6105c4afaae8d5d79318ddeea155a2b735612.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "ab80853f896e96fcde3099428398a9dddc7e0f75a3646ef99297bc553cd861af",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "deadsync c71e8b4fe + 3c0a6d0b7 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/actor-paths-build-v1/proof.json",
+      "capture_seconds": 165.98446518799756,
+      "trace_sha256": "4179d4cbc36f9baf252f1f51d4b1b1e560ab9bce171cc35f7a739a71c98cf7d2",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-184/candidates/45a744d7361e4c19ebbd9f40be15e3970ef615c7933b6e40c464dc3839577f6f.tar",
+      "replay_exit": 0,
+      "replay_seconds": 727.1221300469988,
+      "candidate_sha256": "45a744d7361e4c19ebbd9f40be15e3970ef615c7933b6e40c464dc3839577f6f",
+      "native_frames": 129559,
+      "replayed_frames": 129559,
+      "compared_stage_fields": 1804,
+      "pending_coverage": [
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "a2871ce5a52f50cb7edcad51b01116868b53efd0aa739b74a13b009e6a77166c",
+      "archive": "54575f00e6300a71c6ed475b5e721a981569d2715735208d4fc7772ba22b5617.tar.zst",
+      "archive_sha256": "54575f00e6300a71c6ed475b5e721a981569d2715735208d4fc7772ba22b5617",
+      "compressed_bytes": 6189250,
+      "pack_seconds": 1.6165825369971571,
+      "harness_version": "0.1.80",
+      "title": "Electrified",
+      "retained_original_entry": {
+        "title": "Electrified",
+        "source_simfile": "Electrified/Electrified cut.ssc",
+        "harness_version": "0.1.0",
+        "archive": "1e3502c5a8a99a03b8fd571510c6105c4afaae8d5d79318ddeea155a2b735612.tar.zst",
+        "sha256": "1e3502c5a8a99a03b8fd571510c6105c4afaae8d5d79318ddeea155a2b735612",
+        "compressed_bytes": 1001838,
+        "uncompressed_sha256": "d30078936c1aa3687974cf256de8c5333481482d83c84d6a4463bbb251a69004",
+        "compression_level": 22,
+        "aliases": [
+          "5373760ea48c649402788ca2d14e4d02e1bb65537c3c493733f4f12e74087cfe.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -1446,9 +1496,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "fdb93c3526a021c8fd78788ab0365161fe3b73fe4bf0431f072244cd8ba28493",
-  "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
-  "passed_fixtures": 2,
+  "binary_sha256": "ab80853f896e96fcde3099428398a9dddc7e0f75a3646ef99297bc553cd861af",
+  "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+  "passed_fixtures": 3,
   "pending_charts": 3,
-  "processed_charts": 5
+  "processed_charts": 6
 }

@@ -2331,15 +2331,12 @@
     {
       "title": "Electrified",
       "source_simfile": "Electrified/Electrified cut.ssc",
-      "harness_version": "0.1.0",
-      "archive": "1e3502c5a8a99a03b8fd571510c6105c4afaae8d5d79318ddeea155a2b735612.tar.zst",
-      "sha256": "1e3502c5a8a99a03b8fd571510c6105c4afaae8d5d79318ddeea155a2b735612",
-      "compressed_bytes": 1001838,
-      "uncompressed_sha256": "d30078936c1aa3687974cf256de8c5333481482d83c84d6a4463bbb251a69004",
-      "compression_level": 22,
-      "aliases": [
-        "5373760ea48c649402788ca2d14e4d02e1bb65537c3c493733f4f12e74087cfe.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "54575f00e6300a71c6ed475b5e721a981569d2715735208d4fc7772ba22b5617.tar.zst",
+      "sha256": "54575f00e6300a71c6ed475b5e721a981569d2715735208d4fc7772ba22b5617",
+      "compressed_bytes": 6189250,
+      "uncompressed_sha256": "45a744d7361e4c19ebbd9f40be15e3970ef615c7933b6e40c464dc3839577f6f",
+      "aliases": []
     },
     {
       "title": "​#feelyourtouch e.d.e.n",
