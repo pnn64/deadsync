@@ -1,0 +1,375 @@
+{
+  "source_simfile": "Koi [UPS2016]/koi.sm",
+  "report_sha256": "6512abe289fb43bd959d690ad1abfcfd79e67689c9102e4b77428995656b8ec8",
+  "full_uncompressed_report_verified": true,
+  "native_count": 4909,
+  "actual_count": 4839,
+  "diagnostic_matching_keys": [
+    "kind",
+    "operation",
+    "source",
+    "line",
+    "command"
+  ],
+  "matched_key_events": 4839,
+  "aligned_difference_dimensions": {
+    "identical": 4745,
+    "results": 60,
+    "beat,seconds": 34
+  },
+  "native_operations": {
+    "command.begin": 1701,
+    "Actor.zoomto": 180,
+    "Actor.sleep": 303,
+    "command.end": 1701,
+    "Actor.diffusealpha": 240,
+    "Actor.queuecommand": 424,
+    "ActorFrame.GetChild": 60,
+    "Actor.zoomx": 60,
+    "Actor.x": 60,
+    "Actor.y": 60,
+    "Actor.linear": 120
+  },
+  "actual_operations": {
+    "command.begin": 1666,
+    "Actor.zoomto": 180,
+    "Actor.sleep": 303,
+    "command.end": 1666,
+    "Actor.diffusealpha": 240,
+    "Actor.queuecommand": 424,
+    "ActorFrame.GetChild": 60,
+    "Actor.zoomx": 60,
+    "Actor.x": 60,
+    "Actor.y": 60,
+    "Actor.linear": 120
+  },
+  "repair_attempts_spent": 1,
+  "repair_attempts_remaining": 1,
+  "diagnostic_only": true,
+  "native_capture_uncompressed_bytes_verified": true,
+  "alignment_rule": "Match kind, operation, caller source and line, plus command name for command events. This is diagnostic sequence alignment only; all existing ordered full replay comparisons and tolerances remain unchanged.",
+  "missing_events_summary": "All70 unmatched native events form35 JudgmentMessageCommand begin/end pairs at song:/lua/koi.lua:266. Every one of the4839 independent events has a matching native event key. Among those matched events,4745 have identical compared values,60 differ only in fish parent paths, and34 command boundary events differ only in clocks. The clock pairs amount to17 callbacks.",
+  "authored_mine_count": 35,
+  "native_mine_dispatch": "Player::SetMineJudgment broadcasts Judgment with Player, TapNoteScore and FirstTrack for both AvoidMine and HitMine. The independent retained helper has tap-row and hold callbacks, but no mine Judgment callback. The authored chart has35 mines, matching the callback-count deficit. Exact independent dispatch phase and the17 clock differences still need a production control and source audit; the sequence alignment alone does not establish which repeated callback each unmatched timestamp represents.",
+  "native_source_sha256": {
+    "src/Player.cpp": "fb9fbc6ead8073b26cc8ff9097068ed2c33b8d8c2bea58b43eb61e0384ae1935",
+    "src/Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "src/ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac"
+  },
+  "missing_native_judgment_boundaries": [
+    {
+      "seq": 2667,
+      "beat": 24.857601165771484,
+      "seconds": 10.783333778381348,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 2669,
+      "beat": 25.857219696044922,
+      "seconds": 11.199841499328613,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 2671,
+      "beat": 26.85645866394043,
+      "seconds": 11.616190910339355,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 2673,
+      "beat": 27.86146354675293,
+      "seconds": 12.034943580627441,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 2687,
+      "beat": 28.85678482055664,
+      "seconds": 12.449660301208496,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 2689,
+      "beat": 29.85700035095215,
+      "seconds": 12.866416931152344,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 2691,
+      "beat": 30.858360290527344,
+      "seconds": 13.283650398254395,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 3051,
+      "beat": 82.50059509277344,
+      "seconds": 34.801246643066406,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 3053,
+      "beat": 83.0023193359375,
+      "seconds": 35.01029586791992,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 3055,
+      "beat": 83.50038146972656,
+      "seconds": 35.21782302856445,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 3057,
+      "beat": 83.83540344238281,
+      "seconds": 35.35741424560547,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 3099,
+      "beat": 88.50098419189453,
+      "seconds": 37.30140686035156,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 3101,
+      "beat": 88.75225067138672,
+      "seconds": 37.40610122680664,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 3103,
+      "beat": 88.85853576660156,
+      "seconds": 37.45038604736328,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 3105,
+      "beat": 88.85853576660156,
+      "seconds": 37.45038604736328,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 3473,
+      "beat": 135.36683654785156,
+      "seconds": 56.82884216308594,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 3475,
+      "beat": 135.50311279296875,
+      "seconds": 56.885623931884766,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 3477,
+      "beat": 136.0042724609375,
+      "seconds": 57.094444274902344,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 3641,
+      "beat": 160.86727905273438,
+      "seconds": 67.45403289794922,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 3643,
+      "beat": 160.86727905273438,
+      "seconds": 67.45403289794922,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 3645,
+      "beat": 160.86727905273438,
+      "seconds": 67.45403289794922,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 4542,
+      "beat": 286.85809326171875,
+      "seconds": 119.95020294189453,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 4544,
+      "beat": 287.0005187988281,
+      "seconds": 120.0095443725586,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 4546,
+      "beat": 287.99163818359375,
+      "seconds": 120.42251586914062,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 4548,
+      "beat": 288.0023193359375,
+      "seconds": 120.42696380615234,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 4775,
+      "beat": 320.859130859375,
+      "seconds": 134.11729431152344,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 4777,
+      "beat": 320.859130859375,
+      "seconds": 134.11729431152344,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 4779,
+      "beat": 320.859130859375,
+      "seconds": 134.11729431152344,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 5381,
+      "beat": 432.8604736328125,
+      "seconds": 180.78451538085938,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 5383,
+      "beat": 432.8604736328125,
+      "seconds": 180.78451538085938,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 5385,
+      "beat": 432.8604736328125,
+      "seconds": 180.78451538085938,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 5421,
+      "beat": 447.8625183105469,
+      "seconds": 187.03536987304688,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 5423,
+      "beat": 447.8625183105469,
+      "seconds": 187.03536987304688,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 5425,
+      "beat": 447.8625183105469,
+      "seconds": 187.03536987304688,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    },
+    {
+      "seq": 5427,
+      "beat": 447.8625183105469,
+      "seconds": 187.03536987304688,
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266
+    }
+  ],
+  "first_clock_pair": {
+    "native": {
+      "actor": "def-0242",
+      "args": [],
+      "beat": 38.5,
+      "command": "JudgmentMessageCommand",
+      "definition_id": "def-0242",
+      "detail": {
+        "name": "JudgmentMessageCommand"
+      },
+      "kind": "command",
+      "line": 266,
+      "operation": "command.begin",
+      "scene": 1,
+      "seconds": 16.46766471862793,
+      "seq": 2741,
+      "source": "song:/lua/koi.lua"
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "command",
+      "operation": "command.begin",
+      "command": "JudgmentMessageCommand",
+      "source": "song:/lua/koi.lua",
+      "line": 266,
+      "beat": 38.50554656982422,
+      "seconds": 16.4699764251709,
+      "args": null
+    }
+  },
+  "actor_name_control": "The focused new name/attribute/child lookup/path control meaningfully fails on both Windows and Linux before the production repair. Green validation is in progress, with no full chart repair launched.",
+  "acceptance_comparisons_changed": false,
+  "passing_charts_reopened": false,
+  "new_chart_repair_launched": false
+}
