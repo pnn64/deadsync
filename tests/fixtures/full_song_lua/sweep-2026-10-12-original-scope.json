@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T21:44:44Z",
+  "updated_utc": "2026-10-13T22:27:01Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 227,
-    "pending": 84,
-    "unprocessed": 190
+    "passed": 229,
+    "pending": 85,
+    "unprocessed": 187
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1854,8 +1854,8 @@
       "source_simfile": "Get Into It/GetIntoIt.ssc",
       "simfile_sha256": "c13e18cc0089f8bd5f5dbf814ff97ae0fd614856914b8c41b1593a120e9ebed5",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-get-into-it-ssc-frames-repair.json"
     },
     {
       "position": 212,
@@ -2597,7 +2597,9 @@
       "position": 304,
       "source_simfile": "mawaru5/mawaru5.sm",
       "simfile_sha256": "6feab5a3a888443ae3e50802a230a7ddf6de95ba1e14b8805880795ef14e56b2",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 305,
@@ -2663,9 +2665,9 @@
       "position": 314,
       "source_simfile": "Midnight Madness/midnight.sm",
       "simfile_sha256": "936cc658a970b6e5d211d690465f34d93f911f96c12e8951fa15cb6024d9bcf7",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-midnight-empty-layers-repair.json"
     },
     {
       "position": 315,
@@ -2763,7 +2765,9 @@
       "position": 329,
       "source_simfile": "No Tears Left To Cry - [JNero]/No-Tears.sm",
       "simfile_sha256": "fd2ce941afcd084fbd937ef465715c2bc7cc7e6058526b8bc8abb8c430b4f980",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 330,
@@ -2781,7 +2785,9 @@
       "position": 332,
       "source_simfile": "Number 9/1556 - Number 9.sm",
       "simfile_sha256": "523384100adf1f5591ce4dace7537e26b91377e645699270a26dc04d09f0795d",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 333,
