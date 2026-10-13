@@ -3340,6 +3340,68 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 253,
+      "source_simfile": "Jack The Reaper/Jack The Reaper.sm",
+      "simfile_sha256": "04baaf73d0577eff9e4316a41ac80ed5238bd4da0168929ac3591aea8c548723",
+      "retained_original_archive": "77a743ef27050428b3cbd0dee06de3c7d96ce7ec7ec41a1224e98af43fa2dd9a.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "7e34d8209408e9eb2bccb138914e8b03961806dbeb884a48f88cd340b165d8ec",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "874f2e535 + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+      "build_proof": "/home/parity/jobs/autoplay-off-build-v1/proof.json",
+      "capture_seconds": 160.06682277801156,
+      "trace_sha256": "8ff66d74b0e27cc94ab500bb8deb626237df0d57f8dc891aa034a8c5d5a743c5",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-253/candidates/5bdf4ac66993479620bb2fea1f099169cfac09b164f249f6d48986cab112709c.tar",
+      "replay_exit": 2,
+      "replay_seconds": 447.1370395700069,
+      "candidate_sha256": "5bdf4ac66993479620bb2fea1f099169cfac09b164f249f6d48986cab112709c",
+      "native_frames": 40101,
+      "replayed_frames": 40101,
+      "compared_stage_fields": 1287,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 20.002: missing captured subscriber identity for ScreenGameplay/6/1",
+        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 37.750: missing captured subscriber identity for ScreenGameplay/6/1"
+      ],
+      "mismatch_count": 4,
+      "concrete_failures": [
+        {
+          "phase": "progress",
+          "seconds": 110.00029754638672,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "progress",
+          "seconds": 111.00235748291016,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "screen-end",
+          "seconds": 111.35872650146484,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "gameplay-exit",
+          "seconds": 111.35872650146484,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        }
+      ],
+      "report_sha256": "b5cf3a8e6fab063e2f8cec2770b393c65a9ad174e3a21890be02b465752939a9"
     }
   ],
   "scope": {
@@ -3349,9 +3411,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "66d32bf5de6e658dc177e179b5dd4e1bae2796226a998460dfe2fba722e326a4",
+  "binary_sha256": "7e34d8209408e9eb2bccb138914e8b03961806dbeb884a48f88cd340b165d8ec",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 11,
-  "pending_charts": 17,
-  "processed_charts": 28
+  "pending_charts": 18,
+  "processed_charts": 29
 }
