@@ -1,0 +1,636 @@
+{
+  "status": "actual No Tears complete replay failure traced to numeric option object path capture; no repair launched",
+  "position": 329,
+  "source_simfile": "No Tears Left To Cry - [JNero]/No-Tears.sm",
+  "original_result": {
+    "position": 329,
+    "source_simfile": "No Tears Left To Cry - [JNero]/No-Tears.sm",
+    "simfile_sha256": "fd2ce941afcd084fbd937ef465715c2bc7cc7e6058526b8bc8abb8c430b4f980",
+    "retained_original_archive": "8bf80887839b679011af6805c5fdb5d46b677ff33a38f4403dad5cc97d280001.tar.zst",
+    "status": "pending",
+    "repair_attempts": 0,
+    "binary_sha256": "49482e042c5a60991fd859ab5d1ee6b5eeb64b6511ea2320dcb850abc06f1f78",
+    "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "fix_commit": "402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+    "build_proof": "/home/parity/jobs/subscriber-single-green-v1/proof.json",
+    "capture_seconds": 146.9456810039992,
+    "trace_sha256": "2f6ac80404909839f44838520dea2aa1d95ba389153931edc24688dc0a799be0",
+    "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-329/candidates/db19fd1f779f943447980ac2a845f74910b9de551598a9250b7936b33ad89e85.tar",
+    "replay_exit": 2,
+    "replay_seconds": 1687.5639166450128,
+    "candidate_sha256": "db19fd1f779f943447980ac2a845f74910b9de551598a9250b7936b33ad89e85",
+    "native_frames": 90167,
+    "replayed_frames": 90167,
+    "compared_stage_fields": 1529,
+    "pending_coverage": [
+      "uncompared song operations: Actor.addy, PlayerOptions.Centered",
+      "native drawable state/resources: Quad"
+    ],
+    "whole_song_parity_proven": false,
+    "archive_accepted": false,
+    "errors": [],
+    "mismatch_count": 4,
+    "concrete_failures": [
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "player-state:PlayerNumber_P1",
+          "args": [
+            3
+          ],
+          "beat": 0,
+          "caller": {
+            "line": 0,
+            "source": "song:/PickinItUp/PickinItUp.lua",
+            "tail_call": false
+          },
+          "detail": {
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P1/options:3",
+                "type": "PlayerOptions"
+              }
+            ]
+          },
+          "kind": "query",
+          "line": 0,
+          "operation": "PlayerState.GetPlayerOptions",
+          "phase": "construction",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 4,
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "results": [
+            {
+              "path": "player-state:PlayerNumber_P1/options:3",
+              "type": "PlayerOptions"
+            }
+          ]
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "query",
+          "operation": "PlayerState.GetPlayerOptions",
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "line": 0,
+          "phase": "construction",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [
+            3
+          ],
+          "results": [
+            {
+              "type": "PlayerOptions",
+              "path": "player-state:PlayerNumber_P1/options:ModsLevel_Current"
+            }
+          ]
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "player-state:PlayerNumber_P2",
+          "args": [
+            3
+          ],
+          "beat": 0,
+          "caller": {
+            "line": 0,
+            "source": "song:/PickinItUp/PickinItUp.lua",
+            "tail_call": false
+          },
+          "detail": {
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P2/options:3",
+                "type": "PlayerOptions"
+              }
+            ]
+          },
+          "kind": "query",
+          "line": 0,
+          "operation": "PlayerState.GetPlayerOptions",
+          "phase": "construction",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 7,
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "results": [
+            {
+              "path": "player-state:PlayerNumber_P2/options:3",
+              "type": "PlayerOptions"
+            }
+          ]
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "query",
+          "operation": "PlayerState.GetPlayerOptions",
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "line": 0,
+          "phase": "construction",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [
+            3
+          ],
+          "results": [
+            {
+              "type": "PlayerOptions",
+              "path": "player-state:PlayerNumber_P2/options:ModsLevel_Current"
+            }
+          ]
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "player-state:PlayerNumber_P1",
+          "args": [
+            3
+          ],
+          "beat": 0,
+          "caller": {
+            "line": 0,
+            "source": "song:/PickinItUp/PickinItUp.lua",
+            "tail_call": false
+          },
+          "detail": {
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P1/options:3",
+                "type": "PlayerOptions"
+              }
+            ]
+          },
+          "kind": "query",
+          "line": 0,
+          "operation": "PlayerState.GetPlayerOptions",
+          "phase": "construction",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 10,
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "results": [
+            {
+              "path": "player-state:PlayerNumber_P1/options:3",
+              "type": "PlayerOptions"
+            }
+          ]
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "query",
+          "operation": "PlayerState.GetPlayerOptions",
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "line": 0,
+          "phase": "construction",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [
+            3
+          ],
+          "results": [
+            {
+              "type": "PlayerOptions",
+              "path": "player-state:PlayerNumber_P1/options:ModsLevel_Current"
+            }
+          ]
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "player-state:PlayerNumber_P2",
+          "args": [
+            3
+          ],
+          "beat": 0,
+          "caller": {
+            "line": 0,
+            "source": "song:/PickinItUp/PickinItUp.lua",
+            "tail_call": false
+          },
+          "detail": {
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P2/options:3",
+                "type": "PlayerOptions"
+              }
+            ]
+          },
+          "kind": "query",
+          "line": 0,
+          "operation": "PlayerState.GetPlayerOptions",
+          "phase": "construction",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 13,
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "results": [
+            {
+              "path": "player-state:PlayerNumber_P2/options:3",
+              "type": "PlayerOptions"
+            }
+          ]
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "query",
+          "operation": "PlayerState.GetPlayerOptions",
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "line": 0,
+          "phase": "construction",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [
+            3
+          ],
+          "results": [
+            {
+              "type": "PlayerOptions",
+              "path": "player-state:PlayerNumber_P2/options:ModsLevel_Current"
+            }
+          ]
+        }
+      }
+    ],
+    "report_sha256": "3c8cf255e0fcd66096fc87c02e9ecb7ec429bd7dcd7eb7e3199fdd336dbc3f6d"
+  },
+  "bounded_native_queries": {
+    "source_simfile": "No Tears Left To Cry - [JNero]/No-Tears.sm",
+    "candidate_sha256": "db19fd1f779f943447980ac2a845f74910b9de551598a9250b7936b33ad89e85",
+    "trace_sha256": "2f6ac80404909839f44838520dea2aa1d95ba389153931edc24688dc0a799be0",
+    "simfile_sha256": "fd2ce941afcd084fbd937ef465715c2bc7cc7e6058526b8bc8abb8c430b4f980",
+    "all_manifest_members_byte_verified": true,
+    "native_numeric_option_queries": [
+      {
+        "actor": "player-state:PlayerNumber_P1",
+        "args": [
+          3
+        ],
+        "beat": 0,
+        "caller": {
+          "line": 0,
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "tail_call": false
+        },
+        "detail": {
+          "results": [
+            {
+              "path": "player-state:PlayerNumber_P1/options:3",
+              "type": "PlayerOptions"
+            }
+          ]
+        },
+        "kind": "query",
+        "line": 0,
+        "operation": "PlayerState.GetPlayerOptions",
+        "phase": "construction",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 4,
+        "source": "song:/PickinItUp/PickinItUp.lua"
+      },
+      {
+        "actor": "player-state:PlayerNumber_P2",
+        "args": [
+          3
+        ],
+        "beat": 0,
+        "caller": {
+          "line": 0,
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "tail_call": false
+        },
+        "detail": {
+          "results": [
+            {
+              "path": "player-state:PlayerNumber_P2/options:3",
+              "type": "PlayerOptions"
+            }
+          ]
+        },
+        "kind": "query",
+        "line": 0,
+        "operation": "PlayerState.GetPlayerOptions",
+        "phase": "construction",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 7,
+        "source": "song:/PickinItUp/PickinItUp.lua"
+      },
+      {
+        "actor": "player-state:PlayerNumber_P1",
+        "args": [
+          3
+        ],
+        "beat": 0,
+        "caller": {
+          "line": 0,
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "tail_call": false
+        },
+        "detail": {
+          "results": [
+            {
+              "path": "player-state:PlayerNumber_P1/options:3",
+              "type": "PlayerOptions"
+            }
+          ]
+        },
+        "kind": "query",
+        "line": 0,
+        "operation": "PlayerState.GetPlayerOptions",
+        "phase": "construction",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 10,
+        "source": "song:/PickinItUp/PickinItUp.lua"
+      },
+      {
+        "actor": "player-state:PlayerNumber_P2",
+        "args": [
+          3
+        ],
+        "beat": 0,
+        "caller": {
+          "line": 0,
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "tail_call": false
+        },
+        "detail": {
+          "results": [
+            {
+              "path": "player-state:PlayerNumber_P2/options:3",
+              "type": "PlayerOptions"
+            }
+          ]
+        },
+        "kind": "query",
+        "line": 0,
+        "operation": "PlayerState.GetPlayerOptions",
+        "phase": "construction",
+        "scene": 1,
+        "seconds": 0,
+        "seq": 13,
+        "source": "song:/PickinItUp/PickinItUp.lua"
+      }
+    ],
+    "native_frames": 90167,
+    "complete_original_differences": [
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "player-state:PlayerNumber_P1",
+          "args": [
+            3
+          ],
+          "beat": 0,
+          "caller": {
+            "line": 0,
+            "source": "song:/PickinItUp/PickinItUp.lua",
+            "tail_call": false
+          },
+          "detail": {
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P1/options:3",
+                "type": "PlayerOptions"
+              }
+            ]
+          },
+          "kind": "query",
+          "line": 0,
+          "operation": "PlayerState.GetPlayerOptions",
+          "phase": "construction",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 4,
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "results": [
+            {
+              "path": "player-state:PlayerNumber_P1/options:3",
+              "type": "PlayerOptions"
+            }
+          ]
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "query",
+          "operation": "PlayerState.GetPlayerOptions",
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "line": 0,
+          "phase": "construction",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [
+            3
+          ],
+          "results": [
+            {
+              "type": "PlayerOptions",
+              "path": "player-state:PlayerNumber_P1/options:ModsLevel_Current"
+            }
+          ]
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "player-state:PlayerNumber_P2",
+          "args": [
+            3
+          ],
+          "beat": 0,
+          "caller": {
+            "line": 0,
+            "source": "song:/PickinItUp/PickinItUp.lua",
+            "tail_call": false
+          },
+          "detail": {
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P2/options:3",
+                "type": "PlayerOptions"
+              }
+            ]
+          },
+          "kind": "query",
+          "line": 0,
+          "operation": "PlayerState.GetPlayerOptions",
+          "phase": "construction",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 7,
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "results": [
+            {
+              "path": "player-state:PlayerNumber_P2/options:3",
+              "type": "PlayerOptions"
+            }
+          ]
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "query",
+          "operation": "PlayerState.GetPlayerOptions",
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "line": 0,
+          "phase": "construction",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [
+            3
+          ],
+          "results": [
+            {
+              "type": "PlayerOptions",
+              "path": "player-state:PlayerNumber_P2/options:ModsLevel_Current"
+            }
+          ]
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "player-state:PlayerNumber_P1",
+          "args": [
+            3
+          ],
+          "beat": 0,
+          "caller": {
+            "line": 0,
+            "source": "song:/PickinItUp/PickinItUp.lua",
+            "tail_call": false
+          },
+          "detail": {
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P1/options:3",
+                "type": "PlayerOptions"
+              }
+            ]
+          },
+          "kind": "query",
+          "line": 0,
+          "operation": "PlayerState.GetPlayerOptions",
+          "phase": "construction",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 10,
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "results": [
+            {
+              "path": "player-state:PlayerNumber_P1/options:3",
+              "type": "PlayerOptions"
+            }
+          ]
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "query",
+          "operation": "PlayerState.GetPlayerOptions",
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "line": 0,
+          "phase": "construction",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [
+            3
+          ],
+          "results": [
+            {
+              "type": "PlayerOptions",
+              "path": "player-state:PlayerNumber_P1/options:ModsLevel_Current"
+            }
+          ]
+        }
+      },
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "player-state:PlayerNumber_P2",
+          "args": [
+            3
+          ],
+          "beat": 0,
+          "caller": {
+            "line": 0,
+            "source": "song:/PickinItUp/PickinItUp.lua",
+            "tail_call": false
+          },
+          "detail": {
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P2/options:3",
+                "type": "PlayerOptions"
+              }
+            ]
+          },
+          "kind": "query",
+          "line": 0,
+          "operation": "PlayerState.GetPlayerOptions",
+          "phase": "construction",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 13,
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "results": [
+            {
+              "path": "player-state:PlayerNumber_P2/options:3",
+              "type": "PlayerOptions"
+            }
+          ]
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "query",
+          "operation": "PlayerState.GetPlayerOptions",
+          "source": "song:/PickinItUp/PickinItUp.lua",
+          "line": 0,
+          "phase": "construction",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [
+            3
+          ],
+          "results": [
+            {
+              "type": "PlayerOptions",
+              "path": "player-state:PlayerNumber_P2/options:ModsLevel_Current"
+            }
+          ]
+        }
+      }
+    ],
+    "repair_attempts_spent": 0
+  },
+  "bounded_input_sha256": "5a42e4a7cf7ad8020ca80b441f178519fa97b3cd8993de324bfdafc3a0677379",
+  "local_source_pins": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\PlayerState.cpp",
+      "sha256": "d54ad94985f1917627af53a55d96986777c9c0b3949768d7822074b09b796280"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\probe_theme\\SongLuaTrace.lua",
+      "sha256": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\song_tables.rs",
+      "sha256": "037c334d603c857bc8443757a30e063791a987b134ad0b5c12ce8937224f2182"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\live.rs",
+      "sha256": "4aee5285b9da02efddf0be6a74a8453748eb73604ffac2b4639c9dc41cf96732"
+    }
+  ],
+  "concrete_source_cause": "All 90167 original frames and 1529 stage fields replayed with zero callback errors. The only four differences are returned PlayerOptions paths for numeric GetPlayerOptions(3). Pinned native PlayerState resolves ModsLevel to its existing option object; the unchanged native capture identifies that returned object using the raw getter argument, yielding /options:3. Independent query tracing assigns each option object a canonical string path once during installation and never refreshes it when the same object is returned by a numeric getter. Its /options:ModsLevel_Current result differs despite addressing the same option state.",
+  "repair_requirement": "Retain real option object identity and numeric/string level semantics while recording the native getter argument path; verify a meaningful control before a full repair. Keep existing comparisons and captured bytes unchanged.",
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "chart_repair_attempts_spent": 0,
+  "remaining_repairs": 2,
+  "comparisons_modified": false,
+  "passing_charts_reopened": false
+}
