@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "itg bloodrush 2005/itg bloodrush 2005.sm",
+      "acceptance_commit": "c2b170d2e",
+      "native_frames": 44818,
+      "replayed_frames": 44818,
+      "compared_stage_fields": 1221,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "489d2d01bfc628d652203c19fe52d84dec283318391da05e5574a6219291e471.tar.zst",
+      "compressed_sha256": "489d2d01bfc628d652203c19fe52d84dec283318391da05e5574a6219291e471",
+      "uncompressed_sha256": "c35c65b89ba8b708111e9304a33f7b6ec96df0e390dc541bf8ecc29ba64b2029",
+      "compressed_bytes": 8687092,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.GetEffectDelta, PlayerOptions.CMod, PlayerOptions.Stealth"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
