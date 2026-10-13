@@ -2681,15 +2681,12 @@
     {
       "title": "Girls MIA",
       "source_simfile": "Girls MIA/girlsmia-fakemines.ssc",
-      "harness_version": "0.1.0",
-      "archive": "72cae5f9ff7ba3a6ba02ab1d0df5c5a5457cd0b173e35c81dfd757fdf48e5187.tar.zst",
-      "sha256": "72cae5f9ff7ba3a6ba02ab1d0df5c5a5457cd0b173e35c81dfd757fdf48e5187",
-      "compressed_bytes": 72350,
-      "uncompressed_sha256": "d37d758678bd7b823ad3850b9643d357c002cdd26200e6a21eb793e54ce7c7cd",
-      "compression_level": 22,
-      "aliases": [
-        "5599dfd4b1abae8c55fe5794c90c2a8d87732368e60b7404aa03600efc4ea89c.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "8ecb9dc9d4d935f73b2a4977fbd4aadc4d4822db5919ea016ce1e03e17c76ba9.tar.zst",
+      "sha256": "8ecb9dc9d4d935f73b2a4977fbd4aadc4d4822db5919ea016ce1e03e17c76ba9",
+      "compressed_bytes": 14530750,
+      "uncompressed_sha256": "7a37057ba912defaf080c3dfefe692c17be7b5f1567ca8a2fba66e2634452d45",
+      "aliases": []
     },
     {
       "title": "Godspeed",

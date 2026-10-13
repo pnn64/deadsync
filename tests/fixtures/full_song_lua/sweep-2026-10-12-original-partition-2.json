@@ -2615,6 +2615,56 @@
       "replay_seconds": 17.929088855002192,
       "candidate_sha256": "bc410b2ec660dea177cd25b913edd879070438441184378f20362174d5aed8fa",
       "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[7.1s] replaying every native gameplay frame\n[8.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Get Into It (Yuh)': failed to execute '/tmp/.tmpgRWmbz/song/lua/bg.lua': runtime error: [string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Get Into It (Yuh)' from '/tmp/.tmpgRWmbz/song/lua/default.lua': failed to execute '/tmp/.tmpgRWmbz/song/lua/default.lua': runtime error: [string \"/tmp/.tmpgRWmbz/song/lua/default.lua\"]:460: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmpgRWmbz/song/lua/default.lua\"]:460: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\ndeadsync_song_lua::playback::prepare: Failed to compile background lua layer for 'Get Into It (Yuh)' from '/tmp/.tmpgRWmbz/song/lua/bg.lua': failed to execute '/tmp/.tmpgRWmbz/song/lua/bg.lua': runtime error: [string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (1455192) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[10.0s] replaying every native gameplay frame: frame 0/57594 (0.0%)\n"
+    },
+    {
+      "position": 214,
+      "source_simfile": "Girls MIA/girlsmia-fakemines.ssc",
+      "simfile_sha256": "ce00fed7041435092476160f3d78430b61ef78386425171a8b95b44cc363c0d8",
+      "retained_original_archive": "72cae5f9ff7ba3a6ba02ab1d0df5c5a5457cd0b173e35c81dfd757fdf48e5187.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "63e17ffe7 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/foreground-source-build-v2/proof.json",
+      "capture_seconds": 184.15427342000476,
+      "trace_sha256": "06b131d5cbd7c586d986b956488b432cca1624358ed549a58bfc607064908857",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-214/candidates/7a37057ba912defaf080c3dfefe692c17be7b5f1567ca8a2fba66e2634452d45.tar",
+      "replay_exit": 0,
+      "replay_seconds": 452.7680321240041,
+      "candidate_sha256": "7a37057ba912defaf080c3dfefe692c17be7b5f1567ca8a2fba66e2634452d45",
+      "native_frames": 45135,
+      "replayed_frames": 45135,
+      "compared_stage_fields": 1562,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "701f06fabc911e7ae9778fe39cb828dd8833e3ee8105a0f0196fd267975f1578",
+      "archive": "8ecb9dc9d4d935f73b2a4977fbd4aadc4d4822db5919ea016ce1e03e17c76ba9.tar.zst",
+      "archive_sha256": "8ecb9dc9d4d935f73b2a4977fbd4aadc4d4822db5919ea016ce1e03e17c76ba9",
+      "compressed_bytes": 14530750,
+      "pack_seconds": 17.270753330012667,
+      "harness_version": "0.1.80",
+      "title": "Girls MIA",
+      "retained_original_entry": {
+        "title": "Girls MIA",
+        "source_simfile": "Girls MIA/girlsmia-fakemines.ssc",
+        "harness_version": "0.1.0",
+        "archive": "72cae5f9ff7ba3a6ba02ab1d0df5c5a5457cd0b173e35c81dfd757fdf48e5187.tar.zst",
+        "sha256": "72cae5f9ff7ba3a6ba02ab1d0df5c5a5457cd0b173e35c81dfd757fdf48e5187",
+        "compressed_bytes": 72350,
+        "uncompressed_sha256": "d37d758678bd7b823ad3850b9643d357c002cdd26200e6a21eb793e54ce7c7cd",
+        "compression_level": 22,
+        "aliases": [
+          "5599dfd4b1abae8c55fe5794c90c2a8d87732368e60b7404aa03600efc4ea89c.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -2626,7 +2676,7 @@
   },
   "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 6,
+  "passed_fixtures": 7,
   "pending_charts": 9,
-  "processed_charts": 15
+  "processed_charts": 16
 }
