@@ -4728,6 +4728,54 @@
         }
       ],
       "report_sha256": "9f7a90633e7ff6b059bc844af77d0e327f5d2ca9e2e91ca848865720ff5c869c"
+    },
+    {
+      "position": 218,
+      "source_simfile": "Gossipo Perpetuo [chairodactyl] - Cameron Wiggers/gossiperpet.ssc",
+      "simfile_sha256": "de87ab39c281866fa6c15618481ede1331522ae64cf56f0b43bc6a68457b2d38",
+      "retained_original_archive": "72329fcad3446af03c53b691dc6f78b0c787d5b375e09a121efe73cf7b3d90ff.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "668d1aa95b614dec4d2e3d598e68d2d0be065a583bdd856fbbc19232bf3682c3",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "58fcc8043 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/screen-initial-pose-build-v1/proof.json",
+      "capture_seconds": 139.3077154019993,
+      "trace_sha256": "ddff7db810d0c89ae036fa1cca795b812fa409648267a2696619d2e7c8294262",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-218/candidates/41c54dc221fed6cb3e6999fd0234130683badfe9ea59a2569c7f20910e26b23b.tar",
+      "replay_exit": 0,
+      "replay_seconds": 341.19637633199454,
+      "candidate_sha256": "41c54dc221fed6cb3e6999fd0234130683badfe9ea59a2569c7f20910e26b23b",
+      "native_frames": 61005,
+      "replayed_frames": 61005,
+      "compared_stage_fields": 1584,
+      "pending_coverage": [],
+      "whole_song_parity_proven": true,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "fe78dd39a77774abc468735f503f01c3ec9c5c6dab2befe91752a4c0e4179069",
+      "archive": "432cad841636f318924a1d965af40ab100566e36e45c69fe66d12673db6a9b2c.tar.zst",
+      "archive_sha256": "432cad841636f318924a1d965af40ab100566e36e45c69fe66d12673db6a9b2c",
+      "compressed_bytes": 6412861,
+      "pack_seconds": 2.0515282480046153,
+      "harness_version": "0.1.80",
+      "title": "Gossipo Perpetuo",
+      "retained_original_entry": {
+        "title": "Gossipo Perpetuo",
+        "source_simfile": "Gossipo Perpetuo [chairodactyl] - Cameron Wiggers/gossiperpet.ssc",
+        "harness_version": "0.1.0",
+        "archive": "72329fcad3446af03c53b691dc6f78b0c787d5b375e09a121efe73cf7b3d90ff.tar.zst",
+        "sha256": "72329fcad3446af03c53b691dc6f78b0c787d5b375e09a121efe73cf7b3d90ff",
+        "compressed_bytes": 95535,
+        "uncompressed_sha256": "8fa970fb8a71913ab7c48350f012764c32cc3753da7be665bd0a37ba73b6a973",
+        "compression_level": 22,
+        "aliases": [
+          "4eafb4f72f77e7d61dd99e701b15468c1d43bd0165e15a76b7c64b50f6a6d33b.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -4751,9 +4799,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "89059df47baf921e209718f7e583ed93953151e60e5dc82fefc86cf74a309ca6",
+  "binary_sha256": "668d1aa95b614dec4d2e3d598e68d2d0be065a583bdd856fbbc19232bf3682c3",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 10,
+  "passed_fixtures": 11,
   "pending_charts": 25,
-  "processed_charts": 35
+  "processed_charts": 36
 }

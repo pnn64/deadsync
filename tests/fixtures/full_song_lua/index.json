@@ -2742,15 +2742,12 @@
     {
       "title": "Gossipo Perpetuo",
       "source_simfile": "Gossipo Perpetuo [chairodactyl] - Cameron Wiggers/gossiperpet.ssc",
-      "harness_version": "0.1.0",
-      "archive": "72329fcad3446af03c53b691dc6f78b0c787d5b375e09a121efe73cf7b3d90ff.tar.zst",
-      "sha256": "72329fcad3446af03c53b691dc6f78b0c787d5b375e09a121efe73cf7b3d90ff",
-      "compressed_bytes": 95535,
-      "uncompressed_sha256": "8fa970fb8a71913ab7c48350f012764c32cc3753da7be665bd0a37ba73b6a973",
-      "compression_level": 22,
-      "aliases": [
-        "4eafb4f72f77e7d61dd99e701b15468c1d43bd0165e15a76b7c64b50f6a6d33b.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "432cad841636f318924a1d965af40ab100566e36e45c69fe66d12673db6a9b2c.tar.zst",
+      "sha256": "432cad841636f318924a1d965af40ab100566e36e45c69fe66d12673db6a9b2c",
+      "compressed_bytes": 6412861,
+      "uncompressed_sha256": "41c54dc221fed6cb3e6999fd0234130683badfe9ea59a2569c7f20910e26b23b",
+      "aliases": []
     },
     {
       "title": "GREAT GREAT",
