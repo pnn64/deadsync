@@ -2922,15 +2922,12 @@
     {
       "title": "TETRIS",
       "source_simfile": "I'm sorry/sm.sm",
-      "harness_version": "0.1.0",
-      "archive": "1e6888ef38ca9b6c0ed597b22dda35367464ce0ae4fcee7c69d35ec7e5f074d4.tar.zst",
-      "sha256": "1e6888ef38ca9b6c0ed597b22dda35367464ce0ae4fcee7c69d35ec7e5f074d4",
-      "compressed_bytes": 154069,
-      "uncompressed_sha256": "880482ef2cac4ae2d668a40c18804e5cf59c299f7535f8a0cba99119eaa5b6f6",
-      "compression_level": 22,
-      "aliases": [
-        "1b4f60cb95a187c03031d6497ac18f8019edd0c6621919ddd9ce31de906abf84.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "cbba33052f6e21bc360acdcfc522172be305b59abfb2ca3fd2032738e865e1ec.tar.zst",
+      "sha256": "cbba33052f6e21bc360acdcfc522172be305b59abfb2ca3fd2032738e865e1ec",
+      "compressed_bytes": 5685923,
+      "uncompressed_sha256": "9a71ced6e2fa46ff6059b999bc28322de0744bae0d0cb1b4d53dd05ede7bbacb",
+      "aliases": []
     },
     {
       "title": "TETRIS",

@@ -3614,6 +3614,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 234,
+      "source_simfile": "I'm sorry/sm.sm",
+      "simfile_sha256": "676eb2da583081699939f2de874bb360fb480226230c8a540c7bbc76cb4fd53e",
+      "retained_original_archive": "1e6888ef38ca9b6c0ed597b22dda35367464ce0ae4fcee7c69d35ec7e5f074d4.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "56c7f5ad7480dc190223b46f68cd1f78d172e09431fc49d6eb9a095937789469",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+      "build_proof": "/home/parity/jobs/tap-callback-and-margins-build-v2/proof.json",
+      "capture_seconds": 163.28891178799677,
+      "trace_sha256": "4685e1129dc1cb2dfb4b46fbaf1ac915649315e848b01fccf74fd9520806e988",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-234/candidates/9a71ced6e2fa46ff6059b999bc28322de0744bae0d0cb1b4d53dd05ede7bbacb.tar",
+      "replay_exit": 0,
+      "replay_seconds": 12201.338317269998,
+      "candidate_sha256": "9a71ced6e2fa46ff6059b999bc28322de0744bae0d0cb1b4d53dd05ede7bbacb",
+      "native_frames": 104203,
+      "replayed_frames": 104203,
+      "compared_stage_fields": 1771,
+      "pending_coverage": [
+        "uncompared song operations: Actor.setsize, Actor.xy, GameState.ApplyGameCommand, Screen.AddInputCallback",
+        "native drawable state/resources: Quad"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "52c607a2769305ae43e9fb7563bd047d4947a71ca107f3396f278a7a22fec740",
+      "archive": "cbba33052f6e21bc360acdcfc522172be305b59abfb2ca3fd2032738e865e1ec.tar.zst",
+      "archive_sha256": "cbba33052f6e21bc360acdcfc522172be305b59abfb2ca3fd2032738e865e1ec",
+      "compressed_bytes": 5685923,
+      "pack_seconds": 2.454181706008967,
+      "harness_version": "0.1.80",
+      "title": "TETRIS",
+      "retained_original_entry": {
+        "title": "TETRIS",
+        "source_simfile": "I'm sorry/sm.sm",
+        "harness_version": "0.1.0",
+        "archive": "1e6888ef38ca9b6c0ed597b22dda35367464ce0ae4fcee7c69d35ec7e5f074d4.tar.zst",
+        "sha256": "1e6888ef38ca9b6c0ed597b22dda35367464ce0ae4fcee7c69d35ec7e5f074d4",
+        "compressed_bytes": 154069,
+        "uncompressed_sha256": "880482ef2cac4ae2d668a40c18804e5cf59c299f7535f8a0cba99119eaa5b6f6",
+        "compression_level": 22,
+        "aliases": [
+          "1b4f60cb95a187c03031d6497ac18f8019edd0c6621919ddd9ce31de906abf84.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -3623,9 +3674,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+  "binary_sha256": "56c7f5ad7480dc190223b46f68cd1f78d172e09431fc49d6eb9a095937789469",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 7,
+  "passed_fixtures": 8,
   "pending_charts": 15,
-  "processed_charts": 22
+  "processed_charts": 23
 }
