@@ -1,0 +1,191 @@
+{
+  "source_fix_commit": "43dae3f20",
+  "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+  "observed_failure": {
+    "seconds": 121.01800537109375,
+    "field": "failed",
+    "native": false,
+    "independent": true,
+    "first_independent_navigation_seconds": 120.7923812866211
+  },
+  "source_confirmed_cause": "Native GetMusicEndTiming adds the late-resolution window to whole Song.GetLastSecond. Gameplay seeded that minimum only with LASTSECONDHINT; the whole-song bound entered through audio_end without the window.",
+  "authored_source_evidence": {
+    "diagnostic_only": true,
+    "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+    "offset": "0.000000",
+    "bpms": "0.000000=155.000000",
+    "fakes": "305.000000=10.000000",
+    "charts": [
+      {
+        "index": 0,
+        "steps_type": "dance-single",
+        "description": "Exschwasion",
+        "difficulty": "Beginner",
+        "meter": "1",
+        "offset": null,
+        "bpms": null,
+        "first_beat": 16.0,
+        "last_beat": 304.0,
+        "last_beat_outside_fake_segment": 304.0
+      },
+      {
+        "index": 1,
+        "steps_type": "dance-single",
+        "description": "Exschwasion",
+        "difficulty": "Easy",
+        "meter": "4",
+        "offset": null,
+        "bpms": null,
+        "first_beat": 16.0,
+        "last_beat": 304.0,
+        "last_beat_outside_fake_segment": 304.0
+      },
+      {
+        "index": 2,
+        "steps_type": "dance-single",
+        "description": "Multitaps",
+        "difficulty": "Medium",
+        "meter": "7",
+        "offset": null,
+        "bpms": null,
+        "first_beat": 16.0,
+        "last_beat": 311.0,
+        "last_beat_outside_fake_segment": 304.0
+      },
+      {
+        "index": 3,
+        "steps_type": "dance-single",
+        "description": "Multitaps",
+        "difficulty": "Hard",
+        "meter": "9",
+        "offset": null,
+        "bpms": null,
+        "first_beat": 16.0,
+        "last_beat": 310.0,
+        "last_beat_outside_fake_segment": 304.0
+      },
+      {
+        "index": 4,
+        "steps_type": "dance-single",
+        "description": "Multitaps",
+        "difficulty": "Challenge",
+        "meter": "10",
+        "offset": null,
+        "bpms": null,
+        "first_beat": 16.0,
+        "last_beat": 311.0,
+        "last_beat_outside_fake_segment": 304.0
+      },
+      {
+        "index": 5,
+        "steps_type": "dance-single",
+        "description": "Multitaps",
+        "difficulty": "Edit",
+        "meter": "12",
+        "offset": null,
+        "bpms": null,
+        "first_beat": 14.5,
+        "last_beat": 311.0,
+        "last_beat_outside_fake_segment": 304.0
+      },
+      {
+        "index": 6,
+        "steps_type": "dance-double",
+        "description": "Multitaps",
+        "difficulty": "Challenge",
+        "meter": "10",
+        "offset": null,
+        "bpms": null,
+        "first_beat": 16.0,
+        "last_beat": 312.0,
+        "last_beat_outside_fake_segment": 304.0
+      }
+    ]
+  },
+  "selected_single_last_beat": 311,
+  "whole_song_playable_double_last_beat": 312,
+  "native_sources": [
+    "Song.cpp:1150-1204",
+    "ScreenGameplay.cpp:1669-1708",
+    "Player.cpp:3402-3418"
+  ],
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "independent_behavior": "Initial end bounds, rate changes and timing-cache refreshes now use independently parsed precise whole-song last second before adding the window. Selected note bounds and audio EOF keep their existing separate calculations.",
+  "build_proof": "/home/parity/jobs/whole-song-end-build-v1/proof.json",
+  "linux_checks": [
+    {
+      "label": "gameplay-tests",
+      "exit_code": 0,
+      "seconds": 42.93251419599983,
+      "results": [
+        "test result: ok. 815 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.10s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 238.10855482399347,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.074200856994139,
+      "results": [
+        "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.23s"
+      ]
+    }
+  ],
+  "windows_checks": [
+    {
+      "log": "whole-song-end-windows-gameplay-v2.log",
+      "passed": 815,
+      "failed": 0,
+      "sha256": "078bd4404a5d9cbfac7b760d9466b41d718a52ece2e583fa6d74ca03e7bacf51"
+    },
+    {
+      "log": "whole-song-end-windows-native-v2.log",
+      "passed": 20,
+      "failed": 0,
+      "sha256": "cd10f436c895af2aedcfe2e9b9b3afa887bceee8350cc8a92fbbf67a3df2f735"
+    }
+  ],
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "b7290301b41472a87236fe90399893048b4711d332c1d157f8ce30de74ded4a1",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "ccecdf07dae6378a7df8c94152537d0bab63651b2d193a496aaff3a40d2447dd",
+    "crates/deadsync-song-lua/src/live.rs": "dcb81a8286fa799cbc613e32f9d14e948a8ce7f8881cdac69f1507b0db91b6c1",
+    "crates/deadsync-song-lua/src/song_tables.rs": "3af70eef6c3e9b53eae43811a8a641dc1d8e3e9648a053ca8678302463732e19",
+    "crates/deadsync-song-lua/src/lua_util.rs": "3c3a417f11402f896b639fd42baacbb051748448f1371aed264ab69aa66b7b2b",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "52a1a400f480fc41a03c2bf963f6c31a333ccdc19158e9a262b15e626b907b5f",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "81ecd7c068c18a9f937f5769f67c2865f9ed02c229bea8deb45d814e75032f65",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "fda6b4c90dadc3be5765b7a32a2adf1a70a15936b8983c63411b4a15bd0943a5",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "4cf4acbd2870323761c3925f1808bd2eb0f4e64939cf82ca61d5459723e18078",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "a77c10452e9426f81c4c9f7b90d33092b6c6819fcf9bbb2b1f446a59528abb43",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856"
+  },
+  "binary_sha256": "261394c0b377727a495efc0635ceb40a9d8242d235ffe502adfa93054408f5e3",
+  "native_regression": "A selected single chart ends at beat 3; an unselected double chart has a fake row at beat 4. Production parsing and initialization must retain 4 seconds plus the roll-resolution window, through rate and offset changes, and must not navigate one nanosecond early.",
+  "retained_validation_logs": [
+    "whole-song-end-windows-before-fix-v1.log",
+    "whole-song-end-windows-before-fix-v2.log",
+    "whole-song-end-windows-before-fix-v3.log",
+    "whole-song-end-windows-gameplay-v1.log",
+    "whole-song-end-windows-native-v1.log"
+  ],
+  "validation_corrections": [
+    "Initial test borrow error was corrected before validation.",
+    "The initial expanded control included an unrelated later edit; its public-summary fallback is recorded as separate coverage. The final control models the actual later playable double fake row.",
+    "The existing rate regression assumed a fixed audio-end cap; it now checks the source-confirmed rate-scaled late-resolution window.",
+    "Windows native build ran out of space. Build artifacts were compressed without deleting retained evidence before rerunning the same controls."
+  ],
+  "acceptance": "Existing whole-chart comparisons unchanged; no passing chart reopened."
+}

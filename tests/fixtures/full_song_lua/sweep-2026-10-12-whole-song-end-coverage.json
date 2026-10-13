@@ -1,0 +1,7 @@
+{
+  "separate_from_acceptance": true,
+  "evidence": "whole-song-end-windows-before-fix-v2.log",
+  "synthetic_control_observation": "A later edit at 6 seconds was excluded by the precise-song candidate loop, but the existing public summary fallback still retained 6 rather than the ordinary charts maximum 4.",
+  "scope": "No original chart result was changed or reopened. The final gameplay end control covers the observed playable double fake row, not edit/lights summary fallback semantics.",
+  "acceptance_gate_added": false
+}
