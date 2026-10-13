@@ -958,6 +958,35 @@ end }
     }
 
     #[test]
+    fn live_loadactor_collapses_paths_before_loading_and_naming_chunks() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-actor-paths-{}", std::process::id()));
+        fs::create_dir_all(dir.join("parts")).expect("actor directory");
+        fs::write(dir.join("parts/child.lua"), r#"
+CHILD_SOURCE = debug.getinfo(1, 'S').source
+return Def.ActorFrame { LoadActor('.././sibling.lua') }
+"#).expect("nested actor script");
+        fs::write(dir.join("sibling.lua"), r#"
+SIBLING_SOURCE = debug.getinfo(1, 'S').source
+return Def.Actor { OnCommand = function(self) self:aux(19) end }
+"#).expect("sibling script");
+        let entry = dir.join("default.lua");
+        fs::write(&entry, "return Def.ActorFrame { LoadActor('./parts/missing/../child.lua') }")
+            .expect("actor path aliases");
+        let mut context = SongLuaCompileContext::new(&dir, "actor path collapse");
+        context.live = true;
+        let mut compiled: Compiled = crate::compile_song_lua_with_default_host(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])),
+            |_| None, |_, _| None).expect("native collapse happens before checking missing directory");
+        let scene = compiled.live_scene.take().expect("retained Lua scene");
+        for (key, path) in [("CHILD_SOURCE", dir.join("parts/child.lua")),
+            ("SIBLING_SOURCE", dir.join("sibling.lua"))] {
+            let source = scene.lua.globals().get::<String>(key).expect("actual Lua chunk source");
+            assert_eq!(source.trim_start_matches('@').replace('\\', "/"), crate::file_path_string(&path));
+        }
+        assert!(scene.states().iter().any(|state| state.aux == 19.0), "loaded sibling On command");
+    }
+
+    #[test]
     fn live_screen_layer_consumes_earlier_tween_before_later_message() {
         let mut compiled = compile("screen-layer-tweens", r#"
 local underlay = SCREENMAN:GetTopScreen():GetChild('Underlay')

@@ -87,27 +87,61 @@ pub fn resolve_compat_path(song_dir: &Path, raw_path: &str) -> PathBuf {
 }
 
 pub fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
-    let raw = Path::new(path);
+    resolve_script_path_with(lua, song_dir, path, false)
+}
+
+// ActorUtil::ResolvePath calls CollapsePath before filesystem lookup. Keep
+// that lexical spelling for Lua chunk names; canonicalize would also resolve
+// filesystem links, which native actor loading does not do.
+fn collapse_actor_path(path: &Path) -> PathBuf {
+    let text = file_path_string(path);
+    let mut output = String::with_capacity(text.len());
+    for part in text.split_inclusive('/') {
+        if (part == "/" || part == "./") && !output.is_empty() {
+            continue;
+        }
+        if part == "../" && !output.is_empty() && output != "/" {
+            let previous = output[..output.len() - 1].rfind('/').map_or(0, |i| i + 1);
+            if &output[previous..] != "../" {
+                output.truncate(previous);
+                continue;
+            }
+        }
+        output.push_str(part);
+    }
+    PathBuf::from(output)
+}
+
+fn resolve_script_path_with(
+    lua: &Lua,
+    song_dir: &Path,
+    path: &str,
+    actor_path: bool,
+) -> mlua::Result<PathBuf> {
+    let prepare = |candidate: &Path| {
+        if actor_path { collapse_actor_path(candidate) } else { candidate.to_path_buf() }
+    };
+    let raw = prepare(Path::new(path));
     if raw.is_absolute() && raw.exists() {
-        return Ok(raw.to_path_buf());
+        return Ok(raw);
     }
     let globals = lua.globals();
     if let Some(current_dir) = globals
         .get::<Option<String>>("__songlua_script_dir")?
         .filter(|dir| !dir.trim().is_empty())
     {
-        let candidate = Path::new(&current_dir).join(path);
+        let candidate = prepare(&Path::new(&current_dir).join(path));
         if candidate.exists() {
             return Ok(candidate);
         }
     }
-    let candidate = song_dir.join(path);
+    let candidate = prepare(&song_dir.join(path));
     if candidate.exists() {
         return Ok(candidate);
     }
     // GetSongDir can be process-relative for AdditionalSongFolders entries.
     if raw.exists() {
-        return Ok(raw.to_path_buf());
+        return Ok(raw);
     }
     Err(mlua::Error::external(format!(
         "script '{}' not found relative to '{}'",
@@ -117,7 +151,7 @@ pub fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Resu
 }
 
 pub fn resolve_load_actor_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
-    let mut resolved = if let Ok(resolved) = resolve_script_path(lua, song_dir, path) {
+    let mut resolved = if let Ok(resolved) = resolve_script_path_with(lua, song_dir, path, true) {
         if resolved.is_dir() {
             return resolve_load_actor_directory(&resolved, song_dir, path);
         }
@@ -173,7 +207,7 @@ fn resolve_load_actor_autowildcard(
     // ITGmania's ActorUtil::ResolvePath appends "*" after an exact miss, so
     // LoadActor("overlay") can resolve a hinted name such as "overlay 3x4.png".
     for base_dir in load_actor_search_dirs(lua, song_dir)? {
-        let base = base_dir.join(path);
+        let base = collapse_actor_path(&base_dir.join(path));
         let Some(parent) = base.parent().filter(|parent| parent.is_dir()) else {
             continue;
         };
