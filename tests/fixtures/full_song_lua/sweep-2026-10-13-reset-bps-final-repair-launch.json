@@ -1,0 +1,183 @@
+{
+  "selected_build": {
+    "build_proof": "/home/parity/jobs/reset-bps-green-v1/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "binary_sha256": "80852434eb3c1dc7c06a2a42523e35674f0b6c663c095b6f16a4ee8b0265adc6",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "actual_source_pins": 29,
+  "harness_source_pins": 3,
+  "repairs": [
+    {
+      "position": 326,
+      "source_simfile": "new earth/new earth.ssc",
+      "attempt_started": 2,
+      "per_chart_limit": 2,
+      "remaining_repairs_after_this_attempt": 0,
+      "launch_receipt": {
+        "position": 326,
+        "supervisor_pid": 3004957,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_reset_bps_final_repair_v1.py",
+          "326"
+        ]
+      },
+      "live_observation": {
+        "pid": 3005169,
+        "command": [
+          "/home/parity/jobs/reset-bps-green-v1/full-song-lua-stage-modifier-v1",
+          "--archive",
+          "/home/parity/jobs/new-earth-reset-bps-final-repair-v1/chart-326/1cf42f912b0caf2c3c0d9ba3f17a640ffd9313f9a353d4c4f4bcb076c5c1b1ab.tar",
+          "--report",
+          "/home/parity/jobs/new-earth-reset-bps-final-repair-v1/chart-326/report.json"
+        ],
+        "label": "replay",
+        "source_simfile": "new earth/new earth.ssc"
+      },
+      "exact_process_matches": [
+        true,
+        true
+      ],
+      "attempt_start": {
+        "position": 326,
+        "source_simfile": "new earth/new earth.ssc",
+        "status": "pending",
+        "repair_attempts": 2,
+        "previous_concrete_failures": [
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0017",
+              "args": [
+                0.4
+              ],
+              "beat": 0,
+              "caller": {
+                "line": 171,
+                "source": "song:/lua/default.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0017",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 171,
+              "operation": "Actor.effectperiod",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0,
+              "seq": 87,
+              "source": "song:/lua/default.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.effectperiod",
+              "source": "song:/lua/default.lua",
+              "line": 171,
+              "phase": "callback",
+              "beat": 0.0,
+              "seconds": 0.0,
+              "args": [
+                1.7777777777777777
+              ],
+              "results": [
+                {
+                  "actor": "0x5b14ede87940",
+                  "name": "SpaceshipSpriteP1",
+                  "path": "ScreenGameplay/SongForeground/SpaceshipSpriteP1"
+                }
+              ],
+              "tween_time_left": 0.0
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0020",
+              "args": [
+                0.4
+              ],
+              "beat": 0,
+              "caller": {
+                "line": 171,
+                "source": "song:/lua/default.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0020",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 171,
+              "operation": "Actor.effectperiod",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0,
+              "seq": 109,
+              "source": "song:/lua/default.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.effectperiod",
+              "source": "song:/lua/default.lua",
+              "line": 171,
+              "phase": "callback",
+              "beat": 0.0,
+              "seconds": 0.0,
+              "args": [
+                1.7777777777777777
+              ],
+              "results": [
+                {
+                  "actor": "0x5b14ededadb0",
+                  "name": "SpaceshipSpriteP2",
+                  "path": "ScreenGameplay/SongForeground/SpaceshipSpriteP2"
+                }
+              ],
+              "tween_time_left": 0.0
+            }
+          }
+        ],
+        "previous_errors": [],
+        "previous_failure": null,
+        "binary_sha256": "80852434eb3c1dc7c06a2a42523e35674f0b6c663c095b6f16a4ee8b0265adc6",
+        "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+        "candidate_sha256": "1cf42f912b0caf2c3c0d9ba3f17a640ffd9313f9a353d4c4f4bcb076c5c1b1ab",
+        "trace_sha256": "5142c22ee3a02a750a5bf8de5aea44b4eeaa1ed26dff9a6889614801e61444d4",
+        "simfile_sha256": "614f29f557e0e936a2650122071d9d408eaaa46690031b08dddb471f694a4abb",
+        "build_proof": "/home/parity/jobs/reset-bps-green-v1/proof.json",
+        "fix_commit": "76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+        "native_capture_reused": true,
+        "all_candidate_manifest_members_byte_verified": true
+      },
+      "replay_log_tail": [
+        "[12.0s] replaying every native gameplay frame: frame 433/89954 (0.5%)",
+        "[14.0s] replaying every native gameplay frame: frame 511/89954 (0.6%)",
+        "[16.0s] replaying every native gameplay frame: frame 592/89954 (0.7%)"
+      ],
+      "completed_result": null
+    }
+  ],
+  "status": "final bounded New Earth reset BPS repair launched; existing complete replay comparisons determine acceptance",
+  "validated_build": "sweep-2026-10-13-reset-bps-build.json",
+  "native_capture_reused": true,
+  "all_uncompressed_candidate_members_verified": true,
+  "publisher_streams": 64,
+  "publisher_count": 1,
+  "actual_publisher": {
+    "ProcessId": 60312,
+    "CommandLine": "\"C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe\" -B -X utf8 C:/GitHub/itgmania-harness/target/server-parity/publish_chart_sweep_v1.py"
+  },
+  "comparisons_modified": false,
+  "passing_charts_reopened": false,
+  "capped_lower_ssc_not_retried": true
+}
