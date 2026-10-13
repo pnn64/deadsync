@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T02:16:32Z",
+  "updated_utc": "2026-10-13T04:14:31Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 177,
-    "pending": 37,
-    "unprocessed": 287
+    "passed": 185,
+    "pending": 56,
+    "unprocessed": 260
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1757,7 +1757,9 @@
       "position": 199,
       "source_simfile": "Freaky Deaky/Freaky Deaky.ssc",
       "simfile_sha256": "40b966aea20ce9a9618e9ca081495f9fe47b62b0d367013b7d1230cad739e878",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 200,
@@ -1779,7 +1781,9 @@
       "position": 202,
       "source_simfile": "FTW/FTW.ssc",
       "simfile_sha256": "02bdd005c5338279a37b482183b14e30e2c5fed1238575eb8f2caf92c2c03cde",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-ftw-ssc-description-repairs.json"
     },
     {
       "position": 203,
@@ -1801,7 +1805,9 @@
       "position": 205,
       "source_simfile": "Gallium Phosphide/Gallium Phosphide.ssc",
       "simfile_sha256": "c76b8c1f76163cd87fc702d3cbec68efa50430b4738b108b727578807ac00040",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 206,
@@ -1823,7 +1829,9 @@
       "position": 208,
       "source_simfile": "Gemini in Clockland/Gemini in Clockland.ssc",
       "simfile_sha256": "894f635cea6d0b7dac5e5d434ee5b707e756158672cf1681205bbe2649b98dd3",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 209,
@@ -1845,7 +1853,9 @@
       "position": 211,
       "source_simfile": "Get Into It/GetIntoIt.ssc",
       "simfile_sha256": "c13e18cc0089f8bd5f5dbf814ff97ae0fd614856914b8c41b1593a120e9ebed5",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 212,
@@ -1867,7 +1877,9 @@
       "position": 214,
       "source_simfile": "Girls MIA/girlsmia-fakemines.ssc",
       "simfile_sha256": "ce00fed7041435092476160f3d78430b61ef78386425171a8b95b44cc363c0d8",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 215,
@@ -1889,7 +1901,9 @@
       "position": 217,
       "source_simfile": "Goodbye/Goodbye.ssc",
       "simfile_sha256": "9e2e3158b68431bee28b6b0461b07f2cb33266d55e6cdcb330e92f0b20324bec",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 218,
@@ -1911,7 +1925,9 @@
       "position": 220,
       "source_simfile": "Hallways/hallways.ssc",
       "simfile_sha256": "2f1099184b916460d6d31762b49cac0098a2e26e4a0f57e00a3a2bd8cdafb6bf",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 221,
@@ -1925,13 +1941,17 @@
       "position": 222,
       "source_simfile": "Happy Now Remastered/Happy Now.sm",
       "simfile_sha256": "88dccb258ff2b8a2254c64f461b3ab0dd1d4c78c669d77495e0ec4394a9d94e7",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 223,
       "source_simfile": "Happy Now Remastered/Happy Now.ssc",
       "simfile_sha256": "d7cb2c12b9ab2e40fb30ed6c082ed12ccd4f71f2420bde2942b72ac5f6e68195",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 224,
@@ -1945,55 +1965,73 @@
       "position": 225,
       "source_simfile": "Happy Now/Happy Now.ssc",
       "simfile_sha256": "9c577d5c3cbbc12ea6b4ed5313ac789e3b3adcd24c0e5a345f4b078292f05740",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 226,
       "source_simfile": "Haxo (Sharks Remix) [sorae]/haxo.ssc",
       "simfile_sha256": "d02a73daed864c71d7c0a94e5a8780c2800796ba72db07f98b79790c12eecc72",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 227,
       "source_simfile": "Hello Gordon [chairodactyl] - Cameron Wiggers/Hello Gordon.ssc",
       "simfile_sha256": "24202fda58b5285d06b8fed5aab5db33014eae5bfa043ac9ca630f9f671198c7",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 228,
       "source_simfile": "Hispanic Panic/sm.sm",
       "simfile_sha256": "e6dd029566e76feded2b428c282d50c2214589c47ffb1f2e1035ab5449f5687e",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 229,
       "source_simfile": "HOPE/HOPE.ssc",
       "simfile_sha256": "40320b6ae63e366213e7fbb060fc36beadd09fa2bb33be032bc9177e8a7b023d",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 230,
       "source_simfile": "I (Ai)/I (Ai).ssc",
       "simfile_sha256": "b018aa73151f0cbe2ede2b3fccc31a181cbe806b76faa0b0eddc9221a5357b78",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 231,
       "source_simfile": "I Like To Move It/I Like To Move It.ssc",
       "simfile_sha256": "bdc923e7b32ec605442400459621ea1db149e5523a269e2409a83e540c311f61",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 232,
       "source_simfile": "I Really Like You [dbk2]/I Really Like You.sm",
       "simfile_sha256": "4a47bd207f8c9a72cc73dfd5ab263dd151cb26c3ed1ee713c772aa965f1f249f",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 233,
       "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
       "simfile_sha256": "6438069708d9f60a9df6ba4e35b63b2717a0981e50d35963b773b1cc32d35b4e",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 234,
@@ -2011,7 +2049,9 @@
       "position": 236,
       "source_simfile": "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc",
       "simfile_sha256": "30720d33bd4a2f6746f910b4ac601b4b8bdda7c49c8c04cc9d1914482db12631",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 237,
@@ -2029,7 +2069,9 @@
       "position": 239,
       "source_simfile": "Igaku/Igaku.sm",
       "simfile_sha256": "6c42c53e7fc3a722c38282e866f1b99855cc3486c9eb25e8ed9a7a62b8a3c8e5",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 240,
@@ -2047,7 +2089,9 @@
       "position": 242,
       "source_simfile": "Impulse/impulse.sm",
       "simfile_sha256": "4202087684d63c9525e824368b4e2c021070b3c7bfd01409db460d94823392b4",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 243,
@@ -2065,7 +2109,9 @@
       "position": 245,
       "source_simfile": "INAZUMA (Gio)/INAZUMA.ssc",
       "simfile_sha256": "c0fbe90d2636f645bae1dcb7b91d162eab21e194ba52ea333140b7edb8181d83",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 246,
@@ -2083,7 +2129,9 @@
       "position": 248,
       "source_simfile": "Intro Outro/intro.ssc",
       "simfile_sha256": "8214dcbee76704e940f10dbedc814c541fb615f0f1fdfcbccc230b750a82649d",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 249,
@@ -2101,7 +2149,9 @@
       "position": 251,
       "source_simfile": "It's Showtime/mettaton.ssc",
       "simfile_sha256": "73e611898e40fd3b7a07a6257a3b38e4a6a07cf8f39b0f3e4bd8e7cebbbde128",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 252,
@@ -2119,7 +2169,9 @@
       "position": 254,
       "source_simfile": "Jack The Reaper/Jack The Reaper.ssc",
       "simfile_sha256": "1c5e5890830b97d3122feb59ab13f89c6b336b09b67546114022519ae1e660d3",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 255,
@@ -2137,7 +2189,9 @@
       "position": 257,
       "source_simfile": "Jesus He Knows me/jesusheknowsme.ssc",
       "simfile_sha256": "c87ddc3da7a9dbc3b933227af7d6ddd919eee618da23e70c7083635bb30970ca",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 258,

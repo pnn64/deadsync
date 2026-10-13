@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T02:16:30Z",
-  "previous_goal_turn": "progress: Gossipo Perpetuo SSC passed all 61005 frames and was saved immediately as b458e78e8. FTW source metadata loss was traced to RSSP Unicode trimming versus native ASCII trimming: 142 description stage fields plus one GetCurrentSteps result. SM runtime description, credit and chart name now preserve authored non-ASCII whitespace and escaped text; cache version 64 invalidates old metadata, committed as a45545f0a. The fix passed 17 Windows and Linux song parser tests, one cache rejection control and 18 Linux native replay controls; immutable helper 76f1176f selected. FTW first repair reused the original uncompressed capture and passed all 55351 frames and 1562 stage fields with zero errors or mismatches, saved immediately as 7bf2b1006. DREAMING final attempt 2 completed all 32257 frames with zero Lua errors and one failed-flag mismatch at 48.077754974365234 seconds; it reached the two-attempt cap and remains pending. Directory foreground source names were traced to Native Foreground literal default.lua requests through case-insensitive file lookup; physical file reads are now separate from requested chunk names, with explicitly named file spelling retained, committed as 63e17ffe7. The source fix passed 31 Windows and Linux live tests and 18 Linux native replay controls; the first validation test incorrectly inspected a callback tracing wrapper, and failed validation logs were retained before correction. Immutable helper 6337f9ca is validated and selected for future charts. No new Feely full replay was launched: one final attempt remains, pending gameplay tap callback dispatch and one early failed observation. Flowers Cringle first repair completed all 18924 frames and 2255 stage fields without Lua errors but with 572027 command mismatches: all 160357 extra style queries are gone, and 3584 operations remain missing with a first native P1 X 213.25 versus independent 213.5 input discrepancy. One final attempt remains. Actual new failures for flowers/flowers, Godspeed, Happiness, gone, GREAT GREAT and fof were published as pending. The three fixed disjoint original sweep queues and the single dynamic publisher remain active; all 501 original source bytes are unchanged and the sweep is incomplete.",
+  "updated_utc": "2026-10-13T04:14:32Z",
+  "previous_goal_turn": "progress: FTW SSC first repair passed all 51154 frames and 1573 stage checks with zero errors or mismatches using its retained uncompressed capture; the compressed fixture was decompressed and byte-verified before immediate publication as 1918f8e67. Modern SSC DESCRIPTION lost authored NBSP through RSSP Unicode trimming; native ASCII-only trimming is preserved in b29bff67c and cache version 65. Synchronous gameplay tap callbacks now invoke the same retained Lua VM before the ghost with native column/enum return conversions and bright policy, committed as 9e0511014. Simply Love player margins now reproduce native SafeFArg integer truncation, committed as 8f91878dc, yielding P1 213.25 and P2 640.75 at logical width 854. The corrected production foreground-clock callback control is committed as 5e84abcd4. The seven-check immutable helper 56c7f5ad passed Windows and Linux controls and was selected; Flowers Cringle final attempt 2 is running from the same candidate after its first repair removed all 160357 extra style queries but left 3584 missing calls and 0.25 player-position differences. Feely early failed at 121.01800537109375 was traced to its unselected playable double fake row ending at beat 312 while selected single ends at 311: native adds the late-resolution window after whole Song.GetLastSecond; gameplay previously applied it only to selected rows and LASTSECONDHINT. Fix 43dae3f20 now seeds initial, rate-change and offset-refresh bounds with the independently parsed whole-song end; all 815 gameplay tests and 20 native replay controls pass on Windows and Linux. Failed validation revisions and the Windows disk-space failure are retained; NTFS build-artifact compression recovered space without deleting evidence. Immutable helper 261394c0 is verified and selected for future charts. Feely final attempt 2 is running from the byte-identical case-corrected candidate with the unchanged native trace. A later-edit summary fallback found in an expanded synthetic control is recorded separately as coverage and did not add an acceptance gate or reopen passing fixtures. I Like To Move It and Jack The Reaper passed and were immediately saved as 08fee2846 and c839658de; the original three fixed disjoint queues and single dynamic publisher remain active. All 501 original source bytes are unchanged; the sweep is incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "b4a13527dab201f51556e9078351e461c714fc90",
+      "deadsync": "edc6075a6a3cb9f90526c48c32ec4941be7ce050",
       "itgmania_harness": "b191ebd0fcf8b59b5294958d2ffe2939af2d742a"
     }
   },
@@ -40,7 +40,9 @@
     "rage_sound_volume": "355263c7e passed 29 Windows and Linux live tests plus 18 Linux replay controls; DREAMING final attempt 2 completed all 32257 frames with no Lua errors and one failed-flag mismatch, reaching its two-attempt cap; live audio mixing coverage stays separate; sweep-2026-10-12-sound-volume-build.json",
     "screen_initial_positions": "58fcc8043 passed 30 Windows and Linux live tests plus 18 Linux replay controls; getters and authored tween origins use independent initial positions; Flowers Cringle attempt 1 completed all 18924 frames with no Lua errors; style queries corrected but 3584 calls remain missing and the first position is off by 0.25; sweep-2026-10-12-screen-initial-pose-build.json",
     "native_sm_metadata": "a45545f0a passed 17 Windows and Linux parser tests, one cache rejection control and 18 Linux replay controls; FTW attempt 1 passed all 55351 frames and 1562 fields, saved as 7bf2b1006; sweep-2026-10-12-sm-metadata-build.json",
-    "requested_foreground_source": "63e17ffe7 passed 31 Windows and Linux live tests and 18 Linux replay controls; retained failed validation revision was corrected before selection; helper 6337f9ca selected; Feely final attempt not launched; sweep-2026-10-12-foreground-source-build.json",
+    "requested_foreground_source": "63e17ffe7 passed 31 Windows and Linux live tests and 18 Linux replay controls; retained failed validation revision was corrected before selection; helper 6337f9ca source revision verified; Feely final 2 now running after validated callback and whole-song end fixes; sweep-2026-10-12-foreground-source-build.json",
+    "tap_callbacks_margins_and_ssc": "9e0511014, 8f91878dc, b29bff67c and foreground control 5e84abcd4 passed the seven-check Windows/Linux validation; immutable helper 56c7f5ad; FTW SSC passed as 1918f8e67 and Flowers final 2 is running; sweep-2026-10-12-tap-callback-and-margins-build.json",
+    "whole_song_end_window": "43dae3f20 passed all 815 gameplay tests and 20 native replay controls on Windows and Linux; immutable helper 261394c0 selected; Feely final 2 reuses unchanged native capture; sweep-2026-10-12-whole-song-end-build.json",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved"
   },
   "corpus_transfer": {
@@ -55,14 +57,14 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Hello Gordon [chairodactyl] - Cameron Wiggers/Hello Gordon.ssc",
-      "position": 227,
+      "current": "Jumper/Jumper.ssc",
+      "position": 260,
       "phase": "capture",
-      "pid": 1235820,
+      "pid": 1735580,
       "process_matches": true,
-      "passed": 11,
-      "pending": 27,
-      "processed": 38,
+      "passed": 13,
+      "pending": 36,
+      "processed": 49,
       "last_log_lines": [],
       "supervisor_running": true
     },
@@ -79,12 +81,47 @@
     "feely_owned_style_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-feely-owned-style-diagnosis.json",
     "dreaming_sound_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-dreaming-sound-volume-diagnosis.json",
     "initial_screen_pose_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-screen-initial-pose-diagnosis.json",
+    "ftw_ssc_metadata_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-ftw-ssc-metadata-diagnosis.json",
+    "whole_song_end_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-whole-song-end-build.json",
     "ftw_metadata_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-ftw-metadata-diagnosis.json",
     "feely_source_and_callbacks": "tests/fixtures/full_song_lua/sweep-2026-10-12-feely-source-and-callback-diagnosis.json",
     "repair_residuals": "tests/fixtures/full_song_lua/sweep-2026-10-12-path-repair-residuals.json",
     "fiji_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-fiji-foreground-diagnosis.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
+      {
+        "job": "flowers-cringle-tap-and-margins-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
+        "child_running": true
+      },
+      {
+        "job": "ftw-ssc-description-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
+        "pending": 0,
+        "processed": 1,
+        "last_phase": "pack",
+        "source_simfile": "FTW/FTW.ssc",
+        "child_running": false
+      },
+      {
+        "job": "feely-final-song-end-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+        "child_running": true
+      },
       {
         "job": "ftw-metadata-repair-v1",
         "complete": true,
@@ -288,25 +325,25 @@
         "job": "chart-sweep-parallel-v4-1",
         "complete": false,
         "supervisor_running": true,
-        "passed": 6,
-        "pending": 12,
-        "processed": 18,
-        "last_phase": "capture",
-        "source_simfile": "Happy Now Remastered/Happy Now.sm",
+        "passed": 7,
+        "pending": 15,
+        "processed": 22,
+        "last_phase": "replay",
+        "source_simfile": "I'm sorry/sm.sm",
         "child_running": true,
-        "position": 222
+        "position": 234
       },
       {
         "job": "chart-sweep-parallel-v4-2",
         "complete": false,
         "supervisor_running": true,
-        "passed": 4,
-        "pending": 6,
-        "processed": 10,
+        "passed": 8,
+        "pending": 14,
+        "processed": 22,
         "last_phase": "replay",
-        "source_simfile": "Freaky Deaky/Freaky Deaky.ssc",
+        "source_simfile": "I'm sorry/sm.ssc",
         "child_running": true,
-        "position": 199
+        "position": 235
       },
       {
         "job": "definition-concat-repair-v1",
@@ -565,15 +602,36 @@
         "record": "sweep-2026-10-12-ftw-metadata-repairs.json",
         "fix_commit": "a45545f0a / harness b191ebd",
         "finish_status": "bounded FTW native chart metadata repair complete"
+      },
+      {
+        "name": "flowers-cringle-tap-and-margins-repair",
+        "remote": "/home/parity/jobs/flowers-cringle-tap-and-margins-repair-v1",
+        "record": "sweep-2026-10-12-flowers-cringle-tap-and-margins-repairs.json",
+        "fix_commit": "9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+        "finish_status": "bounded Flowers Cringle final tap callback and margin repair complete"
+      },
+      {
+        "name": "ftw-ssc-description-repair",
+        "remote": "/home/parity/jobs/ftw-ssc-description-repair-v1",
+        "record": "sweep-2026-10-12-ftw-ssc-description-repairs.json",
+        "fix_commit": "9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+        "finish_status": "bounded FTW SSC first description repair complete"
+      },
+      {
+        "name": "feely-final-song-end-repair",
+        "remote": "/home/parity/jobs/feely-final-song-end-repair-v1",
+        "record": "sweep-2026-10-12-feely-final-song-end-repairs.json",
+        "fix_commit": "43dae3f20 + 63e17ffe7 + 9e0511014 + 8f91878dc / harness b191ebd",
+        "finish_status": "bounded feelyourtouch final source callback and whole-song end repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 30,
-    "new_pending_charts": 36,
-    "new_processed_sources": 66,
+    "new_passed_fixtures": 38,
+    "new_pending_charts": 55,
+    "new_processed_sources": 93,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 287,
+    "unprocessed_sources": 260,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -970,6 +1028,98 @@
       "first_mismatch": []
     },
     {
+      "source_simfile": "Hello Gordon [chairodactyl] - Cameron Wiggers/Hello Gordon.ssc",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-1235820-1791857712348590450-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "I (Ai)/I (Ai).ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 66105,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 322399,
+          "deadsync": 322390
+        }
+      ]
+    },
+    {
+      "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 1,
+      "first_mismatch": [
+        {
+          "field": "source_broadcast_count",
+          "native": 5375,
+          "deadsync": 0
+        }
+      ]
+    },
+    {
+      "source_simfile": "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-1403153-1791860093488127063-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1403153-1791860093488127063-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Igaku/Igaku.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 286634,
+      "first_mismatch": [
+        {
+          "phase": "progress",
+          "seconds": 119.00501251220703,
+          "field": "failed",
+          "native": false,
+          "deadsync": true
+        }
+      ]
+    },
+    {
+      "source_simfile": "Impulse/impulse.sm",
+      "repair_attempts": 0,
+      "failure": "[0.5s] replaying every native gameplay frame\n\nthread 'main' (1482632) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: multiple native foreground entries need entry-specific ownership\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "INAZUMA (Gio)/INAZUMA.ssc",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1482682-1791861272532323397-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1482682-1791861272532323397-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Intro Outro/intro.ssc",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-1547895-1791862173152612546-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "It's Showtime/mettaton.ssc",
+      "repair_attempts": 0,
+      "failure": " 45682/145878 (31.3%)\n[698.1s] replaying every native gameplay frame: frame 45809/145878 (31.4%)\n[700.1s] replaying every native gameplay frame: frame 45944/145878 (31.5%)\n[702.1s] replaying every native gameplay frame: frame 46072/145878 (31.6%)\n[704.1s] replaying every native gameplay frame: frame 46205/145878 (31.7%)\n[706.1s] replaying every native gameplay frame: frame 46337/145878 (31.8%)\n[708.1s] replaying every native gameplay frame: frame 46477/145878 (31.9%)\n[710.1s] replaying every native gameplay frame: frame 46618/145878 (32.0%)\n[712.1s] replaying every native gameplay frame: frame 46756/145878 (32.1%)\n[714.1s] replaying every native gameplay frame: frame 46896/145878 (32.1%)\n[716.1s] replaying every native gameplay frame: frame 47033/145878 (32.2%)\n[718.1s] replaying every native gameplay frame: frame 47162/145878 (32.3%)\n[720.2s] replaying every native gameplay frame: frame 47292/145878 (32.4%)\n[722.2s] replaying every native gameplay frame: frame 47422/145878 (32.5%)\n[724.2s] replaying every native gameplay frame: frame 47554/145878 (32.6%)\n[726.2s] replaying every native gameplay frame: frame 47686/145878 (32.7%)\n[728.2s] replaying every native gameplay frame: frame 47817/145878 (32.8%)\n[730.2s] replaying every native gameplay frame: frame 47927/145878 (32.9%)\n[732.2s] replaying every native gameplay frame: frame 48058/145878 (32.9%)\n[734.2s] replaying every native gameplay frame: frame 48189/145878 (33.0%)\n[736.2s] replaying every native gameplay frame: frame 48323/145878 (33.1%)\n[738.2s] replaying every native gameplay frame: frame 48455/145878 (33.2%)\n[740.2s] replaying every native gameplay frame: frame 48589/145878 (33.3%)\n[742.2s] replaying every native gameplay frame: frame 48717/145878 (33.4%)\n[744.2s] replaying every native gameplay frame: frame 48846/145878 (33.5%)\n[746.2s] replaying every native gameplay frame: frame 48973/145878 (33.6%)\n[748.2s] replaying every native gameplay frame: frame 49099/145878 (33.7%)\n[750.2s] replaying every native gameplay frame: frame 49225/145878 (33.7%)\n[752.2s] replaying every native gameplay frame: frame 49352/145878 (33.8%)\n[754.2s] replaying every native gameplay frame: frame 49477/145878 (33.9%)\n[756.2s] replaying every native gameplay frame: frame 49601/145878 (34.0%)\n[758.2s] replaying every native gameplay frame: frame 49721/145878 (34.1%)\n[760.2s] replaying every native gameplay frame: frame 49840/145878 (34.2%)\n[762.2s] replaying every native gameplay frame: frame 49964/145878 (34.3%)\n[764.2s] replaying every native gameplay frame: frame 50088/145878 (34.3%)\n[766.2s] replaying every native gameplay frame: frame 50213/145878 (34.4%)\n[768.2s] replaying every native gameplay frame: frame 50332/145878 (34.5%)\n[770.2s] replaying every native gameplay frame: frame 50459/145878 (34.6%)\n[772.2s] replaying every native gameplay frame: frame 50586/145878 (34.7%)\n[774.2s] replaying every native gameplay frame: frame 50709/145878 (34.8%)\n[776.2s] replaying every native gameplay frame: frame 50839/145878 (34.9%)\n[778.2s] replaying every native gameplay frame: frame 50971/145878 (34.9%)\n[780.2s] replaying every native gameplay frame: frame 51100/145878 (35.0%)\n[782.2s] replaying every native gameplay frame: frame 51231/145878 (35.1%)\n\nthread 'main' (1572481) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: GAMESTATE has no selected P1 chart\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
       "source_simfile": "Delightful Day/Delightful Day.sm",
       "repair_attempts": 0,
       "failure": null,
@@ -1182,6 +1332,36 @@
       ]
     },
     {
+      "source_simfile": "Happy Now Remastered/Happy Now.sm",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1203129-1791857277402329388-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1203129-1791857277402329388-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Happy Now/Happy Now.ssc",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-1269178-1791858178162342429-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1269178-1791858178162342429-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Hispanic Panic/sm.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 986,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 985,
+          "deadsync": 986
+        }
+      ]
+    },
+    {
       "source_simfile": "Delightful Day/Delightful Day.ssc",
       "repair_attempts": 0,
       "failure": null,
@@ -1259,6 +1439,112 @@
       "source_simfile": "fof_guys/fof.ssc",
       "repair_attempts": 0,
       "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.0s] : 0 checks completed, 0 failed\n[16.0s] : 0 checks completed, 0 failed\n[18.0s] : 0 checks completed, 0 failed\n[20.0s] : 0 checks completed, 0 failed\n[22.0s] : 0 checks completed, 0 failed\n[24.0s] : 0 checks completed, 0 failed\n[26.0s] : 0 checks completed, 0 failed\n[28.0s] : 0 checks completed, 0 failed\n[30.0s] : 0 checks completed, 0 failed\n[32.0s] : 0 checks completed, 0 failed\n[34.0s] : 0 checks completed, 0 failed\n[36.0s] : 0 checks completed, 0 failed\n[38.0s] : 0 checks completed, 0 failed\n[40.0s] : 0 checks completed, 0 failed\n[42.0s] : 0 checks completed, 0 failed\n[44.0s] : 0 checks completed, 0 failed\n[46.0s] : 0 checks completed, 0 failed\n[48.0s] : 0 checks completed, 0 failed\n[50.0s] : 0 checks completed, 0 failed\n[52.0s] : 0 checks completed, 0 failed\n[54.0s] : 0 checks completed, 0 failed\n[56.0s] : 0 checks completed, 0 failed\n[58.0s] : 0 checks completed, 0 failed\n[60.0s] : 0 checks completed, 0 failed\n[62.0s] : 0 checks completed, 0 failed\n[64.0s] : 0 checks completed, 0 failed\n[66.0s] : 0 checks completed, 0 failed\n[68.0s] : 0 checks completed, 0 failed\n[70.0s] : 0 checks completed, 0 failed\n[72.0s] : 0 checks completed, 0 failed\n[74.0s] : 0 checks completed, 0 failed\n[76.0s] : 0 checks completed, 0 failed\n[78.0s] : 0 checks completed, 0 failed\n[80.0s] : 0 checks completed, 0 failed\n[82.0s] : 0 checks completed, 0 failed\n[84.0s] : 0 checks completed, 0 failed\n[86.0s] : 0 checks completed, 0 failed\n[88.0s] : 0 checks completed, 0 failed\n[90.0s] : 0 checks completed, 0 failed\n[92.0s] : 0 checks completed, 0 failed\n[94.0s] : 0 checks completed, 0 failed\n[96.0s] : 0 checks completed, 0 failed\n[98.0s] : 0 checks completed, 0 failed\n[100.0s] : 0 checks completed, 0 failed\n[102.1s] : 0 checks completed, 0 failed\n[104.1s] : 0 checks completed, 0 failed\n[106.1s] : 0 checks completed, 0 failed\n[108.1s] : 0 checks completed, 0 failed\n[110.1s] : 0 checks completed, 0 failed\n[112.1s] : 0 checks completed, 0 failed\n[114.2s] : 0 checks completed, 0 failed\n[116.2s] : 0 checks completed, 0 failed\n[118.3s] : 0 checks completed, 0 failed\n[120.4s] : 0 checks completed, 0 failed\n[122.4s] : 0 checks completed, 0 failed\n[124.4s] : 0 checks completed, 0 failed\n[126.4s] : 0 checks completed, 0 failed\n[128.4s] : 0 checks completed, 0 failed\n[130.5s] : 0 checks completed, 0 failed\n[132.5s] : 0 checks completed, 0 failed\n[134.5s] : 0 checks completed, 0 failed\n[136.6s] : 0 checks completed, 0 failed\n[138.6s] : 0 checks completed, 0 failed\n[140.6s] : 0 checks completed, 0 failed\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Freaky Deaky/Freaky Deaky.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 5,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0031",
+            "args": [
+              false
+            ],
+            "beat": 0.0026688259094953537,
+            "caller": {
+              "line": 173,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0007",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 173,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.3125396966934204,
+            "seq": 36,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/lua/default.lua",
+            "line": 173,
+            "phase": "callback",
+            "beat": 0.0026688259094953537,
+            "seconds": 0.3125396966934204,
+            "args": [
+              "P1Score"
+            ],
+            "results": [
+              {
+                "actor": 4,
+                "name": "P1Score",
+                "path": "ScreenGameplay/Underlay/P1Score"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "source_simfile": "Get Into It/GetIntoIt.ssc",
+      "repair_attempts": 0,
+      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[7.1s] replaying every native gameplay frame\n[8.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Get Into It (Yuh)': failed to execute '/tmp/.tmpgRWmbz/song/lua/bg.lua': runtime error: [string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Get Into It (Yuh)' from '/tmp/.tmpgRWmbz/song/lua/default.lua': failed to execute '/tmp/.tmpgRWmbz/song/lua/default.lua': runtime error: [string \"/tmp/.tmpgRWmbz/song/lua/default.lua\"]:460: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmpgRWmbz/song/lua/default.lua\"]:460: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\ndeadsync_song_lua::playback::prepare: Failed to compile background lua layer for 'Get Into It (Yuh)' from '/tmp/.tmpgRWmbz/song/lua/bg.lua': failed to execute '/tmp/.tmpgRWmbz/song/lua/bg.lua': runtime error: [string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmpgRWmbz/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (1455192) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[10.0s] replaying every native gameplay frame: frame 0/57594 (0.0%)\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Hallways/hallways.ssc",
+      "repair_attempts": 0,
+      "failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (1590110) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Happy Now Remastered/Happy Now.ssc",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1590174-1791862771070224596-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1590174-1791862771070224596-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Haxo (Sharks Remix) [sorae]/haxo.ssc",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-1654183-1791863671879384563-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "HOPE/HOPE.ssc",
+      "repair_attempts": 0,
+      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.0s] : 0 checks completed, 0 failed\n[14.5s] replaying every native gameplay frame\n[16.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'HOPE': failed to run actor init commands for '/tmp/.tmpswNxBW/song/default.lua': InitCommand failed for ActorFrame: runtime error: script '/tmp/.tmpswNxBW/song/sm5/modules/eases.lua' not found relative to '/tmp/.tmpswNxBW/song'\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'error'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:32: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:26>\n\t(...tail calls...)\n\t[string \"/tmp/.tmpswNxBW/song/sm5/core/main.lua\"]:17: in main chunk\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:44: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:42>\nstack traceback:\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:44: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:42>\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'HOPE' from '/tmp/.tmpswNxBW/song/default.lua': failed to run actor init commands for '/tmp/.tmpswNxBW/song/default.lua': InitCommand failed for ActorFrame: runtime error: script '/tmp/.tmpswNxBW/song/sm5/modules/eases.lua' not found relative to '/tmp/.tmpswNxBW/song'\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'error'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:32: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:26>\n\t(...tail calls...)\n\t[string \"/tmp/.tmpswNxBW/song/sm5/core/main.lua\"]:17: in main chunk\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:44: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:42>\nstack traceback:\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:44: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:42>\n\n\nthread 'main' (1684281) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[18.0s] replaying every native gameplay frame: frame 0/20574 (0.0%)\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "I Really Like You [dbk2]/I Really Like You.sm",
+      "repair_attempts": 0,
+      "failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (1697278) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []

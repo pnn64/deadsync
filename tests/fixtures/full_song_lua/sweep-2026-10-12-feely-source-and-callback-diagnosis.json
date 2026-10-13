@@ -2,7 +2,7 @@
   "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
   "position": 185,
   "repair_attempts_completed": 1,
-  "repair_attempts_remaining": 1,
+  "repair_attempts_remaining": 0,
   "original_native_trace_sha256": "a1d3409f3031764adf333fe8c368cf52a6a7cf9bde4a9c6a389bff7af8662929",
   "retained_corrected_candidate_sha256": "a9ae3b3944776d2b894c4d24a9fb2a49f331b7e9ce12448202c9c311665fc787",
   "source_name_fix": {
@@ -33,7 +33,8 @@
     "21c106cb4 owned style reads",
     "58fcc8043 initial Player and NoteField poses",
     "8f91878dc native integer player margins",
-    "9e0511014 synchronous retained-VM engine tap callbacks"
+    "9e0511014 synchronous retained-VM engine tap callbacks",
+    "43dae3f20 whole-song late-resolution window"
   ],
   "first_remaining_tween_example": {
     "native_operation": "Actor.x",
@@ -70,7 +71,31 @@
     "native": false,
     "independent": true,
     "first_independent_domain_navigation_seconds": 120.7923812866211,
-    "cause": "Not yet established; one frame or observer ordering has not been proven. Native GetMusicEndTiming uses the whole Song last second and its late-resolution window; current gameplay computes bounds from selected note arrays and the last-second hint."
+    "cause": "Established from authored chart rows and pinned native sources: whole Song last second includes the double chart fake at beat 312; selected single ends at 311. Gameplay applied the late window to selected rows and LASTSECONDHINT while whole-song end entered through audio_end without the window.",
+    "source_fix": "43dae3f20",
+    "build_proof": "/home/parity/jobs/whole-song-end-build-v1/proof.json",
+    "binary_sha256": "261394c0b377727a495efc0635ceb40a9d8242d235ffe502adfa93054408f5e3",
+    "validation": {
+      "windows_gameplay": 815,
+      "linux_gameplay": 815,
+      "windows_native": 20,
+      "linux_native": 20
+    },
+    "evidence": "sweep-2026-10-12-whole-song-end-build.json"
   },
-  "acceptance": "Existing full replay comparisons unchanged. Inspector style filtering and source-case equivalence were diagnostic only. No final chart repair launched."
+  "acceptance": "Existing full replay comparisons unchanged. Final attempt 2 uses the byte-identical corrected archive and original native capture; coverage is recorded separately.",
+  "repair_attempt_in_progress": 2,
+  "final_bounded_repair": {
+    "status": "running",
+    "attempt": 2,
+    "job": "/home/parity/jobs/feely-final-song-end-repair-v1",
+    "launch_receipt": "/home/parity/jobs/run_feely_final_song_end_repair_v1-launch.json",
+    "build_proof": "/home/parity/jobs/whole-song-end-build-v1/proof.json",
+    "binary_sha256": "261394c0b377727a495efc0635ceb40a9d8242d235ffe502adfa93054408f5e3",
+    "candidate_sha256": "a9ae3b3944776d2b894c4d24a9fb2a49f331b7e9ce12448202c9c311665fc787",
+    "trace_sha256": "a1d3409f3031764adf333fe8c368cf52a6a7cf9bde4a9c6a389bff7af8662929",
+    "reuses_original_capture": true,
+    "compares_uncompressed_data": true,
+    "repair_limit": 2
+  }
 }
