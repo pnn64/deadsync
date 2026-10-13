@@ -4151,15 +4151,12 @@
     {
       "title": "Other Guy",
       "source_simfile": "Other Guy/Other Guy.ssc",
-      "harness_version": "0.1.0",
-      "archive": "0ace4e766f0d9c0122f9babe3d47efa50177d732df8b04957efca64b7e37bdfc.tar.zst",
-      "sha256": "0ace4e766f0d9c0122f9babe3d47efa50177d732df8b04957efca64b7e37bdfc",
-      "compressed_bytes": 47081,
-      "uncompressed_sha256": "4fb1345f60a19c5065f696c90bf88e819792e61e7f4e795c0b69f49c7c3aa53b",
-      "compression_level": 22,
-      "aliases": [
-        "5da10f942050882426f4aa527db9b6e5e4feb69a07fa210c2e0667142922dbf9.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "fb3cfc0ed2f8361c7c1e1612664bdfa586c0989b8afccdbe8bff1f2b4e4d7535.tar.zst",
+      "sha256": "fb3cfc0ed2f8361c7c1e1612664bdfa586c0989b8afccdbe8bff1f2b4e4d7535",
+      "compressed_bytes": 10101804,
+      "uncompressed_sha256": "875446d3f7437b96877f9d5e83db0cddfd589cac6815d3121f06868db8772223",
+      "aliases": []
     },
     {
       "title": "Over the Top",

@@ -9614,6 +9614,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 338,
+      "source_simfile": "Other Guy/Other Guy.ssc",
+      "simfile_sha256": "bb022c4cc72ac6c22eafecda132775b6c58dc0da3e939a12bab7d2c6aef5283b",
+      "retained_original_archive": "0ace4e766f0d9c0122f9babe3d47efa50177d732df8b04957efca64b7e37bdfc.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "13910428be95f3669acf1ad4f85fc2098557c84a66ca66606780bedd9c5f2b0c",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/hsva-green-v2/proof.json",
+      "capture_seconds": 191.8941049510031,
+      "trace_sha256": "78f7e71388017226530136d83c462a57cbd7352ee1a2993fa6b9faf5e458b673",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-338/candidates/875446d3f7437b96877f9d5e83db0cddfd589cac6815d3121f06868db8772223.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1274.0474447039887,
+      "candidate_sha256": "875446d3f7437b96877f9d5e83db0cddfd589cac6815d3121f06868db8772223",
+      "native_frames": 75298,
+      "replayed_frames": 75298,
+      "compared_stage_fields": 1727,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.bounce",
+        "native drawable state/resources: Quad"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "d0a62f1d60ea3997705a457f818c3b09ef1bee81126bcc87c64ab209e7d22d00",
+      "archive": "fb3cfc0ed2f8361c7c1e1612664bdfa586c0989b8afccdbe8bff1f2b4e4d7535.tar.zst",
+      "archive_sha256": "fb3cfc0ed2f8361c7c1e1612664bdfa586c0989b8afccdbe8bff1f2b4e4d7535",
+      "compressed_bytes": 10101804,
+      "pack_seconds": 9.691855320008472,
+      "harness_version": "0.1.80",
+      "title": "Other Guy",
+      "retained_original_entry": {
+        "title": "Other Guy",
+        "source_simfile": "Other Guy/Other Guy.ssc",
+        "harness_version": "0.1.0",
+        "archive": "0ace4e766f0d9c0122f9babe3d47efa50177d732df8b04957efca64b7e37bdfc.tar.zst",
+        "sha256": "0ace4e766f0d9c0122f9babe3d47efa50177d732df8b04957efca64b7e37bdfc",
+        "compressed_bytes": 47081,
+        "uncompressed_sha256": "4fb1345f60a19c5065f696c90bf88e819792e61e7f4e795c0b69f49c7c3aa53b",
+        "compression_level": 22,
+        "aliases": [
+          "5da10f942050882426f4aa527db9b6e5e4feb69a07fa210c2e0667142922dbf9.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -9637,9 +9688,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "6a912f949896b963329aaa0cde4ea6c5fbc86bf6368091a1a6974d2b22629114",
+  "binary_sha256": "13910428be95f3669acf1ad4f85fc2098557c84a66ca66606780bedd9c5f2b0c",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 22,
+  "passed_fixtures": 23,
   "pending_charts": 53,
-  "processed_charts": 75
+  "processed_charts": 76
 }
