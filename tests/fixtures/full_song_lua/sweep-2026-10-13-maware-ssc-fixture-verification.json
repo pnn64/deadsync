@@ -1,0 +1,23 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Maware! Setsugetsuka (ric3show3r bootleg)/maware ric3show3r.ssc",
+      "acceptance_commit": "058a3ca1732f33642c4cf52269c8fff3e31a55ca",
+      "native_frames": 68523,
+      "replayed_frames": 68523,
+      "compared_stage_fields": 1177,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "b2428de4259cab7685983984ffaf5b972033e7bc2bb56b09baf9f7acd4f1a4ba.tar.zst",
+      "compressed_sha256": "b2428de4259cab7685983984ffaf5b972033e7bc2bb56b09baf9f7acd4f1a4ba",
+      "uncompressed_sha256": "a14d746f7f78d76efb5de199acb98cd651acbf837a8628721e7bbd8cbe1cb017",
+      "compressed_bytes": 6142342,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
