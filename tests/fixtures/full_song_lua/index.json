@@ -3027,15 +3027,12 @@
     {
       "title": "Impulse",
       "source_simfile": "Impulse/impulse.ssc",
-      "harness_version": "0.1.0",
-      "archive": "22541f730ac0966bb8b67fa95b6d62ccbfae5e756ab2e8afbdb375118dcf2ad1.tar.zst",
-      "sha256": "22541f730ac0966bb8b67fa95b6d62ccbfae5e756ab2e8afbdb375118dcf2ad1",
-      "compressed_bytes": 2254755,
-      "uncompressed_sha256": "203d4709e076bd2fc767768ae03e47e4b90d2cec6731b086878125d2257a1ecf",
-      "compression_level": 22,
-      "aliases": [
-        "c48d59775824abd10003c471f012a55224bc1fc77e6714a28bace96be80e8bc7.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "3acd381df54e1a78b79a245136461482bc085b4b96743f67fa3475ddf60e5965.tar.zst",
+      "sha256": "3acd381df54e1a78b79a245136461482bc085b4b96743f67fa3475ddf60e5965",
+      "compressed_bytes": 13435752,
+      "uncompressed_sha256": "9e432f156449c43b317a020b0d37083da89413bd6538691d0f5f6708dc170417",
+      "aliases": []
     },
     {
       "title": "In the Hall of the Mountain King",
