@@ -2717,15 +2717,12 @@
     {
       "title": "Goodbye",
       "source_simfile": "Goodbye/Goodbye.ssc",
-      "harness_version": "0.1.0",
-      "archive": "69a548e9269eb21e05e9067df1f43feda89deb4ac109319585a723d515d78b68.tar.zst",
-      "sha256": "69a548e9269eb21e05e9067df1f43feda89deb4ac109319585a723d515d78b68",
-      "compressed_bytes": 27833762,
-      "uncompressed_sha256": "a97b873b6b3ca7923ba672799e871236a4c9cd886daeb1bda786132af35823a4",
-      "compression_level": 22,
-      "aliases": [
-        "4368fbae9e83815086840095ade06d86064d89c114777034341cdfeff5896c07.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "68d07738eeb186499b9b49c7549e11231074f1ad5547b5c49dd5e1ce0e08cdd0.tar.zst",
+      "sha256": "68d07738eeb186499b9b49c7549e11231074f1ad5547b5c49dd5e1ce0e08cdd0",
+      "compressed_bytes": 51810185,
+      "uncompressed_sha256": "ee065f685a3b984e0941d54d4b427c4d4d8cbdd943812883d5ef071082199749",
+      "aliases": []
     },
     {
       "title": "Gossipo Perpetuo",

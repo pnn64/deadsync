@@ -2665,6 +2665,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 217,
+      "source_simfile": "Goodbye/Goodbye.ssc",
+      "simfile_sha256": "9e2e3158b68431bee28b6b0461b07f2cb33266d55e6cdcb330e92f0b20324bec",
+      "retained_original_archive": "69a548e9269eb21e05e9067df1f43feda89deb4ac109319585a723d515d78b68.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "63e17ffe7 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/foreground-source-build-v2/proof.json",
+      "capture_seconds": 279.56264380300127,
+      "trace_sha256": "56cbbc088a7a1262fdac5b1ba2ecc4c82714474ed1be349de8ca5d377bb549b2",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-217/candidates/ee065f685a3b984e0941d54d4b427c4d4d8cbdd943812883d5ef071082199749.tar",
+      "replay_exit": 0,
+      "replay_seconds": 661.8921349360025,
+      "candidate_sha256": "ee065f685a3b984e0941d54d4b427c4d4d8cbdd943812883d5ef071082199749",
+      "native_frames": 4470,
+      "replayed_frames": 4470,
+      "compared_stage_fields": 1452,
+      "pending_coverage": [
+        "uncompared song operations: Actor.CenterX, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.cropbottom, Actor.croptop, Actor.diffusecolor, Actor.glow, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.shadowcolor, Actor.shadowlengthx, Actor.shadowlengthy, Actor.valign, Actor.zoomy, Actor.zoomz, GameState.IsHumanPlayer, PlayerOptions.CMod, PlayerOptions.ConfusionOffset1, PlayerOptions.ConfusionOffset2, PlayerOptions.ConfusionOffset3, PlayerOptions.ConfusionOffset4, PlayerOptions.Dark, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.MoveX1, PlayerOptions.MoveX4, PlayerOptions.MoveY1, PlayerOptions.MoveY4, PlayerOptions.ParabolaX, PlayerOptions.Skew, PlayerOptions.Stealth, PlayerOptions.Tilt, PlayerOptions.XMod, Song.GetDisplayBpms, Song.GetDisplayMainTitle, Sprite.SetEffectMode, Sprite.SetTexture",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "84d5308705b304c4839d219ea802553627b8548cc20a743ff6a65bfd2e7aee3e",
+      "archive": "68d07738eeb186499b9b49c7549e11231074f1ad5547b5c49dd5e1ce0e08cdd0.tar.zst",
+      "archive_sha256": "68d07738eeb186499b9b49c7549e11231074f1ad5547b5c49dd5e1ce0e08cdd0",
+      "compressed_bytes": 51810185,
+      "pack_seconds": 38.088367525007925,
+      "harness_version": "0.1.80",
+      "title": "Goodbye",
+      "retained_original_entry": {
+        "title": "Goodbye",
+        "source_simfile": "Goodbye/Goodbye.ssc",
+        "harness_version": "0.1.0",
+        "archive": "69a548e9269eb21e05e9067df1f43feda89deb4ac109319585a723d515d78b68.tar.zst",
+        "sha256": "69a548e9269eb21e05e9067df1f43feda89deb4ac109319585a723d515d78b68",
+        "compressed_bytes": 27833762,
+        "uncompressed_sha256": "a97b873b6b3ca7923ba672799e871236a4c9cd886daeb1bda786132af35823a4",
+        "compression_level": 22,
+        "aliases": [
+          "4368fbae9e83815086840095ade06d86064d89c114777034341cdfeff5896c07.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -2676,7 +2727,7 @@
   },
   "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 7,
+  "passed_fixtures": 8,
   "pending_charts": 9,
-  "processed_charts": 16
+  "processed_charts": 17
 }
