@@ -3139,17 +3139,14 @@
       ]
     },
     {
-      "title": "bloodrush itg",
+      "title": "bloodrush itg do not use a speedmod over 250 scroll speed unless brave",
       "source_simfile": "itg bloodrush 2005/itg bloodrush 2005.sm",
-      "harness_version": "0.1.0",
-      "archive": "f53569be3f6ea8aea1ebfe38c2f3f3a71a2f0a05410aa381cbba97a8462dafa6.tar.zst",
-      "sha256": "f53569be3f6ea8aea1ebfe38c2f3f3a71a2f0a05410aa381cbba97a8462dafa6",
-      "compressed_bytes": 188936,
-      "uncompressed_sha256": "4a35ccdaea07f38cb43e22139b5b2acabea2988e991d977e6cff39e56547532a",
-      "compression_level": 22,
-      "aliases": [
-        "71fb659666028d5f36c3d6093e3cd9999946a104841ccff8779d6b7c5d26b73f.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "489d2d01bfc628d652203c19fe52d84dec283318391da05e5574a6219291e471.tar.zst",
+      "sha256": "489d2d01bfc628d652203c19fe52d84dec283318391da05e5574a6219291e471",
+      "compressed_bytes": 8687092,
+      "uncompressed_sha256": "c35c65b89ba8b708111e9304a33f7b6ec96df0e390dc541bf8ecc29ba64b2029",
+      "aliases": []
     },
     {
       "title": "Jack The Reaper",
