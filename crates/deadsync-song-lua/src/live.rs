@@ -1344,6 +1344,63 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn live_hsva_initializes_native_vertex_colors() {
+        let mut compiled = compile("native-hsva-vertices", r#"
+return Def.ActorMultiVertex {
+    Name = 'SpaceshipTrailP1',
+    InitCommand = function(self)
+        assert(type(HSVA) == 'function', 'native HSVA is available for authored vertex initialization')
+        local inputs = {
+            {0, 1, 1, 1}, {60, 1, 1, 0.75}, {120, 1, 1, 0.5},
+            {180, 1, 1, 0.25}, {240, 1, 1, 0}, {300, 1, 1, 1},
+            {360, 1, 1, 0.5}, {-30, 1, 1, 0.25}, {480, 1, 1, 1},
+            {15, 0.5, 0.25, 0.125}, {270, 0, 0.375, -0.25}, {30, 2, 0.5, 1.25},
+        }
+        local vertices = {}
+        HSVA_COLORS = {}
+        for index, input in ipairs(inputs) do
+            local rgba = HSVA(unpack(input))
+            HSVA_COLORS[index] = rgba
+            vertices[index] = {{index, index % 2, 0}, rgba}
+        end
+        assert(HSVToColor{Hue=0, Sat=0, Value=0.5}[4] == 0)
+        assert(HSVToColor{Hue=0, Sat=0, Value=0.5, Alpha=false}[4] == 0)
+        assert(HSVA(0, 1, 1)[4] == 0)
+        self:SetDrawState{Mode='DrawMode_Quads'}:SetVertices(vertices)
+    end,
+}
+"#);
+        let expected: [[f64; 4]; 12] = [
+            [1.0, 0.0, 0.0, 1.0], [1.0, 1.0, 0.0, 0.75], [0.0, 1.0, 0.0, 0.5],
+            [0.0, 1.0, 1.0, 0.25], [0.0, 0.0, 1.0, 0.0], [1.0, 0.0, 1.0, 1.0],
+            [1.0, 0.0, 1.0, 0.5], [1.0, 0.0, 0.5, 0.25], [1.0, 0.0, 1.0, 1.0],
+            [0.25, 0.15625, 0.125, 0.125], [0.375, 0.375, 0.375, -0.25], [0.5, 0.0, -0.5, 1.25],
+        ];
+        let mut scene = compiled.live_scene.take().expect("owned vertex color scene");
+        assert!(scene.take_startup_output().errors.is_empty());
+        let colors = scene.lua.globals().get::<Table>("HSVA_COLORS").unwrap();
+        for (index, expected) in expected.iter().enumerate() {
+            let rgba = colors.raw_get::<Table>(index + 1).unwrap();
+            for (channel, expected) in expected.iter().enumerate() {
+                assert_eq!(rgba.raw_get::<f64>(channel + 1).unwrap(), *expected,
+                    "native Lua color {index}, channel {channel}");
+            }
+        }
+        let SongLuaOverlayKind::ActorMultiVertex { vertices, .. } = &compiled.overlays[0].kind else {
+            panic!("the authored trail retains its vertex mesh");
+        };
+        assert_eq!(vertices.len(), 18);
+        let mut seen = [false; 12];
+        for vertex in vertices.iter() {
+            let index = vertex.pos[0] as usize;
+            assert!((1..=expected.len()).contains(&index), "authored vertex position retained");
+            assert_eq!(vertex.color, expected[index - 1].map(|v| v as f32));
+            seen[index - 1] = true;
+        }
+        assert!(seen.into_iter().all(|seen| seen), "all authored colors reach the rendered mesh");
+    }
+
     #[cfg(feature = "test-support")]
     #[test]
     fn live_single_judgment_subscriber_needs_no_captured_sort_rank() {
