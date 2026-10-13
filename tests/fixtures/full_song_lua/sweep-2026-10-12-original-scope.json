@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T00:03:17Z",
+  "updated_utc": "2026-10-13T00:06:55Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -11,9 +11,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 164,
-    "pending": 20,
-    "unprocessed": 317
+    "passed": 165,
+    "pending": 21,
+    "unprocessed": 315
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1659,7 +1659,9 @@
       "position": 188,
       "source_simfile": "Final Flash Flight/Final Flash Flight.ssc",
       "simfile_sha256": "e9d8881c79897452784fc68f5aa1aaf1b7df1e8413fee90ff052728d41dea1fb",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 189,
@@ -1685,7 +1687,9 @@
       "position": 192,
       "source_simfile": "flowers [R.I.G.H.T.S]/flowers.ssc",
       "simfile_sha256": "52e86ec7daeca20bdb1e49b6af119c898cd07a20a0e3c0b72703ead58af8bdba",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 193,

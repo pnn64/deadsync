@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T00:03:15Z",
-  "previous_goal_turn": "progress: edamame SM, finite and Dig Dug complete fixtures saved and committed; Dig Dug attempt 1 reused its byte-identical capture and passed all 149043 frames and 1672 stage fields with zero mismatches/errors; native cmd source lines fixed as b1160be8c and gameplay Debug ownership fixed as 3cdcfeb3a; all 9 command syntax tests and 25 live tests passed on Windows and Linux, plus 17 Linux replay controls; Deceive attempt 2 is running on its preserved uncompressed capture with validated immutable helper; Fiji failure traced to the missing native NullActor declaration cutting off traversal before its second foreground; independent empty foreground instances fixed as ce20604ea with all 26 Windows and Linux live tests passing; all 17 Linux replay controls and immutable helper validation passed; Fiji attempt 1 is running on its original capture; feelyourtouch initial replay is pending because preparation did not retain a Lua scene; all three original queues, Dreams Bloom attempt 1 and the single publisher remain active",
+  "updated_utc": "2026-10-13T00:06:53Z",
+  "previous_goal_turn": "progress: edamame SM, finite, Dig Dug and Final Flash Flight complete fixtures saved and committed; Dig Dug attempt 1 reused its byte-identical capture and passed all 149043 frames and 1672 stage fields with zero mismatches/errors; native cmd source lines fixed as b1160be8c and gameplay Debug ownership fixed as 3cdcfeb3a; all 9 command syntax tests and 25 live tests passed on Windows and Linux, plus 17 Linux replay controls; Deceive attempt 2 is running on its preserved uncompressed capture with validated immutable helper; Fiji failure traced to the missing native NullActor declaration cutting off traversal before its second foreground; independent empty foreground instances fixed as ce20604ea with all 26 Windows and Linux live tests passing; all 17 Linux replay controls and immutable helper validation passed; Fiji attempt 1 is running on its original capture; feelyourtouch initial replay is pending because preparation did not retain a Lua scene; Flowers R.I.G.H.T.S initial replay completed all 50828 frames and remains pending on command source paths containing an extra dot segment, with no repair attempt used; all three original queues, Dreams Bloom attempt 1 and the single publisher remain active",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "c80563ccdfd1329b37ee50b22c8070f0ddc8a378",
+      "deadsync": "f5fad0ebcfd1763df173f17c7752d8f6aa9cfc82",
       "itgmania_harness": "55299c5cb59cc4bc0d3fb106b9e21bfebcebe308"
     }
   },
@@ -47,19 +47,15 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Final Flash Flight/Final Flash Flight.ssc",
-      "position": 188,
-      "phase": "replay",
-      "pid": 646236,
-      "process_matches": false,
-      "passed": 7,
+      "current": "Flowers [Cringle Desolation]/Flowers.ssc",
+      "position": 191,
+      "phase": "capture",
+      "pid": 688676,
+      "process_matches": true,
+      "passed": 8,
       "pending": 18,
-      "processed": 25,
-      "last_log_lines": [
-        "[544.1s] replaying every native gameplay frame: 1650 checks completed, 0 failed",
-        "[546.1s] replaying every native gameplay frame: 1650 checks completed, 0 failed",
-        "[548.1s] replaying every native gameplay frame: 1650 checks completed, 0 failed"
-      ],
+      "processed": 26,
+      "last_log_lines": [],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -213,12 +209,12 @@
         "complete": false,
         "supervisor_running": true,
         "passed": 2,
-        "pending": 6,
-        "processed": 8,
-        "last_phase": "replay",
-        "source_simfile": "flowers [R.I.G.H.T.S]/flowers.ssc",
+        "pending": 7,
+        "processed": 9,
+        "last_phase": "capture",
+        "source_simfile": "Flying Castle/flying castle.ssc",
         "child_running": true,
-        "position": 192
+        "position": 195
       },
       {
         "job": "chart-sweep-parallel-v4-2",
@@ -451,11 +447,11 @@
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 17,
-    "new_pending_charts": 19,
-    "new_processed_sources": 36,
+    "new_passed_fixtures": 18,
+    "new_pending_charts": 20,
+    "new_processed_sources": 38,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 317,
+    "unprocessed_sources": 315,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -820,6 +816,20 @@
           "field": "command_query_count",
           "native": 5,
           "deadsync": 0
+        }
+      ]
+    },
+    {
+      "source_simfile": "flowers [R.I.G.H.T.S]/flowers.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 40226,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 40263,
+          "deadsync": 40249
         }
       ]
     },
