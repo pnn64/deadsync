@@ -1,0 +1,61 @@
+{
+  "launch_receipt": {
+    "supervisor_pid": 773297,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_lonely_ssc_column_repair_v1.py"
+    ]
+  },
+  "live_observation": {
+    "pid": 774372,
+    "command": [
+      "/home/parity/jobs/palette-green-v1/full-song-lua-stage-modifier-v1",
+      "--archive",
+      "/home/parity/jobs/lonely-ssc-column-repair-v1/chart-285/168904618cd51ba2aee74126daf1556fae2889e7f0c54a867ba0d4b2a8ae00dc.tar",
+      "--report",
+      "/home/parity/jobs/lonely-ssc-column-repair-v1/chart-285/report.json"
+    ],
+    "label": "replay",
+    "source_simfile": "Lonely/Lonely.ssc"
+  },
+  "exact_process_matches": true,
+  "selected_build": {
+    "build_proof": "/home/parity/jobs/palette-green-v1/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "binary_sha256": "dc33e10eb25790fe5f57e0adf311eb04f8029fa0983e22ce00e25f125eb8111c",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "actual_source_pins": 26,
+  "candidate_sha256": "168904618cd51ba2aee74126daf1556fae2889e7f0c54a867ba0d4b2a8ae00dc",
+  "native_trace_sha256": "2f85dcdc33984ed092904de70bd3c2e4b30c916c626b4a77b571e97e918c2a61",
+  "simfile_sha256": "7d4a0c9d176a875d7e4b4c75ede165c591807996e40591522ad9570dbc80ba4f",
+  "previous_report_sha256": "ea121741520a86825d6c55395f973a7afa27a61e6d0da1b7c8c7bbca0b09720c",
+  "replay_log_tail": [
+    "[88.0s] replaying every native gameplay frame: frame 4760/93048 (5.1%)",
+    "[90.0s] replaying every native gameplay frame: frame 4893/93048 (5.3%)",
+    "[92.0s] replaying every native gameplay frame: frame 5018/93048 (5.4%)"
+  ],
+  "status": "first bounded Lonely SSC repair running; complete replay acceptance not yet decided",
+  "source_fix_commits": [
+    "21f6e34679ef7262f98619bb432d205d820e11f3",
+    "4d1ed6dd89316a06b7b7ac9da88c01b700032305"
+  ],
+  "validated_build": "sweep-2026-10-13-palette-build.json",
+  "original_diagnosis": "sweep-2026-10-13-lonely-ssc-column-diagnosis.json",
+  "repair_attempts_before_launch": 0,
+  "repair_attempt_started": 1,
+  "per_chart_limit": 2,
+  "native_capture_reused": true,
+  "input_archive_uncompressed_bytes_verified": true,
+  "native_candidate_decompressed_once_without_recapture": true,
+  "publisher_streams": 47,
+  "publisher_count": 1,
+  "actual_publisher": {
+    "ProcessId": 60312,
+    "CommandLine": "\"C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe\" -B -X utf8 C:/GitHub/itgmania-harness/target/server-parity/publish_chart_sweep_v1.py"
+  },
+  "comparisons_modified": false,
+  "acceptance_unchanged": true,
+  "passing_chart_reopened": false
+}
