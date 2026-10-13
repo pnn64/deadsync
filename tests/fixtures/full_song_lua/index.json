@@ -4038,15 +4038,12 @@
     {
       "title": "No Tears Left To Cry",
       "source_simfile": "No Tears Left To Cry - [JNero]/No-Tears.sm",
-      "harness_version": "0.1.0",
-      "archive": "8bf80887839b679011af6805c5fdb5d46b677ff33a38f4403dad5cc97d280001.tar.zst",
-      "sha256": "8bf80887839b679011af6805c5fdb5d46b677ff33a38f4403dad5cc97d280001",
-      "compressed_bytes": 71563,
-      "uncompressed_sha256": "73e4be778f1d95ea64187472a5429d369314eab8f6850d6efdbf99987c09bafb",
-      "compression_level": 22,
-      "aliases": [
-        "51a26d3f9ba28808a8863bf49c7370b3f7f396af6f3fdf823e4996f9295a7cf4.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "a706c40ae1f850b05ac41baac33986f5c04a77f35677a36cd8705eb3a2ea25b0.tar.zst",
+      "sha256": "a706c40ae1f850b05ac41baac33986f5c04a77f35677a36cd8705eb3a2ea25b0",
+      "compressed_bytes": 8646770,
+      "uncompressed_sha256": "db19fd1f779f943447980ac2a845f74910b9de551598a9250b7936b33ad89e85",
+      "aliases": []
     },
     {
       "title": "no touchy !!1!",
