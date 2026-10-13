@@ -1,0 +1,23 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc",
+      "acceptance_commit": "816e161106baf78dd6fa97fe25ef403f69e65437",
+      "native_frames": 46936,
+      "replayed_frames": 46936,
+      "compared_stage_fields": 1056,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "a9387070a544652edf75948d85b482a0a6f00381ec959f00b10110cc7c7d80ec.tar.zst",
+      "compressed_sha256": "a9387070a544652edf75948d85b482a0a6f00381ec959f00b10110cc7c7d80ec",
+      "uncompressed_sha256": "b0add8db6ca7f8c6988d2037c193335e899a12b0e4719cd38cece20154c2e950",
+      "compressed_bytes": 2708185,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
