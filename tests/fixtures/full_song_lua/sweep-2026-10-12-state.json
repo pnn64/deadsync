@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T17:57:24Z",
-  "previous_goal_turn": "Progress: Lonely/Lonely.ssc first repair 1 passed all 93048 native frames and 2728 compared stage fields with zero differences or Lua errors. It is accepted as 1b0feb2eb37ebe09b89ec46e72b4c12a386c903a, saved as 2be8be74e06c09d191b8056b5a6e850ff910a10b148784e619dd8a8c7ca5573d.tar.zst, locally decompressed and byte verified as 168904618cd51ba2aee74126daf1556fae2889e7f0c54a867ba0d4b2a8ae00dc; its original native capture was reused. Marshall Maximizer/marshall maximizer.ssc passed all 92066 native frames and 1584 stage fields with zero differences or Lua errors, accepted as 06f79e75155ab009305475798a1803a38d9d624e, saved as 3c61c5dcdf2dd2444d730096674aa784a0452c6ffc22e48867d42d3173f7755a.tar.zst, locally byte verified as 5a3e9184e13cf6bbff10e79dffbba513113c219d1d61db2aa79f17c814a7ef82. Maware! Setsugetsuka SSC also passed all 68523 native frames and 1177 stage fields with zero differences or Lua errors; accepted as 058a3ca1732f33642c4cf52269c8fff3e31a55ca, locally byte verified as a14d746f7f78d76efb5de199acb98cd651acbf837a8628721e7bbd8cbe1cb017. mawaru2 SM also passed all 103901 native frames and 1925 stage fields with zero differences or Lua errors, accepted as b59d9ddecdcee577c21b6ffd2d2bb02a5095f93f, saved and locally byte verified as a997f99959ab10c870fd27a72bc001aea4e698dedeb2e232d680ac505214fe6b. These fixtures remain accepted; coverage stays separate. Lower Times SSC's original full 114,997-frame replay has zero Lua errors and one count mismatch, native 93 versus independent 88, with 2,420 compared stage fields. Its retained native jmouth tail contains two End blocks; natural gameplay navigation omitted the final block. Pinned ScreenManager pops the outgoing screen before EndScreen dispatches End to its retained foreground owners. The unchanged production-path natural navigation control meaningfully failed on both hosts before production changed. The first green revision reached End and exposed an additional SetLife lookup through the already popped top screen, again on both hosts. Native Player owns its life meter. Fix 7c8b4c460131bb1c1674813ca53a210e20ff895d shares idempotent shutdown between completed owned out transitions and immediate pops; natural completion waits for its real Off dispatch before starting the out clock, and fade-start Navigate requests remain live, binds each retained player to its owned meter, applies End output/player writes, detaches callbacks and prevents later update/draw. The second green revision passed both End calls and retained life, but its earlier-queue count assertion was unsupported. The corrected control queues AfterEnd only during popped-screen End and expects no queue advancement; it meaningfully failed for missing second End on both hosts against pre-fix production, then remained unchanged for the final green checks. The fourth green build stopped at a missing pattern separator before running this control; that syntax error was corrected for green5 without changing the red3 control or launching a chart repair. The third green revision passed all Linux checks, but Windows native controls found End at Navigate suppressed the delayed Off update:21 passed and1 failed. Navigate starts the shell fade, not the physical pop. The final control checks authored End, Off with a live top screen, and final End on completed owned out transition plus NavigateNoFade; it meaningfully failed before the final production change on both hosts and remained unchanged for the final green checks. The unchanged corrected control verifies authored queued End then screen End while GetTopScreen is nil, retained life writes, no extra queue advance, no draw on pop and idempotence. Linux passed 815 gameplay, one targeted End, 43 live, one scalar rounding and 22 native controls plus both builds; Windows passed one targeted End, 44 live, one scalar and 22 native controls plus both builds. All 26 actual frozen source pins, eight isolated production preimages, the unchanged control, Linux host-local build mtimes, postbuild hashes and the native harness with all three source pins are verified. The selected immutable helper is 47f6ef41978d4b2f60a074e3dbf91ed8bedf705a65f7852e0a7e66f301f4d017 from natural-end-green-v5. Unselected 874f2e535 remains excluded. Lower Times SSC first bounded repair 1 is running with its retained native capture decompressed once and byte verified; no recapture, second attempt or acceptance decision yet. Its supervisor and replay argv were verified at launch. The singleton publisher 60312 watches 48 streams. The main queue and both original partition queues remain active and existing workers were not restarted. Koi SM first repair 1 completed 145,074 frames with zero errors but 3,014 differences and has one repair left; no residual cause or second attempt is claimed. Kaboom, Lake and other pending source work stays in its preserved evidence records. Capped charts remain pending without another retry. All 501 original simfiles remain byte unchanged, RUNWAY remains outside the original scope, and the goal is active and incomplete. Existing complete uncompressed replay comparisons remain the sole acceptance gates; no passing chart was reopened.",
+  "updated_utc": "2026-10-13T18:35:58Z",
+  "previous_goal_turn": "Progress: four passing original fixtures were saved and locally byte verified with zero differences and Lua errors: Lonely/Lonely.ssc first repair 1 (93048 frames, 2728 stage fields, acceptance 1b0feb2eb37ebe09b89ec46e72b4c12a386c903a), Marshall Maximizer/marshall maximizer.ssc (92066 frames, 1584 fields, 06f79e75155ab009305475798a1803a38d9d624e), Maware! Setsugetsuka SSC (68523 frames, 1177 fields, 058a3ca1732f33642c4cf52269c8fff3e31a55ca), and mawaru2/mawaru2.sm (103901 frames, 1925 fields, b59d9ddecdcee577c21b6ffd2d2bb02a5095f93f). They remain accepted and coverage stays separate. Lower Times SSC first bounded repair 1 completed its full 114997-frame replay with 2420 compared stage fields, zero errors and one count difference: native 93 versus independent 88. Its retained native capture was reused and all uncompressed candidate/report bytes verified. It remains pending with one repair left; no second attempt has launched. The natural navigation fix 7c8b4c460131bb1c1674813ca53a210e20ff895d passed meaningful pre-fix red and post-fix green production controls on both hosts, but its chart repair did not resolve this remaining count difference. The final native stage sample is failed; the failure exit path is under source investigation, without a claimed repair. Koi SM first repair 1 remains pending after 145074 frames, 2299 compared fields and 3014 command differences with zero errors. Diagnostic alignment of the existing complete report isolates 60 Fish parent paths, 35 missing mine Judgment callbacks and three tap callback clocks, without modifying any acceptance gate. Actor-name fix da708fe8836e33d3095f23be69d9eb9b56db7de4 retains native names independently of Lua attribute writes, preserves loading and foreground naming, and passes meaningful unchanged red/green controls on both hosts. Linux passed 815 gameplay, one new actor-name, one parent-loading, one foreground-name, 44 live, one scalar and 22 native controls plus both executable builds. Windows passed one actor-name, one parent-loading, one foreground-name, 45 live, one scalar and 22 native controls plus both builds. All 26 actual frozen source pins, isolated production preimages, build clocks, logs and native harness's three pins were verified. Selected immutable helper 270fd0d5062daf8b1418e44e81d8a9e6b45d9d830ea84c1ded1081205d620ab7 is actor-name-green-v1. Its receipt and atomic selection use the fixed commit SHA; unselected 874f2e535 remains excluded. Koi has one repair left and no second replay launched. mawaru4 SSC's original startup failure has a concrete source diagnosis: native caches 11 unique BackgroundDefs for 20 authored Lua changes while preparation creates 20 separate containers. Correct repair must preserve the whole change timeline and native identity/focus behavior; no fix or chart repair has been launched. The original main queue and both partitions remain live, with mawaru6, mawaru7 and mawaru3 replaying at this checkpoint; workers were not restarted. Singleton publisher 60312 watches 48 streams. Capped charts remain pending without another retry. All 501 original simfiles remain byte unchanged, RUNWAY stays outside original scope, and the goal is active and incomplete. Existing complete uncompressed replay comparisons remain the sole acceptance gates; no passing chart was reopened.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,11 +14,12 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "71f37ac31a66ef7926356d37782633bf839a081f",
+      "deadsync": "b2ab7529b351b4561ca8b2817cd2b878fed754ae",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
   "validation": {
+    "retained_native_actor_names": "da708fe8836e33d3095f23be69d9eb9b56db7de4: meaningful unchanged actor-name control fails before production and passes after on both hosts; all 8 Linux and 7 Windows checks pass, 26 actual source pins and native 3 harness pins verified; actor-name-build.json",
     "natural_owned_scene_end": "7c8b4c460131bb1c1674813ca53a210e20ff895d: original control fails on both hosts before the fix; failed first green exposes retained SetLife ownership; unchanged control passes with owned meter and all green controls/builds. natural-end-build.json",
     "owned_note_columns_and_native_palette": "21f6e3467 and4d1ed6dd8: meaningful pre-fix red controls and complete green controls on Linux and Windows; all26 source pins and isolated preimages verified, both executable builds, harness058 with three source pins; column-update-build.json and palette-build.json",
     "direct_tap_and_scalar_deceleration": "d82120e47: Linux 815 gameplay, 42 live, 1 rounding and 21 native; Windows 43 live, 1 rounding and 21 native; both executable builds on both hosts, pre-fix red and post-fix green controls; sweep-2026-10-13-kaboom-tap-deceleration-build.json",
@@ -74,9 +75,9 @@
       "pending": 44,
       "processed": 64,
       "last_log_lines": [
-        "[13911.0s] replaying every native gameplay frame: frame 78612/121856 (64.5%)",
-        "[13913.0s] replaying every native gameplay frame: frame 78626/121856 (64.5%)",
-        "[13915.0s] replaying every native gameplay frame: frame 78639/121856 (64.5%)"
+        "[16223.8s] replaying every native gameplay frame: frame 90794/121856 (74.5%)",
+        "[16225.8s] replaying every native gameplay frame: frame 90808/121856 (74.5%)",
+        "[16227.8s] replaying every native gameplay frame: frame 90821/121856 (74.5%)"
       ],
       "supervisor_running": true
     },
@@ -85,6 +86,10 @@
     "parallel_queue_receipt": "tests/fixtures/full_song_lua/sweep-2026-10-12-parallel-queues.json",
     "build_transition": "tests/fixtures/full_song_lua/sweep-2026-10-12-build-transition.json",
     "source_scope_audit": "tests/fixtures/full_song_lua/sweep-2026-10-12-original-scope.json",
+    "mawaru4_native_background_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-mawaru4-background-diagnosis.json",
+    "koi_sm_command_alignment": "tests/fixtures/full_song_lua/sweep-2026-10-13-koi-sm-command-alignment.json",
+    "lower_ssc_first_end_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-lower-ssc-end-completion.json",
+    "actor_native_name_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-actor-name-build.json",
     "mawaru2_sm_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-mawaru2-sm-fixture-verification.json",
     "koi_sm_first_residual_audit": "tests/fixtures/full_song_lua/sweep-2026-10-13-koi-sm-first-residual-audit.json",
     "maware_ssc_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-13-maware-ssc-fixture-verification.json",
@@ -179,14 +184,14 @@
     "bounded_repair_jobs": [
       {
         "job": "lower-ssc-end-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
+        "complete": true,
+        "supervisor_running": false,
         "passed": 0,
-        "pending": 0,
-        "processed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "replay",
         "source_simfile": "Lower Times/Lower Times.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "lonely-ssc-column-repair-v1",
@@ -2657,7 +2662,7 @@
     },
     {
       "source_simfile": "Lower Times/Lower Times.ssc",
-      "repair_attempts": 0,
+      "repair_attempts": 1,
       "failure": null,
       "errors": [],
       "mismatch_count": 1,
