@@ -1,0 +1,386 @@
+{
+  "source_simfile": "mawaru4/mawaru4.ssc",
+  "original_repair_attempts": 0,
+  "repair_attempts_remaining": 2,
+  "native_frames_in_verified_retained_capture": 119826,
+  "original_replay_failed_before_frames": true,
+  "original_failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (1135414) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+  "original_binary_sha256": "dc33e10eb25790fe5f57e0adf311eb04f8029fa0983e22ce00e25f125eb8111c",
+  "candidate_sha256": "c74ddfd683990fbeec17a8693b4914325bb19c0a496f8d0438d5f5dd8201ad96",
+  "native_trace_sha256": "a74a2022ed65106cd595780b960be1a0448a2fdbb7328fd77b183f1762d4dc59",
+  "simfile_sha256": "9006c956669afc6740329f508f8159e4df66275a3fc33f192df57b000e4ab93b",
+  "native_capture_uncompressed_bytes_verified": true,
+  "authored_lua_background_changes": [
+    {
+      "start_beat": 40.0,
+      "name": "HappySad 100",
+      "fields": [
+        "40.000",
+        "HappySad 100",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 52.0,
+      "name": "HappySad 100",
+      "fields": [
+        "52.000",
+        "HappySad 100",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 64.0,
+      "name": "100to110",
+      "fields": [
+        "64.000",
+        "100to110",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 72.0,
+      "name": "HappySad 110",
+      "fields": [
+        "72.000",
+        "HappySad 110",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 84.0,
+      "name": "HappySad 110",
+      "fields": [
+        "84.000",
+        "HappySad 110",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 96.0,
+      "name": "HappySad 110",
+      "fields": [
+        "96.000",
+        "HappySad 110",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 108.0,
+      "name": "110to120",
+      "fields": [
+        "108.000",
+        "110to120",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 116.0,
+      "name": "HappySad 120",
+      "fields": [
+        "116.000",
+        "HappySad 120",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 128.0,
+      "name": "HappySad 120",
+      "fields": [
+        "128.000",
+        "HappySad 120",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 144.0,
+      "name": "HappySad 120",
+      "fields": [
+        "144.000",
+        "HappySad 120",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 156.0,
+      "name": "120to130",
+      "fields": [
+        "156.000",
+        "120to130",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 164.0,
+      "name": "HappySad 130",
+      "fields": [
+        "164.000",
+        "HappySad 130",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 176.0,
+      "name": "HappySad 130",
+      "fields": [
+        "176.000",
+        "HappySad 130",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 188.0,
+      "name": "HappySad 130",
+      "fields": [
+        "188.000",
+        "HappySad 130",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 208.0,
+      "name": "130to140",
+      "fields": [
+        "208.000",
+        "130to140",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 216.0,
+      "name": "HappySad 140",
+      "fields": [
+        "216.000",
+        "HappySad 140",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 278.0,
+      "name": "HappySad 140",
+      "fields": [
+        "278.000",
+        "HappySad 140",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 290.0,
+      "name": "obake",
+      "fields": [
+        "290.000",
+        "obake",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 350.0,
+      "name": "warning",
+      "fields": [
+        "350.000",
+        "warning",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "start_beat": 358.0,
+      "name": "HappySad 100",
+      "fields": [
+        "358.000",
+        "HappySad 100",
+        "1.000",
+        "0",
+        "0",
+        "1",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    }
+  ],
+  "occurrences_by_filename": {
+    "HappySad 100": 3,
+    "100to110": 1,
+    "HappySad 110": 3,
+    "110to120": 1,
+    "HappySad 120": 3,
+    "120to130": 1,
+    "HappySad 130": 3,
+    "130to140": 1,
+    "HappySad 140": 2,
+    "obake": 1,
+    "warning": 1
+  },
+  "native_observed_background_instances": 11,
+  "independent_background_entry_count_from_authored_plan": 20,
+  "cause": "The independent metadata keeps each distinct start beat, and compile_song_lua_session compiles each background_lua_changes entry as an independent owner. The native BackgroundImpl layer caches actors by BackgroundDef, whose key is effect, File1, File2, Color1 and Color2; start beat, rate and transition are outside that key. This chart has 20 Lua background changes but 11 distinct definitions and 11 retained native UpperLeft wrappers. The creation-order check fails on that ownership mismatch before any frame. Repeated HappySad entries must retain one actor and replay the actual focus/change schedule; dropping later timeline changes or relaxing the owner check would not repair the production behavior.",
+  "native_source_sha256": {
+    "src/Background.cpp": "8ac3e579ba9b3adf41acd425c4ad921d0ed17f511761dd9e80301119d76eba2c",
+    "src/BackgroundUtil.cpp": "72839c7ee3a7b95fc26251843fbf9846407cee15b2a4f10895390a105758d447"
+  },
+  "independent_source_sha256": {
+    "crates/deadsync-simfile/src/changes.rs": "9b606abda7d0c797148c21420d661c4d1e089f42d3672ed84381bb3cb3984632",
+    "crates/deadsync-song-lua/src/playback/prepare.rs": "34516e37d6ff7bafd18ea0fac8ea0a3ff1f00d99cadc5c472ca067f4b1cfd69e",
+    "crates/deadsync-song-lua/src/live.rs": "1e325e70e9ec30af4b882ef688b5a2771712e47a13621e4842d8d67ac62393e9",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "e2632e93dc75eba8560df0be0bdc7a0cc633ecc7dd41662d346facd645129bc5"
+  },
+  "diagnostic_only": true,
+  "production_changed": false,
+  "new_repair_launched": false,
+  "acceptance_comparisons_changed": false,
+  "passing_charts_reopened": false
+}
