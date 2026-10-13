@@ -2578,17 +2578,14 @@
       "aliases": []
     },
     {
-      "title": "Gaming in 2018",
+      "title": "Gaming in 2018 If you use a screen filter on this then you’re probably taking this tournament too seriously",
       "source_simfile": "Gaming in 2018/Gaming in 2018.ssc",
-      "harness_version": "0.1.0",
-      "archive": "309dd8a10fb6a49d4af02916938bc5a12e37360f8e29d1e92aff0b61fe00306a.tar.zst",
-      "sha256": "309dd8a10fb6a49d4af02916938bc5a12e37360f8e29d1e92aff0b61fe00306a",
-      "compressed_bytes": 18553,
-      "uncompressed_sha256": "043d3198b95e15aacb4c2da1ad453b7d7d0c7d6e9a1f9e59abab9dd553188cd2",
-      "compression_level": 22,
-      "aliases": [
-        "14de279579f70be94b08aa2912ae7e1d143bd9c203e94b0152e6fb1d6a1632e7.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "fdcb61ee1b447ec72aae687901500ee0c26a5fdf4f564b2b98a13c3f8b1adf4b.tar.zst",
+      "sha256": "fdcb61ee1b447ec72aae687901500ee0c26a5fdf4f564b2b98a13c3f8b1adf4b",
+      "compressed_bytes": 1270852,
+      "uncompressed_sha256": "55a78928607c6930accfaf6696355229a72580c749ce9191898415eb6a8b484f",
+      "aliases": []
     },
     {
       "title": "玩具狂奏曲 -終焉-",
