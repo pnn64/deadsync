@@ -4033,6 +4033,56 @@
         }
       ],
       "report_sha256": "46ab664e4831762b03156e38a7bc389516c653e3b6e0dacd66668ca1cc086a6f"
+    },
+    {
+      "position": 203,
+      "source_simfile": "Furst/furst-fakemines.sm",
+      "simfile_sha256": "56449ae4de315565b9d2702796922aa32beeed27caf5f2545676afa10a78a2d4",
+      "retained_original_archive": "6633c359f6185a61e511b33dd77bf7e063d309d3aed2ad4c31bd06cba373f254.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "1d6c6e802 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/condition-build-v1/proof.json",
+      "capture_seconds": 148.8127336730031,
+      "trace_sha256": "7c8c8d13d761fe7b6983ca86ee6d0c3a5f29c420e616309a109c91a5b8db564f",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-203/candidates/bdf738513e4d97a6ac1db4678d046d2bd984297ea82ecd58f158561518686772.tar",
+      "replay_exit": 0,
+      "replay_seconds": 204.64509935300157,
+      "candidate_sha256": "bdf738513e4d97a6ac1db4678d046d2bd984297ea82ecd58f158561518686772",
+      "native_frames": 22658,
+      "replayed_frames": 22658,
+      "compared_stage_fields": 1386,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "1550836b70fceba5dea4a1b3f637cae24cdf054839743ebbbc57359801a0b506",
+      "archive": "08d928a685e0ccba2de00bfed3cc990e12689bc456a9c12907989ae97ce2e2ab.tar.zst",
+      "archive_sha256": "08d928a685e0ccba2de00bfed3cc990e12689bc456a9c12907989ae97ce2e2ab",
+      "compressed_bytes": 10088540,
+      "pack_seconds": 7.988827875997231,
+      "harness_version": "0.1.80",
+      "title": "Furst",
+      "retained_original_entry": {
+        "title": "Furst",
+        "source_simfile": "Furst/furst-fakemines.sm",
+        "harness_version": "0.1.0",
+        "archive": "6633c359f6185a61e511b33dd77bf7e063d309d3aed2ad4c31bd06cba373f254.tar.zst",
+        "sha256": "6633c359f6185a61e511b33dd77bf7e063d309d3aed2ad4c31bd06cba373f254",
+        "compressed_bytes": 102162,
+        "uncompressed_sha256": "1b95171478b43dadf33335d0e60aa173336b0ba30bbd711191da221ebe5a90d8",
+        "compression_level": 22,
+        "aliases": [
+          "6791a1f57a05a3d42c275f0d7653ed30ad067150bd90d3d5b76597c9c5c8a277.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -4058,7 +4108,7 @@
   },
   "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 9,
+  "passed_fixtures": 10,
   "pending_charts": 21,
-  "processed_charts": 30
+  "processed_charts": 31
 }

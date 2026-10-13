@@ -2559,15 +2559,12 @@
     {
       "title": "Furst",
       "source_simfile": "Furst/furst-fakemines.sm",
-      "harness_version": "0.1.0",
-      "archive": "6633c359f6185a61e511b33dd77bf7e063d309d3aed2ad4c31bd06cba373f254.tar.zst",
-      "sha256": "6633c359f6185a61e511b33dd77bf7e063d309d3aed2ad4c31bd06cba373f254",
-      "compressed_bytes": 102162,
-      "uncompressed_sha256": "1b95171478b43dadf33335d0e60aa173336b0ba30bbd711191da221ebe5a90d8",
-      "compression_level": 22,
-      "aliases": [
-        "6791a1f57a05a3d42c275f0d7653ed30ad067150bd90d3d5b76597c9c5c8a277.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "08d928a685e0ccba2de00bfed3cc990e12689bc456a9c12907989ae97ce2e2ab.tar.zst",
+      "sha256": "08d928a685e0ccba2de00bfed3cc990e12689bc456a9c12907989ae97ce2e2ab",
+      "compressed_bytes": 10088540,
+      "uncompressed_sha256": "bdf738513e4d97a6ac1db4678d046d2bd984297ea82ecd58f158561518686772",
+      "aliases": []
     },
     {
       "title": "Furst",
