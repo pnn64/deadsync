@@ -1,0 +1,51 @@
+{
+  "launch_receipt": {
+    "supervisor_pid": 254301,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_lonely_table_find_repair_v1.py"
+    ]
+  },
+  "live_observation": {
+    "pid": 255275,
+    "command": [
+      "/home/parity/jobs/table-find-build-v4/full-song-lua-stage-modifier-v1",
+      "--archive",
+      "/home/parity/jobs/lonely-table-find-repair-v1/chart-284/9e8d473175281b2fc8028dea5c02deceed55cf3af101dc1d0e347f2ed8dcd431.tar",
+      "--report",
+      "/home/parity/jobs/lonely-table-find-repair-v1/chart-284/report.json"
+    ],
+    "label": "replay",
+    "source_simfile": "Lonely/Lonely.sm"
+  },
+  "exact_process_matches": true,
+  "selected_build": {
+    "build_proof": "/home/parity/jobs/table-find-build-v4/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "binary_sha256": "fc7e246c948eb5b0ecb64a09b3777c480ac81eb26d2cf232c4ed3d2f8112cdd1",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "actual_source_pins": 26,
+  "candidate_sha256": "9e8d473175281b2fc8028dea5c02deceed55cf3af101dc1d0e347f2ed8dcd431",
+  "native_trace_sha256": "75dfcff68a91d32ad4ec911fb53afc9d819cd09fbaa4ffa34de7092a591af20b",
+  "replay_log_tail": [
+    "[2.0s] : 0 checks completed, 0 failed"
+  ],
+  "status": "first bounded Lonely repair running; complete replay acceptance not yet decided",
+  "source_fix_commits": [
+    "9bcc50649"
+  ],
+  "validated_build": "sweep-2026-10-13-table-find-build.json",
+  "original_diagnosis": "sweep-2026-10-13-lonely-table-find-diagnosis.json",
+  "repair_attempts_before_launch": 0,
+  "repair_attempt_started": 1,
+  "per_chart_limit": 2,
+  "native_capture_reused": true,
+  "input_archive_uncompressed_bytes_verified": true,
+  "publisher_streams": 45,
+  "publisher_count": 1,
+  "comparisons_modified": false,
+  "acceptance_unchanged": true,
+  "passing_chart_reopened": false
+}
