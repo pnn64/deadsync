@@ -5244,6 +5244,306 @@
         }
       ],
       "report_sha256": "4f6dee522802b3aae56d3ebba4eba5a3a73d275738dc0d23e0c50c1a61763e55"
+    },
+    {
+      "position": 277,
+      "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.ssc",
+      "simfile_sha256": "e008bc1e32614bb02ae854f73c994f3d0a8043797b0c027b9757ef0e86275417",
+      "retained_original_archive": "fd893cd6fcfcbb4a99b7d2ba04415bb35f2c264b1c4b84f54920c684b0fe6bb0.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/live-draw-build-v1/proof.json",
+      "capture_seconds": 255.76622329599923,
+      "trace_sha256": "46bd0d742f5fbbb93b30d58f0e66514a8aff0394479f53876a670da1e5e482b0",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-277/candidates/751f57a60ad01a35009a75d5719460fa400d0892445e8fccb98e7bca61f86ece.tar",
+      "replay_exit": 2,
+      "replay_seconds": 1792.8041801069921,
+      "candidate_sha256": "751f57a60ad01a35009a75d5719460fa400d0892445e8fccb98e7bca61f86ece",
+      "native_frames": 80343,
+      "replayed_frames": 80343,
+      "compared_stage_fields": 2376,
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.addx, Actor.hibernate, Actor.smooth, ActorFrame.GetChildren, GameState.GetHumanPlayers, GameState.GetNumPlayersEnabled, PlayerOptions.NoteSkin, ScreenManager.SystemMessage",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 5,
+      "concrete_failures": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0041",
+            "args": [
+              false
+            ],
+            "beat": 0.0006376465316861868,
+            "caller": {
+              "line": 224,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0021",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 224,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.39625850319862366,
+            "seq": 125,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/lua/default.lua",
+            "line": 224,
+            "phase": "callback",
+            "beat": 0.0006376465316861868,
+            "seconds": 0.39625850319862366,
+            "args": [
+              "P1Score"
+            ],
+            "results": [
+              {
+                "actor": 4,
+                "name": "P1Score",
+                "path": "ScreenGameplay/Underlay/P1Score"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0028",
+            "args": [
+              "P1Score"
+            ],
+            "beat": 0.0006376465316861868,
+            "caller": {
+              "line": 224,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0021",
+            "detail": {
+              "native_tween_time_left": 13.277883529663086,
+              "results": [
+                {
+                  "actor": "external-0029",
+                  "name": "P1Score",
+                  "path": "ScreenGameplay/Underlay/P1Score"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 224,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.39625850319862366,
+            "seq": 126,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "actor": 4,
+                "name": "P1Score",
+                "path": "ScreenGameplay/Underlay/P1Score"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/lua/default.lua",
+            "line": 224,
+            "phase": "callback",
+            "beat": 0.0006376465316861868,
+            "seconds": 0.39625850319862366,
+            "args": [
+              true
+            ],
+            "results": [
+              {
+                "actor": "0x605b81b1c000",
+                "name": "P1Score",
+                "path": "ScreenGameplay/Underlay/P1Score"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0029",
+            "args": [
+              true
+            ],
+            "beat": 0.0006376465316861868,
+            "caller": {
+              "line": 224,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0021",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 224,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.39625850319862366,
+            "seq": 127,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.diffusealpha",
+            "source": "song:/lua/default.lua",
+            "line": 224,
+            "phase": "callback",
+            "beat": 0.0006376465316861868,
+            "seconds": 0.39625850319862366,
+            "args": [
+              1
+            ],
+            "results": [
+              {
+                "actor": "0x605b81b1c000",
+                "name": "P1Score",
+                "path": "ScreenGameplay/Underlay/P1Score"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0029",
+            "args": [
+              1
+            ],
+            "beat": 0.0006376465316861868,
+            "caller": {
+              "line": 224,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0021",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 224,
+            "operation": "Actor.diffusealpha",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.39625850319862366,
+            "seq": 128,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/lua/default.lua",
+            "line": 224,
+            "phase": "callback",
+            "beat": 0.0006376465316861868,
+            "seconds": 0.39625850319862366,
+            "args": [
+              "P2Score"
+            ],
+            "results": [
+              {
+                "type": "nil"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0028",
+            "args": [
+              "P2Score"
+            ],
+            "beat": 0.0006376465316861868,
+            "caller": {
+              "line": 224,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0021",
+            "detail": {
+              "native_tween_time_left": 13.277883529663086,
+              "results": [
+                {
+                  "type": "nil"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 224,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.39625850319862366,
+            "seq": 129,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "type": "nil"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/lua/default.lua",
+            "line": 224,
+            "phase": "callback",
+            "beat": 0.0006376465316861868,
+            "seconds": 0.39625850319862366,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x605b81bc00b0",
+                "name": "In",
+                "path": "ScreenGameplay/In"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        }
+      ],
+      "report_sha256": "180cc3fd82f6b392c35472b7184fd83a19cb3595309e3c370e8b458c226258fe"
     }
   ],
   "scope": {
@@ -5256,6 +5556,6 @@
   "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 15,
-  "pending_charts": 21,
-  "processed_charts": 36
+  "pending_charts": 22,
+  "processed_charts": 37
 }
