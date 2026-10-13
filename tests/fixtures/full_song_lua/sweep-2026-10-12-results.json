@@ -5621,6 +5621,25 @@
       "capture_exit": 1,
       "capture_seconds": 148.92170894800802,
       "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-1547895-1791862173152612546-0\n"
+    },
+    {
+      "position": 251,
+      "source_simfile": "It's Showtime/mettaton.ssc",
+      "simfile_sha256": "73e611898e40fd3b7a07a6257a3b38e4a6a07cf8f39b0f3e4bd8e7cebbbde128",
+      "retained_original_archive": "ded69a669947efef11c80f8824ecb31ef46e5c8dbe830598cd33827145a19812.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "63e17ffe7 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/foreground-source-build-v2/proof.json",
+      "capture_seconds": 185.01882440999907,
+      "trace_sha256": "2cf3e5689300051262fe0c02682585eb53778822168801ea3b0dac38ef90b74f",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-251/candidates/378bedd6129e825b38ebb4cdf6fbd210820f86f9c366036dab669ca89d079f29.tar",
+      "replay_exit": 1,
+      "replay_seconds": 785.3309054389974,
+      "candidate_sha256": "378bedd6129e825b38ebb4cdf6fbd210820f86f9c366036dab669ca89d079f29",
+      "failure": " 45682/145878 (31.3%)\n[698.1s] replaying every native gameplay frame: frame 45809/145878 (31.4%)\n[700.1s] replaying every native gameplay frame: frame 45944/145878 (31.5%)\n[702.1s] replaying every native gameplay frame: frame 46072/145878 (31.6%)\n[704.1s] replaying every native gameplay frame: frame 46205/145878 (31.7%)\n[706.1s] replaying every native gameplay frame: frame 46337/145878 (31.8%)\n[708.1s] replaying every native gameplay frame: frame 46477/145878 (31.9%)\n[710.1s] replaying every native gameplay frame: frame 46618/145878 (32.0%)\n[712.1s] replaying every native gameplay frame: frame 46756/145878 (32.1%)\n[714.1s] replaying every native gameplay frame: frame 46896/145878 (32.1%)\n[716.1s] replaying every native gameplay frame: frame 47033/145878 (32.2%)\n[718.1s] replaying every native gameplay frame: frame 47162/145878 (32.3%)\n[720.2s] replaying every native gameplay frame: frame 47292/145878 (32.4%)\n[722.2s] replaying every native gameplay frame: frame 47422/145878 (32.5%)\n[724.2s] replaying every native gameplay frame: frame 47554/145878 (32.6%)\n[726.2s] replaying every native gameplay frame: frame 47686/145878 (32.7%)\n[728.2s] replaying every native gameplay frame: frame 47817/145878 (32.8%)\n[730.2s] replaying every native gameplay frame: frame 47927/145878 (32.9%)\n[732.2s] replaying every native gameplay frame: frame 48058/145878 (32.9%)\n[734.2s] replaying every native gameplay frame: frame 48189/145878 (33.0%)\n[736.2s] replaying every native gameplay frame: frame 48323/145878 (33.1%)\n[738.2s] replaying every native gameplay frame: frame 48455/145878 (33.2%)\n[740.2s] replaying every native gameplay frame: frame 48589/145878 (33.3%)\n[742.2s] replaying every native gameplay frame: frame 48717/145878 (33.4%)\n[744.2s] replaying every native gameplay frame: frame 48846/145878 (33.5%)\n[746.2s] replaying every native gameplay frame: frame 48973/145878 (33.6%)\n[748.2s] replaying every native gameplay frame: frame 49099/145878 (33.7%)\n[750.2s] replaying every native gameplay frame: frame 49225/145878 (33.7%)\n[752.2s] replaying every native gameplay frame: frame 49352/145878 (33.8%)\n[754.2s] replaying every native gameplay frame: frame 49477/145878 (33.9%)\n[756.2s] replaying every native gameplay frame: frame 49601/145878 (34.0%)\n[758.2s] replaying every native gameplay frame: frame 49721/145878 (34.1%)\n[760.2s] replaying every native gameplay frame: frame 49840/145878 (34.2%)\n[762.2s] replaying every native gameplay frame: frame 49964/145878 (34.3%)\n[764.2s] replaying every native gameplay frame: frame 50088/145878 (34.3%)\n[766.2s] replaying every native gameplay frame: frame 50213/145878 (34.4%)\n[768.2s] replaying every native gameplay frame: frame 50332/145878 (34.5%)\n[770.2s] replaying every native gameplay frame: frame 50459/145878 (34.6%)\n[772.2s] replaying every native gameplay frame: frame 50586/145878 (34.7%)\n[774.2s] replaying every native gameplay frame: frame 50709/145878 (34.8%)\n[776.2s] replaying every native gameplay frame: frame 50839/145878 (34.9%)\n[778.2s] replaying every native gameplay frame: frame 50971/145878 (34.9%)\n[780.2s] replaying every native gameplay frame: frame 51100/145878 (35.0%)\n[782.2s] replaying every native gameplay frame: frame 51231/145878 (35.1%)\n\nthread 'main' (1572481) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: GAMESTATE has no selected P1 chart\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "historical_pending": [
@@ -5647,6 +5666,6 @@
   "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 11,
-  "pending_charts": 35,
-  "processed_charts": 46
+  "pending_charts": 36,
+  "processed_charts": 47
 }
