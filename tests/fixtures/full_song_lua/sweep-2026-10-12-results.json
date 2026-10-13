@@ -5572,6 +5572,25 @@
         }
       ],
       "report_sha256": "5238c936ac9812a1fbeec65fbd8f4cbe5816da81498b64f11777fc6e0321742f"
+    },
+    {
+      "position": 242,
+      "source_simfile": "Impulse/impulse.sm",
+      "simfile_sha256": "4202087684d63c9525e824368b4e2c021070b3c7bfd01409db460d94823392b4",
+      "retained_original_archive": "39768cac5a58e3432b0f4b2bf8af2ec4ab4a2fdc5187b67b5e01555afa609dda.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "63e17ffe7 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/foreground-source-build-v2/proof.json",
+      "capture_seconds": 206.15786728200328,
+      "trace_sha256": "82e5770d30508aa04beb412046309891549b284e214b7c8c36cdb8e70c2601fe",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-242/candidates/22a93ce3af5e412a02225b9840a7ed00c5bd78ec4e24ebe2e4139432de4eb74c.tar",
+      "replay_exit": 1,
+      "replay_seconds": 1.6298035759973573,
+      "candidate_sha256": "22a93ce3af5e412a02225b9840a7ed00c5bd78ec4e24ebe2e4139432de4eb74c",
+      "failure": "[0.5s] replaying every native gameplay frame\n\nthread 'main' (1482632) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: multiple native foreground entries need entry-specific ownership\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "historical_pending": [
@@ -5598,6 +5617,6 @@
   "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 11,
-  "pending_charts": 32,
-  "processed_charts": 43
+  "pending_charts": 33,
+  "processed_charts": 44
 }
