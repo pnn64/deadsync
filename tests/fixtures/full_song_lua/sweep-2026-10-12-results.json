@@ -4791,6 +4791,21 @@
       "capture_exit": 1,
       "capture_seconds": 253.81632231699768,
       "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-1154392-1791856557022276130-0\n"
+    },
+    {
+      "position": 224,
+      "source_simfile": "Happy Now/Happy Now.sm",
+      "simfile_sha256": "4b7b4826b11cb66575c6385f0bbce11e377c10ad0f288b308ed0561b1db997fb",
+      "retained_original_archive": "a9b4ff850bc8ab768828aa730351155c5f828c889f49463c79ccff92e2e75f81.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "76f1176f97fb1c43d5417e1e076c02c4ba3f1e43b57b6a66ac7f4b78f54e9332",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "a45545f0a / harness b191ebd",
+      "build_proof": "/home/parity/jobs/sm-metadata-build-v1/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 900.2718385780026,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1172515-1791856811481466840-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1172515-1791856811481466840-0\n"
     }
   ],
   "historical_pending": [
@@ -4817,6 +4832,6 @@
   "binary_sha256": "76f1176f97fb1c43d5417e1e076c02c4ba3f1e43b57b6a66ac7f4b78f54e9332",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 11,
-  "pending_charts": 26,
-  "processed_charts": 37
+  "pending_charts": 27,
+  "processed_charts": 38
 }
