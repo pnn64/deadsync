@@ -2344,6 +2344,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 210,
+      "source_simfile": "Get Into It/GetIntoIt.sm",
+      "simfile_sha256": "5577279c57ba4255fcec3f2f7e105c0e2627731193ee239d4ecc2486806027af",
+      "retained_original_archive": "9163226a31da0586f252f1c418bbdfd663159cfb2aa3d4b5cd7a8e216afbb3dc.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "4610c4a91d914dbd7346486ef8c1583fd388003dab6c6013e583961b5b01363b",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "21c106cb4 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/owned-style-build-v3/proof.json",
+      "capture_seconds": 172.2527192540001,
+      "trace_sha256": "955ef8d80682254161222f06ac6f57ede4122e54d0cba577443e5cb6406e4632",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-210/candidates/c8525597f7140851887306420f697065b157204649f38c77434fb24b5fa69c27.tar",
+      "replay_exit": 1,
+      "replay_seconds": 20.62181785899884,
+      "candidate_sha256": "c8525597f7140851887306420f697065b157204649f38c77434fb24b5fa69c27",
+      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[8.5s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Get Into It': failed to execute '/tmp/.tmp1eV1dG/song/lua/bg.lua': runtime error: [string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Get Into It' from '/tmp/.tmp1eV1dG/song/lua/default.lua': failed to execute '/tmp/.tmp1eV1dG/song/lua/default.lua': runtime error: [string \"/tmp/.tmp1eV1dG/song/lua/default.lua\"]:460: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmp1eV1dG/song/lua/default.lua\"]:460: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\ndeadsync_song_lua::playback::prepare: Failed to compile background lua layer for 'Get Into It' from '/tmp/.tmp1eV1dG/song/lua/bg.lua': failed to execute '/tmp/.tmp1eV1dG/song/lua/bg.lua': runtime error: [string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: attempt to call field 'LinearFrames' (a nil value)\nstack traceback:\n\t[C]: in field 'LinearFrames'\n\t[string \"/tmp/.tmp1eV1dG/song/lua/bg.lua\"]:13: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (996272) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[10.0s] replaying every native gameplay frame: frame 0/70013 (0.0%)\n"
     }
   ],
   "scope": {
@@ -2353,9 +2372,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
+  "binary_sha256": "4610c4a91d914dbd7346486ef8c1583fd388003dab6c6013e583961b5b01363b",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 5,
-  "pending_charts": 9,
-  "processed_charts": 14
+  "pending_charts": 10,
+  "processed_charts": 15
 }
