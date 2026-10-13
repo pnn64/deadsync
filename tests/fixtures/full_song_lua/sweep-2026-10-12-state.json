@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T00:27:59Z",
-  "previous_goal_turn": "progress: Fiji attempt 1 passed all 93015 frames and 1144 stage fields on its reused capture and was saved as 8c075d14e; Flying Castle complete fixture saved as 18a1bd764; DREAMING-ING!! completed all 32257 frames and remains pending on a missing captured subscriber identity and command/stage failures; LoadActor path collapse fixed as c71e8b4fe after native source diagnosis, with 10 LoadActor and 27 live tests passing on Windows and Linux and 17 Linux replay controls passing; immutable helper ab80853f is selected for future charts; Flowers R.I.G.H.T.S attempt 1 is running on its original capture; replay preparation warnings retained as 3c0a6d0b7; feelyourtouch entry diagnostic showed no scene and no compiler warning because its archive omitted all multitap Lua files despite 1565215 native song events; harness native-case Lua discovery and dependency lookup fixed as b191ebd, with 3 oracle and 12 archive controls passing on Windows and Linux; helper 34a97821 is selected for future charts and feelyourtouch attempt 1 repackages the byte-identical native trace without recapturing; Deceive final attempt 2 and Dreams Bloom attempt 1 remain live; all three frozen original queues and the single publisher remain active",
+  "updated_utc": "2026-10-13T00:48:24Z",
+  "previous_goal_turn": "progress: Fiji attempt 1 passed all 93015 frames and 1144 fields and was saved as 8c075d14e; Flying Castle complete fixture saved as 18a1bd764; Deceive final attempt 2 passed all 43460 frames and 1265 fields with zero errors or mismatches and was saved as f4e7dac4d; LoadActor path collapse fixed as c71e8b4fe and validated with 10 LoadActor and 27 live controls on Windows and Linux plus 17 Linux replay controls; preparation warnings retained as 3c0a6d0b7; harness native-case Lua discovery and dependency lookup fixed as b191ebd and validated with 3 oracle and 12 archive controls on Windows and Linux; feelyourtouch attempt 1 reused its identical native trace and corrected archive, replayed all 7084 frames, and remains pending on source case, command count and one stage-failed observation; Flowers R.I.G.H.T.S attempt 1 replayed all 50828 frames and now remains pending on missing screen actors rather than source path spelling; each retains one final attempt; Condition=false subtrees fixed as 1d6c6e802 after native skipped-actor evidence, with 28 live controls and the subscriber-path regression passing on Windows and Linux plus 17 Linux replay controls; immutable helper 8352032b selected for future charts and DREAMING-ING attempt 1 is running on its retained uncompressed capture; Dreams Bloom attempt 1 failed at frame 18166 because native scene 2 differs from independent scene 1; E2 variant and Freaky Deaky SM initial replays completed and are recorded as pending; the three original queues and single publisher remain active",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "d881ff47f3144da5fd22d7b941cc4f4de234ab20",
+      "deadsync": "6ef9e6b2de603f8440c23268d697d3b3b0316d59",
       "itgmania_harness": "b191ebd0fcf8b59b5294958d2ffe2939af2d742a"
     }
   },
@@ -26,15 +26,16 @@
     "factory_ownership": "final parent tree and reload epoch regression passed; all 15 Linux replay controls passed; Cold attempt 2 and crew attempt 1 reuse their captures",
     "background_entry_ownership": "native background child containers and foreground entry offset regression passed; all 15 Linux replay controls passed; Cuphead attempt 2 reuses its original capture and skips if attempt 1 passed",
     "background_activation": "startup clock regression passed on Windows; 21 live-scene tests and 15 native replay controls passed on Linux; RUNWAY attempt 1 reuses its uncompressed capture; committed as 375a96e85",
-    "definition_concat_capture": "committed as harness 55299c5; 12 runtime tests passed on Windows and Linux; composed definition, foreground and reload native controls passed; Deceive capture repair attempt 1 completed with source line and Debug failures; final attempt 2 is running; sweep-2026-10-12-definition-concat-build.json",
+    "definition_concat_capture": "committed as harness 55299c5; 12 runtime tests passed on Windows and Linux; composed definition, foreground and reload native controls passed; Deceive capture repair attempt 1 completed with source line and Debug failures; final attempt 2 passed all 43460 frames with zero errors or mismatches and was saved as f4e7dac4d; sweep-2026-10-12-definition-concat-build.json",
     "outro_option_rebuild": "committed as df8437373; Windows regression passed; 22 Linux live tests and 15 native replay controls passed; Datamania attempt 1 passed all 65013 frames and was saved as 41602de40; sweep-2026-10-12-outro-options-build.json",
     "screen_layer_tweens": "committed as 25908229a plus d236f305c; first build caught and retained two duplicate background update control failures before any chart replay; corrected build passed all 23 Windows and Linux live tests plus 15 native replay controls; Datura attempt 1 passed all 51588 frames and was saved as f846fd31d; sweep-2026-10-12-screen-layer-tweens-build.json",
-    "instantiated_effect_ownership": "committed as e2b01b99a; all 16 Windows and Linux replay controls passed; Dimmadome attempt 1 completed and remains pending on four exact command clocks; Dreams Bloom attempt 1 is running; sweep-2026-10-12-background-effect-owner-build.json",
+    "instantiated_effect_ownership": "committed as e2b01b99a; all 16 Windows and Linux replay controls passed; Dimmadome attempt 1 completed and remains pending on four exact command clocks; Dreams Bloom attempt 1 failed at frame 18166 on a native scene-2 versus independent scene-1 reload mismatch; sweep-2026-10-12-background-effect-owner-build.json",
     "independent_uptime_and_observer_order": "committed as 4bd354261; all 24 Windows and Linux live tests plus 17 replay controls passed; an invalid test frame and its failure logs were preserved and corrected before any chart replay; Dig Dug attempt 1 reuses the byte-identical capture; sweep-2026-10-12-uptime-pause-build.json",
-    "cmd_source_lines_and_debug": "committed as b1160be8c and 3cdcfeb3a; 9 command syntax and 25 live tests passed on Windows and Linux; all 17 Linux replay controls passed; Deceive attempt 2 reuses the uncompressed capture; sweep-2026-10-12-debug-source-lines-build.json",
+    "cmd_source_lines_and_debug": "committed as b1160be8c and 3cdcfeb3a; 9 command syntax and 25 live tests passed on Windows and Linux; all 17 Linux replay controls passed; Deceive attempt 2 passed all 43460 frames and 1265 fields and was saved as f4e7dac4d; sweep-2026-10-12-debug-source-lines-build.json",
     "null_foreground_declarations": "committed as ce20604ea; all 26 Windows and Linux live tests passed; all 17 Linux replay controls and immutable helper validation passed; Fiji attempt 1 passed all 93015 frames and 1144 stage fields with zero mismatches/errors and was saved as 8c075d14e; sweep-2026-10-12-null-foreground-build.json",
     "load_actor_paths": "c71e8b4fe passed 10 LoadActor and 27 live tests on Windows and Linux plus 17 Linux replay controls; Flowers attempt 1 reuses its capture; sweep-2026-10-12-actor-paths-build.json",
     "native_case_lua_dependencies": "harness b191ebd passed 3 oracle and 12 archive controls on Windows and Linux; native trace observer unchanged; feelyourtouch attempt 1 repackages the unchanged capture; sweep-2026-10-12-case-lua-archive-build.json",
+    "conditional_actor_subtrees": "1d6c6e802 passed 28 live tests plus the subscriber-path regression on Windows and Linux and 17 Linux replay controls; the test-support feature guard was corrected before replay; DREAMING-ING attempt 1 reuses its capture; sweep-2026-10-12-condition-build.json",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved"
   },
   "corpus_transfer": {
@@ -58,9 +59,9 @@
       "pending": 18,
       "processed": 26,
       "last_log_lines": [
-        "[936.2s] replaying every native gameplay frame: frame 9125/18924 (48.2%)",
-        "[938.2s] replaying every native gameplay frame: frame 9141/18924 (48.3%)",
-        "[940.2s] replaying every native gameplay frame: frame 9155/18924 (48.4%)"
+        "[2160.4s] replaying every native gameplay frame: 0 checks completed, 0 failed",
+        "[2162.4s] replaying every native gameplay frame: 0 checks completed, 0 failed",
+        "[2164.4s] replaying every native gameplay frame: 0 checks completed, 0 failed"
       ],
       "supervisor_running": true
     },
@@ -74,41 +75,53 @@
     "dig_dug_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-dig-dug-clock-diagnosis.json",
     "dreams_bloom_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-dreams-background-diagnosis.json",
     "deceive_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-deceive-source-diagnosis.json",
+    "repair_residuals": "tests/fixtures/full_song_lua/sweep-2026-10-12-path-repair-residuals.json",
     "fiji_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-fiji-foreground-diagnosis.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
       {
-        "job": "feely-case-lua-repair-v1",
+        "job": "dreaming-condition-repair-v1",
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
         "pending": 0,
         "processed": 0,
-        "last_phase": "candidate",
-        "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+        "last_phase": "replay",
+        "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
         "child_running": true
+      },
+      {
+        "job": "feely-case-lua-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 0,
+        "pending": 1,
+        "processed": 1,
+        "last_phase": "replay",
+        "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+        "child_running": false
       },
       {
         "job": "actor-paths-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
+        "complete": true,
+        "supervisor_running": false,
         "passed": 0,
-        "pending": 0,
-        "processed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "replay",
         "source_simfile": "flowers [R.I.G.H.T.S]/flowers.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "debug-source-lines-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "null-foreground-repair-v1",
@@ -237,24 +250,24 @@
         "complete": false,
         "supervisor_running": true,
         "passed": 3,
-        "pending": 7,
-        "processed": 10,
+        "pending": 8,
+        "processed": 11,
         "last_phase": "replay",
-        "source_simfile": "Freaky Deaky/Freaky Deaky.sm",
+        "source_simfile": "FTW/FTW.sm",
         "child_running": true,
-        "position": 198
+        "position": 201
       },
       {
         "job": "chart-sweep-parallel-v4-2",
         "complete": false,
         "supervisor_running": true,
-        "passed": 2,
-        "pending": 2,
-        "processed": 4,
-        "last_phase": "replay",
-        "source_simfile": "E2/E.ssc",
+        "passed": 3,
+        "pending": 3,
+        "processed": 6,
+        "last_phase": "capture",
+        "source_simfile": "Final Flash Flight/Final Flash Flight.sm",
         "child_running": true,
-        "position": 181
+        "position": 187
       },
       {
         "job": "definition-concat-repair-v1",
@@ -314,14 +327,14 @@
       },
       {
         "job": "background-effect-owner-repair-v2",
-        "complete": false,
-        "supervisor_running": true,
+        "complete": true,
+        "supervisor_running": false,
         "passed": 0,
-        "pending": 0,
-        "processed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "replay",
         "source_simfile": "Dreams Bloom After School/Dreams Bloom After School.ssc",
-        "child_running": true
+        "child_running": false
       }
     ],
     "publisher_streams": [
@@ -485,15 +498,22 @@
         "record": "sweep-2026-10-12-feely-case-lua-repairs.json",
         "fix_commit": "harness b191ebd / deadsync c71e8b4fe",
         "finish_status": "bounded feelyourtouch archive dependency repair complete"
+      },
+      {
+        "name": "dreaming-condition-repair",
+        "remote": "/home/parity/jobs/dreaming-condition-repair-v1",
+        "record": "sweep-2026-10-12-dreaming-condition-repairs.json",
+        "fix_commit": "1d6c6e802 / harness b191ebd",
+        "finish_status": "bounded DREAMING-ING conditional subtree repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 20,
-    "new_pending_charts": 20,
-    "new_processed_sources": 40,
+    "new_passed_fixtures": 22,
+    "new_pending_charts": 21,
+    "new_processed_sources": 43,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 313,
+    "unprocessed_sources": 310,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -743,31 +763,25 @@
     },
     {
       "source_simfile": "Dreams Bloom After School/Dreams Bloom After School.ssc",
-      "repair_attempts": 0,
-      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[5.5s] replaying every native gameplay frame\n[6.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n\nthread 'main' (548291) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[8.0s] replaying every native gameplay frame: frame 0/120488 (0.0%)\n",
+      "repair_attempts": 1,
+      "failure": "0.7s] replaying every native gameplay frame: frame 17736/120488 (14.7%)\n[3802.7s] replaying every native gameplay frame: frame 17747/120488 (14.7%)\n[3804.7s] replaying every native gameplay frame: frame 17755/120488 (14.7%)\n[3806.7s] replaying every native gameplay frame: frame 17766/120488 (14.7%)\n[3808.7s] replaying every native gameplay frame: frame 17775/120488 (14.8%)\n[3810.7s] replaying every native gameplay frame: frame 17785/120488 (14.8%)\n[3812.7s] replaying every native gameplay frame: frame 17796/120488 (14.8%)\n[3814.7s] replaying every native gameplay frame: frame 17807/120488 (14.8%)\n[3816.7s] replaying every native gameplay frame: frame 17816/120488 (14.8%)\n[3818.7s] replaying every native gameplay frame: frame 17825/120488 (14.8%)\n[3820.7s] replaying every native gameplay frame: frame 17834/120488 (14.8%)\n[3822.7s] replaying every native gameplay frame: frame 17844/120488 (14.8%)\n[3824.7s] replaying every native gameplay frame: frame 17850/120488 (14.8%)\n[3826.7s] replaying every native gameplay frame: frame 17860/120488 (14.8%)\n[3828.7s] replaying every native gameplay frame: frame 17870/120488 (14.8%)\n[3830.7s] replaying every native gameplay frame: frame 17881/120488 (14.8%)\n[3832.7s] replaying every native gameplay frame: frame 17889/120488 (14.8%)\n[3834.7s] replaying every native gameplay frame: frame 17898/120488 (14.9%)\n[3836.7s] replaying every native gameplay frame: frame 17908/120488 (14.9%)\n[3838.7s] replaying every native gameplay frame: frame 17918/120488 (14.9%)\n[3840.7s] replaying every native gameplay frame: frame 17930/120488 (14.9%)\n[3842.7s] replaying every native gameplay frame: frame 17940/120488 (14.9%)\n[3844.7s] replaying every native gameplay frame: frame 17950/120488 (14.9%)\n[3846.7s] replaying every native gameplay frame: frame 17959/120488 (14.9%)\n[3848.7s] replaying every native gameplay frame: frame 17968/120488 (14.9%)\n[3850.7s] replaying every native gameplay frame: frame 17978/120488 (14.9%)\n[3852.7s] replaying every native gameplay frame: frame 17989/120488 (14.9%)\n[3854.7s] replaying every native gameplay frame: frame 17998/120488 (14.9%)\n[3856.7s] replaying every native gameplay frame: frame 18007/120488 (14.9%)\n[3858.7s] replaying every native gameplay frame: frame 18016/120488 (15.0%)\n[3860.7s] replaying every native gameplay frame: frame 18027/120488 (15.0%)\n[3862.7s] replaying every native gameplay frame: frame 18035/120488 (15.0%)\n[3864.7s] replaying every native gameplay frame: frame 18044/120488 (15.0%)\n[3866.7s] replaying every native gameplay frame: frame 18052/120488 (15.0%)\n[3868.7s] replaying every native gameplay frame: frame 18063/120488 (15.0%)\n[3870.7s] replaying every native gameplay frame: frame 18071/120488 (15.0%)\n[3872.7s] replaying every native gameplay frame: frame 18081/120488 (15.0%)\n[3874.7s] replaying every native gameplay frame: frame 18090/120488 (15.0%)\n[3876.7s] replaying every native gameplay frame: frame 18100/120488 (15.0%)\n[3878.7s] replaying every native gameplay frame: frame 18110/120488 (15.0%)\n[3880.7s] replaying every native gameplay frame: frame 18118/120488 (15.0%)\n[3882.7s] replaying every native gameplay frame: frame 18127/120488 (15.0%)\n[3884.7s] replaying every native gameplay frame: frame 18137/120488 (15.1%)\n[3886.7s] replaying every native gameplay frame: frame 18147/120488 (15.1%)\n[3888.7s] replaying every native gameplay frame: frame 18154/120488 (15.1%)\n[3890.7s] replaying every native gameplay frame: frame 18161/120488 (15.1%)\n\nthread 'main' (574222) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native scene 2 differs from independent scene 1 at frame 18166\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[3892.7s] replaying every native gameplay frame: frame 18165/120488 (15.1%)\n[3894.7s] replaying every native gameplay frame: frame 18165/120488 (15.1%)\n[3896.7s] replaying every native gameplay frame: frame 18165/120488 (15.1%)\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
     },
     {
       "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
-      "repair_attempts": 0,
-      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.0s] : 0 checks completed, 0 failed\n[16.0s] : 0 checks completed, 0 failed\n[18.0s] : 0 checks completed, 0 failed\n[20.0s] : 0 checks completed, 0 failed\n[22.0s] : 0 checks completed, 0 failed\n[24.0s] : 0 checks completed, 0 failed\n[25.2s] replaying every native gameplay frame\n[26.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[28.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n\nthread 'main' (625454) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[30.0s] replaying every native gameplay frame: frame 0/7084 (0.0%)\n[32.0s] replaying every native gameplay frame: frame 0/7084 (0.0%)\n[34.0s] replaying every native gameplay frame: frame 0/7084 (0.0%)\n[36.0s] replaying every native gameplay frame: frame 0/7084 (0.0%)\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
-    },
-    {
-      "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
       "repair_attempts": 1,
       "failure": null,
       "errors": [],
-      "mismatch_count": 127283,
+      "mismatch_count": 412569,
       "first_mismatch": [
         {
-          "field": "command_query_count",
-          "native": 295137,
-          "deadsync": 295134
+          "phase": "progress",
+          "seconds": 121.01800537109375,
+          "field": "failed",
+          "native": false,
+          "deadsync": true
         }
       ]
     },
@@ -849,15 +863,73 @@
     },
     {
       "source_simfile": "flowers [R.I.G.H.T.S]/flowers.ssc",
-      "repair_attempts": 0,
+      "repair_attempts": 1,
       "failure": null,
       "errors": [],
-      "mismatch_count": 40226,
+      "mismatch_count": 40098,
       "first_mismatch": [
         {
           "field": "command_query_count",
           "native": 40263,
-          "deadsync": 40249
+          "deadsync": 40250
+        }
+      ]
+    },
+    {
+      "source_simfile": "Freaky Deaky/Freaky Deaky.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 5,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0031",
+            "args": [
+              false
+            ],
+            "beat": 0.0010966340778395534,
+            "caller": {
+              "line": 173,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0007",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 173,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.3116326630115509,
+            "seq": 36,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/lua/default.lua",
+            "line": 173,
+            "phase": "callback",
+            "beat": 0.0010966340778395534,
+            "seconds": 0.3116326630115509,
+            "args": [
+              "P1Score"
+            ],
+            "results": [
+              {
+                "actor": 4,
+                "name": "P1Score",
+                "path": "ScreenGameplay/Underlay/P1Score"
+              }
+            ]
+          }
         }
       ]
     },
@@ -890,6 +962,20 @@
           "field": "failed",
           "native": true,
           "deadsync": false
+        }
+      ]
+    },
+    {
+      "source_simfile": "E2/E.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 272110,
+      "first_mismatch": [
+        {
+          "field": "stage_sample_clock",
+          "native": 96.25424194335938,
+          "deadsync": 96.28983306884766
         }
       ]
     }

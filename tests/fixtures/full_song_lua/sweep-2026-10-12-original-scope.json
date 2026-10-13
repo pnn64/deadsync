@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T00:28:01Z",
+  "updated_utc": "2026-10-13T00:48:25Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -11,9 +11,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 167,
-    "pending": 21,
-    "unprocessed": 313
+    "passed": 169,
+    "pending": 22,
+    "unprocessed": 310
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1507,9 +1507,9 @@
       "position": 168,
       "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
       "simfile_sha256": "bf410851d8e4baf4478713fd48967877c33e1f7a0310b33917d42ac0dfac79be",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-12-definition-concat-repairs.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-12-debug-source-lines-repairs.json"
     },
     {
       "position": 169,
@@ -1596,8 +1596,8 @@
       "source_simfile": "Dreams Bloom After School/Dreams Bloom After School.ssc",
       "simfile_sha256": "2004c1803ec2d989574fd554ab8cf755f58b8b66dd44ebaad4aa85a6f516cd8a",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-dreams-background-effect-owner-repairs.json"
     },
     {
       "position": 180,
@@ -1611,7 +1611,9 @@
       "position": 181,
       "source_simfile": "E2/E.ssc",
       "simfile_sha256": "333782934a7dc6fab316037d7ec30a59e7cc4a34b19a1a14704db27c53936c07",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 182,
@@ -1633,15 +1635,17 @@
       "position": 184,
       "source_simfile": "Electrified/Electrified cut.ssc",
       "simfile_sha256": "8d3dc20a2f554ebf2f445c48e48c5a1e13a709538f0afa4075ba5f8289d99cf0",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 185,
       "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
       "simfile_sha256": "66db5c1884fb2b633bfd26de2f32825a27f7fd9e8e08a0ae89d1ec4f27b8d645",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-feely-case-lua-repairs.json"
     },
     {
       "position": 186,
@@ -1690,8 +1694,8 @@
       "source_simfile": "flowers [R.I.G.H.T.S]/flowers.ssc",
       "simfile_sha256": "52e86ec7daeca20bdb1e49b6af119c898cd07a20a0e3c0b72703ead58af8bdba",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-12-actor-paths-repairs.json"
     },
     {
       "position": 193,
@@ -1729,7 +1733,9 @@
       "position": 198,
       "source_simfile": "Freaky Deaky/Freaky Deaky.sm",
       "simfile_sha256": "836f1455b8e8170f110e4b1596bbed06a23de27213758df17b0b17a2d21a531f",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 199,
