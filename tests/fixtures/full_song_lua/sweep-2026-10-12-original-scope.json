@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T17:51:59Z",
+  "updated_utc": "2026-10-13T20:15:04Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -14,8 +14,8 @@
   ],
   "counts": {
     "passed": 224,
-    "pending": 78,
-    "unprocessed": 199
+    "pending": 79,
+    "unprocessed": 198
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2478,8 +2478,8 @@
       "source_simfile": "Lower Times/Lower Times.ssc",
       "simfile_sha256": "6ca6a4f70f49b08d05d58bd76d943bfa304378ffc855c7f7dfcee3c677e1f65d",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-13-lower-ssc-overlay-final-repair.json"
     },
     {
       "position": 290,
@@ -2601,7 +2601,9 @@
       "position": 305,
       "source_simfile": "mawaru6/mawaru6.sm",
       "simfile_sha256": "394d4b03ce745a22d46dfef9bf581301840ee654ebd382d2c76412260694c37c",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 306,

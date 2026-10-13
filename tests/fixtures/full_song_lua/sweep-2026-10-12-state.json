@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T19:39:02Z",
-  "previous_goal_turn": "Progress: four passing original fixtures were saved and locally byte verified with zero differences and Lua errors: Lonely/Lonely.ssc first repair 1 (93048 frames, 2728 stage fields), Marshall Maximizer SSC (92066 frames,1584 fields), Maware! Setsugetsuka SSC (68523 frames,1177 fields), and mawaru2 SM (103901 frames,1925 fields). They remain accepted and coverage stays separate. Lower Times SSC first repair completed114997 frames and2420 fields with zero errors and one count difference, native93 versus independent88. Paired bounded probes now establish the remaining cause: the frozen Linux helper marked autoplay failed before owned Off, selecting BeginFailed and delaying Off one frame. The existing Windows fix874f2e535 fails judged autoplay inside overlay Off, after exit selection, and dispatches all five terminal End events on the final native frame. Existing fix874f2e535 is now enrolled in Linux through12 isolated verified preimages in six files. Both Get Into It originals fail at startup because Sprite.LinearFrames is absent. New fix06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 installs the native fallback helper and has an unchanged meaningful Sprite control that fails before production on both hosts. A new real autoplay navigation control fails on the excluded Linux baseline and passes with the already fixed Windows source; both controls pass in the combined helper. All10 Linux and9 Windows checks pass, including815 Linux gameplay tests,46 live and23 native controls on both hosts and both executable builds. All26 frozen source pins, logs, isolated edits and the native harness's three pins are byte verified. Selected immutable helper5ae071ff2319cc8c107d87763b84978c29b7ecc763fb4de47330fd6287f5b283 is sprite-frames-overlay-green-v2; atomic selection uses fixed commit SHAs. The first full bounded repair1 for each Get Into It variant and final Lower Times SSC repair2 are running against unchanged native captures; only the existing complete uncompressed comparisons decide acceptance. Koi SM first repair remains pending after145074 frames,2299 fields and3014 command differences with zero errors. Existing diagnostic alignment isolates60 Fish paths,35 missing mine Judgment callbacks and three delayed tap callbacks. Actor-name fixda708fe8836e33d3095f23be69d9eb9b56db7de4 is validated and selected. A new bounded timing probe establishes that all three native clocks already cross the exact authored float beat, while independent nanosecond deadlines lie1319,1320 and5135ns later. Native Player::CrossedRows uses float note rows; controls and a production repair for this timing and the mine callbacks are still required before Koi's one remaining full repair. No second Koi replay has launched. Hold/roll timing windows already include TIMING_WINDOW_ADD_S; no constant change is needed. mawaru4 SSC has11 cached native BackgroundDefs versus20 authored changes; it still needs instance reuse with the complete timeline and native focus behavior. No mawaru4 repair has launched. Original main and both partition workers remain live and were not restarted. Singleton publisher60312 watches51 streams. Capped charts remain pending without another retry. All501 original simfiles remain byte unchanged, RUNWAY stays outside original scope, and the goal is active and incomplete. No passing chart was reopened.",
+  "updated_utc": "2026-10-13T20:15:01Z",
+  "previous_goal_turn": "Koi SM's final allowed repair 2 is running with immutable helper 1df4edb6457cb51a6720afb6f97c47421d2830b23881e133afd0e9821bcaf44c from koi-judgment-green-v1. Fix 9bd984b71e3dd593c07e302839a75be8c6ec3c10 dispatches autoplay at native float row crossings and avoided mine Judgment messages on the next gameplay update. Both unchanged focused controls fail on the pre-fix source on Linux and Windows and pass after the fix; all 12 checks on each host pass, including 815 gameplay tests, 46 live controls, 25 native controls and both executable builds. The bounded real-Core probe reproduces all 35 native avoided-mine callback clocks and column orders exactly. All 26 actual source pins, the three native harness pins, immutable binaries and logs are verified. Koi reuses its first repair's unchanged native capture and raw candidate; there are no repairs remaining after this full attempt. Lower Times SSC's final repair 2 completed all 114997 frames and 2420 fields but remains pending with two missing captured subscriber identity errors and four failed-state differences. Its previous terminal command-count difference is absent from the final report. The two-repair cap is exhausted; no further replay is allowed this sweep. Both Get Into It variants are running first repair 1 with the validated Sprite.LinearFrames helper and unchanged captures; each has one repair left after its current attempt. Mawaru6's original replay completed all 121856 frames and 2992 fields with zero errors and 505260 differences, starting with Close/Game1 broadcast clocks; no repair has launched. Mawaru4 SSC has 11 cached native BackgroundDefs versus 20 authored changes and still needs instance reuse with the complete timeline and native focus behavior; no repair has launched. Earlier accepted Lonely SSC, Marshall Maximizer SSC, Maware! Setsugetsuka SSC and mawaru2 SM remain saved, locally decompressed and byte verified. Original main and both partition workers continue without restart. Singleton publisher 60312 watches 52 streams. Capped charts remain pending without another retry. Only the existing complete uncompressed replay comparisons determine acceptance; coverage stays separate and no passing chart was reopened. All 501 original simfiles remain byte unchanged, RUNWAY stays outside original scope, and the goal is active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,11 +14,12 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "a03cd421dbbba92a2c1f40051a198a457e21f010",
+      "deadsync": "ac5fbcffea90e83be26a5e72b2a61552549360ed",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
   "validation": {
+    "native_autoplay_and_avoided_mine_judgments": "9bd984b71e3dd593c07e302839a75be8c6ec3c10: unchanged meaningful red controls on both hosts; all 12 Linux and 12 Windows checks pass; 26 source and 3 harness pins verified; koi-judgment-build.json",
     "sprite_and_overlay_exit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535: meaningful unchanged focused controls; all10 Linux and9 Windows checks pass; 26 actual source and3 native harness pins verified; sprite-frames-overlay-build.json",
     "retained_native_actor_names": "da708fe8836e33d3095f23be69d9eb9b56db7de4: meaningful unchanged actor-name control fails before production and passes after on both hosts; all 8 Linux and 7 Windows checks pass, 26 actual source pins and native 3 harness pins verified; actor-name-build.json",
     "natural_owned_scene_end": "7c8b4c460131bb1c1674813ca53a210e20ff895d: original control fails on both hosts before the fix; failed first green exposes retained SetLife ownership; unchanged control passes with owned meter and all green controls/builds. natural-end-build.json",
@@ -67,18 +68,18 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "mawaru6/mawaru6.sm",
-      "position": 305,
+      "current": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc",
+      "position": 308,
       "phase": "replay",
-      "pid": 183034,
+      "pid": 1922291,
       "process_matches": true,
       "passed": 20,
-      "pending": 44,
-      "processed": 64,
+      "pending": 45,
+      "processed": 65,
       "last_log_lines": [
-        "[20008.6s] replaying every native gameplay frame: frame 114788/121856 (94.2%)",
-        "[20010.6s] replaying every native gameplay frame: frame 114798/121856 (94.2%)",
-        "[20012.6s] replaying every native gameplay frame: frame 114808/121856 (94.2%)"
+        "[586.3s] replaying every native gameplay frame: frame 41616/46936 (88.7%)",
+        "[588.3s] replaying every native gameplay frame: frame 41760/46936 (89.0%)",
+        "[590.3s] replaying every native gameplay frame: frame 41914/46936 (89.3%)"
       ],
       "supervisor_running": true
     },
@@ -87,6 +88,10 @@
     "parallel_queue_receipt": "tests/fixtures/full_song_lua/sweep-2026-10-12-parallel-queues.json",
     "build_transition": "tests/fixtures/full_song_lua/sweep-2026-10-12-build-transition.json",
     "source_scope_audit": "tests/fixtures/full_song_lua/sweep-2026-10-12-original-scope.json",
+    "lower_ssc_final_overlay_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-lower-ssc-overlay-final-repair.json",
+    "koi_judgment_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-13-koi-judgment-final-launch.json",
+    "koi_judgment_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-koi-judgment-build.json",
+    "koi_mine_clock_boundary": "tests/fixtures/full_song_lua/sweep-2026-10-13-koi-mine-clock-boundary.json",
     "koi_native_row_boundary": "tests/fixtures/full_song_lua/sweep-2026-10-13-koi-native-row-boundary.json",
     "sprite_overlay_repairs_launch": "tests/fixtures/full_song_lua/sweep-2026-10-13-sprite-overlay-repairs-launch.json",
     "sprite_frames_overlay_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-sprite-frames-overlay-build.json",
@@ -189,6 +194,17 @@
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
       {
+        "job": "koi-sm-judgment-final-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Koi [UPS2016]/koi.sm",
+        "child_running": true
+      },
+      {
         "job": "get-into-it-sm-frames-repair-v1",
         "complete": false,
         "supervisor_running": true,
@@ -212,14 +228,14 @@
       },
       {
         "job": "lower-ssc-overlay-final-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
+        "complete": true,
+        "supervisor_running": false,
         "passed": 0,
-        "pending": 0,
-        "processed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "replay",
         "source_simfile": "Lower Times/Lower Times.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "lower-ssc-end-repair-v1",
@@ -1100,15 +1116,22 @@
         "record": "sweep-2026-10-13-lower-ssc-overlay-final-repair.json",
         "fix_commit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044",
         "finish_status": "bounded final Lower Times SSC overlay Off repair complete"
+      },
+      {
+        "name": "koi-sm-judgment-final-repair",
+        "remote": "/home/parity/jobs/koi-sm-judgment-final-repair-v1",
+        "record": "sweep-2026-10-13-koi-sm-judgment-final-repair.json",
+        "fix_commit": "9bd984b71e3dd593c07e302839a75be8c6ec3c10",
+        "finish_status": "bounded final Koi SM row and mine Judgment repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
     "new_passed_fixtures": 77,
-    "new_pending_charts": 77,
-    "new_processed_sources": 154,
+    "new_pending_charts": 78,
+    "new_processed_sources": 155,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 199,
+    "unprocessed_sources": 198,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -1677,6 +1700,35 @@
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
+    },
+    {
+      "source_simfile": "mawaru6/mawaru6.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 505260,
+      "first_mismatch": [
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 15.584239959716797,
+            "beat": 31.003353118896484,
+            "name": "Close",
+            "args": [
+              "Close"
+            ]
+          },
+          "deadsync": {
+            "seconds": 15.592312812805176,
+            "beat": 31.020843505859375,
+            "name": "Close",
+            "args": [
+              "Close"
+            ],
+            "params_error": null
+          }
+        }
+      ]
     },
     {
       "source_simfile": "Delightful Day/Delightful Day.sm",
@@ -2722,15 +2774,20 @@
     },
     {
       "source_simfile": "Lower Times/Lower Times.ssc",
-      "repair_attempts": 1,
+      "repair_attempts": 2,
       "failure": null,
-      "errors": [],
-      "mismatch_count": 1,
+      "errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 0.001: missing captured subscriber identity for ScreenGameplay/6/1",
+        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 2.992: missing captured subscriber identity for ScreenGameplay/6/1"
+      ],
+      "mismatch_count": 4,
       "first_mismatch": [
         {
-          "field": "command_query_count",
-          "native": 93,
-          "deadsync": 88
+          "phase": "progress",
+          "seconds": 209.0005645751953,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
         }
       ]
     }
