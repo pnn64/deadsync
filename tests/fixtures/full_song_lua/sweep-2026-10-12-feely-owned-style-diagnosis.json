@@ -1,0 +1,153 @@
+{
+  "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+  "position": 185,
+  "repair_attempts_used": 1,
+  "remaining_repair_attempts": 1,
+  "whole_replay": {
+    "native_frames": 7084,
+    "replayed_frames": 7084,
+    "native_command_queries": 412567,
+    "independent_command_queries": 472283,
+    "mismatches": 412569,
+    "callback_errors": 0
+  },
+  "extra_independent_operations": {
+    "GameState.GetCurrentStyle": 59716
+  },
+  "source_confirmed_cause": "Native ArrowEffects::GetXPos reads GameState style state in C++; DeadSync delegated through the public hooked Lua GetCurrentStyle getter and emitted an extra authored query at each invocation. All 59,716 extra events in this completed replay are that getter.",
+  "local_references": [
+    "../itgmania-harness/vendor/itgmania/src/ArrowEffects.cpp:338",
+    "../itgmania-harness/vendor/itgmania/src/ArrowEffects.cpp:1751",
+    "crates/deadsync-song-lua/src/host.rs:1129",
+    "crates/deadsync-song-lua/src/host.rs:1485",
+    "crates/deadsync-song-lua/src/lua_util.rs:2034"
+  ],
+  "fix_commit": "21c106cb4",
+  "build_proof": "/home/parity/jobs/owned-style-build-v3/proof.json",
+  "independent_remaining_failures": {
+    "chunk_source": "Native directory entry uses multitap/default.lua; independent uses physical multitap/Default.lua.",
+    "first_position_arguments": [
+      {
+        "index": 935,
+        "fields": [
+          "args"
+        ],
+        "native": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.x",
+          "source": "song:/multitap/default.lua",
+          "line": 724,
+          "seconds": 0.017301587387919426,
+          "beat": 0.0007791007519699633,
+          "args": [
+            213.25
+          ],
+          "phase": "callback",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.x",
+          "source": "song:/multitap/Default.lua",
+          "line": 724,
+          "seconds": 0.017301587387919426,
+          "beat": 0.0007791031384840608,
+          "args": [
+            0
+          ],
+          "phase": "callback",
+          "tween_time_left": 0.0
+        }
+      },
+      {
+        "index": 936,
+        "fields": [
+          "args"
+        ],
+        "native": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.y",
+          "source": "song:/multitap/default.lua",
+          "line": 724,
+          "seconds": 0.017301587387919426,
+          "beat": 0.0007791007519699633,
+          "args": [
+            240
+          ],
+          "phase": "callback",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.y",
+          "source": "song:/multitap/Default.lua",
+          "line": 724,
+          "seconds": 0.017301587387919426,
+          "beat": 0.0007791031384840608,
+          "args": [
+            0
+          ],
+          "phase": "callback",
+          "tween_time_left": 0.0
+        }
+      },
+      {
+        "index": 939,
+        "fields": [
+          "args"
+        ],
+        "native": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.y",
+          "source": "song:/multitap/default.lua",
+          "line": 724,
+          "seconds": 0.017301587387919426,
+          "beat": 0.0007791007519699633,
+          "args": [
+            10
+          ],
+          "phase": "callback",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.y",
+          "source": "song:/multitap/Default.lua",
+          "line": 724,
+          "seconds": 0.017301587387919426,
+          "beat": 0.0007791031384840608,
+          "args": [
+            0
+          ],
+          "phase": "callback",
+          "tween_time_left": 0.0
+        }
+      }
+    ],
+    "later_tween_time_differences": {
+      "('Actor.y', ('args', 'tween_time_left'))": 5908,
+      "('Actor.y', ('args',))": 4300,
+      "('Actor.visible', ('tween_time_left',))": 3258,
+      "('Actor.x', ('args', 'tween_time_left'))": 2954,
+      "('Actor.x', ('tween_time_left',))": 2954,
+      "('Actor.rotationz', ('tween_time_left',))": 2954,
+      "('Actor.zoomx', ('tween_time_left',))": 2954,
+      "('Actor.x', ('args',))": 2150
+    },
+    "stage_failure": {
+      "phase": "progress",
+      "seconds": 121.01800537109375,
+      "field": "failed",
+      "native": false,
+      "deadsync": true
+    }
+  },
+  "diagnostic_filter": "Source spelling and the identified extra getter were filtered only in an evidence inspector to locate residual differences. Full replay acceptance remains unchanged.",
+  "next_repair": "Final attempt retained until the independent remaining causes are addressed; no new whole replay started for this isolated fix."
+}

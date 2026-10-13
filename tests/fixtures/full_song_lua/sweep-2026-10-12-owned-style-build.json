@@ -1,0 +1,61 @@
+{
+  "source_fix_commit": "21c106cb4",
+  "proof": "/home/parity/jobs/owned-style-build-v3/proof.json",
+  "binary": "/home/parity/jobs/owned-style-build-v3/full-song-lua-stage-modifier-v1",
+  "binary_sha256": "4610c4a91d914dbd7346486ef8c1583fd388003dab6c6013e583961b5b01363b",
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "81e0d98be4dc394276102ed861aae8ad0b1ba05ef657aaa463331df7c43bd3c6",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "ccecdf07dae6378a7df8c94152537d0bab63651b2d193a496aaff3a40d2447dd",
+    "crates/deadsync-song-lua/src/live.rs": "55bcc30765c9ef3287e295a14e4e34c415215c172c5aa4e3fb4b4228238b1bed",
+    "crates/deadsync-song-lua/src/song_tables.rs": "3af70eef6c3e9b53eae43811a8a641dc1d8e3e9648a053ca8678302463732e19",
+    "crates/deadsync-song-lua/src/lua_util.rs": "0f0328c03de2cd0c41e004f361ed847ad8fb44ce6e9be6576be182e4e94596f6",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "2714494a70e8b4cc9128f2513abe859e5b8dc97790a914dc5799e0e5eb216586",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "8bd4d5d1c25c3d74d6563ad68a38cd074e5085490bc5012c5a528393cfc6cefa"
+  },
+  "linux_checks": [
+    {
+      "label": "owned-style-control",
+      "exit_code": 0,
+      "seconds": 48.577100611997594,
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 319 filtered out; finished in 0.10s"
+      ]
+    },
+    {
+      "label": "stage-test",
+      "exit_code": 0,
+      "seconds": 147.04513964299986,
+      "results": [
+        "test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 530 filtered out; finished in 0.61s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 37.310692295999615,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.060292132999166,
+      "results": [
+        "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.24s"
+      ]
+    }
+  ],
+  "windows_checks": [
+    {
+      "filter": "native_gameplay::tests",
+      "passed": 18,
+      "failed": 0
+    }
+  ],
+  "corrected_control": "Validation revisions v1 and v2 retained their failed logs: constructor query lines are zero, and the explicit lookup belongs before style mutation because the current diagnostic registry retains only initially registered style object identities. Revision v3 verifies the one explicit query and correct column positions before and after style mutation.",
+  "behavior": "ArrowEffects reads the shared owned style slot, including SetCurrentStyle changes, without invoking the public Lua GetCurrentStyle method internally.",
+  "future_replay_selection": "/home/parity/jobs/chart-sweep-replay-selection-v3.json",
+  "acceptance": "Unchanged existing full replay comparisons; coverage stays separate"
+}
