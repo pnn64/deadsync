@@ -2932,15 +2932,12 @@
     {
       "title": "TETRIS",
       "source_simfile": "I'm sorry/sm.ssc",
-      "harness_version": "0.1.0",
-      "archive": "9b642f9ed9543351cdd85763dd781f029d15a4b81ff48492f5b97e252dfb49a1.tar.zst",
-      "sha256": "9b642f9ed9543351cdd85763dd781f029d15a4b81ff48492f5b97e252dfb49a1",
-      "compressed_bytes": 154103,
-      "uncompressed_sha256": "86c10101ab827451e2456c41b955822317bef287047e7cb578217eef606154b6",
-      "compression_level": 22,
-      "aliases": [
-        "f1cb40ba1c0c543fbb6362a35de55cc4dc4b3a539a902b96140cd4a29240cb95.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "d1f193494499be32d11345b8d5d4fc0922234b5789ad041e00810862789a78ad.tar.zst",
+      "sha256": "d1f193494499be32d11345b8d5d4fc0922234b5789ad041e00810862789a78ad",
+      "compressed_bytes": 5908176,
+      "uncompressed_sha256": "b0f067ee0e3baf05f032e1f46acf06445b2978c4b42a16ca51809b8eb3b9cbcd",
+      "aliases": []
     },
     {
       "title": "Ibuprofen & Weed (LEFTS Edit)",

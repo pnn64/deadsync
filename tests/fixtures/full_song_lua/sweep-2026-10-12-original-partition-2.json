@@ -2803,6 +2803,57 @@
       "replay_seconds": 1.2602733179955976,
       "candidate_sha256": "1a3809967db7ab5fd72b5f5093817e698be7803cc66a09a746e2749b879964b7",
       "failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (1697278) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 235,
+      "source_simfile": "I'm sorry/sm.ssc",
+      "simfile_sha256": "fa76aab36e8dafd4a362371f8a6767b3d0c143e7862b573dd2c94834fe066033",
+      "retained_original_archive": "9b642f9ed9543351cdd85763dd781f029d15a4b81ff48492f5b97e252dfb49a1.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "56c7f5ad7480dc190223b46f68cd1f78d172e09431fc49d6eb9a095937789469",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+      "build_proof": "/home/parity/jobs/tap-callback-and-margins-build-v2/proof.json",
+      "capture_seconds": 164.4187014370109,
+      "trace_sha256": "4f17c6248f965147953132153a8bd40f4517a914cf4ed8cb5c406d1fa95a569c",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-235/candidates/b0f067ee0e3baf05f032e1f46acf06445b2978c4b42a16ca51809b8eb3b9cbcd.tar",
+      "replay_exit": 0,
+      "replay_seconds": 13335.076826826,
+      "candidate_sha256": "b0f067ee0e3baf05f032e1f46acf06445b2978c4b42a16ca51809b8eb3b9cbcd",
+      "native_frames": 114341,
+      "replayed_frames": 114341,
+      "compared_stage_fields": 1771,
+      "pending_coverage": [
+        "uncompared song operations: Actor.setsize, Actor.xy, GameState.ApplyGameCommand, Screen.AddInputCallback",
+        "native drawable state/resources: Quad"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "17ba4f1a9a392f31feaa692c83f53d4a89cbf27b23427ad211c58f6a623ff721",
+      "archive": "d1f193494499be32d11345b8d5d4fc0922234b5789ad041e00810862789a78ad.tar.zst",
+      "archive_sha256": "d1f193494499be32d11345b8d5d4fc0922234b5789ad041e00810862789a78ad",
+      "compressed_bytes": 5908176,
+      "pack_seconds": 2.3201366829889594,
+      "harness_version": "0.1.80",
+      "title": "TETRIS",
+      "retained_original_entry": {
+        "title": "TETRIS",
+        "source_simfile": "I'm sorry/sm.ssc",
+        "harness_version": "0.1.0",
+        "archive": "9b642f9ed9543351cdd85763dd781f029d15a4b81ff48492f5b97e252dfb49a1.tar.zst",
+        "sha256": "9b642f9ed9543351cdd85763dd781f029d15a4b81ff48492f5b97e252dfb49a1",
+        "compressed_bytes": 154103,
+        "uncompressed_sha256": "86c10101ab827451e2456c41b955822317bef287047e7cb578217eef606154b6",
+        "compression_level": 22,
+        "aliases": [
+          "f1cb40ba1c0c543fbb6362a35de55cc4dc4b3a539a902b96140cd4a29240cb95.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -2814,7 +2865,7 @@
   },
   "binary_sha256": "56c7f5ad7480dc190223b46f68cd1f78d172e09431fc49d6eb9a095937789469",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 8,
+  "passed_fixtures": 9,
   "pending_charts": 14,
-  "processed_charts": 22
+  "processed_charts": 23
 }
