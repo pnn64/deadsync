@@ -4083,6 +4083,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 206,
+      "source_simfile": "Gaming in 2018/Gaming in 2018.ssc",
+      "simfile_sha256": "786d023994f26f3e5d66f8b0319b0531e77035978cbd3a6ca1df4500d8800381",
+      "retained_original_archive": "309dd8a10fb6a49d4af02916938bc5a12e37360f8e29d1e92aff0b61fe00306a.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "1d6c6e802 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/condition-build-v1/proof.json",
+      "capture_seconds": 32.46187000399368,
+      "trace_sha256": "97aca2ef66fe8a3921322784d089d4b6289189476bf6d1b7b59cb95334e74ca7",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-206/candidates/55a78928607c6930accfaf6696355229a72580c749ce9191898415eb6a8b484f.tar",
+      "replay_exit": 1,
+      "replay_seconds": 0.2727782370056957,
+      "candidate_sha256": "55a78928607c6930accfaf6696355229a72580c749ce9191898415eb6a8b484f",
+      "failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (966936) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: multiple native foreground entries need entry-specific ownership\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "historical_pending": [
@@ -4109,6 +4128,6 @@
   "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 10,
-  "pending_charts": 21,
-  "processed_charts": 31
+  "pending_charts": 22,
+  "processed_charts": 32
 }
