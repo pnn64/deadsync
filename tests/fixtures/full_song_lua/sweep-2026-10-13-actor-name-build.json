@@ -1,5 +1,5 @@
 {
-  "source_fix_commit": "HEAD",
+  "source_fix_commit": "da708fe8836e33d3095f23be69d9eb9b56db7de4",
   "source_simfile": "Koi [UPS2016]/koi.sm",
   "source_cause": "Actor::LoadFromNode copies an authored Name into Actor::m_sName before Init. Later self.Name assignments are userdata attributes; only Actor.name invokes SetName. The independent actor used the mutable Lua Name field for GetName, named child lookup and query ancestry after loading. Koi assigns Fish_ddd in Init, adding a parent component absent from all60 retained native GetChild results.",
   "change": "Retain the native name separately from Lua attributes, preserve the loading name until authored Name is applied, and make Actor.name update the native name without replacing self.Name. Child queries and removal, observed ancestry, foreground post-Init naming and initialized theme child creation use the retained name. Runtime snapshots restore the native name and cloned definitions receive fresh name state.",
