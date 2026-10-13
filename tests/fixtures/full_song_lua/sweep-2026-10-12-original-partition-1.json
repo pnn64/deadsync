@@ -2293,6 +2293,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 207,
+      "source_simfile": "Gangu Kyousou Kyoku -Shuuen-/chart.ssc",
+      "simfile_sha256": "09d712b0e5e922f1cb71b3a05bafe84d2b32c493c688e54d23abd6ea365aebd6",
+      "retained_original_archive": "65ee621469498274894ad61d84289e8f19a715925f9d26155b2e4b7c42b01bda.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "1d6c6e802 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/condition-build-v1/proof.json",
+      "capture_seconds": 193.98307002299407,
+      "trace_sha256": "00e907a666e10dd3f2fd6be9f386b3f123261623e46afd9df4c98c6ef722d62e",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-207/candidates/c08f0609f6eb1521249619fef31cb191398708c876fb8a54822cac85e2cba3f7.tar",
+      "replay_exit": 0,
+      "replay_seconds": 898.0350409449966,
+      "candidate_sha256": "c08f0609f6eb1521249619fef31cb191398708c876fb8a54822cac85e2cba3f7",
+      "native_frames": 20326,
+      "replayed_frames": 20326,
+      "compared_stage_fields": 1716,
+      "pending_coverage": [
+        "uncompared song operations: Actor.SetHeight, Actor.SetWidth, Actor.bob, Actor.effectoffset, Actor.xy, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.SetTextureName, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Dark, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Stealth, PlayerOptions.Tipsy",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "786203bf9cf3a03bd3daa841bd7b9c1a3fe629b6351d2661db29db329d017883",
+      "archive": "0e201181db02c246f0c84333ac0c748f6b56a9ca59d836cc6dc5a505ee7cfa5e.tar.zst",
+      "archive_sha256": "0e201181db02c246f0c84333ac0c748f6b56a9ca59d836cc6dc5a505ee7cfa5e",
+      "compressed_bytes": 11254945,
+      "pack_seconds": 12.70406016799825,
+      "harness_version": "0.1.80",
+      "title": "玩具狂奏曲 -終焉-",
+      "retained_original_entry": {
+        "title": "玩具狂奏曲 -終焉-",
+        "source_simfile": "Gangu Kyousou Kyoku -Shuuen-/chart.ssc",
+        "harness_version": "0.1.0",
+        "archive": "65ee621469498274894ad61d84289e8f19a715925f9d26155b2e4b7c42b01bda.tar.zst",
+        "sha256": "65ee621469498274894ad61d84289e8f19a715925f9d26155b2e4b7c42b01bda",
+        "compressed_bytes": 1815250,
+        "uncompressed_sha256": "b6081d44522aac6c74416f3e97d3229e61d7302b9a97b6f5cce721302dda79b8",
+        "compression_level": 22,
+        "aliases": [
+          "9afa3b149acf984341647d764058eb5cd58361b123164be03cd59551b031991f.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -2304,7 +2355,7 @@
   },
   "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 4,
+  "passed_fixtures": 5,
   "pending_charts": 9,
-  "processed_charts": 13
+  "processed_charts": 14
 }

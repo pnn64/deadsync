@@ -2605,15 +2605,12 @@
     {
       "title": "玩具狂奏曲 -終焉-",
       "source_simfile": "Gangu Kyousou Kyoku -Shuuen-/chart.ssc",
-      "harness_version": "0.1.0",
-      "archive": "65ee621469498274894ad61d84289e8f19a715925f9d26155b2e4b7c42b01bda.tar.zst",
-      "sha256": "65ee621469498274894ad61d84289e8f19a715925f9d26155b2e4b7c42b01bda",
-      "compressed_bytes": 1815250,
-      "uncompressed_sha256": "b6081d44522aac6c74416f3e97d3229e61d7302b9a97b6f5cce721302dda79b8",
-      "compression_level": 22,
-      "aliases": [
-        "9afa3b149acf984341647d764058eb5cd58361b123164be03cd59551b031991f.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "0e201181db02c246f0c84333ac0c748f6b56a9ca59d836cc6dc5a505ee7cfa5e.tar.zst",
+      "sha256": "0e201181db02c246f0c84333ac0c748f6b56a9ca59d836cc6dc5a505ee7cfa5e",
+      "compressed_bytes": 11254945,
+      "uncompressed_sha256": "c08f0609f6eb1521249619fef31cb191398708c876fb8a54822cac85e2cba3f7",
+      "aliases": []
     },
     {
       "title": "Gemini in Clockland",
