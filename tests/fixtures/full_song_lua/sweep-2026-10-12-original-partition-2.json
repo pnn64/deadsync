@@ -1537,6 +1537,42 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 190,
+      "source_simfile": "flores sulphuris - [Zaia]/flores sulphuris.ssc",
+      "simfile_sha256": "63a03a4561753f127f2af0cced67e27d9852bf58e721f46029a74b44c4c7242b",
+      "retained_original_archive": "47e951bb8e319e2cb93133f3abf44dc9f72e072b2cce5be79efeff5c6335ca5e.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "1d6c6e802 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/condition-build-v1/proof.json",
+      "capture_seconds": 186.67602537100174,
+      "trace_sha256": "cae62122b2c9bee851cb4e6bb3cda4a61f5a85d45403d4d2a5659b16e8ea2d59",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-190/candidates/355581137f178d330dc1dc8e39b6f58ffab5e7a12242674fbd350dede5987246.tar",
+      "replay_exit": 2,
+      "replay_seconds": 851.2349151419985,
+      "candidate_sha256": "355581137f178d330dc1dc8e39b6f58ffab5e7a12242674fbd350dede5987246",
+      "native_frames": 157950,
+      "replayed_frames": 157950,
+      "compared_stage_fields": 2046,
+      "pending_coverage": [],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 1,
+      "concrete_failures": [
+        {
+          "phase": "progress",
+          "seconds": 177.00051879882812,
+          "field": "failed",
+          "native": false,
+          "deadsync": true
+        }
+      ],
+      "report_sha256": "c6ef0df30fdd961d3393e666ca84e83eb48cf412db769fb8c4b1ae6c038c0477"
     }
   ],
   "scope": {
@@ -1549,6 +1585,6 @@
   "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 4,
-  "pending_charts": 3,
-  "processed_charts": 7
+  "pending_charts": 4,
+  "processed_charts": 8
 }
