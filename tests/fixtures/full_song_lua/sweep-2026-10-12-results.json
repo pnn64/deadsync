@@ -4121,6 +4121,93 @@
       "replay_seconds": 1.4122734459961066,
       "candidate_sha256": "f9ebe5e4db775dfb2c023f9bd1ef5a5724f871c44e160c34fca64888a6ef6d57",
       "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Genshin Mega Quiz': failed to execute '/tmp/.tmpqRD1jn/song/lua/default.lua': runtime error: [string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: attempt to call global 'DayOfYear' (a nil value)\nstack traceback:\n\t[C]: in global 'DayOfYear'\n\t[string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Genshin Mega Quiz' from '/tmp/.tmpqRD1jn/song/lua/default.lua': failed to execute '/tmp/.tmpqRD1jn/song/lua/default.lua': runtime error: [string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: attempt to call global 'DayOfYear' (a nil value)\nstack traceback:\n\t[C]: in global 'DayOfYear'\n\t[string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (975076) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 212,
+      "source_simfile": "ghost [Telperion]/ghost.ssc",
+      "simfile_sha256": "dda0f60cd58a4087f0c02b0bd08cdbe04f037836fe8b1ba07c205e4360ceffc4",
+      "retained_original_archive": "80b5192b76a55669ed09cc499613e08113f95713c3965edaa2d9b758a417a96a.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "4610c4a91d914dbd7346486ef8c1583fd388003dab6c6013e583961b5b01363b",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "21c106cb4 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/owned-style-build-v3/proof.json",
+      "capture_seconds": 145.06301871100004,
+      "trace_sha256": "11f62197b1696902cd4fbc3851c7b34c957e7552c78a102855d618316ad25b00",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-212/candidates/46be94f83929984401e91b03311437f417c4fdbd3327f1d3aa3604d650986102.tar",
+      "replay_exit": 2,
+      "replay_seconds": 772.8969537500016,
+      "candidate_sha256": "46be94f83929984401e91b03311437f417c4fdbd3327f1d3aa3604d650986102",
+      "native_frames": 115164,
+      "replayed_frames": 115164,
+      "compared_stage_fields": 1529,
+      "pending_coverage": [
+        "uncompared song operations: Player.SetLife, ScreenGameplay.GetLifeMeter"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [
+        "UpdateCommand failed for ActorFrame: runtime error: [string \"/tmp/.tmpSyNYYb/song/spooky/default.lua\"]:108: attempt to call method 'SetLife' (a nil value)\nstack traceback:\n\t[C]: in method 'SetLife'\n\t[string \"/tmp/.tmpSyNYYb/song/spooky/default.lua\"]:108: in function <[string \"/tmp/.tmpSyNYYb/song/spooky/default.lua\"]:74>"
+      ],
+      "mismatch_count": 2,
+      "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 56057,
+          "deadsync": 43482
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 298.2699890136719,
+            "caller": {
+              "line": 74,
+              "source": "song:/spooky/default.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                {
+                  "actor": "external-0010",
+                  "name": "ScreenGameplay",
+                  "path": "ScreenGameplay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 74,
+            "operation": "ScreenManager.GetTopScreen",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 108.53081512451172,
+            "seq": 48925,
+            "source": "song:/spooky/default.lua",
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "UpdateCommand",
+            "source": "song:/spooky/default.lua",
+            "line": 74,
+            "beat": 298.2699890136719,
+            "seconds": 108.53081512451172,
+            "args": null
+          }
+        }
+      ],
+      "report_sha256": "12a938646c00478f2ee92126d81b99f9fc383f58b7483014dc7ef333e6bfc096"
     }
   ],
   "historical_pending": [
@@ -4144,9 +4231,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
+  "binary_sha256": "4610c4a91d914dbd7346486ef8c1583fd388003dab6c6013e583961b5b01363b",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 10,
-  "pending_charts": 23,
-  "processed_charts": 33
+  "pending_charts": 24,
+  "processed_charts": 34
 }
