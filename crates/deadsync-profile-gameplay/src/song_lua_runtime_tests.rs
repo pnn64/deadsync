@@ -20,6 +20,31 @@ fn deadsync_root() -> PathBuf {
 }
 
 #[test]
+fn song_lua_player_positions_apply_native_integer_margins() {
+    use deadsync_gameplay::{GameplayInputPlayStyle as Style, GameplayInputPlayerSide as Side, GameplayViewport};
+    let profile = deadsync_profile::Profile::default();
+    for (width, p1, p2) in [(640.0, 160.0, 480.0), (852.0, 213.0, 639.0),
+        (854.0, 213.25, 640.75), (1280.0, 426.25, 853.75)] {
+        let viewport = GameplayViewport::new(width, 480.0);
+        for (count, player, style, side, expected) in [
+            (1, 0, Style::Single, Side::P1, p1),
+            (1, 0, Style::Single, Side::P2, p2),
+            (2, 0, Style::Versus, Side::P1, p1),
+            (2, 1, Style::Versus, Side::P1, p2),
+            (1, 0, Style::Double, Side::P1, width * 0.5),
+        ] {
+            assert_eq!(super::song_lua_compile_player_screen_x(count, player, &profile,
+                viewport, style, side, false), expected);
+        }
+        assert_eq!(super::song_lua_compile_player_screen_x(1, 0, &profile, viewport,
+            Style::Single, Side::P1, true), width * 0.5);
+    }
+    let profile = deadsync_profile::Profile { note_field_offset_x: 10, ..profile };
+    assert_eq!(super::song_lua_compile_player_screen_x(1, 0, &profile,
+        GameplayViewport::design(), Style::Single, Side::P1, false), 203.25);
+}
+
+#[test]
 fn null_renderer_reaches_song_lua_unchanged() {
     let song = deadsync_simfile::song::parse_song_meta_file(
         &deadsync_root().join("tests/fixtures/song_lua/display-size.ssc"),
