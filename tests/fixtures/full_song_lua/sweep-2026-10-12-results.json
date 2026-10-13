@@ -4102,6 +4102,25 @@
       "replay_seconds": 0.2727782370056957,
       "candidate_sha256": "55a78928607c6930accfaf6696355229a72580c749ce9191898415eb6a8b484f",
       "failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (966936) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: multiple native foreground entries need entry-specific ownership\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 209,
+      "source_simfile": "Genshin Quiz/Megaquiz.ssc",
+      "simfile_sha256": "18e2165ebaceeae2ac466a114d84fa784f6f3f55f4c845404fdf3d05864f558d",
+      "retained_original_archive": "dc0418aaac4cbea25c5b24b7d65b99a625d44d5a5ff322afd444c079827f92de.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "1d6c6e802 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/condition-build-v1/proof.json",
+      "capture_seconds": 120.40879923600005,
+      "trace_sha256": "ed7ea7ced9748d3a952db24534001fd5946867b8a48e0d4f479743ad61def20a",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-209/candidates/f9ebe5e4db775dfb2c023f9bd1ef5a5724f871c44e160c34fca64888a6ef6d57.tar",
+      "replay_exit": 1,
+      "replay_seconds": 1.4122734459961066,
+      "candidate_sha256": "f9ebe5e4db775dfb2c023f9bd1ef5a5724f871c44e160c34fca64888a6ef6d57",
+      "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Genshin Mega Quiz': failed to execute '/tmp/.tmpqRD1jn/song/lua/default.lua': runtime error: [string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: attempt to call global 'DayOfYear' (a nil value)\nstack traceback:\n\t[C]: in global 'DayOfYear'\n\t[string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Genshin Mega Quiz' from '/tmp/.tmpqRD1jn/song/lua/default.lua': failed to execute '/tmp/.tmpqRD1jn/song/lua/default.lua': runtime error: [string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: attempt to call global 'DayOfYear' (a nil value)\nstack traceback:\n\t[C]: in global 'DayOfYear'\n\t[string \"/tmp/.tmpqRD1jn/song/lua/default.lua\"]:15: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (975076) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "historical_pending": [
@@ -4128,6 +4147,6 @@
   "binary_sha256": "8352032b39ab31ff1c33404e8bd57e2671a1d692bfca614e0fe0472ea7c123f5",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 10,
-  "pending_charts": 22,
-  "processed_charts": 32
+  "pending_charts": 23,
+  "processed_charts": 33
 }
