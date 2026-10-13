@@ -2413,6 +2413,421 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 216,
+      "source_simfile": "gone_KidFresino/song.ssc",
+      "simfile_sha256": "c234598038035b7d4b5746b75cb7591a07299cf5dc5fd40a99fb6eb6a2b33395",
+      "retained_original_archive": "d6dcba2555850935818756d42ccc9f1e6f3cb17b2a00b68f951f60382d6ab244.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "89059df47baf921e209718f7e583ed93953151e60e5dc82fefc86cf74a309ca6",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "355263c7e / harness b191ebd",
+      "build_proof": "/home/parity/jobs/sound-volume-build-v1/proof.json",
+      "capture_seconds": 145.0146236090004,
+      "trace_sha256": "8f00254c640109db9be7ab787fe11124f98635790828c19f78f9599ac44bffc3",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-216/candidates/4377ee34a2e0e1eccd975b25eff17964fecfa2ef39e74a2cc9fb39891769e502.tar",
+      "replay_exit": 2,
+      "replay_seconds": 1902.976193276998,
+      "candidate_sha256": "4377ee34a2e0e1eccd975b25eff17964fecfa2ef39e74a2cc9fb39891769e502",
+      "native_frames": 125586,
+      "replayed_frames": 125586,
+      "compared_stage_fields": 1584,
+      "pending_coverage": [
+        "uncompared song operations: ActorFrame.SetDrawByZPosition"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 65,
+      "concrete_failures": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0001",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 3,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 1,
+            "source": "song:/./text.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "InitCommand",
+            "source": "song:/text.lua",
+            "line": 3,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0001",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 3,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 3,
+            "source": "song:/./text.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "InitCommand",
+            "source": "song:/text.lua",
+            "line": 3,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0032",
+            "args": [],
+            "beat": 0.0018051465740427375,
+            "command": "OnCommand",
+            "definition_id": "def-0032",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 30,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": -1.152471661567688,
+            "seq": 4,
+            "source": "song:/./text.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "OnCommand",
+            "source": "song:/text.lua",
+            "line": 30,
+            "beat": 0.0018051465740427375,
+            "seconds": -1.152471661567688,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0032",
+            "args": [
+              0
+            ],
+            "beat": 0.0018051465740427375,
+            "caller": {
+              "line": 30,
+              "source": "song:/./text.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0032",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 30,
+            "operation": "Actor.sleep",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.152471661567688,
+            "seq": 5,
+            "source": "song:/./text.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.sleep",
+            "source": "song:/text.lua",
+            "line": 30,
+            "phase": "callback",
+            "beat": 0.0018051465740427375,
+            "seconds": -1.152471661567688,
+            "args": [
+              0
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0032",
+            "args": [],
+            "beat": 0.0018051465740427375,
+            "command": "OnCommand",
+            "definition_id": "def-0032",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 30,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": -1.152471661567688,
+            "seq": 6,
+            "source": "song:/./text.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "OnCommand",
+            "source": "song:/text.lua",
+            "line": 30,
+            "beat": 0.0018051465740427375,
+            "seconds": -1.152471661567688,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0002",
+            "args": [],
+            "beat": 0.0018051465740427375,
+            "command": "OnCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 12,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": -1.152471661567688,
+            "seq": 7,
+            "source": "song:/./text.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "OnCommand",
+            "source": "song:/text.lua",
+            "line": 12,
+            "beat": 0.0018051465740427375,
+            "seconds": -1.152471661567688,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0002",
+            "args": [],
+            "beat": 0.0018051465740427375,
+            "command": "OnCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 12,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": -1.152471661567688,
+            "seq": 8,
+            "source": "song:/./text.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "OnCommand",
+            "source": "song:/text.lua",
+            "line": 12,
+            "beat": 0.0018051465740427375,
+            "seconds": -1.152471661567688,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0003",
+            "args": [],
+            "beat": 0.0018051465740427375,
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 12,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": -1.152471661567688,
+            "seq": 9,
+            "source": "song:/./text.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "OnCommand",
+            "source": "song:/text.lua",
+            "line": 12,
+            "beat": 0.0018051465740427375,
+            "seconds": -1.152471661567688,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0003",
+            "args": [],
+            "beat": 0.0018051465740427375,
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 12,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": -1.152471661567688,
+            "seq": 10,
+            "source": "song:/./text.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "OnCommand",
+            "source": "song:/text.lua",
+            "line": 12,
+            "beat": 0.0018051465740427375,
+            "seconds": -1.152471661567688,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0004",
+            "args": [],
+            "beat": 0.0018051465740427375,
+            "command": "OnCommand",
+            "definition_id": "def-0004",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 12,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": -1.152471661567688,
+            "seq": 11,
+            "source": "song:/./text.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "OnCommand",
+            "source": "song:/text.lua",
+            "line": 12,
+            "beat": 0.0018051465740427375,
+            "seconds": -1.152471661567688,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0004",
+            "args": [],
+            "beat": 0.0018051465740427375,
+            "command": "OnCommand",
+            "definition_id": "def-0004",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 12,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": -1.152471661567688,
+            "seq": 12,
+            "source": "song:/./text.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "OnCommand",
+            "source": "song:/text.lua",
+            "line": 12,
+            "beat": 0.0018051465740427375,
+            "seconds": -1.152471661567688,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0005",
+            "args": [],
+            "beat": 0.0018051465740427375,
+            "command": "OnCommand",
+            "definition_id": "def-0005",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 12,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": -1.152471661567688,
+            "seq": 13,
+            "source": "song:/./text.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "OnCommand",
+            "source": "song:/text.lua",
+            "line": 12,
+            "beat": 0.0018051465740427375,
+            "seconds": -1.152471661567688,
+            "args": null
+          }
+        }
+      ],
+      "report_sha256": "db6c3e6cd781008265b09ce5e49f69d2f4a286bdb7939b2b361d8c39167e9d85"
     }
   ],
   "scope": {
@@ -2422,9 +2837,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "4610c4a91d914dbd7346486ef8c1583fd388003dab6c6013e583961b5b01363b",
+  "binary_sha256": "89059df47baf921e209718f7e583ed93953151e60e5dc82fefc86cf74a309ca6",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 6,
-  "pending_charts": 10,
-  "processed_charts": 16
+  "pending_charts": 11,
+  "processed_charts": 17
 }
