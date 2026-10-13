@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T20:15:01Z",
-  "previous_goal_turn": "Koi SM's final allowed repair 2 is running with immutable helper 1df4edb6457cb51a6720afb6f97c47421d2830b23881e133afd0e9821bcaf44c from koi-judgment-green-v1. Fix 9bd984b71e3dd593c07e302839a75be8c6ec3c10 dispatches autoplay at native float row crossings and avoided mine Judgment messages on the next gameplay update. Both unchanged focused controls fail on the pre-fix source on Linux and Windows and pass after the fix; all 12 checks on each host pass, including 815 gameplay tests, 46 live controls, 25 native controls and both executable builds. The bounded real-Core probe reproduces all 35 native avoided-mine callback clocks and column orders exactly. All 26 actual source pins, the three native harness pins, immutable binaries and logs are verified. Koi reuses its first repair's unchanged native capture and raw candidate; there are no repairs remaining after this full attempt. Lower Times SSC's final repair 2 completed all 114997 frames and 2420 fields but remains pending with two missing captured subscriber identity errors and four failed-state differences. Its previous terminal command-count difference is absent from the final report. The two-repair cap is exhausted; no further replay is allowed this sweep. Both Get Into It variants are running first repair 1 with the validated Sprite.LinearFrames helper and unchanged captures; each has one repair left after its current attempt. Mawaru6's original replay completed all 121856 frames and 2992 fields with zero errors and 505260 differences, starting with Close/Game1 broadcast clocks; no repair has launched. Mawaru4 SSC has 11 cached native BackgroundDefs versus 20 authored changes and still needs instance reuse with the complete timeline and native focus behavior; no repair has launched. Earlier accepted Lonely SSC, Marshall Maximizer SSC, Maware! Setsugetsuka SSC and mawaru2 SM remain saved, locally decompressed and byte verified. Original main and both partition workers continue without restart. Singleton publisher 60312 watches 52 streams. Capped charts remain pending without another retry. Only the existing complete uncompressed replay comparisons determine acceptance; coverage stays separate and no passing chart was reopened. All 501 original simfiles remain byte unchanged, RUNWAY stays outside original scope, and the goal is active and incomplete.",
+  "updated_utc": "2026-10-13T20:44:01Z",
+  "previous_goal_turn": "Mawaru6's first repair 1 is running with immutable foreground-row-green-v1 helper b0f2c78467821c35b24856d3169c79e65f53a8a595784b61389ae14c323fa731. Its original full replay completed all 121856 frames and 2992 fields with zero errors and 505260 differences. Pinned native Foreground and TimingData sources establish that the authored start beat 0.01 rounds to note row zero. The independent float tween model reproduces all 4680 early native queue callbacks exactly; the continuous start reproduces the first five DeadSync broadcast differences exactly. Fix 2b28998120d97876715bfe2a81255fb5de156b89 changes one foreground timing expression to the native note row conversion. The unchanged owned-scene control fails before production and passes after on both hosts. All five checks on each host pass: the focused control, 47 live controls, foreground names, 25 native controls and both executable builds. The prior Koi build's gameplay validation remains unchanged. All 26 physical source pins, three native harness pins, immutable binaries and logs are byte verified. Mawaru6 reuses its original capture and complete candidate; it has one repair left after the current full attempt. Koi SM's final repair 2 and both Get Into It first repairs 1 continue with their immutable validated helpers and unchanged captures. Lower Times SSC completed its final repair 2 across 114997 frames and 2420 fields but remains pending with two missing subscriber identity errors and four failed-state differences; its previous terminal command-count difference is absent from that report. Its two-repair cap is exhausted. Wargame and Media Offline originals completed all 46936 and 45745 frames respectively and remain pending with missing identity errors and four failed-state differences each. Wargame has no authored Judgment subscriber; the owned theme latch is interrupted before dispatch. A focused control for the sole-subscriber delivery is required before a production repair. Wargame and Media Offline have two repairs available each. Midnight Madness SM failed preparation because no Lua scene was retained, and its concrete source cause remains undiagnosed. Mawaru4 SSC still needs 11 cached native background actor owners with all 20 authored timeline changes and native focus behavior; no repair has launched. Original main and both partition workers continue without restart. Singleton publisher 60312 watches 53 streams. Capped charts remain pending without another retry. Earlier accepted fixtures remain saved and byte verified. Only existing complete uncompressed replay comparisons determine acceptance; coverage stays separate, no passing chart was reopened, all 501 original simfiles remain byte unchanged, RUNWAY stays outside original scope, and the goal is active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,11 +14,12 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "ac5fbcffea90e83be26a5e72b2a61552549360ed",
+      "deadsync": "96aaa30c59a0e2f4fb3cd65879ad43f73fd5676d",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
   "validation": {
+    "foreground_start_note_row": "2b28998120d97876715bfe2a81255fb5de156b89: unchanged meaningful owned-scene control fails before and passes after on both hosts; all five checks on each host pass, 26 source and three harness pins verified; foreground-row-build.json",
     "native_autoplay_and_avoided_mine_judgments": "9bd984b71e3dd593c07e302839a75be8c6ec3c10: unchanged meaningful red controls on both hosts; all 12 Linux and 12 Windows checks pass; 26 source and 3 harness pins verified; koi-judgment-build.json",
     "sprite_and_overlay_exit": "06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535: meaningful unchanged focused controls; all10 Linux and9 Windows checks pass; 26 actual source and3 native harness pins verified; sprite-frames-overlay-build.json",
     "retained_native_actor_names": "da708fe8836e33d3095f23be69d9eb9b56db7de4: meaningful unchanged actor-name control fails before production and passes after on both hosts; all 8 Linux and 7 Windows checks pass, 26 actual source pins and native 3 harness pins verified; actor-name-build.json",
@@ -68,19 +69,15 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc",
-      "position": 308,
-      "phase": "replay",
-      "pid": 1922291,
+      "current": "My Exes Bestfriend/ExBestFriend.sm",
+      "position": 320,
+      "phase": "capture",
+      "pid": 2097606,
       "process_matches": true,
       "passed": 20,
-      "pending": 45,
-      "processed": 65,
-      "last_log_lines": [
-        "[586.3s] replaying every native gameplay frame: frame 41616/46936 (88.7%)",
-        "[588.3s] replaying every native gameplay frame: frame 41760/46936 (89.0%)",
-        "[590.3s] replaying every native gameplay frame: frame 41914/46936 (89.3%)"
-      ],
+      "pending": 49,
+      "processed": 69,
+      "last_log_lines": [],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -88,6 +85,10 @@
     "parallel_queue_receipt": "tests/fixtures/full_song_lua/sweep-2026-10-12-parallel-queues.json",
     "build_transition": "tests/fixtures/full_song_lua/sweep-2026-10-12-build-transition.json",
     "source_scope_audit": "tests/fixtures/full_song_lua/sweep-2026-10-12-original-scope.json",
+    "wargame_subscriber_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-wargame-subscriber-diagnosis.json",
+    "mawaru6_foreground_row_launch": "tests/fixtures/full_song_lua/sweep-2026-10-13-mawaru6-foreground-row-launch.json",
+    "foreground_row_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-foreground-row-build.json",
+    "mawaru6_foreground_row_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-13-mawaru6-foreground-row-diagnosis.json",
     "lower_ssc_final_overlay_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-lower-ssc-overlay-final-repair.json",
     "koi_judgment_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-13-koi-judgment-final-launch.json",
     "koi_judgment_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-koi-judgment-build.json",
@@ -193,6 +194,17 @@
     "fiji_source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-12-fiji-foreground-diagnosis.json",
     "publisher": "../itgmania-harness/target/server-parity/publish_chart_sweep_v1.py",
     "bounded_repair_jobs": [
+      {
+        "job": "mawaru6-foreground-row-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "mawaru6/mawaru6.sm",
+        "child_running": true
+      },
       {
         "job": "koi-sm-judgment-final-repair-v1",
         "complete": false,
@@ -1123,15 +1135,22 @@
         "record": "sweep-2026-10-13-koi-sm-judgment-final-repair.json",
         "fix_commit": "9bd984b71e3dd593c07e302839a75be8c6ec3c10",
         "finish_status": "bounded final Koi SM row and mine Judgment repair complete"
+      },
+      {
+        "name": "mawaru6-foreground-row-repair",
+        "remote": "/home/parity/jobs/mawaru6-foreground-row-repair-v1",
+        "record": "sweep-2026-10-13-mawaru6-foreground-row-repair.json",
+        "fix_commit": "2b28998120d97876715bfe2a81255fb5de156b89",
+        "finish_status": "bounded first Mawaru6 foreground note row repair complete"
       }
     ]
   },
   "counts_at_checkpoint": {
     "new_passed_fixtures": 77,
-    "new_pending_charts": 78,
-    "new_processed_sources": 155,
+    "new_pending_charts": 82,
+    "new_processed_sources": 159,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 198,
+    "unprocessed_sources": 194,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -1729,6 +1748,61 @@
           }
         }
       ]
+    },
+    {
+      "source_simfile": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 16.008: missing captured subscriber identity for ScreenGameplay/6/1",
+        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 80.993: missing captured subscriber identity for ScreenGameplay/6/1"
+      ],
+      "mismatch_count": 4,
+      "first_mismatch": [
+        {
+          "phase": "progress",
+          "seconds": 86.0012435913086,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        }
+      ]
+    },
+    {
+      "source_simfile": "media offline/media offline.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 33.007: missing captured subscriber identity for ScreenGameplay/6/1",
+        "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 55.793: missing captured subscriber identity for ScreenGameplay/6/1",
+        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 63.013: missing captured subscriber identity for ScreenGameplay/6/1"
+      ],
+      "mismatch_count": 4,
+      "first_mismatch": [
+        {
+          "phase": "progress",
+          "seconds": 135.00112915039062,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        }
+      ]
+    },
+    {
+      "source_simfile": "Midnight Madness/midnight.sm",
+      "repair_attempts": 0,
+      "failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (2070555) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "MODULO/modulo.ssc",
+      "repair_attempts": 0,
+      "failure": "0s] replaying every native gameplay frame: frame 6958/69793 (10.0%)\n[120.0s] replaying every native gameplay frame: frame 7048/69793 (10.1%)\n[122.0s] replaying every native gameplay frame: frame 7149/69793 (10.2%)\n[124.0s] replaying every native gameplay frame: frame 7246/69793 (10.4%)\n[126.0s] replaying every native gameplay frame: frame 7341/69793 (10.5%)\n[128.0s] replaying every native gameplay frame: frame 7443/69793 (10.7%)\n[130.0s] replaying every native gameplay frame: frame 7545/69793 (10.8%)\n[132.0s] replaying every native gameplay frame: frame 7653/69793 (11.0%)\n[134.0s] replaying every native gameplay frame: frame 7747/69793 (11.1%)\n[136.0s] replaying every native gameplay frame: frame 7850/69793 (11.2%)\n[138.0s] replaying every native gameplay frame: frame 7955/69793 (11.4%)\n[140.0s] replaying every native gameplay frame: frame 8053/69793 (11.5%)\n[142.0s] replaying every native gameplay frame: frame 8151/69793 (11.7%)\n[144.0s] replaying every native gameplay frame: frame 8253/69793 (11.8%)\n[146.0s] replaying every native gameplay frame: frame 8355/69793 (12.0%)\n[148.0s] replaying every native gameplay frame: frame 8452/69793 (12.1%)\n[150.0s] replaying every native gameplay frame: frame 8534/69793 (12.2%)\n[152.0s] replaying every native gameplay frame: frame 8625/69793 (12.4%)\n[154.1s] replaying every native gameplay frame: frame 8726/69793 (12.5%)\n[156.1s] replaying every native gameplay frame: frame 8827/69793 (12.6%)\n[158.1s] replaying every native gameplay frame: frame 8933/69793 (12.8%)\n[160.1s] replaying every native gameplay frame: frame 9032/69793 (12.9%)\n[162.1s] replaying every native gameplay frame: frame 9129/69793 (13.1%)\n[164.1s] replaying every native gameplay frame: frame 9221/69793 (13.2%)\n[166.1s] replaying every native gameplay frame: frame 9315/69793 (13.3%)\n[168.1s] replaying every native gameplay frame: frame 9411/69793 (13.5%)\n[170.1s] replaying every native gameplay frame: frame 9505/69793 (13.6%)\n[172.1s] replaying every native gameplay frame: frame 9588/69793 (13.7%)\n[174.1s] replaying every native gameplay frame: frame 9687/69793 (13.9%)\n[176.1s] replaying every native gameplay frame: frame 9788/69793 (14.0%)\n[178.1s] replaying every native gameplay frame: frame 9883/69793 (14.2%)\n[180.1s] replaying every native gameplay frame: frame 9981/69793 (14.3%)\n[182.1s] replaying every native gameplay frame: frame 10087/69793 (14.5%)\n[184.1s] replaying every native gameplay frame: frame 10192/69793 (14.6%)\n[186.1s] replaying every native gameplay frame: frame 10298/69793 (14.8%)\n[188.1s] replaying every native gameplay frame: frame 10406/69793 (14.9%)\n[190.1s] replaying every native gameplay frame: frame 10508/69793 (15.1%)\n[192.1s] replaying every native gameplay frame: frame 10614/69793 (15.2%)\n[194.1s] replaying every native gameplay frame: frame 10713/69793 (15.3%)\n[196.1s] replaying every native gameplay frame: frame 10810/69793 (15.5%)\n[198.1s] replaying every native gameplay frame: frame 10913/69793 (15.6%)\n[200.1s] replaying every native gameplay frame: frame 11021/69793 (15.8%)\n[202.1s] replaying every native gameplay frame: frame 11125/69793 (15.9%)\n[204.1s] replaying every native gameplay frame: frame 11228/69793 (16.1%)\n\nthread 'main' (2081216) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native scene 2 differs from independent scene 1 at frame 11256\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
     },
     {
       "source_simfile": "Delightful Day/Delightful Day.sm",

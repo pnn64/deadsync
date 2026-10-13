@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T20:15:04Z",
+  "updated_utc": "2026-10-13T20:44:03Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -14,8 +14,8 @@
   ],
   "counts": {
     "passed": 224,
-    "pending": 79,
-    "unprocessed": 198
+    "pending": 83,
+    "unprocessed": 194
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2621,7 +2621,9 @@
       "position": 308,
       "source_simfile": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc",
       "simfile_sha256": "56c58acf784dc382fa293f1e7b10aaf659d149d51addc349a421779fbcadde0d",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 309,
@@ -2639,7 +2641,9 @@
       "position": 311,
       "source_simfile": "media offline/media offline.ssc",
       "simfile_sha256": "62fa6179278daeded2cb031ca8532dd5242ce18331b850d8bed44f516b80a535",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 312,
@@ -2657,7 +2661,9 @@
       "position": 314,
       "source_simfile": "Midnight Madness/midnight.sm",
       "simfile_sha256": "936cc658a970b6e5d211d690465f34d93f911f96c12e8951fa15cb6024d9bcf7",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 315,
@@ -2675,7 +2681,9 @@
       "position": 317,
       "source_simfile": "MODULO/modulo.ssc",
       "simfile_sha256": "b0333bc4289473ed6ba3116ff13f169ebf313c93994d35eece21451ceef6d941",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 318,
