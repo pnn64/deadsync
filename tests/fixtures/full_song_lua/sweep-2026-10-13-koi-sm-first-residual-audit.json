@@ -113,6 +113,7 @@
   "repair_attempts_spent": 1,
   "repair_attempts_remaining": 1,
   "diagnostic_only": true,
+  "all_60_results_only_differences_are_fish_parent_paths": true,
   "authored_source_sha256": "4ca701fda58f7c93b6c3bde65fcdb7a012258e8524f549d23d655167eb5fd303",
   "path_difference_example": {
     "field": "command_query_event",
