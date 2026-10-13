@@ -1,0 +1,46 @@
+{
+  "source_simfile": "Lonely/Lonely.sm",
+  "candidate_sha256": "9e8d473175281b2fc8028dea5c02deceed55cf3af101dc1d0e347f2ed8dcd431",
+  "native_trace_sha256": "75dfcff68a91d32ad4ec911fb53afc9d819cd09fbaa4ffa34de7092a591af20b",
+  "report_sha256": "3b992837c1f12a1ecd0b8edd2b78d43052c6b0768280f155d55cf21ef9b434f5",
+  "report_uncompressed_bytes": 702517936,
+  "report_uncompressed_bytes_verified": true,
+  "binary_sha256": "4713556073fc219eef2dd0db6fbb496506cdfa4f49c27f62d6427ec63f95ab84",
+  "build_proof": "/home/parity/jobs/fg-filename-build-v1/proof.json",
+  "native_frames": 90583,
+  "replayed_frames": 90583,
+  "compared_stage_fields": 2706,
+  "errors": [
+    "update function for ActorFrame 'lua' at beat 50.006: ShowArrowMessageCommand failed for ActorFrame 'lua': runtime error: [string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:567: attempt to call field 'find' (a nil value)\nstack traceback:\n\t[C]: in field 'find'\n\t[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:567: in function <[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:557>\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:478: in function <[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:431>\nstack traceback:\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:478: in function <[string \"/tmp/.tmpFdqcZs/song/lua/default.lua\"]:431>\n"
+  ],
+  "mismatch_count": 275039,
+  "mismatch_fields": {
+    "source_broadcast_count": 1,
+    "source_broadcast": 37,
+    "command_query_count": 1,
+    "command_query_event": 275000
+  },
+  "first_mismatch": {
+    "field": "source_broadcast_count",
+    "native": 39,
+    "deadsync": 10360
+  },
+  "repair_attempts_spent": 0,
+  "diagnostic_only": true,
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "source_sha256": {
+    "itgmania-harness/vendor/itgmania/Themes/_fallback/Scripts/02 Utilities.lua": "a3b0dfc1b2d20bd8ffdc961a90b4da816fe1a105fabbda2fc267b423a3336793",
+    "rework/lua-songs/Lonely/lua/default.lua": "35dd12d2b6e08529ba478276cf1494e03f72b10d1c36bbd9616bf22c99a73093"
+  },
+  "native_definition": {
+    "source": "itgmania/Themes/_fallback/Scripts/02 Utilities.lua",
+    "line": 113,
+    "implementation": "function table.find(t, sFind)\n\tfor _, v in pairs(t) do\n\t\tif v == sFind then\n\t\t\treturn _\n\t\tend\n\tend\n\treturn nil\nend"
+  },
+  "source_cause": "Lonely ShowArrowMessageCommand calls table.find at lua/default.lua:567. Native fallback defines it as a pairs search returning the matching key, or nil. The independent compatibility layer omits it. The first update callback fails at beat 50.006; repeated ShowArrow source broadcasts follow the interrupted callback instead of its intended advance.",
+  "original_actual_helper": "4713556073fc219eef2dd0db6fbb496506cdfa4f49c27f62d6427ec63f95ab84; the rec_print helper had not yet been selected when this chart started.",
+  "repair_attempts_remaining": 2,
+  "repair_not_started": true,
+  "required_control": "Use the pinned pairs/key-return behavior with sequence and keyed tables, false values, absent values and equality. Demonstrate a real owned ShowArrow-style callback continuing after lookup before spending its first full retained-capture repair.",
+  "acceptance": "Existing complete uncompressed replay comparisons unchanged; coverage separate; no accepted chart reopened."
+}
