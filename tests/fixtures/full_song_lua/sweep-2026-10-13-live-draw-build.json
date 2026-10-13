@@ -1,0 +1,290 @@
+{
+  "source_fix_commit": "04899487a",
+  "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "source_cause": "Lake installs a real ActorFrame DrawFunction, but live advancement never calls the owned draw traversal. Native GameLoop updates the complete screen then draws it; ScreenManager skips a replacement before its first update and does not draw a popped scene.",
+  "change": "Separate owned scene update and draw, with advance providing both for a still active scene. Production gameplay draws after its full update and life visuals, after processing navigation/reload boundaries. Native draw callback phase, nested explicit Draw, current tween poses and inherited visibility/opacity are honored. Draw-queued commands remain pending until the next actor update. Live draw capture stores only the current frame; compiler baked history is preserved.",
+  "screen_lifetime": "Draw skips scenes before their first update and after End. Production skips outgoing navigation/reload frames without using native expected timestamps. A new screen request authored during draw is processed after the next update; transition-out starts during that draw and advances on following updates.",
+  "regression_control": "An owned root originally reproduced zero draw callbacks instead of one. Its strengthened control covers update and health before draw, explicit nested Draw, replacement of automatic children, deferred queued commands, split update/draw, visibility, hibernation, zero diffuse alpha and glow, wrapper visibility, callback removal/replacement, draw-time visual pose writes, 2000 subsequent frames with one current draw frame/one leaf and <8192 retained bytes, and no draw after End.",
+  "before_fix_control_log_sha256": "27cfba399a04b152a4b9e1439b60912041711da6381540087f2f16d8e1daa886",
+  "before_fix_shell_exit_code": 1,
+  "before_fix_control_failed": true,
+  "linux_checks": [
+    {
+      "label": "gameplay-tests",
+      "exit_code": 0,
+      "seconds": 64.31878680799855,
+      "results": [
+        "test result: ok. 815 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.10s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 259.8765337319928,
+      "results": [
+        "test result: ok. 41 passed; 0 failed; 0 ignored; 0 measured; 530 filtered out; finished in 32.24s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 278.14952744499897,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.0868596009968314,
+      "results": [
+        "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.24s"
+      ]
+    }
+  ],
+  "windows_checks": [
+    {
+      "label": "live",
+      "exit_code": 0,
+      "passed": 42,
+      "log": "live-draw-windows-live-v1.log",
+      "sha256": "e2d04ad626543c335deaa25485c5df2541e61ee3046606093752f06b6270d502",
+      "seconds": 528.6244578999467
+    },
+    {
+      "label": "native",
+      "exit_code": 0,
+      "passed": 21,
+      "log": "live-draw-windows-native-v1.log",
+      "sha256": "1765a2bbf0525b6fc77d3a3870204c1424e71a038ada1fd2d0524eb172783657",
+      "seconds": 366.37212780024856
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "passed": null,
+      "log": "live-draw-windows-build-v1.log",
+      "sha256": "14a3ff20c59ba61e687f6fa3dc63c5b997491fd47aa6be070a0e6914883935eb",
+      "seconds": 40.414237400051206
+    }
+  ],
+  "source_provenance": {
+    "baseline_build": "screen-loading-build-v1",
+    "baseline_source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "8811b4ed411c8afb48c847db32ff07123a07290673350a0899864a76675d2069",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "0cd4110f9c9db0d374f066cb6c480cbbcb74d2ccc024a760b1dc757032af15ef",
+      "crates/deadsync-song-lua/src/live.rs": "71c161cd698b6bec5cbfdff9f2f28e56b885c0daf4edbb94eee97e36d310133d",
+      "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+      "crates/deadsync-song-lua/src/lua_util.rs": "8577249fcae4a1d51f6d4620783d5794ddbfc03e1780dacaa91913e2b9641c62",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "d6516441dcc76f586cb577537c01a8d8647c2e01e77fa9651c52e3c9f252d613",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "93abcc7ff53ad7d72b901dbed62c45edcd87d17c2be7d64168bbcc1b1aacab97",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "1ee26608ce1a38ad2db32580a8ac4d76afceaceb962a72d452e4ace9985939b4",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+      "crates/deadsync-song-lua/src/compat.rs": "2460be1ba151fa6203588de5df1d6b70cdb572ec8fb2e799008119ea6d76ed9e",
+      "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801"
+    },
+    "baseline_source_bundle_sha256": "36c1931091e8f4eaf4b7c3380a79d6820bf54c4ffce4c85c1818fa4f8cdd3a18",
+    "new_source_pin": "crates/deadsync-song-lua/src/draw_capture.rs",
+    "baseline_draw_capture_sha256": "263aa7bc71e59bcadce8b4854b30cfb3ad4db772f06f4bc080784d9e7f63c6f8",
+    "source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "8811b4ed411c8afb48c847db32ff07123a07290673350a0899864a76675d2069",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "0cd4110f9c9db0d374f066cb6c480cbbcb74d2ccc024a760b1dc757032af15ef",
+      "crates/deadsync-song-lua/src/live.rs": "ab3d20ff1a5aa033f7502e2ef64917cd0a7781daae26e10c89203572fb09c749",
+      "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+      "crates/deadsync-song-lua/src/lua_util.rs": "b40e1cc30c5a228a3e01060164a056b5565a4e2cf03068d2e0975a1388aad12b",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "0a9453b0e768b8f8000a6d7ae71595c8ceef54c51ddf85e8e519113454ca90e3",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "93abcc7ff53ad7d72b901dbed62c45edcd87d17c2be7d64168bbcc1b1aacab97",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "1ee26608ce1a38ad2db32580a8ac4d76afceaceb962a72d452e4ace9985939b4",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+      "crates/deadsync-song-lua/src/compat.rs": "2460be1ba151fa6203588de5df1d6b70cdb572ec8fb2e799008119ea6d76ed9e",
+      "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+      "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+    },
+    "changed_sources": [
+      "crates/deadsync-song-lua/src/live.rs",
+      "crates/deadsync-song-lua/src/lua_util.rs",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs",
+      "crates/deadsync-song-lua/src/draw_capture.rs"
+    ],
+    "isolated_patch_sha256": {
+      "crates/deadsync-song-lua/src/live.rs": "c875db506127d0e614672875736a5047eccbab187b564493e89f7fe0ec65027a",
+      "crates/deadsync-song-lua/src/lua_util.rs": "6111c67cf7636700ee19254830c08bc325fe8716d70c861ec2550d6907268906",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "54a88fdd70909b67432dd3518747b3298aead25a72719e442012f9e7708cf457",
+      "crates/deadsync-song-lua/src/draw_capture.rs": "8777a53fd783bc38fb3e492e3c1234389e4d837b5ca174cfc99494e1f7191a85"
+    },
+    "isolated_patch_edits": {
+      "crates/deadsync-song-lua/src/draw_capture.rs": [
+        [
+          "fn state(actor: &Table) -> mlua::Result<SongLuaOverlayState> {\n    actor_overlay_initial_state(actor).map_err(mlua::Error::external)\n}",
+          "fn state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {\n    if crate::live::active(lua) {\n        crate::live::read_state(lua, actor)\n    } else {\n        actor_overlay_initial_state(actor).map_err(mlua::Error::external)\n    }\n}\n\n// Actor::PreDraw multiplies diffuse by its inherited diffuse and combines\n// glow with Screen blending before Actor::PartiallyOpaque tests the result.\nfn partially_opaque(state: SongLuaOverlayState, parents: &[SongLuaOverlayState]) -> bool {\n    let mut diffuse = 1.0;\n    let mut glow = 0.0;\n    for parent in parents {\n        diffuse *= parent.vertex_colors.map_or(parent.diffuse[3], |colors| colors[0][3]);\n        glow = glow + parent.glow[3] - glow * parent.glow[3];\n    }\n    let diffuse_visible = state.vertex_colors.map_or(state.diffuse[3] * diffuse > 0.0,\n        |colors| colors.iter().any(|color| color[3] * diffuse > 0.0));\n    diffuse_visible || state.glow[3] + glow - state.glow[3] * glow > 0.0\n}"
+        ],
+        [
+          "fn scoped_context(actor: &Table, prior: &Context)",
+          "fn scoped_context(lua: &Lua, actor: &Table, prior: &Context)"
+        ],
+        [
+          "let wrapper = state(&wrappers.raw_get::<Table>(index)?)?;",
+          "let wrapper = state(lua, &wrappers.raw_get::<Table>(index)?)?;"
+        ],
+        [
+          "if !wrapper.draw_visible() {",
+          "if !wrapper.draw_visible()\n                || (crate::live::active(lua) && !partially_opaque(wrapper, &parents)) {"
+        ],
+        [
+          "let state = state(actor)?;\n    if !state.draw_visible() {",
+          "let state = state(lua, actor)?;\n    if !state.draw_visible()\n        || (crate::live::active(lua) && !partially_opaque(state, &parents)) {"
+        ],
+        [
+          "scoped_context(actor, &prior)",
+          "scoped_context(lua, actor, &prior)"
+        ],
+        [
+          "scoped_context(actor, prior)",
+          "scoped_context(lua, actor, prior)"
+        ],
+        [
+          "                call_actor_function(lua, actor, &callback, None)?;\n                drain_actor_command_queue(lua, actor)",
+          "                crate::live::callback_phase(lua, true);\n                let result = call_actor_function(lua, actor, &callback, None);\n                crate::live::callback_phase(lua, false);\n                if crate::live::active(lua) {\n                    if let Err(error) = result {\n                        crate::lua_util::report_update_error(lua, actor,\n                            \"__songlua_draw_error_reported\", \"draw callback\", &error)?;\n                    }\n                    // Native draw callbacks do not update the actor queue.\n                    // queuecommand from Draw waits for the next actor Update.\n                    Ok(())\n                } else {\n                    result?;\n                    drain_actor_command_queue(lua, actor)\n                }"
+        ],
+        [
+          "screen.as_ref().map(state).transpose()?",
+          "screen.as_ref().map(|actor| state(lua, actor)).transpose()?"
+        ],
+        [
+          "pub(crate) fn run(lua: &Lua, root: &Table) -> mlua::Result<()> {",
+          "/// The live VM retains only this frame's draw stack. Reuse the same owned\n/// traversal and explicit Draw/render-target scopes as the baker, while\n/// releasing prior frame payloads before any callback runs. Trace events and\n/// pending actor queues are separate and are never cleared here.\npub(crate) fn run_live(lua: &Lua, root: &Table) -> mlua::Result<()> {\n    if let Some(mut capture) = lua.app_data_mut::<Capture>() {\n        capture.context = None;\n        capture.targets.clear();\n        capture.calls.clear();\n        capture.owners.clear();\n        capture.frames.clear();\n        capture.labels.clear();\n        capture.bytes = 0;\n    }\n    run(lua, root)\n}\n\n#[cfg(test)]\npub(crate) fn live_storage(lua: &Lua) -> (usize, usize, usize) {\n    lua.app_data_ref::<Capture>().map_or((0, 0, 0), |capture|\n        (capture.frames.len(), capture.frames.iter().map(|frame| frame.calls.len()).sum(), capture.bytes))\n}\n\npub(crate) fn run(lua: &Lua, root: &Table) -> mlua::Result<()> {"
+        ]
+      ],
+      "crates/deadsync-song-lua/src/live.rs": [
+        [
+          "    ended: bool,\n}",
+          "    ended: bool,\n    updated: bool,\n}"
+        ],
+        [
+          "outro_off_pending: false, ended: false })",
+          "outro_off_pending: false, ended: false, updated: false })"
+        ],
+        [
+          "    pub fn advance(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {\n        if self.ended",
+          "    /// Advance one complete active-screen frame: update, then draw.\n    pub fn advance(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {\n        let mut output = self.update(frame)?;\n        output.append(self.draw()?);\n        Ok(output)\n    }\n\n    /// Update the owned actor tree and health. Screen owners can process exit\n    /// or replacement before deciding whether this scene is still drawn.\n    pub fn update(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {\n        if self.ended"
+        ],
+        [
+          "        take_output(&self.lua)\n    }\n\n    fn advance_backgrounds",
+          "        self.updated = true;\n        take_output(&self.lua)\n    }\n\n    /// ScreenManager::Draw skips a screen before its first Update and after\n    /// it has been popped. Authored Draw uses the latest owned tween pose.\n    pub fn draw(&mut self) -> mlua::Result<SongLuaLiveOutput> {\n        if self.ended || !self.updated { return Ok(SongLuaLiveOutput::default()); }\n        if let Value::Table(root) = &self.root {\n            crate::lua_util::run_actor_draw_functions_for_table(&self.lua, root)?;\n        }\n        for (actor, state) in self.actors.iter().zip(&mut self.states) {\n            *state = read_state(&self.lua, actor)?;\n        }\n        for (_, actor, state) in &mut self.tracked {\n            *state = read_state(&self.lua, actor)?;\n        }\n        for actor in &self.registry { crate::reset_actor_capture(&self.lua, actor)?; }\n        take_output(&self.lua)\n    }\n\n    fn advance_backgrounds"
+        ]
+      ],
+      "crates/deadsync-song-lua/src/lua_util.rs": [
+        [
+          "    let result = crate::draw_capture::run(lua, actor);",
+          "    let result = if crate::live::active(lua) {\n        crate::draw_capture::run_live(lua, actor)\n    } else {\n        crate::draw_capture::run(lua, actor)\n    };"
+        ]
+      ],
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": [
+        [
+          "    song_lua_ended: bool,",
+          "    song_lua_ended: bool,\n    song_lua_draw_reload_pending: bool,"
+        ],
+        [
+          "            song_lua_ended: false,",
+          "            song_lua_ended: false,\n            song_lua_draw_reload_pending: false,"
+        ],
+        [
+          "let output = scene.advance(frame).map_err(|error| error.to_string())?;",
+          "let output = scene.update(frame).map_err(|error| error.to_string())?;"
+        ],
+        [
+          "        if matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen)) if screen == \"ScreenGameplay\") {\n            effects.push(ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::ReloadSongLua));\n        }",
+          "        if self.song_lua_draw_reload_pending\n            || matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen)) if screen == \"ScreenGameplay\") {\n            effects.push(ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::ReloadSongLua));\n            self.song_lua_draw_reload_pending = false;\n        }"
+        ],
+        [
+          "    pub const fn machine_font(&self)",
+          "    fn draw_song_lua(&mut self) -> Result<(), String> {\n        if self.song_lua_ended { return Ok(()); }\n        let Some(scene) = &mut self.song_lua else { return Ok(()); };\n        let output = scene.draw().map_err(|error| error.to_string())?;\n        scene.apply_output_player_writes(&output, &mut self.gameplay);\n        match output.request.as_ref() {\n            Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message))\n                if message == \"SM_DoNextScreen\" && self.song_lua_out.is_none() => {\n                    self.gameplay.progress.stage.song_completed_naturally = true;\n                    self.song_lua_out = Some(SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY });\n                }\n            Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen)) if screen == \"ScreenGameplay\" => {\n                // Draw follows ScreenManager::Update: its delayed screen load\n                // is processed after the next update, not during this draw.\n                self.song_lua_draw_reload_pending = true;\n            }\n            _ => {}\n        }\n        self.song_lua_output.append(output);\n        scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)\n    }\n\n    pub const fn machine_font(&self)"
+        ],
+        [
+          "    if state.song_lua_ended { return; }\n    let action = update_core",
+          "    if state.song_lua_ended { return; }\n    let effect_start = effects.len();\n    let action = update_core"
+        ],
+        [
+          "        action => effects.push(map_gameplay_action(action)),\n    }\n}\n\nfn update_life_meter_visuals",
+          "        action => effects.push(map_gameplay_action(action)),\n    }\n    // GameLoop updates the screen manager before drawing. An outgoing screen\n    // is already popped; a replacement has not received its first Update yet.\n    let screen_changes = effects[effect_start..].iter().any(|effect| matches!(effect,\n        ThemeEffect::Navigate(_) | ThemeEffect::NavigateNoFade(_)\n        | ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::ReloadSongLua)));\n    if !screen_changes && let Err(error) = state.draw_song_lua() {\n        state.song_lua_output.errors.push(error);\n    }\n}\n\nfn update_life_meter_visuals"
+        ]
+      ]
+    },
+    "current_worktree_control_sha256": "1f1db79e92410bb5eb202a83102a1248e020ad6555b8e66a4429bdc61f2514d4",
+    "current_worktree_after_sha256": {
+      "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879",
+      "crates/deadsync-song-lua/src/live.rs": "e98dffdf0e74fad0937bf7fc4b6eff74a0b3bda04f50458b75beca3ad18a4ebf",
+      "crates/deadsync-song-lua/src/lua_util.rs": "191c8e0421c61575c43013ccecece8fe4cb447e41521d3bdeed7d72b5321af25",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "575be21ede73a1ed0d68043128c66e7a674a60eaac14f61a2a1f5fd330c6618c"
+    },
+    "source_bundle_sha256": "26fbcbeb29fdc57757fcb8abbfa293cb9f907a706cc536827b0782079cfddd58",
+    "unselected_theme_listener": "874f2e535 remains excluded. Only the explicit live draw edits/control are applied to frozen sources.",
+    "repair_attempts_spent_before_launch": 0
+  },
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "8811b4ed411c8afb48c847db32ff07123a07290673350a0899864a76675d2069",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "0cd4110f9c9db0d374f066cb6c480cbbcb74d2ccc024a760b1dc757032af15ef",
+    "crates/deadsync-song-lua/src/live.rs": "ab3d20ff1a5aa033f7502e2ef64917cd0a7781daae26e10c89203572fb09c749",
+    "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+    "crates/deadsync-song-lua/src/lua_util.rs": "b40e1cc30c5a228a3e01060164a056b5565a4e2cf03068d2e0975a1388aad12b",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "0a9453b0e768b8f8000a6d7ae71595c8ceef54c51ddf85e8e519113454ca90e3",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "93abcc7ff53ad7d72b901dbed62c45edcd87d17c2be7d64168bbcc1b1aacab97",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+    "crates/deadsync-song-lua/src/lib.rs": "1ee26608ce1a38ad2db32580a8ac4d76afceaceb962a72d452e4ace9985939b4",
+    "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+    "crates/deadsync-song-lua/src/compat.rs": "2460be1ba151fa6203588de5df1d6b70cdb572ec8fb2e799008119ea6d76ed9e",
+    "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+    "crates/deadsync-song-lua/src/draw_capture.rs": "1e833059754c01997abeae6feca1890e4abf940f7546be7b67b002a0be861879"
+  },
+  "host_local_mtimes_before_cargo": true,
+  "build_proof": "/home/parity/jobs/live-draw-build-v1/proof.json",
+  "binary_sha256": "c3b9c61ce09b682a706e57184062964a91a53d0ec435c3e6b8b5b9b8adff29d2",
+  "native_harness_byte_verified": true,
+  "repair_attempts_before_launch": 0,
+  "next_repair_attempt": 1,
+  "native_capture_reused": true,
+  "observed_draw_passes": 17471,
+  "observed_native_frames": 17472,
+  "lake_repair_not_started": true,
+  "acceptance": "Existing full uncompressed replay comparisons unchanged. Coverage is separate; runtime drawable coverage is not claimed by callback execution. No accepted pass reopened."
+}
