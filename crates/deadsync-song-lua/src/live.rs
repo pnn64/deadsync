@@ -1843,6 +1843,65 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn live_table_find_returns_native_keys_and_completes_show_arrow() {
+        let mut compiled = compile_with_context("table-find-show-arrow", r#"
+SHOWS, AFTER_SHOW, SELECTED = 0, false, {}
+local fired = false
+return Def.ActorFrame {
+    OnCommand=function(self)
+        assert(table.find({4,8,12}, 8) == 2)
+        assert(table.find({[6]='six', tail='end'}, 'six') == 6)
+        assert(table.find({[6]='six', tail='end'}, 'end') == 'tail')
+        assert(table.find({off=false}, false) == 'off')
+        assert(table.find({[false]='needle'}, 'needle') == false)
+        assert(table.find({4,8}, '8') == nil)
+        assert(table.find({4,8}, nil) == nil and table.find({}, 8) == nil)
+        local marker = self:GetChild('Arrow2')
+        assert(table.find({self:GetChild('Arrow1'), marker}, marker) == 2)
+        local same = {__eq=function(a,b) return a.id == b.id end}
+        local a, b = setmetatable({id=7}, same), setmetatable({id=7}, same)
+        assert(table.find({[3]=a}, b) == 3)
+        self:SetUpdateFunction(function(actor, delta)
+            if fired or delta <= 0 then return end
+            MESSAGEMAN:Broadcast('ShowArrow', {{2,4},0.5})
+            AFTER_SHOW = true
+            fired = true
+        end)
+    end,
+    ShowArrowMessageCommand=function(self, args)
+        for column=1,4 do
+            if table.find(args[1], column) then
+                self:GetChild('Arrow'..column):aux(10+column)
+                SELECTED[#SELECTED+1] = column
+            end
+        end
+        SHOWS = SHOWS + 1
+    end,
+    Def.Actor {Name='Arrow1'}, Def.Actor {Name='Arrow2'},
+    Def.Actor {Name='Arrow3'}, Def.Actor {Name='Arrow4'},
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.layer_start_beats = vec![0.0];
+        });
+        let mut scene = compiled.live_scene.take().expect("owned ShowArrow scene");
+        for seconds in [0.1, 0.2, 0.3] {
+            let output = scene.advance(SongLuaLiveFrame { screen_seconds: seconds,
+                music_seconds: seconds, beat: seconds, delta_seconds: 0.1,
+                ..Default::default() }).expect("ShowArrow frame");
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+        }
+        assert!(scene.lua.globals().get::<bool>("AFTER_SHOW").unwrap(),
+            "the update continues after the real message callback");
+        assert_eq!(scene.lua.globals().get::<u32>("SHOWS").unwrap(), 1,
+            "successful lookup prevents repeated broadcasts");
+        let selected = scene.lua.globals().get::<Table>("SELECTED").unwrap();
+        assert_eq!(selected.raw_len(), 2);
+        assert_eq!(selected.raw_get::<u32>(1).unwrap(), 2);
+        assert_eq!(selected.raw_get::<u32>(2).unwrap(), 4);
+    }
+
+    #[test]
     fn live_rec_print_table_handles_owned_actor_values_and_depth() {
         let mut compiled = compile_with_context("recursive-debug-table", r#"
 return Def.ActorFrame {

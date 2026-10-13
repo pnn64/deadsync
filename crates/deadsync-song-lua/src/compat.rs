@@ -36,6 +36,18 @@ pub fn install_stdlib_compat(
     install_random_compat(lua)?;
     let globals = lua.globals();
     let table: Table = globals.get("table")?;
+    // _fallback/Scripts/02 Utilities.lua:113 returns the matching pairs key.
+    table.set(
+        "find",
+        lua.load(r#"
+            return function(t, sFind)
+                for key, value in pairs(t) do
+                    if value == sFind then return key end
+                end
+                return nil
+            end
+        "#).eval::<Function>()?,
+    )?;
     table.set(
         "rotate_right",
         lua.create_function(|lua, args: MultiValue| rotate_lua_table(lua, &args, false))?,
