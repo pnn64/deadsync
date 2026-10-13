@@ -1031,7 +1031,7 @@ impl SongLuaLiveScene {
                 }
                 let start = self.context.song_timing.as_ref().map_or_else(
                     || crate::song_elapsed_seconds_at(foreground.start_beat, &self.context) * crate::song_music_rate(&self.context),
-                    |timing| timing.get_time_for_beat_exact(foreground.start_beat));
+                    |timing| timing.get_time_for_beat(foreground.start_beat));
                 let stop = start + crate::lua_util::actor_tween_time_left(&self.lua, &foreground.actor)?;
                 foreground.stop_beat = self.context.song_timing.as_ref().map_or_else(
                     || crate::song_beat_at_elapsed_seconds(stop / crate::song_music_rate(&self.context), &self.context),
@@ -1344,6 +1344,35 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn live_foreground_start_time_uses_native_note_row() {
+        let mut compiled = compile_with_context("foreground-rounded-start", r#"
+return Def.Actor {
+    InitCommand = function(self) FOREGROUND = self end,
+    OnCommand = function(self) self:sleep(0.004):queuecommand('Done') end,
+    DoneCommand = function(self) self:aux(self:getaux()+1) end,
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.layer_start_beats = vec![0.01];
+            context.song_timing = Some(deadsync_rules::timing::TimingData::from_segments(
+                0.0, 0.0, &deadsync_rules::timing::TimingSegments {
+                    bpms: vec![(0.0, 120.0)], ..Default::default()
+                }, &[]));
+        });
+        let mut scene = compiled.live_scene.take().expect("retained foreground");
+        // Foreground checks the authored 0.01 beat, then GetElapsedTimeFromBeat
+        // rounds its marker to row zero. Its first update consumes all 6ms.
+        let output = scene.advance(SongLuaLiveFrame {
+            music_seconds: 0.006, beat: 0.012, screen_seconds: 0.006,
+            delta_seconds: 0.001, ..Default::default()
+        }).expect("foreground activation frame");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        let actor = scene.lua.globals().get::<Table>("FOREGROUND").expect("owned foreground");
+        assert_eq!(actor.get::<Function>("getaux").unwrap().call::<f32>(actor).unwrap(), 1.0,
+            "foreground consumes delta from the native rounded start row");
+    }
+
     #[test]
     fn live_sprite_linear_frames_builds_native_authored_states() {
         let mut compiled = compile_with_context("sprite-linear-frames", r#"
