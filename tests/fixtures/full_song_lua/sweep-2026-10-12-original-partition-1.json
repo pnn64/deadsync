@@ -2127,6 +2127,122 @@
         }
       ],
       "report_sha256": "8d1d83523bb1d04daec195ab37fb6d9c253bf6db6c4d76c5a24cafe8c15039ac"
+    },
+    {
+      "position": 201,
+      "source_simfile": "FTW/FTW.sm",
+      "simfile_sha256": "aba9ad891fce149bb80286a9b5d9feb06041e9c2f478467c889bbe08d8235790",
+      "retained_original_archive": "e60fd23f932e586de8a0d5ae931147bdf53d96faabede1a361be436891df3282.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "ab80853f896e96fcde3099428398a9dddc7e0f75a3646ef99297bc553cd861af",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "deadsync c71e8b4fe + 3c0a6d0b7 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/actor-paths-build-v1/proof.json",
+      "capture_seconds": 205.4183761719978,
+      "trace_sha256": "91908c1ff555f384a49b830202ebf5bd907fa5417f6779d800e002d7837fc2d7",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-201/candidates/bb831a9399e2162b88b214b086c08e192062f26cac650f233a3e75ad2a88037b.tar",
+      "replay_exit": 2,
+      "replay_seconds": 577.0734437290012,
+      "candidate_sha256": "bb831a9399e2162b88b214b086c08e192062f26cac650f233a3e75ad2a88037b",
+      "native_frames": 55351,
+      "replayed_frames": 55351,
+      "compared_stage_fields": 1562,
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, ActorFrame.SetDrawByZPosition, GameState.GetCurMusicSeconds, PlayerOptions.FromString",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 143,
+      "concrete_failures": [
+        {
+          "phase": "screen-active",
+          "seconds": -2.2996599674224854,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": -2.2996599674224854,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": -1.999342441558838,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": -0.999750554561615,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 0.0006802721181884408,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 1.0070521831512451,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 2.001587390899658,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 3.001473903656006,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 4.000725746154785,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 5.001246929168701,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 6.001972675323486,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        },
+        {
+          "phase": "progress",
+          "seconds": 7.000952243804932,
+          "field": "description",
+          "native": "KS+ DS ",
+          "deadsync": "KS+ DS"
+        }
+      ],
+      "report_sha256": "13bfc9aff510eb5e198249774d6a2cf4ecd33c64618d2e5b8497dceb1e4e2c90"
     }
   ],
   "scope": {
@@ -2136,9 +2252,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "fdb93c3526a021c8fd78788ab0365161fe3b73fe4bf0431f072244cd8ba28493",
-  "harness_sha256": "841ddd1bbd956b7224f692ca0c358fb31e1a6fb7f7a89bfd1c7c73ef05b57e76",
+  "binary_sha256": "ab80853f896e96fcde3099428398a9dddc7e0f75a3646ef99297bc553cd861af",
+  "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 3,
-  "pending_charts": 8,
-  "processed_charts": 11
+  "pending_charts": 9,
+  "processed_charts": 12
 }
