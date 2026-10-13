@@ -1,0 +1,224 @@
+{
+  "source_simfile": "Lower Times/Lower Times.ssc",
+  "status": "pending",
+  "repair_attempts_spent": 1,
+  "repair_attempts_remaining": 1,
+  "per_chart_limit": 2,
+  "candidate_sha256": "f2f5ef47ffbd972a1a82faed813e31cff6b36e3177114c0a8b579b815115cb8b",
+  "native_trace_sha256": "60becf74ac483841cd11aade35a2a7a1a838e486b72b39294d1c7e4e032a78de",
+  "full_uncompressed_report_sha256": "5e00ae370c167d64b57824ce2d80708df930254e232582030290d7ed307dd930",
+  "all_uncompressed_candidate_and_report_bytes_verified": true,
+  "full_first_repair_result": {
+    "native_frames": 114997,
+    "replayed_frames": 114997,
+    "compared_stage_fields": 2420,
+    "mismatches": [
+      {
+        "field": "command_query_count",
+        "native": 93,
+        "deadsync": 88
+      }
+    ],
+    "errors": []
+  },
+  "recorded_preferences": {
+    "default_sync_offset": "SyncOffset_ITG",
+    "display_aspect_ratio": 1.7777777910232544,
+    "global_offset_seconds": -0.00800000037997961,
+    "visual_delay_seconds": 0
+  },
+  "final_native_samples": [
+    {
+      "beat": 465.1004943847656,
+      "gameplay_seconds": 215.22332763671875,
+      "phase": "screen-end",
+      "players": [
+        {
+          "actual": 0,
+          "alive_seconds": 215.22332763671875,
+          "autoplay": 1,
+          "current_max_score": 0,
+          "current_possible": 0,
+          "description": "",
+          "difficulty": "Difficulty_Challenge",
+          "failed": true,
+          "life_begin": 0.5,
+          "life_latest": 0.5,
+          "meter": 12,
+          "misses": 0,
+          "player": "PlayerNumber_P1",
+          "possible": 4485,
+          "score": 0,
+          "w1": 0,
+          "w2": 0
+        }
+      ],
+      "scene": 1,
+      "seconds": 210.0229034423828
+    },
+    {
+      "beat": 465.1004943847656,
+      "gameplay_seconds": 215.22332763671875,
+      "phase": "gameplay-exit",
+      "players": [
+        {
+          "actual": 0,
+          "alive_seconds": 215.22332763671875,
+          "autoplay": 1,
+          "current_max_score": 0,
+          "current_possible": 0,
+          "description": "",
+          "difficulty": "Difficulty_Challenge",
+          "failed": true,
+          "life_begin": 0.5,
+          "life_latest": 0.5,
+          "meter": 12,
+          "misses": 0,
+          "player": "PlayerNumber_P1",
+          "possible": 4485,
+          "score": 0,
+          "w1": 0,
+          "w2": 0
+        }
+      ],
+      "scene": 1,
+      "seconds": 210.0229034423828
+    }
+  ],
+  "independent_initialization": {
+    "global_offset_seconds": -0.008,
+    "default_sync_offset": "ITG",
+    "precise_song_last_second_seconds": 208.15924,
+    "music_length_seconds": 208.58347,
+    "music_end_time_ns": 208519742349,
+    "notes_end_time_ns": 208519742349,
+    "step_resolution_distance_ns": 351500005
+  },
+  "correction": "Earlier audio-EOF cause claim is retracted: song_audio_end_time_ns clamps EOF to the independently parsed chart end; the actual initialized core boundary is last relevant step plus the native window, with ITG sync applied. A final failed flag alone also does not prove failed-transition selection because Simply Love marks used autoplay during Off.",
+  "diagnostic_only_model": {
+    "acceptance_gate": false,
+    "does_not_run_chart_repair": true,
+    "native_last_step_plus_window": 208.51974487304688,
+    "audio_eof_boundary": 208.58346557617188,
+    "existing_owned_clock_with_audio_eof": {
+      "boundary_frame": {
+        "beat": 461.14422607421875,
+        "delta": 0.0010930000571534038,
+        "scene": 1,
+        "seconds": 208.58425903320312,
+        "sequence": 113776,
+        "wall_seconds": 216.668783
+      },
+      "off_frame": {
+        "beat": 461.1484680175781,
+        "delta": 0.0015539999585598707,
+        "scene": 1,
+        "seconds": 208.58580017089844,
+        "sequence": 113777,
+        "wall_seconds": 216.670034
+      },
+      "end_frame": null,
+      "remaining_phase": 1,
+      "remaining_seconds": 0.06288518011569977
+    },
+    "existing_owned_clock_with_native_boundary": {
+      "boundary_frame": {
+        "beat": 460.96832275390625,
+        "delta": 0.0010860000038519502,
+        "scene": 1,
+        "seconds": 208.52029418945312,
+        "sequence": 113723,
+        "wall_seconds": 216.604512
+      },
+      "off_frame": {
+        "beat": 460.9720153808594,
+        "delta": 0.0013770000077784061,
+        "scene": 1,
+        "seconds": 208.52163696289062,
+        "sequence": 113724,
+        "wall_seconds": 216.605938
+      },
+      "end_frame": {
+        "beat": 465.1004943847656,
+        "delta": 0.0009449999779462814,
+        "scene": 1,
+        "seconds": 210.0229034423828,
+        "sequence": 114997,
+        "wall_seconds": 218.107043
+      }
+    },
+    "actual_initialized_core_music_end_ns": 208519742349,
+    "actual_initialized_core_music_end_frame_model": {
+      "boundary_frame": {
+        "beat": 460.96832275390625,
+        "delta": 0.0010860000038519502,
+        "scene": 1,
+        "seconds": 208.52029418945312,
+        "sequence": 113723,
+        "wall_seconds": 216.604512
+      },
+      "off_frame": {
+        "beat": 460.9720153808594,
+        "delta": 0.0013770000077784061,
+        "scene": 1,
+        "seconds": 208.52163696289062,
+        "sequence": 113724,
+        "wall_seconds": 216.605938
+      },
+      "end_frame": {
+        "beat": 465.1004943847656,
+        "delta": 0.0009449999779462814,
+        "scene": 1,
+        "seconds": 210.0229034423828,
+        "sequence": 114997,
+        "wall_seconds": 218.107043
+      }
+    },
+    "audio_eof_is_not_actual_core_boundary": true,
+    "earlier_audio_eof_cause_claim_retracted": true
+  },
+  "bounded_probe": {
+    "full_chart_replay": false,
+    "neutral_tail_clock_inputs": 1643,
+    "input_seconds_start": 208.00013732910156,
+    "input_seconds_end": 210.0229034423828,
+    "native_expected_stats_or_calls_imported": false,
+    "original_simfile_and_authored_lua_used": true,
+    "fresh_scene_not_original_full_prefix_state": true,
+    "result": "Real core and live scene dispatch Off at native frame 113724; the concrete theme emits NavigateNoFade(Evaluation) on exact final native frame 114997 without errors. This does not explain the full first repair count difference and is not an acceptance result.",
+    "windows_exploratory_source_graph": "Current validated Windows actor-name source includes unselected 874f2e535; the Linux selected 26-source graph is restored and immutable."
+  },
+  "diagnostic_logs": {
+    "lower-bounds-output-v1.log": {
+      "sha256": "7b4f4b56f15bb49bcf880ee091ed1702d72383fe54566bae898a151609f8ac9e",
+      "text": "song first=0.46899998 precise_last=208.15924 integer_length=208 audio_length=208.58347\nchart=0 difficulty=Challenge notes=13614 last_note=Some(51)\n"
+    },
+    "lower-initialized-bounds-output-v1.log": {
+      "sha256": "9bfa0372f9940fc5a710a7703f69350868491878b47a43eb09b265944d90e657",
+      "text": "precise_last=208.15924 audio=208.58347 notes_end_ns=208519742349 music_end_ns=208519742349 step_distance_ns=351500005 final_note_time_ns=Some(205986424335)\nframe=113723 seconds=208.52029418945313 action=Navigate(Complete) cleared=true off=false failed=false broadcasts=[] errors=[]\nframe=113724 seconds=208.52163696289065 action=Navigate(Complete) cleared=true off=true failed=true broadcasts=[\"ProbeOff\"] errors=[]\n"
+    },
+    "lower-theme-tail-output-v1.log": {
+      "sha256": "fc15fbff012511df69b433bd732317cd85873c53792b8c9c1a888ca35361166c",
+      "text": "actual_theme_init notes_end_ns=208519742349 music_end_ns=208519742349\nframe=113723 seconds=208.52029418945313 cleared=true off=false failed=false effects=[] errors=[]\nframe=113724 seconds=208.52163696289065 cleared=true off=true failed=true effects=[] errors=[]\nframe=114997 seconds=210.0229034423828 cleared=true off=true failed=true effects=[NavigateNoFade(Evaluation)] errors=[]\n"
+    }
+  },
+  "exploratory_controls": {
+    "first": "Zero-step hint control failed before production on both hosts but did not represent the real nonzero final step.",
+    "second": "Corrected authored-step nearby EOF comparison already passes before production; the long-audio assertion fails and does not explain this chart. Control runners rejected it as a mismatch with the intended failure.",
+    "production_changed": false,
+    "controls_removed_from_both_worktrees": true
+  },
+  "restored_selected_baseline": {
+    "selected_source_pins_restored": 26,
+    "immutable_helper_sha256": "270fd0d5062daf8b1418e44e81d8a9e6b45d9d830ea84c1ded1081205d620ab7"
+  },
+  "additional_full_chart_repair_launched": false,
+  "new_acceptance_gate": false,
+  "passing_chart_reopened": false,
+  "next_work": "The remaining full-replay lifecycle/state difference is unestablished; retain the last bounded chart repair until a source-backed change or reproduction addresses it.",
+  "local_source_sha256": {
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "366ae906ee2b7b5cfb89a0a34c4dc0ebf437bd873db5e764fc454fdad25f62cb",
+    "crates/deadsync-song-lua/src/live.rs": "0699b9cd1584a424c2681e22cd5eec4148db58c067d636f99a69161fe0984d66"
+  }
+}
