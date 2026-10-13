@@ -1,0 +1,162 @@
+{
+  "source_fix_commit": "469d6157b",
+  "source_simfile": "Gaming in 2018/Gaming in 2018.ssc",
+  "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "source_cause": "Pinned Foreground.cpp concatenates SongDir and the raw foreground name when the directory default.lua does not exist, then passes that literal to MakeActor. The directory-only source override in compile.rs otherwise falls back to the normalized physical entry path.",
+  "change": "Keep the raw requested foreground filename as the Lua chunk name as well as the directory default.lua spelling; read bytes from the existing resolved physical file. Preserve normal LoadActor path collapsing separately.",
+  "actual_first_repair_residual": "sweep-2026-10-13-gaming-first-ownership-residual.json",
+  "regression_control": "The existing foreground chunk-name control now exercises direct ./directory/Default.lua and directory//Default.lua alongside its directory cases. It failed before the fix, then passed in the complete live suites.",
+  "before_fix_control_log_sha256": "95e831918aa58ac59db2d388e9e078f59ea87b3f011eb71a265612a68b2e9985",
+  "before_fix_exit_code": 101,
+  "source_provenance": {
+    "baseline_build": "fg-entry-build-v1",
+    "baseline_source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "1110d3a86320d3d077599ccc08371471a532ae5486ee3191090388ee9235e865",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "ccecdf07dae6378a7df8c94152537d0bab63651b2d193a496aaff3a40d2447dd",
+      "crates/deadsync-song-lua/src/live.rs": "940b3bf28663ea719fd5c848100aa6ce87844e6296ba5d17a84227338d450ac4",
+      "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+      "crates/deadsync-song-lua/src/lua_util.rs": "8577249fcae4a1d51f6d4620783d5794ddbfc03e1780dacaa91913e2b9641c62",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "d6516441dcc76f586cb577537c01a8d8647c2e01e77fa9651c52e3c9f252d613",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "93abcc7ff53ad7d72b901dbed62c45edcd87d17c2be7d64168bbcc1b1aacab97",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "2f1a0e1b3e2cadbc4c5005db6369f5ae6a50994135f2216da556374d9650c19e",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f"
+    },
+    "source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "06a3d21afc5859a3c8163a9d9b144ccddab8cab0468c05443234b90574d28b72",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "ccecdf07dae6378a7df8c94152537d0bab63651b2d193a496aaff3a40d2447dd",
+      "crates/deadsync-song-lua/src/live.rs": "1c49ed60a4077371eae441fbc90757e1127bf06b05a587a5962796d586a1d558",
+      "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+      "crates/deadsync-song-lua/src/lua_util.rs": "8577249fcae4a1d51f6d4620783d5794ddbfc03e1780dacaa91913e2b9641c62",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "d6516441dcc76f586cb577537c01a8d8647c2e01e77fa9651c52e3c9f252d613",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "93abcc7ff53ad7d72b901dbed62c45edcd87d17c2be7d64168bbcc1b1aacab97",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "2f1a0e1b3e2cadbc4c5005db6369f5ae6a50994135f2216da556374d9650c19e",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f"
+    },
+    "changed_sources": [
+      "crates/deadsync-song-lua/src/compile.rs",
+      "crates/deadsync-song-lua/src/live.rs"
+    ],
+    "current_worktree_compile_sha256": "06a3d21afc5859a3c8163a9d9b144ccddab8cab0468c05443234b90574d28b72",
+    "current_worktree_directory_control_sha256": "fbe0a010cd41fddb87127e1bed78cef1cce41280a239ef5edfc9de88cac15e99",
+    "source_bundle_sha256": "a21bbb8588593b797e7301fdd667d1946676f90f42e4790580c4877fbe20e5d2",
+    "unselected_theme_listener": "874f2e535 remains outside the selected helper baseline until its uncaptured theme subscriber ordering can be represented."
+  },
+  "linux_checks": [
+    {
+      "label": "gameplay-tests",
+      "exit_code": 0,
+      "seconds": 62.64940504801052,
+      "results": [
+        "test result: ok. 815 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.10s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 208.1605407199968,
+      "results": [
+        "test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 530 filtered out; finished in 0.96s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 257.3580707739893,
+      "results": []
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 1.6892529360047774,
+      "results": [
+        "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.30s"
+      ]
+    }
+  ],
+  "windows_checks": [
+    {
+      "label": "live",
+      "exit_code": 0,
+      "passed": 39,
+      "log": "fg-filename-windows-live-v1.log",
+      "sha256": "32f35f9181526fa8d54776b64f2942cf6f76b07af7526644526f653f32107393",
+      "seconds": 342.981788800098
+    },
+    {
+      "label": "native",
+      "exit_code": 0,
+      "passed": 21,
+      "log": "fg-filename-windows-native-v1.log",
+      "sha256": "f34555cc2a46b9897ea8d91539b38d79bca71ce132186dcdb788ec12fdab912a",
+      "seconds": 146.94080760004
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "passed": null,
+      "log": "fg-filename-windows-build-v1.log",
+      "sha256": "f53ca427b45da142659c90f8cba5be990ab3f5e92343cc0938479c3c1644f89e",
+      "seconds": 25.056813899893314
+    }
+  ],
+  "build_proof": "/home/parity/jobs/fg-filename-build-v1/proof.json",
+  "binary_sha256": "4713556073fc219eef2dd0db6fbb496506cdfa4f49c27f62d6427ec63f95ab84",
+  "source_sha256": {
+    "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+    "crates/deadsync-song-lua/src/compile.rs": "06a3d21afc5859a3c8163a9d9b144ccddab8cab0468c05443234b90574d28b72",
+    "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+    "crates/deadsync-song-lua/src/host.rs": "ccecdf07dae6378a7df8c94152537d0bab63651b2d193a496aaff3a40d2447dd",
+    "crates/deadsync-song-lua/src/live.rs": "1c49ed60a4077371eae441fbc90757e1127bf06b05a587a5962796d586a1d558",
+    "crates/deadsync-song-lua/src/song_tables.rs": "9d0bf1e9071ef15313911d227ac3647bc42b4434724f589caad2838755980423",
+    "crates/deadsync-song-lua/src/lua_util.rs": "8577249fcae4a1d51f6d4620783d5794ddbfc03e1780dacaa91913e2b9641c62",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "d6516441dcc76f586cb577537c01a8d8647c2e01e77fa9651c52e3c9f252d613",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "93abcc7ff53ad7d72b901dbed62c45edcd87d17c2be7d64168bbcc1b1aacab97",
+    "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+    "crates/deadsync-simfile/src/cache.rs": "1d170cf61f44609761abfbc27c9fc339d741b2ad0d3ac7663c163b4e9052ddf6",
+    "crates/deadsync-gameplay/src/runtime_state.rs": "202ae9051fb61305dcb558fe96ddc51f736afb52cb96146c59cdbf14fda9e3c2",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "3870344c534b4519c90ae8bd626ae507a4e0945501c82cd3266f9795df886c7c",
+    "crates/deadsync-gameplay/src/runtime_methods.rs": "5776abe1860ded8f0d4f4d471e4c4b9abdb24e53054ccedc371abe13f4a7128a",
+    "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "59c02d78c29cf22760f55e4d1367a814d89056b0ce995e63e83be30852b2c7ed",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+    "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+    "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+    "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+    "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+    "crates/deadsync-song-lua/src/lib.rs": "2f1a0e1b3e2cadbc4c5005db6369f5ae6a50994135f2216da556374d9650c19e",
+    "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f"
+  },
+  "host_local_mtimes_before_cargo": true,
+  "native_harness_byte_verified": true,
+  "repair_attempts_before_launch": 1,
+  "next_repair_attempt": 2,
+  "acceptance": "Existing complete uncompressed replay comparisons unchanged; capture reused; coverage separate; no passing chart reopened."
+}
