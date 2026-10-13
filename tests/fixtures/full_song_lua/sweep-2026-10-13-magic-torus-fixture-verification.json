@@ -1,0 +1,26 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Magic Torus/torus3.sm",
+      "acceptance_commit": "6f4d9e4621ae65983d6523c770b08591bbfb0055",
+      "native_frames": 30590,
+      "replayed_frames": 30590,
+      "compared_stage_fields": 869,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "321534ef07de7b5527467bedf0dddfb72fa8b45466dbce0ac8e00c6c1a878f79.tar.zst",
+      "compressed_sha256": "321534ef07de7b5527467bedf0dddfb72fa8b45466dbce0ac8e00c6c1a878f79",
+      "uncompressed_sha256": "2246f8e01472c6aca28b75ab5ac2204a4a31e7ca89838eaead24ee23c1e4f90a",
+      "compressed_bytes": 3460826,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.spring, Actor.stoptweening, Actor.zoomy, Actor.zoomz",
+        "native drawable state/resources: Quad"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
