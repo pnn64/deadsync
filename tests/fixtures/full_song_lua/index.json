@@ -3302,17 +3302,14 @@
       "aliases": []
     },
     {
-      "title": "傷跡",
+      "title": "傷跡 Scar",
       "source_simfile": "Kizuato - [Zaia]/Kizuato.ssc",
-      "harness_version": "0.1.0",
-      "archive": "ea3f7e1732e823e04539481c00f7192f490aa86484c9df4d59cd41c794a86462.tar.zst",
-      "sha256": "ea3f7e1732e823e04539481c00f7192f490aa86484c9df4d59cd41c794a86462",
-      "compressed_bytes": 77847,
-      "uncompressed_sha256": "bd553424277b667bc78c852347a8711bb90940ac77bb76dc5d9ad8816c453af6",
-      "compression_level": 22,
-      "aliases": [
-        "0243a3529fb6cef5a3281c19e5a9f533d311d0987f95067b063789bbb3d4875e.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "9b37441118bd8521c7f2ba3d7e9588b84247d1cc1858c7cfac2abf09759b0823.tar.zst",
+      "sha256": "9b37441118bd8521c7f2ba3d7e9588b84247d1cc1858c7cfac2abf09759b0823",
+      "compressed_bytes": 13055554,
+      "uncompressed_sha256": "5ed247bed481679102d19247be399528bd55e47cb8de95167e03bbeac67b874d",
+      "aliases": []
     },
     {
       "title": "Koi",
