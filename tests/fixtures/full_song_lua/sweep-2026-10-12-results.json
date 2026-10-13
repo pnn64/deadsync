@@ -5591,6 +5591,21 @@
       "replay_seconds": 1.6298035759973573,
       "candidate_sha256": "22a93ce3af5e412a02225b9840a7ed00c5bd78ec4e24ebe2e4139432de4eb74c",
       "failure": "[0.5s] replaying every native gameplay frame\n\nthread 'main' (1482632) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: multiple native foreground entries need entry-specific ownership\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 245,
+      "source_simfile": "INAZUMA (Gio)/INAZUMA.ssc",
+      "simfile_sha256": "c0fbe90d2636f645bae1dcb7b91d162eab21e194ba52ea333140b7edb8181d83",
+      "retained_original_archive": "3ccb5707122f1a284c4c2caa010dd0cea897588e3919c265ef7d473f68754f91.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "63e17ffe7 / harness b191ebd",
+      "build_proof": "/home/parity/jobs/foreground-source-build-v2/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 900.061370741998,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1482682-1791861272532323397-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1482682-1791861272532323397-0\n"
     }
   ],
   "historical_pending": [
@@ -5617,6 +5632,6 @@
   "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 11,
-  "pending_charts": 33,
-  "processed_charts": 44
+  "pending_charts": 34,
+  "processed_charts": 45
 }
