@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Levels/levels-fakemines.ssc",
+      "acceptance_commit": "9f470d7e731671d189cdaa4929b8d287be9ae607",
+      "native_frames": 41311,
+      "replayed_frames": 41311,
+      "compared_stage_fields": 1540,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "e9e265da30f50252453800bf851e069bddd0be61be3f62946dfb8bbc7feb9d57.tar.zst",
+      "compressed_sha256": "e9e265da30f50252453800bf851e069bddd0be61be3f62946dfb8bbc7feb9d57",
+      "uncompressed_sha256": "fd9cc3147104e5999afdae0b8408416ffaac168246b4ad60bb83dd6b1391bc1c",
+      "compressed_bytes": 13473916,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
