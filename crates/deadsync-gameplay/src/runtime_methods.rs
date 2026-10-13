@@ -1517,6 +1517,19 @@ where
         }
         let music_time_sec = song_time_ns_to_seconds(music_time_ns);
         let log_mine_avoid = log::log_enabled!(log::Level::Trace);
+        if self.avoided_mine_judgment_callback.is_some() {
+            for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
+                let start = self.chart_runtime.mine_scan.next_mine_ix_cursor[player];
+                let indices = &self.chart_runtime.mine_scan.mine_note_ix[player];
+                let end = mine_avoid_cursor_end(&self.chart_runtime.notes, indices, start, cutoff_rows[player]);
+                for index in &indices[start.min(indices.len())..end] {
+                    let note = &self.chart_runtime.notes[index.get()];
+                    if mine_can_be_avoided(note) {
+                        self.chart_runtime.mine_scan.pending_avoided_mine_judgments.push((player, note.column));
+                    }
+                }
+            }
+        }
         let player_updates = apply_time_based_mine_avoidance_for_players(
             &mut self.chart_runtime.notes,
             &self.chart_runtime.mine_scan.mine_note_ix,
@@ -1848,6 +1861,18 @@ where
         }
     }
 
+    fn dispatch_avoided_mine_judgments(&mut self) {
+        let mut pending = std::mem::take(&mut self.chart_runtime.mine_scan.pending_avoided_mine_judgments);
+        if let Some(mut callback) = self.avoided_mine_judgment_callback.take() {
+            for &(player, column) in &pending {
+                callback(self, player, column);
+            }
+            self.avoided_mine_judgment_callback = Some(callback);
+        }
+        pending.clear();
+        self.chart_runtime.mine_scan.pending_avoided_mine_judgments = pending;
+    }
+
     pub fn run_autoplay(&mut self, now_music_time_ns: SongTimeNs) {
         if !self.stage_autoplay_enabled() {
             return;
@@ -1856,7 +1881,21 @@ where
         for player in 0..self.setup.num_players {
             let note_range = self.note_range_for_player(player);
             let mut cursor = self.autoplay_cursor(player).max(note_range.0);
+            // Player::CrossedRows uses the float displayed beat and truncates
+            // to the native note row. A rounded float can cross a row before
+            // its precise nanosecond deadline; waiting for that deadline loses
+            // a whole gameplay frame. Delay rows cross only after the delay.
+            let position = self.timing_runtime.timing_players[player]
+                .get_song_position(song_time_ns_to_seconds(now_music_time_ns));
+            let crossed_row = (position.beat * ROWS_PER_BEAT as f32) as i32;
             loop {
+                while cursor < note_range.1 && self.chart_runtime.notes[cursor].result.is_some() {
+                    cursor += 1;
+                }
+                if position.is_in_delay || crossed_row < 0 || cursor >= note_range.1
+                    || beat_to_note_row(self.chart_runtime.notes[cursor].beat) > crossed_row {
+                    break;
+                }
                 let mut events = [None; MAX_COLS];
                 let update = collect_next_autoplay_row_events(
                     &self.chart_runtime.notes,
@@ -1864,7 +1903,7 @@ where
                     note_range,
                     cursor,
                     self.setup.num_cols,
-                    now_music_time_ns,
+                    SongTimeNs::MAX,
                     &mut events,
                 );
                 cursor = update.cursor;
@@ -2065,6 +2104,7 @@ where
         // ITGmania resolves already-complete rows before it promotes overdue
         // mines/taps to avoids/misses.
         self.update_judged_rows();
+        self.dispatch_avoided_mine_judgments();
         if let Some(started) = judged_rows_started {
             phase_timings.judged_rows_us = elapsed_us_since(started);
         }

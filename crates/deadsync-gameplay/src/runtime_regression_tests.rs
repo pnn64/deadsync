@@ -1788,7 +1788,8 @@ mod runtime_regression_tests {
         assert!(!state.players_runtime.players[0].autoplay_judged, "controller selection is not a judgment");
         let note_time = state.chart_runtime.note_time_cache_ns[0];
         state.set_song_position_for_test(1.0, note_time, 1.0, 1.0);
-        state.run_autoplay(note_time - 1);
+        // Native float row crossing cannot distinguish a one-nanosecond lead.
+        state.run_autoplay(note_time - 1_000_000);
         assert!(!state.players_runtime.players[0].autoplay_judged, "the note is still in the future");
         state.run_autoplay(note_time);
         state.update_judged_rows();

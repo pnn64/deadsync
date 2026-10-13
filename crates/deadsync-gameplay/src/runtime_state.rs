@@ -213,6 +213,8 @@ pub struct GameplayMineScanState {
     pub next_mine_ix_cursor: [usize; MAX_PLAYERS],
     /// Song-sized frame batch allocated during setup and cleared after each use.
     pub pending_mine_hit_indices: Vec<ChartNoteIndex>,
+    /// Avoid results are marked after UpdateJudgedRows and broadcast next frame.
+    pub pending_avoided_mine_judgments: Vec<(usize, usize)>,
 }
 
 impl Default for GameplayMineScanState {
@@ -224,6 +226,7 @@ impl Default for GameplayMineScanState {
             mine_note_time_ns: std::array::from_fn(|_| Vec::new()),
             next_mine_ix_cursor: [0; MAX_PLAYERS],
             pending_mine_hit_indices: Vec::new(),
+            pending_avoided_mine_judgments: Vec::new(),
         }
     }
 }
@@ -242,6 +245,7 @@ impl GameplayMineScanState {
             mine_note_time_ns,
             next_mine_ix_cursor: [0; MAX_PLAYERS],
             pending_mine_hit_indices: Vec::with_capacity(mine_count),
+            pending_avoided_mine_judgments: Vec::with_capacity(mine_count),
         }
     }
 
@@ -264,6 +268,7 @@ impl GameplayMineScanState {
             mine_time_ns.clear();
         }
         self.pending_mine_hit_indices.clear();
+        self.pending_avoided_mine_judgments.clear();
     }
 }
 
@@ -1068,6 +1073,12 @@ pub type GameplayHoldJudgmentCallback<Profile, OverlayActor, CapturedActor, Stat
         usize, usize, HoldResult,
     ) + Send>;
 
+pub type GameplayAvoidedMineJudgmentCallback<Profile, OverlayActor, CapturedActor, StateDelta> =
+    Box<dyn FnMut(
+        &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
+        usize, usize,
+    ) + Send>;
+
 pub struct GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta> {
     pub source: GameplaySourceRuntimeState,
     pub setup: GameplaySetupRuntimeState,
@@ -1091,6 +1102,8 @@ pub struct GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta
         Option<GameplayTapRowJudgmentCallback<Profile, OverlayActor, CapturedActor, StateDelta>>,
     pub hold_judgment_callback:
         Option<GameplayHoldJudgmentCallback<Profile, OverlayActor, CapturedActor, StateDelta>>,
+    pub avoided_mine_judgment_callback:
+        Option<GameplayAvoidedMineJudgmentCallback<Profile, OverlayActor, CapturedActor, StateDelta>>,
 }
 
 pub fn gameplay_runtime_profiles<Profile: GameplayProfileData>(

@@ -471,6 +471,9 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
 
 #[cfg(test)]
 mod tests {
+    use super::{gameplay, paths, GameplayAudioSnapshot, GameplayConfig, GameplaySession,
+        GameplayStreamClockSnapshot, GameplayViewport, Arc, json};
+
     #[test]
     fn call_trace_capacity_keeps_overflow_visible() {
         use log::Log;
@@ -749,6 +752,121 @@ return Def.ActorFrame{}
         state.set_current_music_time_ns(end);
         assert!(matches!(state.finish_gameplay_if_ready(false),
             Some(deadsync_gameplay::GameplayAction::Navigate(deadsync_gameplay::GameplayExit::Complete))));
+    }
+
+    fn owned_judgment_control(name: &str, notes: &str, script: &str, offset: f32) -> gameplay::State {
+        paths::init();
+        let dir = std::env::temp_dir().join(format!("deadsync-judgment-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let simfile = dir.join("control.sm");
+        std::fs::write(&simfile, format!("#TITLE:{name};#OFFSET:{offset};#BPMS:0=144;#FGCHANGES:-24=default.lua=1=0=0=1;#NOTES:dance-single:Control:Hard:1:0,0,0,0,0:\n{notes};")).unwrap();
+        std::fs::write(dir.join("default.lua"), script).unwrap();
+        let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, -0.008).unwrap());
+        let chart = Arc::new(song.charts[0].clone());
+        let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], -0.008).unwrap().remove(0));
+        let mut context = deadsync_song_lua::SongLuaCompileContext::new(&dir, name);
+        context.live = true;
+        context.defer_initial_live_update = true;
+        context.song_timing = song.song_timing.clone();
+        let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+        let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
+        let prepared = deadsync_song_lua::playback::prepare_song_lua(
+            &song, &context, deadsync_assets::song_lua::compile_song_lua,
+            deadsync_assets::song_lua::compile_song_lua_layers);
+        let mut state = gameplay::init(song, [chart.clone(), chart], [payload.clone(), payload],
+            GameplayViewport::default(), GameplaySession::default(), GameplayConfig {
+                global_offset_seconds: -0.008,
+                machine_default_sync_pref: deadsync_chart::SyncPref::Itg,
+                machine_pack_ini_offsets: true,
+                ..Default::default()
+            }, 5, 1.0, scroll, profiles, None, None, None, Arc::from("EVENT"), None, None, None,
+            None, None, [deadsync_gameplay::CourseLifeConfig::Bar; 2], false, None, None,
+            [0; 2], prepared, Default::default());
+        state.set_live_autoplay_enabled(true);
+        state
+    }
+
+    fn update_judgment_control(state: &mut gameplay::State, nanos: i64, host: u64) -> deadsync_song_lua::SongLuaLiveOutput {
+        gameplay::update(state, 0.002, GameplayAudioSnapshot {
+            stream_clock: GameplayStreamClockSnapshot { music_nanos: nanos,
+                has_music_mapping: true, valid_at_host_nanos: host, ..Default::default() },
+            ..Default::default()
+        }, || host, &mut Vec::new());
+        let output = state.take_song_lua_output();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        output
+    }
+
+    #[test]
+    fn gameplay_autoplay_judges_at_native_float_row_boundary() {
+        let notes = (0..90).map(|measure| (0..16).map(|row| {
+            let beat = measure as f32 * 4.0 + row as f32 / 4.0;
+            if [38.5, 92.5, 356.0].contains(&beat) { "1000\n" } else { "0000\n" }
+        }).collect::<String>()).collect::<Vec<_>>().join(",\n");
+        let mut state = owned_judgment_control("float-row", &notes, r#"
+return Def.ActorFrame {
+    OnCommand = function(self) self:sleep(9999) end,
+    JudgmentMessageCommand = function(_, params)
+        assert(params.Player == PLAYER_1 and params.TapNoteScore == 'TapNoteScore_W1')
+        MESSAGEMAN:Broadcast('FloatRowJudgment', {beat=GAMESTATE:GetSongBeat()})
+    end,
+}
+"#, -0.409);
+        update_judgment_control(&mut state, -250_000_000, 1_000_000_000);
+        for (index, (beat, seconds)) in [(38.5_f32, 16.46766471862793_f64),
+            (92.5, 38.9676628112793), (356.0, 148.7593231201172)].into_iter().enumerate() {
+            let nanos = (seconds * 1e9).round() as i64;
+            let before = update_judgment_control(&mut state, nanos - 2_000_000, 2_000_000_000 + index as u64 * 2_000_000);
+            assert!(!before.source_broadcasts.iter().any(|event| event.name == "FloatRowJudgment"));
+            assert!(state.gameplay.chart_runtime.note_time_cache_ns[index] > nanos,
+                "the control must exercise a future nanosecond deadline");
+            assert_eq!(state.gameplay.timing_runtime.timing_players[0].get_song_position(seconds as f32).beat, beat);
+            let output = update_judgment_control(&mut state, nanos, 2_001_000_000 + index as u64 * 2_000_000);
+            assert_eq!(output.source_broadcasts.iter().filter(|event| event.name == "FloatRowJudgment").count(), 1,
+                "autoplay dispatches at native float row boundary: beat={beat}");
+            assert!(state.gameplay.chart_runtime.notes[index].result.is_some());
+        }
+    }
+
+    #[test]
+    fn gameplay_avoided_mines_dispatch_each_owned_judgment_next_update() {
+        let mut state = owned_judgment_control("mine-message", "0000\nM0MM\n0000\n0000\n,\n1000\n0000\n0000\n0000\n", r#"
+local count = 0
+local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+return Def.ActorFrame {
+    OnCommand = function(self)
+        self:sleep(9999)
+        self:SetUpdateFunction(function()
+            MESSAGEMAN:Broadcast('MineObserver', {count=count})
+        end)
+    end,
+    JudgmentMessageCommand = function(_, params)
+        if params.TapNoteScore ~= 'TapNoteScore_AvoidMine' then return end
+        assert(params.Player == PLAYER_1)
+        assert(params.NumTracks == nil and params.MultiPlayer == nil and params.Notes == nil)
+        assert(params.Holds == nil and params.HoldNoteScore == nil and params.TapNoteOffset == nil)
+        count = count + 1
+        player:SetLife(0.125)
+        MESSAGEMAN:Broadcast('AvoidMineJudgment', {column=params.FirstTrack, count=count})
+    end,
+}
+"#, 0.0);
+        update_judgment_control(&mut state, -250_000_000, 1_000_000_000);
+        let mine_time = state.gameplay.chart_runtime.note_time_cache_ns[0];
+        let avoided = mine_time + state.gameplay.timing_runtime.step_resolution_distance_ns + 20_000_000;
+        let marking = update_judgment_control(&mut state, avoided, 2_000_000_000);
+        assert!(state.gameplay.chart_runtime.notes[..3].iter().all(|note| note.mine_result == Some(deadsync_rules::note::MineResult::Avoided)));
+        assert!(!marking.source_broadcasts.iter().any(|event| event.name == "AvoidMineJudgment"),
+            "native UpdateJudgedRows precedes the avoidance marking pass");
+        let output = update_judgment_control(&mut state, avoided + 2_000_000, 2_002_000_000);
+        let columns: Vec<_> = output.source_broadcasts.iter().filter(|event| event.name == "AvoidMineJudgment")
+            .map(|event| event.params.as_ref().unwrap().as_ref().unwrap()["column"].as_u64().unwrap()).collect();
+        assert_eq!(columns, [0, 2, 3], "avoided mine Judgment dispatches every owned mine on the next update");
+        assert_eq!(output.source_broadcasts.iter().find(|event| event.name == "MineObserver").unwrap()
+            .params.as_ref().unwrap().as_ref().unwrap()["count"], json!(3), "mine messages precede foreground update");
+        assert_eq!(state.gameplay.players()[0].life, 0.125, "synchronous Lua player writes reach gameplay");
+        let later = update_judgment_control(&mut state, avoided + 4_000_000, 2_004_000_000);
+        assert!(!later.source_broadcasts.iter().any(|event| event.name == "AvoidMineJudgment"), "each mine dispatches once");
     }
 
     #[test]

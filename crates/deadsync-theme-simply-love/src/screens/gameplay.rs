@@ -955,6 +955,7 @@ impl State {
             .map_err(|error| error.to_string())?;
         scene.install_tap_row_judgment_callback(&mut self.gameplay);
         scene.install_hold_judgment_callback(&mut self.gameplay);
+        scene.install_avoided_mine_judgment_callback(&mut self.gameplay);
         if let Some(scratch) = &mut self.song_scratch { scratch.enable_live_scene(); }
         self.song_lua_output = scene.take_startup_output();
         scene.apply_output_player_writes(&self.song_lua_output, &mut self.gameplay);
@@ -972,6 +973,8 @@ impl State {
         self.gameplay.note_field_tap_callback = None;
         self.gameplay.tap_row_judgment_callback = None;
         self.gameplay.hold_judgment_callback = None;
+        self.gameplay.avoided_mine_judgment_callback = None;
+        self.gameplay.chart_runtime.mine_scan.pending_avoided_mine_judgments.clear();
         Ok(())
     }
 

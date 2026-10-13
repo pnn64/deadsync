@@ -1048,6 +1048,7 @@ where
         note_field_tap_callback: None,
         tap_row_judgment_callback: None,
         hold_judgment_callback: None,
+        avoided_mine_judgment_callback: None,
         source: GameplaySourceRuntimeState {
             song,
             charts,

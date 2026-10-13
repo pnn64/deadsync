@@ -1184,6 +1184,38 @@ impl SongLuaLiveScene {
         }));
     }
 
+    pub fn install_avoided_mine_judgment_callback<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+        &self, game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
+    ) {
+        let lua = self.lua.clone();
+        let stage = self.stage.clone();
+        let players = self.players.clone();
+        let song_timing = self.context.song_timing.clone();
+        game.avoided_mine_judgment_callback = Some(Box::new(move |game, player, column| {
+            let dispatched = (|| -> mlua::Result<()> {
+                let frame = SongLuaLiveFrame::from_gameplay(game, 0.0);
+                feed_live_stats(&stage, &players, &frame)?;
+                let beat = song_timing.as_ref().map_or(frame.beat as f32,
+                    |timing| timing.get_song_position(frame.music_seconds as f32).beat);
+                crate::set_compile_song_runtime_values(&lua, beat, frame.music_seconds as f32)?;
+                crate::lua_util::set_live_frame(&lua, frame.screen_seconds, f64::from(beat), 0.0);
+                lua.set_app_data(LivePlayers(frame.players));
+                let params = lua.create_table()?;
+                params.raw_set("Player", crate::player_number_name(player))?;
+                params.raw_set("TapNoteScore", "TapNoteScore_AvoidMine")?;
+                params.raw_set("FirstTrack", column - player * game.cols_per_player())?;
+                crate::lua_util::broadcast_native_song_lua_message(&lua, "Judgment", Some(Value::Table(params)))
+            })();
+            if let Err(error) = dispatched
+                && let Ok(screen) = lua.globals().raw_get::<Table>("__songlua_top_screen") {
+                let _ = crate::lua_util::report_update_error(&lua, &screen,
+                    "__songlua_avoided_mine_error_reported", "AvoidMine JudgmentMessage", &error);
+            }
+            let writes = lua.remove_app_data::<PlayerWrites>().map_or_else(Vec::new, |writes| writes.0);
+            apply_player_writes(writes, game);
+        }));
+    }
+
     /// LeaveGameplay has dispatched Off; its out transition can now advance.
     pub fn outro_off_dispatched(&self) -> bool {
         self.outro_options_reset && !self.outro_off_pending
