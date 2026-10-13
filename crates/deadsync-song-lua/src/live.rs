@@ -389,6 +389,88 @@ fn apply_player_writes<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
     }
 }
 
+fn judgment_score(judgment: deadsync_rules::judgment::Judgment) -> &'static str {
+    use deadsync_rules::judgment::JudgeGrade::*;
+    match judgment.grade {
+        Fantastic => "TapNoteScore_W1", Excellent => "TapNoteScore_W2",
+        Great => "TapNoteScore_W3", Decent => "TapNoteScore_W4",
+        WayOff => "TapNoteScore_W5", Miss => "TapNoteScore_Miss",
+    }
+}
+
+fn live_tap_note(lua: &Lua, params: &Table, note: &deadsync_rules::note::Note) -> mlua::Result<Table> {
+    use deadsync_core::note::NoteType;
+    let table = lua.create_table()?;
+    let kind = match note.note_type {
+        NoteType::Tap => "TapNoteType_Tap", NoteType::Hold | NoteType::Roll => "TapNoteType_HoldHead",
+        NoteType::Mine => "TapNoteType_Mine", NoteType::Lift => "TapNoteType_Lift",
+        NoteType::Fake => "TapNoteType_Fake",
+    };
+    table.raw_set("TapNoteType", kind)?;
+    table.raw_set("TapNoteSubType", if note.note_type == NoteType::Roll { "TapNoteSubType_Roll" }
+        else { "TapNoteSubType_Hold" })?;
+    table.raw_set("HoldDuration", note.hold.as_ref().map_or(0.0, |hold| hold.end_beat - note.beat))?;
+    table.raw_set("KeysoundIndex", -1)?;
+    table.raw_set("TapNoteScore", note.result.map_or("TapNoteScore_None", judgment_score))?;
+    table.raw_set("TapNoteOffset", note.result.map_or(0.0, |result| result.time_error_ms / 1000.0))?;
+    table.raw_set("Held", note.result.is_some_and(|result| result.miss_because_held))?;
+    let table = crate::lua_util::normalize_tap_note_table(lua, params, table)?;
+    // Ordinary dance notes have no assigned routine-player number.
+    table.raw_set("GetPlayerNumber", lua.create_function(|_, _: MultiValue| Ok(Value::Nil))?)?;
+    Ok(table)
+}
+
+fn tap_row_judgment_params<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+    lua: &Lua, game: &deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
+    player: usize, row_entry: usize, judgment: deadsync_rules::judgment::Judgment,
+) -> mlua::Result<Table> {
+    let row = &game.chart_runtime.row_entries[row_entry];
+    let notes = &game.chart_runtime.notes;
+    let columns = game.cols_per_player();
+    let first_column = player * columns;
+    let first_track = row.note_indices().iter().map(|index| notes[index.get()].column)
+        .min().unwrap_or(first_column) - first_column;
+    let params = lua.create_table()?;
+    params.raw_set("Player", format!("PlayerNumber_P{}", player + 1))?;
+    params.raw_set("FirstTrack", first_track)?;
+    params.raw_set("TapNoteScore", judgment_score(judgment))?;
+    params.raw_set("TapNoteOffset", judgment.time_error_ms / 1000.0)?;
+    params.raw_set("Early", judgment.time_error_ms < 0.0)?;
+    let early = row.note_indices().iter().map(|index| &notes[index.get()])
+        .find(|note| note.result.is_some_and(|result| result.time_error_music_ns == judgment.time_error_music_ns
+            && result.grade == judgment.grade)).and_then(|note| note.early_result);
+    params.raw_set("EarlyTapNoteScore", early.map_or("TapNoteScore_None", judgment_score))?;
+    params.raw_set("EarlyTapNoteOffset", early.map_or(0.0, |result| result.time_error_ms / 1000.0))?;
+    if judgment.grade == deadsync_rules::judgment::JudgeGrade::Miss {
+        params.raw_set("HeldMiss", judgment.miss_because_held)?;
+    }
+    let row_notes = lua.create_table()?;
+    let holds = lua.create_table()?;
+    // Native SetJudgment includes each note at this row, or the preceding
+    // hold head when that track is still inside a hold. Owned lane indices
+    // avoid scanning the song or retaining an event history on every frame.
+    for column in first_column..first_column + columns {
+        let lane = &game.chart_runtime.lane_indices.note_indices[column];
+        let at = lane.partition_point(|index| notes[index.get()].row_index < row.row_index.get());
+        if let Some(index) = lane.get(at)
+            && notes[index.get()].row_index == row.row_index.get() {
+            row_notes.raw_set(column - first_column + 1, live_tap_note(lua, &params, &notes[index.get()])?)?;
+            continue;
+        }
+        let lane_holds = &game.chart_runtime.lane_indices.hold_indices[column];
+        let before = lane_holds.partition_point(|index| notes[index.get()].row_index < row.row_index.get());
+        if let Some(index) = before.checked_sub(1).and_then(|index| lane_holds.get(index)) {
+            let note = &notes[index.get()];
+            if note.hold.as_ref().is_some_and(|hold| hold.end_row_index >= row.row_index.get()) {
+                holds.raw_set(column - first_column + 1, live_tap_note(lua, &params, note)?)?;
+            }
+        }
+    }
+    params.raw_set("Notes", row_notes)?;
+    params.raw_set("Holds", holds)?;
+    Ok(params)
+}
+
 fn finish_health_update(lua: &Lua) -> mlua::Result<()> {
     let screen: Table = lua.globals().raw_get("__songlua_top_screen")?;
     for player in 0..LUA_PLAYERS {
@@ -976,6 +1058,35 @@ impl SongLuaLiveScene {
     }
 
     pub fn context(&self) -> &SongLuaCompileContext { &self.context }
+
+    pub fn install_tap_row_judgment_callback<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+        &self, game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
+    ) {
+        let lua = self.lua.clone();
+        let stage = self.stage.clone();
+        let players = self.players.clone();
+        let song_timing = self.context.song_timing.clone();
+        game.tap_row_judgment_callback = Some(Box::new(move |game, player, row_entry, judgment| {
+            let result = (|| -> mlua::Result<()> {
+                let frame = SongLuaLiveFrame::from_gameplay(game, 0.0);
+                feed_live_stats(&stage, &players, &frame)?;
+                let beat = song_timing.as_ref().map_or(frame.beat as f32,
+                    |timing| timing.get_song_position(frame.music_seconds as f32).beat);
+                crate::set_compile_song_runtime_values(&lua, beat, frame.music_seconds as f32)?;
+                crate::lua_util::set_live_frame(&lua, frame.screen_seconds, f64::from(beat), 0.0);
+                lua.set_app_data(LivePlayers(frame.players));
+                let params = tap_row_judgment_params(&lua, game, player, row_entry, judgment)?;
+                crate::lua_util::broadcast_native_song_lua_message(&lua, "Judgment", Some(Value::Table(params)))
+            })();
+            if let Err(error) = result
+                && let Ok(screen) = lua.globals().raw_get::<Table>("__songlua_top_screen") {
+                let _ = crate::lua_util::report_update_error(&lua, &screen,
+                    "__songlua_judgment_error_reported", "JudgmentMessage", &error);
+            }
+            let writes = lua.remove_app_data::<PlayerWrites>().map_or_else(Vec::new, |writes| writes.0);
+            apply_player_writes(writes, game);
+        }));
+    }
 
     pub fn apply_pending_player_writes<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
         &self, game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,

@@ -1689,6 +1689,13 @@ where
                 }
             }
         }
+        // Native UpdateJudgedRows broadcasts before HandleTapRowScore changes
+        // counts or life. Lua SetLife therefore participates in this row's
+        // subsequent life change, rather than overwriting it after the frame.
+        if let Some(mut callback) = self.tap_row_judgment_callback.take() {
+            callback(self, player, row_entry_index, final_judgment);
+            self.tap_row_judgment_callback = Some(callback);
+        }
         record_player_live_timing_stats(&mut self.players_runtime.players[player], &final_judgment);
         if plan.record_display_window_counts {
             self.progress.window_counts.record_judgment(

@@ -770,6 +770,7 @@ local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
 local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
 local meter = SCREENMAN:GetTopScreen():GetLifeMeter(PLAYER_1)
 local taps = 0
+local judgments = 0
 return Def.ActorFrame {
     OnCommand = function(self)
         self:sleep(60)
@@ -786,6 +787,17 @@ return Def.ActorFrame {
         self:SetUpdateFunction(function(self)
             MESSAGEMAN:Broadcast('EngineObserve', {left=self:GetTweenTimeLeft(), taps=taps})
         end)
+    end,
+    JudgmentMessageCommand = function(_, params)
+        assert(params.Player == PLAYER_1 and params.FirstTrack == 0)
+        assert(params.TapNoteScore == 'TapNoteScore_W1' and params.HoldNoteScore == nil)
+        assert(params.Notes[1]:GetTapNoteType() == 'TapNoteType_Tap')
+        assert(params.Notes[1]:GetTapNoteResult():GetTapNoteScore() == 'TapNoteScore_W1')
+        assert(type(params.Holds) == 'table' and next(params.Holds) == nil)
+        assert(meter:GetLife() == 0.25 and stats:GetCurrentPossibleDancePoints() == 0)
+        player:SetLife(0.125)
+        judgments = judgments + 1
+        MESSAGEMAN:Broadcast('EngineJudgment', {judgments=judgments})
     end,
 }
 "#).unwrap();
@@ -829,8 +841,9 @@ return Def.ActorFrame {
         }, || 1_000_000_000, &mut effects);
         let output = state.take_song_lua_output();
         assert!(output.errors.is_empty(), "{:?}", output.errors);
-        assert_eq!(state.gameplay.players_runtime.players[0].life, 0.25,
-            "synchronous engine callback writes reach gameplay before the foreground update");
+        assert_eq!(state.gameplay.players_runtime.players[0].life, 0.125,
+            "native judgment dispatch applies Lua writes before row scoring and foreground update");
+        assert_eq!(output.source_broadcasts.iter().filter(|event| event.name == "EngineJudgment").count(), 1);
         assert_eq!(output.source_broadcasts.iter().filter(|event| event.name == "EngineTap").count(), 1,
             "clock={} notes={:?} scores={:?} scene={} hook={}",
             state.gameplay.clock.song_position.current_music_time_ns,
@@ -849,6 +862,15 @@ return Def.ActorFrame {
         assert_eq!(queries.len(), 1);
         assert_eq!(queries[0]["phase"], "callback");
         assert_eq!(queries[0]["results"][0], serde_json::json!(expected_beat));
+        gameplay::update(&mut state, 0.1, GameplayAudioSnapshot {
+            stream_clock: GameplayStreamClockSnapshot { music_nanos: tap_time + 100_000_000,
+                has_music_mapping: true, valid_at_host_nanos: 1_100_000_000, ..Default::default() },
+            ..Default::default()
+        }, || 1_100_000_000, &mut effects);
+        let next = state.take_song_lua_output();
+        assert!(next.errors.is_empty(), "{:?}", next.errors);
+        assert!(!next.source_broadcasts.iter().any(|event| event.name == "EngineJudgment"));
+        assert_eq!(state.gameplay.players_runtime.players[0].life, 0.125);
     }
 
     #[test]

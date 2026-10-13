@@ -1055,6 +1055,13 @@ pub type GameplayNoteFieldTapCallback<Profile, OverlayActor, CapturedActor, Stat
         GameplayNoteFieldTap,
     ) -> GameplayNoteFieldTap + Send>;
 
+/// Player::SetJudgment runs before HandleTapRowScore, including during autoplay.
+pub type GameplayTapRowJudgmentCallback<Profile, OverlayActor, CapturedActor, StateDelta> =
+    Box<dyn FnMut(
+        &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
+        usize, usize, Judgment,
+    ) + Send>;
+
 pub struct GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta> {
     pub source: GameplaySourceRuntimeState,
     pub setup: GameplaySetupRuntimeState,
@@ -1074,6 +1081,8 @@ pub struct GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta
     /// No event history is accumulated when a screen has no Lua scene.
     pub note_field_tap_callback:
         Option<GameplayNoteFieldTapCallback<Profile, OverlayActor, CapturedActor, StateDelta>>,
+    pub tap_row_judgment_callback:
+        Option<GameplayTapRowJudgmentCallback<Profile, OverlayActor, CapturedActor, StateDelta>>,
 }
 
 pub fn gameplay_runtime_profiles<Profile: GameplayProfileData>(

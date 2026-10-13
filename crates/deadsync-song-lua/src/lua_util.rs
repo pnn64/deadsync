@@ -3125,6 +3125,20 @@ pub fn broadcast_song_lua_message(
     message: &str,
     params: Option<Value>,
 ) -> mlua::Result<()> {
+    broadcast_song_lua_message_impl(lua, message, params, true)
+}
+
+/// Engine parameters already contain native note objects and optional fields.
+/// Do not add the compiler's sampled Judgment defaults to a real engine event.
+pub(crate) fn broadcast_native_song_lua_message(
+    lua: &Lua, message: &str, params: Option<Value>,
+) -> mlua::Result<()> {
+    broadcast_song_lua_message_impl(lua, message, params, false)
+}
+
+fn broadcast_song_lua_message_impl(
+    lua: &Lua, message: &str, params: Option<Value>, normalize: bool,
+) -> mlua::Result<()> {
     if message.trim().is_empty() { return Ok(()); }
     let command = ActorCommandName::new(message, "MessageCommand");
     let globals = lua.globals();
@@ -3176,7 +3190,7 @@ pub fn broadcast_song_lua_message(
         // MessageManager.cpp stores subscribers in an identity-ordered set.
         // Tree construction and definition-table order do not define delivery.
         actors.sort_unstable_by_key(|(identity, _)| *identity);
-        let params = normalize_broadcast_params(lua, message, params)?;
+        let params = if normalize { normalize_broadcast_params(lua, message, params)? } else { params };
         // Drain in place so consuming the snapshot does not move its inline buffer.
         actors.drain(..).try_for_each(|(_, actor)| {
             // Native Actor::HandleMessage invokes the command immediately,
@@ -3351,7 +3365,7 @@ fn table_has_entries(table: &Table) -> mlua::Result<bool> {
     Ok(table.pairs::<Value, Value>().next().transpose()?.is_some())
 }
 
-fn normalize_tap_note_table(lua: &Lua, params: &Table, note: Table) -> mlua::Result<Table> {
+pub(crate) fn normalize_tap_note_table(lua: &Lua, params: &Table, note: Table) -> mlua::Result<Table> {
     if !matches!(note.get::<Value>("GetTapNoteType")?, Value::Nil) {
         return Ok(note);
     }
