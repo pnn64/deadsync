@@ -2750,6 +2750,21 @@
       "capture_exit": 1,
       "capture_seconds": 900.2148301630077,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1590174-1791862771070224596-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1590174-1791862771070224596-0\n"
+    },
+    {
+      "position": 226,
+      "source_simfile": "Haxo (Sharks Remix) [sorae]/haxo.ssc",
+      "simfile_sha256": "d02a73daed864c71d7c0a94e5a8780c2800796ba72db07f98b79790c12eecc72",
+      "retained_original_archive": "8a276535e1cbc6189402d1d8aed8ce0ba89df4d729e41f12f3c9d779cdab1d8c.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "56c7f5ad7480dc190223b46f68cd1f78d172e09431fc49d6eb9a095937789469",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+      "build_proof": "/home/parity/jobs/tap-callback-and-margins-build-v2/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 125.13577945499856,
+      "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-1654183-1791863671879384563-0\n"
     }
   ],
   "scope": {
@@ -2759,9 +2774,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "6337f9cacc0ff48c536a19c0977028eae0855329b2229a484e49f68f1917398f",
+  "binary_sha256": "56c7f5ad7480dc190223b46f68cd1f78d172e09431fc49d6eb9a095937789469",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
   "passed_fixtures": 8,
-  "pending_charts": 11,
-  "processed_charts": 19
+  "pending_charts": 12,
+  "processed_charts": 20
 }
