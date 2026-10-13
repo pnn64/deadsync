@@ -6563,6 +6563,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 301,
+      "source_simfile": "mawaru3/mawaru3.sm",
+      "simfile_sha256": "5a69ffb76ead10df5e436a6f49b6239f657ee820ce626175912e0a1eab834ec8",
+      "retained_original_archive": "f0e8b664a15fdf5efd25a588dbd3b75bbc0e8bb6dc09d24c3e9f84639adccfdc.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "dc33e10eb25790fe5f57e0adf311eb04f8029fa0983e22ce00e25f125eb8111c",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/palette-green-v1/proof.json",
+      "capture_seconds": 258.87048083399714,
+      "trace_sha256": "f439a6647f5b5eb5c5e5a1367db1de2a291070273bcd518fb2dd1a86ce6715cc",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-301/candidates/ca79a1990d87c6c35f81044be1a5448fdd947a9ee761a5ebe30ce912ccbd3318.tar",
+      "replay_exit": 0,
+      "replay_seconds": 16848.788070254,
+      "candidate_sha256": "ca79a1990d87c6c35f81044be1a5448fdd947a9ee761a5ebe30ce912ccbd3318",
+      "native_frames": 170536,
+      "replayed_frames": 170536,
+      "compared_stage_fields": 2783,
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.horizalign, Actor.vertalign, Actor.zoomtowidth",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "0985942f1f28bd101f6afb16df2a90cd77201393ccaef1b1e825d0f3d7235eee",
+      "archive": "93c3db054588763a70e4adb4cd74f66a00b72e1cfabff61bee52ea63d59fb868.tar.zst",
+      "archive_sha256": "93c3db054588763a70e4adb4cd74f66a00b72e1cfabff61bee52ea63d59fb868",
+      "compressed_bytes": 15951732,
+      "pack_seconds": 2.7330470489978325,
+      "harness_version": "0.1.80",
+      "title": "MAWARU 3 ~SURViVOR~ Good Gravy",
+      "retained_original_entry": {
+        "title": "MAWARU 3 ~SURViVOR~",
+        "source_simfile": "mawaru3/mawaru3.sm",
+        "harness_version": "0.1.0",
+        "archive": "f0e8b664a15fdf5efd25a588dbd3b75bbc0e8bb6dc09d24c3e9f84639adccfdc.tar.zst",
+        "sha256": "f0e8b664a15fdf5efd25a588dbd3b75bbc0e8bb6dc09d24c3e9f84639adccfdc",
+        "compressed_bytes": 462596,
+        "uncompressed_sha256": "bd7b73cb01945dbba3a9e1f4d6f4cd50f6bfe575ace921962305845187d8cc7f",
+        "compression_level": 22,
+        "aliases": [
+          "7ccdeb8e9bfa4d8f8993d79ace652bc35ba613eb5c790b439ac3fae5a7ab49dd.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -6574,7 +6625,7 @@
   },
   "binary_sha256": "dc33e10eb25790fe5f57e0adf311eb04f8029fa0983e22ce00e25f125eb8111c",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 19,
+  "passed_fixtures": 20,
   "pending_charts": 25,
-  "processed_charts": 44
+  "processed_charts": 45
 }

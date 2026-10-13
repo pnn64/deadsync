@@ -3683,17 +3683,14 @@
       "aliases": []
     },
     {
-      "title": "MAWARU 3 ~SURViVOR~",
+      "title": "MAWARU 3 ~SURViVOR~ Good Gravy",
       "source_simfile": "mawaru3/mawaru3.sm",
-      "harness_version": "0.1.0",
-      "archive": "f0e8b664a15fdf5efd25a588dbd3b75bbc0e8bb6dc09d24c3e9f84639adccfdc.tar.zst",
-      "sha256": "f0e8b664a15fdf5efd25a588dbd3b75bbc0e8bb6dc09d24c3e9f84639adccfdc",
-      "compressed_bytes": 462596,
-      "uncompressed_sha256": "bd7b73cb01945dbba3a9e1f4d6f4cd50f6bfe575ace921962305845187d8cc7f",
-      "compression_level": 22,
-      "aliases": [
-        "7ccdeb8e9bfa4d8f8993d79ace652bc35ba613eb5c790b439ac3fae5a7ab49dd.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "93c3db054588763a70e4adb4cd74f66a00b72e1cfabff61bee52ea63d59fb868.tar.zst",
+      "sha256": "93c3db054588763a70e4adb4cd74f66a00b72e1cfabff61bee52ea63d59fb868",
+      "compressed_bytes": 15951732,
+      "uncompressed_sha256": "ca79a1990d87c6c35f81044be1a5448fdd947a9ee761a5ebe30ce912ccbd3318",
+      "aliases": []
     },
     {
       "title": "MAWARU 4",
