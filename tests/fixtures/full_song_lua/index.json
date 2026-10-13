@@ -3171,15 +3171,12 @@
     {
       "title": "Jeans",
       "source_simfile": "jeans/abj.sm",
-      "harness_version": "0.1.0",
-      "archive": "dc58def6b83a6c67053f973b9f8d0d99c4564f7bf42f583816b9e42bf0f1db54.tar.zst",
-      "sha256": "dc58def6b83a6c67053f973b9f8d0d99c4564f7bf42f583816b9e42bf0f1db54",
-      "compressed_bytes": 5765005,
-      "uncompressed_sha256": "7c77e4da7c6a46fd2c9a8c7fc2412a34ff66c7cb8cbb247b5052a156470a0ba8",
-      "compression_level": 22,
-      "aliases": [
-        "9512c04d708e6dc9d64ba7b8a11d22af556cad17a0d2062fd955b34225ce8d6a.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "f9f961f5835392f63e3b2a8e8c58b00aedab67b42ced6dd21aedad01e4de4f83.tar.zst",
+      "sha256": "f9f961f5835392f63e3b2a8e8c58b00aedab67b42ced6dd21aedad01e4de4f83",
+      "compressed_bytes": 7873448,
+      "uncompressed_sha256": "78e3d3d899ed96cea7df7e3645577348710e0a0b64aaa7b8f6abd58f07ebc92b",
+      "aliases": []
     },
     {
       "title": "Jerk",
