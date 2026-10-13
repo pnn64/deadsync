@@ -7571,6 +7571,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 303,
+      "source_simfile": "mawaru4/mawaru4.ssc",
+      "simfile_sha256": "9006c956669afc6740329f508f8159e4df66275a3fc33f192df57b000e4ab93b",
+      "retained_original_archive": "203f10e0eaf8d5fb5de746f3915cb8ed233dd3d7b9edd1a3b2318ccced0ab30f.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "dc33e10eb25790fe5f57e0adf311eb04f8029fa0983e22ce00e25f125eb8111c",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/palette-green-v1/proof.json",
+      "capture_seconds": 192.7350081330078,
+      "trace_sha256": "a74a2022ed65106cd595780b960be1a0448a2fdbb7328fd77b183f1762d4dc59",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-303/candidates/c74ddfd683990fbeec17a8693b4914325bb19c0a496f8d0438d5f5dd8201ad96.tar",
+      "replay_exit": 1,
+      "replay_seconds": 1.5788179430091986,
+      "candidate_sha256": "c74ddfd683990fbeec17a8693b4914325bb19c0a496f8d0438d5f5dd8201ad96",
+      "failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (1135414) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "scope": {
@@ -7583,6 +7602,6 @@
   "binary_sha256": "dc33e10eb25790fe5f57e0adf311eb04f8029fa0983e22ce00e25f125eb8111c",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 20,
-  "pending_charts": 25,
-  "processed_charts": 45
+  "pending_charts": 26,
+  "processed_charts": 46
 }
