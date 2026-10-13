@@ -3240,6 +3240,56 @@
       "replay_seconds": 8.406106003996683,
       "candidate_sha256": "5a12b3ce2bafa95e1a4eeba5100c4069e5a483bb4115d8f24379413fa5a33116",
       "failure": "[0.2s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: frame 293/56068 (0.5%)\n[4.0s] replaying every native gameplay frame: frame 675/56068 (1.2%)\n[6.0s] replaying every native gameplay frame: frame 1036/56068 (1.8%)\n\nthread 'main' (2778362) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: failed to execute '/tmp/.tmpO4LgxL/song/default.lua': runtime error: interval is empty\nstack traceback:\n\t[C]: in function 'math.random'\n\t[string \"/tmp/.tmpO4LgxL/song/default.lua\"]:106: in main chunk\n\t>[C]: in ?\n\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[8.0s] replaying every native gameplay frame: frame 1354/56068 (2.4%)\n"
+    },
+    {
+      "position": 247,
+      "source_simfile": "Into The Light2/Into The Light.ssc",
+      "simfile_sha256": "45df198ee3ac50f0dc21ceb8e8ab0e2a53b4fb391bd13d9621211d7683eb9428",
+      "retained_original_archive": "d875fddb0ac5e980f7ab0799fe67b208640e84e619eb19ce1bdf92f44a15c140.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "7f64d791484688206a4eeaf9f264d48cf0de71ac73780fc40226f1f74bb473e8",
+      "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+      "fix_commit": "34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness b191ebd",
+      "build_proof": "/home/parity/jobs/startup-provenance-build-v3/proof.json",
+      "capture_seconds": 158.450269072011,
+      "trace_sha256": "bd51d1f4c0ffa291889e744280e4206e4532845650b90532b54dab5637ce804d",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-247/candidates/2a19c844a052bc633c7d14764f8012801aafb5c663535dc43ff63ee83727fd98.tar",
+      "replay_exit": 0,
+      "replay_seconds": 309.1724111270014,
+      "candidate_sha256": "2a19c844a052bc633c7d14764f8012801aafb5c663535dc43ff63ee83727fd98",
+      "native_frames": 38737,
+      "replayed_frames": 38737,
+      "compared_stage_fields": 1320,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "af44fde23db6b2c49bd6704d909b2201bd243b83097b40e5967dd33117fb9855",
+      "archive": "0e2ac617712eea4186baf59715f7889cfda5ecb87abe8a004c7d974364fbcf8f.tar.zst",
+      "archive_sha256": "0e2ac617712eea4186baf59715f7889cfda5ecb87abe8a004c7d974364fbcf8f",
+      "compressed_bytes": 12647026,
+      "pack_seconds": 12.422528998999042,
+      "harness_version": "0.1.80",
+      "title": "Into The Light",
+      "retained_original_entry": {
+        "title": "Into The Light",
+        "source_simfile": "Into The Light2/Into The Light.ssc",
+        "harness_version": "0.1.0",
+        "archive": "d875fddb0ac5e980f7ab0799fe67b208640e84e619eb19ce1bdf92f44a15c140.tar.zst",
+        "sha256": "d875fddb0ac5e980f7ab0799fe67b208640e84e619eb19ce1bdf92f44a15c140",
+        "compressed_bytes": 48093,
+        "uncompressed_sha256": "a640659e0935399148697ef1cb8a8eba1d91ab164974090efaa90de8b0293221",
+        "compression_level": 22,
+        "aliases": [
+          "9f938cadebabc926849d4d657302cfe97a695ff23ef6dcfd1dd8a411d706e6f1.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -3251,7 +3301,7 @@
   },
   "binary_sha256": "7f64d791484688206a4eeaf9f264d48cf0de71ac73780fc40226f1f74bb473e8",
   "harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
-  "passed_fixtures": 9,
+  "passed_fixtures": 10,
   "pending_charts": 17,
-  "processed_charts": 26
+  "processed_charts": 27
 }

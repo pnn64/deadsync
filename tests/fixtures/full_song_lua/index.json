@@ -3082,15 +3082,12 @@
     {
       "title": "Into The Light",
       "source_simfile": "Into The Light2/Into The Light.ssc",
-      "harness_version": "0.1.0",
-      "archive": "d875fddb0ac5e980f7ab0799fe67b208640e84e619eb19ce1bdf92f44a15c140.tar.zst",
-      "sha256": "d875fddb0ac5e980f7ab0799fe67b208640e84e619eb19ce1bdf92f44a15c140",
-      "compressed_bytes": 48093,
-      "uncompressed_sha256": "a640659e0935399148697ef1cb8a8eba1d91ab164974090efaa90de8b0293221",
-      "compression_level": 22,
-      "aliases": [
-        "9f938cadebabc926849d4d657302cfe97a695ff23ef6dcfd1dd8a411d706e6f1.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "0e2ac617712eea4186baf59715f7889cfda5ecb87abe8a004c7d974364fbcf8f.tar.zst",
+      "sha256": "0e2ac617712eea4186baf59715f7889cfda5ecb87abe8a004c7d974364fbcf8f",
+      "compressed_bytes": 12647026,
+      "uncompressed_sha256": "2a19c844a052bc633c7d14764f8012801aafb5c663535dc43ff63ee83727fd98",
+      "aliases": []
     },
     {
       "title": "Intro Outro",
