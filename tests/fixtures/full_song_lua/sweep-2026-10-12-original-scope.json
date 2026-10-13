@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T08:14:49Z",
+  "updated_utc": "2026-10-13T08:19:15Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 193,
+    "passed": 194,
     "pending": 60,
-    "unprocessed": 248
+    "unprocessed": 247
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2141,7 +2141,9 @@
       "position": 247,
       "source_simfile": "Into The Light2/Into The Light.ssc",
       "simfile_sha256": "45df198ee3ac50f0dc21ceb8e8ab0e2a53b4fb391bd13d9621211d7683eb9428",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 248,

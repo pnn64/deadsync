@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Into The Light2/Into The Light.ssc",
+      "acceptance_commit": "037e8c45e",
+      "native_frames": 38737,
+      "replayed_frames": 38737,
+      "compared_stage_fields": 1320,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "0e2ac617712eea4186baf59715f7889cfda5ecb87abe8a004c7d974364fbcf8f.tar.zst",
+      "compressed_sha256": "0e2ac617712eea4186baf59715f7889cfda5ecb87abe8a004c7d974364fbcf8f",
+      "uncompressed_sha256": "2a19c844a052bc633c7d14764f8012801aafb5c663535dc43ff63ee83727fd98",
+      "compressed_bytes": 12647026,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}

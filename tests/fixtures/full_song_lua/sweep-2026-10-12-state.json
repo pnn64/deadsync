@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-13T08:14:46Z",
-  "previous_goal_turn": "progress: Four original queued fixtures passed and were immediately saved: I'm sorry SM 7edb8f331 (104203 frames), ICON KILLER 3b9c59dda (53943), I'm sorry SSC b869cccd6 (114341), and Into The Light2 204211b1a (50780). Every full replay had zero mismatches and Lua errors; all four compressed archives locally decompress to their retained raw hashes. Storage proofs are 61252e375 and b5881b86b; coverage remains separate. Source fix d851d0c3b adds Simply Love's eligible DensityGraph owned recurring sleep queue, native Song-BPM quantization, current-frame foreground activation and screen Off lifecycle dispatch. Three before-fix live regressions failed while the existing 34 passed. An existing late-start regression caught a missing same-frame callback slot; that failure was retained and corrected, with a fourth control preserving multitap single-update detection. Final Windows validation passed 38 live checks, 21 native controls and both replay executable builds. The first executable build's PDB FILE_SYSTEM failure was retained; lossless compression and expansion of the linker PDB allowed the single-job retry. Fresh Linux validation passed 815 gameplay tests, 38 live checks, 21 native replay controls and both executable builds against 23 frozen source pins with host-local mtimes. Immutable helper 66d32bf5 is selected; proof a69b3d0d2. Freg first repair reused byte-identical raw 4be2dbf1 and native trace 3736aead, completed all 24013 frames and 341 stage fields with no stage differences or Lua errors, and resolved the original DensityGraph timer and command-count failures. It remains pending at repair 1 with only Off begin/end one frame late (native 19.869955, independent 19.894785). Diagnosis 7f7148865 traces the premature autoplay failure flag to theme State::update before Lua, versus native FailOnHoldStart overlay Off after AllFailed is decided. Its final attempt remains unspent until that production phase is corrected and verified. GREAT GREAT stays pending at the two-attempt cap; no third replay or accepted fixture. Three original queues continue with one publisher and 34 streams. All original 501 source bytes remain audited against f7ea01463. Existing full replay acceptance is unchanged and the sweep stays active.",
+  "updated_utc": "2026-10-13T08:19:13Z",
+  "previous_goal_turn": "progress: Five original queued fixtures passed and were immediately saved: I'm sorry SM 7edb8f331 (104203 frames), ICON KILLER 3b9c59dda (53943), I'm sorry SSC b869cccd6 (114341), Into The Light2 SM 204211b1a (50780), and Into The Light2 SSC 037e8c45e (38737). Every full replay had zero mismatches and Lua errors; all five compressed archives locally decompress to their retained raw hashes. Storage proofs are 61252e375, b5881b86b and sweep-2026-10-13-light-ssc-fixture-verification.json; coverage remains separate. Source fix d851d0c3b adds Simply Love's eligible DensityGraph owned recurring sleep queue, native Song-BPM quantization, current-frame foreground activation and screen Off lifecycle dispatch. Three before-fix live regressions failed while the existing 34 passed. An existing late-start regression caught a missing same-frame callback slot; that failure was retained and corrected, with a fourth control preserving multitap single-update detection. Final Windows validation passed 38 live checks, 21 native controls and both replay executable builds. The first executable build's PDB FILE_SYSTEM failure was retained; lossless compression and expansion of the linker PDB allowed the single-job retry. Fresh Linux validation passed 815 gameplay tests, 38 live checks, 21 native replay controls and both executable builds against 23 frozen source pins with host-local mtimes. Immutable helper 66d32bf5 is selected; proof a69b3d0d2. Freg first repair reused byte-identical raw 4be2dbf1 and native trace 3736aead, completed all 24013 frames and 341 stage fields with no stage differences or Lua errors, and resolved the original DensityGraph timer and command-count failures. It remains pending at repair 1 with only Off begin/end one frame late (native 19.869955, independent 19.894785). Diagnosis 7f7148865 traces the premature autoplay failure flag to theme State::update before Lua, versus native FailOnHoldStart overlay Off after AllFailed is decided. Its final attempt remains unspent until that production phase is corrected and verified. GREAT GREAT stays pending at the two-attempt cap; no third replay or accepted fixture. Three original queues continue with one publisher and 34 streams. All original 501 source bytes remain audited against f7ea01463. Existing full replay acceptance is unchanged and the sweep stays active.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "7f71488650d1f7c02eb692368696e524a30d41fb",
+      "deadsync": "037e8c45ebbc34bebe7a658041961197643a585a",
       "itgmania_harness": "b191ebd0fcf8b59b5294958d2ffe2939af2d742a"
     }
   },
@@ -71,9 +71,9 @@
       "pending": 37,
       "processed": 52,
       "last_log_lines": [
-        "[3402.8s] replaying every native gameplay frame: frame 35740/145074 (24.6%)",
-        "[3404.8s] replaying every native gameplay frame: frame 35764/145074 (24.7%)",
-        "[3406.8s] replaying every native gameplay frame: frame 35787/145074 (24.7%)"
+        "[3668.9s] replaying every native gameplay frame: frame 38583/145074 (26.6%)",
+        "[3670.9s] replaying every native gameplay frame: frame 38611/145074 (26.6%)",
+        "[3672.9s] replaying every native gameplay frame: frame 38639/145074 (26.6%)"
       ],
       "supervisor_running": true
     },
@@ -394,13 +394,13 @@
         "job": "chart-sweep-parallel-v4-2",
         "complete": false,
         "supervisor_running": true,
-        "passed": 9,
+        "passed": 10,
         "pending": 17,
-        "processed": 26,
-        "last_phase": "pack",
-        "source_simfile": "Into The Light2/Into The Light.ssc",
-        "child_running": false,
-        "position": 247
+        "processed": 27,
+        "last_phase": "capture",
+        "source_simfile": "Invert/invert.ssc",
+        "child_running": true,
+        "position": 250
       },
       {
         "job": "definition-concat-repair-v1",
@@ -712,11 +712,11 @@
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 46,
+    "new_passed_fixtures": 47,
     "new_pending_charts": 59,
-    "new_processed_sources": 105,
+    "new_processed_sources": 106,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 248,
+    "unprocessed_sources": 247,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
