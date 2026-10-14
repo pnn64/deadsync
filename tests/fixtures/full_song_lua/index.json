@@ -5457,19 +5457,14 @@
       ]
     },
     {
-      "title": "Vanishing Point",
+      "title": "Vanishing Point [Visual FX]",
       "source_simfile": "Vanishing Point - [Zaia][FX]/Vanishing Point.sm",
-      "harness_version": "0.1.6",
-      "archive": "30e0a5a698a6406e42c5b8379ac5a974b57f5dfd6e74d201f4e151875166a5b6.tar.zst",
-      "sha256": "30e0a5a698a6406e42c5b8379ac5a974b57f5dfd6e74d201f4e151875166a5b6",
-      "compressed_bytes": 66697,
-      "uncompressed_sha256": "022c2d38667b6cd85b0e63c2599bb1f11704ebcf1a7dafd66f8cde052c4c373f",
-      "compression_level": 22,
-      "aliases": [
-        "a1fac014639c6ca4610359eab48ac413ecfca62fa0111cb0268e1fe6fd9deded.tar.zst",
-        "8a306469330fed616bdd8425afb67255af786261e5394eeb3324c9383e537c49.tar.zst",
-        "2cedd84ae3907afd4c87a05e71e0055ab9a5b9350951e9769fab9429dad88491.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "4dc18d2326d744aa95067d8905edf5d930b5ba9f6cc1d445cddfeb4033fa892a.tar.zst",
+      "sha256": "4dc18d2326d744aa95067d8905edf5d930b5ba9f6cc1d445cddfeb4033fa892a",
+      "compressed_bytes": 11074579,
+      "uncompressed_sha256": "ed48fef31abe3ecbbd9a8126466f80e43aab536ad7f4e80c898ab40594ffb7f2",
+      "aliases": []
     },
     {
       "title": "Vector Field",

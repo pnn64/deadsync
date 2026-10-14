@@ -1558,6 +1558,58 @@
         }
       ],
       "report_sha256": "112acfc9ef088ebbaa2793af0b97225dcf25992abd9b82a573cf298e578bb838"
+    },
+    {
+      "position": 458,
+      "source_simfile": "Vanishing Point - [Zaia][FX]/Vanishing Point.sm",
+      "simfile_sha256": "f7ac16da8d8c62411ac7632013d534ed3601e0a122d7634a18f625933e9a7246",
+      "retained_original_archive": "30e0a5a698a6406e42c5b8379ac5a974b57f5dfd6e74d201f4e151875166a5b6.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e1d9c9995fcf756f86445761fe965767a848dd24",
+      "build_proof": "/home/parity/jobs/next-screen-target-linux-green-v1/proof.json",
+      "capture_seconds": 305.53906498799915,
+      "trace_sha256": "2f6a777cc8bbea5b4bae32a1e4c83f32dde345efa06fcfcdf9323b1bac694f2e",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-7/chart-458/candidates/ed48fef31abe3ecbbd9a8126466f80e43aab536ad7f4e80c898ab40594ffb7f2.tar",
+      "replay_exit": 0,
+      "replay_seconds": 3926.099480501027,
+      "candidate_sha256": "ed48fef31abe3ecbbd9a8126466f80e43aab536ad7f4e80c898ab40594ffb7f2",
+      "native_frames": 230658,
+      "replayed_frames": 230658,
+      "compared_stage_fields": 3322,
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "5809f10a7ba642cf6b8ec988714a42df78dccfdde4c83ee732de95d07e1b098d",
+      "archive": "4dc18d2326d744aa95067d8905edf5d930b5ba9f6cc1d445cddfeb4033fa892a.tar.zst",
+      "archive_sha256": "4dc18d2326d744aa95067d8905edf5d930b5ba9f6cc1d445cddfeb4033fa892a",
+      "compressed_bytes": 11074579,
+      "pack_seconds": 2.700196437013801,
+      "harness_version": "0.1.80",
+      "title": "Vanishing Point [Visual FX]",
+      "retained_original_entry": {
+        "title": "Vanishing Point",
+        "source_simfile": "Vanishing Point - [Zaia][FX]/Vanishing Point.sm",
+        "harness_version": "0.1.6",
+        "archive": "30e0a5a698a6406e42c5b8379ac5a974b57f5dfd6e74d201f4e151875166a5b6.tar.zst",
+        "sha256": "30e0a5a698a6406e42c5b8379ac5a974b57f5dfd6e74d201f4e151875166a5b6",
+        "compressed_bytes": 66697,
+        "uncompressed_sha256": "022c2d38667b6cd85b0e63c2599bb1f11704ebcf1a7dafd66f8cde052c4c373f",
+        "compression_level": 22,
+        "aliases": [
+          "a1fac014639c6ca4610359eab48ac413ecfca62fa0111cb0268e1fe6fd9deded.tar.zst",
+          "8a306469330fed616bdd8425afb67255af786261e5394eeb3324c9383e537c49.tar.zst",
+          "2cedd84ae3907afd4c87a05e71e0055ab9a5b9350951e9769fab9429dad88491.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -1568,7 +1620,7 @@
   },
   "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 5,
+  "passed_fixtures": 6,
   "pending_charts": 8,
-  "processed_charts": 13
+  "processed_charts": 14
 }
