@@ -1,0 +1,13 @@
+{
+  "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+  "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+  "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+  "validated_source_root": "/home/parity/workspace/loader-multi-return-v1/deadsync",
+  "source_pin_count": 1175,
+  "all_tested_raw_and_normalized_source_pins_verified": true,
+  "windows_and_linux_all_five_checks_passed": true,
+  "active_source_files_modified": false,
+  "local_user_views_edited": false,
+  "running_replays_restarted": false,
+  "native_harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4"
+}
