@@ -1610,6 +1610,384 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 466,
+      "source_simfile": "Wake Up/Wake Up.ssc",
+      "simfile_sha256": "82fd8abc80e5a812b098793e3d82a90b54de42016e68c7ef37db66e0eefbbf8f",
+      "retained_original_archive": "087058a7d38b6c7c88131e1204e74e93ab8ab4a1b32f1551bd06e15620de7ad5.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "b97bcedd8f8d8d88dac55531a7d287cb7bbccd69",
+      "build_proof": "/home/parity/jobs/music-fade-end-linux-green-v1/proof.json",
+      "capture_seconds": 153.40421862600488,
+      "trace_sha256": "531e3a2150e78dfe98b4fa8ce61fc74cfb146a4123c2e9c332e8f24488420dfd",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-7/chart-466/candidates/d441ccf0f454966757144e0165a0b62e34fb1fcc538964a31204ffe55dc69a58.tar",
+      "replay_exit": 2,
+      "replay_seconds": 2285.376630937011,
+      "candidate_sha256": "d441ccf0f454966757144e0165a0b62e34fb1fcc538964a31204ffe55dc69a58",
+      "native_frames": 84024,
+      "replayed_frames": 84024,
+      "compared_stage_fields": 1507,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetWidth, Actor.addx, Actor.halign, GameState.ApplyGameCommand, GameState.GetHumanPlayers, GameState.IsHumanPlayer, PlayerOptions.Stealth, PlayerOptions.StealthPastReceptors, ScreenGameplay.GetLifeMeter",
+        "native drawable state/resources: Quad, Sound, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 16.001: missing captured subscriber identity for ScreenGameplay/19/1"
+      ],
+      "mismatch_count": 72260,
+      "concrete_failures": [
+        {
+          "phase": "progress",
+          "seconds": 130.00022888183594,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "progress",
+          "seconds": 131.0001983642578,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "screen-end",
+          "seconds": 131.18011474609375,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "gameplay-exit",
+          "seconds": 131.18011474609375,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "field": "command_query_count",
+          "native": 84036,
+          "deadsync": 82121
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0018",
+            "args": [],
+            "beat": 16.00058937072754,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0018",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 65,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 12.640045166015625,
+            "seq": 19715,
+            "source": "song:/code/open the door/escape.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/code/mods.lua",
+            "line": 44,
+            "phase": "callback",
+            "beat": 16.00058937072754,
+            "seconds": 12.640045166015625,
+            "args": [],
+            "results": [
+              16.00058937072754
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 16.00058937072754,
+            "caller": {
+              "line": 16,
+              "source": "song:/code/open the door/escape.lua",
+              "tail_call": false
+            },
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0018",
+            "detail": {
+              "results": [
+                {
+                  "actor": "external-0021",
+                  "name": "ScreenGameplay",
+                  "path": "ScreenGameplay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 16,
+            "operation": "ScreenManager.GetTopScreen",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 12.640045166015625,
+            "seq": 19716,
+            "source": "song:/code/open the door/escape.lua",
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/code/mods.lua",
+            "line": 44,
+            "phase": "callback",
+            "beat": 16.00547218322754,
+            "seconds": 12.643899917602539,
+            "args": [],
+            "results": [
+              16.00547218322754
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0021",
+            "args": [],
+            "beat": 16.00058937072754,
+            "caller": {
+              "line": 16,
+              "source": "song:/code/open the door/escape.lua",
+              "tail_call": false
+            },
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0018",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              },
+              "results": [
+                "ScreenGameplay"
+              ]
+            },
+            "kind": "query",
+            "line": 16,
+            "operation": "Actor.GetName",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 12.640045166015625,
+            "seq": 19717,
+            "source": "song:/code/open the door/escape.lua",
+            "results": [
+              "ScreenGameplay"
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/code/mods.lua",
+            "line": 44,
+            "phase": "callback",
+            "beat": 16.007396697998047,
+            "seconds": 12.645419120788574,
+            "args": [],
+            "results": [
+              16.007396697998047
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 16.00058937072754,
+            "caller": {
+              "line": 65,
+              "source": "song:/code/open the door/escape.lua",
+              "tail_call": false
+            },
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0018",
+            "detail": {
+              "results": [
+                {
+                  "actor": "external-0021",
+                  "name": "ScreenGameplay",
+                  "path": "ScreenGameplay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 65,
+            "operation": "ScreenManager.GetTopScreen",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 12.640045166015625,
+            "seq": 19718,
+            "source": "song:/code/open the door/escape.lua",
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/code/mods.lua",
+            "line": 44,
+            "phase": "callback",
+            "beat": 16.00900650024414,
+            "seconds": 12.646689414978027,
+            "args": [],
+            "results": [
+              16.00900650024414
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0018",
+            "args": [],
+            "beat": 16.00058937072754,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0018",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 65,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 12.640045166015625,
+            "seq": 19720,
+            "source": "song:/code/open the door/escape.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/code/mods.lua",
+            "line": 44,
+            "phase": "callback",
+            "beat": 16.010671615600586,
+            "seconds": 12.648004531860352,
+            "args": [],
+            "results": [
+              16.010671615600586
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 16.00058937072754,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 44,
+              "source": "song:/code/mods.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                16.00058937072754
+              ]
+            },
+            "kind": "query",
+            "line": 44,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 12.640045166015625,
+            "seq": 19721,
+            "source": "song:/code/mods.lua",
+            "results": [
+              16.00058937072754
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/code/mods.lua",
+            "line": 44,
+            "phase": "callback",
+            "beat": 16.01233673095703,
+            "seconds": 12.649319648742676,
+            "args": [],
+            "results": [
+              16.01233673095703
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 16.00547218322754,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 44,
+              "source": "song:/code/mods.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                16.00547218322754
+              ]
+            },
+            "kind": "query",
+            "line": 44,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 12.643899917602539,
+            "seq": 19723,
+            "source": "song:/code/mods.lua",
+            "results": [
+              16.00547218322754
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/code/mods.lua",
+            "line": 44,
+            "phase": "callback",
+            "beat": 16.01426124572754,
+            "seconds": 12.650838851928711,
+            "args": [],
+            "results": [
+              16.01426124572754
+            ]
+          }
+        }
+      ],
+      "report_sha256": "1f3420b5b71123ce530aa71a559d41780f33cc143c8995c412e93ebdfd3e36e6"
     }
   ],
   "scope": {
@@ -1618,9 +1996,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
+  "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 6,
-  "pending_charts": 8,
-  "processed_charts": 14
+  "pending_charts": 9,
+  "processed_charts": 15
 }
