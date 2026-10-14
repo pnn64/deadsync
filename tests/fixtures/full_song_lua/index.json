@@ -4806,15 +4806,12 @@
     {
       "title": "spooky",
       "source_simfile": "spooky (SM 12)/spooky (Tech-Stam cut).ssc",
-      "harness_version": "0.1.0",
-      "archive": "32635dde8bf66fd65db720cb954ed59f804ffc79ef6a9f0b2af933b873e9e2e9.tar.zst",
-      "sha256": "32635dde8bf66fd65db720cb954ed59f804ffc79ef6a9f0b2af933b873e9e2e9",
-      "compressed_bytes": 41330,
-      "uncompressed_sha256": "097391bd14cda2b49268f2939a5af6fa6ef13da35a33110189b25fb4bcc69180",
-      "compression_level": 22,
-      "aliases": [
-        "5c09ed3ff3bb688f7b109058550bc6c3d17202cc3e94f30d43d032ad16068de9.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "e7a530794a21eb6bd4eafc2f494e0c41bae4161e456037846ed3a7ddf4c86c48.tar.zst",
+      "sha256": "e7a530794a21eb6bd4eafc2f494e0c41bae4161e456037846ed3a7ddf4c86c48",
+      "compressed_bytes": 18945330,
+      "uncompressed_sha256": "180f5f8018d07859084d56f947f55031d044ac091a18caed854b90a766395156",
+      "aliases": []
     },
     {
       "title": "spooky",

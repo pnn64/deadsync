@@ -1,0 +1,71 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef / explicit original chart metadata",
+  "results": [
+    {
+      "position": 410,
+      "source_simfile": "spooky (SM 12)/spooky (Tech-Stam cut).ssc",
+      "simfile_sha256": "c511f139ca6b9687612ea5fd120aec3973e1eb2a24a8d9b1920e1bbca49b579d",
+      "retained_original_archive": "32635dde8bf66fd65db720cb954ed59f804ffc79ef6a9f0b2af933b873e9e2e9.tar.zst",
+      "style": "single",
+      "difficulty": "Medium",
+      "previous_failure": "error: ITGmania song Lua semantic trace failed: ITGmania probe script reported: no StepsType_Dance_Single chart matched difficulty Challenge; retained run directory /tmp/itgmania-harness-rs/song-lua-2941014-1791992890221485388-0\n",
+      "no_complete_native_capture_to_reuse": true,
+      "status": "passed",
+      "repair_attempts": 1,
+      "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/arrow-alpha-linux-green-v1/proof.json",
+      "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef",
+      "capture_seconds": 141.66998159899958,
+      "trace_sha256": "1545e51cc4821e09ab9dde4c68e020ec96aab7512a93db8ca962a15939f2b514",
+      "candidate": "/home/parity/jobs/capture-selection-first-repairs-v1/chart-410/candidates/180f5f8018d07859084d56f947f55031d044ac091a18caed854b90a766395156.tar",
+      "replay_exit": 0,
+      "replay_seconds": 2076.12356391098,
+      "candidate_sha256": "180f5f8018d07859084d56f947f55031d044ac091a18caed854b90a766395156",
+      "native_frames": 108669,
+      "replayed_frames": 108669,
+      "compared_stage_fields": 1529,
+      "pending_coverage": [],
+      "whole_song_parity_proven": true,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "3d98d6fa4e774d1ff196f2241ca2dcf3c484754adfea07e5232787336b3ce188",
+      "archive": "e7a530794a21eb6bd4eafc2f494e0c41bae4161e456037846ed3a7ddf4c86c48.tar.zst",
+      "archive_sha256": "e7a530794a21eb6bd4eafc2f494e0c41bae4161e456037846ed3a7ddf4c86c48",
+      "compressed_bytes": 18945330,
+      "pack_seconds": 3.126415984996129,
+      "harness_version": "0.1.80",
+      "title": "spooky",
+      "retained_original_entry": {
+        "title": "spooky",
+        "source_simfile": "spooky (SM 12)/spooky (Tech-Stam cut).ssc",
+        "harness_version": "0.1.0",
+        "archive": "32635dde8bf66fd65db720cb954ed59f804ffc79ef6a9f0b2af933b873e9e2e9.tar.zst",
+        "sha256": "32635dde8bf66fd65db720cb954ed59f804ffc79ef6a9f0b2af933b873e9e2e9",
+        "compressed_bytes": 41330,
+        "uncompressed_sha256": "097391bd14cda2b49268f2939a5af6fa6ef13da35a33110189b25fb4bcc69180",
+        "compression_level": 22,
+        "aliases": [
+          "5c09ed3ff3bb688f7b109058550bc6c3d17202cc3e94f30d43d032ad16068de9.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "scope": {
+    "original_simfiles": 501,
+    "charts": 2,
+    "original_scope_preserved": true
+  },
+  "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first native capture selection repair from original simfile chart metadata",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
