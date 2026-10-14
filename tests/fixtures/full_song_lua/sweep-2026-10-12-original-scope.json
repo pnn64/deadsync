@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T19:49:31Z",
+  "updated_utc": "2026-10-14T20:13:35Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 314,
-    "pending": 92,
-    "unprocessed": 95
+    "passed": 318,
+    "pending": 95,
+    "unprocessed": 88
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3213,7 +3213,9 @@
       "position": 381,
       "source_simfile": "saitama2000/Saitama2000.sm",
       "simfile_sha256": "63beb3e8028a17f6e9aa54ae8a88b8893453ce255823b2ec7d07e387067fd7cc",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 382,
@@ -3227,9 +3229,9 @@
       "position": 383,
       "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.sm",
       "simfile_sha256": "6141d6d76f0e80ec9ece060bac5bdee2d7edf282ec675ce795b44224dfa54dfa",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-4.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-save-tears-sm-first-repair.json"
     },
     {
       "position": 384,
@@ -3259,7 +3261,9 @@
       "position": 387,
       "source_simfile": "Save Your Tears/SaveYourTears.sm",
       "simfile_sha256": "6141d6d76f0e80ec9ece060bac5bdee2d7edf282ec675ce795b44224dfa54dfa",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 388,
@@ -3345,7 +3349,9 @@
       "position": 399,
       "source_simfile": "Shivers/Shivers.ssc",
       "simfile_sha256": "420c147c6ae52db11935b39d26fbcaabb9c034c21700a7467ebde927abb1aee9",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-4.json"
     },
     {
       "position": 400,
@@ -3449,7 +3455,9 @@
       "position": 414,
       "source_simfile": "STAGE 0.ac11/STAGE 0.ac11.sm",
       "simfile_sha256": "ec87e095ecf33b807ec3a384419c5085b0bd58857f4294faeb489193881e20c5",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 415,
@@ -3519,7 +3527,9 @@
       "position": 425,
       "source_simfile": "Talk About/talkabout.ssc",
       "simfile_sha256": "0f208e7b750312e6878a7dfaaf8cee19b309c051a1e5b6f4093a35da6b145c6d",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 426,
@@ -3569,7 +3579,9 @@
       "position": 433,
       "source_simfile": "the fresh prince of bel air (razihel remix)/steps.sm",
       "simfile_sha256": "7fd67a74fb5e8acf49f0cc1b26ad698992eb230dc7c06f2f293acb34d3d71bdc",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 434,
@@ -3619,7 +3631,9 @@
       "position": 441,
       "source_simfile": "Think About You/Think About You.ssc",
       "simfile_sha256": "7e1f7c8e92dafb3603c470d852b1a8b46b7bae33693e0093760b0d9aff079e1c",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 442,
