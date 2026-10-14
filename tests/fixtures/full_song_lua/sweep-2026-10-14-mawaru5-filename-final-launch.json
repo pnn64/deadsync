@@ -1,0 +1,16 @@
+{
+  "position": 304,
+  "source_simfile": "mawaru5/mawaru5.sm",
+  "attempt_started": 2,
+  "repairs_remaining_after_this_attempt": 0,
+  "source_fix_commit": "1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf",
+  "launch": {
+    "supervisor_pid": 303948,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_mawaru5_filename_final_repair_v1.py"
+    ]
+  },
+  "native_capture_reused": true,
+  "build_evidence": "sweep-2026-10-14-mawaru5-filename-build.json"
+}
