@@ -443,6 +443,25 @@
       "capture_exit": 1,
       "capture_seconds": 0.01874377200147137,
       "failure": "error: ITGmania song Lua semantic trace failed: could not create directory /tmp/itgmania-harness-rs/song-lua-877132-1792016188607742587-0/Data: No space left on device (os error 28); retained run directory /tmp/itgmania-harness-rs/song-lua-877132-1792016188607742587-0\n"
+    },
+    {
+      "position": 440,
+      "source_simfile": "Think About You/Think About You.sm",
+      "simfile_sha256": "d01ff4ef09316dc0d24520e9ae7df0c98d8f3754bcacb2aa20fef875c3c3ec99",
+      "retained_original_archive": "21d9f2425baa2f04a119eb6c84bd05902781eb7559282e838c29605370be582b.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+      "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+      "capture_seconds": 239.20931470999494,
+      "trace_sha256": "6854552aaf4239cbe80e5f181d6aec045b6a5fd80e1e8dc733124862421d95ab",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-440/candidates/4d83f3dd94561b2692bf707deabd410195c3268a8db55c919863bc548245ef34.tar",
+      "replay_exit": 1,
+      "replay_seconds": 60.212618839985225,
+      "candidate_sha256": "4d83f3dd94561b2692bf707deabd410195c3268a8db55c919863bc548245ef34",
+      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[5.2s] replaying every native gameplay frame\n[6.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[8.0s] replaying every native gameplay frame: frame 7/38435 (0.0%)\n[10.0s] replaying every native gameplay frame: frame 96/38435 (0.2%)\n[12.0s] replaying every native gameplay frame: frame 194/38435 (0.5%)\n[14.0s] replaying every native gameplay frame: frame 276/38435 (0.7%)\n[16.0s] replaying every native gameplay frame: frame 357/38435 (0.9%)\n[18.0s] replaying every native gameplay frame: frame 434/38435 (1.1%)\n[20.0s] replaying every native gameplay frame: frame 507/38435 (1.3%)\n[22.0s] replaying every native gameplay frame: frame 593/38435 (1.5%)\n[24.0s] replaying every native gameplay frame: frame 685/38435 (1.8%)\n[26.0s] replaying every native gameplay frame: frame 780/38435 (2.0%)\n[28.0s] replaying every native gameplay frame: frame 865/38435 (2.3%)\n[30.0s] replaying every native gameplay frame: frame 956/38435 (2.5%)\n[32.0s] replaying every native gameplay frame: frame 1054/38435 (2.7%)\n[34.0s] replaying every native gameplay frame: frame 1148/38435 (3.0%)\n[36.0s] replaying every native gameplay frame: frame 1249/38435 (3.2%)\n[38.0s] replaying every native gameplay frame: frame 1350/38435 (3.5%)\n[40.0s] replaying every native gameplay frame: frame 1433/38435 (3.7%)\n[42.0s] replaying every native gameplay frame: frame 1524/38435 (4.0%)\n[44.0s] replaying every native gameplay frame: frame 1615/38435 (4.2%)\n[46.0s] replaying every native gameplay frame: frame 1699/38435 (4.4%)\n[48.0s] replaying every native gameplay frame: frame 1769/38435 (4.6%)\n[50.0s] replaying every native gameplay frame: frame 1863/38435 (4.8%)\n\nthread 'main' (936293) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: native scene 2 differs from independent scene 1 at frame 1946\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[52.0s] replaying every native gameplay frame: frame 1945/38435 (5.1%)\n[54.0s] replaying every native gameplay frame: frame 1945/38435 (5.1%)\n"
     }
   ],
   "scope": {
@@ -454,6 +473,6 @@
   "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 7,
-  "pending_charts": 4,
-  "processed_charts": 11
+  "pending_charts": 5,
+  "processed_charts": 12
 }
