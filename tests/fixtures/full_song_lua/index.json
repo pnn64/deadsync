@@ -4445,17 +4445,14 @@
       ]
     },
     {
-      "title": "Redesign your logo",
+      "title": "Redesign your logo We know what we're doing",
       "source_simfile": "redesign your logo/Redesign your logo.ssc",
-      "harness_version": "0.1.0",
-      "archive": "b4309dd1424e0e8733439f7a1f1769d781d1f4d44b677712da2ec5beed72f0e2.tar.zst",
-      "sha256": "b4309dd1424e0e8733439f7a1f1769d781d1f4d44b677712da2ec5beed72f0e2",
-      "compressed_bytes": 1497418,
-      "uncompressed_sha256": "4be68f14c997b4d69d9c211d6ac955a59e833a69c123c6d2248db6ae042ac1cc",
-      "compression_level": 22,
-      "aliases": [
-        "7b5c56a028bc6d40da26aedda95f525507ade56c3e00115e8ec59c49032295d5.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "3df709914f1980a195ba59f83e32e1f1517ce1782cf8c0110d517eb51628a791.tar.zst",
+      "sha256": "3df709914f1980a195ba59f83e32e1f1517ce1782cf8c0110d517eb51628a791",
+      "compressed_bytes": 7439559,
+      "uncompressed_sha256": "8998c0ecd94aae7c64f574038dab31266ce403ee033f59aa18ab4b26b154d1a8",
+      "aliases": []
     },
     {
       "title": "Remind the Souls",
