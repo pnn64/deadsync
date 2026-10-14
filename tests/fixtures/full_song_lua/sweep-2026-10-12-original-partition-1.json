@@ -7898,6 +7898,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 312,
+      "source_simfile": "Megalovania SM5 - [TaroNuke]/megalovania.sm",
+      "simfile_sha256": "cc4f9cb19318d83f9ea651ecb790ab5d12bcb02fc60dfff11ea2ae79e8cf31f3",
+      "retained_original_archive": "0312287f76b167c790515f620dea5a7d93a78a0ced2e25385889d515a6079a3b.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "62659d350949f3074029c04eefbe46b03ab09c55a49e5abd6593087868cb7d50",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/modulo-cpu-green-v1/proof.json",
+      "capture_seconds": 289.22771051101154,
+      "trace_sha256": "caf8ef8cceb298bc6ae7d959abf56d00e4229da8b3ae160d75187d589da92275",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-312/candidates/2cf484d970501b4cbf80a4738139bbcea2ebb29d39417e8139c04d77954f1f38.tar",
+      "replay_exit": 1,
+      "replay_seconds": 5532.716471277992,
+      "candidate_sha256": "2cf484d970501b4cbf80a4738139bbcea2ebb29d39417e8139c04d77954f1f38",
+      "failure": "very native gameplay frame: frame 44060/84295 (52.3%)\n[5431.0s] replaying every native gameplay frame: frame 44076/84295 (52.3%)\n[5433.0s] replaying every native gameplay frame: frame 44092/84295 (52.3%)\n[5435.0s] replaying every native gameplay frame: frame 44109/84295 (52.3%)\n[5437.0s] replaying every native gameplay frame: frame 44127/84295 (52.3%)\n[5439.0s] replaying every native gameplay frame: frame 44142/84295 (52.4%)\n[5441.0s] replaying every native gameplay frame: frame 44159/84295 (52.4%)\n[5443.0s] replaying every native gameplay frame: frame 44177/84295 (52.4%)\n[5445.0s] replaying every native gameplay frame: frame 44189/84295 (52.4%)\n[5447.0s] replaying every native gameplay frame: frame 44206/84295 (52.4%)\n[5449.0s] replaying every native gameplay frame: frame 44220/84295 (52.5%)\n[5451.0s] replaying every native gameplay frame: frame 44235/84295 (52.5%)\n[5453.0s] replaying every native gameplay frame: frame 44251/84295 (52.5%)\n[5455.0s] replaying every native gameplay frame: frame 44268/84295 (52.5%)\n[5457.0s] replaying every native gameplay frame: frame 44285/84295 (52.5%)\n[5459.0s] replaying every native gameplay frame: frame 44301/84295 (52.6%)\n[5461.0s] replaying every native gameplay frame: frame 44317/84295 (52.6%)\n[5463.0s] replaying every native gameplay frame: frame 44335/84295 (52.6%)\n[5465.0s] replaying every native gameplay frame: frame 44351/84295 (52.6%)\n[5467.0s] replaying every native gameplay frame: frame 44367/84295 (52.6%)\n[5469.0s] replaying every native gameplay frame: frame 44383/84295 (52.7%)\n[5471.0s] replaying every native gameplay frame: frame 44400/84295 (52.7%)\n[5473.0s] replaying every native gameplay frame: frame 44416/84295 (52.7%)\n[5475.0s] replaying every native gameplay frame: frame 44431/84295 (52.7%)\n[5477.0s] replaying every native gameplay frame: frame 44447/84295 (52.7%)\n[5479.0s] replaying every native gameplay frame: frame 44464/84295 (52.7%)\n[5481.0s] replaying every native gameplay frame: frame 44481/84295 (52.8%)\n[5483.0s] replaying every native gameplay frame: frame 44497/84295 (52.8%)\n[5485.0s] replaying every native gameplay frame: frame 44514/84295 (52.8%)\n[5487.0s] replaying every native gameplay frame: frame 44531/84295 (52.8%)\n[5489.0s] replaying every native gameplay frame: frame 44547/84295 (52.8%)\n[5491.0s] replaying every native gameplay frame: frame 44563/84295 (52.9%)\n[5493.0s] replaying every native gameplay frame: frame 44580/84295 (52.9%)\n[5495.0s] replaying every native gameplay frame: frame 44596/84295 (52.9%)\n[5497.0s] replaying every native gameplay frame: frame 44613/84295 (52.9%)\n[5499.0s] replaying every native gameplay frame: frame 44628/84295 (52.9%)\n[5501.0s] replaying every native gameplay frame: frame 44645/84295 (53.0%)\n[5503.0s] replaying every native gameplay frame: frame 44662/84295 (53.0%)\n[5505.0s] replaying every native gameplay frame: frame 44677/84295 (53.0%)\n[5507.0s] replaying every native gameplay frame: frame 44689/84295 (53.0%)\n[5509.0s] replaying every native gameplay frame: frame 44706/84295 (53.0%)\n\nthread 'main' (92994) panicked at /home/parity/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mlua-0.12.2/src/state/extra.rs:290:13:\ncannot create a Lua reference, out of auxiliary stack space (used 7996 slots)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[5511.0s] replaying every native gameplay frame: frame 44708/84295 (53.0%)\n[5513.0s] replaying every native gameplay frame: frame 44708/84295 (53.0%)\n"
     }
   ],
   "scope": {
@@ -7910,6 +7929,6 @@
   "binary_sha256": "62659d350949f3074029c04eefbe46b03ab09c55a49e5abd6593087868cb7d50",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 21,
-  "pending_charts": 27,
-  "processed_charts": 48
+  "pending_charts": 28,
+  "processed_charts": 49
 }
