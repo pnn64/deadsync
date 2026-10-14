@@ -4669,17 +4669,14 @@
       "aliases": []
     },
     {
-      "title": "September",
+      "title": "September [Extras]",
       "source_simfile": "September/september.ssc",
-      "harness_version": "0.1.0",
-      "archive": "8466c72b430467bf1dfceb0b73068fa766ac4a763de3009da2492120e8a72580.tar.zst",
-      "sha256": "8466c72b430467bf1dfceb0b73068fa766ac4a763de3009da2492120e8a72580",
-      "compressed_bytes": 95717,
-      "uncompressed_sha256": "29437f2dd9cc968f12bc575fb030ae99ab7e8ad70bb961c7679ef59213991882",
-      "compression_level": 22,
-      "aliases": [
-        "a1b13e64b209e44671bd6e22e60cdb24ddf18d6408efe92cfc26553421186d2a.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "4f2783bf3e06a1804fa3d07d5dd5089a150b26af7e99d0e5505d07a546a25a74.tar.zst",
+      "sha256": "4f2783bf3e06a1804fa3d07d5dd5089a150b26af7e99d0e5505d07a546a25a74",
+      "compressed_bytes": 5336176,
+      "uncompressed_sha256": "1a3a05b4cae7b504034d1779b2eb70387cfb5e25edd82608893735624e39d237",
+      "aliases": []
     },
     {
       "title": "Shakunetsu pt. II",
