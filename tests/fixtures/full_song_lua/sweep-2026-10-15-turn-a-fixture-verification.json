@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Turn A - [Freya]/turn_a.ssc",
+  "native_frames": 69833,
+  "replayed_frames": 69833,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "b27c43a22b46afe29c45fdb7c0327a9c4d4d88a63850ae5670a6695f21dfbd2d.tar.zst",
+  "compressed_sha256": "b27c43a22b46afe29c45fdb7c0327a9c4d4d88a63850ae5670a6695f21dfbd2d",
+  "uncompressed_sha256": "6d7acf2ad83ffc057210fb0044639c6c0946c149a6676353b146cc8d111d254d",
+  "compressed_bytes": 7288715,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "spooky (SM 12)/spooky (Tech-Stam cut).ssc",
+  "native_frames": 108669,
+  "replayed_frames": 108669,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "e7a530794a21eb6bd4eafc2f494e0c41bae4161e456037846ed3a7ddf4c86c48.tar.zst",
+  "compressed_sha256": "e7a530794a21eb6bd4eafc2f494e0c41bae4161e456037846ed3a7ddf4c86c48",
+  "uncompressed_sha256": "180f5f8018d07859084d56f947f55031d044ac091a18caed854b90a766395156",
+  "compressed_bytes": 18945330,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
