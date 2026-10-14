@@ -4562,17 +4562,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 02",
+      "title": "Episode 02 Save Your Tears",
       "source_simfile": "Save Your Tears/SaveYourTears.sm",
-      "harness_version": "0.1.0",
-      "archive": "da43bc6839eacb8fdf37a73c5ca138984f20d79a7b44b615b9dd3fc8aa9927b7.tar.zst",
-      "sha256": "da43bc6839eacb8fdf37a73c5ca138984f20d79a7b44b615b9dd3fc8aa9927b7",
-      "compressed_bytes": 4526188,
-      "uncompressed_sha256": "8c85927ca8fd23f87a9eabef077572dd4c8e62845999e22e327f940c9d2f8cd7",
-      "compression_level": 22,
-      "aliases": [
-        "bfa5aaf39211381808fb77a98b4711ec436e42fb21472f6ad5ce44362bca5eb5.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "2228da45dedca286c6687334c292e7171e31ef1331c1ccfe09990f175d1c1f9e.tar.zst",
+      "sha256": "2228da45dedca286c6687334c292e7171e31ef1331c1ccfe09990f175d1c1f9e",
+      "compressed_bytes": 23160822,
+      "uncompressed_sha256": "68212c6ca22e2ccd66a8c1ebb5344fda4f5e1b0e69b91ba490807d433018a712",
+      "aliases": []
     },
     {
       "title": "Episode 01 Save Your Tears",

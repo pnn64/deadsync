@@ -12466,6 +12466,57 @@
         }
       ],
       "report_sha256": "17d553b3790e40d71b17a76f67b9a14623f6a37e0228d998a3a1a8ec65bfb872"
+    },
+    {
+      "position": 387,
+      "source_simfile": "Save Your Tears/SaveYourTears.sm",
+      "simfile_sha256": "6141d6d76f0e80ec9ece060bac5bdee2d7edf282ec675ce795b44224dfa54dfa",
+      "retained_original_archive": "da43bc6839eacb8fdf37a73c5ca138984f20d79a7b44b615b9dd3fc8aa9927b7.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "b97bcedd8f8d8d88dac55531a7d287cb7bbccd69",
+      "build_proof": "/home/parity/jobs/music-fade-end-linux-green-v1/proof.json",
+      "capture_seconds": 227.64619762302027,
+      "trace_sha256": "54630d712b6d7397268dc5e9deb93bbaf729c0fb988b21b164db756d0b538b84",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-387/candidates/68212c6ca22e2ccd66a8c1ebb5344fda4f5e1b0e69b91ba490807d433018a712.tar",
+      "replay_exit": 0,
+      "replay_seconds": 2325.683249633992,
+      "candidate_sha256": "68212c6ca22e2ccd66a8c1ebb5344fda4f5e1b0e69b91ba490807d433018a712",
+      "native_frames": 79385,
+      "replayed_frames": 79385,
+      "compared_stage_fields": 2123,
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate, ActorFrame.GetChildren, ActorSound.play",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "3a3aa55beda985f045a8436a2c1ee12aab5ed3719db5e91935f47e2ebff98886",
+      "archive": "2228da45dedca286c6687334c292e7171e31ef1331c1ccfe09990f175d1c1f9e.tar.zst",
+      "archive_sha256": "2228da45dedca286c6687334c292e7171e31ef1331c1ccfe09990f175d1c1f9e",
+      "compressed_bytes": 23160822,
+      "pack_seconds": 13.434358047990827,
+      "harness_version": "0.1.80",
+      "title": "Episode 02 Save Your Tears",
+      "retained_original_entry": {
+        "title": "Episode 02",
+        "source_simfile": "Save Your Tears/SaveYourTears.sm",
+        "harness_version": "0.1.0",
+        "archive": "da43bc6839eacb8fdf37a73c5ca138984f20d79a7b44b615b9dd3fc8aa9927b7.tar.zst",
+        "sha256": "da43bc6839eacb8fdf37a73c5ca138984f20d79a7b44b615b9dd3fc8aa9927b7",
+        "compressed_bytes": 4526188,
+        "uncompressed_sha256": "8c85927ca8fd23f87a9eabef077572dd4c8e62845999e22e327f940c9d2f8cd7",
+        "compression_level": 22,
+        "aliases": [
+          "bfa5aaf39211381808fb77a98b4711ec436e42fb21472f6ad5ce44362bca5eb5.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -12489,9 +12540,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
+  "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 34,
+  "passed_fixtures": 35,
   "pending_charts": 61,
-  "processed_charts": 95
+  "processed_charts": 96
 }
