@@ -1369,6 +1369,57 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 #[cfg(test)]
 mod tests {
     #[test]
+    fn live_get_all_steps_returns_native_array_without_internal_getter_calls() {
+        let compiled = compile_with_context("all-steps-native-array", "return Def.Actor{}", |context| {
+            context.song_steps = [SongLuaDifficulty::Challenge, SongLuaDifficulty::Edit]
+                .into_iter().enumerate().map(|(index, difficulty)| crate::SongLuaStep {
+                    steps_type: "StepsType_Dance_Single".into(), difficulty,
+                    description: format!("chart {index}"), chart_name: String::new(),
+                    credit: String::new(), meter: 9, music_file: String::new(), possible_grade_points: 0,
+                }).collect();
+            context.player_step_indices = [Some(0), Some(0)];
+        });
+        let scene = compiled.live_scene.expect("owned song array");
+        let game = scene.lua.globals().get::<Table>("GAMESTATE").unwrap();
+        let song = game.get::<Function>("GetCurrentSong").unwrap().call::<Table>(game).unwrap();
+        let original = song.raw_get::<Table>("__songlua_steps").unwrap();
+        scene.lua.globals().set("SONG", song).unwrap();
+        scene.lua.globals().set("ORIGINAL", original).unwrap();
+        scene.lua.load(r#"
+GETTER_CALLS = 0
+for _, step in ipairs(ORIGINAL) do
+    for _, name in ipairs({'GetStepsType', 'GetDifficulty'}) do
+        local getter = step[name]
+        step[name] = function(self)
+            GETTER_CALLS = GETTER_CALLS + 1
+            return getter(self)
+        end
+    end
+end
+FIRST = SONG:GetAllSteps()
+SECOND = SONG:GetAllSteps()
+"#).exec().unwrap();
+        let globals = scene.lua.globals();
+        assert_eq!(globals.get::<u32>("GETTER_CALLS").unwrap(), 0,
+            "native GetAllSteps returns its array without Lua metadata getter callbacks");
+        let first = globals.get::<Table>("FIRST").unwrap();
+        let second = globals.get::<Table>("SECOND").unwrap();
+        let original = globals.get::<Table>("ORIGINAL").unwrap();
+        assert_eq!(first.raw_len(), 2);
+        assert_eq!(second.raw_len(), 2);
+        assert_ne!(first.to_pointer(), second.to_pointer(), "each getter returns a fresh array");
+        assert_ne!(first.to_pointer(), original.to_pointer());
+        for index in 1..=2 {
+            assert_eq!(first.raw_get::<Table>(index).unwrap().to_pointer(), original.raw_get::<Table>(index).unwrap().to_pointer());
+            assert_eq!(second.raw_get::<Table>(index).unwrap().to_pointer(), original.raw_get::<Table>(index).unwrap().to_pointer());
+        }
+        assert_eq!(first.raw_get::<Table>(2).unwrap().get::<Function>("GetDifficulty").unwrap()
+            .call::<String>(first.raw_get::<Table>(2).unwrap()).unwrap(), "Difficulty_Edit");
+        assert_eq!(globals.get::<u32>("GETTER_CALLS").unwrap(), 1,
+            "authored getter calls remain observable");
+    }
+
+    #[test]
     fn live_infinite_sleep_keeps_foreground_sibling_reload_queue_active() {
         let mut compiled = compile_with_context("infinite-foreground-reload", r#"
 local root

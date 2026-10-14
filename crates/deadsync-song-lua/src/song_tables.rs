@@ -2176,9 +2176,13 @@ pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Re
             let result = lua.create_table()?;
             for step in steps.sequence_values::<Table>() {
                 let step = step?;
+                if method == "GetAllSteps" {
+                    result.raw_set(result.raw_len() + 1, step)?;
+                    continue;
+                }
                 let step_type: String = step.get::<Function>("GetStepsType")?.call(step.clone())?;
                 let step_diff: String = step.get::<Function>("GetDifficulty")?.call(step.clone())?;
-                let type_matches = method == "GetAllSteps" || type_name.as_ref().is_some_and(|name| {
+                let type_matches = type_name.as_ref().is_some_and(|name| {
                     with_compact_ascii_lowercase_song_key(name, |name| {
                         with_compact_ascii_lowercase_song_key(&step_type, |step_type| {
                             name.trim_start_matches("stepstype") == step_type.trim_start_matches("stepstype")
