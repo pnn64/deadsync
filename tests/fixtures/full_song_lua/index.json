@@ -4533,17 +4533,14 @@
       ]
     },
     {
-      "title": "Episode 02",
+      "title": "Episode 02 Jenny (I wanna Ruin Our Friendship)",
       "source_simfile": "Ruin Our Friendship/RuinOurFriendship.ssc",
-      "harness_version": "0.1.0",
-      "archive": "14d5a7c57f232005e0ee587007640d17b6963348fbdaa4a1f4e7f87187f625cd.tar.zst",
-      "sha256": "14d5a7c57f232005e0ee587007640d17b6963348fbdaa4a1f4e7f87187f625cd",
-      "compressed_bytes": 69048,
-      "uncompressed_sha256": "f6113a5576d610d648ce1be2b1d756f5f54cacc22477dca4ce4d9634d63ea10f",
-      "compression_level": 22,
-      "aliases": [
-        "df0428b9d927f2971d70467227cff99a87c40c67319252827fa001e7c1365c31.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "28a13ed299105e7307b8546c95ba69ae40c52340b37c770637bf74e2e06950aa.tar.zst",
+      "sha256": "28a13ed299105e7307b8546c95ba69ae40c52340b37c770637bf74e2e06950aa",
+      "compressed_bytes": 104724635,
+      "uncompressed_sha256": "6133b834410a8f51266a56bff99968f0629ab3461915caa4cd95fc6e15808826",
+      "aliases": []
     },
     {
       "title": "Perfectly Normal Saitama 2000 From UKSRT1",
