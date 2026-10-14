@@ -2201,6 +2201,45 @@
         }
       ],
       "report_sha256": "4388244b57939757d273f6557219ac766da014fd51170bcc52002d43c1a76806"
+    },
+    {
+      "position": 438,
+      "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.sm",
+      "simfile_sha256": "325e86230449989c83c5e1a2fb2ff61c36220675dfd3ea95582decc85711177f",
+      "retained_original_archive": "c01e4da92ef912cc2feeac8813527b508e6604a380517da0e820e29db5124910.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef",
+      "build_proof": "/home/parity/jobs/arrow-alpha-linux-green-v1/proof.json",
+      "capture_seconds": 188.5967663860065,
+      "trace_sha256": "29ee1eaf9cec98eaebc3f8c117518d27eb552419005ceaf625b20b65c8f15b95",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-3/chart-438/candidates/a1dce324230b9fe85d37d013f20942b9a015f55251cbb1d0866bd97e1e11e107.tar",
+      "replay_exit": 2,
+      "replay_seconds": 4521.376761581021,
+      "candidate_sha256": "a1dce324230b9fe85d37d013f20942b9a015f55251cbb1d0866bd97e1e11e107",
+      "native_frames": 35306,
+      "replayed_frames": 35306,
+      "compared_stage_fields": 1276,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.SetTextureFiltering, Actor.accelerate, Actor.addx, Actor.addy, Actor.bob, Actor.bouncebegin, Actor.bounceend, Actor.cullmode, Actor.effectclock, Actor.effectoffset, Actor.finishtweening, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.stoptweening, Actor.stretchto, Actor.z, Actor.zoomy, ActorFrame.fov, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetTexture, ActorMultiVertex.SetVertices, GameState.IsHumanPlayer, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Hallway, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Incoming, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Roll, PlayerOptions.Space, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave, PlayerOptions.XMod, PlayerOptions.Xmode, Sprite.setstate",
+        "native drawable state/resources: ActorMultiVertex, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 1,
+      "concrete_failures": [
+        {
+          "phase": "progress",
+          "seconds": 109.0005874633789,
+          "field": "failed",
+          "native": false,
+          "deadsync": true
+        }
+      ],
+      "report_sha256": "de4634bd05413360f2c4e823c7986d2ca9c791fcb0160da197155e15b779fa99"
     }
   ],
   "scope": {
@@ -2209,9 +2248,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
+  "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 5,
-  "pending_charts": 6,
-  "processed_charts": 11
+  "pending_charts": 7,
+  "processed_charts": 12
 }
