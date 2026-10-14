@@ -1,0 +1,25 @@
+{
+  "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.sm",
+  "position": 438,
+  "full_repair_attempts_spent": 0,
+  "native_frames": 35306,
+  "replayed_frames": 35306,
+  "callback_errors": 0,
+  "mismatch_count": 1,
+  "actual_mismatch": {
+    "phase": "progress",
+    "seconds": 109.0005874633789,
+    "field": "failed",
+    "native": false,
+    "deadsync": true
+  },
+  "retained_candidate_sha256": "a1dce324230b9fe85d37d013f20942b9a015f55251cbb1d0866bd97e1e11e107",
+  "trace_sha256": "29ee1eaf9cec98eaebc3f8c117518d27eb552419005ceaf625b20b65c8f15b95",
+  "simfile_sha256": "325e86230449989c83c5e1a2fb2ff61c36220675dfd3ea95582decc85711177f",
+  "original_helper_includes_listener_fix": true,
+  "further_evidence_needed": "Read the failure flag transition, surrounding frame clocks, life inputs and chart/theme fail setting. Diagnose primary ITGmania failure ordering before any first full repair. A single mismatch still rejects the fixture.",
+  "archive_accepted": false,
+  "thresholds_or_tolerances_changed": false,
+  "missing_coverage_separate": true,
+  "passing_charts_reopened": false
+}
