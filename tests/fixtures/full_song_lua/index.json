@@ -4088,17 +4088,12 @@
     {
       "title": "OK",
       "source_simfile": "OK/OK.ssc",
-      "harness_version": "0.1.6",
-      "archive": "69fc891af534ad9d704967906bfc8a8c48b6e0271227995d092ce817a4e73aaa.tar.zst",
-      "sha256": "69fc891af534ad9d704967906bfc8a8c48b6e0271227995d092ce817a4e73aaa",
-      "compressed_bytes": 36805,
-      "uncompressed_sha256": "c0522b594f4a10f1e6f0548a800ef6af4b59fd1adc0a3466fbeadf998a4169ee",
-      "compression_level": 22,
-      "aliases": [
-        "37686fabfd020455e204ea2c93eb417dcac766c020fc29ca85ff5301f2ccbe10.tar.zst",
-        "dd774d4492d70cd3656f7674e478b10f491685fe0bec14c78c736c74b95de703.tar.zst",
-        "71d8a89a36303a5a1d83fb05f730a0a6ec6052fbe89cebe32560a55b10eaba75.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "dd0c8291ee90c09c836a94202d3f7c00bda20e25fefa1fd5dea3233ed2e810cb.tar.zst",
+      "sha256": "dd0c8291ee90c09c836a94202d3f7c00bda20e25fefa1fd5dea3233ed2e810cb",
+      "compressed_bytes": 6434627,
+      "uncompressed_sha256": "22ee3394f357f0ba8182077fa66053b760ee3235859d826ee86ab3c708011ab6",
+      "aliases": []
     },
     {
       "title": "Oshama Scramble!",
