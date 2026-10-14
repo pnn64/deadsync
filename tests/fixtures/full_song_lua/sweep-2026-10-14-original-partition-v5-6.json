@@ -54,6 +54,615 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 351,
+      "source_simfile": "PARTY [pArTy eDiTioN]/Party.ssc",
+      "simfile_sha256": "0e23885e106ef30c5df46a756d78c4157c0e8d89551978aa36abe1e849123a18",
+      "retained_original_archive": "b805d2a8b59293694db65ac87b92368f08f471c8d812bc53b9cbc71c96735f44.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "1f0beb2612f19d67900331a90493ac35fe0c66b7bbe36ba0ceab5b7cfa7b4d03",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "1ed84cd471a8eeb8511474ca8881aa1516acbf96 + 254c36811 + e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/ruin-transition-linux-green-v2/proof.json",
+      "capture_seconds": 181.34116921000532,
+      "trace_sha256": "901a54652dd02caed7eeca89bfccaaf0e3b30ea07bf7227c11a933bc0c914462",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-6/chart-351/candidates/d8d38cde9dafe107ff338549e783838b71fff78eb10b3eb40ed9318522371a7b.tar",
+      "replay_exit": 2,
+      "replay_seconds": 639.6278226540016,
+      "candidate_sha256": "d8d38cde9dafe107ff338549e783838b71fff78eb10b3eb40ed9318522371a7b",
+      "native_frames": 31283,
+      "replayed_frames": 31283,
+      "compared_stage_fields": 1386,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers, PlayerOptions.Bumpy, PlayerOptions.Confusion, PlayerOptions.Dizzy, PlayerOptions.Mini, PlayerOptions.Wave, PlayerState.GetSongPosition"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 88698,
+      "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 383931,
+          "deadsync": 383933
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "beat": 0.0004744890611618757,
+            "caller": {
+              "line": 160,
+              "source": "song:/mods.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "results": [
+                {
+                  "path": "player-state:PlayerNumber_P1",
+                  "type": "PlayerState"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 160,
+            "operation": "GameState.GetPlayerState",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.017210884019732475,
+            "seq": 6,
+            "source": "song:/mods.lua",
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P1",
+                "type": "PlayerState"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "OnCommand",
+            "source": "song:/mods.lua",
+            "line": 160,
+            "beat": 0.0004744911566376686,
+            "seconds": 0.017210884019732475,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "player-state:PlayerNumber_P1",
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "beat": 0.0004744890611618757,
+            "caller": {
+              "line": 160,
+              "source": "song:/mods.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "results": [
+                "NoHideLights, PlayerAutoPlay, Overhead"
+              ]
+            },
+            "kind": "query",
+            "line": 160,
+            "operation": "PlayerState.GetPlayerOptionsString",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.017210884019732475,
+            "seq": 10,
+            "source": "song:/mods.lua",
+            "results": [
+              "NoHideLights, PlayerAutoPlay, Overhead"
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetPlayerState",
+            "source": "song:/mods.lua",
+            "line": 160,
+            "phase": "callback",
+            "beat": 0.0004744911566376686,
+            "seconds": 0.017210884019732475,
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "results": [
+              {
+                "type": "PlayerState",
+                "path": "player-state:PlayerNumber_P1"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 0.0004744890611618757,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 117,
+              "source": "song:/mods.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "results": [
+                0.0004744890611618757
+              ]
+            },
+            "kind": "query",
+            "line": 117,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.017210884019732475,
+            "seq": 17,
+            "source": "song:/mods.lua",
+            "results": [
+              0.0004744890611618757
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "PlayerState.GetPlayerOptionsString",
+            "source": "song:/mods.lua",
+            "line": 160,
+            "phase": "callback",
+            "beat": 0.0004744911566376686,
+            "seconds": 0.017210884019732475,
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "results": [
+              "NoHideLights, PlayerAutoPlay, Overhead"
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "beat": 0.0004744890611618757,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 117,
+              "source": "song:/mods.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "results": [
+                {
+                  "path": "player-state:PlayerNumber_P1",
+                  "type": "PlayerState"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 117,
+            "operation": "GameState.GetPlayerState",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.017210884019732475,
+            "seq": 20,
+            "source": "song:/mods.lua",
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P1",
+                "type": "PlayerState"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "OnCommand",
+            "source": "song:/mods.lua",
+            "line": 160,
+            "beat": 0.0004744911566376686,
+            "seconds": 0.017210884019732475,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "beat": 0.0004744890611618757,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 117,
+              "source": "song:/mods.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "results": [
+                {
+                  "path": "player-state:PlayerNumber_P1",
+                  "type": "PlayerState"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 117,
+            "operation": "GameState.GetPlayerState",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.017210884019732475,
+            "seq": 22,
+            "source": "song:/mods.lua",
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P1",
+                "type": "PlayerState"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/mods.lua",
+            "line": 117,
+            "phase": "callback",
+            "beat": 0.0004744911566376686,
+            "seconds": 0.017210884019732475,
+            "args": [],
+            "results": [
+              0.0004744911566376686
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 0.009607142768800259,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 117,
+              "source": "song:/mods.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "results": [
+                0.009607142768800259
+              ]
+            },
+            "kind": "query",
+            "line": 117,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.021269841119647026,
+            "seq": 44,
+            "source": "song:/mods.lua",
+            "results": [
+              0.009607142768800259
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetPlayerState",
+            "source": "song:/mods.lua",
+            "line": 117,
+            "phase": "callback",
+            "beat": 0.0004744911566376686,
+            "seconds": 0.017210884019732475,
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "results": [
+              {
+                "type": "PlayerState",
+                "path": "player-state:PlayerNumber_P1"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "beat": 0.009607142768800259,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 117,
+              "source": "song:/mods.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "results": [
+                {
+                  "path": "player-state:PlayerNumber_P1",
+                  "type": "PlayerState"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 117,
+            "operation": "GameState.GetPlayerState",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.021269841119647026,
+            "seq": 47,
+            "source": "song:/mods.lua",
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P1",
+                "type": "PlayerState"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetPlayerState",
+            "source": "song:/mods.lua",
+            "line": 117,
+            "phase": "callback",
+            "beat": 0.0004744911566376686,
+            "seconds": 0.017210884019732475,
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "results": [
+              {
+                "type": "PlayerState",
+                "path": "player-state:PlayerNumber_P1"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "beat": 0.009607142768800259,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 117,
+              "source": "song:/mods.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "results": [
+                {
+                  "path": "player-state:PlayerNumber_P1",
+                  "type": "PlayerState"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 117,
+            "operation": "GameState.GetPlayerState",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.021269841119647026,
+            "seq": 49,
+            "source": "song:/mods.lua",
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P1",
+                "type": "PlayerState"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/mods.lua",
+            "line": 117,
+            "phase": "callback",
+            "beat": 0.009607144631445408,
+            "seconds": 0.021269841119647026,
+            "args": [],
+            "results": [
+              0.009607144631445408
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 0.01639285683631897,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 117,
+              "source": "song:/mods.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "results": [
+                0.01639285683631897
+              ]
+            },
+            "kind": "query",
+            "line": 117,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.02428571507334709,
+            "seq": 71,
+            "source": "song:/mods.lua",
+            "results": [
+              0.01639285683631897
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetPlayerState",
+            "source": "song:/mods.lua",
+            "line": 117,
+            "phase": "callback",
+            "beat": 0.009607144631445408,
+            "seconds": 0.021269841119647026,
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "results": [
+              {
+                "type": "PlayerState",
+                "path": "player-state:PlayerNumber_P1"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "beat": 0.01639285683631897,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 117,
+              "source": "song:/mods.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "results": [
+                {
+                  "path": "player-state:PlayerNumber_P1",
+                  "type": "PlayerState"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 117,
+            "operation": "GameState.GetPlayerState",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.02428571507334709,
+            "seq": 74,
+            "source": "song:/mods.lua",
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P1",
+                "type": "PlayerState"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetPlayerState",
+            "source": "song:/mods.lua",
+            "line": 117,
+            "phase": "callback",
+            "beat": 0.009607144631445408,
+            "seconds": 0.021269841119647026,
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "results": [
+              {
+                "type": "PlayerState",
+                "path": "player-state:PlayerNumber_P1"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "beat": 0.01639285683631897,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 117,
+              "source": "song:/mods.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "results": [
+                {
+                  "path": "player-state:PlayerNumber_P1",
+                  "type": "PlayerState"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 117,
+            "operation": "GameState.GetPlayerState",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.02428571507334709,
+            "seq": 76,
+            "source": "song:/mods.lua",
+            "results": [
+              {
+                "path": "player-state:PlayerNumber_P1",
+                "type": "PlayerState"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/mods.lua",
+            "line": 117,
+            "phase": "callback",
+            "beat": 0.01639285869896412,
+            "seconds": 0.02428571507334709,
+            "args": [],
+            "results": [
+              0.01639285869896412
+            ]
+          }
+        }
+      ],
+      "report_sha256": "ad81ea6f5556387893aff5f64a3eb123a6f890a449e365efe8cc70ba8c9c7aaf"
     }
   ],
   "scope": {
@@ -62,9 +671,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c",
+  "binary_sha256": "1f0beb2612f19d67900331a90493ac35fe0c66b7bbe36ba0ceab5b7cfa7b4d03",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 1,
-  "pending_charts": 0,
-  "processed_charts": 1
+  "pending_charts": 1,
+  "processed_charts": 2
 }
