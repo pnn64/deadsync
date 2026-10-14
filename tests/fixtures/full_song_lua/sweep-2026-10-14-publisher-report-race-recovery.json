@@ -1,0 +1,20 @@
+{
+  "cause": "Worker report compaction removed raw chart395 report after publisher compactor had hashed it and before its compression command. Publisher stopped on that missing-file race.",
+  "previous_publisher_pid": 50760,
+  "previous_handle_confirmed_missing": true,
+  "verified_report": "/home/parity/jobs/chart-sweep-20261012-v2/chart-395/report.json.zst",
+  "decompressed_report_sha256": "ca9c196f53df63be9e971262e9f74ff1f174a1414faab3db2ee99c015982a609",
+  "decompressed_bytes_match_original_report_sha256": true,
+  "worker_storage_receipt_present": true,
+  "change": "Reuse the retained compressed report only after SHA256 verification; allow raw unlink to have already occurred. Missing raw files do not trigger a replay.",
+  "before_compactor_sha256": "a020b08c2610fa2ccc5ccd2f4b9dfbaa7c07f709d8f0822ac067168db4bc3868",
+  "repaired_compactor_sha256": "bd7b5a73a0ac0358149c1f401622a4e4ce06d1d55892a004d8d9c8d6512d2a4d",
+  "repaired_compactor_run_exit": 0,
+  "new_publisher": {
+    "ProcessId": 56856,
+    "CommandLine": "\"C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe\" C:/GitHub/itgmania-harness/target/server-parity/publish_chart_sweep_v1.py "
+  },
+  "publisher_stream_count": 112,
+  "chart_replays_restarted": false,
+  "acceptance_criteria_changed": false
+}
