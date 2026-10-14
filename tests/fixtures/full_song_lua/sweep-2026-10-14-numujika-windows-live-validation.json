@@ -1,0 +1,9 @@
+{
+  "source_fix_commit": "3eac32e9e",
+  "log_path": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\numujika-tacos-windows-live-v1.log",
+  "log_sha256": "97cac58bfee51ba276b4c1fc631a39d31e3eb3249560e2948409c923c71c0554",
+  "test_results": "60 passed; 0 failed; 0 ignored",
+  "shell_session": 93485,
+  "shell_exit_code": 1,
+  "note": "The retained Cargo test summary is green. PowerShell redirection returned a nonzero shell status after native stderr warnings, so this is recorded as test-result evidence, not a zero-exit shell check. Linux build proof records five zero-exit checks independently."
+}

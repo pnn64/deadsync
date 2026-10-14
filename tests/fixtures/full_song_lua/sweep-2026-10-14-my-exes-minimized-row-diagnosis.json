@@ -1,0 +1,80 @@
+{
+  "report_sha256": "1e14d2b2d3305b1955cf7b6fd2184c7adc77f4c8267444d74cd05d5fbe2e3007",
+  "log_sha256": "85bc79cec51cb1d4ee5075a50a66302b63fa980d53a9f436acc9932019fc4d0b",
+  "native_frames": 62908,
+  "replayed_frames": 4128,
+  "archive_accepted": false,
+  "errors": [],
+  "mismatches": [
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "external-0022",
+        "args": [
+          false
+        ],
+        "beat": 0.0012660399079322815,
+        "caller": {
+          "line": 173,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0009",
+        "detail": {
+          "native_tween_time_left": 1.3322865962982178
+        },
+        "kind": "call",
+        "line": 173,
+        "operation": "Actor.visible",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 0.29260769486427307,
+        "seq": 71,
+        "source": "song:/lua/default.lua",
+        "tween_time_left": 1.3322865962982178
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.visible",
+        "source": "song:/lua/default.lua",
+        "line": 173,
+        "phase": "callback",
+        "beat": 0.0012660399079322815,
+        "seconds": 0.29260769486427307,
+        "args": [
+          false
+        ],
+        "results": [
+          {
+            "actor": "0x61712eba3750",
+            "name": "Underlay",
+            "path": "ScreenGameplay/Underlay"
+          }
+        ],
+        "tween_time_left": 0.2305031716823578
+      }
+    }
+  ],
+  "source_simfile": "My Exes Bestfriend/ExBestFriend.ssc",
+  "full_repairs_already_spent": 1,
+  "full_repairs_remaining": 1,
+  "cutoff_diagnostic_spends_full_attempt": false,
+  "concrete_cause": "Parsed/minimized note rows index row_to_beat. The cue getter used note_row_to_beat(row_index), treating each minimized row as a native 48th, so the first note and cue duration were scheduled too early. Thread the real row_to_beat payload to the same Lua Steps getter; expected native timer values are not runtime inputs.",
+  "candidate_sha256": "f813961ad235573b82a041951b36cbc587888d3c1758f0261bc3f2d0af71f0a7",
+  "pre_fix_source_pins": [
+    {
+      "path": "crates/deadsync-song-lua/src/song_tables.rs",
+      "sha256_lf": "4c07c1df773fec3ef97dfe25b6879a88a19be43eb4ab7e32aac851f7e884dbdc"
+    },
+    {
+      "path": "crates/deadsync-simfile/src/cache.rs",
+      "sha256_lf": "21446d92cceec141c55d689d386533a12547f4af79900ceedb6f7e9b193164fb"
+    },
+    {
+      "path": "crates/deadsync-shell/src/gameplay_entry.rs",
+      "sha256_lf": "d3d112e3e307f6f2cf8b238fea29aace03b1ec930094b512dace66a059b52e47"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "verification": "Storage bytes only; full replay acceptance remains closed.",
+  "source_simfile": "Rayc Fire 2 (SM5)/Rayc Fire 2.sm",
+  "native_frames": 69301,
+  "replayed_frames": 69301,
+  "compared_stage_fields": 1705,
+  "archive": "16a290b2221a0920ef3d4ecc96be934abb892c7698ac7a816ae1a72a4fe3254e.tar.zst",
+  "compressed_sha256": "16a290b2221a0920ef3d4ecc96be934abb892c7698ac7a816ae1a72a4fe3254e",
+  "uncompressed_sha256": "87c2c059000de30f69a249552d192539ffc5189aa7ee7f08645e0b99b32dd31f",
+  "local_decompression_byte_verified": true,
+  "callback_errors": 0,
+  "mismatches": 0,
+  "pending_coverage": [
+    "uncompared song operations: Actor.GetVisible, Actor.xy, GameState.GetCurMusicSeconds",
+    "native drawable state/resources: Quad, Sprite"
+  ],
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
