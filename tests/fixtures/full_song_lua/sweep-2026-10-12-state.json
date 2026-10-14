@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T20:13:35Z",
-  "previous_goal_turn": "Progress: four complete passing fixtures saved, committed and byte verified: Cringle Save Your Tears SM first repair (81952 frames), other Save Your Tears SM original replay (79385), STAGE 0 SM (86961), and Talk About SSC (45291). All have zero errors/mismatches and are closed. Both See Tinh charts fail before frame zero because their authored mod reader defines GameState:ApplyModifiers but the host lacks the native class-method table. Primary LuaBinding and LunaGameState registration establish distinct writable class methods with instance __index lookup. Fix e0f16f893 moves native methods into GameState and lets the owned GAMESTATE instance inherit them, preserving instance identity. Recorder hooks attach to native class bindings, allowing authored class overrides without instance shadowing or extra native getter calls. The control reproduces the missing class before the fix on Linux and passes afterward. Windows 65 live/32 replay and Linux 65 live/32 replay/1 identity plus focused control and both helper builds pass. All 1,175 raw and local/Linux normalized source pins verified. The immutable game-state-class helper is selected from its isolated root. See Tinh SM first repair runs its original capture; SSC first repair follows sequentially in the slot vacated by closed Save SM. Each has one further repair after this attempt if needed. Koi final repair 2 remains active; Rite first repair is queued behind it on its immutable older listener-coverage selection. Mawaru8 first repair and all eight original queues continue without restart. Publisher 50760 watches 111 streams. All 501 original simfile hashes remain unchanged; RUNWAY remains outside scope. Oversized fixtures remain ignored/local; missing coverage stays separate and full replay acceptance is unchanged. The sweep remains active and incomplete.",
+  "updated_utc": "2026-10-14T20:42:57Z",
+  "previous_goal_turn": "Progress: See Tinh SM first GameState repair passes all 42817 frames with zero errors/mismatches; fixture saved, committed and byte verified. GameState fix e0f16f893 is accepted on its failing chart, which is now closed. SharpNel SSC (138581) and Subway Surfers SSC (102224) original replays also pass and are saved, committed and byte verified. Shivers SSC original full 8,392-frame replay has exactly 1,787 mismatches, all Actor.diffusealpha argument -infinity versus 1, and no callback errors. Captured authored source and local native ArrowEffects identify the host GetAlpha constant 1 stub. Native theme defaults use draw distance 1.5*screen height and zero far-edge fade width, producing raw negative infinity beyond the far edge. Existing actor alpha setter already preserves infinity. Fix f2a8bbc08 computes Current appearance visibility, Y without reverse, optional fail fade and native f32 far-edge scaling. Owned alpha control reproduces failure before on Linux and passes after; Windows 66 live/32 replay, Linux 66 live/32 replay/1 identity plus focused control and both helper builds pass. All 1,175 raw and local/Linux normalized source pins verified. Immutable helper f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665 selected from isolated arrow-alpha root. First Shivers repair queued after both See Tinh first repairs in the same bounded slot; original capture reused, one later repair remains after it. Publisher 50760 stopped when a concurrent worker removed chart395 raw report between compactor hash and compression. Verified retained compressed report matches original SHA; compactor reuses only byte-verified replacement and missing-ok unlink. Compactor completes, singleton publisher 56856 resumed 112 streams and See SM publication completes without replay restart. See Tinh SSC first repair, Koi final 2, Mawaru8 first and all eight original queues continue; Rite first remains queued on its pinned listener helper. All 501 original simfile hashes unchanged; RUNWAY separate. Existing full acceptance unchanged, coverage separate and oversized fixtures ignored/local. Sweep active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "232af2a7080d10d292f2003dd11bb6066ab16dda",
+      "deadsync": "cfb10fd57c0d663962dbd447cc7526f9bf4e96af",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -83,7 +83,8 @@
     "native_whole_song_pack_sync": "3d314ba64 controls green both platforms. Save Tears actual first full repair now passes67253 frames/zero errors/mismatches; original bytes verified and fixture closed. Existing acceptance unchanged.",
     "native_music_fade_end": "b97bcedd8: primary SL/native music-fade end alignment, controlled EOF/rate/offset test red before both platforms then green. Windows62/32/815; Linux64/32/815 and both builds zero exit. All1175 source pins/immutable binary verified; Great Divide first repair starts unchanged original archive after Save pass, active sources/local views untouched.",
     "imported_message_identity_coverage": "d69f0a20f: Linux red reproduces callback abort; Windows and Linux 64 live/32 replay/1 identity controls pass, Linux focused control and both helper builds pass. Missing imported identities report coverage and callbacks run. Captured relative order, actual errors and existing full replay acceptance are preserved. All 1,175 normalized source pins and immutable helper 04af4ff5 verified; original Koi final and Rite first repairs launched sequentially without reopening passes.",
-    "native_game_state_class_methods": "e0f16f893: primary LuaBinding class method lookup implemented, with owned class extension/override, modifier side effect, two native calls and single class recorder hook control. Linux red then green; Windows 65/32 and Linux 65/32/1 plus focused control and both helper builds pass. All 1175 raw/normalized source pins verified. Original See Tinh first repairs queued sequentially; existing full acceptance checks remain unchanged."
+    "native_game_state_class_methods": "e0f16f893: primary LuaBinding class method lookup implemented, with owned class extension/override, modifier side effect, two native calls and single class recorder hook control. Linux red then green; Windows 65/32 and Linux 65/32/1 plus focused control and both helper builds pass. All 1175 raw/normalized source pins verified. Original See Tinh first repairs queued sequentially; existing full acceptance checks remain unchanged. Actual first See Tinh SM full repair now passes 42,817 frames, saved and byte verified; chart closed and fix accepted.",
+    "native_arrow_alpha": "f2a8bbc08: primary ArrowEffects native alpha calculation replaces constant 1; owned fade/visibility/raw-infinity control red before Linux then green, Windows 66/32 and Linux 66/32/1 plus focused control/both helper builds pass. All 1,175 raw/normalized pins verified; immutable f93db55d helper selected, original Shivers first repair queued behind See Tinh chain. Existing full counts, arguments, timing, state and error acceptance unchanged."
   },
   "corpus_transfer": {
     "tar_sha256": "37febe98e2e47b325b9f9b96f4d29ddf32eedda84514191252d043c5fd4a4d1a",
@@ -137,18 +138,18 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
-      "position": 395,
+      "current": "Slamurai/Slamurai.ssc",
+      "position": 403,
       "phase": "replay",
-      "pid": 173848,
+      "pid": 325013,
       "process_matches": true,
       "passed": 35,
-      "pending": 61,
-      "processed": 96,
+      "pending": 62,
+      "processed": 97,
       "last_log_lines": [
-        "[792.2s] replaying every native gameplay frame: frame 25812/44354 (58.2%)",
-        "[794.2s] replaying every native gameplay frame: frame 25880/44354 (58.3%)",
-        "[796.2s] replaying every native gameplay frame: frame 25946/44354 (58.5%)"
+        "[782.3s] replaying every native gameplay frame: frame 37106/38157 (97.2%)",
+        "[784.3s] replaying every native gameplay frame: frame 37203/38157 (97.5%)",
+        "[786.3s] replaying every native gameplay frame: frame 37298/38157 (97.7%)"
       ],
       "supervisor_running": true
     },
@@ -1792,6 +1793,13 @@
         "record": "sweep-2026-10-14-see-tinh-ssc-first-repair.json",
         "fix_commit": "e0f16f89374ce78a1b07cafdb6d13c8e5c04de3e",
         "finish_status": "first native GameState class-method repair complete"
+      },
+      {
+        "name": "shivers-ssc-arrow-alpha-first-repair",
+        "remote": "/home/parity/jobs/shivers-ssc-arrow-alpha-first-repair-v1",
+        "record": "sweep-2026-10-14-shivers-ssc-first-repair.json",
+        "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef",
+        "finish_status": "first native ArrowEffects alpha repair complete"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -1799,32 +1807,40 @@
     "other_jobs_live_observation": {
       "initial_sweep": {
         "status": "running",
-        "current": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
-        "position": 395,
+        "current": "Slamurai/Slamurai.ssc",
+        "position": 403,
         "phase": "replay",
-        "pid": 173848,
+        "pid": 325013,
         "process_matches": true,
         "passed": 35,
-        "pending": 61,
-        "processed": 96,
+        "pending": 62,
+        "processed": 97,
         "last_log_lines": [
-          "[792.2s] replaying every native gameplay frame: frame 25812/44354 (58.2%)",
-          "[794.2s] replaying every native gameplay frame: frame 25880/44354 (58.3%)",
-          "[796.2s] replaying every native gameplay frame: frame 25946/44354 (58.5%)"
+          "[782.3s] replaying every native gameplay frame: frame 37106/38157 (97.2%)",
+          "[784.3s] replaying every native gameplay frame: frame 37203/38157 (97.5%)",
+          "[786.3s] replaying every native gameplay frame: frame 37298/38157 (97.7%)"
         ],
         "supervisor_running": true
       },
       "jobs": [
         {
-          "job": "see-tinh-sm-game-state-class-first-repair-v1",
+          "job": "shivers-ssc-arrow-alpha-first-repair-v1",
           "complete": false,
           "supervisor_running": true,
           "passed": 0,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 0
+        },
+        {
+          "job": "see-tinh-sm-game-state-class-first-repair-v1",
+          "complete": true,
+          "supervisor_running": true,
+          "passed": 1,
+          "pending": 0,
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "See Tinh/See Tinh.sm",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "see-tinh-ssc-game-state-class-first-repair-v1",
@@ -1832,7 +1848,10 @@
           "supervisor_running": true,
           "passed": 0,
           "pending": 0,
-          "processed": 0
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "See Tinh/See Tinh.ssc",
+          "child_running": true
         },
         {
           "job": "koi-ssc-message-coverage-final-repair-v1",
@@ -1967,13 +1986,13 @@
           "job": "chart-sweep-parallel-v5-3",
           "complete": false,
           "supervisor_running": true,
-          "passed": 4,
+          "passed": 5,
           "pending": 5,
-          "processed": 9,
+          "processed": 10,
           "last_phase": "replay",
-          "source_simfile": "Subway Surfers/subwaysurfers.ssc",
+          "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
           "child_running": true,
-          "position": 422
+          "position": 430
         },
         {
           "job": "chart-sweep-parallel-v5-4",
@@ -2004,24 +2023,24 @@
           "complete": false,
           "supervisor_running": true,
           "passed": 7,
-          "pending": 5,
-          "processed": 12,
+          "pending": 6,
+          "processed": 13,
           "last_phase": "replay",
-          "source_simfile": "Turn A - [Freya]/turn_a.ssc",
+          "source_simfile": "Up Up Up Up/Up Up Up Up.sm",
           "child_running": true,
-          "position": 449
+          "position": 457
         },
         {
           "job": "chart-sweep-parallel-v5-7",
           "complete": false,
           "supervisor_running": true,
           "passed": 6,
-          "pending": 9,
-          "processed": 15,
+          "pending": 11,
+          "processed": 17,
           "last_phase": "capture",
-          "source_simfile": "wndrwll/wndrwll.ssc",
+          "source_simfile": "Dongo Bongo/dongobongo2.ssc",
           "child_running": true,
-          "position": 474
+          "position": 490
         },
         {
           "job": "koi-ssc-rec-print-repair-v1",
@@ -2858,13 +2877,13 @@
           "job": "chart-sweep-parallel-v4-1",
           "complete": false,
           "supervisor_running": true,
-          "passed": 34,
+          "passed": 35,
           "pending": 33,
-          "processed": 67,
+          "processed": 68,
           "last_phase": "replay",
-          "source_simfile": "SharpNel/HashtagNel.ssc",
+          "source_simfile": "Someone Special - hubert/Someone Special.sm",
           "child_running": true,
-          "position": 396
+          "position": 404
         },
         {
           "job": "chart-sweep-parallel-v4-2",
@@ -2970,7 +2989,7 @@
     "my_exes_ssc_tweens_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-my-exes-ssc-tweens-launch.json",
     "tacos_double_capture": "tests/fixtures/full_song_lua/sweep-2026-10-14-tacos-double-capture-diagnosis.json",
     "large_fixture_publisher": "tests/fixtures/full_song_lua/sweep-2026-10-14-large-fixture-publisher.json",
-    "publisher_pid": 50760,
+    "publisher_pid": 56856,
     "numujika_metric_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-numujika-missing-metrics-diagnosis.json",
     "numujika_metrics_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-numujika-metrics-build.json",
     "numujika_metrics_first_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-numujika-metrics-launch.json",
@@ -2999,10 +3018,10 @@
     "attack_boundary_completed_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-attack-boundary-linux-build.json",
     "cringle_sm_attack_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-door-cringle-sm-attack-final-launch.json",
     "reason_red_zero_seed": "tests/fixtures/full_song_lua/sweep-2026-10-14-reason-red-zero-seed-diagnosis.json",
-    "selected_replay_binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
+    "selected_replay_binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 111,
+    "publisher_stream_count": 112,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -3077,7 +3096,7 @@
     "raving_fire_sm_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-raving-with-fire-sm-fixture-verification.json",
     "splak_down_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-splak-down-ssc-fixture-verification.json",
     "reason_red_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-reason-red-ssc-fixture-verification.json",
-    "selected_tested_source_root": "/home/parity/workspace/game-state-class-v1/deadsync",
+    "selected_tested_source_root": "/home/parity/workspace/arrow-alpha-v1/deadsync",
     "selected_source_pin_count": 1175,
     "music_fade_end_validation": "tests/fixtures/full_song_lua/sweep-2026-10-14-music-fade-end-validation.json",
     "music_fade_end_selection": "tests/fixtures/full_song_lua/sweep-2026-10-14-music-fade-end-selection.json",
@@ -3106,14 +3125,22 @@
     "save_tears_sm_first_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-save-tears-sm-cringle-fixture-verification.json",
     "save_tears_normal_sm_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-save-tears-sm-normal-fixture-verification.json",
     "stage0_sm_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-chart-414-fixture-verification.json",
-    "talk_about_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-chart-425-fixture-verification.json"
+    "talk_about_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-chart-425-fixture-verification.json",
+    "arrow_alpha_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-arrow-alpha-diagnosis.json",
+    "arrow_alpha_validation": "tests/fixtures/full_song_lua/sweep-2026-10-14-arrow-alpha-validation.json",
+    "arrow_alpha_selection": "tests/fixtures/full_song_lua/sweep-2026-10-14-arrow-alpha-selection.json",
+    "arrow_alpha_first_queue": "tests/fixtures/full_song_lua/sweep-2026-10-14-arrow-alpha-first-repair-launch.json",
+    "publisher_report_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-publisher-report-race-recovery.json",
+    "see_tinh_sm_first_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-see-tinh-sm-fixture-verification.json",
+    "sharpnel_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-chart-396-fixture-verification.json",
+    "subway_surfers_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-chart-422-fixture-verification.json"
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 171,
-    "new_pending_charts": 94,
-    "new_processed_sources": 265,
+    "new_passed_fixtures": 174,
+    "new_pending_charts": 98,
+    "new_processed_sources": 272,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 88,
+    "unprocessed_sources": 81,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -4912,14 +4939,6 @@
       ]
     },
     {
-      "source_simfile": "See Tinh/See Tinh.sm",
-      "repair_attempts": 0,
-      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[13.2s] replaying every native gameplay frame\n[14.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'See Tinh': failed to execute '/tmp/.tmpPM0Vbq/song/lua/default.lua': runtime error: [string \"/tmp/.tmpPM0Vbq/song/lua/mods-taro.lua\"]:514: attempt to index global 'GameState' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/mods-taro.lua\"]:514: in main chunk\n\t[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\nstack traceback:\n\t>[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'See Tinh' from '/tmp/.tmpPM0Vbq/song/lua/default.lua': failed to execute '/tmp/.tmpPM0Vbq/song/lua/default.lua': runtime error: [string \"/tmp/.tmpPM0Vbq/song/lua/mods-taro.lua\"]:514: attempt to index global 'GameState' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/mods-taro.lua\"]:514: in main chunk\n\t[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\nstack traceback:\n\t>[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\n\n\nthread 'main' (3584736) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[16.0s] replaying every native gameplay frame: frame 0/42817 (0.0%)\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
-    },
-    {
       "source_simfile": "See Tinh/See Tinh.ssc",
       "repair_attempts": 0,
       "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[13.8s] replaying every native gameplay frame\n[14.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'See Tinh \u300cCukak Remix\u300d': failed to execute '/tmp/.tmp2gH3Yk/song/lua/default.lua': runtime error: [string \"/tmp/.tmp2gH3Yk/song/lua/mods-taro.lua\"]:514: attempt to index global 'GameState' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/mods-taro.lua\"]:514: in main chunk\n\t[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\nstack traceback:\n\t>[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'See Tinh \u300cCukak Remix\u300d' from '/tmp/.tmp2gH3Yk/song/lua/default.lua': failed to execute '/tmp/.tmp2gH3Yk/song/lua/default.lua': runtime error: [string \"/tmp/.tmp2gH3Yk/song/lua/mods-taro.lua\"]:514: attempt to index global 'GameState' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/mods-taro.lua\"]:514: in main chunk\n\t[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\nstack traceback:\n\t>[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\n\n[16.0s] replaying every native gameplay frame: frame 0/42885 (0.0%)\n\nthread 'main' (4106265) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[18.0s] replaying every native gameplay frame: frame 0/42885 (0.0%)\n",
@@ -4940,6 +4959,20 @@
           "field": "source_broadcast_count",
           "native": 47,
           "deadsync": 1
+        }
+      ]
+    },
+    {
+      "source_simfile": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 260894,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 261327,
+          "deadsync": 260905
         }
       ]
     },
@@ -5108,6 +5141,23 @@
       ]
     },
     {
+      "source_simfile": "Turn A - [Freya]/turn_a.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [
+        "OnCommand failed for ActorFrame 'video': runtime error: [string \"/tmp/.tmpbor3YH/song/lua/default.lua\"]:36: bad argument #1 to 'lower' (string expected, got nil)\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'string.lower'\n\t[string \"/tmp/.tmpbor3YH/song/lua/default.lua\"]:36: in function <[string \"/tmp/.tmpbor3YH/song/lua/default.lua\"]:33>",
+        "runtime error: nonterminating zero-time actor command queue"
+      ],
+      "mismatch_count": 59715,
+      "first_mismatch": [
+        {
+          "field": "source_broadcast_count",
+          "native": 1,
+          "deadsync": 0
+        }
+      ]
+    },
+    {
       "source_simfile": "U-0 - [PCBoyGames]/Srezcat - U-0.ssc",
       "repair_attempts": 0,
       "failure": null,
@@ -5118,6 +5168,91 @@
           "field": "stage_sample_clock",
           "native": 166.36764526367188,
           "deadsync": 166.4296112060547
+        }
+      ]
+    },
+    {
+      "source_simfile": "Wake Up/Wake Up.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 16.001: missing captured subscriber identity for ScreenGameplay/19/1"
+      ],
+      "mismatch_count": 72260,
+      "first_mismatch": [
+        {
+          "phase": "progress",
+          "seconds": 130.00022888183594,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        }
+      ]
+    },
+    {
+      "source_simfile": "wndrwll/wndrwll.ssc",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-247409-1792008774508778954-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Zoku Shimedore 2000/Zoku Shimedore 2000.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 21,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 83.00955963134766,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 57,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0010",
+            "detail": {
+              "results": [
+                {
+                  "actor": "external-0017",
+                  "name": "ScreenGameplay",
+                  "path": "ScreenGameplay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 57,
+            "operation": "ScreenManager.GetTopScreen",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 25.628934860229492,
+            "seq": 113824,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "CheckCommand",
+            "source": "song:/lua/bg.lua",
+            "line": 9,
+            "beat": 83.00955963134766,
+            "seconds": 25.628934860229492,
+            "args": null
+          }
         }
       ]
     }

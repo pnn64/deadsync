@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T20:13:35Z",
+  "updated_utc": "2026-10-14T20:42:57Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 318,
-    "pending": 95,
-    "unprocessed": 88
+    "passed": 321,
+    "pending": 99,
+    "unprocessed": 81
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3283,9 +3283,9 @@
       "position": 390,
       "source_simfile": "See Tinh/See Tinh.sm",
       "simfile_sha256": "7a1a95ff2bcd51881b7d406aef5e038ad483269827ba9243c46b8d4dc8b794cb",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-see-tinh-sm-first-repair.json"
     },
     {
       "position": 391,
@@ -3323,13 +3323,17 @@
       "position": 395,
       "source_simfile": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
       "simfile_sha256": "1e28512dd3481ef7d34e72fbee9f0c252c258544fcc2d267aac2dfb8541edb91",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 396,
       "source_simfile": "SharpNel/HashtagNel.ssc",
       "simfile_sha256": "4f1d2c61f1a2d693db1bcb2f4f48b5e3702d5a9cf06dcf74465d05bbe13958a5",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 397,
@@ -3509,7 +3513,9 @@
       "position": 422,
       "source_simfile": "Subway Surfers/subwaysurfers.ssc",
       "simfile_sha256": "145d9c6f99abb2e11fd544f681a1441f3c84ea11f2a70742e9a215a72d10ef62",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 423,
@@ -3683,7 +3689,9 @@
       "position": 449,
       "source_simfile": "Turn A - [Freya]/turn_a.ssc",
       "simfile_sha256": "7877692800f17f5cb85481cc652be8317830640b81c55b87d7c3c49da5a55990",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 450,
@@ -3789,7 +3797,9 @@
       "position": 466,
       "source_simfile": "Wake Up/Wake Up.ssc",
       "simfile_sha256": "82fd8abc80e5a812b098793e3d82a90b54de42016e68c7ef37db66e0eefbbf8f",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 467,
@@ -3837,7 +3847,9 @@
       "position": 474,
       "source_simfile": "wndrwll/wndrwll.ssc",
       "simfile_sha256": "26433a3ef9255d76659f20b47b4e1e63afabea0ecea9b128a8ee2904433cf2fe",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 475,
@@ -3885,7 +3897,9 @@
       "position": 482,
       "source_simfile": "Zoku Shimedore 2000/Zoku Shimedore 2000.ssc",
       "simfile_sha256": "fd615c9d0397ba0e3ca3c85ffbf0ed4bf7fc45cf32ae788925f55d926c927f16",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 483,
