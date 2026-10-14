@@ -1,0 +1,33 @@
+{
+  "source_simfile": "Pokemon Gym Battle Remix/pokes.ssc",
+  "position": 498,
+  "full_repair_attempts_spent": 0,
+  "previous_goal_turn_classification": "progress",
+  "previous_turn_evidence": "cea059942 checkpoint: six fixtures saved and byte verified, native video driver fix ae3f7aa26 tested and committed, Turn A first full repair launched",
+  "actual_failure": "native background containers do not match the prepared entry count before frame replay",
+  "retained_candidate_sha256": "77ad34ad0fac6104a41cddd042fc60d34d0b0dabcc5a9a775d67ced6cadd64ba",
+  "retained_trace_sha256": "c1e8191cb872cb3b2a89d7059c9cf58fc4335b53ce9e1f1f5e485b51594219f4",
+  "simfile_sha256": "04a6fbf5926825207a7a520403db97e5bdb24d456bdc54775ca157a7ef9be4c6",
+  "primary_source": {
+    "ActorUtil.cpp:249-271": "Load failure returns no XNode and logs the source error",
+    "ActorUtil.cpp:278-300": "Lua chunks that fail or do not return a table fail actor description loading",
+    "ActorUtil.cpp:306-319": "FT_Lua MakeActor returns new Actor when no node was loaded; process Lua VM survives",
+    "Background.cpp:431-436": "CreateBackground uses MakeActor and retains the resulting background actor"
+  },
+  "proposed_owned_behavior": "Live gameplay actor construction logs the source load failure and substitutes a plain Actor in the same VM; non-table returns also substitute a plain Actor. Source globals already changed survive, later foreground entries run, and reload re-evaluates the background in the retained VM.",
+  "proposed_creation_mapping": "When all observed scene roots are explicitly foreground-owned and there are no observed background factory owners, retain foreground entry positions; omit unobserved background ranks and record missing factory coverage. Other structural, pointer and ownership validation remains.",
+  "regressions": [
+    "Live failed background construction preserves prefix side effects and foreground slot, reload reconstructs background after counter initialization; invalid non-table foreground occupies an independent dummy slot.",
+    "Missing background factory identity keeps known foreground rank at entry 2 and produces separate coverage. Existing invalid ownership inputs must remain rejected."
+  ],
+  "validation_jobs": {
+    "windows_green_pid": 56212,
+    "linux_red_pid": 780472,
+    "linux_green_waiter_pid": 792494
+  },
+  "native_captures_reusable": true,
+  "expected_query_results_used_as_input": false,
+  "native_pointer_inferred": false,
+  "passing_charts_reopened": false,
+  "full_comparison_gates_changed": false
+}
