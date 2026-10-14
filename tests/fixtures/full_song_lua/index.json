@@ -5070,19 +5070,14 @@
       ]
     },
     {
-      "title": "The Fresh Prince Of Bel Air",
+      "title": "The Fresh Prince Of Bel Air (Razihel Remix)",
       "source_simfile": "the fresh prince of bel air (razihel remix)/steps.sm",
-      "harness_version": "0.1.6",
-      "archive": "0e87d1cda1c314a3fc97ce47b81afa0281e3b5f8b182648018ea5646f3ef77a2.tar.zst",
-      "sha256": "0e87d1cda1c314a3fc97ce47b81afa0281e3b5f8b182648018ea5646f3ef77a2",
-      "compressed_bytes": 34284,
-      "uncompressed_sha256": "4bfd445b4b48c74e2056e2572b573333754bdf4ac3b293fda02413f82b4576de",
-      "compression_level": 22,
-      "aliases": [
-        "151bbcbb280fa01d87952853f48155e743f22b48114db09571aee4dbebcc34dd.tar.zst",
-        "beced1eeddae0faff142300473cc662708aca848324a8bdb3a56f5b350e9bfd2.tar.zst",
-        "7857a1427bd018402ffb8534d0ae64a23a6d9939b911a44e2f3db8d9e891807e.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "f793f42cdfd07d08d27c1bb9298f1f573aa9ab63283ff1a288307c9e8ae20f51.tar.zst",
+      "sha256": "f793f42cdfd07d08d27c1bb9298f1f573aa9ab63283ff1a288307c9e8ae20f51",
+      "compressed_bytes": 4522907,
+      "uncompressed_sha256": "8123d050dc5073cab3bb2da3f2ab1c3a4401a9c01a4f6f541682d5b8290c9540",
+      "aliases": []
     },
     {
       "title": "The Great Divide Seven Lions Remix",
