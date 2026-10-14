@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T17:27:29Z",
+  "updated_utc": "2026-10-14T18:35:42Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 302,
-    "pending": 85,
-    "unprocessed": 114
+    "passed": 306,
+    "pending": 91,
+    "unprocessed": 104
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2326,8 +2326,8 @@
       "source_simfile": "Koi [UPS2016]/koi.ssc",
       "simfile_sha256": "2efedac6dcecd6354ba67a65cc0f0732260d4f37536fe2522a6ee6402a7be205",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-koi-ssc-rec-print-repair.json"
     },
     {
       "position": 271,
@@ -2997,7 +2997,9 @@
       "position": 354,
       "source_simfile": "PizzaBoy/PizzaBoy.ssc",
       "simfile_sha256": "f11f346c34640724590614b3c1801a6723d54c349801574c2a809dbdce09ff16",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 355,
@@ -3091,13 +3093,17 @@
       "position": 366,
       "source_simfile": "Raving With Fire/Raving With Fire.sm",
       "simfile_sha256": "9f35a23f2bc46c9e562fed767a0f8b006934bc425dcb40df6191b303313273d9",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 367,
       "source_simfile": "Raving With Fire/Raving With Fire.ssc",
       "simfile_sha256": "bda9bd92c59212adb06d6c7aee91346fa78af0780f0e741475c761f9a65d8bab",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 368,
@@ -3133,7 +3139,9 @@
       "position": 372,
       "source_simfile": "REASON for RED/reasonforgay.ssc",
       "simfile_sha256": "0ab9fcf27fd744bb9546754cad4165370c9b2bc8492625079f0e67e29ddff39e",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-4.json"
     },
     {
       "position": 373,
@@ -3205,7 +3213,9 @@
       "position": 382,
       "source_simfile": "saitama2000/Saitama2000.ssc",
       "simfile_sha256": "4ccd923293963e4db18db48561032ee821efccb3cf331c95e31a5cfacb8a88f5",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 383,
@@ -3259,7 +3269,9 @@
       "position": 390,
       "source_simfile": "See Tinh/See Tinh.sm",
       "simfile_sha256": "7a1a95ff2bcd51881b7d406aef5e038ad483269827ba9243c46b8d4dc8b794cb",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 391,
@@ -3313,7 +3325,9 @@
       "position": 398,
       "source_simfile": "Shivers/Shivers.sm",
       "simfile_sha256": "89d4e89a6631069369c535f3ec692e0b5d2f2388042726fbb0ea950c61f38716",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 399,
@@ -3387,7 +3401,9 @@
       "position": 409,
       "source_simfile": "SPLAK IT DOWN - [Zaia +ruunix2]/SPLAK IT DOWN.ssc",
       "simfile_sha256": "5807f8222a01ca5fb8407c16aeb0e5e915bfecb5f99fca21f2bdbd7941589e76",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 410,
@@ -3593,7 +3609,9 @@
       "position": 442,
       "source_simfile": "This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!/This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!.ssc",
       "simfile_sha256": "bfd45fee4d033b51d4341238d9ca9145d3c52133bea7eb5c975f20ca9fd2ac0e",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 443,
@@ -3641,7 +3659,9 @@
       "position": 450,
       "source_simfile": "U-0 - [PCBoyGames]/Srezcat - U-0.ssc",
       "simfile_sha256": "e02d69efc0c2670faa1c7e4aba6b34c3a4d4ca96fd80e627848a64836c63dd82",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 451,
