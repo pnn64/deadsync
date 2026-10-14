@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T01:49:58Z",
+  "updated_utc": "2026-10-14T02:50:21Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,8 +13,8 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 235,
-    "pending": 84,
+    "passed": 237,
+    "pending": 82,
     "unprocessed": 182
   },
   "complete": false,
@@ -1853,9 +1853,9 @@
       "position": 211,
       "source_simfile": "Get Into It/GetIntoIt.ssc",
       "simfile_sha256": "c13e18cc0089f8bd5f5dbf814ff97ae0fd614856914b8c41b1593a120e9ebed5",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-13-get-into-it-ssc-frames-repair.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-13-get-into-it-ssc-begin-final-repair-v2.json"
     },
     {
       "position": 212,
@@ -2685,9 +2685,9 @@
       "position": 317,
       "source_simfile": "MODULO/modulo.ssc",
       "simfile_sha256": "b0333bc4289473ed6ba3116ff13f169ebf313c93994d35eece21451ceef6d941",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-13-modulo-infinite-foreground-repair.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-14-modulo-cpu-steps-final-repair.json"
     },
     {
       "position": 318,
