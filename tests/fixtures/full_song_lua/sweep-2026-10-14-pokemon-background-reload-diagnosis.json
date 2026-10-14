@@ -1,0 +1,52 @@
+{
+  "source_simfile": "Pokemon Gym Battle Remix/pokes.ssc",
+  "position": 498,
+  "repair_attempts_spent": 0,
+  "native_frames": 46563,
+  "initial_replay_failure": "native background containers do not match the prepared entry count",
+  "candidate_sha256": "77ad34ad0fac6104a41cddd042fc60d34d0b0dabcc5a9a775d67ced6cadd64ba",
+  "trace_sha256": "c1e8191cb872cb3b2a89d7059c9cf58fc4335b53ce9e1f1f5e485b51594219f4",
+  "source_inputs": {
+    "background_change": "beat 4, jokes",
+    "foreground_change": "beat 0, pokes",
+    "savefile_present_in_original_candidate": false,
+    "source_sha256": {
+      "pokes.ssc": "04a6fbf5926825207a7a520403db97e5bdb24d456bdc54775ca157a7ef9be4c6",
+      "jokes/default.lua": "f20aebcc5aae0b80e5088cb418f907aa24748d23b0f0d199cc8142ff04503936",
+      "pokes/default.lua": "d9d9bf7f67e2eb0f49f559ad99ae45b4733dd48777ea42ff1050ffde8cdabd1e"
+    }
+  },
+  "native_creation_observations": {
+    "scene_1_external_roots": [
+      {
+        "actor": "def-0003",
+        "parent_path": "SongForeground",
+        "source": "song:/pokes/default.lua"
+      }
+    ],
+    "scene_2_external_roots": [
+      {
+        "actor": "def-0014",
+        "source": "@/BackgroundEffects/UpperLeft.lua",
+        "parent": null
+      },
+      {
+        "actor": "def-0017",
+        "parent_path": "SongForeground",
+        "source": "song:/pokes/default.lua"
+      }
+    ]
+  },
+  "source_sequence": "jokes/default.lua accesses counter before constructing its root; pokes/default.lua initializes counter when the savefile is absent, writes savefile.lua, and requests a ScreenGameplay reload.",
+  "cause_to_investigate": "Replay requires a background owner for every prepared entry in each scene; initial native creation has no background owner, while reload scene has the UpperLeft owner. Inspect native failed Lua actor construction and owned reload behavior before changing normalization.",
+  "primary_sources": [
+    "../itgmania/src/Background.cpp:BackgroundLayer::CreateBackground",
+    "../itgmania/src/ActorUtil.cpp:MakeActor",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs:native_creation_order_for_entries"
+  ],
+  "no_pointer_inferred": true,
+  "original_capture_reuse_available": true,
+  "native_trace_bytes_changed": false,
+  "acceptance_gates_changed": false,
+  "passing_charts_reopened": false
+}
