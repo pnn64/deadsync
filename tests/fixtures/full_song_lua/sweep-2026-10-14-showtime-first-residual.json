@@ -1,0 +1,33 @@
+{
+  "source_simfile": "It's Showtime/mettaton.ssc",
+  "position": 251,
+  "repair_attempts": 1,
+  "repair_attempts_remaining": 1,
+  "replay_exit": 1,
+  "native_frames": 145878,
+  "last_progress_frame": 56382,
+  "replayed_frames": null,
+  "callback_errors": null,
+  "full_report_produced": false,
+  "concrete_failure": "native scene 2 differs from independent scene 1 at frame 56383",
+  "candidate_sha256": "378bedd6129e825b38ebb4cdf6fbd210820f86f9c366036dab669ca89d079f29",
+  "trace_sha256": "2cf3e5689300051262fe0c02682585eb53778822168801ea3b0dac38ef90b74f",
+  "simfile_sha256": "73e611898e40fd3b7a07a6257a3b38e4a6a07cf8f39b0f3e4bd8e7cebbbde128",
+  "retained_replay_log": "/home/parity/jobs/showtime-numeric-first-repair-v1/chart-251/replay.log",
+  "source_cause": "At authored beat 160, cooking_with_a_killer_robot/default.lua:284-285 sets the next screen to ScreenGameplay and starts SM_DoNextScreen. The Lua binding stores __songlua_next_screen_name, but gameplay advance_song_lua completes every such transition by navigating to Evaluation. Native ScreenGameplay handles SM_DoNextScreen by completing the stage and dispatching SM_GoToNextScreen; Screen resolves its explicit next-screen name and queues that screen. The missing production gameplay reload causes the independent scene to remain 1 when the retained native trace enters scene 2.",
+  "next_action": "Honor the explicit next-screen target after the production transition finishes, validate the real reload effect with primary-source-based controls, then spend the second/final repair on the unchanged original capture.",
+  "lua_source_sha256": "12332fe925e5eb0eb09a98dfc489c6506a70f4204eeeb698737728e51c8a5bfa",
+  "primary_source_sha256": {
+    "src/Screen.cpp": "d77fc7cd061a7a90584529f95966badc0b5b327438b2b00376c463151fb9ec9a",
+    "src/ScreenGameplay.cpp": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b"
+  },
+  "primary_source_lines": [
+    "Screen.cpp:259-269: SM_GoToNextScreen queues resolved next screen",
+    "Screen.cpp:286-290: explicit next-screen name overrides theme default",
+    "ScreenGameplay.cpp:2987-2998: SM_DoNextScreen finishes stage and dispatches SM_GoToNextScreen"
+  ],
+  "native_results_not_fed_to_simulation": true,
+  "comparison_fields_and_tolerances_unchanged": true,
+  "new_chart_replays_started": false,
+  "passing_charts_reopened": false
+}
