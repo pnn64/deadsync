@@ -4678,17 +4678,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 10",
+      "title": "Episode 10 Shivers",
       "source_simfile": "Shivers/Shivers.sm",
-      "harness_version": "0.1.0",
-      "archive": "ced79efc913753445d798d01b0aeab14ebec6dbb19c3d4879c2c6c93dace34ae.tar.zst",
-      "sha256": "ced79efc913753445d798d01b0aeab14ebec6dbb19c3d4879c2c6c93dace34ae",
-      "compressed_bytes": 2519783,
-      "uncompressed_sha256": "8d61be133df6c5b77d018d9f55ba66f536e64da762ca2f1468380ed089cce503",
-      "compression_level": 22,
-      "aliases": [
-        "d3dfe76788a9fb7e6cb42c0fce8a35e38a6a251380ee132c1cbd8d85420c6e4f.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "3e059b400212cbed68914157dcc8b39201b72aa743504fde25f7de185b846591.tar.zst",
+      "sha256": "3e059b400212cbed68914157dcc8b39201b72aa743504fde25f7de185b846591",
+      "compressed_bytes": 31580241,
+      "uncompressed_sha256": "e23af6a90319bad75d4aeb566e96bbe9d2a09d4d5fb99687dbf1e7d52d7e8c40",
+      "aliases": []
     },
     {
       "title": "Episode 10 Shivers",
