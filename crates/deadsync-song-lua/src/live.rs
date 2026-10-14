@@ -20,8 +20,14 @@ struct LiveForeground {
 
 struct LiveBackground {
     actor: Table,
-    start_beat: f32,
-    started: bool,
+}
+
+#[derive(Default)]
+struct LiveBackgroundLayer {
+    changes: Vec<(usize, deadsync_chart::song::SongBackgroundLuaActivation)>,
+    change_index: Option<usize>,
+    current: Option<usize>,
+    fading: Option<usize>,
 }
 
 pub(crate) fn active(lua: &Lua) -> bool {
@@ -806,6 +812,8 @@ pub struct SongLuaLiveScene {
     last_beat: f64,
     last_music_seconds: f32,
     backgrounds: Vec<LiveBackground>,
+    background_layers: [LiveBackgroundLayer; 2],
+    background_order: Vec<usize>,
     foregrounds: Vec<LiveForeground>,
     pub(crate) startup_output: SongLuaLiveOutput,
     outro_started: bool,
@@ -860,21 +868,32 @@ impl SongLuaLiveScene {
         startup_output.broadcasts = startup_broadcasts;
         let last_beat = f64::from(crate::compile_song_runtime_values(&lua)?.0);
         let mut backgrounds = Vec::new();
+        let mut background_layers: [LiveBackgroundLayer; 2] = std::array::from_fn(|_| LiveBackgroundLayer::default());
         let mut foregrounds = Vec::new();
         if let Value::Table(roots) = &root {
             for actor in roots.sequence_values::<Value>() {
                 let Value::Table(actor) = actor? else { continue; };
                 if let Some(start_beat) = actor.raw_get::<Option<f32>>("__songlua_background_start_beat")? {
-                    backgrounds.push(LiveBackground { actor: actor.clone(), start_beat, started: false });
+                    let index = backgrounds.len();
+                    let (layer, changes) = context.background_activations.get(index).cloned()
+                        .unwrap_or_else(|| (0, vec![deadsync_chart::song::SongBackgroundLuaActivation {
+                            start_beat, rate: 1.0, transition: String::new(),
+                        }]));
+                    let layer = background_layers.get_mut(usize::from(layer))
+                        .ok_or_else(|| mlua::Error::runtime("invalid background layer"))?;
+                    layer.changes.extend(changes.into_iter().map(|change| (index, change)));
+                    backgrounds.push(LiveBackground { actor: actor.clone() });
                 }
                 if let Some(start_beat) = actor.raw_get::<Option<f32>>("__songlua_foreground_start_beat")? {
                     foregrounds.push(LiveForeground { actor, start_beat, stop_beat: 0.0, started: false, finished: false });
                 }
             }
         }
+        for layer in &mut background_layers { layer.changes.sort_by(|a,b| a.1.start_beat.total_cmp(&b.1.start_beat)); }
+        let background_order = (0..backgrounds.len()).collect();
         Ok(Self { lua, root, stage, players, actors, states, tracked, registry,
             targets: Vec::new(), context, entry_paths, primary_index, last_beat,
-            last_music_seconds: -9999.0, backgrounds, foregrounds, startup_output,
+            last_music_seconds: -9999.0, backgrounds, background_layers, background_order, foregrounds, startup_output,
             outro_started: false, outro_options_reset: false, outro_off_pending: false, ended: false, updated: false })
     }
 
@@ -1004,27 +1023,59 @@ impl SongLuaLiveScene {
         let options = game.get::<Function>("GetSongOptionsObject")?
             .call::<Table>((game, "ModsLevel_Current"))?;
         let rate = if rate_tweens { 1.0 } else { options.get::<Function>("MusicRate")?.call::<f32>(options)? };
-        for background in &mut self.backgrounds {
-            let inactive = beat < background.start_beat;
-            background.actor.raw_set("__songlua_live_inactive", inactive)?;
-            if inactive { continue; }
-            let delta = if !background.started {
-                // BackgroundImpl::Layer::UpdateCurBGChange sends On when the
-                // music clock reaches this change, then consumes the elapsed
-                // music since its authored start before the regular updates.
-                background.actor.raw_set("__songlua_defer_on", false)?;
-                crate::lua_util::run_actor_startup_commands_for_table(&self.lua, &background.actor)?;
-                background.actor.get::<Function>("playcommand")?
-                    .call::<()>((background.actor.clone(), "GainFocus"))?;
-                background.started = true;
+        for background in &self.backgrounds { background.actor.raw_set("__songlua_live_inactive", true)?; }
+        let mut order = Vec::new();
+        for layer in &mut self.background_layers {
+            let next = layer.changes.iter().rposition(|(_, change)| change.start_beat <= beat);
+            let mut delta = music_seconds - self.last_music_seconds;
+            if let Some(next) = next.filter(|next| Some(*next) != layer.change_index) {
+                let (owner, change) = &layer.changes[next];
+                layer.fading = layer.current.filter(|current| current != owner);
+                if let Some(fading) = layer.fading {
+                    let actor = &self.backgrounds[fading].actor;
+                    actor.get::<Function>("playcommand")?.call::<()>((actor.clone(), "LoseFocus"))?;
+                    crate::lua_util::run_background_transition(&self.lua, actor, &change.transition)?;
+                }
+                layer.current = Some(*owner);
+                layer.change_index = Some(next);
+                let actor = &self.backgrounds[*owner].actor;
+                crate::lua_util::init_actor_native_state(&self.lua, actor)?;
+                actor.raw_set("__songlua_defer_on", false)?;
+                crate::lua_util::run_actor_startup_commands_for_table(&self.lua, actor)?;
+                actor.get::<Function>("playcommand")?.call::<()>((actor.clone(), "GainFocus"))?;
                 let start = self.context.song_timing.as_ref().map_or_else(
-                    || crate::song_elapsed_seconds_at(background.start_beat, &self.context) * crate::song_music_rate(&self.context),
-                    |timing| timing.get_time_for_beat_exact(background.start_beat));
-                (music_seconds - start).max(0.0) / rate
-            } else {
-                (music_seconds - self.last_music_seconds).max(0.0) / rate
-            };
-            background.actor.raw_set("__songlua_live_delta", f64::from(delta))?;
+                    || crate::song_elapsed_seconds_at(change.start_beat, &self.context) * crate::song_music_rate(&self.context),
+                    |timing| timing.get_time_for_beat(change.start_beat));
+                delta = music_seconds - start;
+            }
+            if let Some(fading) = layer.fading
+                && crate::lua_util::actor_tween_time_left(&self.lua, &self.backgrounds[fading].actor)? == 0.0 {
+                layer.fading = None;
+            }
+            let delta = (delta / rate).max(0.0);
+            for (index, owner) in [layer.current, layer.fading].into_iter().enumerate() {
+                let Some(owner) = owner else { continue; };
+                let actor = &self.backgrounds[owner].actor;
+                // SetUpdateRate belongs to the native effect wrapper, outside
+                // any authored ActorFrame update rate on its loaded child.
+                let owner_rate = if index == 0 {
+                    layer.changes[layer.change_index.expect("current activation")].1.rate
+                } else {
+                    actor.raw_get::<Option<f32>>("__songlua_background_rate")?.unwrap_or(1.0)
+                };
+                actor.raw_set("__songlua_background_rate", owner_rate)?;
+                actor.raw_set("__songlua_live_delta", f64::from(delta * owner_rate))?;
+                actor.raw_set("__songlua_live_inactive", false)?;
+                order.push(owner);
+            }
+        }
+        for owner in 0..self.backgrounds.len() { if !order.contains(&owner) { order.push(owner); } }
+        if order != self.background_order {
+            if let Value::Table(root) = &self.root {
+                for (position, &owner) in order.iter().enumerate() { root.raw_set(position + 1, self.backgrounds[owner].actor.clone())?; }
+            }
+            self.background_order = order;
+            crate::lua_util::invalidate_compile_update_plan(&self.lua);
         }
         Ok(())
     }
@@ -1727,6 +1778,36 @@ return Def.ActorFrame {
             "multiple subscribers still require every captured ordering identity");
         assert_eq!(scene.lua.globals().get::<u32>("CALLS").unwrap(), 0,
             "missing ordering information must be reported before either callback");
+    }
+
+    #[test]
+    fn live_background_start_time_uses_native_note_row() {
+        let mut compiled = compile_with_context("background-rounded-start", r#"
+return Def.Actor {
+    InitCommand = function(self) BACKGROUND = self end,
+    OnCommand = function(self) self:sleep(0.004):queuecommand('Done') end,
+    DoneCommand = function(self) self:aux(self:getaux()+1) end,
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.background_layer_count = 1;
+            context.layer_start_beats = vec![0.01];
+            context.song_timing = Some(deadsync_rules::timing::TimingData::from_segments(
+                0.0, 0.0, &deadsync_rules::timing::TimingSegments {
+                    bpms: vec![(0.0, 120.0)], ..Default::default()
+                }, &[]));
+        });
+        let mut scene = compiled.live_scene.take().expect("retained background");
+        // The authored marker selects the activation; elapsed time rounds
+        // that marker to note row zero, consuming all 6ms on the first update.
+        let output = scene.advance(SongLuaLiveFrame {
+            music_seconds: 0.006, beat: 0.012, screen_seconds: 0.006,
+            delta_seconds: 0.001, ..Default::default()
+        }).expect("background activation frame");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        let actor = scene.lua.globals().get::<Table>("BACKGROUND").expect("owned background");
+        assert_eq!(actor.get::<Function>("getaux").unwrap().call::<f32>(actor).unwrap(), 1.0,
+            "background consumes delta from the native rounded start row");
     }
 
     #[test]

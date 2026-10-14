@@ -471,6 +471,77 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn background_cache_reuses_owners_and_replays_focus_schedule() {
+        paths::init();
+        let dir = std::env::temp_dir().join(format!("deadsync-live-background-cache-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("test directory");
+        for name in ["A", "B"] {
+            std::fs::write(dir.join(format!("{name}.lua")), format!(r#"
+BG_EVENTS = BG_EVENTS or {{}}
+BG_INSTANCES = BG_INSTANCES or {{}}
+local function note(event) MESSAGEMAN:Broadcast('{name}' .. event) end
+return Def.ActorFrame {{
+    InitCommand = function(self)
+        table.insert(BG_INSTANCES, self)
+        note('Init')
+        self.activations = 0
+        self:x(99)
+    end,
+    OnCommand = function(self)
+        assert(#BG_INSTANCES == 2)
+        assert(self == BG_INSTANCES['{name}' == 'A' and 1 or 2])
+        note('On' .. tostring(self:GetX()))
+        self.activations = self.activations + 1
+        self:x(self.activations * 10)
+        self:SetUpdateFunction(function(self, delta) note('Update' .. tostring(delta)) end)
+    end,
+    GainFocusCommand = function(self) note('Gain' .. tostring(self.activations)) end,
+    LoseFocusCommand = function(self) note('Lose'); self:sleep(0.25):queuecommand('Faded') end,
+    FadedCommand = function(self) note('Faded') end,
+}}
+"#)).expect("background script");
+        }
+        let simfile = dir.join("cache.sm");
+        std::fs::write(&simfile, b"#TITLE:Background cache;#BPMS:0=120;#BGCHANGES:0=A.lua=1=0=0=1,2=B.lua=1=0=0=1,4=A.lua=2=0=0=1,6=A.lua=0.5=0=0=1;#NOTES:dance-single:Control:Hard:1:0,0,0,0,0:\n1000\n0000\n0000\n0000\n;").expect("simfile");
+        let song = deadsync_simfile::song::parse_song_meta_file(&simfile,
+            &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+            0.0, |_| 0.0).expect("song metadata");
+        let mut context = deadsync_song_lua::SongLuaCompileContext::new(&dir, "Background cache");
+        context.live = true;
+        context.defer_initial_live_update = true;
+        context.song_display_bpms = [120.0; 2];
+        context.song_timing_bpms = vec![(0.0, 120.0)];
+        let mut prepared = deadsync_song_lua::playback::prepare_song_lua(&song, &context,
+            deadsync_assets::song_lua::compile_song_lua, deadsync_assets::song_lua::compile_song_lua_layers);
+        let mut scene = prepared.take_live_scene().expect("one shared VM").expect("owned scene");
+        let startup = scene.take_startup_output();
+        assert!(startup.errors.is_empty());
+        let initialized = startup.broadcasts.iter().filter(|(_, name, _)| name == "AInit" || name == "BInit").count();
+        assert_eq!(initialized, 2, "native background cache retains one actor per definition");
+        assert!(startup.broadcasts.iter().all(|(_, name, _)| !name.contains("On") && !name.contains("Gain")), "backgrounds stay dormant during construction");
+        for (seconds, expected) in [
+            (0.125, vec!["AOn0", "AGain1", "AUpdate0.125"]),
+            (0.25, vec!["AUpdate0.125"]),
+            (1.125, vec!["ALose", "BOn0", "BGain1", "BUpdate0.125", "AUpdate0.125"]),
+            (1.25, vec!["BUpdate0.125", "AUpdate0.125"]),
+            (1.375, vec!["BUpdate0.125"]),
+            (1.5, vec!["BUpdate0.125"]),
+            (2.125, vec!["BLose", "AOn0", "AGain2", "AUpdate0.25", "BUpdate0.125"]),
+            (3.125, vec!["AOn0", "AGain3", "AUpdate0.0625"]),
+        ] {
+            let output = scene.advance(deadsync_song_lua::SongLuaLiveFrame { music_seconds: seconds, beat: seconds * 2.0,
+                screen_seconds: seconds + 4.0, delta_seconds: 0.125, ..Default::default() }).expect("native background frame");
+            assert!(output.errors.is_empty(), "{:#?}", output.errors);
+            let actual = output.broadcasts.iter().map(|(_, name, _)| name.as_str()).collect::<Vec<_>>();
+            assert_eq!(actual, expected, "music second {seconds}");
+        }
+        let song = deadsync_simfile::song::parse_song_meta_file(&simfile,
+            &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+            0.0, |_| 0.0).unwrap();
+        assert_eq!(song.background_lua_changes.len(), 2, "metadata preserves cached owner cardinality");
+    }
+
     use super::{gameplay, paths, GameplayAudioSnapshot, GameplayConfig, GameplaySession,
         GameplayStreamClockSnapshot, GameplayViewport, Arc, json};
 

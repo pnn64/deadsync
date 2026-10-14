@@ -343,6 +343,9 @@ pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
 }
 
 fn visit(lua: &Lua, actor: &Table, prior: &Context) -> mlua::Result<()> {
+    if crate::live::active(lua) && actor.raw_get::<Option<bool>>("__songlua_live_inactive")?.unwrap_or(false) {
+        return Ok(());
+    }
     let custom = actor
         .raw_get::<Option<Function>>("__songlua_draw_function")?
         .is_some();

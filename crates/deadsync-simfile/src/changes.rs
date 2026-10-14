@@ -4,7 +4,7 @@ use crate::bgchanges::{
     parse_bgchange_rate, parse_bgchange_transition,
 };
 use crate::cache::{
-    SerializableSongBackgroundLuaChange, SerializableSongForegroundChange,
+    SerializableSongBackgroundLuaActivation, SerializableSongBackgroundLuaChange, SerializableSongForegroundChange,
     SerializableSongForegroundLuaChange,
 };
 use crate::media::{
@@ -193,10 +193,12 @@ pub fn extract_background_lua_change_set(
     let mut uses_lua = false;
     let mut push_change = |start_beat: f32, path: PathBuf| {
         let path = song_lua_entry_path_like_itg(path);
-        layer_1.push(SerializableSongBackgroundLuaChange {
+        layer_1.push(([String::new(), "-songbackground-".to_owned(), String::new(), String::new(), String::new()], SerializableSongBackgroundLuaChange {
             start_beat,
             path: path.to_string_lossy().into_owned(),
-        });
+            layer: 0,
+            activations: vec![SerializableSongBackgroundLuaActivation { start_beat, rate: 1.0, transition: String::new() }],
+        }));
     };
 
     if let Some(path) = resolve_song_path_like_itg(song_dir, background_tag)
@@ -212,11 +214,7 @@ pub fn extract_background_lua_change_set(
         &entries,
         &mut layer_1,
     );
-    sort_dedup_path_changes(
-        &mut layer_1,
-        |change| change.start_beat,
-        |change| &change.path,
-    );
+    let mut layer_1 = cache_background_lua_owners(layer_1, 0);
 
     let mut layer_2 = Vec::new();
     uses_lua |= append_background_lua_changes(
@@ -225,11 +223,7 @@ pub fn extract_background_lua_change_set(
         &entries,
         &mut layer_2,
     );
-    sort_dedup_path_changes(
-        &mut layer_2,
-        |change| change.start_beat,
-        |change| &change.path,
-    );
+    let layer_2 = cache_background_lua_owners(layer_2, 1);
     layer_1.extend(layer_2);
     BackgroundLuaChangeSet {
         changes: layer_1,
@@ -241,7 +235,7 @@ fn append_background_lua_changes<'a>(
     song_dir: &Path,
     values: impl IntoIterator<Item = &'a [u8]>,
     entries: &[String],
-    out: &mut Vec<SerializableSongBackgroundLuaChange>,
+    out: &mut Vec<([String; 5], SerializableSongBackgroundLuaChange)>,
 ) -> bool {
     let mut uses_lua = false;
     for raw in values {
@@ -261,13 +255,48 @@ fn append_background_lua_changes<'a>(
                 continue;
             };
             let path = song_lua_entry_path_like_itg(path);
-            out.push(SerializableSongBackgroundLuaChange {
+            let key = [
+                parse_bgchange_effect(fields.get(4).map(AsRef::as_ref), fields.get(5).map(AsRef::as_ref), fields.get(6).map(AsRef::as_ref)),
+                target.to_string(), fields.get(7).map_or_else(String::new, ToString::to_string),
+                normalized_background_lua_color(fields.get(9).map(AsRef::as_ref)),
+                normalized_background_lua_color(fields.get(10).map(AsRef::as_ref)),
+            ];
+            out.push((key, SerializableSongBackgroundLuaChange {
                 start_beat,
                 path: path.to_string_lossy().into_owned(),
-            });
+                layer: 0,
+                activations: vec![SerializableSongBackgroundLuaActivation {
+                    start_beat, rate: parse_bgchange_rate(fields.get(2).map(AsRef::as_ref)),
+                    transition: parse_bgchange_transition(fields.get(3).map(AsRef::as_ref), fields.get(8).map(AsRef::as_ref)),
+                }],
+            }));
         }
     }
     uses_lua
+}
+
+fn normalized_background_lua_color(field: Option<&str>) -> String {
+    let Some(color) = field.and_then(|field| parse_bgchange_color(&field.replace('^', ","))) else { return String::new(); };
+    let [r,g,b,a] = color.map(|component| (component * 255.0).round_ties_even().clamp(0.0,255.0) as u8);
+    if a == 255 { format!("#{r:02X}{g:02X}{b:02X}") } else { format!("#{r:02X}{g:02X}{b:02X}{a:02X}") }
+}
+
+fn cache_background_lua_owners(
+    mut changes: Vec<([String; 5], SerializableSongBackgroundLuaChange)>, layer: u8,
+) -> Vec<SerializableSongBackgroundLuaChange> {
+    // Native BackgroundImpl caches the full BackgroundDef per layer. Beats,
+    // rates and transitions belong to activations, never to the cache key.
+    changes.sort_by(|a,b| a.1.start_beat.total_cmp(&b.1.start_beat));
+    let mut owners: Vec<([String; 5], SerializableSongBackgroundLuaChange)> = Vec::new();
+    for (key, mut change) in changes {
+        if let Some((_, owner)) = owners.iter_mut().find(|(known, _)| *known == key) {
+            owner.activations.append(&mut change.activations);
+        } else {
+            change.layer = layer;
+            owners.push((key, change));
+        }
+    }
+    owners.into_iter().map(|(_, owner)| owner).collect()
 }
 
 #[must_use]

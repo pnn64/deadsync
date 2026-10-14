@@ -1153,9 +1153,7 @@ return Def.ActorFrame { Name = 'Foreground',
 }
 "#).expect("foreground script");
             let mut song = (*state.source.song).clone();
-            song.background_lua_changes = vec![deadsync_chart::SongBackgroundLuaChange {
-                start_beat: 0.0, path: dir.join("background.lua"),
-            }];
+            song.background_lua_changes = vec![deadsync_chart::SongBackgroundLuaChange::new(0.0, dir.join("background.lua"))];
             song.foreground_lua_changes = vec![
                 deadsync_chart::SongForegroundLuaChange { start_beat: 0.0, path: dir.join("primary.lua"), name: "primary.lua".into() },
                 deadsync_chart::SongForegroundLuaChange { start_beat: 0.01, path: dir.join("foreground.lua"), name: "foreground.lua".into() },

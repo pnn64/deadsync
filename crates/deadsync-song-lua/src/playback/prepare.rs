@@ -209,6 +209,8 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
     }
     let mut context = context.clone();
     context.background_layer_count = paths.len();
+    context.background_activations = song.background_lua_changes.iter()
+        .map(|change| (change.layer, change.activations.clone())).collect();
     context.foreground_names.clear();
     for (index, change) in song.foreground_lua_changes.iter().enumerate() {
         if !change.path.is_file() {

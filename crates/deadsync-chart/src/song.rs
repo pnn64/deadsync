@@ -230,6 +230,25 @@ pub struct SongForegroundChange {
 pub struct SongBackgroundLuaChange {
     pub start_beat: f32,
     pub path: PathBuf,
+    /// BackgroundDef caches are separate for each native background layer.
+    pub layer: u8,
+    /// Every activation of this cached owner, including repeated definitions.
+    pub activations: Vec<SongBackgroundLuaActivation>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SongBackgroundLuaActivation {
+    pub start_beat: f32,
+    pub rate: f32,
+    pub transition: String,
+}
+
+impl SongBackgroundLuaChange {
+    pub fn new(start_beat: f32, path: PathBuf) -> Self {
+        Self { start_beat, path, layer: 0, activations: vec![SongBackgroundLuaActivation {
+            start_beat, rate: 1.0, transition: String::new(),
+        }] }
+    }
 }
 
 #[derive(Clone, Debug)]

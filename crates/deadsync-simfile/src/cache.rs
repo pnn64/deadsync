@@ -27,7 +27,7 @@ use crate::song::{
 };
 
 // Preserve runtime chart metadata using native ASCII whitespace trimming.
-pub const SONG_CACHE_VERSION: u8 = 65;
+pub const SONG_CACHE_VERSION: u8 = 66;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
@@ -289,6 +289,15 @@ pub struct SerializableSongForegroundChange {
 pub struct SerializableSongBackgroundLuaChange {
     pub start_beat: f32,
     pub path: String,
+    pub layer: u8,
+    pub activations: Vec<SerializableSongBackgroundLuaActivation>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+pub struct SerializableSongBackgroundLuaActivation {
+    pub start_beat: f32,
+    pub rate: f32,
+    pub transition: String,
 }
 
 impl From<&SongBackgroundChange> for SerializableSongBackgroundChange {
@@ -436,6 +445,10 @@ impl From<&SongBackgroundLuaChange> for SerializableSongBackgroundLuaChange {
         Self {
             start_beat: change.start_beat,
             path: change.path.to_string_lossy().into_owned(),
+            layer: change.layer,
+            activations: change.activations.iter().map(|activation| SerializableSongBackgroundLuaActivation {
+                start_beat: activation.start_beat, rate: activation.rate, transition: activation.transition.clone(),
+            }).collect(),
         }
     }
 }
@@ -445,6 +458,10 @@ impl From<SerializableSongBackgroundLuaChange> for SongBackgroundLuaChange {
         Self {
             start_beat: change.start_beat,
             path: PathBuf::from(change.path),
+            layer: change.layer,
+            activations: change.activations.into_iter().map(|activation| deadsync_chart::song::SongBackgroundLuaActivation {
+                start_beat: activation.start_beat, rate: activation.rate, transition: activation.transition,
+            }).collect(),
         }
     }
 }

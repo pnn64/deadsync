@@ -10350,6 +10350,65 @@ pub fn run_actor_startup_commands_for_table(lua: &Lua, actor: &Table) -> mlua::R
     Ok(())
 }
 
+pub(crate) fn init_actor_native_state(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    // ActorFrame::InitState resets children and base Actor state, preserving
+    // names, Lua fields, command handlers, callbacks and loaded resources.
+    for child in actor.sequence_values::<Table>() { init_actor_native_state(lua, &child?)?; }
+    let keys = actor.clone().pairs::<Value, Value>().filter_map(|pair| {
+        let (Value::String(key), _) = pair.ok()? else { return None; };
+        let name = key.to_str().ok()?;
+        let native_state = name.strip_prefix("__songlua_state_").is_some_and(|name|
+            matches!(name, "aux" | "x" | "y" | "z" | "z_bias" | "draw_order"
+                | "halign" | "valign" | "visible" | "zoom" | "zoom_x" | "zoom_y" | "zoom_z"
+                | "basezoom" | "basezoom_x" | "basezoom_y" | "basezoom_z" | "base_rotation"
+                | "rot_x_deg" | "rot_y_deg" | "rot_z_deg" | "skew_x" | "skew_y"
+                | "cropleft" | "cropright" | "croptop" | "cropbottom"
+                | "fadeleft" | "faderight" | "fadetop" | "fadebottom" | "stretch_rect"
+                | "diffuse" | "vertex_colors" | "glow" | "blend" | "shadow_len" | "shadow_color"
+                | "depth_test" | "cull_mode" | "texture_filtering" | "texture_wrapping"
+                | "texcoord_offset" | "vibrate" | "rainbow" | "rainbow_scroll" | "spin"
+                | "motion_clock" | "hibernating") || name.starts_with("effect_"));
+        (native_state || matches!(name.as_ref(), "__songlua_visible" | "__songlua_current_x"
+            | "__songlua_current_y" | "__songlua_current_z" | "__songlua_diffuse" | "__songlua_aux"
+            | "__songlua_hibernate_seconds" | "__songlua_startup_commands_ran"
+            | "__songlua_startup_command_started" | "__songlua_startup_children_walked")
+            || name.starts_with("__songlua_command_queue")).then(|| key.clone())
+    }).collect::<Vec<_>>();
+    for key in keys { actor.raw_set(key, Value::Nil)?; }
+    if actor_type_is(actor, "Sprite")? {
+        actor.raw_set("__songlua_state_sprite_state_index", 0u32)?;
+        actor.raw_set("__songlua_state_sprite_animate", true)?;
+    }
+    let current = actor_overlay_initial_state(actor).map_err(mlua::Error::external)?;
+    if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() {
+        replays.0.insert(actor.to_pointer() as usize, ActorTweenReplay {
+            current, queue: Default::default(), progress: None, targets: 0,
+        });
+    }
+    reset_actor_capture(lua, actor)?;
+    sync_tween_getters(lua, actor)
+}
+
+pub(crate) fn run_background_transition(lua: &Lua, actor: &Table, transition: &str) -> mlua::Result<()> {
+    let duration = match transition {
+        "" => return Ok(()),
+        "CrossFade" => 1.0,
+        "CrossFade_Faster" => 0.75,
+        "CrossFade_Fastest" => 0.5,
+        _ => return Err(mlua::Error::runtime(format!("unsupported background transition: {transition}"))),
+    };
+    fn leaves(lua: &Lua, actor: &Table, duration: f32) -> mlua::Result<()> {
+        let children = actor_direct_children(lua, actor)?;
+        if children.is_empty() {
+            actor.get::<Function>("stoptweening")?.call::<()>(actor.clone())?;
+            actor.get::<Function>("linear")?.call::<()>((actor.clone(), duration))?;
+            actor.get::<Function>("diffusealpha")?.call::<()>((actor.clone(), 0.0))?;
+        } else { for child in children { leaves(lua, &child, duration)?; } }
+        Ok(())
+    }
+    leaves(lua, actor, duration)
+}
+
 pub fn run_added_actor_child_commands(
     lua: &Lua,
     parent: &Table,
