@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "the fresh prince of bel air (razihel remix)/steps.sm",
+  "native_frames": 75729,
+  "replayed_frames": 75729,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "f793f42cdfd07d08d27c1bb9298f1f573aa9ab63283ff1a288307c9e8ae20f51.tar.zst",
+  "compressed_sha256": "f793f42cdfd07d08d27c1bb9298f1f573aa9ab63283ff1a288307c9e8ae20f51",
+  "uncompressed_sha256": "8123d050dc5073cab3bb2da3f2ab1c3a4401a9c01a4f6f541682d5b8290c9540",
+  "compressed_bytes": 4522907,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
