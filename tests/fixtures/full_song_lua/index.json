@@ -3550,19 +3550,14 @@
       "aliases": []
     },
     {
-      "title": "Loyal Divide",
+      "title": "Loyal Divide (R_D Remix)",
       "source_simfile": "Loyal Divide [TaroNuke]/Loyal Divide.sm",
-      "harness_version": "0.1.6",
-      "archive": "5648c7c99bcfb981c4e2bb2559c523074b3faba69855f4941429faec9ff5da1d.tar.zst",
-      "sha256": "5648c7c99bcfb981c4e2bb2559c523074b3faba69855f4941429faec9ff5da1d",
-      "compressed_bytes": 31582,
-      "uncompressed_sha256": "a95b075c081558130d97c7cbde0858677a4143567d26f591dd65e53edc687f46",
-      "compression_level": 22,
-      "aliases": [
-        "616d020e02f7122b3788d40706a5c87c3f792bb57432909eeddc575de3dabf62.tar.zst",
-        "ae448843777721b40b43c27939757ad92a00e3bd2870878be6992b5781972e27.tar.zst",
-        "beaec019cc51b6a07578fb1a2a9ef20b3fe01eba1af31a5f49caa1af1c00c739.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "2535ae776cb2b2110119fa4f5aa92a1458d99122495035547dd0b306f08c04eb.tar.zst",
+      "sha256": "2535ae776cb2b2110119fa4f5aa92a1458d99122495035547dd0b306f08c04eb",
+      "compressed_bytes": 4301604,
+      "uncompressed_sha256": "3798f249b84078d2e6a80afd3a6e96f8392a99a85523477cc4bbe73412f604c7",
+      "aliases": []
     },
     {
       "title": "Macarena",
