@@ -1,0 +1,42 @@
+{
+  "verification": "Storage bytes only; accepted full replays remain closed.",
+  "passing_charts_reopened": false,
+  "acceptance_gate_added": false,
+  "results": [
+    {
+      "source_simfile": "Genshin Quiz/Megaquiz.ssc",
+      "acceptance_commit": "edcba67a5",
+      "native_frames": 105754,
+      "replayed_frames": 105754,
+      "compared_stage_fields": 1309,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "573ad6ad01df2a3958636ec215433438b9bd57ea63455dfa53b077c4e39c3dbd.tar.zst",
+      "compressed_sha256": "573ad6ad01df2a3958636ec215433438b9bd57ea63455dfa53b077c4e39c3dbd",
+      "compressed_bytes": 13790843,
+      "uncompressed_sha256": "f9ebe5e4db775dfb2c023f9bd1ef5a5724f871c44e160c34fca64888a6ef6d57",
+      "local_decompression_byte_verified": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.horizalign, Actor.setsize, Actor.stoptweening, Actor.xy, ActorSound.play, BitmapText.settext, GameState.GetHumanPlayers, PlayerOptions.Bumpy, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Mini, PlayerOptions.Stealth, PlayerOptions.Tilt, Screen.AddInputCallback",
+        "native drawable state/resources: BitmapText, Quad, Sound, Sprite"
+      ]
+    },
+    {
+      "source_simfile": "No Role Modelz/No Role Modelz.sm",
+      "acceptance_commit": "1852c1ee3",
+      "native_frames": 165265,
+      "replayed_frames": 165265,
+      "compared_stage_fields": 2882,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "475a93191d05901677fac62ecb74ef9889d3dc0c082ced6cace989e2364a1b26.tar.zst",
+      "compressed_sha256": "475a93191d05901677fac62ecb74ef9889d3dc0c082ced6cace989e2364a1b26",
+      "compressed_bytes": 12257852,
+      "uncompressed_sha256": "78b1e6de83560ed0f05f9cc92167fb9ff2a6a9c490a4c623879657b195fe4da3",
+      "local_decompression_byte_verified": true,
+      "separate_coverage": [
+        "native actor definitions are missing"
+      ]
+    }
+  ]
+}
