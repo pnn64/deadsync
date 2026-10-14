@@ -1,0 +1,167 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "76ec2f609c495f809cb012c2759ee6bf937b33f8",
+  "results": [
+    {
+      "position": 326,
+      "source_simfile": "new earth/new earth.ssc",
+      "status": "passed",
+      "repair_attempts": 2,
+      "previous_concrete_failures": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0017",
+            "args": [
+              0.4
+            ],
+            "beat": 0,
+            "caller": {
+              "line": 171,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0017",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 171,
+            "operation": "Actor.effectperiod",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 87,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.effectperiod",
+            "source": "song:/lua/default.lua",
+            "line": 171,
+            "phase": "callback",
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": [
+              1.7777777777777777
+            ],
+            "results": [
+              {
+                "actor": "0x5b14ede87940",
+                "name": "SpaceshipSpriteP1",
+                "path": "ScreenGameplay/SongForeground/SpaceshipSpriteP1"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0020",
+            "args": [
+              0.4
+            ],
+            "beat": 0,
+            "caller": {
+              "line": 171,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0020",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 171,
+            "operation": "Actor.effectperiod",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 109,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.effectperiod",
+            "source": "song:/lua/default.lua",
+            "line": 171,
+            "phase": "callback",
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": [
+              1.7777777777777777
+            ],
+            "results": [
+              {
+                "actor": "0x5b14ededadb0",
+                "name": "SpaceshipSpriteP2",
+                "path": "ScreenGameplay/SongForeground/SpaceshipSpriteP2"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        }
+      ],
+      "previous_errors": [],
+      "previous_failure": null,
+      "binary_sha256": "80852434eb3c1dc7c06a2a42523e35674f0b6c663c095b6f16a4ee8b0265adc6",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "candidate_sha256": "1cf42f912b0caf2c3c0d9ba3f17a640ffd9313f9a353d4c4f4bcb076c5c1b1ab",
+      "trace_sha256": "5142c22ee3a02a750a5bf8de5aea44b4eeaa1ed26dff9a6889614801e61444d4",
+      "simfile_sha256": "614f29f557e0e936a2650122071d9d408eaaa46690031b08dddb471f694a4abb",
+      "build_proof": "/home/parity/jobs/reset-bps-green-v1/proof.json",
+      "fix_commit": "76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "replay_exit": 0,
+      "replay_seconds": 2933.9789103759977,
+      "native_frames": 89954,
+      "replayed_frames": 89954,
+      "compared_stage_fields": 1408,
+      "pending_coverage": [
+        "uncompared song operations: Actor.blend, Actor.diffuseshift, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetNumVertices, ActorMultiVertex.SetVertices, GameState.GetSongBPS",
+        "native drawable state/resources: ActorMultiVertex, Sprite"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "1697a89395cf64fed7b83ecb8fad7bb34c6a1280f391b12a727a070dfd9e50c3",
+      "archive": "08c46eb2ddf3034aee917a2e4cf6bb56958054996d0e6535241d5c419d1caefc.tar.zst",
+      "archive_sha256": "08c46eb2ddf3034aee917a2e4cf6bb56958054996d0e6535241d5c419d1caefc",
+      "compressed_bytes": 8639555,
+      "harness_version": "0.1.80",
+      "title": "new earth",
+      "pack_seconds": 1.8398627209826373,
+      "retained_original_entry": {
+        "title": "new earth",
+        "source_simfile": "new earth/new earth.ssc",
+        "harness_version": "0.1.0",
+        "archive": "e1fc74644895f1995a6d30caebef17d5b1cedc773397874cbdd43a442579c157.tar.zst",
+        "sha256": "e1fc74644895f1995a6d30caebef17d5b1cedc773397874cbdd43a442579c157",
+        "compressed_bytes": 1657347,
+        "uncompressed_sha256": "d8679eea0d80916fa3513ab39c834731f6b8025a1b75dad3f52c1992072cf03f",
+        "compression_level": 22,
+        "aliases": [
+          "fa32ba3ce76aea5ef6b30834b7af0ba55aa10defa0cf5b9b5b69e44591c57964.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "80852434eb3c1dc7c06a2a42523e35674f0b6c663c095b6f16a4ee8b0265adc6",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "final bounded repair: native live SongPosition reset BPS 10 before normal song timing updates; inherited validated HSVA initializer",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}

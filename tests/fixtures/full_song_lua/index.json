@@ -3997,15 +3997,12 @@
     {
       "title": "new earth",
       "source_simfile": "new earth/new earth.ssc",
-      "harness_version": "0.1.0",
-      "archive": "e1fc74644895f1995a6d30caebef17d5b1cedc773397874cbdd43a442579c157.tar.zst",
-      "sha256": "e1fc74644895f1995a6d30caebef17d5b1cedc773397874cbdd43a442579c157",
-      "compressed_bytes": 1657347,
-      "uncompressed_sha256": "d8679eea0d80916fa3513ab39c834731f6b8025a1b75dad3f52c1992072cf03f",
-      "compression_level": 22,
-      "aliases": [
-        "fa32ba3ce76aea5ef6b30834b7af0ba55aa10defa0cf5b9b5b69e44591c57964.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "08c46eb2ddf3034aee917a2e4cf6bb56958054996d0e6535241d5c419d1caefc.tar.zst",
+      "sha256": "08c46eb2ddf3034aee917a2e4cf6bb56958054996d0e6535241d5c419d1caefc",
+      "compressed_bytes": 8639555,
+      "uncompressed_sha256": "1cf42f912b0caf2c3c0d9ba3f17a640ffd9313f9a353d4c4f4bcb076c5c1b1ab",
+      "aliases": []
     },
     {
       "title": "Episode 18",
