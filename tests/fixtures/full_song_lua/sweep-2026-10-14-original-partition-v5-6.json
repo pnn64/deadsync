@@ -1646,6 +1646,21 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 433,
+      "source_simfile": "the fresh prince of bel air (razihel remix)/steps.sm",
+      "simfile_sha256": "7fd67a74fb5e8acf49f0cc1b26ad698992eb230dc7c06f2f293acb34d3d71bdc",
+      "retained_original_archive": "0e87d1cda1c314a3fc97ce47b81afa0281e3b5f8b182648018ea5646f3ef77a2.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "04af4ff5dfcbbf4a0290dfe81b5e1b5690fa28289a2e2fdbebb293006a88bce2",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "d69f0a20fd7a8b9a00fef1680365364522a51706",
+      "build_proof": "/home/parity/jobs/message-coverage-linux-green-v1/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 1.6009480390057433,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania probe script reported: no StepsType_Dance_Single chart matched difficulty Challenge; retained run directory /tmp/itgmania-harness-rs/song-lua-142376-1792007680870319388-0\n"
     }
   ],
   "scope": {
@@ -1654,9 +1669,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
+  "binary_sha256": "04af4ff5dfcbbf4a0290dfe81b5e1b5690fa28289a2e2fdbebb293006a88bce2",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 7,
-  "pending_charts": 3,
-  "processed_charts": 10
+  "pending_charts": 4,
+  "processed_charts": 11
 }
