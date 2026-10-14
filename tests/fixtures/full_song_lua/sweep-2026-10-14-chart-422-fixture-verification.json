@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Subway Surfers/subwaysurfers.ssc",
+  "native_frames": 102224,
+  "replayed_frames": 102224,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "0c86dc9497389da2992ac1c00ee37ee7749b3b88e9a791f7fee8910e88b11291.tar.zst",
+  "compressed_sha256": "0c86dc9497389da2992ac1c00ee37ee7749b3b88e9a791f7fee8910e88b11291",
+  "uncompressed_sha256": "02ac5f775ddd79556a96a42bb517ddfddabd8bed5554b575a5544b8c2841b305",
+  "compressed_bytes": 12559630,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
