@@ -2473,17 +2473,12 @@
     {
       "title": "Fortuna Redux",
       "source_simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
-      "harness_version": "0.1.6",
-      "archive": "f57eb16400d31576642620a501576e4a219c0cbed7bac182baf404345e689cfb.tar.zst",
-      "sha256": "f57eb16400d31576642620a501576e4a219c0cbed7bac182baf404345e689cfb",
-      "compressed_bytes": 40718,
-      "uncompressed_sha256": "1bedbb6886ea6967c9632f0a012002f1a0f2e224d0aeaace507dbfc57ef02434",
-      "compression_level": 22,
-      "aliases": [
-        "c97dc09e9652e93455ac393a3eb645764819392f2f76d0eb12774a641b2874a7.tar.zst",
-        "00f801d04d5af95cc78259457fb913f4d4ae8fc24c558424579c4d4156796589.tar.zst",
-        "f9f013c432264dc034f8f511279f4a68a6b77c88ac831be0e635ef39ec03e874.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "6589c2b07c731ec217c837f3cc633f6425635c371fd31702b21dff8d85a937c1.tar.zst",
+      "sha256": "6589c2b07c731ec217c837f3cc633f6425635c371fd31702b21dff8d85a937c1",
+      "compressed_bytes": 12904209,
+      "uncompressed_sha256": "b637897cc508ebf3e4149376a02f3445f279d4814d16ddcd22e825a881ca76f0",
+      "aliases": []
     },
     {
       "title": "Episode 20",
