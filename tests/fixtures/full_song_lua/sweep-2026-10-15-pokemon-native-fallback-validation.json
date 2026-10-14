@@ -53,14 +53,65 @@
   "linux": {
     "baseline_regression_reproduced": true,
     "new_target_control_passed": true,
-    "remaining_checks_status": "running",
-    "build_proof": "/home/parity/jobs/pokemon-failed-load-linux-green-v1/proof.json"
+    "remaining_checks_status": "passed after lossless ENOSPC recovery",
+    "build_proof": "/home/parity/jobs/pokemon-failed-load-linux-green-v1/proof.json",
+    "all_five_checks_passed": true,
+    "checks": [
+      {
+        "label": "target-control",
+        "exit_code": 0,
+        "seconds": 286.1373825929768,
+        "log_sha256": "269620ca7722ee95828ff1c08c02dd97f095e7c900b8127987b5cf4025379175",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 601 filtered out; finished in 0.58s"
+        ]
+      },
+      {
+        "label": "live-controls",
+        "exit_code": 0,
+        "seconds": 38.65648167801555,
+        "log_sha256": "7b4ba710b1c1202f327fc7be943dcf2505dd9708ea45da4c46acace334329b12",
+        "results": [
+          "test result: ok. 67 passed; 0 failed; 0 ignored; 0 measured; 535 filtered out; finished in 37.77s"
+        ]
+      },
+      {
+        "label": "replay-controls",
+        "exit_code": 0,
+        "seconds": 323.51057102601044,
+        "log_sha256": "ef79351ef258598483af4c4d41ab4083354acf920bc3d9df76d8c3f4f4070f1f",
+        "results": [
+          "test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.20s"
+        ]
+      },
+      {
+        "label": "identity-control",
+        "exit_code": 0,
+        "seconds": 352.13357497099787,
+        "log_sha256": "963190ea59168c1de6670e5482e42e28bada6ce4e51b24708d2d0297f15397fa",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 601 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "label": "build",
+        "exit_code": 0,
+        "seconds": 48.9439607069944,
+        "log_sha256": "97e529c4fabcc9e62554f3c074ae37e9caedfde9af75ce421e712041cbc80725",
+        "results": []
+      }
+    ],
+    "binary_sha256": "35fe73189443c9841fe505707fe015c82e5deaada0649e00f9f50460b832640b",
+    "source_pin_count": 1175,
+    "all_raw_and_normalized_source_pins_verified": true
   },
   "full_chart_repair_attempts_spent": 0,
-  "entry_diagnostic_waiter_pid": 830312,
+  "entry_diagnostic_waiter_pid": 898939,
   "passing_charts_reopened": false,
   "acceptance_comparisons_changed": false,
   "native_trace_bytes_changed": false,
   "expected_query_results_used_as_input": false,
-  "local_user_views_edited": false
+  "local_user_views_edited": false,
+  "fix_commit": "8c891b592f6476e1c6224b5ce7aae86c5e18ee97",
+  "final_source_verification": "sweep-2026-10-15-pokemon-final-source-verification.json"
 }

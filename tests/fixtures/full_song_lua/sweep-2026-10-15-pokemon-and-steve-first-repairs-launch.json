@@ -1,0 +1,13 @@
+{
+  "pid": 964869,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_pokemon_and_steve_first_repairs_after_turn_a_v1.py"
+  ],
+  "starts_after": "turn-a-preferences-first-repair-v1",
+  "waits_for_all_windows_and_linux_checks": true,
+  "one_child_at_a_time": true,
+  "one_later_full_repair_maximum_per_chart": true,
+  "native_capture_reuse": true,
+  "publisher_stream_count": 120
+}

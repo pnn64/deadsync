@@ -1,0 +1,29 @@
+{
+  "linux_red_recovery_pid": 979674,
+  "linux_green_waiter": {
+    "pid": 982188,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_loader_multi_return_green_after_red_v1.py"
+    ]
+  },
+  "tested_selector": {
+    "pid": 982189,
+    "command": [
+      "python3",
+      "/home/parity/jobs/select_loader_multi_return_after_green_v1.py"
+    ]
+  },
+  "first_repair_queue": {
+    "pid": 982190,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_pokemon_and_steve_first_repairs_after_turn_a_v1.py"
+    ]
+  },
+  "full_repair_attempts_spent": 0,
+  "zero_test_result_was_not_accepted": true,
+  "starts_after_turn_a": true,
+  "one_full_child_at_a_time": true,
+  "one_later_full_repair_maximum_per_chart": true
+}

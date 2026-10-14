@@ -1,0 +1,11 @@
+{
+  "fix_commit": "8c891b592f6476e1c6224b5ce7aae86c5e18ee97",
+  "all_windows_and_linux_checks_passed": true,
+  "source_pin_count": 1175,
+  "all_raw_and_normalized_source_pins_verified": true,
+  "all_linux_check_logs_verified": true,
+  "binary_sha256": "35fe73189443c9841fe505707fe015c82e5deaada0649e00f9f50460b832640b",
+  "source_root": "/home/parity/workspace/pokemon-failed-load-v1/deadsync",
+  "build_proof": "/home/parity/jobs/pokemon-failed-load-linux-green-v1/proof.json",
+  "enospc_failure_preserved_separately": true
+}
