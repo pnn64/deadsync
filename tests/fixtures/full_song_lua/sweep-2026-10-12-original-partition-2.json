@@ -7863,6 +7863,57 @@
         }
       ],
       "report_sha256": "65c265794481048f2f658c7bde0041c3d1effb1967ed46e1b66d35e264c0ad2e"
+    },
+    {
+      "position": 389,
+      "source_simfile": "Scorpion King [TaroNuke]/scorpion.sm",
+      "simfile_sha256": "aa835fb23eb12b0504fb01c60f06f48983ebc193810be30607848a2c2c6128e9",
+      "retained_original_archive": "ebf7660009ffda8eb929f2f264dc0bef27564378798af207edae9c5a24b4f03f.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "04af4ff5dfcbbf4a0290dfe81b5e1b5690fa28289a2e2fdbebb293006a88bce2",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "d69f0a20fd7a8b9a00fef1680365364522a51706",
+      "build_proof": "/home/parity/jobs/message-coverage-linux-green-v1/proof.json",
+      "capture_seconds": 133.80719831300667,
+      "trace_sha256": "3df6863149d6d822e79d855ada3c37ed3e2d0f7b4905bcea49492b14eccb363f",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-389/candidates/133f7bab54d7afe70feb37154b8eddc2138fc1185864460985e76b43fb0dceb3.tar",
+      "replay_exit": 0,
+      "replay_seconds": 3722.8370764900174,
+      "candidate_sha256": "133f7bab54d7afe70feb37154b8eddc2138fc1185864460985e76b43fb0dceb3",
+      "native_frames": 81493,
+      "replayed_frames": 81493,
+      "compared_stage_fields": 1375,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetSecsIntoEffect, Actor.blend, Actor.bob, Actor.diffuseblink, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.fadebottom, Actor.fadetop, Actor.playcommand, Actor.vertalign, ActorFrame.SetDrawByZPosition, ActorFrame.fov, BitmapText.GetText, BitmapText.settext, ScreenManager.SystemMessage, Sprite.customtexturerect, Sprite.texcoordvelocity",
+        "native drawable state/resources: ActorProxy, BitmapText, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "7ebc962b42dd81177ae3bce906bea651850025b21882b130178bee1efdd91124",
+      "archive": "3a063f3d4721fec5de3ebd35e6e79af41f76cbbaa8d426f87aeaf25595e0295f.tar.zst",
+      "archive_sha256": "3a063f3d4721fec5de3ebd35e6e79af41f76cbbaa8d426f87aeaf25595e0295f",
+      "compressed_bytes": 8577935,
+      "pack_seconds": 3.6391341849812306,
+      "harness_version": "0.1.80",
+      "title": "Scorpion King",
+      "retained_original_entry": {
+        "title": "Scorpion King",
+        "source_simfile": "Scorpion King [TaroNuke]/scorpion.sm",
+        "harness_version": "0.1.0",
+        "archive": "ebf7660009ffda8eb929f2f264dc0bef27564378798af207edae9c5a24b4f03f.tar.zst",
+        "sha256": "ebf7660009ffda8eb929f2f264dc0bef27564378798af207edae9c5a24b4f03f",
+        "compressed_bytes": 2015234,
+        "uncompressed_sha256": "2f4293c42987d4a1cdaf490d349237dcade1a3b2742a18300851ff51dd168590",
+        "compression_level": 22,
+        "aliases": [
+          "98c02a71ec788c3d09db8b926edd9960ca350efc6f743e3bd1112143f9ce2743.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -7872,9 +7923,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "151a68b24584a9730b6cdf893009fb4a59873684ac28bc89b79e85f1a8752e39",
+  "binary_sha256": "04af4ff5dfcbbf4a0290dfe81b5e1b5690fa28289a2e2fdbebb293006a88bce2",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 22,
+  "passed_fixtures": 23,
   "pending_charts": 30,
-  "processed_charts": 52
+  "processed_charts": 53
 }

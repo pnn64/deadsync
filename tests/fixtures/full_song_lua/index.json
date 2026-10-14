@@ -4584,15 +4584,12 @@
     {
       "title": "Scorpion King",
       "source_simfile": "Scorpion King [TaroNuke]/scorpion.sm",
-      "harness_version": "0.1.0",
-      "archive": "ebf7660009ffda8eb929f2f264dc0bef27564378798af207edae9c5a24b4f03f.tar.zst",
-      "sha256": "ebf7660009ffda8eb929f2f264dc0bef27564378798af207edae9c5a24b4f03f",
-      "compressed_bytes": 2015234,
-      "uncompressed_sha256": "2f4293c42987d4a1cdaf490d349237dcade1a3b2742a18300851ff51dd168590",
-      "compression_level": 22,
-      "aliases": [
-        "98c02a71ec788c3d09db8b926edd9960ca350efc6f743e3bd1112143f9ce2743.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "3a063f3d4721fec5de3ebd35e6e79af41f76cbbaa8d426f87aeaf25595e0295f.tar.zst",
+      "sha256": "3a063f3d4721fec5de3ebd35e6e79af41f76cbbaa8d426f87aeaf25595e0295f",
+      "compressed_bytes": 8577935,
+      "uncompressed_sha256": "133f7bab54d7afe70feb37154b8eddc2138fc1185864460985e76b43fb0dceb3",
+      "aliases": []
     },
     {
       "title": "See Tinh 「Cukak Remix」",
