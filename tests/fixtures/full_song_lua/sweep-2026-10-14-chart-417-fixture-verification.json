@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Step Your Game Up (Director's Cut)/stepyourgameup.ssc",
+  "native_frames": 89897,
+  "replayed_frames": 89897,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "e92ffe7f0f5e097b101b0f6b548d7901f59b8cd4087a05513d8d10a33361e5e9.tar.zst",
+  "compressed_sha256": "e92ffe7f0f5e097b101b0f6b548d7901f59b8cd4087a05513d8d10a33361e5e9",
+  "uncompressed_sha256": "421b056de3cffe73890513b11d6454ccb19beca50ab3463b13e8ed18719251d8",
+  "compressed_bytes": 10660319,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

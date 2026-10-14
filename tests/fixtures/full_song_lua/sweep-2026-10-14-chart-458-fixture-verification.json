@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Vanishing Point - [Zaia][FX]/Vanishing Point.sm",
+  "native_frames": 230658,
+  "replayed_frames": 230658,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "4dc18d2326d744aa95067d8905edf5d930b5ba9f6cc1d445cddfeb4033fa892a.tar.zst",
+  "compressed_sha256": "4dc18d2326d744aa95067d8905edf5d930b5ba9f6cc1d445cddfeb4033fa892a",
+  "uncompressed_sha256": "ed48fef31abe3ecbbd9a8126466f80e43aab536ad7f4e80c898ab40594ffb7f2",
+  "compressed_bytes": 11074579,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

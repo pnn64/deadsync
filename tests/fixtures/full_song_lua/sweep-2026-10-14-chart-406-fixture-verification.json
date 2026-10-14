@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Space Creation Theory/space creation theory.ssc",
+  "native_frames": 17896,
+  "replayed_frames": 17896,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "db729f9c7c37537c4889dbbf3d15a52056d5d665c5c85b4f199441f8f4754090.tar.zst",
+  "compressed_sha256": "db729f9c7c37537c4889dbbf3d15a52056d5d665c5c85b4f199441f8f4754090",
+  "uncompressed_sha256": "039bd5a39f307e94c38ca09b1864650a9bd4534c9d32d583ef641bfcceaa1304",
+  "compressed_bytes": 14129544,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
