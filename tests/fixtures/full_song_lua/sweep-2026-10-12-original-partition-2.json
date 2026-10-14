@@ -7996,6 +7996,57 @@
       "mismatch_count": 0,
       "concrete_failures": [],
       "report_sha256": "acc4ddd61371557a23cc7dc06d6470176d424676a52cc35d293c69d9bb86492f"
+    },
+    {
+      "position": 413,
+      "source_simfile": "Spooky/1.09 - Spooky.ssc",
+      "simfile_sha256": "02483562b5e4bb9e92b956e640f8d4e429d3723eb29fdaa5378a0ea15ee608e5",
+      "retained_original_archive": "7e31fff6c5c0b273464ebff4b5aa06729f06ebf9c6f43a015738daf872609059.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+      "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+      "capture_seconds": 151.23002196699963,
+      "trace_sha256": "7dc1b8c98355dafe0fca44682c27730d6aa7f37edfad17bbfd7261c94c137e08",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-413/candidates/cd912f1edf7f7517a97f2946296b072a68d157966d1472e2d3441a31363ff614.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1168.2384803660098,
+      "candidate_sha256": "cd912f1edf7f7517a97f2946296b072a68d157966d1472e2d3441a31363ff614",
+      "native_frames": 45058,
+      "replayed_frames": 45058,
+      "compared_stage_fields": 1397,
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.basezoom, Actor.cropleft, Actor.cropright, Actor.skewx, Actor.stretchto, Actor.xy, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.CMod, PlayerOptions.Centered, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.MMod, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.XMod",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "d0999a15aa628cb100e39c1caa7a53181486832a5bac50b89cdc55588b21196e",
+      "archive": "18ef7ff5db9acd8161644f2e5dfcf48d7f871ba235ea7228eb5b57f92d6ca2ca.tar.zst",
+      "archive_sha256": "18ef7ff5db9acd8161644f2e5dfcf48d7f871ba235ea7228eb5b57f92d6ca2ca",
+      "compressed_bytes": 6867169,
+      "pack_seconds": 9.858748566010036,
+      "harness_version": "0.1.80",
+      "title": "Spooky",
+      "retained_original_entry": {
+        "title": "Spooky",
+        "source_simfile": "Spooky/1.09 - Spooky.ssc",
+        "harness_version": "0.1.0",
+        "archive": "7e31fff6c5c0b273464ebff4b5aa06729f06ebf9c6f43a015738daf872609059.tar.zst",
+        "sha256": "7e31fff6c5c0b273464ebff4b5aa06729f06ebf9c6f43a015738daf872609059",
+        "compressed_bytes": 150520,
+        "uncompressed_sha256": "0199842e172d4c776d59ef3b8619ea8309e29c83ecf32302ac0694d40cb2a28c",
+        "compression_level": 22,
+        "aliases": [
+          "415235145425ffab228157de541de5d7c45a12897305ffff2b9522784ae9a7cf.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -8005,9 +8056,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+  "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 24,
+  "passed_fixtures": 25,
   "pending_charts": 31,
-  "processed_charts": 55
+  "processed_charts": 56
 }

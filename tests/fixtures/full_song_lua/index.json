@@ -4836,15 +4836,12 @@
     {
       "title": "Spooky",
       "source_simfile": "Spooky/1.09 - Spooky.ssc",
-      "harness_version": "0.1.0",
-      "archive": "7e31fff6c5c0b273464ebff4b5aa06729f06ebf9c6f43a015738daf872609059.tar.zst",
-      "sha256": "7e31fff6c5c0b273464ebff4b5aa06729f06ebf9c6f43a015738daf872609059",
-      "compressed_bytes": 150520,
-      "uncompressed_sha256": "0199842e172d4c776d59ef3b8619ea8309e29c83ecf32302ac0694d40cb2a28c",
-      "compression_level": 22,
-      "aliases": [
-        "415235145425ffab228157de541de5d7c45a12897305ffff2b9522784ae9a7cf.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "18ef7ff5db9acd8161644f2e5dfcf48d7f871ba235ea7228eb5b57f92d6ca2ca.tar.zst",
+      "sha256": "18ef7ff5db9acd8161644f2e5dfcf48d7f871ba235ea7228eb5b57f92d6ca2ca",
+      "compressed_bytes": 6867169,
+      "uncompressed_sha256": "cd912f1edf7f7517a97f2946296b072a68d157966d1472e2d3441a31363ff614",
+      "aliases": []
     },
     {
       "title": "STAGE 0.ac11",
