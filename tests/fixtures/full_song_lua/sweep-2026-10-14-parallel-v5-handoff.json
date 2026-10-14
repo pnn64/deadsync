@@ -1,0 +1,1665 @@
+{
+  "assignment": {
+    "scope": {
+      "original_simfiles": 501,
+      "indexed_sources": 483,
+      "remaining_indexed_charts": 335,
+      "historical_unindexed_charts": 18
+    },
+    "queues": {
+      "chart-sweep-20261012-v2": [
+        {
+          "position": 380,
+          "source_simfile": "Ruin Our Friendship/RuinOurFriendship.ssc",
+          "simfile_sha256": "f6ca5379055f264bcf41c1c1efe9b022a22789529220240dd6870d34e31ccb8a",
+          "retained_original_archive": "14d5a7c57f232005e0ee587007640d17b6963348fbdaa4a1f4e7f87187f625cd.tar.zst",
+          "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-380/candidates/6133b834410a8f51266a56bff99968f0629ab3461915caa4cd95fc6e15808826.tar"
+        },
+        {
+          "position": 310,
+          "source_simfile": "media offline/media offline.sm",
+          "simfile_sha256": "49431b3bf1261ac2bea70d8b65f838b6de30fccb1f3cbe03509d8a614e1c10d0",
+          "retained_original_archive": "37ab9e3214210590a2a79a272fb17189ea159945b97c5ac531357c0157362a9d.tar.zst"
+        },
+        {
+          "position": 334,
+          "source_simfile": "OIIA OIIA - [Zaia]/OIIA OIIA.ssc",
+          "simfile_sha256": "f479164368929f9db909538d7bd8311d739d587abafc8edc14cda04b1a772389",
+          "retained_original_archive": "904abe86b43d76e483f8d17a9f02a2b9ecb39162e6bffe6d54b77e755d5f1cc1.tar.zst"
+        },
+        {
+          "position": 354,
+          "source_simfile": "PizzaBoy/PizzaBoy.ssc",
+          "simfile_sha256": "f11f346c34640724590614b3c1801a6723d54c349801574c2a809dbdce09ff16",
+          "retained_original_archive": "44938af597b6bdbfe37bc629cc1117143e6025d6e6313e885196ab5d5c241ff4.tar.zst"
+        },
+        {
+          "position": 366,
+          "source_simfile": "Raving With Fire/Raving With Fire.sm",
+          "simfile_sha256": "9f35a23f2bc46c9e562fed767a0f8b006934bc425dcb40df6191b303313273d9",
+          "retained_original_archive": "ebd39c7daf61be2905cb5159d78a4c7a9037e1386eedf1c7c082e3f58bb88cb5.tar.zst"
+        },
+        {
+          "position": 378,
+          "source_simfile": "rite of spring/rite.ssc",
+          "simfile_sha256": "7ce2cf7cfa441b16842c6577e922df25f8c49258da2b1cd49358f0f1a428c0fc",
+          "retained_original_archive": "78f644521bf3cf8ad55174c3c5bbd617407b7dee870a9288cd7e7db5238a932a.tar.zst"
+        },
+        {
+          "position": 387,
+          "source_simfile": "Save Your Tears/SaveYourTears.sm",
+          "simfile_sha256": "6141d6d76f0e80ec9ece060bac5bdee2d7edf282ec675ce795b44224dfa54dfa",
+          "retained_original_archive": "da43bc6839eacb8fdf37a73c5ca138984f20d79a7b44b615b9dd3fc8aa9927b7.tar.zst"
+        },
+        {
+          "position": 395,
+          "source_simfile": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
+          "simfile_sha256": "1e28512dd3481ef7d34e72fbee9f0c252c258544fcc2d267aac2dfb8541edb91",
+          "retained_original_archive": "9ad52da3f9a4dd9baf9fc1b01fa9d4e8bc93d91fd7887f4b371dfbe5a69d72cf.tar.zst"
+        },
+        {
+          "position": 403,
+          "source_simfile": "Slamurai/Slamurai.ssc",
+          "simfile_sha256": "ad13580d8964e7fc062aea34c7c68c32fe24785b4f8ce00a20beb6a2873cd0c6",
+          "retained_original_archive": "0ea8829ba0181ac193576415941d4493c23c5e373c85e387c1f5d710ae862c4a.tar.zst"
+        },
+        {
+          "position": 411,
+          "source_simfile": "spooky (SX 14)/spooky (Tech-Stam cut).ssc",
+          "simfile_sha256": "f38dfd79e04e6f2caa616d75d3eba60b14bf16cd6bc081ce6651994a27a56bf1",
+          "retained_original_archive": "25f515a5eac4b6c349f3cf992859f5d6842c03abf32f2f71bd62ca84008b68a0.tar.zst"
+        },
+        {
+          "position": 419,
+          "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
+          "simfile_sha256": "7da60c3cba1434e6c4eb48937abb9dcb0266a9a2686196274252fa555c3af30d",
+          "retained_original_archive": "c76f3e6bdd5558006e65dd8f61a04d08932a1a6f15fda00f792756a675bce0e0.tar.zst"
+        },
+        {
+          "position": 427,
+          "source_simfile": "tamashi/tamashi.sm",
+          "simfile_sha256": "cafe0801b0cc0958ccb8a2ec113186feb7c177f5db76be400e4227acacac1250",
+          "retained_original_archive": "1414b286088f609e5e172ae1da2e503ee7428b3941a8092d0bc9b8fcef7bba0e.tar.zst"
+        },
+        {
+          "position": 435,
+          "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.ssc",
+          "simfile_sha256": "831835da8009cc98965aa71ec3e997cbddd6c810da2470fea8f44f68bc82006c",
+          "retained_original_archive": "2e2d6d045606f42dba6a5cd24a8f137b9856b85702eea7503d0d338f49ae3125.tar.zst"
+        },
+        {
+          "position": 443,
+          "source_simfile": "Toho Mathematics (LADIES CHECK THIS OUT)/thischartsucks.ssc",
+          "simfile_sha256": "5effc07169fdd5a5246331d3b08fe26cfbaf83ff59db11aed2401e076c18b5de",
+          "retained_original_archive": "39bd9326b5af6b1516595b7227dc571abb107bc5e10287f32dbd902e275788d8.tar.zst"
+        },
+        {
+          "position": 451,
+          "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
+          "simfile_sha256": "67cfeadc69cdbd54c042acf83a94c9d6ecc0b973c66d4658f3ead831395b2901",
+          "retained_original_archive": "22f4b7e93b07b2db7ae57fa01aaca5fa248e9d488e66039d6bbdceedb6751522.tar.zst"
+        },
+        {
+          "position": 459,
+          "source_simfile": "Vector Field/Vector Field.ssc",
+          "simfile_sha256": "940c17077877f0de5b20f0976892b372b1a95313ad772062d3d2607a8fcc0537",
+          "retained_original_archive": "8152f73a818a4931c802e7d4f4d192e6671e28c69481838c1c964fb29452636b.tar.zst"
+        },
+        {
+          "position": 467,
+          "source_simfile": "Watching/watching-fakemines.sm",
+          "simfile_sha256": "1c7dfef2fa28adb1f74b7e4ba7f84542e8d5c9b2dd4095bdf3f9d0ad853e4a19",
+          "retained_original_archive": "d3bf325b6bbc9fc71c6ef35a53d1d52219fd2c32962da8be72c5a7d50c1da741.tar.zst"
+        },
+        {
+          "position": 475,
+          "source_simfile": "Wobbpotato [Blue Shift Phase 1]/wobbpotato.ssc",
+          "simfile_sha256": "85652fc5fe5dbdfd1bf7fba6a8e531504013a373d1835b568abd297270489888",
+          "retained_original_archive": "36dba1040aa04ac6edc04d62e8839394103411a24f572e3e166101abb5d1e5fd.tar.zst"
+        },
+        {
+          "position": 483,
+          "source_simfile": "Ztar Trek/steps.sm",
+          "simfile_sha256": "ee49242dc6636c34dcc44b25b05c4b3ab71ee90bb7416ef1f9d219280fffba6c",
+          "retained_original_archive": "0edac4c296c7f9f71f47b66bd7316e618c860967ddc61a596a95a3b56c34dfc6.tar.zst"
+        },
+        {
+          "position": 491,
+          "source_simfile": "james/james.sm",
+          "simfile_sha256": "90aa95cea1b414042d77e510e78aa77392ffb72cad525a7116df2f17b7b31aaa",
+          "historical_failure": {
+            "simfile": "james/james.sm",
+            "status": "timeout",
+            "category": "capture_timeout",
+            "reason": "native capture exceeded 600 seconds",
+            "diagnostics": "target/song-lua-repair/phase4/beb47e811c5aafd3"
+          }
+        },
+        {
+          "position": 499,
+          "source_simfile": "Rayc Fire 2/Rayc Fire 2.sm",
+          "simfile_sha256": "d90743d240bffd1d225185769c52a692c240531382e1cc617890e278e3d5b331",
+          "historical_failure": {
+            "simfile": "Rayc Fire 2/Rayc Fire 2.sm",
+            "status": "error",
+            "category": "missing_song_lua",
+            "reason": "ITGmania Lua host failed: cannot open corpus:/Rayc Fire 2/lua/LUA.lua: No such file or directory",
+            "diagnostics": "target/song-lua-repair/known/5a998294ae8b6156"
+          }
+        }
+      ],
+      "chart-sweep-parallel-v4-1": [
+        {
+          "position": 348,
+          "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.ssc",
+          "simfile_sha256": "f5fa33a551c25ad5a3b55e7c115048c07c8684d71b09616f8409f8b2f075fa57",
+          "retained_original_archive": "69782c63aa11278e9a3da5c860936dee4f2459a99c678c154ba7c09b6f37ac22.tar.zst",
+          "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-348/candidates/2db5ac9f92542a9ad43cecf09a8e54ebb9ebbc91bf07c1e8456077b57405e8ed.tar"
+        },
+        {
+          "position": 313,
+          "source_simfile": "Megalovania SM5 [TaroNuke]/megalovania.ssc",
+          "simfile_sha256": "7009b23d689889ebb16e9b0f6c87612f19b6530a6e1656c980e48b62bf4affde",
+          "retained_original_archive": "26582b759a98952cda73fe4c3d8542c182eaae3d47be8fdfdf051ddf6f179100.tar.zst"
+        },
+        {
+          "position": 337,
+          "source_simfile": "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc",
+          "simfile_sha256": "a88c9337515e95bdf15d244cc788b446f837e9f215d7671cf8181fe229281c42",
+          "retained_original_archive": "1048d7c8760b6944303f6c3b938563dadcf614e3d7a6e1fd979bf83bba01584b.tar.zst"
+        },
+        {
+          "position": 355,
+          "source_simfile": "Planet Calling/Planet Calling.ssc",
+          "simfile_sha256": "2f232179ed67004f2cfcd167093ff3c7354c380edcdbf85dd15853da4f5a38a1",
+          "retained_original_archive": "1f946d0f87a1110695ec6b3d25dc9ffd322ef21f4f83b84f7f5dc179f5a9513d.tar.zst"
+        },
+        {
+          "position": 367,
+          "source_simfile": "Raving With Fire/Raving With Fire.ssc",
+          "simfile_sha256": "bda9bd92c59212adb06d6c7aee91346fa78af0780f0e741475c761f9a65d8bab",
+          "retained_original_archive": "c860130738bcd0b8fbfcdfdad03e54757c81887d947401dbf2767d982afd215a.tar.zst"
+        },
+        {
+          "position": 379,
+          "source_simfile": "Ruin Our Friendship/RuinOurFriendship.sm",
+          "simfile_sha256": "5b07ecdb5659eb3877dc1fcd3046df38777e831e5f44ecdd24b53784ad577633",
+          "retained_original_archive": "42e8849bb73924b078a22aea38051d4d2a4daade43e9c0b1a895b61e5c4fb8ad.tar.zst"
+        },
+        {
+          "position": 388,
+          "source_simfile": "Save Your Tears/SaveYourTears.ssc",
+          "simfile_sha256": "8b57aae087794bf0c7f0bb19c297c69c58f2d0d6bac97c4cfde344875e29c3c1",
+          "retained_original_archive": "88aab2806ae8ab0192cc7c7e3435c52f18bbe926357e8b985921772966af14b8.tar.zst"
+        },
+        {
+          "position": 396,
+          "source_simfile": "SharpNel/HashtagNel.ssc",
+          "simfile_sha256": "4f1d2c61f1a2d693db1bcb2f4f48b5e3702d5a9cf06dcf74465d05bbe13958a5",
+          "retained_original_archive": "5faf9046be843398d8ad2023fc326e3848c82b81807ada2e7bee9bff12bf2bf5.tar.zst"
+        },
+        {
+          "position": 404,
+          "source_simfile": "Someone Special - hubert/Someone Special.sm",
+          "simfile_sha256": "cf85ff2306a162cf432b2c9259cd037ad254488673f2a8c8c2fcd6695915f5c1",
+          "retained_original_archive": "fdd109c28e14b9084b7f980a6ba38a5c77f420ca993d7f8b9b701776667b6e03.tar.zst"
+        },
+        {
+          "position": 412,
+          "source_simfile": "Spooky/1.09 - Spooky.sm",
+          "simfile_sha256": "cba3c91cadabeb4d866f942beb4434686e1ad8760ae3497d26828e5fd558588b",
+          "retained_original_archive": "6f6e31e07826d04ea9b91f35c489264cd1407dde2d93c35b9902f40163fd5ea6.tar.zst"
+        },
+        {
+          "position": 420,
+          "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
+          "simfile_sha256": "1588e4386ca32a812af78557b4748679f28e382476cc90cb30249922380daf8f",
+          "retained_original_archive": "0763cb254f5e99045b4e68d802ca6ce5d75b4b90e160630cdfd0a3fb3b8e7068.tar.zst"
+        },
+        {
+          "position": 428,
+          "source_simfile": "Tear Jerker/tearjerker.sm",
+          "simfile_sha256": "b8069e6cb3ce841a80cd9ee7c413108e9a450f19a481dd3ea5145dd210ecc031",
+          "retained_original_archive": "77f0b1a1dc7ffdc2fd5f75fc06fe92f4241305b70dde7af789b71ef96fd2a08f.tar.zst"
+        },
+        {
+          "position": 436,
+          "source_simfile": "The Scale/The Scale.ssc",
+          "simfile_sha256": "c8074e00d27e85d053acf991a1886b8232d63ddb052494f4b6303e1cba072ede",
+          "retained_original_archive": "35a72751e27dab1f63e9a07b154a2431cec0811e16be3e3cd94d4085e759a887.tar.zst"
+        },
+        {
+          "position": 444,
+          "source_simfile": "Toki o Kizamu Uta (Nhato Remix)/Toki o Kizamu Uta (Nhato Remix).ssc",
+          "simfile_sha256": "3a3803a12ee288f83c09e6dabcbdf1589b8e180fd46abe09260769b04f4822b3",
+          "retained_original_archive": "c86e848232f0272bb5589cca64a27546b0031a28d4744c1e5ffc52f02115d456.tar.zst"
+        },
+        {
+          "position": 452,
+          "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.ssc",
+          "simfile_sha256": "6089de409f4818e67acada887c3d1e8ad147c8b080d874ebe4b05aa5aa24e4e4",
+          "retained_original_archive": "9aacd48f51ab522240c344c4f774c79af43480cc6f7ef68df0c7fdd65b6b8fd7.tar.zst"
+        },
+        {
+          "position": 460,
+          "source_simfile": "Velvet LEFTS 1/chart.ssc",
+          "simfile_sha256": "a38146c07ea9483591ae94748621822e163c8ad283e60fe1273048a229f94514",
+          "retained_original_archive": "97ca1764984f050694cf634f9083f9d4ebd1a3cc59fee842fe36b17bed7b1e30.tar.zst"
+        },
+        {
+          "position": 468,
+          "source_simfile": "Watching/watching-fakemines.ssc",
+          "simfile_sha256": "e42c012f9336930e77c2e70f8625975e43ab2b8f3241279f1be69f345e50691c",
+          "retained_original_archive": "2aab120a00988eb6f587fd0b033fba7d59df7edfb20d476a465df2de6c0fcc14.tar.zst"
+        },
+        {
+          "position": 476,
+          "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
+          "simfile_sha256": "b401ffe8880d652b2da8c5347cbf8db01be52038899e6c19b80ab748e93ae5aa",
+          "retained_original_archive": "f4249fbbe615707be08caf70a3937635a22a24800cf7c29e7968fa62cc7f7b9d.tar.zst"
+        },
+        {
+          "position": 484,
+          "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
+          "simfile_sha256": "fb767f349b23e62155118f76097269da54e20bf983f6bd0a71e8baba098d266e",
+          "historical_failure": {
+            "simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
+            "status": "timeout",
+            "category": "capture_timeout",
+            "reason": "native capture exceeded 600 seconds",
+            "diagnostics": "target/song-lua-repair/phase4/67053c6979c0becb"
+          }
+        },
+        {
+          "position": 492,
+          "source_simfile": "james/james.ssc",
+          "simfile_sha256": "9c675cd26cc1f0b2c00956c7901ef13957d68ade067469fbfc8abd58dfdecdda",
+          "historical_failure": {
+            "simfile": "james/james.ssc",
+            "status": "timeout",
+            "category": "capture_timeout",
+            "reason": "native capture exceeded 600 seconds",
+            "diagnostics": "target/song-lua-repair/phase4/ee72a53d84d7fc88"
+          }
+        },
+        {
+          "position": 500,
+          "source_simfile": "Rayc Fire 2/Rayc Fire 2.ssc",
+          "simfile_sha256": "7163714252068f63b817c7eed2127d3d312941bed6f9969b6d317e6f998930e0",
+          "historical_failure": {
+            "simfile": "Rayc Fire 2/Rayc Fire 2.ssc",
+            "status": "error",
+            "category": "missing_song_lua",
+            "reason": "ITGmania Lua host failed: cannot open corpus:/Rayc Fire 2/lua/LUA.lua: No such file or directory",
+            "diagnostics": "target/song-lua-repair/known/53da0d7a82127af7"
+          }
+        }
+      ],
+      "chart-sweep-parallel-v4-2": [
+        {
+          "position": 307,
+          "source_simfile": "mawaru8/mawaru8.sm",
+          "simfile_sha256": "a0e32b54c2762591bb87110e8661cdc1b9e31b6d5d9a287e8500ced93cc5d492",
+          "retained_original_archive": "563f40565c419e299a0e956ba002854bd02cb498a809dfaa0130244f3b4026f8.tar.zst",
+          "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-307/candidates/6371f5c7299efa1afae969b3dc7b0f033aa78702ed72161af14fe0a068a7f91f.tar"
+        },
+        {
+          "position": 316,
+          "source_simfile": "MISSION SPUTNIK/sputnik.ssc",
+          "simfile_sha256": "1241e37b8933c76c957ed2217eebd3cd53c1e2efd27cc84fba9a24938ba7f688",
+          "retained_original_archive": "b13247db1ef7475bbb3960e1be844c4e63852b8e72e76f26563cd59333fef2ee.tar.zst"
+        },
+        {
+          "position": 340,
+          "source_simfile": "Paint the Town Red/PaintTheTownRed.sm",
+          "simfile_sha256": "a876df80258c0fb9a9c0eb23294c0857e7a249fc8c37e96f6305f2c4b5456173",
+          "retained_original_archive": "a38a1138ca11d0face83a5f5eca6869efcfc165accc945116a9178a003eb1df3.tar.zst"
+        },
+        {
+          "position": 357,
+          "source_simfile": "POP MY SHIT (FOXSKY REMIX)/pop my shit.ssc",
+          "simfile_sha256": "6a713c677818670d011a0c230ec0985fb4a3ba0c2609438de5a16d7fcc02bd97",
+          "retained_original_archive": "0ce97793c0850623e94eb3815bdfe378f446643ff0ec060141efedb643a12d16.tar.zst"
+        },
+        {
+          "position": 369,
+          "source_simfile": "Rayc Fire 2 (SM5)/Rayc Fire 2.ssc",
+          "simfile_sha256": "3d8c9f881802a7b324735dbe784bb0ea4a4090eda4750dfba9c2ba3dbbdb8ace",
+          "retained_original_archive": "2f226db770c854c6281d12db7794a809b7851e7eb0978ac4425314b1dc3a29e5.tar.zst"
+        },
+        {
+          "position": 381,
+          "source_simfile": "saitama2000/Saitama2000.sm",
+          "simfile_sha256": "63beb3e8028a17f6e9aa54ae8a88b8893453ce255823b2ec7d07e387067fd7cc",
+          "retained_original_archive": "3b197018a82aff5a619526cac3c023b7272da38eaa55e6c432012b3671a05e39.tar.zst"
+        },
+        {
+          "position": 389,
+          "source_simfile": "Scorpion King [TaroNuke]/scorpion.sm",
+          "simfile_sha256": "aa835fb23eb12b0504fb01c60f06f48983ebc193810be30607848a2c2c6128e9",
+          "retained_original_archive": "ebf7660009ffda8eb929f2f264dc0bef27564378798af207edae9c5a24b4f03f.tar.zst"
+        },
+        {
+          "position": 397,
+          "source_simfile": "Shine!/Shine!.ssc",
+          "simfile_sha256": "7650b40f62aee65b856e81d3a4efb60518d6e4e31d555d237aa3825ccec29665",
+          "retained_original_archive": "e097ac6283e583804b5653fc221e4039c83a9265762c4292bf08776ab941e44c.tar.zst"
+        },
+        {
+          "position": 405,
+          "source_simfile": "Someone Special - hubert/Someone Special.ssc",
+          "simfile_sha256": "b279384ecd66c19bd62f6969503bb0c93854027ec88fbf6e21d59fe361116cf2",
+          "retained_original_archive": "c41e7b12a9fa27155d4244917c25db042a1e3d84b1a7a9449b71f7986b2182a8.tar.zst"
+        },
+        {
+          "position": 413,
+          "source_simfile": "Spooky/1.09 - Spooky.ssc",
+          "simfile_sha256": "02483562b5e4bb9e92b956e640f8d4e429d3723eb29fdaa5378a0ea15ee608e5",
+          "retained_original_archive": "7e31fff6c5c0b273464ebff4b5aa06729f06ebf9c6f43a015738daf872609059.tar.zst"
+        },
+        {
+          "position": 421,
+          "source_simfile": "Stuck in the Abyss [DDDAAA]/stuckintheabyss.ssc",
+          "simfile_sha256": "3b95302912ee6f885ec870171eaf713ed6243dffe37d648f1333fa6c2480cdb8",
+          "retained_original_archive": "9f31bc1fdeeb9194792f50da868ed2ccef27521bb51bb7b372061f2608568ff6.tar.zst"
+        },
+        {
+          "position": 429,
+          "source_simfile": "Tear Jerker/tearjerker.ssc",
+          "simfile_sha256": "9e2d58cd69470fd765e59c943ab881980385c13fb6cd3ab44e376bdbc84c42c1",
+          "retained_original_archive": "10dde04d2feaa32ee04264ce88f9ac63eb01ff2ecb0969acfd05227229005af8.tar.zst"
+        },
+        {
+          "position": 437,
+          "source_simfile": "The Video Boaboaboaboab/The Video Boab Oyedivuth.sm",
+          "simfile_sha256": "588089cc7c71bc6f92934e15e6bc28d9dd914254b0cceb0b68b4c0f47fc29136",
+          "retained_original_archive": "89e15e6decb405ab0d2bdf05f0e87d143ae6cdcfb9dc9493e7a0fd5e813de36e.tar.zst"
+        },
+        {
+          "position": 445,
+          "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
+          "simfile_sha256": "3d43975664a8d1b0cdb6e9a5192126af61b447b10da2f94f1d9d4a1d9ba22645",
+          "retained_original_archive": "61f5f4a0ff7fde7e802dda787495150e1537c7195c8a095aff519f8d459e4082.tar.zst"
+        },
+        {
+          "position": 453,
+          "source_simfile": "Ultimate taste/Ultimate taste.ssc",
+          "simfile_sha256": "b01a15355bb6cf7f033fd2316b9e874d6d5083289e82251f98e2b80bbcefc959",
+          "retained_original_archive": "187636c8511cebb1d704300ba06120739f35d3000d379117b5dba2a2069e7ec8.tar.zst"
+        },
+        {
+          "position": 461,
+          "source_simfile": "Void Virus/Void_Virus.ssc",
+          "simfile_sha256": "ed7242ed2ca8c6ec3fd2cb8a8bb405a301123969126b01e795d6881c5222e563",
+          "retained_original_archive": "27d1085d9a79ed144ebfb645489e1acf7ea33ccadec51930644bd7a380f4b2b2.tar.zst"
+        },
+        {
+          "position": 469,
+          "source_simfile": "Watermelon/Watermelon.ssc",
+          "simfile_sha256": "89898223233445c8fbe6523d106fa1109a531f94c111fd6a2cdf508e1890964e",
+          "retained_original_archive": "7ce3c1cbcbf4dfead26e5463a1058e5312909c977aa284463e986a9a570455af.tar.zst"
+        },
+        {
+          "position": 477,
+          "source_simfile": "WOP/WOP.ssc",
+          "simfile_sha256": "2f2d3db0bf83de274f01f03ce9dfa337aa8dbf8496079052881a4049446726c5",
+          "retained_original_archive": "bdc1f910efc602d0759169348edcb0927c4b7d6f916ac60a0dc273f6212dc3f8.tar.zst"
+        },
+        {
+          "position": 485,
+          "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super]/ArrowQuest.sm",
+          "simfile_sha256": "fb767f349b23e62155118f76097269da54e20bf983f6bd0a71e8baba098d266e",
+          "historical_failure": {
+            "simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super]/ArrowQuest.sm",
+            "status": "timeout",
+            "category": "capture_timeout",
+            "reason": "native capture exceeded 600 seconds",
+            "diagnostics": "target/song-lua-repair/phase4/85aa930d114b2262"
+          }
+        },
+        {
+          "position": 493,
+          "source_simfile": "Lesson by DJ/Lesson by DJ.sm",
+          "simfile_sha256": "c5300bc691048803db427d58d9e76b7dbd159cfba2c9bffee3bf8b632964b840",
+          "historical_failure": {
+            "simfile": "Lesson by DJ/Lesson by DJ.sm",
+            "status": "error",
+            "category": "source_error",
+            "reason": "ITGmania oracle failed: ITGmania loaded no charts; source #NOTES header lacks its colon",
+            "diagnostics": "target/song-lua-repair/known/c5080f1c121d14e5"
+          }
+        },
+        {
+          "position": 501,
+          "source_simfile": "Sequential Dreambox - [Zaia]/Sequential Dreambox.ssc",
+          "simfile_sha256": "698cb06f326aa77f4e016a462c3eb368b22365d1e28f8d44f870ec933e8813dc",
+          "historical_failure": {
+            "simfile": "Sequential Dreambox - [Zaia]/Sequential Dreambox.ssc",
+            "status": "error",
+            "category": "source_error",
+            "reason": "ITGmania Lua host failed: corpus:/Sequential Dreambox - [Zaia]/lua/FastEnd.lua:47: '<eof>' expected near 'local'",
+            "diagnostics": "target/song-lua-repair/known/c893672a26e2b70c"
+          }
+        }
+      ],
+      "chart-sweep-parallel-v5-3": [
+        {
+          "position": 319,
+          "source_simfile": "Molly/Molly.ssc",
+          "simfile_sha256": "0ecb72fad3d2d651a35e2e51c7dcfb0ca7cc90a15718187d2a666ae493e99aa9",
+          "retained_original_archive": "3dbf83a63e6ea2179469b390845918aa18398e3878bc6cead041d29833e1c5d0.tar.zst"
+        },
+        {
+          "position": 343,
+          "source_simfile": "Pale/Pale.ssc",
+          "simfile_sha256": "99949a78b111661c0c3582f78357d23bb8223bbff1c2a5effd65361314a7fc5d",
+          "retained_original_archive": "a1cc4e84aa2f2b64dabd5fec32a816f5dfa0c39ea96787f8fb494a3e2b69cab5.tar.zst"
+        },
+        {
+          "position": 358,
+          "source_simfile": "Pop/Pop.ssc",
+          "simfile_sha256": "1d74d7d3fea33b0ac6eb7c4e19b3035f1aa65b7feefb86c16fb5229a3b728ff7",
+          "retained_original_archive": "25ee2408eb43f41e8e7377de1fa9c88695965704de94184c48a711a9d085d6fd.tar.zst"
+        },
+        {
+          "position": 370,
+          "source_simfile": "Reach The Light Switch, Without Asking you/Reach The Light Switch, Without Asking you.ssc",
+          "simfile_sha256": "483ce56a841d250956961fcd0199d08564d029ef0304d1e44683be0d2a2a35a0",
+          "retained_original_archive": "a9a66b0076cbc68d677253b09a5e289c5ce20c98d3579498c0d2472bfd3447c3.tar.zst"
+        },
+        {
+          "position": 382,
+          "source_simfile": "saitama2000/Saitama2000.ssc",
+          "simfile_sha256": "4ccd923293963e4db18db48561032ee821efccb3cf331c95e31a5cfacb8a88f5",
+          "retained_original_archive": "da2bd41518716d9f7be7180ee81f3e0c1b0692427209881d92edf5b4d0db1f34.tar.zst"
+        },
+        {
+          "position": 390,
+          "source_simfile": "See Tinh/See Tinh.sm",
+          "simfile_sha256": "7a1a95ff2bcd51881b7d406aef5e038ad483269827ba9243c46b8d4dc8b794cb",
+          "retained_original_archive": "395def068b6e9f1192bdc55380b6f10891e898e5a2efd27e0a234db981e131a3.tar.zst"
+        },
+        {
+          "position": 398,
+          "source_simfile": "Shivers/Shivers.sm",
+          "simfile_sha256": "89d4e89a6631069369c535f3ec692e0b5d2f2388042726fbb0ea950c61f38716",
+          "retained_original_archive": "ced79efc913753445d798d01b0aeab14ebec6dbb19c3d4879c2c6c93dace34ae.tar.zst"
+        },
+        {
+          "position": 406,
+          "source_simfile": "Space Creation Theory/space creation theory.ssc",
+          "simfile_sha256": "d6d1d47404836d6ce3daba417925d64255cc9e2d5630228c57db19e171dc4c19",
+          "retained_original_archive": "2ed0e171ebd07a23ebff9e5bbd1a65aeb987545389bd44a213cb08320d149258.tar.zst"
+        },
+        {
+          "position": 414,
+          "source_simfile": "STAGE 0.ac11/STAGE 0.ac11.sm",
+          "simfile_sha256": "ec87e095ecf33b807ec3a384419c5085b0bd58857f4294faeb489193881e20c5",
+          "retained_original_archive": "852cbbb1b4826effd45cf24173c9b134ad944dc3ecfb47f7c48b5f186a598437.tar.zst"
+        },
+        {
+          "position": 422,
+          "source_simfile": "Subway Surfers/subwaysurfers.ssc",
+          "simfile_sha256": "145d9c6f99abb2e11fd544f681a1441f3c84ea11f2a70742e9a215a72d10ef62",
+          "retained_original_archive": "fd5b7925d948b2e1935453daf0e9c5680b9806ff27f683f77b1f8b8692cd3612.tar.zst"
+        },
+        {
+          "position": 430,
+          "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
+          "simfile_sha256": "24e12ec68bb719cc2aa9b42899c6ae403dba4e9be2190540bb43417186c71433",
+          "retained_original_archive": "532ec728623e8d26b0fbe9870baae63a0956af54c1a6631d671d7bb5f8f76c98.tar.zst"
+        },
+        {
+          "position": 438,
+          "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.sm",
+          "simfile_sha256": "325e86230449989c83c5e1a2fb2ff61c36220675dfd3ea95582decc85711177f",
+          "retained_original_archive": "c01e4da92ef912cc2feeac8813527b508e6604a380517da0e820e29db5124910.tar.zst"
+        },
+        {
+          "position": 446,
+          "source_simfile": "Trancing Pulse (Random)/Trancing Pulse (Random).ssc",
+          "simfile_sha256": "84256242f02679956d7bd96c469f22cc2363690497e69efc63830e75e5fc6552",
+          "retained_original_archive": "ca3f6e2b63b902e1d2828636e8b31c164d2fc89602dccf93101c6194373a3898.tar.zst"
+        },
+        {
+          "position": 454,
+          "source_simfile": "Ultra B+K/ultrabk.ssc",
+          "simfile_sha256": "f48bd0315c0c37bde102b362865ac78a3df5aa982a6d37da4e8d49504e67baf6",
+          "retained_original_archive": "ecb71826a557b950afab9efb4ba6e0e5b4c538a416e449d9527579dc54d344da.tar.zst"
+        },
+        {
+          "position": 462,
+          "source_simfile": "Vtubers Never Die! [Gpop]/Vtubers Never Die!.ssc",
+          "simfile_sha256": "087b03ce6f9b7fe18df6061b9f0c2e99435db870e4d18b165cda3e9d6139dcdb",
+          "retained_original_archive": "1a04009c0d983b115c690a260f8b2a7a627cf2fb0429ae78cd1d30656a434ab1.tar.zst"
+        },
+        {
+          "position": 470,
+          "source_simfile": "We're Finally Landing/landing.ssc",
+          "simfile_sha256": "96e9de49c793c05cf830d88912859eaf70e531cf832de3da8ef0027895c89af1",
+          "retained_original_archive": "797bb0d03a4d30b771310852cdd4dc8e2a8b79094496b3b9213a02ca16145a34.tar.zst"
+        },
+        {
+          "position": 478,
+          "source_simfile": "You are Goomba Play ITG/You are Gooma Play ITG.sm",
+          "simfile_sha256": "64da7a41d112f9f31f06625f6f5af6e864ba58dedddfe9d5af42ae15e20eff8f",
+          "retained_original_archive": "966162336e990bbdb3fab673bfea8e02192993e8b5791b62f8c3d65738ebc45c.tar.zst"
+        },
+        {
+          "position": 486,
+          "source_simfile": "[12] Ascendanz/Ascendanz.ssc",
+          "simfile_sha256": "cddb4aa7377dd0f3f0ce3d45ec5806bc8879cc2159c4bf643bf89b9c72b0bcd0",
+          "historical_failure": {
+            "simfile": "[12] Ascendanz/Ascendanz.ssc",
+            "status": "error",
+            "category": "missing_song_lua",
+            "reason": "ITGmania Lua host failed: cannot open corpus:/[12] Ascendanz/lua/default.lua: No such file or directory",
+            "diagnostics": "target/song-lua-repair/known/9e5cb2c801c247a3"
+          }
+        },
+        {
+          "position": 494,
+          "source_simfile": "Lots of Spices - [tari]/spices.ssc",
+          "simfile_sha256": "2fb744ee8811e3a6080df50173756ef648d02ae9aee46a52b6e514bf2d4544f9",
+          "historical_failure": {
+            "simfile": "Lots of Spices - [tari]/spices.ssc",
+            "status": "error",
+            "category": "missing_song_lua",
+            "reason": "ITGmania Lua host failed: cannot open corpus:/Lots of Spices - [tari]/template/default.lua: No such file or directory",
+            "diagnostics": "target/song-lua-repair/known/8bbbbd0a227889ec"
+          }
+        }
+      ],
+      "chart-sweep-parallel-v5-4": [
+        {
+          "position": 322,
+          "source_simfile": "My Penny/My Penny.ssc",
+          "simfile_sha256": "c068da62f7dc51d0898f667568ec7b043295b6e31abe654fdd32d0110f4ef754",
+          "retained_original_archive": "1c492a47ba819c03089bbbe4ca4735c401337687c672e026fef8b8ae01d7d4c1.tar.zst"
+        },
+        {
+          "position": 346,
+          "source_simfile": "Paradise [Cringle Desolation]/Paradise.ssc",
+          "simfile_sha256": "1b7370ebc6a69a753e628b6f1d893ba3d58e58cfae3b9ad84c12bfcb24175368",
+          "retained_original_archive": "7441c912bfee6d0731a8f2b0ee138241b0a6b414b7d19dffdd85ddf2c7dc097c.tar.zst"
+        },
+        {
+          "position": 360,
+          "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).sm",
+          "simfile_sha256": "b60d8f125c21bf91b6d7a4da43964427245a21d7b1f4786f401d12790bcb0c44",
+          "retained_original_archive": "41de42083e4692a244bf2cd6cc48c5d03acc29788c785b6c01b07341dcba7f41.tar.zst"
+        },
+        {
+          "position": 372,
+          "source_simfile": "REASON for RED/reasonforgay.ssc",
+          "simfile_sha256": "0ab9fcf27fd744bb9546754cad4165370c9b2bc8492625079f0e67e29ddff39e",
+          "retained_original_archive": "1e6aba284389988b5402aa3ec718613f88cc8343c33718b65095ce55c56c9f52.tar.zst"
+        },
+        {
+          "position": 383,
+          "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.sm",
+          "simfile_sha256": "6141d6d76f0e80ec9ece060bac5bdee2d7edf282ec675ce795b44224dfa54dfa",
+          "retained_original_archive": "3cb5b82071c5bc856f05ff2fe71a68c6e49038a633edcf3d69f74b77467fa773.tar.zst"
+        },
+        {
+          "position": 391,
+          "source_simfile": "See Tinh/See Tinh.ssc",
+          "simfile_sha256": "38cead7310020cd16c5bf90eb8ca7d0026e562364eb34d7db18a320e43cc5546",
+          "retained_original_archive": "77176aa9c15fab64849e08157302aab7ff3cccb0956e31261b058bbd5eac3e73.tar.zst"
+        },
+        {
+          "position": 399,
+          "source_simfile": "Shivers/Shivers.ssc",
+          "simfile_sha256": "420c147c6ae52db11935b39d26fbcaabb9c034c21700a7467ebde927abb1aee9",
+          "retained_original_archive": "356225cf1dcc404e12ec3dcc893c9d5095efc379ab9d44a93b7e773d423ac7d2.tar.zst"
+        },
+        {
+          "position": 407,
+          "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+          "simfile_sha256": "029596d9d093479e06f71010fdda42b381856414c3bc8678f62ddf4aa70025ee",
+          "retained_original_archive": "dcd16b42cd90cf994dc5f7a147c0982b5105a79b243ee379a2f024e488e764d5.tar.zst"
+        },
+        {
+          "position": 415,
+          "source_simfile": "Stay Alive/Stay Alive.ssc",
+          "simfile_sha256": "3e226becec13ec3915539c0a39690b9d3421f7c0dfb454e6e063d0cbb2ed633b",
+          "retained_original_archive": "988731d0d8989b4ed9d13fa487132cc259dd4ad2ffedb247f815955b2228144f.tar.zst"
+        },
+        {
+          "position": 423,
+          "source_simfile": "Tacos/Tacos.ssc",
+          "simfile_sha256": "f381a5f2e116668828e6903131adf2affdd1be42eed3c636b846a8a2de1e5520",
+          "retained_original_archive": "10a753e82c3d3b40641c307da4c03f0d36317fd8bcbbd156d65a61af11d2804b.tar.zst"
+        },
+        {
+          "position": 431,
+          "source_simfile": "The Entity/The Entity.sm",
+          "simfile_sha256": "0b88f5eaeda0df0cfe8443d59bc7d94a386ec82bbde8ab813efd27e156d7fccc",
+          "retained_original_archive": "a5219f3e355965a385ee0acb93b4a9c556f3235df10907c1f36b1cb5026d13ed.tar.zst"
+        },
+        {
+          "position": 439,
+          "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.ssc",
+          "simfile_sha256": "ae38b82cd09bdaaa1dc0b5599e341b5d46befa7aefb3962de70f679bed63a1f0",
+          "retained_original_archive": "f1eb13e3e7fa2807483fdec7378a3862ff04222586129c30b62936d2ce2b4746.tar.zst"
+        },
+        {
+          "position": 447,
+          "source_simfile": "Trinity Field/Trinity Field.ssc",
+          "simfile_sha256": "b8eeadc4d5aaf4a8b79eb4193308bdad7d89e50e53e6b1e55fad7993e83ecaa8",
+          "retained_original_archive": "f93d59b626603cf2728bf43cfaa8b8365ef0f83efa088e968a409fe0380d9357.tar.zst"
+        },
+        {
+          "position": 455,
+          "source_simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.sm",
+          "simfile_sha256": "48984c4c5269593eae36d745ff4525211a1700f80599d118ff1410f8ba761ee3",
+          "retained_original_archive": "79bae6c946ebb4ae1f51a79cffb992be5c0bac1687a567dd5511b60419109014.tar.zst"
+        },
+        {
+          "position": 463,
+          "source_simfile": "wah-leven [telperion (ddrillini remix)]/eleven.ssc",
+          "simfile_sha256": "17e70b53a8af11e65045e4cbb29b3f1841914cbacefcc1b13d5b4335fa8cb4ca",
+          "retained_original_archive": "51f50b97cd8baa7cf1b7dd4d8ecdb2ae342df5b112e50eb45a8804878f3f1db5.tar.zst"
+        },
+        {
+          "position": 471,
+          "source_simfile": "What A Wonderful World/WAWW.sm",
+          "simfile_sha256": "44d9e8c548a43bfbf4e7b1f35229c66a5063759098784abd70c542409d7f22b5",
+          "retained_original_archive": "8ff418d0678800ce2842370a2a5ee572a07454cbf086523567e52aa026169c85.tar.zst"
+        },
+        {
+          "position": 479,
+          "source_simfile": "You are Goomba Play ITG/You are Gooma Play ITG.ssc",
+          "simfile_sha256": "7fa3912f27384cb3666bde4809ed12fd393d1064c282e019ac22ff7612d346d8",
+          "retained_original_archive": "44bd4c5f7b30e0fcd578e04ac0d98ea09516062f11ff19a405d721ae2a01daec.tar.zst"
+        },
+        {
+          "position": 487,
+          "source_simfile": "Ascendanz/Ascendanz.ssc",
+          "simfile_sha256": "c116a4fc612d43be52cf043e44995e15ba71c2b0fa3eac1e0f72af7143664ef9",
+          "historical_failure": {
+            "simfile": "Ascendanz/Ascendanz.ssc",
+            "status": "error",
+            "category": "missing_song_lua",
+            "reason": "ITGmania Lua host failed: cannot open corpus:/Ascendanz/lua/default.lua: No such file or directory",
+            "diagnostics": "target/song-lua-repair/known/11205e6997187207"
+          }
+        },
+        {
+          "position": 495,
+          "source_simfile": "mawaru9/mawaru9.sm",
+          "simfile_sha256": "0012dd2fa9cef58ae543bd88b3ab84e25d0b390fcea2827c97c3dd1ac7d5a624",
+          "historical_failure": {
+            "simfile": "mawaru9/mawaru9.sm",
+            "status": "timeout",
+            "category": "capture_timeout",
+            "reason": "native capture exceeded 900 seconds",
+            "diagnostics": "target/song-lua-repair/final/02d24424431a0192"
+          }
+        }
+      ],
+      "chart-sweep-parallel-v5-5": [
+        {
+          "position": 325,
+          "source_simfile": "Neon Nights - [Zaia]/Neon Nights.ssc",
+          "simfile_sha256": "edb425865ce2261b1e659f875a343dc7436b893af2c8188adcca704ff399e531",
+          "retained_original_archive": "84ce4de19d14b3150d0361b805c7940bb0edfe78946d7ecdde6cedba3649f627.tar.zst"
+        },
+        {
+          "position": 349,
+          "source_simfile": "Paradise/Paradise.sm",
+          "simfile_sha256": "574c082e56fc722d2414d47ff780788616d38df3c322f47527cc891016fdbc25",
+          "retained_original_archive": "23c86a31465111cd8d16560ef36b3158389b7963624f47e46486dfebc6525244.tar.zst"
+        },
+        {
+          "position": 361,
+          "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).ssc",
+          "simfile_sha256": "1c769ffa86dce0c11dcfa5c67e20acc2381f20b7cfd11520a3e299d5d1483ff5",
+          "retained_original_archive": "1f88d5ee979dcc03da989bc8795de8e308fcd17749e9abfe801f4a973784fc6f.tar.zst"
+        },
+        {
+          "position": 373,
+          "source_simfile": "redesign your logo/Redesign your logo.ssc",
+          "simfile_sha256": "d3972069a85534d606cb612cdc9ca511a9abd7341ad49f962086d6ed618e83b0",
+          "retained_original_archive": "b4309dd1424e0e8733439f7a1f1769d781d1f4d44b677712da2ec5beed72f0e2.tar.zst"
+        },
+        {
+          "position": 384,
+          "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.ssc",
+          "simfile_sha256": "8b57aae087794bf0c7f0bb19c297c69c58f2d0d6bac97c4cfde344875e29c3c1",
+          "retained_original_archive": "fb2c6cd3981a5356eb3deb3efddc14ea7ed0464beaf6fdc93b05613207efb8c0.tar.zst"
+        },
+        {
+          "position": 392,
+          "source_simfile": "Selfie - [JNero]/Selfie.ssc",
+          "simfile_sha256": "2127506d801e1bd3b47774fbf41ab690041a5f9129a5c6f7231c0d63b672cba1",
+          "retained_original_archive": "a6ff684844f24363390393b8107b2b8ea06089966c8e1c5e00c4188920cbadd4.tar.zst"
+        },
+        {
+          "position": 400,
+          "source_simfile": "ShockWAVE Syndrome  [-YOSEFU-]/ShockWAVE Syndrome.ssc",
+          "simfile_sha256": "51aa717b34654f7f4bbad091afb0e9621718e57977d78fe36702c21f580ed3c7",
+          "retained_original_archive": "42fc00a2ef99d242340d8443f9d74329efafda77c917c1758236a301ae79e278.tar.zst"
+        },
+        {
+          "position": 408,
+          "source_simfile": "Spectrum Sequence/spectrumsequence.ssc",
+          "simfile_sha256": "c6cb1fcd9137d0fe2e5e729aee4be12096ab08097333f391e64c9521759a06e9",
+          "retained_original_archive": "eb5ec789e6f5cb86e47dd64d1c5b184245357e239f0f203254f5c3847c87a45d.tar.zst"
+        },
+        {
+          "position": 416,
+          "source_simfile": "Stella Glow/Stella Glow.ssc",
+          "simfile_sha256": "55b95249b44773d770c1700d4791173ca3a7ec04b3bd57dc39e51e349ce15edc",
+          "retained_original_archive": "75c5ddbce3060d5e4f31bc12e6e2a7995808ec22192344d4c323abbebdcee9a2.tar.zst"
+        },
+        {
+          "position": 424,
+          "source_simfile": "Talk About/talkabout.sm",
+          "simfile_sha256": "3f1bd2e358d9712250fa99601b6101386464a5ea59a62c754aa7286fa27bb1b4",
+          "retained_original_archive": "780974ec4621b1223f8af891d098be559b60904c7d03fede92d2138c76e8a1fd.tar.zst"
+        },
+        {
+          "position": 432,
+          "source_simfile": "The Entity/The Entity.ssc",
+          "simfile_sha256": "c4808c70ab4505fe4cd87d3e39a55be8629cb03628ca4e19aef9568d20b77eff",
+          "retained_original_archive": "2903b6b8ced3d1703649aa31554a6d63ee9e378b18638d9599b9a7d2705653dc.tar.zst"
+        },
+        {
+          "position": 440,
+          "source_simfile": "Think About You/Think About You.sm",
+          "simfile_sha256": "d01ff4ef09316dc0d24520e9ae7df0c98d8f3754bcacb2aa20fef875c3c3ec99",
+          "retained_original_archive": "21d9f2425baa2f04a119eb6c84bd05902781eb7559282e838c29605370be582b.tar.zst"
+        },
+        {
+          "position": 448,
+          "source_simfile": "TRIP MACHINE -Resuscitation MIX-/TRIP MACHINE -Resuscitation MIX-.ssc",
+          "simfile_sha256": "57c804fc493c1021df3e77b221706646e996c622f2c0e6b82482503bfeda3934",
+          "retained_original_archive": "41ca641ece28c407d4c8dc386cf90e7fcc0f6f625b89c175864063199d6d9164.tar.zst"
+        },
+        {
+          "position": 456,
+          "source_simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.ssc",
+          "simfile_sha256": "912debac3e2475cdb5de2f6c83150b6ebb21c4a277cb6fc0789f524c23e5f248",
+          "retained_original_archive": "16ee975a29ffd54734737990cb30e29212e3875519d2ad294e5e47afe15a5c91.tar.zst"
+        },
+        {
+          "position": 464,
+          "source_simfile": "wah-propaganwah (habstrakt remix) (ddrillini remix)/Propaganda (Habstrakt Remix).ssc",
+          "simfile_sha256": "512975cf66528e0f97eb9eda05e663d90c9281280794226f18779020d3e0ed0d",
+          "retained_original_archive": "5bd8af7128a7bf99749e22e881f4c86a5245513811b2faf270358e1fc5e4715e.tar.zst"
+        },
+        {
+          "position": 472,
+          "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+          "simfile_sha256": "3d4d8467ebbbd92076d67f661822eead8387f4c7e05fd5fb4bdf5ec3b3d5db4e",
+          "retained_original_archive": "b661badef962c63aae3272b9fb87e3a5e147247d6b11f38541d468005387cfd2.tar.zst"
+        },
+        {
+          "position": 480,
+          "source_simfile": "Young Dumb And Broke/YDB.sm",
+          "simfile_sha256": "1addc2202817def4719e4b62fb85ade39e8450cfe01a19ed3adc3370efce6cd0",
+          "retained_original_archive": "d5a047decffc532d9ed092aa51ae20f7a7809c0abebe405190618b9cf03f6428.tar.zst"
+        },
+        {
+          "position": 488,
+          "source_simfile": "Collaboration with Paul J Kim/Something.sm",
+          "simfile_sha256": "6dbe100f3f622fb59e684b7f0953f4fe7b448deec1821630c68235437d326fb3",
+          "historical_failure": {
+            "simfile": "Collaboration with Paul J Kim/Something.sm",
+            "status": "partial",
+            "category": "source_error",
+            "reason": "corpus:/Collaboration with Paul J Kim/Nothing/default.lua:6: attempt to index global 'SREENMAN' (a nil value)",
+            "diagnostics": "target/song-lua-repair/phase2/5c63f1e940a14e50",
+            "dropped_events": 0,
+            "end_position": {
+              "beat": 339,
+              "seconds": 131.35581970214844
+            },
+            "target_beat": 339.0
+          }
+        },
+        {
+          "position": 496,
+          "source_simfile": "Metronogik/Song.ssc",
+          "simfile_sha256": "b47ec860275040252ac437d921d2c8b04338a126a65f0fd84fee2494781d4808",
+          "historical_failure": {
+            "simfile": "Metronogik/Song.ssc",
+            "status": "partial",
+            "category": "unsupported_theme_context",
+            "reason": "corpus:/Metronogik/code/update.lua:439: bad argument #1 to 'ipairs' (table expected, got nil); full Simply Love HUD text actors are not instantiated by this host",
+            "diagnostics": "target/song-lua-repair/phase2/bd062750cefe5be7",
+            "dropped_events": 0,
+            "end_position": {
+              "beat": 2702,
+              "seconds": 146.14315795898438
+            },
+            "target_beat": 2702.0
+          }
+        }
+      ],
+      "chart-sweep-parallel-v5-6": [
+        {
+          "position": 328,
+          "source_simfile": "No Role Modelz/No Role Modelz.ssc",
+          "simfile_sha256": "62c5d4b588b5d9bb3f7a8f71417bfeb2a0561c6dc17443308fbd90cf700faad3",
+          "retained_original_archive": "a05f9d82be073f19a4f499bd9c7db339e8a97617c82c8c75fc1e16bafc2e4df2.tar.zst"
+        },
+        {
+          "position": 351,
+          "source_simfile": "PARTY [pArTy eDiTioN]/Party.ssc",
+          "simfile_sha256": "0e23885e106ef30c5df46a756d78c4157c0e8d89551978aa36abe1e849123a18",
+          "retained_original_archive": "b805d2a8b59293694db65ac87b92368f08f471c8d812bc53b9cbc71c96735f44.tar.zst"
+        },
+        {
+          "position": 363,
+          "source_simfile": "Quarantine/Quarantine.ssc",
+          "simfile_sha256": "5c9539eaa66e70d13eee0f446f5a0f09e4095438ed0ed5d8110ec89a9cd53a51",
+          "retained_original_archive": "b85e490024c5f44f05ddb83760623ec5b912f18535dc0445f022b248c9555d14.tar.zst"
+        },
+        {
+          "position": 375,
+          "source_simfile": "Remind The Souls/remindthesouls-fakemines.ssc",
+          "simfile_sha256": "d062101e12e79bc921d5ed7c1c5cd39650ff4d242ce6e6370be33df1a9526841",
+          "retained_original_archive": "5b6dd2c7346c5fe204cd3334a4b26a6570561158a1727cadc75f3ea8087db73d.tar.zst"
+        },
+        {
+          "position": 385,
+          "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
+          "simfile_sha256": "8fe26f5a104dc99f0cea900b336f5404b18f0048a758829f1f4c09c00f99d5c4",
+          "retained_original_archive": "3b8ed87a2b0f138bd6e27055ecaace396a575b07ba51146cdc61879176c95521.tar.zst"
+        },
+        {
+          "position": 393,
+          "source_simfile": "September/september.ssc",
+          "simfile_sha256": "a0bc086398a4f8682345c2ed7b9c9dfff26cea64eba493597b44bfae279275ba",
+          "retained_original_archive": "8466c72b430467bf1dfceb0b73068fa766ac4a763de3009da2492120e8a72580.tar.zst"
+        },
+        {
+          "position": 401,
+          "source_simfile": "Shooting Love/Shooting Love.ssc",
+          "simfile_sha256": "127f73762b1660128aaaf50354cbb9c3f65fc6aadad10140084ac062e23aa652",
+          "retained_original_archive": "8dc1c58dc778b3718b89efbb7b022f53ebfe2ed9d0e95ffff5e243cfba0c6ffc.tar.zst"
+        },
+        {
+          "position": 409,
+          "source_simfile": "SPLAK IT DOWN - [Zaia +ruunix2]/SPLAK IT DOWN.ssc",
+          "simfile_sha256": "5807f8222a01ca5fb8407c16aeb0e5e915bfecb5f99fca21f2bdbd7941589e76",
+          "retained_original_archive": "edf407ed75008ed2da8a1fc40922a146973aa26f79fbde739c2ec56612f367be.tar.zst"
+        },
+        {
+          "position": 417,
+          "source_simfile": "Step Your Game Up (Director's Cut)/stepyourgameup.ssc",
+          "simfile_sha256": "0a3d5f8740b9a803178783ad771478123c20159d33e697440d971c46c1f7aab7",
+          "retained_original_archive": "22387511d228b48e2eef93341c05345792b730497e88f5e68fb90885648ec217.tar.zst"
+        },
+        {
+          "position": 425,
+          "source_simfile": "Talk About/talkabout.ssc",
+          "simfile_sha256": "0f208e7b750312e6878a7dfaaf8cee19b309c051a1e5b6f4093a35da6b145c6d",
+          "retained_original_archive": "d3283b2ccd70d187f4f70cafad9f25a7999c67e1a72521656d3beec914f73cb0.tar.zst"
+        },
+        {
+          "position": 433,
+          "source_simfile": "the fresh prince of bel air (razihel remix)/steps.sm",
+          "simfile_sha256": "7fd67a74fb5e8acf49f0cc1b26ad698992eb230dc7c06f2f293acb34d3d71bdc",
+          "retained_original_archive": "0e87d1cda1c314a3fc97ce47b81afa0281e3b5f8b182648018ea5646f3ef77a2.tar.zst"
+        },
+        {
+          "position": 441,
+          "source_simfile": "Think About You/Think About You.ssc",
+          "simfile_sha256": "7e1f7c8e92dafb3603c470d852b1a8b46b7bae33693e0093760b0d9aff079e1c",
+          "retained_original_archive": "a9a8b95a86398a5759891ba0ed098e569f019bc22d2d1a8510f7b2fc1ebdb376.tar.zst"
+        },
+        {
+          "position": 449,
+          "source_simfile": "Turn A - [Freya]/turn_a.ssc",
+          "simfile_sha256": "7877692800f17f5cb85481cc652be8317830640b81c55b87d7c3c49da5a55990",
+          "retained_original_archive": "88154659902f37929643b5caec609a2700d67c863450df439554e8d35a9effa3.tar.zst"
+        },
+        {
+          "position": 457,
+          "source_simfile": "Up Up Up Up/Up Up Up Up.sm",
+          "simfile_sha256": "2f5319394cf6847a86d2be85032b0ab2479452f81f40542adb9634111c91d986",
+          "retained_original_archive": "7acf4619b2f2bd7f6b37c031437a2dfdd22ad71e69db5c37d2598cf29be4968f.tar.zst"
+        },
+        {
+          "position": 465,
+          "source_simfile": "Waiting/Waiting.ssc",
+          "simfile_sha256": "41b880df985e8c91a2092c266e1f439e735d9dd82b600b4993cadb7b4a3fea4e",
+          "retained_original_archive": "c8e4b447aad3f46015398ddabcc06fdbfc62394538411d854f6b324fb32dd29f.tar.zst"
+        },
+        {
+          "position": 473,
+          "source_simfile": "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc",
+          "simfile_sha256": "66dba9f19596561f280a582920a90e18425191544e0051909d81b7bbb239abd9",
+          "retained_original_archive": "b22f74de2e8fbe69396870627e62559db93553c4dab1372bfad3ee0c5832765c.tar.zst"
+        },
+        {
+          "position": 481,
+          "source_simfile": "Young Dumb And Broke/YDB.ssc",
+          "simfile_sha256": "8768a55012287ef1a6fb4f70a6b18e53f129ec03782bb3d2dfdbdf0517377d4c",
+          "retained_original_archive": "8022849c5f08e058cf3f8d79201fe4b86bec82b04f3ffa51ce7ed7bf5e83ba40.tar.zst"
+        },
+        {
+          "position": 489,
+          "source_simfile": "Cursed Metamorph - [Zaia]/saved/Cursed Metamorph.ssc",
+          "simfile_sha256": "08f8865ca23a834cbed37f92c94f5c5439c2cf6eec65fbaff66d9d827e60aa50",
+          "historical_failure": {
+            "simfile": "Cursed Metamorph - [Zaia]/saved/Cursed Metamorph.ssc",
+            "status": "error",
+            "category": "missing_song_lua",
+            "reason": "ITGmania Lua host failed: cannot open corpus:/Cursed Metamorph - [Zaia]/saved/lua/default.lua: No such file or directory",
+            "diagnostics": "target/song-lua-repair/known/cf1c3df5d6e9f28b"
+          }
+        },
+        {
+          "position": 497,
+          "source_simfile": "mr sandman/mr sandman.sm",
+          "simfile_sha256": "e2262781ebdd5afd187dbdb5ce568db701ed7a4b6f8b856dbeb4f471c17b27c3",
+          "historical_failure": {
+            "simfile": "mr sandman/mr sandman.sm",
+            "status": "timeout",
+            "category": "capture_timeout",
+            "reason": "native capture exceeded 900 seconds",
+            "diagnostics": "target/song-lua-repair/final/9a7dc9dd696c05ad"
+          }
+        }
+      ],
+      "chart-sweep-parallel-v5-7": [
+        {
+          "position": 331,
+          "source_simfile": "No.13/no13.ssc",
+          "simfile_sha256": "fd7bbfeee391ed68c8be20fe1784e08d3b3b4fb7ca9839720d3d04dd9d11d94f",
+          "retained_original_archive": "a7611b125e7ff5921df9a2b227abb498dc9a688376251f3c77072782952ed899.tar.zst"
+        },
+        {
+          "position": 352,
+          "source_simfile": "paw, paw!/paw paw.ssc",
+          "simfile_sha256": "52b1922e1195cec39c371c15db6041a43fdaa8f0a892256b9febe32e69eceb04",
+          "retained_original_archive": "77eacfb29a6ee00d92c4cdef2b6893a7d6e8110a5cc2739a55a18fe2fc9ae2f2.tar.zst"
+        },
+        {
+          "position": 364,
+          "source_simfile": "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc",
+          "simfile_sha256": "2b25813381440b9e64c321a73c0f6f3b42a6f9ab474e727a379ea692d959d721",
+          "retained_original_archive": "5f2c75c1c78ab4d15f7db1dddaa751dc9728036f30fcae04a6a70246c521c6df.tar.zst"
+        },
+        {
+          "position": 376,
+          "source_simfile": "Retrospective/Retrospective.ssc",
+          "simfile_sha256": "6b8b605a11579a2bcf5f699c422a28a0aac0ec1178bd7a39d4f99964c4684095",
+          "retained_original_archive": "bd9d4d8cde193f9127448117fc02f4f17930ace7fdff9fdfbc36bc65de8de56b.tar.zst"
+        },
+        {
+          "position": 386,
+          "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.ssc",
+          "simfile_sha256": "29d4151e08577c8256f6a5021112d53456525ed900eb8b8b4bae0427b2b2018f",
+          "retained_original_archive": "905f4d5096a547453771c44f961de105265650bb38663f963f2ec0bd68afbfda.tar.zst"
+        },
+        {
+          "position": 394,
+          "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
+          "simfile_sha256": "45d9d5f8655020c9086fbeef5ad48616f82fb351961223046e68d95bed94e0bf",
+          "retained_original_archive": "34598587c55a3b9452d7ac65dbfd4228cbd7c77a1b8ab83ef5ba32e78bf410fd.tar.zst"
+        },
+        {
+          "position": 402,
+          "source_simfile": "Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem.ssc",
+          "simfile_sha256": "7a82f8b2dbf4b1b3fb938b1c4a2584da143f65f0da58d1f83df3d18498789afb",
+          "retained_original_archive": "4ba543256995b864147dce3e20a8b4290ad7ba8dee482782227cd7580374b4d1.tar.zst"
+        },
+        {
+          "position": 410,
+          "source_simfile": "spooky (SM 12)/spooky (Tech-Stam cut).ssc",
+          "simfile_sha256": "c511f139ca6b9687612ea5fd120aec3973e1eb2a24a8d9b1920e1bbca49b579d",
+          "retained_original_archive": "32635dde8bf66fd65db720cb954ed59f804ffc79ef6a9f0b2af933b873e9e2e9.tar.zst"
+        },
+        {
+          "position": 418,
+          "source_simfile": "Stepping Music/simfile.ssc",
+          "simfile_sha256": "10012ad27ef9d7d1f1011b4ea0ee35c2a2aa082a36cbd57578a5f32605db804d",
+          "retained_original_archive": "bd3590158d0ac0d81ca614d6f89f05847f11fbedd8905ac513abea999652425a.tar.zst"
+        },
+        {
+          "position": 426,
+          "source_simfile": "Tamamo no Mae/Tamamo no Mae.ssc",
+          "simfile_sha256": "eec264efef2401e6e519391de04b63e44b7c9540c88b7c7bf97b15aa151e3cab",
+          "retained_original_archive": "4a9de7cb051bcab2b5da182fa371621239e65568c156b372f66d2b046e5903b7.tar.zst"
+        },
+        {
+          "position": 434,
+          "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.sm",
+          "simfile_sha256": "8c1930f235fa5619e2afa477e52a61b2f8bf92062ac73a8cec69fc0bb90733dc",
+          "retained_original_archive": "04ec281a4c93dacfe84756dab5a3df423f1ab623017f8f51aa99d66bce57b95c.tar.zst"
+        },
+        {
+          "position": 442,
+          "source_simfile": "This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!/This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!.ssc",
+          "simfile_sha256": "bfd45fee4d033b51d4341238d9ca9145d3c52133bea7eb5c975f20ca9fd2ac0e",
+          "retained_original_archive": "17d9dd0bce10fd4b992f93127eec828efa4fd7ae8ab25d0f2c687cb2be728e0d.tar.zst"
+        },
+        {
+          "position": 450,
+          "source_simfile": "U-0 - [PCBoyGames]/Srezcat - U-0.ssc",
+          "simfile_sha256": "e02d69efc0c2670faa1c7e4aba6b34c3a4d4ca96fd80e627848a64836c63dd82",
+          "retained_original_archive": "264bd06f6c2e74ccb0062f038af1df64db2078aae62bd65955d2bf6d31b12239.tar.zst"
+        },
+        {
+          "position": 458,
+          "source_simfile": "Vanishing Point - [Zaia][FX]/Vanishing Point.sm",
+          "simfile_sha256": "f7ac16da8d8c62411ac7632013d534ed3601e0a122d7634a18f625933e9a7246",
+          "retained_original_archive": "30e0a5a698a6406e42c5b8379ac5a974b57f5dfd6e74d201f4e151875166a5b6.tar.zst"
+        },
+        {
+          "position": 466,
+          "source_simfile": "Wake Up/Wake Up.ssc",
+          "simfile_sha256": "82fd8abc80e5a812b098793e3d82a90b54de42016e68c7ef37db66e0eefbbf8f",
+          "retained_original_archive": "087058a7d38b6c7c88131e1204e74e93ab8ab4a1b32f1551bd06e15620de7ad5.tar.zst"
+        },
+        {
+          "position": 474,
+          "source_simfile": "wndrwll/wndrwll.ssc",
+          "simfile_sha256": "26433a3ef9255d76659f20b47b4e1e63afabea0ecea9b128a8ee2904433cf2fe",
+          "retained_original_archive": "8d72e948ab8d95a85e992f012230dda8a61941abf9b34bd8da77cfcfa9f2d5f2.tar.zst"
+        },
+        {
+          "position": 482,
+          "source_simfile": "Zoku Shimedore 2000/Zoku Shimedore 2000.ssc",
+          "simfile_sha256": "fd615c9d0397ba0e3ca3c85ffbf0ed4bf7fc45cf32ae788925f55d926c927f16",
+          "retained_original_archive": "a57ea926770a30c77b59c6149fc05d9550e6731965170b18f2e561aae931ed8f.tar.zst"
+        },
+        {
+          "position": 490,
+          "source_simfile": "Dongo Bongo/dongobongo2.ssc",
+          "simfile_sha256": "b0057ebbdf4f8465cc34fda1fe7327d1a4edbf2978ed04b7c98eef0fe43f4dd0",
+          "historical_failure": {
+            "simfile": "Dongo Bongo/dongobongo2.ssc",
+            "status": "partial",
+            "category": "source_error",
+            "reason": "corpus:/Dongo Bongo/despair/default.lua:198: attempt to index global 'SREENMAN' (a nil value)",
+            "diagnostics": "target/song-lua-repair/phase2/2c9db316dfcd9ab2",
+            "dropped_events": 0,
+            "end_position": {
+              "beat": 398.5,
+              "seconds": 200.97715276551943
+            },
+            "target_beat": 398.5
+          }
+        },
+        {
+          "position": 498,
+          "source_simfile": "Pokemon Gym Battle Remix/pokes.ssc",
+          "simfile_sha256": "04a6fbf5926825207a7a520403db97e5bdb24d456bdc54775ca157a7ef9be4c6",
+          "historical_failure": {
+            "simfile": "Pokemon Gym Battle Remix/pokes.ssc",
+            "status": "error",
+            "category": "source_error",
+            "reason": "ITGmania Lua host failed: corpus:/Pokemon Gym Battle Remix/jokes/default.lua:18: attempt to perform arithmetic on global 'counter' (a nil value)",
+            "diagnostics": "target/song-lua-repair/known/8f40f6c480324919"
+          }
+        }
+      ]
+    },
+    "retained_replays": {
+      "chart-sweep-20261012-v2": {
+        "old_supervisor": {
+          "pid": 355208,
+          "command": [
+            "python3",
+            "/home/parity/jobs/run_chart_sweep_v4.py"
+          ]
+        },
+        "current": {
+          "position": 380,
+          "source_simfile": "Ruin Our Friendship/RuinOurFriendship.ssc",
+          "simfile_sha256": "f6ca5379055f264bcf41c1c1efe9b022a22789529220240dd6870d34e31ccb8a",
+          "retained_original_archive": "14d5a7c57f232005e0ee587007640d17b6963348fbdaa4a1f4e7f87187f625cd.tar.zst",
+          "status": "pending",
+          "repair_attempts": 0,
+          "binary_sha256": "74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234",
+          "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+          "fix_commit": "e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+          "build_proof": "/home/parity/jobs/double-cue-rows-green-v2/proof.json"
+        },
+        "live": {
+          "pid": 1834225,
+          "command": [
+            "/home/parity/jobs/double-cue-rows-green-v2/full-song-lua",
+            "--archive",
+            "/home/parity/jobs/chart-sweep-20261012-v2/chart-380/candidates/6133b834410a8f51266a56bff99968f0629ab3461915caa4cd95fc6e15808826.tar",
+            "--report",
+            "/home/parity/jobs/chart-sweep-20261012-v2/chart-380/report.json"
+          ],
+          "label": "replay",
+          "source_simfile": "Ruin Our Friendship/RuinOurFriendship.ssc"
+        },
+        "elapsed_seconds": 2138.7999999999884,
+        "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-380/candidates/6133b834410a8f51266a56bff99968f0629ab3461915caa4cd95fc6e15808826.tar",
+        "progress_results": 89
+      },
+      "chart-sweep-parallel-v4-1": {
+        "old_supervisor": {
+          "pid": 355209,
+          "command": [
+            "python3",
+            "/home/parity/jobs/run_chart_sweep_partition_v4.py",
+            "1"
+          ]
+        },
+        "current": {
+          "position": 348,
+          "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.ssc",
+          "simfile_sha256": "f5fa33a551c25ad5a3b55e7c115048c07c8684d71b09616f8409f8b2f075fa57",
+          "retained_original_archive": "69782c63aa11278e9a3da5c860936dee4f2459a99c678c154ba7c09b6f37ac22.tar.zst",
+          "status": "pending",
+          "repair_attempts": 0,
+          "binary_sha256": "74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234",
+          "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+          "fix_commit": "e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+          "build_proof": "/home/parity/jobs/double-cue-rows-green-v2/proof.json"
+        },
+        "live": {
+          "pid": 1603266,
+          "command": [
+            "/home/parity/jobs/double-cue-rows-green-v2/full-song-lua",
+            "--archive",
+            "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-348/candidates/2db5ac9f92542a9ad43cecf09a8e54ebb9ebbc91bf07c1e8456077b57405e8ed.tar",
+            "--report",
+            "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-348/report.json"
+          ],
+          "label": "replay",
+          "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.ssc"
+        },
+        "elapsed_seconds": 4798.49000000002,
+        "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-348/candidates/2db5ac9f92542a9ad43cecf09a8e54ebb9ebbc91bf07c1e8456077b57405e8ed.tar",
+        "progress_results": 60
+      },
+      "chart-sweep-parallel-v4-2": {
+        "old_supervisor": {
+          "pid": 355210,
+          "command": [
+            "python3",
+            "/home/parity/jobs/run_chart_sweep_partition_v4.py",
+            "2"
+          ]
+        },
+        "current": {
+          "position": 307,
+          "source_simfile": "mawaru8/mawaru8.sm",
+          "simfile_sha256": "a0e32b54c2762591bb87110e8661cdc1b9e31b6d5d9a287e8500ced93cc5d492",
+          "retained_original_archive": "563f40565c419e299a0e956ba002854bd02cb498a809dfaa0130244f3b4026f8.tar.zst",
+          "status": "pending",
+          "repair_attempts": 0,
+          "binary_sha256": "6a912f949896b963329aaa0cde4ea6c5fbc86bf6368091a1a6974d2b22629114",
+          "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+          "fix_commit": "d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+          "build_proof": "/home/parity/jobs/empty-layers-green-v2/proof.json"
+        },
+        "live": {
+          "pid": 2425243,
+          "command": [
+            "/home/parity/jobs/empty-layers-green-v2/full-song-lua-stage-modifier-v1",
+            "--archive",
+            "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-307/candidates/6371f5c7299efa1afae969b3dc7b0f033aa78702ed72161af14fe0a068a7f91f.tar",
+            "--report",
+            "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-307/report.json"
+          ],
+          "label": "replay",
+          "source_simfile": "mawaru8/mawaru8.sm"
+        },
+        "elapsed_seconds": 54374.59999999998,
+        "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-307/candidates/6371f5c7299efa1afae969b3dc7b0f033aa78702ed72161af14fe0a068a7f91f.tar",
+        "progress_results": 46
+      }
+    },
+    "completed_positions": [
+      149,
+      150,
+      151,
+      152,
+      153,
+      154,
+      155,
+      156,
+      157,
+      158,
+      159,
+      160,
+      161,
+      162,
+      163,
+      164,
+      165,
+      166,
+      167,
+      168,
+      169,
+      170,
+      171,
+      172,
+      173,
+      174,
+      175,
+      176,
+      177,
+      178,
+      179,
+      180,
+      181,
+      182,
+      183,
+      184,
+      185,
+      186,
+      187,
+      188,
+      189,
+      190,
+      191,
+      192,
+      193,
+      194,
+      195,
+      196,
+      197,
+      198,
+      199,
+      200,
+      201,
+      202,
+      203,
+      204,
+      205,
+      206,
+      207,
+      208,
+      209,
+      210,
+      211,
+      212,
+      213,
+      214,
+      215,
+      216,
+      217,
+      218,
+      219,
+      220,
+      221,
+      222,
+      223,
+      224,
+      225,
+      226,
+      227,
+      228,
+      229,
+      230,
+      231,
+      232,
+      233,
+      234,
+      235,
+      236,
+      237,
+      238,
+      239,
+      240,
+      241,
+      242,
+      243,
+      244,
+      245,
+      246,
+      247,
+      248,
+      249,
+      250,
+      251,
+      252,
+      253,
+      254,
+      255,
+      256,
+      257,
+      258,
+      259,
+      260,
+      261,
+      262,
+      263,
+      264,
+      265,
+      266,
+      267,
+      268,
+      269,
+      270,
+      271,
+      272,
+      273,
+      274,
+      275,
+      276,
+      277,
+      278,
+      279,
+      280,
+      281,
+      282,
+      283,
+      284,
+      285,
+      286,
+      287,
+      288,
+      289,
+      290,
+      291,
+      292,
+      293,
+      294,
+      295,
+      296,
+      297,
+      298,
+      299,
+      300,
+      301,
+      302,
+      303,
+      304,
+      305,
+      306,
+      308,
+      309,
+      311,
+      312,
+      314,
+      315,
+      317,
+      318,
+      320,
+      321,
+      323,
+      324,
+      326,
+      327,
+      329,
+      330,
+      332,
+      333,
+      335,
+      336,
+      338,
+      339,
+      341,
+      342,
+      344,
+      345,
+      347,
+      350,
+      353,
+      356,
+      359,
+      362,
+      365,
+      368,
+      371,
+      374,
+      377
+    ],
+    "unprocessed_positions": [
+      307,
+      310,
+      313,
+      316,
+      319,
+      322,
+      325,
+      328,
+      331,
+      334,
+      337,
+      340,
+      343,
+      346,
+      348,
+      349,
+      351,
+      352,
+      354,
+      355,
+      357,
+      358,
+      360,
+      361,
+      363,
+      364,
+      366,
+      367,
+      369,
+      370,
+      372,
+      373,
+      375,
+      376,
+      378,
+      379,
+      380,
+      381,
+      382,
+      383,
+      384,
+      385,
+      386,
+      387,
+      388,
+      389,
+      390,
+      391,
+      392,
+      393,
+      394,
+      395,
+      396,
+      397,
+      398,
+      399,
+      400,
+      401,
+      402,
+      403,
+      404,
+      405,
+      406,
+      407,
+      408,
+      409,
+      410,
+      411,
+      412,
+      413,
+      414,
+      415,
+      416,
+      417,
+      418,
+      419,
+      420,
+      421,
+      422,
+      423,
+      424,
+      425,
+      426,
+      427,
+      428,
+      429,
+      430,
+      431,
+      432,
+      433,
+      434,
+      435,
+      436,
+      437,
+      438,
+      439,
+      440,
+      441,
+      442,
+      443,
+      444,
+      445,
+      446,
+      447,
+      448,
+      449,
+      450,
+      451,
+      452,
+      453,
+      454,
+      455,
+      456,
+      457,
+      458,
+      459,
+      460,
+      461,
+      462,
+      463,
+      464,
+      465,
+      466,
+      467,
+      468,
+      469,
+      470,
+      471,
+      472,
+      473,
+      474,
+      475,
+      476,
+      477,
+      478,
+      479,
+      480,
+      481,
+      482,
+      483,
+      484,
+      485,
+      486,
+      487,
+      488,
+      489,
+      490,
+      491,
+      492,
+      493,
+      494,
+      495,
+      496,
+      497,
+      498,
+      499,
+      500,
+      501
+    ],
+    "original_remaining_plan_sources": 353,
+    "concurrency": 8,
+    "reason": "Increase independent-chart throughput using spare capacity; preserve existing captures and replay children"
+  },
+  "launches": {
+    "chart-sweep-20261012-v2": {
+      "pid": 2027825,
+      "command": [
+        "python3",
+        "/home/parity/jobs/run_chart_sweep_partition_v5.py",
+        "chart-sweep-20261012-v2"
+      ]
+    },
+    "chart-sweep-parallel-v4-1": {
+      "pid": 2027826,
+      "command": [
+        "python3",
+        "/home/parity/jobs/run_chart_sweep_partition_v5.py",
+        "chart-sweep-parallel-v4-1"
+      ]
+    },
+    "chart-sweep-parallel-v4-2": {
+      "pid": 2027827,
+      "command": [
+        "python3",
+        "/home/parity/jobs/run_chart_sweep_partition_v5.py",
+        "chart-sweep-parallel-v4-2"
+      ]
+    },
+    "chart-sweep-parallel-v5-3": {
+      "pid": 2027828,
+      "command": [
+        "python3",
+        "/home/parity/jobs/run_chart_sweep_partition_v5.py",
+        "chart-sweep-parallel-v5-3"
+      ]
+    },
+    "chart-sweep-parallel-v5-4": {
+      "pid": 2027829,
+      "command": [
+        "python3",
+        "/home/parity/jobs/run_chart_sweep_partition_v5.py",
+        "chart-sweep-parallel-v5-4"
+      ]
+    },
+    "chart-sweep-parallel-v5-5": {
+      "pid": 2027830,
+      "command": [
+        "python3",
+        "/home/parity/jobs/run_chart_sweep_partition_v5.py",
+        "chart-sweep-parallel-v5-5"
+      ]
+    },
+    "chart-sweep-parallel-v5-6": {
+      "pid": 2027831,
+      "command": [
+        "python3",
+        "/home/parity/jobs/run_chart_sweep_partition_v5.py",
+        "chart-sweep-parallel-v5-6"
+      ]
+    },
+    "chart-sweep-parallel-v5-7": {
+      "pid": 2027832,
+      "command": [
+        "python3",
+        "/home/parity/jobs/run_chart_sweep_partition_v5.py",
+        "chart-sweep-parallel-v5-7"
+      ]
+    }
+  },
+  "kernel_exit_status_control": {
+    "kernel_wait_status": 1792,
+    "actual_exit_code": 7,
+    "parent_stopped_before_reap": true,
+    "fixture_processes_touched": false
+  },
+  "source_scripts": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\run_chart_sweep_partition_v5.py",
+      "sha256": "c43a68eb69b416a6ad04e83b2c32b7f7fb79ddef261da69861f4fe0ea9a58652"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\handoff_chart_sweep_v5.py",
+      "sha256": "6da09c2c088895d895766349b9c89cd95c82c21a1dce8ad576d69685d58b1cf5"
+    }
+  ],
+  "existing_replay_children_restarted": false,
+  "existing_native_captures_restarted": false,
+  "existing_zero_exit_acceptance_preserved": true,
+  "new_acceptance_gate_added": false,
+  "single_publisher_stream_count": 95,
+  "reason": "Use spare server capacity for unstarted charts while preserving all current work."
+}
