@@ -1,0 +1,24 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "acceptance_gate_added": false,
+  "results": [
+    {
+      "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.ssc",
+      "archive": "6806ab1f2e21991df906cfc6199a4ed091446abab465b3a414b2d0c9fec796d4.tar.zst",
+      "compressed_sha256": "6806ab1f2e21991df906cfc6199a4ed091446abab465b3a414b2d0c9fec796d4",
+      "uncompressed_sha256": "751f57a60ad01a35009a75d5719460fa400d0892445e8fccb98e7bca61f86ece",
+      "compressed_bytes": 23417696,
+      "local_decompression_byte_verified": true,
+      "passing_chart_reopened": false
+    },
+    {
+      "source_simfile": "Paradise [Cringle Desolation]/Paradise.sm",
+      "archive": "7fe43b2f10ed975a048b0ec8f67146f210b9ac16eccea9bfb21b0d870ad003e6.tar.zst",
+      "compressed_sha256": "7fe43b2f10ed975a048b0ec8f67146f210b9ac16eccea9bfb21b0d870ad003e6",
+      "uncompressed_sha256": "f3bb2f1de93a110257ecf2328da503d50036f19bea462cda2f80b3bd799995e0",
+      "compressed_bytes": 14405538,
+      "local_decompression_byte_verified": true,
+      "passing_chart_reopened": false
+    }
+  ]
+}
