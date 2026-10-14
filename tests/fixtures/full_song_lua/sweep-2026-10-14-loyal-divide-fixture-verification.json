@@ -1,0 +1,11 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Loyal Divide [TaroNuke]/Loyal Divide.sm",
+  "archive": "2535ae776cb2b2110119fa4f5aa92a1458d99122495035547dd0b306f08c04eb.tar.zst",
+  "compressed_sha256": "2535ae776cb2b2110119fa4f5aa92a1458d99122495035547dd0b306f08c04eb",
+  "uncompressed_sha256": "3798f249b84078d2e6a80afd3a6e96f8392a99a85523477cc4bbe73412f604c7",
+  "compressed_bytes": 4301604,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
