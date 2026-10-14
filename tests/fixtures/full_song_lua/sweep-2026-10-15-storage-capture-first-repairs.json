@@ -1,0 +1,76 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "cc145ab04",
+  "results": [
+    {
+      "position": 424,
+      "source_simfile": "Talk About/talkabout.sm",
+      "simfile_sha256": "3f1bd2e358d9712250fa99601b6101386464a5ea59a62c754aa7286fa27bb1b4",
+      "style": "single",
+      "difficulty": "Challenge",
+      "previous_result": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-424/result.json",
+      "complete_native_capture_available": false,
+      "previous_failure": "runtime native JSON truncated at 116531200 bytes during the verified full-disk incident",
+      "status": "passed",
+      "repair_attempts": 1,
+      "binary_sha256": "375fb5facffc717409b9b22e354eb2bddfd03358b9d9126ec5d00ceb3318b195",
+      "harness_sha256": "ea7314391554e3fc933a5531ba71f6a93a70a35f8e3b8c8706358dc60420e36c",
+      "build_proof": "/home/parity/jobs/sparse-declaration-linux-green-v1/proof.json",
+      "fix_commit": "cc145ab04",
+      "harness_fix_commit": "3adbf72",
+      "native_capture_reused": false,
+      "recapture_reason": "previous native capture incomplete or absent during verified ENOSPC; original files and failure logs retained",
+      "capture_seconds": 180.79315077100182,
+      "trace_sha256": "3ee0fa6723affcac10d5987ee2c6a21669b58d5f1d5acf045974eaa31675d03e",
+      "candidate": "/home/parity/jobs/storage-capture-first-repairs-v1/chart-424/candidates/d8cab1d90070cef6f48caf61e17088ea49f0d91bd2a4e7d2d870c2a3893a78d8.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1024.7316470459918,
+      "candidate_sha256": "d8cab1d90070cef6f48caf61e17088ea49f0d91bd2a4e7d2d870c2a3893a78d8",
+      "native_frames": 41146,
+      "replayed_frames": 41146,
+      "compared_stage_fields": 1408,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "eafd8df7fd6edaadb0b564c320ce7f5d14911a1576ed11d46ddd592df24a38f6",
+      "archive": "6c0a7478230a62025bd1da9ffe03806c030d5182c7efddb4f3ecb3d66a12fbd5.tar.zst",
+      "archive_sha256": "6c0a7478230a62025bd1da9ffe03806c030d5182c7efddb4f3ecb3d66a12fbd5",
+      "compressed_bytes": 12949907,
+      "pack_seconds": 15.479718420014251,
+      "harness_version": "0.1.80",
+      "title": "Talk About",
+      "retained_original_entry": {
+        "title": "Talk About",
+        "source_simfile": "Talk About/talkabout.sm",
+        "harness_version": "0.1.0",
+        "archive": "780974ec4621b1223f8af891d098be559b60904c7d03fede92d2138c76e8a1fd.tar.zst",
+        "sha256": "780974ec4621b1223f8af891d098be559b60904c7d03fede92d2138c76e8a1fd",
+        "compressed_bytes": 69510,
+        "uncompressed_sha256": "3a715279e22ff5eab44e816161c4e0a37dc13560153cbb03f3b22a6251c6d4f5",
+        "compression_level": 22,
+        "aliases": [
+          "16e5622fb167089e4ef205341a46568c04e5bf74fc6a2276876fa710f3f4d39e.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "scope": {
+    "original_simfiles": 501,
+    "charts": 2,
+    "original_scope_preserved": true
+  },
+  "binary_sha256": "375fb5facffc717409b9b22e354eb2bddfd03358b9d9126ec5d00ceb3318b195",
+  "harness_sha256": "ea7314391554e3fc933a5531ba71f6a93a70a35f8e3b8c8706358dc60420e36c",
+  "repair": "first full repair after verified storage recovery: old native capture incomplete or never created; corrected native observer and matching validated replay helper",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}

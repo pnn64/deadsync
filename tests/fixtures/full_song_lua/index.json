@@ -4955,15 +4955,12 @@
     {
       "title": "Talk About",
       "source_simfile": "Talk About/talkabout.sm",
-      "harness_version": "0.1.0",
-      "archive": "780974ec4621b1223f8af891d098be559b60904c7d03fede92d2138c76e8a1fd.tar.zst",
-      "sha256": "780974ec4621b1223f8af891d098be559b60904c7d03fede92d2138c76e8a1fd",
-      "compressed_bytes": 69510,
-      "uncompressed_sha256": "3a715279e22ff5eab44e816161c4e0a37dc13560153cbb03f3b22a6251c6d4f5",
-      "compression_level": 22,
-      "aliases": [
-        "16e5622fb167089e4ef205341a46568c04e5bf74fc6a2276876fa710f3f4d39e.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "6c0a7478230a62025bd1da9ffe03806c030d5182c7efddb4f3ecb3d66a12fbd5.tar.zst",
+      "sha256": "6c0a7478230a62025bd1da9ffe03806c030d5182c7efddb4f3ecb3d66a12fbd5",
+      "compressed_bytes": 12949907,
+      "uncompressed_sha256": "d8cab1d90070cef6f48caf61e17088ea49f0d91bd2a4e7d2d870c2a3893a78d8",
+      "aliases": []
     },
     {
       "title": "Talk About",
