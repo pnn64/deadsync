@@ -10606,6 +10606,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 476,
+      "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
+      "simfile_sha256": "b401ffe8880d652b2da8c5347cbf8db01be52038899e6c19b80ab748e93ae5aa",
+      "retained_original_archive": "f4249fbbe615707be08caf70a3937635a22a24800cf7c29e7968fa62cc7f7b9d.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 112.55596883801627,
+      "trace_sha256": "c844e0976dd12d9bc42c8c48910febb84842133b96eaddd04fbf488d2726c0b1",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-476/candidates/8988758df161a64fe92831476b38d15d6208ed2ca080032f20cb8b538cfb8c69.tar",
+      "replay_exit": 1,
+      "replay_seconds": 1.5219025390106253,
+      "candidate_sha256": "8988758df161a64fe92831476b38d15d6208ed2ca080032f20cb8b538cfb8c69",
+      "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Wobbpotato': error converting Lua nil to function; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Wobbpotato' from '/tmp/.tmpbZSdUN/song/lua/default.lua': error converting Lua nil to function\n\nthread 'main' (1384391) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "scope": {
@@ -10618,6 +10637,6 @@
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 39,
-  "pending_charts": 38,
-  "processed_charts": 77
+  "pending_charts": 39,
+  "processed_charts": 78
 }
