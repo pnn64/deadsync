@@ -1232,6 +1232,25 @@
         }
       ],
       "report_sha256": "1955ebc687faab5696b75ae2946f7a5ab8f58c7bc59e665cc1b6f9e20dc77d67"
+    },
+    {
+      "position": 390,
+      "source_simfile": "See Tinh/See Tinh.sm",
+      "simfile_sha256": "7a1a95ff2bcd51881b7d406aef5e038ad483269827ba9243c46b8d4dc8b794cb",
+      "retained_original_archive": "395def068b6e9f1192bdc55380b6f10891e898e5a2efd27e0a234db981e131a3.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e1d9c9995fcf756f86445761fe965767a848dd24",
+      "build_proof": "/home/parity/jobs/next-screen-target-linux-green-v1/proof.json",
+      "capture_seconds": 237.58471070599626,
+      "trace_sha256": "652a0da56e03b4b47007f12168f5620e7a7313e7730cb07a9fc831ba0506b477",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-3/chart-390/candidates/3c4a446cab0be9b5682b71c92d4949ab27883c8c891755d25894f4f23db432ac.tar",
+      "replay_exit": 1,
+      "replay_seconds": 32.53233461998752,
+      "candidate_sha256": "3c4a446cab0be9b5682b71c92d4949ab27883c8c891755d25894f4f23db432ac",
+      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[13.2s] replaying every native gameplay frame\n[14.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'See Tinh': failed to execute '/tmp/.tmpPM0Vbq/song/lua/default.lua': runtime error: [string \"/tmp/.tmpPM0Vbq/song/lua/mods-taro.lua\"]:514: attempt to index global 'GameState' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/mods-taro.lua\"]:514: in main chunk\n\t[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\nstack traceback:\n\t>[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'See Tinh' from '/tmp/.tmpPM0Vbq/song/lua/default.lua': failed to execute '/tmp/.tmpPM0Vbq/song/lua/default.lua': runtime error: [string \"/tmp/.tmpPM0Vbq/song/lua/mods-taro.lua\"]:514: attempt to index global 'GameState' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/mods-taro.lua\"]:514: in main chunk\n\t[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\nstack traceback:\n\t>[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\n\n\nthread 'main' (3584736) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[16.0s] replaying every native gameplay frame: frame 0/42817 (0.0%)\n"
     }
   ],
   "scope": {
@@ -1240,9 +1259,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "fc937c1ae18f5ffc8bc3716cc10f755ae0c4dd23172c9a055955844fef0c3a28",
+  "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 2,
-  "pending_charts": 3,
-  "processed_charts": 5
+  "pending_charts": 4,
+  "processed_charts": 6
 }
