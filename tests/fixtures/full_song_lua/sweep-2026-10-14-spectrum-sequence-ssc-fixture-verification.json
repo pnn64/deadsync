@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Spectrum Sequence/spectrumsequence.ssc",
+  "native_frames": 62146,
+  "replayed_frames": 62146,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "86a513ce1d948e1de2dc18dc749689170598ca9ab5faafe96f90982b19ef7efd.tar.zst",
+  "compressed_sha256": "86a513ce1d948e1de2dc18dc749689170598ca9ab5faafe96f90982b19ef7efd",
+  "uncompressed_sha256": "70092bc97dcfc063dfe09c9b56148f0280cf9865195f7935a6de0dbe77923a18",
+  "compressed_bytes": 7175371,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
