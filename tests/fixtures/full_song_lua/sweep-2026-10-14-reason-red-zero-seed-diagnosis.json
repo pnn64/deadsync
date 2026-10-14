@@ -1,0 +1,47 @@
+{
+  "source_simfile": "REASON for RED/reasonforgay.sm",
+  "original_position": 371,
+  "original_full_mismatch_count": 34021,
+  "full_repair_attempts_spent": 0,
+  "native_capture_reused": true,
+  "retained_capture_evidence": {
+    "source_simfile": "REASON for RED/reasonforgay.sm",
+    "candidate_sha256": "deb19de35af9bdf0cf66b9a98b54e291a1b89aeea50d0fe2163d2780c781a316",
+    "trace_sha256": "3613fb8c0f4879b72a151ea8f6b79bee724f270fdf9939f32612de2feeb8d3ca",
+    "simfile_sha256": "1002753a6f9c3c38f92aa9a35e5600e2b4bf0175ee05ebdf36f48efd67e78173",
+    "candidate_path": "/home/parity/jobs/reason-red-rng-diagnosis-v1/deb19de35af9bdf0cf66b9a98b54e291a1b89aeea50d0fe2163d2780c781a316.tar",
+    "all_manifest_members_byte_verified": true,
+    "full_repair_attempts_spent": 0,
+    "entry": {
+      "native_frames": 84068,
+      "replayed_frames": 1548,
+      "errors": [],
+      "mismatches": [],
+      "archive_accepted": false
+    },
+    "entry_report_sha256": "21390c8348981257309c01429995da84369b80b7ed426d2065f2fbed46b461b2"
+  },
+  "captured_explicit_reseed": 0.24028495317907073,
+  "native_integer_reseed": 0,
+  "primary_native_behavior": "RandomNumbers.cpp Seed uses IArg(1); MersenneTwister(int) seeds std::mt19937 from time(nullptr) when that integer is zero.",
+  "deadsync_behavior": "random_int_arg truncates to i32; the same zero-seed fallback uses current UTC epoch seconds.",
+  "captured_input_limitation": "The retained capture records the raw reseed argument, but not the effective wall-clock seed. Its manifest marks RNG state reproducible=false.",
+  "cause_status": "native wall-clock input missing from retained capture; do not infer the seed from expected random outputs or modify the chart",
+  "entry_comparison": "1548 frames complete with zero callback errors/mismatches; random outputs diverge later. Entry success does not accept the archive.",
+  "source_pins": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\RageUtil\\RandomNumbers.h",
+      "sha256": "776cb7c63bca1b731a6dcebf37055a828d0ac1dc937ce7e5d5ef7e9624d86b13"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\RageUtil\\RandomNumbers.cpp",
+      "sha256": "7ff37771f9209cc3e16a65a6d374015265f0b7afc8cd180dbb2f55d977d33edf"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\compat.rs",
+      "sha256": "b0762ebaa42aee8d4e625cc57ed04bc78d94702702ba9e8ed7490387886e034c"
+    }
+  ],
+  "archive_accepted": false,
+  "new_acceptance_gate_added": false
+}
