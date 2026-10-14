@@ -37,8 +37,8 @@
     "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "d76747aa16e317e8e825b6d453dac21b0e60377f06c259d3333c89c185fa9693"
   },
   "linux_green_build": "/home/parity/jobs/attack-boundary-linux-green-v2",
-  "linux_all_checks_complete": false,
-  "selected_sweep_helper_changed": false,
+  "linux_all_checks_complete": true,
+  "selected_sweep_helper_changed": true,
   "native_capture_modified": false,
   "comparison_rules_changed": false,
   "full_repair_attempts_spent_by_controls": 0,
@@ -47,5 +47,7 @@
   "fix_commit": "254c36811",
   "linux_green_v1": "Production attack control passed; lib-test compilation found a reused frame requiring clone. This is corrected, Windows 61 live controls pass, and fresh green-v2 is confirmed live in the isolated checkout.",
   "final_chart_repair_attempt": 2,
-  "final_chart_repair_not_yet_launched": true
+  "final_chart_repair_not_yet_launched": true,
+  "selected_binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c",
+  "linux_completed_build": "sweep-2026-10-14-attack-boundary-linux-build.json"
 }
