@@ -1,0 +1,13 @@
+{
+  "pid": 1159577,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_additional_listener_repairs_after_capture_selection_v1.py"
+  ],
+  "previous_supervisor_absent": true,
+  "both_attempt_directories_absent": true,
+  "no_full_repair_previously_started": true,
+  "resume_reason": "waiting supervisor exited before completed predecessor proof; retained status still says no repairs started",
+  "predecessor_complete": true,
+  "log": "/home/parity/jobs/additional-listener-first-repairs-resume-v1.log"
+}
