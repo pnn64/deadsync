@@ -11935,6 +11935,11 @@ pub(crate) fn run_actor_startup_commands(
         run_actor_named_command(lua, &child, "BeginCommand")?;
         run_named_command_on_children_recursively(lua, &child, "BeginCommand", None)?;
     }
+    if let Some(screen) = lua.globals().raw_get::<Option<Table>>("__songlua_top_screen")?
+        && let Some(transition) = actor_children(lua, &screen)?.raw_get::<Option<Table>>("In")?
+    {
+        start_actor_transition(lua, &transition)?;
+    }
     // LoadDelayedScreen broadcasts after activation, before Update(0) sends On.
     crate::record_song_lua_broadcast(lua, "ScreenChanged", false)?;
     broadcast_song_lua_message(lua, "ScreenChanged", None)?;
@@ -12103,6 +12108,7 @@ enum SongLuaCompileParentDelta {
 
 #[derive(Clone)]
 enum SongLuaCompileUpdateJob {
+    Transition { actor: Table },
     PlayerFeedback {
         actor: Table,
     },
@@ -12181,6 +12187,9 @@ fn collect_compile_update_jobs(
             order: *order,
         });
     }
+    if actor.raw_get::<Option<u8>>("__songlua_transition_state")?.is_some() {
+        jobs.push(SongLuaCompileUpdateJob::Transition { actor: actor.clone() });
+    }
     for child in actor.sequence_values::<Value>() {
         let Value::Table(child) = child? else {
             continue;
@@ -12225,8 +12234,14 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
             let children = actor_children(lua, &screen)?;
             // SongBackground's entries are already visited through the song
             // root below; traversing its child aliases would update them twice.
-            for name in ["Underlay", "Overlay", "In", "Debug"] {
+            for name in ["Underlay", "Overlay", "In", "Out", "Cancel", "Debug"] {
                 if let Some(actor) = children.raw_get::<Option<Table>>(name)? {
+                    collect_compile_update_jobs(lua, &actor, None, SongLuaCompileParentDelta::Children, &mut jobs, &mut order)?;
+                }
+            }
+            for actor in screen.sequence_values::<Table>() {
+                let actor = actor?;
+                if actor.raw_get::<Option<String>>("__songlua_screen_actor_role")?.is_some() {
                     collect_compile_update_jobs(lua, &actor, None, SongLuaCompileParentDelta::Children, &mut jobs, &mut order)?;
                 }
             }
@@ -12281,6 +12296,7 @@ pub(crate) fn actor_tree_update_only(lua: &Lua, root: &Value, name: &str) -> mlu
             job,
             SongLuaCompileUpdateJob::Advance { .. } | SongLuaCompileUpdateJob::Enter { .. }
                 | SongLuaCompileUpdateJob::Texture { .. } | SongLuaCompileUpdateJob::PlayerFeedback { .. }
+                | SongLuaCompileUpdateJob::Transition { .. }
         ) { continue; }
         if let SongLuaCompileUpdateJob::Callback { actor, .. } = job
             && actor.get::<Option<Function>>("__songlua_update_function")?.is_none()
@@ -12632,6 +12648,21 @@ pub(crate) fn run_actor_compile_update_functions_with_entry(
         .expect("phase installed");
     let result = (|| {
         for job in jobs.iter() {
+            if let SongLuaCompileUpdateJob::Transition { actor } = job {
+                // Transition::UpdateInternal gates its child, after the base
+                // Actor has advanced its own queue. Completion is checked
+                // before the child's last Update, as in Transition.cpp.
+                if actor.raw_get::<Option<f64>>("__songlua_compile_update_delta")?.is_some() {
+                    if actor.raw_get::<u8>("__songlua_transition_state")? != 1 {
+                        actor.raw_set("__songlua_compile_update_delta", Value::Nil)?;
+                    } else if let Some(child) = actor.raw_get::<Option<Table>>("__songlua_transition_child")?
+                        && actor_tween_time_left(lua, &child)? == 0.0
+                    {
+                        actor.raw_set("__songlua_transition_state", 2)?;
+                    }
+                }
+                continue;
+            }
             if let SongLuaCompileUpdateJob::PlayerFeedback { actor } = job {
                 crate::live::update_player_holds(lua, actor)?;
                 crate::live::update_player_judgment(lua, actor)?;
@@ -12697,7 +12728,8 @@ pub(crate) fn run_actor_compile_update_functions_with_entry(
                 SongLuaCompileUpdateJob::Advance { actor, order, .. }
                 | SongLuaCompileUpdateJob::Recurring { actor, order, .. }
                 | SongLuaCompileUpdateJob::Callback { actor, order, .. } => (actor, *order),
-                SongLuaCompileUpdateJob::Texture { .. } | SongLuaCompileUpdateJob::PlayerFeedback { .. } => unreachable!("host jobs handled above"),
+                SongLuaCompileUpdateJob::Texture { .. } | SongLuaCompileUpdateJob::PlayerFeedback { .. }
+                | SongLuaCompileUpdateJob::Transition { .. } => unreachable!("host jobs handled above"),
             };
             let delta = if matches!(job, SongLuaCompileUpdateJob::Advance { .. }) {
                 // A wrapper callback can change the owner's update rate. Native
@@ -12793,7 +12825,8 @@ pub(crate) fn run_actor_compile_update_functions_with_entry(
                     run_update_callback(lua, actor, delta_seconds)?
                 }
                 SongLuaCompileUpdateJob::Enter { .. } | SongLuaCompileUpdateJob::Texture { .. }
-                | SongLuaCompileUpdateJob::PlayerFeedback { .. } => unreachable!("actor entry handled above"),
+                | SongLuaCompileUpdateJob::PlayerFeedback { .. } | SongLuaCompileUpdateJob::Transition { .. }
+                    => unreachable!("actor entry handled above"),
             }
         }
         Ok(())
@@ -13366,6 +13399,63 @@ pub fn create_top_screen_theme_actor(
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
 ) -> mlua::Result<Option<Table>> {
+    if ["In", "Out", "Cancel"].iter().any(|known| name.eq_ignore_ascii_case(known)) {
+        let actor = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
+        actor.raw_set("__songlua_transition_state", 0_u8)?;
+        if name.eq_ignore_ascii_case("In") || name.eq_ignore_ascii_case("Out") {
+            let child = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
+            child.raw_set("__songlua_parent", actor.clone())?;
+            actor.raw_set("__songlua_transition_child", child.clone())?;
+            push_sequence_child_once(&actor, child.clone())?;
+            if name.eq_ignore_ascii_case("In") {
+                // Simply Love's gameplay-in lead-in owns these actual queues.
+                // On precedes StartTransitioning; the wrapper's own tweens
+                // never contribute to its virtual GetTweenTimeLeft result.
+                let visuals = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
+                visuals.raw_set("__songlua_parent", child.clone())?;
+                push_sequence_child_once(&child, visuals.clone())?;
+                let reload = lua.globals().get::<Table>("SL")?.get::<Table>("Global")?
+                    .get::<bool>("GameplayReloadCheck")?;
+                visuals.raw_set("HideCommand", lua.create_function(|lua, actor: Table| {
+                    actor.get::<Function>("visible")?.call::<()>((actor.clone(), false))?;
+                    lua.globals().get::<Table>("SL")?.get::<Table>("Global")?.raw_set("GameplayReloadCheck", true)
+                })?)?;
+                visuals.raw_set("OffCommand", lua.create_function(|lua, _: Table| {
+                    lua.globals().get::<Table>("SL")?.get::<Table>("Global")?.raw_set("GameplayReloadCheck", false)
+                })?)?;
+                if !reload {
+                    visuals.get::<Function>("sleep")?.call::<()>((visuals.clone(), 2.0))?;
+                    visuals.get::<Function>("queuecommand")?.call::<()>((visuals.clone(), "Hide"))?;
+                    for (kind, first, last) in [("Quad", 1.4, 0.6), ("Sprite", 0.4, 0.6),
+                        ("Sprite", 0.4, 0.6), ("Sprite", 0.4, 0.8)] {
+                        let sprite = create_named_actor(lua, kind, "", create_dummy_actor)?;
+                        sprite.raw_set("__songlua_parent", visuals.clone())?;
+                        sprite.get::<Function>("sleep")?.call::<()>((sprite.clone(), first))?;
+                        sprite.get::<Function>("accelerate")?.call::<()>((sprite.clone(), last))?;
+                        sprite.get::<Function>("diffusealpha")?.call::<()>((sprite.clone(), 0.0))?;
+                        push_sequence_child_once(&visuals, sprite)?;
+                    }
+                    let text = create_named_text_actor(lua, "BitmapText", "", String::new(), create_dummy_actor)?;
+                    text.raw_set("__songlua_parent", child.clone())?;
+                    text.get::<Function>("accelerate")?.call::<()>((text.clone(), 0.5))?;
+                    text.get::<Function>("diffusealpha")?.call::<()>((text.clone(), 1.0))?;
+                    text.get::<Function>("sleep")?.call::<()>((text.clone(), 0.66))?;
+                    text.get::<Function>("accelerate")?.call::<()>((text.clone(), 0.33))?;
+                    push_sequence_child_once(&child, text)?;
+                } else {
+                    visuals.get::<Function>("playcommand")?.call::<()>((visuals, "Hide"))?;
+                }
+            } else {
+                let quad = create_named_actor(lua, "Quad", "", create_dummy_actor)?;
+                quad.raw_set("__songlua_parent", child.clone())?;
+                quad.get::<Function>("sleep")?.call::<()>((quad.clone(), 0.5))?;
+                quad.get::<Function>("linear")?.call::<()>((quad.clone(), 1.0))?;
+                quad.get::<Function>("diffusealpha")?.call::<()>((quad.clone(), 1.0))?;
+                push_sequence_child_once(&child, quad)?;
+            }
+        }
+        return Ok(Some(actor));
+    }
     if name.eq_ignore_ascii_case("Debug") {
         // ScreenGameplay::Init owns this BitmapText. Simply Love inherits
         // these Debug metrics from _fallback, including OnCommand's zoom.
@@ -13468,6 +13558,22 @@ pub fn create_underlay_theme_actor(
     name: &str,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
 ) -> mlua::Result<Option<Table>> {
+    if let Some(player) = name.strip_prefix("NoteFieldContainerP")
+        .and_then(|number| number.parse::<usize>().ok()).filter(|number| (1..=2).contains(number))
+    {
+        let container = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
+        let sl: Table = lua.globals().get("SL")?;
+        let mods: Table = sl.get::<Table>(format!("P{player}"))?.get("ActiveModifiers")?;
+        if sl.get::<Table>("Global")?.get::<String>("GameMode")? != "Casual"
+            && mods.get::<bool>("ColumnCues")?
+        {
+            let cue = create_column_cue_actor(lua, player - 1, create_dummy_actor)?;
+            cue.raw_set("__songlua_parent", container.clone())?;
+            push_sequence_child_once(&container, cue.clone())?;
+            actor_children(lua, &container)?.raw_set("", cue)?;
+        }
+        return Ok(Some(container));
+    }
     if name.eq_ignore_ascii_case("BPMDisplay") {
         return Ok(Some(create_named_text_actor(
             lua,
@@ -13543,6 +13649,101 @@ pub fn create_underlay_theme_actor(
         )?));
     }
     Ok(None)
+}
+
+fn create_column_cue_actor(
+    lua: &Lua, player: usize, create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+) -> mlua::Result<Table> {
+    // ColumnCues.lua owns these queues. Keep actual Quad/BitmapText children
+    // so normal ActorFrame max-time traversal and screen updates see them.
+    let root = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
+    let game: Table = lua.globals().get("GAMESTATE")?;
+    let style = game.get::<Function>("GetCurrentStyle")?.call::<Table>(game)?;
+    let count = style.get::<Function>("ColumnsPerPlayer")?.call::<usize>(style.clone())?;
+    let width = style.get::<Function>("GetWidth")?.call::<f32>((style, player_number_name(player)))?;
+    let commands = lua.load(r#"
+local player, pn = ...
+local cues, mapping, state, cursor, first = {}, nil, nil, 1, false
+local text, breakTime = nil, 0
+local function reload()
+    ParseColumnCues(GAMESTATE:GetCurrentSteps(player), pn)
+    cues = SL[pn].Streams.ColumnCues
+    mapping = GetColumnMapping(player)
+    state = GAMESTATE:GetPlayerState(player)
+    cursor, first = 1, false
+end
+local function update(self, delta)
+    local screen = SCREENMAN:GetTopScreen()
+    if screen and screen.IsPaused and screen:IsPaused() then return end
+    local cue = cues[cursor]
+    if cue == nil or mapping == nil then return end
+    local now = state:GetSongPosition():GetMusicSecondsVisible()
+    local start, duration = cue.startTime, cue.duration
+    if cursor == 1 and not first and now < 0 then
+        duration, start, first = duration - now, start + now, true
+    end
+    if start <= now then
+        duration = duration / SL.Global.ActiveModifiers.MusicRate
+        if duration > 0.30 then
+            for column in ivalues(cue.columns) do
+                self:GetChild('Column' .. mapping[column.colNum]):GetChild('ColumnFlash')
+                    :playcommand('Flash', {duration=duration, isMine=column.isMine})
+            end
+        end
+        cursor = cursor + 1
+    end
+end
+return {
+    SetUpdateCommand=function(self) reload(); self:SetUpdateFunction(update) end,
+    CurrentSongChangedMessageCommand=function(self) reload() end,
+    PlayingCommand=function(self) cursor = 1 end,
+    FlashCommand=function(self, params)
+        local duration = params.duration
+        local color = params.isMine and {1,0,0,0.12} or {0.3,1,1,0.12}
+        self:stoptweening():decelerate(0.15):diffuse(color)
+            :sleep(duration - 0.30):accelerate(0.15):diffuse(0,0,0,0)
+        if duration >= 5 and text ~= nil then
+            breakTime = duration
+            text:stoptweening():x(self:GetX()):decelerate(0.15):diffuse(1,1,1,1)
+                :settext(round(duration, 1)):playcommand('UpdateBreak')
+        end
+    end,
+    UpdateBreakCommand=function(self)
+        if breakTime > 0.5 then
+            breakTime = breakTime - 0.1
+            if breakTime > 0.5 then
+                self:sleep(0.1):settext(round(breakTime)):queuecommand('UpdateBreak')
+            else self:diffuse(0,0,0,0) end
+        else self:diffuse(0,0,0,0) end
+    end,
+    SetText=function(actor) text = actor end,
+}
+"#).set_name("@theme:/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua")
+        .call::<Table>((player_number_name(player), crate::player_short_name(player)))?;
+    for name in ["SetUpdateCommand", "CurrentSongChangedMessageCommand", "PlayingCommand"] {
+        root.raw_set(name, commands.raw_get::<Function>(name)?)?;
+    }
+    for column in 1..=count {
+        let frame = create_named_actor(lua, "ActorFrame", &format!("Column{column}"), create_dummy_actor)?;
+        let flash = create_named_actor(lua, "Quad", "ColumnFlash", create_dummy_actor)?;
+        let text = create_named_text_actor(lua, "BitmapText", "ColumnText", String::new(), create_dummy_actor)?;
+        flash.raw_set("FlashCommand", commands.raw_get::<Function>("FlashCommand")?)?;
+        text.raw_set("UpdateBreakCommand", commands.raw_get::<Function>("UpdateBreakCommand")?)?;
+        for actor in [&flash, &text] {
+            actor.get::<Function>("diffuse")?.call::<()>((actor.clone(), 0, 0, 0, 0))?;
+            actor.get::<Function>("x")?.call::<()>((actor.clone(),
+                (column as f32 - (count as f32 / 2.0 + 0.5)) * (width / count as f32)))?;
+            actor.raw_set("__songlua_parent", frame.clone())?;
+            push_sequence_child_once(&frame, actor.clone())?;
+            actor_children(lua, &frame)?.raw_set(actor_name(actor)?, actor.clone())?;
+        }
+        commands.raw_get::<Function>("SetText")?.call::<()>(text)?;
+        frame.raw_set("__songlua_parent", root.clone())?;
+        actor_children(lua, &root)?.raw_set(format!("Column{column}"), frame.clone())?;
+        push_sequence_child_once(&root, frame)?;
+    }
+    root.get::<Function>("queuecommand")?.call::<()>((root.clone(), "SetUpdate"))?;
+    Ok(root)
 }
 
 fn simply_love_step_stats_enabled(lua: &Lua, player: usize) -> mlua::Result<bool> {
@@ -13772,7 +13973,9 @@ pub fn install_underlay_theme_children(
         // GAMESTATE:GetHumanPlayers; an inactive side has no score or pane.
         let player = underlay_score_index(name)
             .or_else(|| top_screen_step_stats_pane_index(name))
-            .or_else(|| top_screen_danger_index(name));
+            .or_else(|| top_screen_danger_index(name))
+            .or_else(|| name.strip_prefix("NoteFieldContainerP")
+                .and_then(|number| number.parse::<usize>().ok()).map(|number| number - 1));
         if let Some(player) = player {
             let key = ["__songlua_player1_enabled", "__songlua_player2_enabled"][player];
             if underlay.raw_get::<Option<bool>>(key)? == Some(false) {
@@ -13780,7 +13983,7 @@ pub fn install_underlay_theme_children(
             }
         }
         let child = create_named_child_actor(lua, underlay, name)?;
-        if top_screen_step_stats_pane_index(name).is_some() {
+        if top_screen_step_stats_pane_index(name).is_some() || name.starts_with("NoteFieldContainerP") {
             // Named lookup and screen Update share the same pane owner.
             push_sequence_child_once(underlay, child.clone())?;
         }
@@ -14063,11 +14266,12 @@ pub fn create_top_screen_table(
         }
     }
     install_top_screen_theme_children(lua, &top_screen, &players, create_named_child_actor)?;
-    // Toasty and the four empty gameplay transitions are real unnamed owners.
+    // ScreenGameplay.h declares all five unnamed owners as Transition.
     // Keep the duplicate-name group as lookup aliases of the same actor tree.
     let unnamed = create_actor_child_group(lua)?;
     for role in ["Toasty", "NextSong", "Ready", "Go", "Failed"] {
-        let actor = create_named_actor(lua, if role == "Toasty" { "Actor" } else { "ActorFrame" }, "", create_dummy_actor)?;
+        let actor = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
+        actor.raw_set("__songlua_transition_state", 0_u8)?;
         actor.raw_set("__songlua_parent", top_screen.clone())?;
         actor.raw_set("__songlua_screen_actor_role", role)?;
         if role == "Toasty" {
@@ -14187,6 +14391,9 @@ pub fn create_top_screen_table(
                     let message = method_arg(&args, 0).cloned().and_then(read_string)
                         .ok_or_else(|| mlua::Error::runtime("expected a screen transition message"))?;
                     run_named_command_on_children_recursively(lua, &top_screen, "OffCommand", None)?;
+                    if let Some(transition) = actor_children(lua, &top_screen)?.raw_get::<Option<Table>>("Out")? {
+                        start_actor_transition(lua, &transition)?;
+                    }
                     lua.set_app_data(crate::live::TransitionRequest(message));
                 }
                 Ok(top_screen.clone())
@@ -17067,6 +17274,12 @@ pub fn flush_actor_capture(actor: &Table) -> mlua::Result<()> {
 }
 
 pub fn actor_tween_time_left(lua: &Lua, actor: &Table) -> mlua::Result<f32> {
+    if let Some(state) = actor.raw_get::<Option<u8>>("__songlua_transition_state")? {
+        return if state == 1 {
+            actor.raw_get::<Option<Table>>("__songlua_transition_child")?
+                .map_or(Ok(0.0), |child| actor_tween_time_left(lua, &child))
+        } else { Ok(0.0) };
+    }
     let hibernate = if actor
         .raw_get::<Option<bool>>("__songlua_theme_hibernating")?
         .unwrap_or(false)
@@ -17104,6 +17317,18 @@ pub fn actor_tween_time_left(lua: &Lua, actor: &Table) -> mlua::Result<f32> {
         }
     }
     Ok(left)
+}
+
+pub(crate) fn start_actor_transition(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if actor.raw_get::<Option<u8>>("__songlua_transition_state")? != Some(0) {
+        return Ok(());
+    }
+    if let Some(child) = actor.raw_get::<Option<Table>>("__songlua_transition_child")? {
+        run_actor_named_command(lua, &child, "StartTransitioningCommand")?;
+        run_named_command_on_children_recursively(lua, &child, "StartTransitioningCommand", None)?;
+        actor.raw_set("__songlua_transition_state", 1_u8)?;
+    }
+    Ok(())
 }
 
 fn scale_actor_capture_f32(actor: &Table, key: &str, scale: f32) -> mlua::Result<()> {

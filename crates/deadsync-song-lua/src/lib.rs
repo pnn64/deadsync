@@ -668,6 +668,8 @@ pub struct SongLuaPlayerContext {
     pub noteskin_name: String,
     /// Profile-selected graphic already loaded by the gameplay theme.
     pub judgment_texture: Option<PathBuf>,
+    /// Profile option used by Simply Love's Lua-owned cue actors.
+    pub column_cues: bool,
     pub screen_x: f32,
     pub screen_y: f32,
 }
@@ -690,6 +692,7 @@ impl Default for SongLuaPlayerContext {
             display_bpms: [60.0, 60.0],
             noteskin_name: SONG_LUA_DEFAULT_NOTESKIN_NAME.to_string(),
             judgment_texture: None,
+            column_cues: false,
             screen_x: 320.0,
             screen_y: 240.0,
         }
@@ -1449,6 +1452,8 @@ pub struct SongLuaCompileContext {
     /// Timing for every chart in `song_steps` order, loaded before compilation.
     /// Song-local ownership keeps unselected SSC timing out of the library cache.
     pub song_step_timing: Vec<deadsync_rules::timing::TimingData>,
+    /// Minimized chart notes in `song_steps` order, loaded on the song worker.
+    pub song_step_notes: Vec<Arc<[u8]>>,
     pub song_music_rate: f32,
     /// Initial ITGmania PRNG seed; fixed per compilation for repeatable playback.
     /// Scripts may reseed it through math.randomseed or MersenneTwister.Seed.
@@ -1499,6 +1504,7 @@ impl SongLuaCompileContext {
             song_timing: None,
             player_timing: std::array::from_fn(|_| None),
             song_step_timing: Vec::new(),
+            song_step_notes: Vec::new(),
             song_music_rate: 1.0,
             random_seed: 1,
             #[cfg(feature = "test-support")]

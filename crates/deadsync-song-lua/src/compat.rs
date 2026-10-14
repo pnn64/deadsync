@@ -402,6 +402,25 @@ pub fn install_stdlib_compat(
         lua.create_function(|lua, args: MultiValue| parse_chart_info(lua, &args))?,
     )?;
     globals.set(
+        "ParseColumnCues",
+        lua.load(
+            r#"
+return function(steps, pn)
+    local cues = steps:GetColumnCues(SL.Global.ColumnCueMinTime)
+    for _, cue in ipairs(cues) do
+        for _, column in ipairs(cue.columns) do
+            column.isMine = column.noteType == 4
+            column.noteType = nil
+        end
+    end
+    SL[pn].Streams.ColumnCues = cues
+end
+"#,
+        )
+        .set_name("@theme:/Scripts/SL-ChartParser.lua")
+        .eval::<Function>()?,
+    )?;
+    globals.set(
         "ivalues",
         // Native 01 base.lua uses normal indexing, accepts input before the
         // first lookup, and observes changes through the captured table.

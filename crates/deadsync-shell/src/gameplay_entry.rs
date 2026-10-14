@@ -223,14 +223,23 @@ pub fn song_lua_context(
     context.random_seed = random_seed;
     context.live = live;
     context.screen_loading = live;
-    let mut timings = deadsync_simfile::app_runtime::load_chart_timings(song, config.global_offset_seconds)?;
+    let inputs = deadsync_simfile::app_runtime::load_chart_timing_and_notes(
+        song,
+        config.global_offset_seconds,
+    )?;
     let sync_offset = if config.machine_pack_ini_offsets {
         deadsync_chart::song::sync_pref_offset(
             deadsync_profile_gameplay::gameplay_pack_data(song, None, None).sync_pref,
-            config.machine_default_sync_pref)
-    } else { 0.0 };
-    for timing in &mut timings { timing.shift_song_offset_seconds(sync_offset); }
-    context.song_step_timing = timings;
+            config.machine_default_sync_pref,
+        )
+    } else {
+        0.0
+    };
+    for (mut timing, notes) in inputs {
+        timing.shift_song_offset_seconds(sync_offset);
+        context.song_step_timing.push(timing);
+        context.song_step_notes.push(notes.into());
+    }
     for (player, profile) in context.players.iter_mut().zip(player_profiles) {
         let Some(choice) = deadsync_assets::textures::resolve_texture_choice_entry(
             profile.judgment_graphic.texture_key(),

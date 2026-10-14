@@ -128,7 +128,7 @@ fn create_sl_global_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::R
     table.set("GameplayReloadCheck", false)?;
     table.set("WheelLocked", false)?;
     table.set("ContinuesRemaining", 0)?;
-    table.set("ColumnCueMinTime", 0.0)?;
+    table.set("ColumnCueMinTime", 1.5)?;
     table.set("TimeAtSessionStart", 0.0)?;
     Ok(table)
 }
@@ -192,7 +192,7 @@ fn create_sl_player_mods(lua: &Lua, player: &SongLuaPlayerContext) -> mlua::Resu
     table.set("NPSGraphAtTop", false)?;
     table.set("JudgmentTilt", false)?;
     table.set("TiltMultiplier", 1)?;
-    table.set("ColumnCues", false)?;
+    table.set("ColumnCues", player.column_cues)?;
     table.set("ColumnCountdown", false)?;
     table.set("ShowHeldMiss", false)?;
     table.set("DisplayScorebox", true)?;

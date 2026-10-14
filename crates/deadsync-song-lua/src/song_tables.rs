@@ -872,6 +872,7 @@ pub fn create_steps_table(
         lua.create_function(move |_, _args: MultiValue| Ok(radar.clone()))?,
     )?;
     set_string_method(lua, &table, "GetDisplayBPMType", "DISPLAY_BPM_ACTUAL")?;
+    install_step_column_cues(lua, &table, std::sync::Arc::from([]), steps_type)?;
     Ok(table)
 }
 
@@ -2719,8 +2720,17 @@ fn create_song_steps(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result
                 .position(|selected| *selected == Some(index))
                 .and_then(|player| context.player_timing[player].as_ref()))
             .or(context.song_timing.as_ref());
-        let value = create_steps_table(lua, step.difficulty, display_bpms,
-            &context.song_dir, &step.steps_type, timing)?;
+        let value = create_steps_table(
+            lua,
+            step.difficulty,
+            display_bpms,
+            &context.song_dir,
+            &step.steps_type,
+            timing,
+        )?;
+        if let Some(notes) = context.song_step_notes.get(index) {
+            install_step_column_cues(lua, &value, notes.clone(), &step.steps_type)?;
+        }
         set_string_method(lua, &value, "GetDescription", &step.description)?;
         set_string_method(lua, &value, "GetChartName", &step.chart_name)?;
         set_string_method(lua, &value, "GetAuthorCredit", &step.credit)?;
@@ -2730,6 +2740,81 @@ fn create_song_steps(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result
         table.raw_set(index + 1, value)?;
     }
     Ok(table)
+}
+
+fn install_step_column_cues(
+    lua: &Lua,
+    steps: &Table,
+    notes: std::sync::Arc<[u8]>,
+    steps_type: &str,
+) -> mlua::Result<()> {
+    let lanes = deadsync_chart::notes::step_type_lanes(
+        steps_type.strip_prefix("StepsType_").unwrap_or(steps_type),
+    );
+    steps.set(
+        "GetColumnCues",
+        lua.create_function(move |lua, args: MultiValue| {
+            // Steps.cpp accepts a numeric minimum, defaulting to 1.5 seconds.
+            // Keep each result independent: SL-ChartParser mutates noteType into
+            // isMine, but a subsequent native Steps query returns fresh tables.
+            let minimum = method_arg(&args, 0)
+                .cloned()
+                .and_then(read_f32)
+                .unwrap_or(1.5);
+            let steps = args
+                .front()
+                .and_then(|value| match value {
+                    Value::Table(table) => Some(table.clone()),
+                    _ => None,
+                })
+                .ok_or_else(|| mlua::Error::runtime("expected Steps receiver"))?;
+            let timing = steps
+                .get::<Function>("GetTimingData")?
+                .call::<Table>(steps)?;
+            let elapsed = timing.get::<Function>("GetElapsedTimeFromBeat")?;
+            let notes = deadsync_chart::notes::parse_chart_notes(&notes, lanes);
+            let cues = lua.create_table()?;
+            let mut previous = 0.0_f32;
+            let mut cursor = 0;
+            while cursor < notes.len() {
+                let row = notes[cursor].row_index;
+                let beat = deadsync_core::timing::note_row_to_beat(row as i32);
+                let time = elapsed.call::<f32>((timing.clone(), beat))?;
+                let duration = time - previous;
+                let emit = duration > minimum || previous == 0.0;
+                let columns = emit.then(|| lua.create_table()).transpose()?;
+                while cursor < notes.len() && notes[cursor].row_index == row {
+                    use deadsync_core::note::NoteType;
+                    let note = &notes[cursor];
+                    let kind = match note.note_type {
+                        NoteType::Tap => Some(1),
+                        NoteType::Hold | NoteType::Roll => Some(2),
+                        NoteType::Mine => Some(4),
+                        NoteType::Lift => Some(5),
+                        NoteType::Fake => None,
+                    };
+                    if emit && let Some(kind) = kind {
+                        let columns = columns.as_ref().expect("emitted row owns columns");
+                        let column = lua.create_table()?;
+                        column.raw_set("colNum", note.column + 1)?;
+                        column.raw_set("noteType", kind)?;
+                        columns.raw_set(columns.raw_len() + 1, column)?;
+                    }
+                    cursor += 1;
+                }
+                if emit {
+                    let cue = lua.create_table()?;
+                    cue.raw_set("startTime", previous)?;
+                    cue.raw_set("duration", duration)?;
+                    cue.raw_set("columns", columns.expect("emitted row owns columns"))?;
+                    cues.raw_set(cues.raw_len() + 1, cue)?;
+                }
+                // ColumnCues.cpp advances this even for a short or fake-only row.
+                previous = time;
+            }
+            Ok(cues)
+        })?,
+    )
 }
 
 #[cfg(test)]

@@ -2350,11 +2350,26 @@ fn native_profile_inputs(trace: &Value) -> Result<[deadsync_profile::Profile; 2]
     // default player options use the inherited Common.DefaultModifiers=1x.
     // Keep nonempty machine defaults pending instead of silently substituting
     // DeadSync's guest profile or reconstructing options from later queries.
-    if trace.pointer("/input/gameplay_preferences/default_modifiers").and_then(Value::as_str) != Some("") {
-        return Err("nonempty native default modifiers require complete initial option support".into());
+    if trace
+        .pointer("/input/gameplay_preferences/default_modifiers")
+        .and_then(Value::as_str)
+        != Some("")
+    {
+        return Err(
+            "nonempty native default modifiers require complete initial option support".into(),
+        );
     }
-    Ok(std::array::from_fn(|_| deadsync_profile::Profile {
+    Ok(std::array::from_fn(|player| deadsync_profile::Profile {
         scroll_speed: deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0),
+        // A neutral profile input, recorded before chart Lua executes. Older
+        // captures use SL_Init.lua's fresh-profile default of enabled cues.
+        column_cues: trace
+            .pointer("/input/gameplay_preferences/players")
+            .and_then(Value::as_array)
+            .and_then(|players| players.get(player))
+            .and_then(|player| player.pointer("/theme_modifiers/ColumnCues"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
         ..Default::default()
     }))
 }

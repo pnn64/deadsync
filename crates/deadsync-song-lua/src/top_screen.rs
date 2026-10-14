@@ -95,6 +95,8 @@ pub const UNDERLAY_THEME_CHILD_NAMES: &[&str] = &[
     "Header",
     "StepStatsPaneP1",
     "StepStatsPaneP2",
+    "NoteFieldContainerP1",
+    "NoteFieldContainerP2",
     "DangerP1",
     "DangerP2",
     "P1Score",

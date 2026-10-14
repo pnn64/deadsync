@@ -272,6 +272,16 @@ pub fn load_chart_timings(
     song: &SongData,
     global_offset_seconds: f32,
 ) -> Result<Vec<deadsync_rules::timing::TimingData>, String> {
+    Ok(load_chart_timing_and_notes(song, global_offset_seconds)?
+        .into_iter()
+        .map(|(timing, _)| timing)
+        .collect())
+}
+
+pub fn load_chart_timing_and_notes(
+    song: &SongData,
+    global_offset_seconds: f32,
+) -> Result<Vec<(deadsync_rules::timing::TimingData, Vec<u8>)>, String> {
     let parse_options = parse_song_options();
     let options = crate::runtime::gameplay_chart_load_options(
         song, &paths().song_cache, &parse_options,
@@ -279,11 +289,14 @@ pub fn load_chart_timings(
         deadsync_config::runtime::group_is_never_cached,
     );
     let started = std::time::Instant::now();
-    let timings = crate::cache::load_chart_timings(
-        song, &options, |_| song.music_length_seconds,
-    )?;
-    debug!("Song Lua chart timing: song='{}' charts={} elapsed_ms={:.3}",
-        song.title, timings.len(), started.elapsed().as_secs_f64() * 1000.0);
+    let timings =
+        crate::cache::load_chart_timing_and_notes(song, &options, |_| song.music_length_seconds)?;
+    debug!(
+        "Song Lua chart timing: song='{}' charts={} elapsed_ms={:.3}",
+        song.title,
+        timings.len(),
+        started.elapsed().as_secs_f64() * 1000.0
+    );
     Ok(timings)
 }
 

@@ -2453,6 +2453,18 @@ pub fn load_chart_timings(
     options: &GameplayChartLoadOptions<'_>,
     music_len: impl FnOnce(Option<&Path>) -> f32,
 ) -> Result<Vec<TimingData>, String> {
+    Ok(load_chart_timing_and_notes(song, options, music_len)?
+        .into_iter()
+        .map(|(timing, _)| timing)
+        .collect())
+}
+
+/// Share the same payload read for Lua chart timing and note-derived getters.
+pub fn load_chart_timing_and_notes(
+    song: &SongData,
+    options: &GameplayChartLoadOptions<'_>,
+    music_len: impl FnOnce(Option<&Path>) -> f32,
+) -> Result<Vec<(TimingData, Vec<u8>)>, String> {
     if options.allow_cache_read {
         let cached = (|| {
             let cache_path = song_cache_path(options.cache_dir, &song.simfile_path).ok()?;
@@ -2462,13 +2474,22 @@ pub fn load_chart_timings(
             if cached_song.chart_payloads.len() != song.charts.len() {
                 return None;
             }
-            cached_song.chart_payloads.into_iter().map(|entry| {
-                let payload = load_cached_chart_payload(&cache_path, payload_start, entry)?;
-                Some(TimingData::from_segments(
-                    -payload.offset, options.global_offset_seconds,
-                    &payload.timing_segments.into(), &[],
-                ))
-            }).collect::<Option<Vec<_>>>()
+            cached_song
+                .chart_payloads
+                .into_iter()
+                .map(|entry| {
+                    let payload = load_cached_chart_payload(&cache_path, payload_start, entry)?;
+                    Some((
+                        TimingData::from_segments(
+                            -payload.offset,
+                            options.global_offset_seconds,
+                            &payload.timing_segments.into(),
+                            &[],
+                        ),
+                        payload.notes,
+                    ))
+                })
+                .collect::<Option<Vec<_>>>()
         })();
         if let Some(timings) = cached {
             return Ok(timings);
@@ -2480,11 +2501,21 @@ pub fn load_chart_timings(
     if data.charts.len() != song.charts.len() {
         return Err("song charts changed before loading Lua timing".into());
     }
-    Ok(data.charts.into_iter().map(|chart| {
-        TimingData::from_segments(
-            -chart.offset, options.global_offset_seconds, &chart.timing_segments.into(), &[],
-        )
-    }).collect())
+    Ok(data
+        .charts
+        .into_iter()
+        .map(|chart| {
+            (
+                TimingData::from_segments(
+                    -chart.offset,
+                    options.global_offset_seconds,
+                    &chart.timing_segments.into(),
+                    &[],
+                ),
+                chart.notes,
+            )
+        })
+        .collect())
 }
 
 pub fn load_gameplay_charts_with_options<F>(

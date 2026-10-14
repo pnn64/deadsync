@@ -543,6 +543,7 @@ pub fn song_lua_compile_context(
         ),
         screen_y: viewport.center_y(),
         judgment_texture: None,
+        column_cues: player < num_players && player_profiles[player].column_cues,
     });
     context
 }

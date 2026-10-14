@@ -1130,7 +1130,11 @@ impl SongLuaLiveScene {
     fn tween_off_screen(&self) -> mlua::Result<()> {
         let screen: Table = self.lua.globals().raw_get("__songlua_top_screen")?;
         crate::lua_util::run_named_command_on_children_recursively(
-            &self.lua, &screen, "OffCommand", None)
+            &self.lua, &screen, "OffCommand", None)?;
+        if let Some(transition) = crate::actor_children(&self.lua, &screen)?.raw_get::<Option<Table>>("Out")? {
+            crate::lua_util::start_actor_transition(&self.lua, &transition)?;
+        }
+        Ok(())
     }
 
     /// Share the retained VM with the gameplay thread's synchronous NoteField
@@ -2768,6 +2772,92 @@ end }
             let actual = left.raw_get::<f32>(index).expect("tween left");
             assert!((actual - expected).abs() < 1e-6, "frame {index}: {actual} != {expected}");
         }
+    }
+
+    #[test]
+    fn live_column_cues_derive_owned_tweens_from_chart_notes() {
+        let compiled = compile_with_context("column-cue-owned-tweens", "return Def.Actor{}", |context| {
+            context.players[0].column_cues = true;
+            context.players[1].enabled = false;
+            context.song_steps = vec![crate::SongLuaStep {
+                steps_type: "StepsType_Dance_Single".into(), difficulty: SongLuaDifficulty::Challenge,
+                description: String::new(), chart_name: String::new(), credit: String::new(),
+                meter: 9, music_file: String::new(), possible_grade_points: 0,
+            }];
+            context.player_step_indices = [Some(0), None];
+            // Gameplay payloads use one minimized line per native note row,
+            // rather than authored measure divisions. A measure is 192 rows.
+            let mut notes = Vec::new();
+            for row in 0..=576 {
+                notes.extend_from_slice(match row {
+                    0 => b"1000\n", 192 => b"0M00\n", 384 => b"00F0\n",
+                    576 => b"000L\n", _ => b"0000\n",
+                });
+            }
+            context.song_step_notes = vec![notes.into()];
+        });
+        let mut scene = compiled.live_scene.expect("cue scene");
+        scene.lua.load(r#"
+local steps = GAMESTATE:GetCurrentSteps(PLAYER_1)
+local cues = steps:GetColumnCues()
+assert(#cues == 4 and cues[1].startTime == 0 and cues[2].duration == 4)
+assert(cues[2].columns[1].colNum == 2 and cues[2].columns[1].noteType == 4)
+assert(#cues[3].columns == 0 and cues[4].columns[1].noteType == 5)
+assert(#steps:GetColumnCues(4) == 2, 'duration threshold is strict; previous zero is special')
+ParseColumnCues(steps, 'P1')
+assert(SL.P1.Streams.ColumnCues[2].columns[1].isMine)
+assert(steps:GetColumnCues()[2].columns[1].noteType == 4, 'fresh mutable query results')
+UNDERLAY = SCREENMAN:GetTopScreen():GetChild('Underlay')
+CONTAINER = UNDERLAY:GetChild('NoteFieldContainerP1')
+CUES = CONTAINER:GetChild('')
+FLASH = CUES:GetChild('Column1'):GetChild('ColumnFlash')
+assert(FLASH:GetParent():GetParent() == CUES and CUES:GetParent() == CONTAINER)
+"#).exec().expect("native cue getter, parser and ownership");
+        for (screen, music, delta, expected) in [(0.1, -1.0, 0.1, 1.0), (0.3, -0.8, 0.2, 0.8)] {
+            let output = scene.advance(SongLuaLiveFrame {
+                screen_seconds: screen, music_seconds: music, delta_seconds: delta,
+                ..Default::default()
+            }).expect("cue frame");
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            let globals = scene.lua.globals();
+            let flash = globals.get::<Table>("FLASH").unwrap();
+            let underlay = globals.get::<Table>("UNDERLAY").unwrap();
+            let remaining = crate::actor_tween_time_left(&scene.lua, &flash).unwrap();
+            assert!((remaining - expected).abs() < 1e-6, "{remaining} != {expected}");
+            assert_eq!(crate::actor_tween_time_left(&scene.lua, &underlay).unwrap(), remaining);
+        }
+    }
+
+    #[test]
+    fn live_transition_getter_uses_loaded_child_and_native_lifecycle() {
+        let mut compiled = compile("transition-virtual-getter", r#"
+OUT = SCREENMAN:GetTopScreen():GetChild('Out')
+return Def.Actor { OnCommand=function(self)
+    OUT:smooth(7):diffusealpha(0)
+    assert(OUT:GetTweenTimeLeft() == 0, 'waiting transition ignores its own queue')
+end }
+"#);
+        let mut scene = compiled.live_scene.take().expect("transition scene");
+        let out = scene.lua.globals().get::<Table>("OUT").unwrap();
+        let child = out.raw_get::<Table>("__songlua_transition_child").unwrap();
+        assert_eq!(crate::actor_tween_time_left(&scene.lua, &child).unwrap(), 1.5);
+        scene.advance(SongLuaLiveFrame { screen_seconds: 0.25, delta_seconds: 0.25,
+            ..Default::default() }).unwrap();
+        assert_eq!(crate::actor_tween_time_left(&scene.lua, &child).unwrap(), 1.5,
+            "waiting transition freezes its loaded child");
+        crate::lua_util::start_actor_transition(&scene.lua, &out).unwrap();
+        assert_eq!(crate::actor_tween_time_left(&scene.lua, &out).unwrap(), 1.5);
+        for (seconds, delta, expected) in [(0.5, 0.25, 1.25), (1.75, 1.25, 0.0), (2.0, 0.25, 0.0)] {
+            let output = scene.advance(SongLuaLiveFrame { screen_seconds: seconds,
+                delta_seconds: delta, ..Default::default() }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            assert_eq!(crate::actor_tween_time_left(&scene.lua, &out).unwrap(), expected);
+        }
+        assert_eq!(out.raw_get::<u8>("__songlua_transition_state").unwrap(), 2,
+            "completion is checked before the next child update");
+        crate::lua_util::start_actor_transition(&scene.lua, &out).unwrap();
+        assert_eq!(out.raw_get::<u8>("__songlua_transition_state").unwrap(), 2,
+            "a finished transition cannot restart before Reset");
     }
 
     #[test]
