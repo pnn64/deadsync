@@ -3641,17 +3641,14 @@
       "aliases": []
     },
     {
-      "title": "MAWARU 4",
+      "title": "MAWARU 4 EASY MODO!?",
       "source_simfile": "mawaru4/mawaru4.sm",
-      "harness_version": "0.1.0",
-      "archive": "7916c7ae791bfec2bcab760266913cd60e306151ac8fa1071ff3b1bbe9b1ddd4.tar.zst",
-      "sha256": "7916c7ae791bfec2bcab760266913cd60e306151ac8fa1071ff3b1bbe9b1ddd4",
-      "compressed_bytes": 2088261,
-      "uncompressed_sha256": "501632b80b3e788be4fdfee5e09509c2e51e2d05b3885d523e989f94c3b99a74",
-      "compression_level": 22,
-      "aliases": [
-        "967c03320388eeecba8dbb6f2408283c701635ffcb54039adb7a5162ed3f8730.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "d367c86820bedf24a5980b1176c46527287e9c708d07c97df13b7f735f84a804.tar.zst",
+      "sha256": "d367c86820bedf24a5980b1176c46527287e9c708d07c97df13b7f735f84a804",
+      "compressed_bytes": 10443246,
+      "uncompressed_sha256": "1607561d59af9e72612fce2e935cf8f45fa67b674646158fd0f02d83df14dfad",
+      "aliases": []
     },
     {
       "title": "MAWARU 4 EASY MODO!?",
