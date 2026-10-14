@@ -1,0 +1,65 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "3d314ba64cfadf2dbdb8ac761bbaf34890c84127",
+  "results": [
+    {
+      "position": 384,
+      "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.ssc",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "d6abe31f782a6747dfb98adffe8b2532c8fc5309f6711fe22135f4a4bf0f236e",
+      "trace_sha256": "fb24e5c91afc6d20ff77cb848622277ca5a2f0d99bcae8681f4de7749c98aed9",
+      "simfile_sha256": "8b57aae087794bf0c7f0bb19c297c69c58f2d0d6bac97c4cfde344875e29c3c1",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "151a68b24584a9730b6cdf893009fb4a59873684ac28bc89b79e85f1a8752e39",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/whole-song-pack-sync-linux-green-v1/proof.json",
+      "fix_commit": "3d314ba64cfadf2dbdb8ac761bbaf34890c84127",
+      "previous_failure": null,
+      "previous_errors": [],
+      "replay_exit": 0,
+      "replay_seconds": 2173.531395498023,
+      "native_frames": 67253,
+      "replayed_frames": 67253,
+      "compared_stage_fields": 2101,
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate, ActorFrame.GetChildren, ActorSound.play",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "f0c0a8e86eb149713ae24be9ede465674cd31ae8cf20fea482e60bfe92301af3",
+      "archive": "e8be9c74adaf37025cde759043a82eaf154f81b34ff2c895264fea2ef323fd20.tar.zst",
+      "archive_sha256": "e8be9c74adaf37025cde759043a82eaf154f81b34ff2c895264fea2ef323fd20",
+      "compressed_bytes": 22336930,
+      "harness_version": "0.1.80",
+      "title": "Episode 01 Save Your Tears",
+      "pack_seconds": 11.836908127006609,
+      "retained_original_entry": {
+        "title": "Episode 01",
+        "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.ssc",
+        "harness_version": "0.1.0",
+        "archive": "fb2c6cd3981a5356eb3deb3efddc14ea7ed0464beaf6fdc93b05613207efb8c0.tar.zst",
+        "sha256": "fb2c6cd3981a5356eb3deb3efddc14ea7ed0464beaf6fdc93b05613207efb8c0",
+        "compressed_bytes": 4604651,
+        "uncompressed_sha256": "cafb82003cfbef2bee1e9d12b83dfac8b134f5ae1bc6ce6497cb5132046c9ecb",
+        "compression_level": 22,
+        "aliases": [
+          "3ad9a8b24788c6f8e96d79e5d5eda76638b708f6a60ffdc037979c73990f2ab2.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "151a68b24584a9730b6cdf893009fb4a59873684ac28bc89b79e85f1a8752e39",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first repair: resolve whole-song note bound with pack group sync before absolute hints; original archive and full comparisons unchanged",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
