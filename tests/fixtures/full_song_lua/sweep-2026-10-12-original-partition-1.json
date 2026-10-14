@@ -8856,6 +8856,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 367,
+      "source_simfile": "Raving With Fire/Raving With Fire.ssc",
+      "simfile_sha256": "bda9bd92c59212adb06d6c7aee91346fa78af0780f0e741475c761f9a65d8bab",
+      "retained_original_archive": "c860130738bcd0b8fbfcdfdad03e54757c81887d947401dbf2767d982afd215a.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "745eee7daaa9bd844dd8092d43d02e25b6b5e05a2a8967cca909eba5a2e487b7",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "771646c8d58dc1170f1e2b9f332a701f8bd518b7",
+      "build_proof": "/home/parity/jobs/song-selector-observations-linux-green-v1/proof.json",
+      "capture_seconds": 403.05155909300083,
+      "trace_sha256": "fcb555603ef718ce7defc45905bf7058462e2fadb1457d1238b5c50199b06407",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-367/candidates/5b3d076aa39267ba7e8b3fbcfc00d3d9e714ea598db290bc68a096a275563477.tar",
+      "replay_exit": 0,
+      "replay_seconds": 2318.6585939700017,
+      "candidate_sha256": "5b3d076aa39267ba7e8b3fbcfc00d3d9e714ea598db290bc68a096a275563477",
+      "native_frames": 6112,
+      "replayed_frames": 6112,
+      "compared_stage_fields": 2145,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.rotationx, Actor.rotationy, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: BitmapText, Model, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "74337ecf06b287f54b30cf504477b6cf8bdaf195dd964218fc3414f301d7e1c1",
+      "archive": "b8770fd90d6155138b3a6e5b167ed49168a8a4723a1c18e43d99aee92b083979.tar.zst",
+      "archive_sha256": "b8770fd90d6155138b3a6e5b167ed49168a8a4723a1c18e43d99aee92b083979",
+      "compressed_bytes": 20114537,
+      "pack_seconds": 33.48318409998319,
+      "harness_version": "0.1.80",
+      "title": "Raving With Fire",
+      "retained_original_entry": {
+        "title": "Raving With Fire",
+        "source_simfile": "Raving With Fire/Raving With Fire.ssc",
+        "harness_version": "0.1.0",
+        "archive": "c860130738bcd0b8fbfcdfdad03e54757c81887d947401dbf2767d982afd215a.tar.zst",
+        "sha256": "c860130738bcd0b8fbfcdfdad03e54757c81887d947401dbf2767d982afd215a",
+        "compressed_bytes": 1755863,
+        "uncompressed_sha256": "cb6053d693ab1b40fb92df0a8dc0d2af32223050ed3e15dfc98a52871fdf6702",
+        "compression_level": 22,
+        "aliases": [
+          "1fbb9d10c0686d4694f7130b10ace4fc1215d825460e6252a2cc943bcdc8b6ba.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -8865,9 +8916,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "fc937c1ae18f5ffc8bc3716cc10f755ae0c4dd23172c9a055955844fef0c3a28",
+  "binary_sha256": "745eee7daaa9bd844dd8092d43d02e25b6b5e05a2a8967cca909eba5a2e487b7",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 31,
+  "passed_fixtures": 32,
   "pending_charts": 33,
-  "processed_charts": 64
+  "processed_charts": 65
 }

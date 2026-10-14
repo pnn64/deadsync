@@ -4349,15 +4349,12 @@
     {
       "title": "Raving With Fire",
       "source_simfile": "Raving With Fire/Raving With Fire.ssc",
-      "harness_version": "0.1.0",
-      "archive": "c860130738bcd0b8fbfcdfdad03e54757c81887d947401dbf2767d982afd215a.tar.zst",
-      "sha256": "c860130738bcd0b8fbfcdfdad03e54757c81887d947401dbf2767d982afd215a",
-      "compressed_bytes": 1755863,
-      "uncompressed_sha256": "cb6053d693ab1b40fb92df0a8dc0d2af32223050ed3e15dfc98a52871fdf6702",
-      "compression_level": 22,
-      "aliases": [
-        "1fbb9d10c0686d4694f7130b10ace4fc1215d825460e6252a2cc943bcdc8b6ba.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b8770fd90d6155138b3a6e5b167ed49168a8a4723a1c18e43d99aee92b083979.tar.zst",
+      "sha256": "b8770fd90d6155138b3a6e5b167ed49168a8a4723a1c18e43d99aee92b083979",
+      "compressed_bytes": 20114537,
+      "uncompressed_sha256": "5b3d076aa39267ba7e8b3fbcfc00d3d9e714ea598db290bc68a096a275563477",
+      "aliases": []
     },
     {
       "title": "Rayc Fire 2",
