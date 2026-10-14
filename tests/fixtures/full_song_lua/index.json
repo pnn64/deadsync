@@ -4361,17 +4361,14 @@
       ]
     },
     {
-      "title": "ぽ",
+      "title": "ぽ (wrashi Bootleg)",
       "source_simfile": "PO (wrashi Bootleg) [Gpop]/PO (wrashi Bootleg).ssc",
-      "harness_version": "0.1.0",
-      "archive": "b83277594f0366e1747e914ead11aeb4ad6295625183aa8eece8ac5e1dd2b770.tar.zst",
-      "sha256": "b83277594f0366e1747e914ead11aeb4ad6295625183aa8eece8ac5e1dd2b770",
-      "compressed_bytes": 758125,
-      "uncompressed_sha256": "54e3b3edca390c9778e44227546c2df4f19602df30ecfd8c5989f31b3622f603",
-      "compression_level": 22,
-      "aliases": [
-        "2f11d765b532777c2ab1439085e741dc1f4eda1493388d5914ea7516f4592e8c.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "46ac98a250bbd2ce5cd1f60a8a0e243b865ed82de23a2da8c96e9b158f3c9b24.tar.zst",
+      "sha256": "46ac98a250bbd2ce5cd1f60a8a0e243b865ed82de23a2da8c96e9b158f3c9b24",
+      "compressed_bytes": 12116757,
+      "uncompressed_sha256": "acdac772a5e6e3b18d5795a5aadc1c821214bf73835ffb0c824e1040ed6cf4c5",
+      "aliases": []
     },
     {
       "title": "POP MY SHIT",
