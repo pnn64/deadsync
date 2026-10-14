@@ -47,10 +47,10 @@ impl<'a> Iterator for BgChangeSets<'a> {
         let mut fields = BgChangeFields::new();
         let mut pnum = 0u8;
         loop {
-            let matched_entry_end = matches!(pnum, 1 | 7)
-                .then(|| match_bgchange_entry_end(self.changes, self.start, self.entries))
+            let matched_entry = matches!(pnum, 1 | 7)
+                .then(|| match_bgchange_entry(self.changes, self.start, self.entries))
                 .flatten();
-            let (end, delimiter) = if let Some(end) = matched_entry_end {
+            let (end, delimiter) = if let Some((end, _)) = matched_entry {
                 (end, self.changes.as_bytes().get(end).copied())
             } else if let Some((end, delimiter)) = next_bgchange_delimiter(self.changes, self.start)
             {
@@ -64,7 +64,13 @@ impl<'a> Iterator for BgChangeSets<'a> {
                 self.done = true;
                 return Some(fields);
             };
-            fields.push(bgchange_field_range(self.changes, self.start, end));
+            // Native ParseBGChangesString stores the matched filesystem entry,
+            // including its spelling, rather than the authored filename slice.
+            fields.push(if let Some((_, entry)) = matched_entry {
+                Cow::Borrowed(entry)
+            } else {
+                bgchange_field_range(self.changes, self.start, end)
+            });
             self.start = end;
             if let Some(delimiter) = delimiter {
                 self.start += 1;
@@ -104,7 +110,11 @@ fn bgchange_field_range(changes: &str, start: usize, end: usize) -> Cow<'_, str>
     }
 }
 
-fn match_bgchange_entry_end(changes: &str, start: usize, entries: &[String]) -> Option<usize> {
+fn match_bgchange_entry<'a>(
+    changes: &str,
+    start: usize,
+    entries: &'a [String],
+) -> Option<(usize, &'a str)> {
     if entries.is_empty() {
         return None;
     }
@@ -133,23 +143,23 @@ fn match_bgchange_entry_end(changes: &str, start: usize, entries: &[String]) -> 
         {
             return (matches!(input.get(expected.len()), None | Some(b'=') | Some(b','))
                 && prefix.eq_ignore_ascii_case(expected))
-            .then_some(start + expected.len());
+            .then_some((start + expected.len(), entry.as_str()));
         }
-        match_bgchange_entry_end_one(changes, start, entry)
+        match_bgchange_entry_end_one(changes, start, entry).map(|end| (end, entry.as_str()))
     })
 }
 
 // Keep the legacy scan in its own loop so the ordinary-name fast path does not
 // increase its register pressure or prevent inlining the per-entry matcher.
 #[inline(never)]
-fn match_bgchange_entries_with_newlines(
+fn match_bgchange_entries_with_newlines<'a>(
     changes: &str,
     start: usize,
-    entries: &[String],
-) -> Option<usize> {
-    entries
-        .iter()
-        .find_map(|entry| match_bgchange_entry_end_one(changes, start, entry))
+    entries: &'a [String],
+) -> Option<(usize, &'a str)> {
+    entries.iter().find_map(|entry| {
+        match_bgchange_entry_end_one(changes, start, entry).map(|end| (end, entry.as_str()))
+    })
 }
 
 #[inline(always)]
@@ -324,6 +334,31 @@ mod tests {
                 "1".to_string()
             ]]
         );
+    }
+
+    #[test]
+    fn matched_filenames_retain_directory_entry_spelling() {
+        let entries = vec!["foregrounds/fgc".into(), "other=Part,Two.lua".into()];
+        let sets = split_bgchange_sets_like_itg(
+            "0=Foregrounds/FGC=1=0=0=0=0=OTHER=part,two.LUA",
+            &entries,
+        );
+        assert_eq!(sets[0][1], "foregrounds/fgc");
+        assert_eq!(sets[0][7], "other=Part,Two.lua");
+        let sets = split_bgchange_sets_like_itg("0=./Foregrounds/FGC=1", &entries);
+        assert_eq!(
+            sets[0][1], "./Foregrounds/FGC",
+            "unmatched authored paths retain their spelling"
+        );
+    }
+
+    #[test]
+    fn matched_filename_spelling_survives_newline_removal() {
+        let entries = vec!["foregrounds/fgc".into()];
+        for text in ["0=Fore\ngrounds/FGC=1", "0=Fore\r\ngrounds/FGC\n=1"] {
+            let sets = split_bgchange_sets_like_itg(text, &entries);
+            assert_eq!(sets[0][1], "foregrounds/fgc");
+        }
     }
 
     #[test]
