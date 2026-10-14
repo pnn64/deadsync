@@ -3700,17 +3700,14 @@
       ]
     },
     {
-      "title": "MAWARU 4",
+      "title": "MAWARU 4 EASY MODO!?",
       "source_simfile": "mawaru4/mawaru4.ssc",
-      "harness_version": "0.1.0",
-      "archive": "203f10e0eaf8d5fb5de746f3915cb8ed233dd3d7b9edd1a3b2318ccced0ab30f.tar.zst",
-      "sha256": "203f10e0eaf8d5fb5de746f3915cb8ed233dd3d7b9edd1a3b2318ccced0ab30f",
-      "compressed_bytes": 2088471,
-      "uncompressed_sha256": "c278e66e76081b442ce39afebc8b31d7ee53727b0be0370b19d2a9acc64a05cd",
-      "compression_level": 22,
-      "aliases": [
-        "45c90f72b503d81c26870239fbae4f2f5872e1c9ea76c3a5421bae03b71998f7.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "3e52794f9d2cea5d684aa6a1da08bf4bb35561f1a37c0f41aa00839bf5510e64.tar.zst",
+      "sha256": "3e52794f9d2cea5d684aa6a1da08bf4bb35561f1a37c0f41aa00839bf5510e64",
+      "compressed_bytes": 10171978,
+      "uncompressed_sha256": "c74ddfd683990fbeec17a8693b4914325bb19c0a496f8d0438d5f5dd8201ad96",
+      "aliases": []
     },
     {
       "title": "MAWARU FINALE",
