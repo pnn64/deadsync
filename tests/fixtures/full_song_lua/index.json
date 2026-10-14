@@ -2610,15 +2610,12 @@
     {
       "title": "Genshin Mega Quiz",
       "source_simfile": "Genshin Quiz/Megaquiz.ssc",
-      "harness_version": "0.1.0",
-      "archive": "dc0418aaac4cbea25c5b24b7d65b99a625d44d5a5ff322afd444c079827f92de.tar.zst",
-      "sha256": "dc0418aaac4cbea25c5b24b7d65b99a625d44d5a5ff322afd444c079827f92de",
-      "compressed_bytes": 190553,
-      "uncompressed_sha256": "595ebb39e59156e604d55ced2eded45a3e8fa9e096d39c98f186c030f6d46b45",
-      "compression_level": 22,
-      "aliases": [
-        "abaf1331aaa15cdc7c076d39d7b152d9bae91980fba32396c16342a82668b619.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "573ad6ad01df2a3958636ec215433438b9bd57ea63455dfa53b077c4e39c3dbd.tar.zst",
+      "sha256": "573ad6ad01df2a3958636ec215433438b9bd57ea63455dfa53b077c4e39c3dbd",
+      "compressed_bytes": 13790843,
+      "uncompressed_sha256": "f9ebe5e4db775dfb2c023f9bd1ef5a5724f871c44e160c34fca64888a6ef6d57",
+      "aliases": []
     },
     {
       "title": "Get Into It",
