@@ -1,0 +1,17 @@
+{
+  "pid": 3476811,
+  "supervisor_pid": 3476811,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_showtime_after_sputnik_final_v1.py"
+  ],
+  "fix_commit": "e1d9c9995fcf756f86445761fe965767a848dd24",
+  "script_sha256": "cad201438faf3f81fa500d1aed6875f924bec76a3f6c6bc5db9261ec0f581645",
+  "predecessor_final_proof_sha256": "849b22685c288fa02263aa52ed21482781bbb839ce22c103a84840b26d2b7619",
+  "predecessor_status": "passed",
+  "repair_attempt": 2,
+  "maximum_repairs": 2,
+  "native_capture_reused": true,
+  "previous_repair_slot_reused": true,
+  "passing_charts_reopened": false
+}
