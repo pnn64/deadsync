@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Tear Jerker/tearjerker.ssc",
+  "native_frames": 36060,
+  "replayed_frames": 36060,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "3bc81f0049b0d52d75a340d63f89bce9f1614e245e6799c23ec9dd5ffaba54d1.tar.zst",
+  "compressed_sha256": "3bc81f0049b0d52d75a340d63f89bce9f1614e245e6799c23ec9dd5ffaba54d1",
+  "uncompressed_sha256": "40dc149737fd7bf93dfd939bf2838623fba0ba351bf51cf8f3528178bd55b02b",
+  "compressed_bytes": 12885868,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
