@@ -4928,15 +4928,12 @@
     {
       "title": "Stuck In The Abyss",
       "source_simfile": "Stuck in the Abyss [DDDAAA]/stuckintheabyss.ssc",
-      "harness_version": "0.1.0",
-      "archive": "9f31bc1fdeeb9194792f50da868ed2ccef27521bb51bb7b372061f2608568ff6.tar.zst",
-      "sha256": "9f31bc1fdeeb9194792f50da868ed2ccef27521bb51bb7b372061f2608568ff6",
-      "compressed_bytes": 1175421,
-      "uncompressed_sha256": "7be142e19eabe6ff5c9a9aa68a96fa65cc7f3afdb8b88b4517a8b8f9637e4d72",
-      "compression_level": 22,
-      "aliases": [
-        "e7c4542acb03e2e975cb621d3bd560ae962788953a553bf4d2dd569f50f07444.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "f2dbadd55e6cf464268be9ffb28d3a0fbc98466b6f16769c8b7ab87b8a49c87d.tar.zst",
+      "sha256": "f2dbadd55e6cf464268be9ffb28d3a0fbc98466b6f16769c8b7ab87b8a49c87d",
+      "compressed_bytes": 7355813,
+      "uncompressed_sha256": "1a06707ce02b21e170b87b6fa201026c7cd31308af2c72da7b5a2e3fd33de3e0",
+      "aliases": []
     },
     {
       "title": "Subway Surfers Main Theme",

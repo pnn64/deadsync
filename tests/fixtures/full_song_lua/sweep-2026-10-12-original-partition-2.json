@@ -8047,6 +8047,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 421,
+      "source_simfile": "Stuck in the Abyss [DDDAAA]/stuckintheabyss.ssc",
+      "simfile_sha256": "3b95302912ee6f885ec870171eaf713ed6243dffe37d648f1333fa6c2480cdb8",
+      "retained_original_archive": "9f31bc1fdeeb9194792f50da868ed2ccef27521bb51bb7b372061f2608568ff6.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+      "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+      "capture_seconds": 159.4245646329946,
+      "trace_sha256": "00dca99bfbe88a2f435e12edfe921d1834024b3b50a6b3e70a2e05d156b8ba29",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-421/candidates/1a06707ce02b21e170b87b6fa201026c7cd31308af2c72da7b5a2e3fd33de3e0.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1668.51163211299,
+      "candidate_sha256": "1a06707ce02b21e170b87b6fa201026c7cd31308af2c72da7b5a2e3fd33de3e0",
+      "native_frames": 75750,
+      "replayed_frames": 75750,
+      "compared_stage_fields": 1562,
+      "pending_coverage": [
+        "uncompared song operations: Actor.basezoom, Actor.xy, PlayerOptions.Beat, PlayerOptions.Confusion, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Tipsy",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "977822219ef6cc7ba86dc903d9f224d513a0ef176bc28a9417c703bdb71f7eb4",
+      "archive": "f2dbadd55e6cf464268be9ffb28d3a0fbc98466b6f16769c8b7ab87b8a49c87d.tar.zst",
+      "archive_sha256": "f2dbadd55e6cf464268be9ffb28d3a0fbc98466b6f16769c8b7ab87b8a49c87d",
+      "compressed_bytes": 7355813,
+      "pack_seconds": 5.774553195980843,
+      "harness_version": "0.1.80",
+      "title": "Stuck In The Abyss",
+      "retained_original_entry": {
+        "title": "Stuck In The Abyss",
+        "source_simfile": "Stuck in the Abyss [DDDAAA]/stuckintheabyss.ssc",
+        "harness_version": "0.1.0",
+        "archive": "9f31bc1fdeeb9194792f50da868ed2ccef27521bb51bb7b372061f2608568ff6.tar.zst",
+        "sha256": "9f31bc1fdeeb9194792f50da868ed2ccef27521bb51bb7b372061f2608568ff6",
+        "compressed_bytes": 1175421,
+        "uncompressed_sha256": "7be142e19eabe6ff5c9a9aa68a96fa65cc7f3afdb8b88b4517a8b8f9637e4d72",
+        "compression_level": 22,
+        "aliases": [
+          "e7c4542acb03e2e975cb621d3bd560ae962788953a553bf4d2dd569f50f07444.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -8058,7 +8109,7 @@
   },
   "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 25,
+  "passed_fixtures": 26,
   "pending_charts": 31,
-  "processed_charts": 56
+  "processed_charts": 57
 }
