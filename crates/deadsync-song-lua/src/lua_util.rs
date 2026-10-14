@@ -2842,6 +2842,22 @@ pub fn song_lua_actor_registry(lua: &Lua) -> mlua::Result<Table> {
 struct SongLuaMessageOrder(FxHashMap<String, usize>);
 
 #[cfg(feature = "test-support")]
+#[derive(Default)]
+struct SongLuaMessageCoverage {
+    seen: rustc_hash::FxHashSet<String>,
+    pending: Vec<String>,
+}
+
+pub(crate) fn take_message_coverage(lua: &Lua) -> Vec<String> {
+    #[cfg(feature = "test-support")]
+    if let Some(mut coverage) = lua.app_data_mut::<SongLuaMessageCoverage>() {
+        return std::mem::take(&mut coverage.pending);
+    }
+    let _ = lua;
+    Vec::new()
+}
+
+#[cfg(feature = "test-support")]
 pub(crate) fn install_message_order(lua: &Lua, ranks: &[(String, usize)]) -> mlua::Result<()> {
     if ranks.is_empty() { return Ok(()); }
     let mut order = FxHashMap::default();
@@ -2903,16 +2919,22 @@ fn message_actor_path(actor: &Table) -> mlua::Result<String> {
     Ok(parts.join("/"))
 }
 
-fn message_actor_identity(lua: &Lua, actor: &Table) -> mlua::Result<usize> {
-    #[cfg(feature = "test-support")]
-    if let Some(order) = lua.app_data_ref::<SongLuaMessageOrder>() {
-        let path = message_actor_path(actor)?;
-        return order.0.get(&path).copied().ok_or_else(|| {
-            mlua::Error::external(format!("missing captured subscriber identity for {path}"))
-        });
+#[cfg(feature = "test-support")]
+fn captured_message_actor_identity(lua: &Lua, actor: &Table) -> mlua::Result<Option<usize>> {
+    let path = message_actor_path(actor)?;
+    let rank = lua.app_data_ref::<SongLuaMessageOrder>()
+        .and_then(|order| order.0.get(&path).copied());
+    if rank.is_none() {
+        if lua.app_data_ref::<SongLuaMessageCoverage>().is_none() {
+            lua.set_app_data(SongLuaMessageCoverage::default());
+        }
+        let mut coverage = lua.app_data_mut::<SongLuaMessageCoverage>().unwrap();
+        let gap = format!("missing captured subscriber identity for {path}");
+        if coverage.seen.insert(gap.clone()) {
+            coverage.pending.push(gap);
+        }
     }
-    let _ = lua;
-    Ok(actor.to_pointer() as usize)
+    Ok(rank)
 }
 
 #[cfg(test)]
@@ -3233,19 +3255,29 @@ fn broadcast_song_lua_message_impl(
             if !matches!(actor.get::<Value>(command.as_str())?, Value::Function(_)) {
                 continue;
             }
-            actors.push((0, actor));
+            actors.push((actor.to_pointer() as usize, actor));
         }
         // MessageManager.cpp stores subscribers in an identity-ordered set.
         // Tree construction and definition-table order do not define delivery.
-        // A set with one subscriber has only one delivery order, so its rank
-        // cannot affect dispatch. Multiple subscribers still need every rank
-        // before running any callback.
-        if actors.len() > 1 {
-            for (identity, actor) in &mut actors {
-                *identity = message_actor_identity(lua, actor)?;
+        actors.sort_unstable_by_key(|(identity, _)| *identity);
+        // Imported identities are observational inputs. Preserve their relative
+        // order in the known slots; unobserved listeners keep their VM identity
+        // slots and report missing coverage without disabling message delivery.
+        #[cfg(feature = "test-support")]
+        if actors.len() > 1 && lua.app_data_ref::<SongLuaMessageOrder>().is_some() {
+            let mut slots = smallvec::SmallVec::<[usize; 32]>::new();
+            let mut known = smallvec::SmallVec::<[(usize, Table); 32]>::new();
+            for (slot, (_, actor)) in actors.iter().enumerate() {
+                if let Some(rank) = captured_message_actor_identity(lua, actor)? {
+                    slots.push(slot);
+                    known.push((rank, actor.clone()));
+                }
+            }
+            known.sort_unstable_by_key(|(rank, _)| *rank);
+            for (slot, entry) in slots.into_iter().zip(known) {
+                actors[slot] = entry;
             }
         }
-        actors.sort_unstable_by_key(|(identity, _)| *identity);
         let params = if normalize { normalize_broadcast_params(lua, message, params)? } else { params };
         // Drain in place so consuming the snapshot does not move its inline buffer.
         actors.drain(..).try_for_each(|(_, actor)| {

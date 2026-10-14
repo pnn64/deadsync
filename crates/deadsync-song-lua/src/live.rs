@@ -832,6 +832,8 @@ pub struct SongLuaLiveOutput {
     pub sounds: Vec<crate::SongLuaSoundEvent>,
     /// Native-style callback errors retain partial state and are reported once.
     pub errors: Vec<String>,
+    /// Missing observational inputs, separate from callback execution errors.
+    pub coverage_gaps: Vec<String>,
     pub player_writes: Vec<SongLuaLivePlayerWrite>,
 }
 
@@ -843,6 +845,7 @@ impl SongLuaLiveOutput {
         self.source_broadcasts.append(&mut next.source_broadcasts);
         self.sounds.append(&mut next.sounds);
         self.errors.append(&mut next.errors);
+        self.coverage_gaps.append(&mut next.coverage_gaps);
         self.player_writes.append(&mut next.player_writes);
     }
 }
@@ -1483,11 +1486,12 @@ fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
     let sounds = crate::lua_util::take_runtime_sounds(lua);
     let errors = lua.remove_app_data::<crate::lua_util::SongLuaUpdateErrors>()
         .map_or_else(Vec::new, |errors| errors.0);
+    let coverage_gaps = crate::lua_util::take_message_coverage(lua);
     if let Some(history) = lua.globals().raw_get::<Option<Table>>(crate::SONG_LUA_BROADCASTS_KEY)? {
         history.clear()?;
     }
     let player_writes = lua.remove_app_data::<PlayerWrites>().map_or_else(Vec::new, |writes| writes.0);
-    Ok(SongLuaLiveOutput { request, source_requests, broadcasts, source_broadcasts, sounds, errors, player_writes })
+    Ok(SongLuaLiveOutput { request, source_requests, broadcasts, source_broadcasts, sounds, errors, coverage_gaps, player_writes })
 }
 
 pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
@@ -2013,7 +2017,7 @@ return Def.ActorMultiVertex {
 
     #[cfg(feature = "test-support")]
     #[test]
-    fn live_single_judgment_subscriber_needs_no_captured_sort_rank() {
+    fn live_message_order_gaps_preserve_callback_dispatch() {
         let mut compiled = compile_with_context("sole-native-judgment-subscriber",
             "return Def.Actor{}", |context| {
                 context.defer_initial_live_update = true;
@@ -2058,10 +2062,70 @@ return Def.ActorFrame {
         });
         let scene = compiled.live_scene.take().unwrap();
         let result = crate::lua_util::broadcast_native_song_lua_message(&scene.lua, "Probe", None);
-        assert!(result.unwrap_err().to_string().contains("missing captured subscriber identity"),
-            "multiple subscribers still require every captured ordering identity");
-        assert_eq!(scene.lua.globals().get::<u32>("CALLS").unwrap(), 0,
-            "missing ordering information must be reported before either callback");
+        assert!(result.is_ok(),
+            "missing captured ordering must not abort callback dispatch: {result:?}");
+        assert_eq!(scene.lua.globals().get::<u32>("CALLS").unwrap(), 2,
+            "both subscribed callbacks run when an ordering identity is absent");
+        let output = take_output(&scene.lua).unwrap();
+        assert!(output.errors.is_empty());
+        assert_eq!(output.coverage_gaps,
+            vec!["missing captured subscriber identity for 1/1"]);
+        crate::lua_util::broadcast_native_song_lua_message(&scene.lua, "Probe", None).unwrap();
+        assert_eq!(scene.lua.globals().get::<u32>("CALLS").unwrap(), 4);
+        assert!(take_output(&scene.lua).unwrap().coverage_gaps.is_empty(),
+            "a recurring ordering gap is reported once per scene");
+
+        let mut compiled = compile_with_context("partially-captured-order", r#"
+SEEN = {}
+return Def.ActorFrame {
+    InitCommand = function(self) ROOT = self end,
+    ProbeMessageCommand = function() table.insert(SEEN, 'root') end,
+    Def.Actor {ProbeMessageCommand = function() table.insert(SEEN, 'first') end},
+    Def.Actor {ProbeMessageCommand = function() table.insert(SEEN, 'second') end},
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.message_actor_order = vec![("1/1".into(), 20), ("1/2".into(), 10)];
+        });
+        let scene = compiled.live_scene.take().unwrap();
+        let root = scene.lua.globals().get::<Table>("ROOT").unwrap().to_pointer() as usize;
+        let mut pointers: Vec<_> = crate::song_lua_actor_registry(&scene.lua).unwrap()
+            .sequence_values::<Table>().map(Result::unwrap)
+            .filter(|actor| matches!(actor.get::<Value>("ProbeMessageCommand").unwrap(), Value::Function(_)))
+            .map(|actor| actor.to_pointer() as usize).collect();
+        pointers.sort_unstable();
+        let root_slot = pointers.iter().position(|pointer| *pointer == root).unwrap();
+        crate::lua_util::broadcast_native_song_lua_message(&scene.lua, "Probe", None).unwrap();
+        let seen: Vec<_> = scene.lua.globals().get::<Table>("SEEN").unwrap()
+            .sequence_values::<String>().map(Result::unwrap).collect();
+        assert_eq!(seen.len(), 3);
+        assert_eq!(seen[root_slot], "root", "the unknown subscriber keeps its VM identity slot");
+        assert_eq!(seen.into_iter().filter(|name| name != "root").collect::<Vec<_>>(),
+            vec!["second", "first"], "captured listeners retain their native relative order");
+        assert_eq!(take_output(&scene.lua).unwrap().coverage_gaps,
+            vec!["missing captured subscriber identity for 1"]);
+
+        let mut compiled = compile_with_context("mixed-theme-judgment-subscribers",
+            "CALLS = 0; return Def.Actor {JudgmentMessageCommand = function() CALLS = CALLS + 1 end}",
+            |context| {
+                context.defer_initial_live_update = true;
+                context.message_actor_order = vec![("1".into(), 10)];
+            });
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.advance(frame).unwrap();
+        let params = scene.lua.create_table().unwrap();
+        params.raw_set("Player", "PlayerNumber_P1").unwrap();
+        crate::lua_util::broadcast_native_song_lua_message(
+            &scene.lua, "Judgment", Some(Value::Table(params))).unwrap();
+        scene.lua.load("SCREENMAN:GetTopScreen():GetChild('Overlay'):playcommand('Off')")
+            .exec().unwrap();
+        let output = take_output(&scene.lua).unwrap();
+        assert!(output.errors.is_empty());
+        assert_eq!(scene.lua.globals().get::<u32>("CALLS").unwrap(), 1);
+        assert_eq!(output.player_writes, vec![SongLuaLivePlayerWrite::Fail { player: 0 }],
+            "the owned Judgment latch still fails autoplay with an authored subscriber");
+        assert!(output.coverage_gaps.iter().any(|gap| gap.contains("ScreenGameplay/")),
+            "missing native theme ordering remains explicit coverage");
     }
 
     #[test]

@@ -2934,6 +2934,7 @@ pub(crate) fn replay(
     let mut scene_count = startup_scenes as u64;
     let mut pending_reload = false;
     let mut errors = startup.errors;
+    let mut runtime_coverage: BTreeSet<String> = startup.coverage_gaps.into_iter().collect();
     let mut broadcasts: Vec<_> = startup
         .source_broadcasts
         .iter()
@@ -2971,6 +2972,7 @@ pub(crate) fn replay(
             state = init_scene(prepared)?;
             let startup = state.take_song_lua_output();
             errors.extend(startup.errors);
+            runtime_coverage.extend(startup.coverage_gaps);
             broadcasts.extend(
                 startup
                     .source_broadcasts
@@ -3061,6 +3063,7 @@ pub(crate) fn replay(
                 .map(|event| broadcast_event(event, simfile)),
         );
         errors.extend(output.errors);
+        runtime_coverage.extend(output.coverage_gaps);
         // Production coalesces screen loads, while the source trace records
         // every authored invocation. Validate the queued effect independently.
         if let Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(name)) = &output.request {
@@ -3127,7 +3130,9 @@ pub(crate) fn replay(
             scope,
             &mut mismatches,
         )?;
-        let coverage = coverage(&trace, scope, &calls, used_frames, frames.len());
+        let mut coverage = coverage(&trace, scope, &calls, used_frames, frames.len());
+        coverage["pending"].as_array_mut().unwrap()
+            .extend(runtime_coverage.iter().map(|gap| json!(gap)));
         return Ok(
             json!({"diagnostic_only":true,"whole_song_parity_proven":false,"archive_accepted":false,
             "scope":match scope { Scope::Entry => "entry", Scope::FirstQuery => "first-point-query",
@@ -3219,7 +3224,9 @@ pub(crate) fn replay(
         scope,
         &mut mismatches,
     )?;
-    let coverage = coverage(&trace, scope, &calls, used_frames, frames.len());
+    let mut coverage = coverage(&trace, scope, &calls, used_frames, frames.len());
+    coverage["pending"].as_array_mut().unwrap()
+        .extend(runtime_coverage.iter().map(|gap| json!(gap)));
     let mut report = json!({"diagnostic_only":false,"whole_song_parity_proven":false,"archive_accepted":false,
         "source_simfile":simfile,"native_trace":trace_path,"native_frames":frames.len(),"replayed_frames":used_frames,
         "startup_scenes":startup_scenes,"replayed_scenes":scene_count,"selected_description":state.source.charts[0].description,

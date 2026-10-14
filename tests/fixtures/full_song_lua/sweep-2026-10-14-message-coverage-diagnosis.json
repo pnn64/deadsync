@@ -1,0 +1,656 @@
+{
+  "cause": "Imported recorder identities aborted a broadcast before any callback when a theme subscriber was absent from the captured identity map. This prevented the real autoplay latch and authored listeners from running.",
+  "primary_sources": [
+    {
+      "path": "C:/GitHub/itgmania-harness/vendor/itgmania/src/MessageManager.cpp",
+      "sha256": "d7b8f7873062039d81d7d5b3b052f785c182deea731d4c4ed5d473499689c311"
+    },
+    {
+      "path": "C:/GitHub/itgmania-harness/vendor/simply-love/BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua",
+      "sha256": "ffcd8705267aa7f299ce65970810d74de1db24c821c8a21baa6b9a547d70a269"
+    }
+  ],
+  "existing_full_replays": [
+    {
+      "position": 378,
+      "source_simfile": "rite of spring/rite.ssc",
+      "repair_attempts": 0,
+      "candidate_sha256": "fa30207b35448ca133d0e13bf2377c07ba2037f042e00f19a5d9fb4bf03287c3",
+      "trace_sha256": "f25daa8bbea570fec79713a278558b8336e3ee879d935c3e6ba006ee30241567",
+      "simfile_sha256": "7ce2cf7cfa441b16842c6577e922df25f8c49258da2b1cd49358f0f1a428c0fc",
+      "native_frames": 104414,
+      "replayed_frames": 104414,
+      "errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 8.960: missing captured subscriber identity for ScreenGameplay/19/1",
+        "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 9.186: missing captured subscriber identity for ScreenGameplay/19/1"
+      ],
+      "mismatch_count": 13777,
+      "concrete_failures": [
+        {
+          "phase": "progress",
+          "seconds": 147.0004119873047,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "progress",
+          "seconds": 148.0008544921875,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "screen-end",
+          "seconds": 148.15025329589844,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "gameplay-exit",
+          "seconds": 148.15025329589844,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "field": "command_query_count",
+          "native": 17476,
+          "deadsync": 14032
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0010",
+            "args": [],
+            "beat": 8.9602632522583,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0010",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 342,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 0.29607710242271423,
+            "seq": 514,
+            "source": "song:/rite.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "LockLifeCommand",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "beat": 9.001381874084473,
+            "seconds": 0.30841270089149475,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0010",
+            "args": [
+              [
+                0,
+                1,
+                1,
+                1
+              ]
+            ],
+            "beat": 8.9602632522583,
+            "caller": {
+              "line": 342,
+              "source": "song:/rite.lua",
+              "tail_call": false
+            },
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0010",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 342,
+            "operation": "Actor.diffuse",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.29607710242271423,
+            "seq": 519,
+            "source": "song:/rite.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ScreenManager.GetTopScreen",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "phase": "callback",
+            "beat": 9.001381874084473,
+            "seconds": 0.30841270089149475,
+            "args": [],
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0010",
+            "args": [
+              1
+            ],
+            "beat": 8.9602632522583,
+            "caller": {
+              "line": 342,
+              "source": "song:/rite.lua",
+              "tail_call": false
+            },
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0010",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 342,
+            "operation": "Actor.diffusealpha",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.29607710242271423,
+            "seq": 520,
+            "source": "song:/rite.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "phase": "callback",
+            "beat": 9.001381874084473,
+            "seconds": 0.30841270089149475,
+            "args": [
+              "PlayerP1"
+            ],
+            "results": [
+              {
+                "actor": 2,
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0010",
+            "args": [
+              0.5
+            ],
+            "beat": 8.9602632522583,
+            "caller": {
+              "line": 342,
+              "source": "song:/rite.lua",
+              "tail_call": false
+            },
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0010",
+            "detail": {
+              "native_tween_time_left": 0.5
+            },
+            "kind": "call",
+            "line": 342,
+            "operation": "Actor.linear",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.29607710242271423,
+            "seq": 521,
+            "source": "song:/rite.lua",
+            "tween_time_left": 0.5
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ScreenManager.GetTopScreen",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "phase": "callback",
+            "beat": 9.001381874084473,
+            "seconds": 0.30841270089149475,
+            "args": [],
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0010",
+            "args": [
+              0
+            ],
+            "beat": 8.9602632522583,
+            "caller": {
+              "line": 342,
+              "source": "song:/rite.lua",
+              "tail_call": false
+            },
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0010",
+            "detail": {
+              "native_tween_time_left": 0.5
+            },
+            "kind": "call",
+            "line": 342,
+            "operation": "Actor.diffusealpha",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.29607710242271423,
+            "seq": 523,
+            "source": "song:/rite.lua",
+            "tween_time_left": 0.5
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "phase": "callback",
+            "beat": 9.001381874084473,
+            "seconds": 0.30841270089149475,
+            "args": [
+              "PlayerP2"
+            ],
+            "results": [
+              {
+                "type": "nil"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0010",
+            "args": [],
+            "beat": 8.9602632522583,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0010",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 342,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 0.29607710242271423,
+            "seq": 524,
+            "source": "song:/rite.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.sleep",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "phase": "callback",
+            "beat": 9.001381874084473,
+            "seconds": 0.30841270089149475,
+            "args": [
+              0.1
+            ],
+            "tween_time_left": 0.10000000149011612
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0011",
+            "args": [],
+            "beat": 8.9602632522583,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0011",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 342,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 0.29607710242271423,
+            "seq": 525,
+            "source": "song:/rite.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.queuecommand",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "phase": "callback",
+            "beat": 9.001381874084473,
+            "seconds": 0.30841270089149475,
+            "args": [
+              "LockLife"
+            ],
+            "tween_time_left": 0.10000000149011612
+          }
+        }
+      ]
+    },
+    {
+      "position": 270,
+      "source_simfile": "Koi [UPS2016]/koi.ssc",
+      "repair_attempts": 1,
+      "candidate_sha256": "42f964c593f8f62d2731bb51dccf610fda9e4dd8e5c3c85385db8d9d787e9667",
+      "trace_sha256": "6313db510762c74890eb62402b84caaa99fcde9a9507b1e9eac6fdc4199bdd42",
+      "simfile_sha256": "2efedac6dcecd6354ba67a65cc0f0732260d4f37536fe2522a6ee6402a7be205",
+      "native_frames": 116240,
+      "replayed_frames": 116240,
+      "errors": [
+        "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 24.858: missing captured subscriber identity for ScreenGameplay/19/1",
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 31.001: missing captured subscriber identity for ScreenGameplay/19/1",
+        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 32.992: missing captured subscriber identity for ScreenGameplay/19/1"
+      ],
+      "mismatch_count": 1080,
+      "concrete_failures": [
+        {
+          "phase": "progress",
+          "seconds": 202.0009002685547,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "progress",
+          "seconds": 203.0003204345703,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "screen-end",
+          "seconds": 203.12123107910156,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "phase": "gameplay-exit",
+          "seconds": 203.12123107910156,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "field": "command_query_count",
+          "native": 4909,
+          "deadsync": 2961
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0242",
+            "args": [],
+            "beat": 24.85755729675293,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0242",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 266,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 10.791315078735352,
+            "seq": 2667,
+            "source": "song:/lua/koi.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "AddFishCommand",
+            "source": "song:/lua/koi.lua",
+            "line": 234,
+            "beat": 28.00204849243164,
+            "seconds": 12.101519584655762,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0242",
+            "args": [],
+            "beat": 24.85755729675293,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0242",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 266,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 10.791315078735352,
+            "seq": 2668,
+            "source": "song:/lua/koi.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.queuecommand",
+            "source": "song:/lua/koi.lua",
+            "line": 234,
+            "phase": "callback",
+            "beat": 28.00204849243164,
+            "seconds": 12.101519584655762,
+            "args": [
+              "SlowlyAppear"
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0242",
+            "args": [],
+            "beat": 25.856468200683594,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0242",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 266,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 11.207528114318848,
+            "seq": 2669,
+            "source": "song:/lua/koi.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.queuecommand",
+            "source": "song:/lua/koi.lua",
+            "line": 234,
+            "phase": "callback",
+            "beat": 28.00204849243164,
+            "seconds": 12.101519584655762,
+            "args": [
+              "AddFishAgain"
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0242",
+            "args": [],
+            "beat": 25.856468200683594,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0242",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 266,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 11.207528114318848,
+            "seq": 2670,
+            "source": "song:/lua/koi.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "AddFishCommand",
+            "source": "song:/lua/koi.lua",
+            "line": 234,
+            "beat": 28.00204849243164,
+            "seconds": 12.101519584655762,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0242",
+            "args": [],
+            "beat": 26.858591079711914,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0242",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 266,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 11.625079154968262,
+            "seq": 2671,
+            "source": "song:/lua/koi.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "AddFishAgainCommand",
+            "source": "song:/lua/koi.lua",
+            "line": 246,
+            "beat": 28.00204849243164,
+            "seconds": 12.101519584655762,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0242",
+            "args": [],
+            "beat": 26.858591079711914,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0242",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 266,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 11.625079154968262,
+            "seq": 2672,
+            "source": "song:/lua/koi.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.sleep",
+            "source": "song:/lua/koi.lua",
+            "line": 246,
+            "phase": "callback",
+            "beat": 28.00204849243164,
+            "seconds": 12.101519584655762,
+            "args": [
+              1.666668
+            ],
+            "tween_time_left": 1.6666680574417114
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0242",
+            "args": [],
+            "beat": 27.858919143676758,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0242",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 266,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 12.041882514953613,
+            "seq": 2673,
+            "source": "song:/lua/koi.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.queuecommand",
+            "source": "song:/lua/koi.lua",
+            "line": 246,
+            "phase": "callback",
+            "beat": 28.00204849243164,
+            "seconds": 12.101519584655762,
+            "args": [
+              "AddFish"
+            ],
+            "tween_time_left": 1.6666680574417114
+          }
+        }
+      ]
+    }
+  ],
+  "koi_missing_neutral_identity_inventory": "/home/parity/jobs/koi-ssc-native-identity-inventory-v1.json",
+  "change": "Dispatch subscribers in VM identity order, reorder the captured subset in its existing slots by captured rank, and report absent ranks as deduplicated coverage gaps. Actual callback errors and full count, argument, timing and state comparisons remain unchanged.",
+  "native_missing_pointer_inferred": false,
+  "existing_internal_missing_rank_test_updated": "The observer-abort assertion is replaced by callback execution and coverage assertions, with mixed authored/theme autoplay and partial-order controls. Full replay acceptance criteria are unchanged.",
+  "planned_repairs": [
+    {
+      "source_simfile": "Koi [UPS2016]/koi.ssc",
+      "attempt": 2,
+      "final_attempt_for_sweep": true
+    },
+    {
+      "source_simfile": "rite of spring/rite.ssc",
+      "attempt": 1,
+      "remaining_after_this_attempt": 1
+    }
+  ],
+  "passing_charts_reopened": false
+}
