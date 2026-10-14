@@ -2255,6 +2255,33 @@
       "capture_exit": 1,
       "capture_seconds": 1.9101519599789754,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania probe script reported: could not find staged song Harness/Probe; retained run directory /tmp/itgmania-harness-rs/song-lua-829171-1792015685793041617-0\n"
+    },
+    {
+      "position": 497,
+      "source_simfile": "mr sandman/mr sandman.sm",
+      "simfile_sha256": "e2262781ebdd5afd187dbdb5ce568db701ed7a4b6f8b856dbeb4f471c17b27c3",
+      "historical_failure": {
+        "simfile": "mr sandman/mr sandman.sm",
+        "status": "timeout",
+        "category": "capture_timeout",
+        "reason": "native capture exceeded 900 seconds",
+        "diagnostics": "target/song-lua-repair/final/9a7dc9dd696c05ad"
+      },
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+      "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+      "native_capture_reused_after_enospc": true,
+      "retained_trace_sha256": "946455fb6201633311da38c8e951a95b790de235a5fd0e3777051fab72153f15",
+      "capture_seconds": 0.0,
+      "trace_sha256": "946455fb6201633311da38c8e951a95b790de235a5fd0e3777051fab72153f15",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-6/chart-497/candidates/f2319fc5fddcf12bdf27256ad609f12a770b92b2b905f1980345a86e64716352.tar",
+      "replay_exit": 1,
+      "replay_seconds": 228.1920788929856,
+      "candidate_sha256": "f2319fc5fddcf12bdf27256ad609f12a770b92b2b905f1980345a86e64716352",
+      "failure": "y frame: frame 0/5040 (0.0%)\n[140.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[142.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[144.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[146.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[148.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[150.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[152.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[154.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[156.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[158.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[160.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[162.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[164.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[166.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[168.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[170.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[172.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[174.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[176.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[178.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[180.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[182.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[184.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[186.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[188.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[190.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[192.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[194.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Mr. Sandman': failed to execute '/tmp/.tmpwS40jd/song/sand/Default.lua': out of Lua stack, too many arguments to a Lua function or too many return values from a callback\nstack traceback:\n\t[C]: in function 'Def.Quad'\n\t[string \"/tmp/.tmpwS40jd/song/sand/default.lua\"]:147: in main chunk\n\t>[C]: in ?\n; retrying layers independently\n[196.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[198.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[200.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[202.1s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[204.1s] replaying every native gameplay frame: frame 0/5040 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Mr. Sandman' from '/tmp/.tmpwS40jd/song/sand/Default.lua': failed to execute '/tmp/.tmpwS40jd/song/sand/Default.lua': out of Lua stack, too many arguments to a Lua function or too many return values from a callback\nstack traceback:\n\t[C]: in function 'Def.Quad'\n\t[string \"/tmp/.tmpwS40jd/song/sand/default.lua\"]:147: in main chunk\n\t>[C]: in ?\n\n\nthread 'main' (918560) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[206.1s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[208.1s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n"
     }
   ],
   "scope": {
@@ -2266,6 +2293,6 @@
   "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 9,
-  "pending_charts": 9,
-  "processed_charts": 18
+  "pending_charts": 10,
+  "processed_charts": 19
 }
