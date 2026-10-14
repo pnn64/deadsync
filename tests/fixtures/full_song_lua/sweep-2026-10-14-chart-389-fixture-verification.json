@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Scorpion King [TaroNuke]/scorpion.sm",
+  "native_frames": 81493,
+  "replayed_frames": 81493,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "3a063f3d4721fec5de3ebd35e6e79af41f76cbbaa8d426f87aeaf25595e0295f.tar.zst",
+  "compressed_sha256": "3a063f3d4721fec5de3ebd35e6e79af41f76cbbaa8d426f87aeaf25595e0295f",
+  "uncompressed_sha256": "133f7bab54d7afe70feb37154b8eddc2138fc1185864460985e76b43fb0dceb3",
+  "compressed_bytes": 8577935,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
