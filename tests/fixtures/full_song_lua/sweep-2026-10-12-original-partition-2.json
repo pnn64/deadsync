@@ -6633,6 +6633,102 @@
       "replay_seconds": 2.2365693020110484,
       "candidate_sha256": "7b9ab3bde10c5a0295fe1047d5a3a00fb02a14d44c1497980d49e73dde41b910",
       "failure": "[0.6s] replaying every native gameplay frame\n\nthread 'main' (2389615) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 307,
+      "source_simfile": "mawaru8/mawaru8.sm",
+      "simfile_sha256": "a0e32b54c2762591bb87110e8661cdc1b9e31b6d5d9a287e8500ced93cc5d492",
+      "retained_original_archive": "563f40565c419e299a0e956ba002854bd02cb498a809dfaa0130244f3b4026f8.tar.zst",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-307/candidates/6371f5c7299efa1afae969b3dc7b0f033aa78702ed72161af14fe0a068a7f91f.tar",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "6a912f949896b963329aaa0cde4ea6c5fbc86bf6368091a1a6974d2b22629114",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/empty-layers-green-v2/proof.json",
+      "native_capture_reused": true,
+      "trace_sha256": "b4a8c89a8dd0c24062db973e85df8e1697846292bfe58d5bad175d5613bec42a",
+      "supervisor_handoff_v5": {
+        "retained_pid": 2425243,
+        "replay_restarted": false,
+        "kernel_wait_status": 512,
+        "exit_status_source": "kernel zombie exit status before old-parent reap"
+      },
+      "replay_exit": 2,
+      "replay_seconds": 58586.58432289399,
+      "candidate_sha256": "6371f5c7299efa1afae969b3dc7b0f033aa78702ed72161af14fe0a068a7f91f",
+      "native_frames": 124734,
+      "replayed_frames": 124734,
+      "compared_stage_fields": 3036,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetSecsIntoEffect, Actor.GetX, Actor.GetY, Actor.GetZoomX, Actor.accelerate, Actor.addx, Actor.addy, Actor.basezoomx, Actor.basezoomy, Actor.blend, Actor.bob, Actor.bounceend, Actor.cropleft, Actor.croptop, Actor.diffuseramp, Actor.diffuseshift, Actor.effect_hold_at_full, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.finishtweening, Actor.glow, Actor.glowshift, Actor.horizalign, Actor.playcommand, Actor.pulse, Actor.rotationy, Actor.shadowlength, Actor.skewx, Actor.stopeffect, Actor.stoptweening, Actor.vertalign, Actor.wag, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, Actor.ztest, Actor.zwrite, ActorFrame.SetDrawByZPosition, ActorFrame.fov, BitmapText.GetText, BitmapText.maxwidth, BitmapText.settext, GameState.IsHumanPlayer, GameState.PlayerIsUsingModifier, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Hallway, PlayerOptions.Mini, PlayerOptions.Stealth, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Wave, PlayerOptions.XMod, PlayerStageStats.GetPercentDancePoints, Screen.AddInputCallback, Sprite.Load, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: BitmapText, Model, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 1,
+      "concrete_failures": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "stage:current",
+            "args": [
+              0
+            ],
+            "beat": 703.015869140625,
+            "caller": {
+              "line": 2469,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "FinalScoresMessageCommand",
+            "definition_id": "def-0628",
+            "detail": {
+              "results": [
+                {
+                  "path": "stage:current/player:0",
+                  "type": "PlayerStageStats"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 2469,
+            "operation": "StageStats.GetPlayerStageStats",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 264.0615539550781,
+            "seq": 994526,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "path": "stage:current/player:0",
+                "type": "PlayerStageStats"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "StageStats.GetPlayerStageStats",
+            "source": "song:/lua/default.lua",
+            "line": 2469,
+            "phase": "callback",
+            "beat": 703.015869140625,
+            "seconds": 264.0615539550781,
+            "args": [
+              0
+            ],
+            "results": [
+              {
+                "type": "PlayerStageStats",
+                "path": "stage:current/player:P1"
+              }
+            ]
+          }
+        }
+      ],
+      "report_sha256": "2d4c8b54834dcf7a4e5eb8123ec652c8153abbf123177721bd26d70ec1a48470"
     }
   ],
   "scope": {
@@ -6642,9 +6738,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "49482e042c5a60991fd859ab5d1ee6b5eeb64b6511ea2320dcb850abc06f1f78",
+  "binary_sha256": "6a912f949896b963329aaa0cde4ea6c5fbc86bf6368091a1a6974d2b22629114",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 20,
-  "pending_charts": 26,
-  "processed_charts": 46
+  "pending_charts": 27,
+  "processed_charts": 47
 }
