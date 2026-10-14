@@ -4408,15 +4408,12 @@
     {
       "title": "REASON for RED",
       "source_simfile": "REASON for RED/reasonforgay.ssc",
-      "harness_version": "0.1.0",
-      "archive": "1e6aba284389988b5402aa3ec718613f88cc8343c33718b65095ce55c56c9f52.tar.zst",
-      "sha256": "1e6aba284389988b5402aa3ec718613f88cc8343c33718b65095ce55c56c9f52",
-      "compressed_bytes": 681810,
-      "uncompressed_sha256": "2962b222bff4db969068c1b4ec76ea29797ee31e8d8eba953d759bdc036bd331",
-      "compression_level": 22,
-      "aliases": [
-        "fcca483e74dee507741dc24a3227ac88663178f838d26adacb7fcc1888591684.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "e72e37d50450553bbaeade1ad717122755d91dedb006873a46d226c22f4a3b47.tar.zst",
+      "sha256": "e72e37d50450553bbaeade1ad717122755d91dedb006873a46d226c22f4a3b47",
+      "compressed_bytes": 6108286,
+      "uncompressed_sha256": "1ffba561031a377e82cc69ba30cf59815a335c5376a64f92f1fbaa5d5753edbb",
+      "aliases": []
     },
     {
       "title": "Redesign your logo We know what we're doing",
