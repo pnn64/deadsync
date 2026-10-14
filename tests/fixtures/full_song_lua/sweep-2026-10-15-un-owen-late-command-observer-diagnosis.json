@@ -1,0 +1,53 @@
+{
+  "position": 452,
+  "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.ssc",
+  "full_repair_attempts_spent": 0,
+  "native_frames": 52158,
+  "replayed_frames": 52158,
+  "callback_errors": [],
+  "mismatch_count": 13,
+  "retained_candidate_sha256": "99df7920bcba50b34fe030ba23b5012c55e6259b65a860fa18d1c5eca5688f3d",
+  "trace_sha256": "76c7e762393e33b42a8ec550e0cd311ce5cd4c58c2ca1db48cae5ed17380fe08",
+  "simfile_sha256": "6089de409f4818e67acada887c3d1e8ad147c8b080d874ebe4b05aa5aa24e4e4",
+  "lua_source_sha256": "f596821832b269519aafbb40022751fa5c198a4fa38cfbefc5af5b941a18b410",
+  "authored_sequence": "Def.ActorFrame{} at line1; af.OnCommand assigned afterward at line5; append two Sprites with On callbacks.",
+  "first_native_event": {
+    "actor": "def-0001",
+    "args": [
+      999
+    ],
+    "beat": 0.006011337041854858,
+    "caller": {
+      "line": 5,
+      "source": "song:/./default.lua",
+      "tail_call": false
+    },
+    "detail": {
+      "native_tween_time_left": 999
+    },
+    "kind": "call",
+    "line": 5,
+    "operation": "Actor.sleep",
+    "phase": "construction",
+    "scene": 1,
+    "seconds": -1.7618141174316406,
+    "seq": 1,
+    "source": "song:/./default.lua",
+    "tween_time_left": 999
+  },
+  "first_owned_event": {
+    "scene": 1,
+    "kind": "command",
+    "operation": "command.begin",
+    "command": "OnCommand",
+    "source": "song:/./default.lua",
+    "line": 5,
+    "beat": 0.006011337041854858,
+    "seconds": -1.7618141174316406,
+    "args": null
+  },
+  "concrete_observer_gap": "Native root sleep at line5 is captured as construction without command.begin/end. Owned code runs the authored OnCommand and records both boundaries, yielding native12 versus owned14 command/query events. Current trace hook registers commands at Def constructor/concatenation time only; it misses the later new OnCommand field.",
+  "next_action": "Reproduce late-added OnCommand with actual native Lua and proposed observer hook; observe final declarations or late command assignment without changing table keys or runtime behavior. Validate capture observer, then first full repair with fresh native capture only if the existing observer gap is proven; retain current full native capture. Do not remove owned command boundaries or expected comparison events.",
+  "existing_comparisons_unchanged": true,
+  "passing_chart_reopened": false
+}
