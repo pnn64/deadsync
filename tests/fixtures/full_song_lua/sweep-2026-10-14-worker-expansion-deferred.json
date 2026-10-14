@@ -1,0 +1,16 @@
+{
+  "status": "not launched; initial guard failed before any supervisor was stopped",
+  "proposed_concurrency": 12,
+  "current_concurrency": 8,
+  "original_plan_sources": 353,
+  "dry_run_completed_positions": 217,
+  "dry_run_unprocessed_positions": 136,
+  "guard_minimum_available_bytes": 19327352832,
+  "failed_guard_observed_available_bytes": 15888683008,
+  "observed_largest_replay_rss_kib": 18692324,
+  "reason": "Current replay memory ranges from223900 to18692324 KiB, so four additional unbounded replay processes do not have a dependable reserve. Keep original eight queues and their actual live children. A later expansion requires memory-aware admission rather than a single initial observation.",
+  "existing_replays_restarted": false,
+  "existing_supervisors_stopped": false,
+  "assignment_written": false,
+  "goal_scope_changed": false
+}

@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T14:51:03Z",
-  "previous_goal_turn": "Current turn is progress: Molly SSC passes142186 frames and214896171-byte fixture is retained/Git ignored/untracked and locally decompressed byte verified. No Role Modelz SSC passes155076, Potion SSC passes83299 and Pale SSC passes65181; all four fixtures saved/committed promptly and locally compressed/decompressed hashes match original accepted candidates. Passing fixtures remain closed. Native keysound control has four cells, one real hold and one roll. Identical SM/SSC file+memory control fails before on Windows/Linux with five parsed cells. Source fix7fae1f026 skips optional keysound indices only within native note columns before RSSP analysis, preserves metadata/original chart bytes, and bumps song cache67 to68 to invalidate false cached notes/totals. Final Windows256 parser controls and Linux257 parser/62 live/29 native controls plus both executable builds exit zero. All36 local/Linux source contents match after CRLF normalization; all36 active source raw pins and unchanged harness verified before selecting immutable helperd4f40ff1feff82ea80b0cbc85c8665d0a6099a459febd5519f4baa1a1febe218. Rebuilt actual parser on unchanged original No13 FD7B source returns1192 taps/no holds/no rolls/1192 cells in all three charts, matching native. No13 first full repair is launched on unchanged original candidatebdf00631 and native trace503a7c7a, all manifest bytes verified, with one later repair remaining. Red build script initially rejected the correct failure because it expected the stats assertion label; genuine stored wait exit101/log hash and source pins recover expected-red proof at cell count without rerunning. Eight original-scope workers continue; Koi and No13 bounded repairs confirmed live. Publisher98 streams. New actual pending initial failures include Mawaru8 full124734-frame replay with no Lua errors and one PlayerStageStats identity-path mismatch, MISSION SPUTNIK no-selected-P1-chart replay panic, Rainbow Road SSC seven mismatches, Retrospective replay failure and Party SSC failure; full records retained and no repairs spent on these newly failing sources. Existing full acceptance/tolerances unchanged, original501 corpus preserved, coverage separate, sweep incomplete. Ruin repair1 completes all102848 frames, zero errors/mismatches; immutable1ed84cd47 transition-order fix accepted on its failing chart. Original candidate6133b834 preserved;104724635-byte packed fixture retained/Git ignored/untracked and locally decompressed bytes match. Mawaru4 SM repair1 completes131824 frames, zero errors/mismatches;10443246-byte fixture saved/committed and local decompression matches original candidate1607561d. Both passing fixtures remain closed; no later repairs/replays. Six accepted fixtures saved and verified this turn (four initial passes plus Ruin and Mawaru4 pending repairs).",
+  "updated_utc": "2026-10-14T15:32:02Z",
+  "previous_goal_turn": "Current turn is progress: Paradise RIGHTS SSC passes63027 frames; Redesign Your Logo SSC passes112683; Save Your Tears RIGHTS SSC passes78820. No13 first repair completes125239 frames, zero errors/mismatches; keysound fix7fae1f026 accepted on its actual failing chart. All four fixtures saved/committed and locally compressed/decompressed bytes verified against accepted original candidates; passing charts closed. No13 storage verifier initially saw prior index row while publisher updated it; lookup now keys by accepted archive hash, publication-pending distinguished, successful current compressed/raw bytes verified without reopening acceptance. Mawaru8 initial full124734-frame result has one numeric PlayerStageStats path mismatch, no Lua errors. Primary StageStats.cpp indexes m_player by Enum::Check<PlayerNumber>; PlayerNumber.h defines PLAYER_1=0; native recorder names returned stats from tostring caller argument. Source-backed typed alias normalization extends existing player identity handling only for PlayerStageStats, preserving stage/player distinctions, raw arguments, literal strings, unknown paths, all compared fields and numeric tolerances. Control fails before on both platforms, passes after; Windows30 native and Linux62 live/30 native controls plus both executable builds exit zero. Fix94e70049b committed, immutable helperdde531bd61c48d752748b8343e61715839944afdde5c5c7b028bb9308de85a15 selected after all36 active source raw pins and unchanged harness verify. Mawaru8 first full repair runs unchanged original candidate6371f5c7 and traceb4a8c89a with one later repair remaining. Eight original-scope workers and Koi/Mawaru8 bounded repairs confirmed live; publisher99 streams. Proposed twelve-worker split validates217 completed+136 remaining positions covering exactly353 original remaining-plan sources, but memory guard fails before any SIGSTOP or assignment write. Per-process RSS includes18.7GiB PaintTown replay; four extra unbounded jobs deferred, original eight children and queues unchanged. Original501 scope unchanged, >100M fixtures retained/Git ignored, coverage separate, full acceptance zero-exit/frame/error requirements unchanged, sweep incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "5c3126619ae9707ca8ef87152a6190574c14311d",
+      "deadsync": "df5e1fbe39c84f05136c7d55badf7c1eeb396345",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -74,7 +74,8 @@
     "double_and_minimized_cues": "e56f30a19: 60 live/256 simfile/28 native controls, dedicated eight-column production-session control and both executables built; Windows 60 live controls exit zero. Tacos first full double repair passes 63984 frames/1551 fields; My Exes final full SSC repair 2 passes 62908 frames/1650 fields. Both fixtures saved, committed and locally byte verified; passing fixtures closed.",
     "native_attack_option_boundaries": "254c36811: identical meaningful production control fails before on Linux, passes after on Windows and Linux; strict endpoint/overlap test, 61 live/65 attack-core/29 native controls and both builds green. Native schedule feeds actual Lua Stage-to-Song rebuilds; final full Cringle SM repair2 runs original capture, no acceptance or tolerance changes. Final Cringle SM repair2 passes all55331 frames/2354 fields, zero errors/mismatches, saved/committed and local bytes verified.",
     "native_foreground_transition_order": "1ed84cd47: meaningful owned foreground control fails before on both platforms and passes after; Windows60/Linux62 live and Linux29 native controls, both executable builds all exit zero. Only transition update jobs moved after song roots; getters, owners, native deltas and acceptance unchanged. Ruin first full repair is running original retained capture, with one later attempt available. Original full Ruin repair1 now passes102848 frames, zero errors/mismatches; fixture saved/committed, >100M ignored, local bytes verified, passing chart closed.",
-    "native_keysound_indices": "7fae1f026: native four-cell/real-hold/real-roll control reproduced failure before on both platforms. Native-compatible note input projection and cache68 tested on Windows256 parser and Linux257 parser/62 live/29 native controls, both executable builds; actual unchanged original No13 parses1192 taps and zero holds/rolls matching native. First full repair running original retained candidate/capture. Existing full replay acceptance, tolerances and pending coverage unchanged."
+    "native_keysound_indices": "7fae1f026: native four-cell/real-hold/real-roll control reproduced failure before on both platforms. Native-compatible note input projection and cache68 tested on Windows256 parser and Linux257 parser/62 live/29 native controls, both executable builds; actual unchanged original No13 parses1192 taps and zero holds/rolls matching native. First full repair running original retained candidate/capture. Existing full replay acceptance, tolerances and pending coverage unchanged. Original full No13 repair1 now passes125239 frames, zero errors/mismatches; fixture saved/committed and local bytes verified, passing chart closed.",
+    "native_player_stats_identity": "94e70049b: genuine numeric/enum aliases proven by primary native bindings and recorder path construction. Identical control fails before both platforms and passes after, retaining wrong-player/stage/literal/unknown-identity distinctions. Windows30 and Linux62 live/30 native controls plus both builds exit zero. Only typed identity alias spelling corrected; fields, numeric tolerances, raw arguments and full zero-exit/frame/error requirements preserved. Original Mawaru8 first full repair running."
   },
   "corpus_transfer": {
     "tar_sha256": "37febe98e2e47b325b9f9b96f4d29ddf32eedda84514191252d043c5fd4a4d1a",
@@ -137,9 +138,9 @@
       "pending": 59,
       "processed": 92,
       "last_log_lines": [
-        "[3569.4s] replaying every native gameplay frame: frame 12665/85655 (14.8%)",
-        "[3571.4s] replaying every native gameplay frame: frame 12672/85655 (14.8%)",
-        "[3573.4s] replaying every native gameplay frame: frame 12678/85655 (14.8%)"
+        "[6026.4s] replaying every native gameplay frame: frame 20843/85655 (24.3%)",
+        "[6028.4s] replaying every native gameplay frame: frame 20849/85655 (24.3%)",
+        "[6030.4s] replaying every native gameplay frame: frame 20855/85655 (24.3%)"
       ],
       "supervisor_running": true
     },
@@ -1696,33 +1697,50 @@
         "remote": "/home/parity/jobs/no13-ssc-keysound-first-repair-v1",
         "record": "sweep-2026-10-14-no13-keysound-first-repair.json",
         "finish_status": "No13 SSC first keysound full repair complete"
+      },
+      {
+        "name": "mawaru8-player-stats-identity-first-repair",
+        "remote": "/home/parity/jobs/mawaru8-player-stats-identity-first-repair-v1",
+        "record": "sweep-2026-10-14-mawaru8-player-stats-first-repair.json",
+        "finish_status": "Mawaru8 first player-stats-identity full repair complete"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
     "get_into_it_sm_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-get-into-it-sm-fixture-verification.json",
     "other_jobs_live_observation": [
       {
-        "job": "no13-ssc-keysound-first-repair-v1",
+        "job": "mawaru8-player-stats-identity-first-repair-v1",
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
         "pending": 0,
         "processed": 0,
         "last_phase": "replay",
-        "source_simfile": "No.13/no13.ssc",
+        "source_simfile": "mawaru8/mawaru8.sm",
         "child_running": true
+      },
+      {
+        "job": "no13-ssc-keysound-first-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
+        "pending": 0,
+        "processed": 1,
+        "last_phase": "pack",
+        "source_simfile": "No.13/no13.ssc",
+        "child_running": false
       },
       {
         "job": "chart-sweep-parallel-v5-3",
         "complete": false,
         "supervisor_running": true,
         "passed": 2,
-        "pending": 0,
-        "processed": 2,
+        "pending": 1,
+        "processed": 3,
         "last_phase": "replay",
-        "source_simfile": "Pop/Pop.ssc",
+        "source_simfile": "Reach The Light Switch, Without Asking you/Reach The Light Switch, Without Asking you.ssc",
         "child_running": true,
-        "position": 358
+        "position": 370
       },
       {
         "job": "chart-sweep-parallel-v5-4",
@@ -1740,37 +1758,37 @@
         "job": "chart-sweep-parallel-v5-5",
         "complete": false,
         "supervisor_running": true,
-        "passed": 3,
+        "passed": 4,
         "pending": 0,
-        "processed": 3,
+        "processed": 4,
         "last_phase": "replay",
-        "source_simfile": "redesign your logo/Redesign your logo.ssc",
+        "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.ssc",
         "child_running": true,
-        "position": 373
+        "position": 384
       },
       {
         "job": "chart-sweep-parallel-v5-6",
         "complete": false,
         "supervisor_running": true,
         "passed": 1,
-        "pending": 1,
-        "processed": 2,
+        "pending": 2,
+        "processed": 3,
         "last_phase": "replay",
-        "source_simfile": "Quarantine/Quarantine.ssc",
+        "source_simfile": "Remind The Souls/remindthesouls-fakemines.ssc",
         "child_running": true,
-        "position": 363
+        "position": 375
       },
       {
         "job": "chart-sweep-parallel-v5-7",
         "complete": false,
         "supervisor_running": true,
-        "passed": 1,
-        "pending": 3,
-        "processed": 4,
+        "passed": 2,
+        "pending": 4,
+        "processed": 6,
         "last_phase": "replay",
-        "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.ssc",
+        "source_simfile": "Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem.ssc",
         "child_running": true,
-        "position": 386
+        "position": 402
       },
       {
         "job": "koi-ssc-rec-print-repair-v1",
@@ -1963,13 +1981,13 @@
         "job": "chart-sweep-parallel-v4-1",
         "complete": false,
         "supervisor_running": true,
-        "passed": 28,
+        "passed": 29,
         "pending": 32,
-        "processed": 60,
+        "processed": 61,
         "last_phase": "replay",
-        "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.ssc",
+        "source_simfile": "Megalovania SM5 [TaroNuke]/megalovania.ssc",
         "child_running": true,
-        "position": 348
+        "position": 313
       },
       {
         "job": "chart-sweep-parallel-v4-2",
@@ -2036,10 +2054,10 @@
     "attack_boundary_completed_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-attack-boundary-linux-build.json",
     "cringle_sm_attack_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-door-cringle-sm-attack-final-launch.json",
     "reason_red_zero_seed": "tests/fixtures/full_song_lua/sweep-2026-10-14-reason-red-zero-seed-diagnosis.json",
-    "selected_replay_binary_sha256": "d4f40ff1feff82ea80b0cbc85c8665d0a6099a459febd5519f4baa1a1febe218",
+    "selected_replay_binary_sha256": "dde531bd61c48d752748b8343e61715839944afdde5c5c7b028bb9308de85a15",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 98,
+    "publisher_stream_count": 99,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -2063,14 +2081,23 @@
     "potion_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-potion-ssc-fixture-verification.json",
     "pale_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-pale-ssc-fixture-verification.json",
     "ruin_first_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-ruin-first-fixture-verification.json",
-    "mawaru4_first_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-mawaru4-first-fixture-verification.json"
+    "mawaru4_first_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-mawaru4-first-fixture-verification.json",
+    "player_stats_identity_source_validation": "tests/fixtures/full_song_lua/sweep-2026-10-14-player-stats-identity-source-validation.json",
+    "player_stats_identity_completed_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-player-stats-identity-linux-build.json",
+    "player_stats_identity_selection": "tests/fixtures/full_song_lua/sweep-2026-10-14-player-stats-identity-selection.json",
+    "mawaru8_identity_first_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-mawaru8-player-stats-first-launch.json",
+    "no13_first_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-no13-first-fixture-verification.json",
+    "paradise_rights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-paradise-rights-ssc-fixture-verification.json",
+    "redesign_logo_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-redesign-logo-ssc-fixture-verification.json",
+    "save_tears_rights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-save-tears-rights-ssc-fixture-verification.json",
+    "worker_expansion_deferred": "tests/fixtures/full_song_lua/sweep-2026-10-14-worker-expansion-deferred.json"
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 135,
-    "new_pending_charts": 77,
-    "new_processed_sources": 212,
+    "new_passed_fixtures": 139,
+    "new_pending_charts": 79,
+    "new_processed_sources": 218,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 141,
+    "unprocessed_sources": 135,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -3569,6 +3596,20 @@
       "first_mismatch": []
     },
     {
+      "source_simfile": "Pop/Pop.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 2,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 10,
+          "deadsync": 7
+        }
+      ]
+    },
+    {
       "source_simfile": "My Penny/My Penny.ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-2027895-1791982709619865985-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-2027895-1791982709619865985-0\n",
@@ -3591,18 +3632,62 @@
       ]
     },
     {
-      "source_simfile": "No.13/no13.ssc",
+      "source_simfile": "Quarantine/Quarantine.ssc",
       "repair_attempts": 0,
       "failure": null,
       "errors": [],
-      "mismatch_count": 183,
+      "mismatch_count": 67,
       "first_mismatch": [
         {
-          "phase": "screen-active",
-          "seconds": -1.9999773502349854,
-          "field": "possible",
-          "native": 5960,
-          "deadsync": 5985
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0086",
+            "args": [
+              -92.88910675048828
+            ],
+            "beat": 284.39849853515625,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 998,
+              "source": "song:/multitap/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0132",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 998,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 103.45344543457031,
+            "seq": 834808,
+            "source": "song:/multitap/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/multitap/default.lua",
+            "line": 998,
+            "phase": "callback",
+            "beat": 284.39849853515625,
+            "seconds": 103.45344543457031,
+            "args": [
+              -96
+            ],
+            "results": [
+              {
+                "actor": "0x6351c996a040",
+                "name": "MultitapP1_1",
+                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
         }
       ]
     },
@@ -3629,6 +3714,22 @@
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
+    },
+    {
+      "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [
+        "UpdateCommand failed for Quad: missing captured subscriber identity for 1/7/1/1\nstack traceback:\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"/tmp/.tmp0aEFKe/song/lua/default.lua\"]:1985: in function <[string \"/tmp/.tmp0aEFKe/song/lua/default.lua\"]:1693>\n"
+      ],
+      "mismatch_count": 1026,
+      "first_mismatch": [
+        {
+          "field": "source_broadcast_count",
+          "native": 47,
+          "deadsync": 1
+        }
+      ]
     }
   ],
   "historical_concrete_failures": [
