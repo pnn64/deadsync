@@ -1,0 +1,86 @@
+{
+  "source_simfile": "mawaru8/mawaru8.sm",
+  "position": 307,
+  "repair_attempts_before": 0,
+  "native_frames": 124734,
+  "replayed_frames": 124734,
+  "errors": [],
+  "mismatch_count": 1,
+  "first_mismatch": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "stage:current",
+      "args": [
+        0
+      ],
+      "beat": 703.015869140625,
+      "caller": {
+        "line": 2469,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "FinalScoresMessageCommand",
+      "definition_id": "def-0628",
+      "detail": {
+        "results": [
+          {
+            "path": "stage:current/player:0",
+            "type": "PlayerStageStats"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 2469,
+      "operation": "StageStats.GetPlayerStageStats",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 264.0615539550781,
+      "seq": 994526,
+      "source": "song:/lua/default.lua",
+      "results": [
+        {
+          "path": "stage:current/player:0",
+          "type": "PlayerStageStats"
+        }
+      ]
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "query",
+      "operation": "StageStats.GetPlayerStageStats",
+      "source": "song:/lua/default.lua",
+      "line": 2469,
+      "phase": "callback",
+      "beat": 703.015869140625,
+      "seconds": 264.0615539550781,
+      "args": [
+        0
+      ],
+      "results": [
+        {
+          "type": "PlayerStageStats",
+          "path": "stage:current/player:P1"
+        }
+      ]
+    }
+  },
+  "candidate_sha256": "6371f5c7299efa1afae969b3dc7b0f033aa78702ed72161af14fe0a068a7f91f",
+  "trace_sha256": "b4a8c89a8dd0c24062db973e85df8e1697846292bfe58d5bad175d5613bec42a",
+  "simfile_sha256": "a0e32b54c2762591bb87110e8661cdc1b9e31b6d5d9a287e8500ced93cc5d492",
+  "cause": "The chart calls GetPlayerStageStats(0). StageStats.cpp indexes m_player by Enum::Check<PlayerNumber>; PlayerNumber.h defines PLAYER_1=0. SongLuaTrace.lua constructs the returned stats path from tostring of the caller argument, yielding player:0 rather than enum-based player:P1. Both represent the same native player stats slot. Existing typed identity normalization covers PlayerState/PlayerOptions numeric aliases but omitted PlayerStageStats.",
+  "primary_source_sha256": {
+    "src/StageStats.cpp": "354273846aa175b8ae51f5ca7b56b05b5138b28a4ea61db0c5feca30a0bc4097",
+    "src/PlayerNumber.h": "84871663893a089cb14be698b7bd60e9bb13d58593f442c860213d7a491983a2"
+  },
+  "primary_source_lines": [
+    "StageStats.cpp:366-369",
+    "PlayerNumber.h:10-15",
+    "SongLuaTrace.lua:600-601"
+  ],
+  "fix": "Canonicalize only typed PlayerStageStats numeric/enum slot names; retain stage prefix, player distinction, raw arguments, literal strings and unknown identities.",
+  "comparison_fields_unchanged": true,
+  "numeric_tolerances_unchanged": true,
+  "original_capture_unchanged": true,
+  "full_repair_attempts_spent": 0,
+  "passing_charts_reopened": false
+}

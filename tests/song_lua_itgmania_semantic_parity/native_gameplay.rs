@@ -334,6 +334,22 @@ fn normalize_query_handles(
                     } else { format!("{canonical}/{suffix}") }));
                 }
             }
+            // StageStats indexes m_player by the same native PlayerNumber.
+            // Historical recorders put the caller's spelling in this path.
+            if values.get("type").and_then(Value::as_str) == Some("PlayerStageStats")
+                && let Some(path) = values.get("path").and_then(Value::as_str).map(str::to_owned)
+                && let Some((stage, player)) = path.rsplit_once("/player:")
+                && (stage == "stage" || stage.starts_with("stage:"))
+            {
+                let canonical = match player {
+                    "0" | "PlayerNumber_P1" => Some("P1"),
+                    "1" | "PlayerNumber_P2" => Some("P2"),
+                    _ => None,
+                };
+                if let Some(player) = canonical {
+                    values.insert("path".into(), json!(format!("{stage}/player:{player}")));
+                }
+            }
             // Canonicalize allocation IDs by first observation while retaining
             // alias relationships, actor names, and actual named ancestry.
             if values.get("name").is_some_and(Value::is_string)
@@ -676,6 +692,38 @@ return Def.ActorFrame{}
             wrong[1]["path"] = json!(path);
             assert!(!super::same_value(&numeric, &wrong), "accepted {path}");
         }
+    }
+
+    #[test]
+    fn player_stage_stats_paths_preserve_player_stage_and_literal_identity() {
+        use serde_json::json;
+        use std::collections::BTreeMap;
+        let mut numeric = json!([
+            {"type":"PlayerStageStats","path":"stage:current/player:0"},
+            {"type":"PlayerStageStats","path":"stage:current/player:1"},
+            {"type":"PlayerStageStats","path":"stage:played:0/player:0"},
+        ]);
+        let named = json!([
+            {"type":"PlayerStageStats","path":"stage:current/player:P1"},
+            {"type":"PlayerStageStats","path":"stage:current/player:P2"},
+            {"type":"PlayerStageStats","path":"stage:played:0/player:P1"},
+        ]);
+        super::normalize_query_handles(&mut numeric, &mut BTreeMap::new(), 1);
+        assert_eq!(numeric, named, "native numeric enum aliases address the same player stats");
+        for path in ["stage:current/player:P2", "stage:played:0/player:P1", "stage:played:1/player:P1"] {
+            let mut wrong = named.clone();
+            wrong[0]["path"] = json!(path);
+            assert!(!super::same_value(&numeric, &wrong), "accepted different identity {path}");
+        }
+        let mut literals = json!([
+            "stage:current/player:0",
+            {"type":"PlayerOptions","path":"stage:current/player:0"},
+            {"type":"PlayerStageStats","path":"stage:current/player:2"},
+            {"type":"PlayerStageStats","path":"other:0/player:0"},
+        ]);
+        let unchanged = literals.clone();
+        super::normalize_query_handles(&mut literals, &mut BTreeMap::new(), 1);
+        assert_eq!(literals, unchanged);
     }
 
     #[test]
