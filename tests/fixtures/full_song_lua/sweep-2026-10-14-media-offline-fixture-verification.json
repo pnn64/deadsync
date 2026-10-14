@@ -1,0 +1,11 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "media offline/media offline.sm",
+  "archive": "44f953605b29363142729d5a45a74a0b0352cc5bc072acbf33e91b2b2ff73887.tar.zst",
+  "compressed_sha256": "44f953605b29363142729d5a45a74a0b0352cc5bc072acbf33e91b2b2ff73887",
+  "uncompressed_sha256": "d1a3eab6e9745a3cd685abd951d3128bbebdcf8aa5fbbf4edcf6b0fd62bfb0c9",
+  "compressed_bytes": 16117087,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
