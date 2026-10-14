@@ -5028,15 +5028,12 @@
     {
       "title": "Talk About",
       "source_simfile": "Talk About/talkabout.ssc",
-      "harness_version": "0.1.0",
-      "archive": "d3283b2ccd70d187f4f70cafad9f25a7999c67e1a72521656d3beec914f73cb0.tar.zst",
-      "sha256": "d3283b2ccd70d187f4f70cafad9f25a7999c67e1a72521656d3beec914f73cb0",
-      "compressed_bytes": 70256,
-      "uncompressed_sha256": "cba41dc1b987697952b3895c2c21aead667668a1317200896acada6c1055608d",
-      "compression_level": 22,
-      "aliases": [
-        "ce337cf9ad90cac75efc02de22c3d76fee4d9873f8d3f959bd37b730454d24f2.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "3771ee2e2d0add85e8f319a8ba15eb78e43e0e5cef84a4f7d283077b59c4f8d0.tar.zst",
+      "sha256": "3771ee2e2d0add85e8f319a8ba15eb78e43e0e5cef84a4f7d283077b59c4f8d0",
+      "compressed_bytes": 13568482,
+      "uncompressed_sha256": "b9f56b077474bbbdbf6db4f542f1cb09779e38b314c35fc1359def728442a751",
+      "aliases": []
     },
     {
       "title": "玉藻前",

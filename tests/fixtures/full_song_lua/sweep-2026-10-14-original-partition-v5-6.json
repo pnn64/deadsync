@@ -1596,6 +1596,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 425,
+      "source_simfile": "Talk About/talkabout.ssc",
+      "simfile_sha256": "0f208e7b750312e6878a7dfaaf8cee19b309c051a1e5b6f4093a35da6b145c6d",
+      "retained_original_archive": "d3283b2ccd70d187f4f70cafad9f25a7999c67e1a72521656d3beec914f73cb0.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "b97bcedd8f8d8d88dac55531a7d287cb7bbccd69",
+      "build_proof": "/home/parity/jobs/music-fade-end-linux-green-v1/proof.json",
+      "capture_seconds": 170.1145095069951,
+      "trace_sha256": "8b2a0b16fe81a95021b9a794f473547afa9aa94e04213d8cda53f8bb1ab1bc83",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-6/chart-425/candidates/b9f56b077474bbbdbf6db4f542f1cb09779e38b314c35fc1359def728442a751.tar",
+      "replay_exit": 0,
+      "replay_seconds": 988.6330747210013,
+      "candidate_sha256": "b9f56b077474bbbdbf6db4f542f1cb09779e38b314c35fc1359def728442a751",
+      "native_frames": 45291,
+      "replayed_frames": 45291,
+      "compared_stage_fields": 1430,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "db867f0201140c5546df98133c9f93c7c1d403a72ea488afa4e1e95926d08f77",
+      "archive": "3771ee2e2d0add85e8f319a8ba15eb78e43e0e5cef84a4f7d283077b59c4f8d0.tar.zst",
+      "archive_sha256": "3771ee2e2d0add85e8f319a8ba15eb78e43e0e5cef84a4f7d283077b59c4f8d0",
+      "compressed_bytes": 13568482,
+      "pack_seconds": 16.60225784400245,
+      "harness_version": "0.1.80",
+      "title": "Talk About",
+      "retained_original_entry": {
+        "title": "Talk About",
+        "source_simfile": "Talk About/talkabout.ssc",
+        "harness_version": "0.1.0",
+        "archive": "d3283b2ccd70d187f4f70cafad9f25a7999c67e1a72521656d3beec914f73cb0.tar.zst",
+        "sha256": "d3283b2ccd70d187f4f70cafad9f25a7999c67e1a72521656d3beec914f73cb0",
+        "compressed_bytes": 70256,
+        "uncompressed_sha256": "cba41dc1b987697952b3895c2c21aead667668a1317200896acada6c1055608d",
+        "compression_level": 22,
+        "aliases": [
+          "ce337cf9ad90cac75efc02de22c3d76fee4d9873f8d3f959bd37b730454d24f2.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -1604,9 +1654,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
+  "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 6,
+  "passed_fixtures": 7,
   "pending_charts": 3,
-  "processed_charts": 9
+  "processed_charts": 10
 }
