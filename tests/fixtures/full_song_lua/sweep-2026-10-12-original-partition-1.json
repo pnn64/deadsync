@@ -8453,6 +8453,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 333,
+      "source_simfile": "Numujika ac.10/Numujika ac.10.sm",
+      "simfile_sha256": "0748c293677cfcd598e3ccf217be1886bbb0744a82f8eeb6741bc5bc36e5d8ce",
+      "retained_original_archive": "f7a4e675dc606d108be0983b49f66f0051e7b309f941740924d5251c2e238601.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "11c5e904d10e169bc4a437d05164a00e17d3139ac4603fa64de854d8fd6b6cf0",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/genshin-day-of-year-green-v1/proof.json",
+      "capture_seconds": 146.60914587401203,
+      "trace_sha256": "39b559910220937269590f49d08559e5c605da8f7654769579c0f8df685b352d",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-333/candidates/3530fde92e7e3198e9ad503be0aa8b121b46856f166ef098aedd1b4a9892d981.tar",
+      "replay_exit": 1,
+      "replay_seconds": 5.447398167976644,
+      "candidate_sha256": "3530fde92e7e3198e9ad503be0aa8b121b46856f166ef098aedd1b4a9892d981",
+      "failure": "[2.0s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'ヌムジカac.10': failed to execute '/tmp/.tmpnQxxZh/song/lua/default.lua': runtime error: [string \"/tmp/.tmpnQxxZh/song/lua/default.lua\"]:4: bad argument #1 to 'max' (number expected, got nil)\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'math.max'\n\t[string \"/tmp/.tmpnQxxZh/song/lua/default.lua\"]:4: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'ヌムジカac.10' from '/tmp/.tmpnQxxZh/song/lua/default.lua': failed to execute '/tmp/.tmpnQxxZh/song/lua/default.lua': runtime error: [string \"/tmp/.tmpnQxxZh/song/lua/default.lua\"]:4: bad argument #1 to 'max' (number expected, got nil)\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'math.max'\n\t[string \"/tmp/.tmpnQxxZh/song/lua/default.lua\"]:4: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (848205) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "scope": {
@@ -8465,6 +8484,6 @@
   "binary_sha256": "11c5e904d10e169bc4a437d05164a00e17d3139ac4603fa64de854d8fd6b6cf0",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 24,
-  "pending_charts": 31,
-  "processed_charts": 55
+  "pending_charts": 32,
+  "processed_charts": 56
 }
