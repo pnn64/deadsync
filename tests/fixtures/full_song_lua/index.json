@@ -4605,17 +4605,14 @@
       "aliases": []
     },
     {
-      "title": "See Tinh 「Cukak Remix」",
+      "title": "See Tinh 「Cukak Remix」 [REQUIRES 2 PLAYERS]",
       "source_simfile": "See Tinh/See Tinh.ssc",
-      "harness_version": "0.1.0",
-      "archive": "77176aa9c15fab64849e08157302aab7ff3cccb0956e31261b058bbd5eac3e73.tar.zst",
-      "sha256": "77176aa9c15fab64849e08157302aab7ff3cccb0956e31261b058bbd5eac3e73",
-      "compressed_bytes": 565629,
-      "uncompressed_sha256": "d1fdd8e16a5e30f503a7d4f948848460e79cda5e02864085da8c74689811fead",
-      "compression_level": 22,
-      "aliases": [
-        "e4016245f6fa8a0a6aab8e0052ce4a60d237dbdb87835c893a3c76eef81396d2.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b5f570b58947f9dee7f130910b1007177b5f35b6394cd782a0e2ccd83d78602a.tar.zst",
+      "sha256": "b5f570b58947f9dee7f130910b1007177b5f35b6394cd782a0e2ccd83d78602a",
+      "compressed_bytes": 12837823,
+      "uncompressed_sha256": "fd6d290bc5da6313c089b3000d454ca65023587404fbad506f86235387d18131",
+      "aliases": []
     },
     {
       "title": "自撮ーる",
