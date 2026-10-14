@@ -8098,6 +8098,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 429,
+      "source_simfile": "Tear Jerker/tearjerker.ssc",
+      "simfile_sha256": "9e2d58cd69470fd765e59c943ab881980385c13fb6cd3ab44e376bdbc84c42c1",
+      "retained_original_archive": "10dde04d2feaa32ee04264ce88f9ac63eb01ff2ecb0969acfd05227229005af8.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 166.68699722000747,
+      "trace_sha256": "b9af8b31be1336424492aa2dfe91bb4118ee04ddb5a8750b87ab36abf93206d5",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-429/candidates/40dc149737fd7bf93dfd939bf2838623fba0ba351bf51cf8f3528178bd55b02b.tar",
+      "replay_exit": 0,
+      "replay_seconds": 844.4109749580093,
+      "candidate_sha256": "40dc149737fd7bf93dfd939bf2838623fba0ba351bf51cf8f3528178bd55b02b",
+      "native_frames": 36060,
+      "replayed_frames": 36060,
+      "compared_stage_fields": 1386,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "5901ca6e5d15e83b92d2eea10bc27de72dc7262848b19b87b8944863d7c0e0c3",
+      "archive": "3bc81f0049b0d52d75a340d63f89bce9f1614e245e6799c23ec9dd5ffaba54d1.tar.zst",
+      "archive_sha256": "3bc81f0049b0d52d75a340d63f89bce9f1614e245e6799c23ec9dd5ffaba54d1",
+      "compressed_bytes": 12885868,
+      "pack_seconds": 12.935065845987992,
+      "harness_version": "0.1.80",
+      "title": "Tear Jerker (Soltan Remix)",
+      "retained_original_entry": {
+        "title": "Tear Jerker",
+        "source_simfile": "Tear Jerker/tearjerker.ssc",
+        "harness_version": "0.1.0",
+        "archive": "10dde04d2feaa32ee04264ce88f9ac63eb01ff2ecb0969acfd05227229005af8.tar.zst",
+        "sha256": "10dde04d2feaa32ee04264ce88f9ac63eb01ff2ecb0969acfd05227229005af8",
+        "compressed_bytes": 63957,
+        "uncompressed_sha256": "66ad685f55fcb9f19e9860700cde7d1357911c3b388a1118fd7684908ff166fb",
+        "compression_level": 22,
+        "aliases": [
+          "077c7987219358590471643964634c1d02116ed401e23d3e617e7610684591ae.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -8107,9 +8157,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+  "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 26,
+  "passed_fixtures": 27,
   "pending_charts": 31,
-  "processed_charts": 57
+  "processed_charts": 58
 }

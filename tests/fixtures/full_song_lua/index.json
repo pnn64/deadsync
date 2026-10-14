@@ -5009,17 +5009,14 @@
       "aliases": []
     },
     {
-      "title": "Tear Jerker",
+      "title": "Tear Jerker (Soltan Remix)",
       "source_simfile": "Tear Jerker/tearjerker.ssc",
-      "harness_version": "0.1.0",
-      "archive": "10dde04d2feaa32ee04264ce88f9ac63eb01ff2ecb0969acfd05227229005af8.tar.zst",
-      "sha256": "10dde04d2feaa32ee04264ce88f9ac63eb01ff2ecb0969acfd05227229005af8",
-      "compressed_bytes": 63957,
-      "uncompressed_sha256": "66ad685f55fcb9f19e9860700cde7d1357911c3b388a1118fd7684908ff166fb",
-      "compression_level": 22,
-      "aliases": [
-        "077c7987219358590471643964634c1d02116ed401e23d3e617e7610684591ae.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "3bc81f0049b0d52d75a340d63f89bce9f1614e245e6799c23ec9dd5ffaba54d1.tar.zst",
+      "sha256": "3bc81f0049b0d52d75a340d63f89bce9f1614e245e6799c23ec9dd5ffaba54d1",
+      "compressed_bytes": 12885868,
+      "uncompressed_sha256": "40dc149737fd7bf93dfd939bf2838623fba0ba351bf51cf8f3528178bd55b02b",
+      "aliases": []
     },
     {
       "title": "The Boys Are Back in Town (to kill you)",
