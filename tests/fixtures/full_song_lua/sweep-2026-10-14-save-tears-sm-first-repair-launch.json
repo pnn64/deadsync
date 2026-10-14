@@ -1,0 +1,15 @@
+{
+  "pid": 4106357,
+  "supervisor_pid": 4106357,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_save_tears_sm_pack_sync_first_repair_v1.py"
+  ],
+  "fix_commit": "b97bcedd8f8d8d88dac55531a7d287cb7bbccd69",
+  "pack_sync_fix": "3d314ba64cfadf2dbdb8ac761bbaf34890c84127",
+  "script_sha256": "fbc66665278992e997763a193e61530d8b77f3fd0a5d0849950679ba4a01e3dc",
+  "repair_attempt": 1,
+  "maximum_repairs": 2,
+  "native_capture_reused": true,
+  "passing_charts_reopened": false
+}
