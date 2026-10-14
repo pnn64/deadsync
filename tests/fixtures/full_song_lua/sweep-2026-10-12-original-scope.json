@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T15:32:01Z",
+  "updated_utc": "2026-10-14T16:02:04Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 286,
-    "pending": 80,
-    "unprocessed": 135
+    "passed": 289,
+    "pending": 83,
+    "unprocessed": 129
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2881,7 +2881,9 @@
       "position": 340,
       "source_simfile": "Paint the Town Red/PaintTheTownRed.sm",
       "simfile_sha256": "a876df80258c0fb9a9c0eb23294c0857e7a249fc8c37e96f6305f2c4b5456173",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 341,
@@ -3009,7 +3011,9 @@
       "position": 357,
       "source_simfile": "POP MY SHIT (FOXSKY REMIX)/pop my shit.ssc",
       "simfile_sha256": "6a713c677818670d011a0c230ec0985fb4a3ba0c2609438de5a16d7fcc02bd97",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 358,
@@ -3139,7 +3143,9 @@
       "position": 375,
       "source_simfile": "Remind The Souls/remindthesouls-fakemines.ssc",
       "simfile_sha256": "d062101e12e79bc921d5ed7c1c5cd39650ff4d242ce6e6370be33df1a9526841",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 376,
@@ -3199,7 +3205,9 @@
       "position": 384,
       "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.ssc",
       "simfile_sha256": "8b57aae087794bf0c7f0bb19c297c69c58f2d0d6bac97c4cfde344875e29c3c1",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 385,
@@ -3311,7 +3319,9 @@
       "position": 402,
       "source_simfile": "Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem.ssc",
       "simfile_sha256": "7a82f8b2dbf4b1b3fb938b1c4a2584da143f65f0da58d1f83df3d18498789afb",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 403,
@@ -3359,7 +3369,9 @@
       "position": 410,
       "source_simfile": "spooky (SM 12)/spooky (Tech-Stam cut).ssc",
       "simfile_sha256": "c511f139ca6b9687612ea5fd120aec3973e1eb2a24a8d9b1920e1bbca49b579d",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 411,
