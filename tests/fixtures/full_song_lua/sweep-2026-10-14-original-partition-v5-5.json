@@ -394,6 +394,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 416,
+      "source_simfile": "Stella Glow/Stella Glow.ssc",
+      "simfile_sha256": "55b95249b44773d770c1700d4791173ca3a7ec04b3bd57dc39e51e349ce15edc",
+      "retained_original_archive": "75c5ddbce3060d5e4f31bc12e6e2a7995808ec22192344d4c323abbebdcee9a2.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "745eee7daaa9bd844dd8092d43d02e25b6b5e05a2a8967cca909eba5a2e487b7",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "771646c8d58dc1170f1e2b9f332a701f8bd518b7",
+      "build_proof": "/home/parity/jobs/song-selector-observations-linux-green-v1/proof.json",
+      "capture_seconds": 226.7004177570052,
+      "trace_sha256": "54112d666eebe8235b8139b206bfecceb7d22b64bd74abc1ea4ad2fa614d7c3a",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-416/candidates/3915e33e35d9673760c8cc9dfc88495631aaa4cf5e0886cdd03309b6f4ba762b.tar",
+      "replay_exit": 1,
+      "replay_seconds": 17217.964996602008,
+      "candidate_sha256": "3915e33e35d9673760c8cc9dfc88495631aaa4cf5e0886cdd03309b6f4ba762b",
+      "failure": "Expecting value: line 1 column 1 (char 0)"
     }
   ],
   "scope": {
@@ -402,9 +421,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "fc937c1ae18f5ffc8bc3716cc10f755ae0c4dd23172c9a055955844fef0c3a28",
+  "binary_sha256": "745eee7daaa9bd844dd8092d43d02e25b6b5e05a2a8967cca909eba5a2e487b7",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 7,
-  "pending_charts": 1,
-  "processed_charts": 8
+  "pending_charts": 2,
+  "processed_charts": 9
 }
