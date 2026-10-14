@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T19:10:44Z",
+  "updated_utc": "2026-10-14T19:48:33Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 309,
-    "pending": 91,
-    "unprocessed": 101
+    "passed": 314,
+    "pending": 92,
+    "unprocessed": 95
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3189,7 +3189,9 @@
       "position": 378,
       "source_simfile": "rite of spring/rite.ssc",
       "simfile_sha256": "7ce2cf7cfa441b16842c6577e922df25f8c49258da2b1cd49358f0f1a428c0fc",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 379,
@@ -3263,7 +3265,9 @@
       "position": 388,
       "source_simfile": "Save Your Tears/SaveYourTears.ssc",
       "simfile_sha256": "8b57aae087794bf0c7f0bb19c297c69c58f2d0d6bac97c4cfde344875e29c3c1",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 389,
@@ -3283,7 +3287,9 @@
       "position": 391,
       "source_simfile": "See Tinh/See Tinh.ssc",
       "simfile_sha256": "38cead7310020cd16c5bf90eb8ca7d0026e562364eb34d7db18a320e43cc5546",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-4.json"
     },
     {
       "position": 392,
@@ -3387,7 +3393,9 @@
       "position": 406,
       "source_simfile": "Space Creation Theory/space creation theory.ssc",
       "simfile_sha256": "d6d1d47404836d6ce3daba417925d64255cc9e2d5630228c57db19e171dc4c19",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 407,
@@ -3459,7 +3467,9 @@
       "position": 417,
       "source_simfile": "Step Your Game Up (Director's Cut)/stepyourgameup.ssc",
       "simfile_sha256": "0a3d5f8740b9a803178783ad771478123c20159d33e697440d971c46c1f7aab7",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 418,
@@ -3565,9 +3575,9 @@
       "position": 434,
       "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.sm",
       "simfile_sha256": "8c1930f235fa5619e2afa477e52a61b2f8bf92062ac73a8cec69fc0bb90733dc",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-great-divide-sm-first-repair.json"
     },
     {
       "position": 435,
@@ -3715,7 +3725,9 @@
       "position": 458,
       "source_simfile": "Vanishing Point - [Zaia][FX]/Vanishing Point.sm",
       "simfile_sha256": "f7ac16da8d8c62411ac7632013d534ed3601e0a122d7634a18f625933e9a7246",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 459,
