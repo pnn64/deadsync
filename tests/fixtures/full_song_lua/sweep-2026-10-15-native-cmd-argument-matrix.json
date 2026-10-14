@@ -1,0 +1,8 @@
+{
+  "actual_native_lua51_used": true,
+  "source_sha256": "2b88fac6c4639b20953893d76004f1af9afc2bc60f8d1c25f0cdc767f136babb",
+  "source": "local command = (function()\nreturn cmd(sleep,0\npulse; effectmagnitude,1,1,1;\nvalue, (2 + 3) * 4 nextvalue, false or 7;\nvalue, function() return {3, 4} end nextvalue, ({9, 10})[2];\nvalue, \"literal\" nextvalue, [=[long literal]=];\nvalue, math.max(2, 3) nextvalue, .5e+1;\nvalue, (function(x) return x end){11} nextvalue, -2^3;\n)\nend)()\nlocal actor={calls={}}\nfor _,name in ipairs({'sleep','pulse','effectmagnitude','value','nextvalue'}) do\n actor[name]=function(self,...) self.calls[#self.calls+1]={name,...} end\nend\ncommand(actor)\nlocal calls=actor.calls\nassert(#calls==13 and calls[1][2]==0 and #calls[2]==1)\nassert(calls[4][2]==20 and calls[5][2]==7 and calls[7][2]==10)\nassert(calls[11][2]==5 and calls[13][2]==-8)\nassert(calls[6][2]()[2]==4 and calls[12][2][1]==11)\nprint('native regression matrix: 13 calls, expression values and callback/table arguments verified')\n",
+  "exit_code": 0,
+  "output": "native regression matrix: 13 calls, expression values and callback/table arguments verified\n",
+  "native_argument_expression_cases_verified": true
+}

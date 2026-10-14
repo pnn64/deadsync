@@ -1,0 +1,12 @@
+{
+  "baseline_source_sha256": "ed22fe971b0d50427524c422d48770abc040ebfde08057dde64f5000206872ff",
+  "windows_baseline_target_failed": true,
+  "baseline_target_count": 1,
+  "baseline_exit_code": 1,
+  "baseline_failure_marker": "native cmd argument expressions end before the next command name",
+  "baseline_failure": "SyntaxError near pulse after sleep,0 newline pulse",
+  "first_proposed_parser_controls_passed": 10,
+  "native_primary_matrix": "sweep-2026-10-15-native-cmd-argument-matrix.json",
+  "full_checks_running": true,
+  "chart_full_repair_attempt_spent": false
+}
