@@ -1,0 +1,35 @@
+{
+  "source_simfile": "Turn A - [Freya]/turn_a.ssc",
+  "position": 449,
+  "repair_attempts_spent": 0,
+  "initial_full_replay": {
+    "native_frames": 69833,
+    "replayed_frames": 69833,
+    "mismatch_count": 59715,
+    "errors": [
+      "OnCommand ActorFrame video: string.lower receives nil for missing LastSeenVideoDriver",
+      "nonterminating zero-time actor command queue"
+    ]
+  },
+  "primary_source_evidence": {
+    "PrefsManager.cpp": "LastSeenVideoDriver is a string preference initialized empty; video initialization records the actual driver",
+    "StepMania.cpp": "GetVideoDriverName returns OpenGL outside Windows; CheckVideoDefaultSettings records it",
+    "harness song_lua_runtime.rs": "prepare_install writes preferences before engine launch, and capture_in adds source_simfile and derived semantics after reading native results"
+  },
+  "retained_input_evidence": "sweep-2026-10-14-turn-a-retained-native-association.json",
+  "candidate_preparation": "sweep-2026-10-14-turn-a-retained-machine-input-candidate.json",
+  "proposed_fix": "Expose last_seen_video_driver on compile context and PrefsManager; optional archive runtime machine_preferences supplies retained neutral driver input without changing trace bytes.",
+  "new_regression": "Known empty native default, PreferenceExists, mutable driver, configured NVIDIA/OpenGL branch, lowercase lookup, and null renderer independence.",
+  "remaining_actual_error": "Zero-time queue error retained as an actual failure; first diagnostic replay will determine whether it persists after preference repair.",
+  "validation": {
+    "windows_builder_pid": 45356,
+    "linux_green_waiter_pid": 660247,
+    "linux_red_builder_pid": 622222,
+    "linux_green_starts_only_after_expected_red": true
+  },
+  "new_acceptance_gates": false,
+  "native_trace_bytes_changed": false,
+  "expected_query_results_used_as_input": false,
+  "passing_charts_reopened": false,
+  "native_capture_reused": true
+}

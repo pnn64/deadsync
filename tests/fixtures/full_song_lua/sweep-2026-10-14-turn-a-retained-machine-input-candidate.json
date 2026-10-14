@@ -1,0 +1,19 @@
+{
+  "source_simfile": "Turn A - [Freya]/turn_a.ssc",
+  "candidate": "/home/parity/jobs/turn-a-retained-machine-input-candidate-v1/6d7acf2ad83ffc057210fb0044639c6c0946c149a6676353b146cc8d111d254d.tar",
+  "candidate_sha256": "6d7acf2ad83ffc057210fb0044639c6c0946c149a6676353b146cc8d111d254d",
+  "original_candidate_sha256": "2e5573d484d88872ee89580f585e5637745c98e4e9bf5d7ba0c49c2294fe1091",
+  "trace_sha256": "0f830463bdfcb350fab706e997003d71620b78f81b87b63f862f51a5f612a5e7",
+  "simfile_sha256": "7877692800f17f5cb85481cc652be8317830640b81c55b87d7c3c49da5a55990",
+  "preferences_sha256": "93124b90073f2c5750ff3bcc29c40f88ebb142f181f8d4fd655e38603dc8ee23",
+  "machine_preferences": {
+    "last_seen_video_driver": "OpenGL"
+  },
+  "original_manifest_members_byte_verified_and_unchanged": true,
+  "native_trace_bytes_unchanged": true,
+  "expected_query_results_used_as_input": false,
+  "capture_reused": true,
+  "repair_attempts_spent": 0,
+  "preparation_only": true,
+  "native_association_receipt": "/home/parity/jobs/turn-a-retained-native-association-v1.json"
+}
