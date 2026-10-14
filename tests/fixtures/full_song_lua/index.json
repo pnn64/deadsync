@@ -4476,17 +4476,14 @@
       ]
     },
     {
-      "title": "Episode 02",
+      "title": "Episode 02 Jenny (I wanna Ruin Our Friendship)",
       "source_simfile": "Ruin Our Friendship/RuinOurFriendship.sm",
-      "harness_version": "0.1.0",
-      "archive": "42e8849bb73924b078a22aea38051d4d2a4daade43e9c0b1a895b61e5c4fb8ad.tar.zst",
-      "sha256": "42e8849bb73924b078a22aea38051d4d2a4daade43e9c0b1a895b61e5c4fb8ad",
-      "compressed_bytes": 68548,
-      "uncompressed_sha256": "6e19c3f87116d3f209f9fbeca8495e2ad3a211b7ed22ed9a098473dbf97ce26a",
-      "compression_level": 22,
-      "aliases": [
-        "58516de685360b168a32e4369489230368e5558de2cb358ac8c428a0efa7a7a6.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "c429881a3b8aef7be07dd93dcec619028599e038ca1266fa8409a62dbc65a959.tar.zst",
+      "sha256": "c429881a3b8aef7be07dd93dcec619028599e038ca1266fa8409a62dbc65a959",
+      "compressed_bytes": 105403244,
+      "uncompressed_sha256": "2aa01e6059f0d5d3a64169f2cde9f0edf6ece40654e4b8ec8d460a08b5146b0a",
+      "aliases": []
     },
     {
       "title": "Episode 02 Jenny (I wanna Ruin Our Friendship)",

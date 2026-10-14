@@ -8907,6 +8907,58 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 379,
+      "source_simfile": "Ruin Our Friendship/RuinOurFriendship.sm",
+      "simfile_sha256": "5b07ecdb5659eb3877dc1fcd3046df38777e831e5f44ecdd24b53784ad577633",
+      "retained_original_archive": "42e8849bb73924b078a22aea38051d4d2a4daade43e9c0b1a895b61e5c4fb8ad.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e1d9c9995fcf756f86445761fe965767a848dd24",
+      "build_proof": "/home/parity/jobs/next-screen-target-linux-green-v1/proof.json",
+      "capture_seconds": 252.0949277820182,
+      "trace_sha256": "f2a3aaa4994fb00dcf7cf88a1e074ea9b050d27025d4a7740b6afcaa234c54d9",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-379/candidates/2aa01e6059f0d5d3a64169f2cde9f0edf6ece40654e4b8ec8d460a08b5146b0a.tar",
+      "replay_exit": 0,
+      "replay_seconds": 2618.3543594150105,
+      "candidate_sha256": "2aa01e6059f0d5d3a64169f2cde9f0edf6ece40654e4b8ec8d460a08b5146b0a",
+      "native_frames": 113993,
+      "replayed_frames": 113993,
+      "compared_stage_fields": 2387,
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate, Actor.smooth, ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "8c34ba8fbd1d1bf6253561032ae914eaf5325a165614914acd78268a3e39471c",
+      "archive": "c429881a3b8aef7be07dd93dcec619028599e038ca1266fa8409a62dbc65a959.tar.zst",
+      "archive_sha256": "c429881a3b8aef7be07dd93dcec619028599e038ca1266fa8409a62dbc65a959",
+      "compressed_bytes": 105403244,
+      "pack_seconds": 13.345515908004018,
+      "harness_version": "0.1.80",
+      "title": "Episode 02 Jenny (I wanna Ruin Our Friendship)",
+      "retained_original_entry": {
+        "title": "Episode 02",
+        "source_simfile": "Ruin Our Friendship/RuinOurFriendship.sm",
+        "harness_version": "0.1.0",
+        "archive": "42e8849bb73924b078a22aea38051d4d2a4daade43e9c0b1a895b61e5c4fb8ad.tar.zst",
+        "sha256": "42e8849bb73924b078a22aea38051d4d2a4daade43e9c0b1a895b61e5c4fb8ad",
+        "compressed_bytes": 68548,
+        "uncompressed_sha256": "6e19c3f87116d3f209f9fbeca8495e2ad3a211b7ed22ed9a098473dbf97ce26a",
+        "compression_level": 22,
+        "aliases": [
+          "58516de685360b168a32e4369489230368e5558de2cb358ac8c428a0efa7a7a6.tar.zst"
+        ]
+      },
+      "archive_git_ignored": true,
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -8916,9 +8968,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "745eee7daaa9bd844dd8092d43d02e25b6b5e05a2a8967cca909eba5a2e487b7",
+  "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 32,
+  "passed_fixtures": 33,
   "pending_charts": 33,
-  "processed_charts": 65
+  "processed_charts": 66
 }
