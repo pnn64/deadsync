@@ -1988,6 +1988,21 @@
         }
       ],
       "report_sha256": "1f3420b5b71123ce530aa71a559d41780f33cc143c8995c412e93ebdfd3e36e6"
+    },
+    {
+      "position": 474,
+      "source_simfile": "wndrwll/wndrwll.ssc",
+      "simfile_sha256": "26433a3ef9255d76659f20b47b4e1e63afabea0ecea9b128a8ee2904433cf2fe",
+      "retained_original_archive": "8d72e948ab8d95a85e992f012230dda8a61941abf9b34bd8da77cfcfa9f2d5f2.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e0f16f89374ce78a1b07cafdb6d13c8e5c04de3e",
+      "build_proof": "/home/parity/jobs/game-state-class-linux-green-v1/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 227.9695647569897,
+      "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-247409-1792008774508778954-0\n"
     }
   ],
   "scope": {
@@ -1996,9 +2011,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
+  "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 6,
-  "pending_charts": 9,
-  "processed_charts": 15
+  "pending_charts": 10,
+  "processed_charts": 16
 }
