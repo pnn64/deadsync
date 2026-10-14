@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "STAGE 0.ac11/STAGE 0.ac11.sm",
+  "native_frames": 86961,
+  "replayed_frames": 86961,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "1e1623f5f44c3e8d6d998b395c8adb587f07cf8b6bb989702a52fe970b3d8a92.tar.zst",
+  "compressed_sha256": "1e1623f5f44c3e8d6d998b395c8adb587f07cf8b6bb989702a52fe970b3d8a92",
+  "uncompressed_sha256": "dda626957a19d3ec93e1a1df78f4d761b7ebc44329426ad1fc7d8eb213812b7e",
+  "compressed_bytes": 7188654,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Talk About/talkabout.ssc",
+  "native_frames": 45291,
+  "replayed_frames": 45291,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "3771ee2e2d0add85e8f319a8ba15eb78e43e0e5cef84a4f7d283077b59c4f8d0.tar.zst",
+  "compressed_sha256": "3771ee2e2d0add85e8f319a8ba15eb78e43e0e5cef84a4f7d283077b59c4f8d0",
+  "uncompressed_sha256": "b9f56b077474bbbdbf6db4f542f1cb09779e38b314c35fc1359def728442a751",
+  "compressed_bytes": 13568482,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
