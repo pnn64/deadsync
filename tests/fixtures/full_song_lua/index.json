@@ -3936,17 +3936,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 18",
+      "title": "Episode 18 No Role Modelz",
       "source_simfile": "No Role Modelz/No Role Modelz.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a05f9d82be073f19a4f499bd9c7db339e8a97617c82c8c75fc1e16bafc2e4df2.tar.zst",
-      "sha256": "a05f9d82be073f19a4f499bd9c7db339e8a97617c82c8c75fc1e16bafc2e4df2",
-      "compressed_bytes": 631912,
-      "uncompressed_sha256": "6cea38530d28abea28bb19057fa62b73518ee6b8b66f42b887b94b3c6555f377",
-      "compression_level": 22,
-      "aliases": [
-        "d8e9d7c9a0687af81ae3657bed7fa01a8bd8b74b2b6680af0d11ca0163731b23.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "f2f8ba22af059394b52fd465a0e0c4bebdd2595448dddc3668a99194ef3c6b6b.tar.zst",
+      "sha256": "f2f8ba22af059394b52fd465a0e0c4bebdd2595448dddc3668a99194ef3c6b6b",
+      "compressed_bytes": 13747337,
+      "uncompressed_sha256": "74b47b1cd7e23aa1f04206a836c6a0ac12bce302d3c9a2aa15392c08fc8c0f15",
+      "aliases": []
     },
     {
       "title": "No Tears Left To Cry",
