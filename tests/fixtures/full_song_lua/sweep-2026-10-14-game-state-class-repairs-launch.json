@@ -1,0 +1,30 @@
+{
+  "pid": 246837,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_see_tinh_game_state_class_repairs_v1.py"
+  ],
+  "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
+  "build_proof": "/home/parity/jobs/game-state-class-linux-green-v1/proof.json",
+  "fix_commit": "e0f16f89374ce78a1b07cafdb6d13c8e5c04de3e",
+  "native_capture_reused": true,
+  "source_pin_count": 1175,
+  "local_normalized_source_pins_verified": true,
+  "repair_slot_vacated_by": "save-tears-sm-pack-sync-first-repair-v1",
+  "sequential_jobs": [
+    {
+      "job": "see-tinh-sm-game-state-class-first-repair-v1",
+      "source_simfile": "See Tinh/See Tinh.sm",
+      "attempt": 1,
+      "remaining_after_attempt": 1
+    },
+    {
+      "job": "see-tinh-ssc-game-state-class-first-repair-v1",
+      "source_simfile": "See Tinh/See Tinh.ssc",
+      "attempt": 1,
+      "remaining_after_attempt": 1
+    }
+  ],
+  "full_acceptance_checks_unchanged": true,
+  "passing_charts_reopened": false
+}

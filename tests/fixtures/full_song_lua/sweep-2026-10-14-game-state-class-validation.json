@@ -1,0 +1,135 @@
+{
+  "fix_commit": "e0f16f89374ce78a1b07cafdb6d13c8e5c04de3e",
+  "linux_red": {
+    "proof": "/home/parity/jobs/game-state-class-linux-red-v1/proof.json",
+    "proof_sha256": "01d3822590b04d9d4c5e02db37cd24c1891f4a75f2aa5dbc1f5958c4d7262ba0",
+    "missing_class_reproduced": true,
+    "checks": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 279.5245230119908,
+        "log_sha256": "15575971a941722e5234ebfc9414a94ab2e844bec63300001d915da0a6abd978",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 598 filtered out; finished in 0.19s"
+        ]
+      }
+    ]
+  },
+  "linux_green": {
+    "proof": "/home/parity/jobs/game-state-class-linux-green-v1/proof.json",
+    "proof_sha256": "1d148dede1d6c60866f07ae68fb31a7f736cc38e5678dbccc6e1bb51916d3eb1",
+    "source_root": "/home/parity/workspace/game-state-class-v1/deadsync",
+    "binary": "/home/parity/jobs/game-state-class-linux-green-v1/full-song-lua",
+    "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
+    "checks": [
+      {
+        "label": "target-control",
+        "exit_code": 0,
+        "seconds": 248.81873659798293,
+        "log_sha256": "be19dca35150469821eb2d41471b40eafba16ce5a31f68e6cd7af7fe64973455",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 598 filtered out; finished in 0.26s"
+        ]
+      },
+      {
+        "label": "live-controls",
+        "exit_code": 0,
+        "seconds": 37.7829695760156,
+        "log_sha256": "415286cede148dc945b5a26f2ce39f0664f540759c568d829a71c2fadf65d3c7",
+        "results": [
+          "test result: ok. 65 passed; 0 failed; 0 ignored; 0 measured; 534 filtered out; finished in 36.91s"
+        ]
+      },
+      {
+        "label": "replay-controls",
+        "exit_code": 0,
+        "seconds": 254.644008881005,
+        "log_sha256": "620c05699f792eb74d698d1775e127daf49a77a467d4d9b76729b7f420e83f5e",
+        "results": [
+          "test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.10s"
+        ]
+      },
+      {
+        "label": "identity-control",
+        "exit_code": 0,
+        "seconds": 0.9489967820118181,
+        "log_sha256": "33a784c6298d5f076cfc5af46fc6f80ff3459bb9656098ef8269d879c1d74fdd",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 598 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "label": "build",
+        "exit_code": 0,
+        "seconds": 49.57129166598315,
+        "log_sha256": "b08299b3feaa669bc99b6f801cc3a1151e9f42faf4174580f2785d95021e68dc",
+        "results": []
+      }
+    ],
+    "source_pin_count": 1175,
+    "all_raw_pins_verified": true,
+    "all_local_linux_normalized_source_pins_match": true,
+    "normalized_pin_evidence_sha256": "ed192f83cf5847cf2b61639b261db6b873aca21fac0c7edb3d4f50b37c1407be",
+    "edited_source_sha256": {
+      "crates/deadsync-song-lua/src/live.rs": "a1ebeab317d34d97d21b6e65bae69d8f31eaf004b0f02340de747fc9ae153f05",
+      "crates/deadsync-song-lua/src/host.rs": "bd645a72056dcb40492858dfda614a1bccc8f6028d58f230340a950eee39036a"
+    }
+  },
+  "windows_green": {
+    "checks": [
+      {
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--jobs",
+          "8",
+          "--config",
+          "profile.dev.debug=0",
+          "--config",
+          "profile.dev.incremental=false",
+          "-p",
+          "deadsync-song-lua",
+          "--features",
+          "test-support",
+          "--lib",
+          "live_"
+        ],
+        "exit_code": 0,
+        "passed": 65,
+        "failed": 0
+      },
+      {
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--jobs",
+          "8",
+          "--config",
+          "profile.dev.debug=0",
+          "--config",
+          "profile.dev.incremental=false",
+          "--test",
+          "song_lua_itgmania_semantic_parity",
+          "native_gameplay::tests"
+        ],
+        "exit_code": 0,
+        "passed": 32,
+        "failed": 0
+      }
+    ],
+    "source_sha256": {
+      "crates/deadsync-song-lua/src/live.rs": "a1ebeab317d34d97d21b6e65bae69d8f31eaf004b0f02340de747fc9ae153f05",
+      "crates/deadsync-song-lua/src/host.rs": "bd645a72056dcb40492858dfda614a1bccc8f6028d58f230340a950eee39036a"
+    },
+    "red_control_host": "Linux",
+    "windows_red_control_run": false
+  },
+  "local_user_views_edited": false,
+  "active_sweep_sources_edited": false,
+  "running_replays_restarted": false,
+  "full_acceptance_checks_changed": false,
+  "capture_reuse_planned": true
+}
