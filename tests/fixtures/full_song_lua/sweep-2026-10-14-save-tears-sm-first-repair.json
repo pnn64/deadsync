@@ -1,0 +1,65 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "b97bcedd8f8d8d88dac55531a7d287cb7bbccd69",
+  "results": [
+    {
+      "position": 383,
+      "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.sm",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "84a19da50aef6811f60a0d57972b7dc2d68b1ae45130e307549d82de14f56a73",
+      "trace_sha256": "6168f790a3db17f36e1b1a9cfa3fbfedbf9a1be9b6e2db6d64610db780ffe762",
+      "simfile_sha256": "6141d6d76f0e80ec9ece060bac5bdee2d7edf282ec675ce795b44224dfa54dfa",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/music-fade-end-linux-green-v1/proof.json",
+      "fix_commit": "b97bcedd8f8d8d88dac55531a7d287cb7bbccd69",
+      "previous_failure": null,
+      "previous_errors": [],
+      "replay_exit": 0,
+      "replay_seconds": 2303.508963054017,
+      "native_frames": 81952,
+      "replayed_frames": 81952,
+      "compared_stage_fields": 2101,
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate, ActorFrame.GetChildren, ActorSound.play",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "cd133f52b896e0712e292c2076ec5ecb4548b7519eaf0f2695b6dfc1890384f2",
+      "archive": "29566108c71bda8175c1400d31027f61e94e7b84e91ce313eb16d962faeb6e58.tar.zst",
+      "archive_sha256": "29566108c71bda8175c1400d31027f61e94e7b84e91ce313eb16d962faeb6e58",
+      "compressed_bytes": 23331508,
+      "harness_version": "0.1.80",
+      "title": "Episode 02 Save Your Tears",
+      "pack_seconds": 15.268048680009088,
+      "retained_original_entry": {
+        "title": "Episode 02",
+        "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.sm",
+        "harness_version": "0.1.0",
+        "archive": "3cb5b82071c5bc856f05ff2fe71a68c6e49038a633edcf3d69f74b77467fa773.tar.zst",
+        "sha256": "3cb5b82071c5bc856f05ff2fe71a68c6e49038a633edcf3d69f74b77467fa773",
+        "compressed_bytes": 4603376,
+        "uncompressed_sha256": "ffe32852f69984cc8f9709f4202b59fb37442eb039f215558fbb2706767e5cdd",
+        "compression_level": 22,
+        "aliases": [
+          "ac1a98be3f865132c1a21fec4149d8f038b4491bbbb26e9a10478ceb7e9c74a3.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first SM pack-sync repair: same confirmed9ms whole-song group-offset cause as accepted SSC; original archive and full comparisons unchanged",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}

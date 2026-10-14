@@ -4519,17 +4519,14 @@
       ]
     },
     {
-      "title": "Episode 02",
+      "title": "Episode 02 Save Your Tears",
       "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.sm",
-      "harness_version": "0.1.0",
-      "archive": "3cb5b82071c5bc856f05ff2fe71a68c6e49038a633edcf3d69f74b77467fa773.tar.zst",
-      "sha256": "3cb5b82071c5bc856f05ff2fe71a68c6e49038a633edcf3d69f74b77467fa773",
-      "compressed_bytes": 4603376,
-      "uncompressed_sha256": "ffe32852f69984cc8f9709f4202b59fb37442eb039f215558fbb2706767e5cdd",
-      "compression_level": 22,
-      "aliases": [
-        "ac1a98be3f865132c1a21fec4149d8f038b4491bbbb26e9a10478ceb7e9c74a3.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "29566108c71bda8175c1400d31027f61e94e7b84e91ce313eb16d962faeb6e58.tar.zst",
+      "sha256": "29566108c71bda8175c1400d31027f61e94e7b84e91ce313eb16d962faeb6e58",
+      "compressed_bytes": 23331508,
+      "uncompressed_sha256": "84a19da50aef6811f60a0d57972b7dc2d68b1ae45130e307549d82de14f56a73",
+      "aliases": []
     },
     {
       "title": "Episode 01 Save Your Tears",
