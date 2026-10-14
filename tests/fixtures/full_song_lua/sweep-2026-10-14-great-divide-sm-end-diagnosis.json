@@ -1,0 +1,40 @@
+{
+  "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.sm",
+  "position": 434,
+  "repair_attempts": 0,
+  "native_frames": 85375,
+  "replayed_frames": 85375,
+  "errors": [],
+  "mismatch_count": 1,
+  "native_command_queries": 325057,
+  "actual_command_queries": 324696,
+  "operation_count_difference": {
+    "command.begin": 19,
+    "GameState.GetSongBeat": 285,
+    "Actor.sleep": 19,
+    "Actor.queuecommand": 19,
+    "command.end": 19
+  },
+  "actual_first_navigation_seconds": 200.9776153564453,
+  "native_last_authored_query_seconds": 201.16378784179688,
+  "native_exit_seconds": 201.1713409423828,
+  "canonical_song_last_second": 199.11081,
+  "decoded_audio_length_seconds": 204.416,
+  "native_input_music_rate": 1,
+  "native_default_sync_offset": "SyncOffset_ITG",
+  "original_candidate_sha256": "0f995844217de709779d63ea0ae47ef542c3b1810b785057fe287c616e3ae052",
+  "original_trace_sha256": "abbc6e386af75cc0afbb95947eed0b01b80e26881c9acc355f22f42486fc7797",
+  "original_simfile_sha256": "8c1930f235fa5619e2afa477e52a61b2f8bf92062ac73a8cec69fc0bb90733dc",
+  "retained_terminal_context": "/home/parity/jobs/great-divide-native-terminal-context-v1.json",
+  "primary_cause": "ScreenGameplay::GetMusicEndTiming constrains transition start so the music fade finishes before the declared out transition. Simply Love has MusicFadeOutSeconds0.25 and inherited OutTransitionLength5. Audio EOF204.416 is inside the final quarter second of that alignment window: EOF+0.25-5 raises transition start to approximately199.666, beyond the group-adjusted note end plus resolution window approximately199.471. Production clamps audio length to the chart end and drops this constraint, cutting off nineteen authored update cycles. The prior pack-sync fix accounts for9ms of the gap; the music-fade constraint accounts for the larger remainder.",
+  "primary_sources": [
+    "ScreenGameplay.cpp:1669-1710: fade and transition end alignment",
+    "Simply Love metrics.ini:1793: MusicFadeOutSeconds0.25",
+    "fallback metrics.ini:3538: OutTransitionLength5"
+  ],
+  "next_action": "Validate the native f32 fade constraint with controlled EOF positions and rate/offset changes, then run first repair on unchanged original capture.",
+  "native_results_fed_to_simulation": false,
+  "full_acceptance_criteria_changed": false,
+  "new_chart_replays_started": false,
+  "passing_charts_reopened": false
+}
