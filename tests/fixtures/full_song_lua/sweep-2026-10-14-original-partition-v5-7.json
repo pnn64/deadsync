@@ -1512,6 +1512,52 @@
         }
       ],
       "report_sha256": "675623c215f7214cb6032cf7f454110a1081307883c1655a43d7092dbf0e4dbe"
+    },
+    {
+      "position": 450,
+      "source_simfile": "U-0 - [PCBoyGames]/Srezcat - U-0.ssc",
+      "simfile_sha256": "e02d69efc0c2670faa1c7e4aba6b34c3a4d4ca96fd80e627848a64836c63dd82",
+      "retained_original_archive": "264bd06f6c2e74ccb0062f038af1df64db2078aae62bd65955d2bf6d31b12239.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e1d9c9995fcf756f86445761fe965767a848dd24",
+      "build_proof": "/home/parity/jobs/next-screen-target-linux-green-v1/proof.json",
+      "capture_seconds": 272.68382904300233,
+      "trace_sha256": "4496d55f067e7e8423fe730559377e5482a63968bee615c914b8dca88469fed6",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-7/chart-450/candidates/86b750e692317ad64d8383257e70196c21eeebcb6509fa11228581011607a759.tar",
+      "replay_exit": 2,
+      "replay_seconds": 1011.1469307139923,
+      "candidate_sha256": "86b750e692317ad64d8383257e70196c21eeebcb6509fa11228581011607a759",
+      "native_frames": 48783,
+      "replayed_frames": 48783,
+      "compared_stage_fields": 1870,
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.skewx, PlayerOptions.AttenuateX, PlayerOptions.Bumpy, PlayerOptions.BumpyX, PlayerOptions.BumpyXPeriod, PlayerOptions.Dark, PlayerOptions.Dark1, PlayerOptions.Dark2, PlayerOptions.Dark3, PlayerOptions.Dark4, PlayerOptions.Drunk, PlayerOptions.DrunkZ, PlayerOptions.Mini, PlayerOptions.MoveY1, PlayerOptions.MoveY2, PlayerOptions.MoveY3, PlayerOptions.MoveY4, PlayerOptions.Skew, PlayerOptions.Stealth, PlayerOptions.Stealth1, PlayerOptions.Stealth2, PlayerOptions.Stealth3, PlayerOptions.Stealth4, PlayerOptions.StealthPastReceptors, PlayerOptions.Tilt, PlayerOptions.Tipsy, PlayerOptions.XMod, PlayerOptions.Zigzag, PlayerOptions.ZigzagPeriod"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 3,
+      "concrete_failures": [
+        {
+          "field": "stage_sample_clock",
+          "native": 166.36764526367188,
+          "deadsync": 166.4296112060547
+        },
+        {
+          "field": "stage_sample_clock",
+          "native": 166.36764526367188,
+          "deadsync": 166.4296112060547
+        },
+        {
+          "field": "stage_sample_coverage",
+          "native": 172,
+          "deadsync": 170
+        }
+      ],
+      "report_sha256": "112acfc9ef088ebbaa2793af0b97225dcf25992abd9b82a573cf298e578bb838"
     }
   ],
   "scope": {
@@ -1520,9 +1566,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "745eee7daaa9bd844dd8092d43d02e25b6b5e05a2a8967cca909eba5a2e487b7",
+  "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 5,
-  "pending_charts": 7,
-  "processed_charts": 12
+  "pending_charts": 8,
+  "processed_charts": 13
 }
