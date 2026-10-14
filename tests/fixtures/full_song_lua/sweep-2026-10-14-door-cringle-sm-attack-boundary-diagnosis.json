@@ -1,0 +1,239 @@
+{
+  "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
+  "native_frames": 55331,
+  "replayed_frames": 55331,
+  "repair_attempts": 1,
+  "repairs_remaining": 1,
+  "mismatch_count": 4,
+  "callback_errors": 0,
+  "concrete_failures": [
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "player-state:PlayerNumber_P1",
+        "args": [
+          "ModsLevel_Song"
+        ],
+        "beat": 16.00544548034668,
+        "callback": "SetUpdateFunction",
+        "caller": {
+          "line": 71,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0021",
+        "detail": {
+          "results": [
+            "NoHideLights, PlayerAutoPlay, Overhead"
+          ]
+        },
+        "kind": "query",
+        "line": 71,
+        "operation": "PlayerState.GetPlayerOptionsString",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 6.8846940994262695,
+        "seq": 14315,
+        "source": "song:/lua/default.lua",
+        "results": [
+          "NoHideLights, PlayerAutoPlay, Overhead"
+        ]
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "PlayerState.GetPlayerOptionsString",
+        "source": "song:/lua/default.lua",
+        "line": 71,
+        "phase": "callback",
+        "beat": 16.00544548034668,
+        "seconds": 6.8846940994262695,
+        "args": [
+          "ModsLevel_Song"
+        ],
+        "results": [
+          "NoHideLights, 80% Drunk, 25% Tornado, Tipsy, PlayerAutoPlay, Overhead"
+        ]
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "player-state:PlayerNumber_P1",
+        "args": [
+          "ModsLevel_Song",
+          "NoHideLights, PlayerAutoPlay, Overhead, *1 15% dark, *1 5% stealth, *1 100% Beat"
+        ],
+        "beat": 16.00544548034668,
+        "callback": "SetUpdateFunction",
+        "caller": {
+          "line": 71,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0021",
+        "detail": {
+          "results": []
+        },
+        "kind": "modifier",
+        "line": 71,
+        "operation": "PlayerState.SetPlayerOptions",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 6.8846940994262695,
+        "seq": 14316,
+        "source": "song:/lua/default.lua",
+        "results": []
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "modifier",
+        "operation": "PlayerState.SetPlayerOptions",
+        "source": "song:/lua/default.lua",
+        "line": 71,
+        "phase": "callback",
+        "beat": 16.00544548034668,
+        "seconds": 6.8846940994262695,
+        "args": [
+          "ModsLevel_Song",
+          "NoHideLights, 80% Drunk, 25% Tornado, Tipsy, PlayerAutoPlay, Overhead, *1 15% dark, *1 5% stealth, *1 100% Beat"
+        ],
+        "results": []
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "player-state:PlayerNumber_P1",
+        "args": [
+          "ModsLevel_Song"
+        ],
+        "beat": 22.284818649291992,
+        "callback": "SetUpdateFunction",
+        "caller": {
+          "line": 71,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0021",
+        "detail": {
+          "results": [
+            "NoHideLights, Beat, 5% Stealth, 15% Dark, PlayerAutoPlay, Overhead"
+          ]
+        },
+        "kind": "query",
+        "line": 71,
+        "operation": "PlayerState.GetPlayerOptionsString",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 9.43038558959961,
+        "seq": 19475,
+        "source": "song:/lua/default.lua",
+        "results": [
+          "NoHideLights, Beat, 5% Stealth, 15% Dark, PlayerAutoPlay, Overhead"
+        ]
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "PlayerState.GetPlayerOptionsString",
+        "source": "song:/lua/default.lua",
+        "line": 71,
+        "phase": "callback",
+        "beat": 22.284818649291992,
+        "seconds": 9.43038558959961,
+        "args": [
+          "ModsLevel_Song"
+        ],
+        "results": [
+          "NoHideLights, 80% Drunk, 25% Tornado, Tipsy, Beat, 5% Stealth, 15% Dark, PlayerAutoPlay, Overhead"
+        ]
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "player-state:PlayerNumber_P1",
+        "args": [
+          "ModsLevel_Song",
+          "NoHideLights, Beat, 5% Stealth, 15% Dark, PlayerAutoPlay, Overhead, *1 95% dark, *2 80% stealth, *1 no Blink, no Confusion, no Tipsy, no Drunk, no Tornado"
+        ],
+        "beat": 22.284818649291992,
+        "callback": "SetUpdateFunction",
+        "caller": {
+          "line": 71,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0021",
+        "detail": {
+          "results": []
+        },
+        "kind": "modifier",
+        "line": 71,
+        "operation": "PlayerState.SetPlayerOptions",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 9.43038558959961,
+        "seq": 19476,
+        "source": "song:/lua/default.lua",
+        "results": []
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "modifier",
+        "operation": "PlayerState.SetPlayerOptions",
+        "source": "song:/lua/default.lua",
+        "line": 71,
+        "phase": "callback",
+        "beat": 22.284818649291992,
+        "seconds": 9.43038558959961,
+        "args": [
+          "ModsLevel_Song",
+          "NoHideLights, 80% Drunk, 25% Tornado, Tipsy, Beat, 5% Stealth, 15% Dark, PlayerAutoPlay, Overhead, *1 95% dark, *2 80% stealth, *1 no Blink, no Confusion, no Tipsy, no Drunk, no Tornado"
+        ],
+        "results": []
+      }
+    }
+  ],
+  "authored_attack": {
+    "start_seconds": 2.802432,
+    "duration_seconds": 0.405405,
+    "modifiers": "Overhead, Onlyonecouples"
+  },
+  "primary_native_behavior": "PlayerState::Update detects each strict start/end active-attack boundary and calls RebuildPlayerOptionsFromActiveAttacks. This copies Stage to Song, applies active attack strings and assigns the master SongOptions target, leaving Current to approach afterwards.",
+  "observed_host_behavior": "clear_active_attack_options rebuilds targets only at gameplay outro. Earlier Lua Song-level Drunk/Tornado/Tipsy strings remain visible after this authored attack.",
+  "cause_status": "inferred from primary source, authored attack and exact residual getter/setter strings; unchanged production red/green still required",
+  "source_pins": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\PlayerState.cpp",
+      "sha256": "d54ad94985f1917627af53a55d96986777c9c0b3949768d7822074b09b796280"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\song_tables.rs",
+      "sha256": "2e4baade7aa6fa0a363a0a792c5baf5efc342e4fa5fbe002170633a84faad5b6"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\live.rs",
+      "sha256": "cde2cd1e406e086676b77540f63b2ae392ceb3694727ee4638209811793ae26e"
+    },
+    {
+      "path": "C:\\GitHub\\rework\\lua-songs\\LeaveTheDoorOpen [Cringle Desolation]\\DoorOpen.sm",
+      "sha256": "b6d04a396b53ff753fb9efd98509a48c2e737815e4ce2671d28801b802955299"
+    },
+    {
+      "path": "C:\\GitHub\\rework\\lua-songs\\LeaveTheDoorOpen [Cringle Desolation]\\lua\\default.lua",
+      "sha256": "19465675198da65b0bc9b44a0e7c0ef2eefbd8bbdc4376f4b9262a8518e90b04"
+    }
+  ],
+  "candidate_sha256": "0616f94607ea769ac606577ace6ef2a6aa0c9c1e0a9142ae3b31e65d2f18347c",
+  "capture_reused": true,
+  "final_full_repair_launched": false,
+  "new_full_attempts_spent_by_diagnosis": 0,
+  "archive_accepted": false,
+  "comparison_tolerances_changed": false
+}
