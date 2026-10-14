@@ -1,0 +1,10 @@
+{
+  "actual_native_lua51_used": true,
+  "actual_adjacent_command_syntax_accepted": true,
+  "source_sha256": "409b86d9832fc6868cd2335c1985fcb9c58803d48792e745ac45272221eb0a9a",
+  "source": "local calls={}\nlocal actor=setmetatable({},{__index=function(_,name) return function(_,...) calls[#calls+1]={name,...} end end})\nlocal callback=cmd(sleep,0\npulse;effectmagnitude,1,1,1;effectcolor2,.97,1.02,1,1;effectcolor1,1.03,.98,1,1;)\ncallback(actor)\nlocal expected={'sleep','pulse','effectmagnitude','effectcolor2','effectcolor1'}\nfor i,name in ipairs(expected) do assert(calls[i][1]==name) end\nassert(#calls==5 and calls[1][2]==0 and #calls[2]==1)\nprint('native cmd accepts adjacent commands without semicolon: sleep,pulse,effectmagnitude,effectcolor2,effectcolor1')\n",
+  "exit_code": 0,
+  "output": "native cmd accepts adjacent commands without semicolon: sleep,pulse,effectmagnitude,effectcolor2,effectcolor1\n",
+  "full_repair_attempts_spent": 1,
+  "final_attempt_not_started": true
+}
