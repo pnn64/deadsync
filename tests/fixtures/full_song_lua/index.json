@@ -3963,17 +3963,14 @@
       "aliases": []
     },
     {
-      "title": "No.13",
+      "title": "No.13 SOFT LANDING PARADISE",
       "source_simfile": "No.13/no13.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a7611b125e7ff5921df9a2b227abb498dc9a688376251f3c77072782952ed899.tar.zst",
-      "sha256": "a7611b125e7ff5921df9a2b227abb498dc9a688376251f3c77072782952ed899",
-      "compressed_bytes": 71137,
-      "uncompressed_sha256": "936a5722f9db9b90e149cbc2828c3a6a4dbdb243637bc9f4854ab73e1916ad67",
-      "compression_level": 22,
-      "aliases": [
-        "01c2e175180ff7da1860ebd7c6063244b377e6610091bc7f5c89ce517b0f6216.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "db115e05c0fabdf0a6d0ecc9a479496d66b9b4c92a35fcbdd87796a2e1ffbb20.tar.zst",
+      "sha256": "db115e05c0fabdf0a6d0ecc9a479496d66b9b4c92a35fcbdd87796a2e1ffbb20",
+      "compressed_bytes": 13565176,
+      "uncompressed_sha256": "bdf006310df58d85946fe0a76e943d7d90a0c1a8d3b316469b2767340e8b4d78",
+      "aliases": []
     },
     {
       "title": "Number 9",
