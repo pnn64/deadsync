@@ -1,0 +1,20 @@
+{
+  "verification": "Storage bytes only; accepted full replay remains closed.",
+  "source_simfile": "Molly/Molly.sm",
+  "native_frames": 150215,
+  "replayed_frames": 150215,
+  "compared_stage_fields": 3608,
+  "mismatches": 0,
+  "callback_errors": 0,
+  "acceptance_commit": "c34b7ac2d",
+  "archive": "2aece6288ddf864b9057f60c88a7fb5c4ee8cb975a7361b4193023adf012648a.tar.zst",
+  "compressed_sha256": "2aece6288ddf864b9057f60c88a7fb5c4ee8cb975a7361b4193023adf012648a",
+  "uncompressed_sha256": "34025226756f0fe2ef42d9597a1a54f6b5a8b114fbf71c1dbce46a01dd43951f",
+  "local_decompression_byte_verified": true,
+  "separate_coverage": [
+    "uncompared song operations: GameState.GetCurrentGame, GameState.GetHumanPlayers, GameState.GetMasterPlayerNumber, PlayerOptions.CMod, PlayerState.GetSongPosition",
+    "native drawable state/resources: ActorProxy, Quad, Sprite"
+  ],
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
