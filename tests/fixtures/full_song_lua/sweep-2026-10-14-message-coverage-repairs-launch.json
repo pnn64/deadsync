@@ -1,0 +1,30 @@
+{
+  "pid": 83512,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_message_coverage_repairs_after_great_v1.py"
+  ],
+  "binary_sha256": "04af4ff5dfcbbf4a0290dfe81b5e1b5690fa28289a2e2fdbebb293006a88bce2",
+  "build_proof": "/home/parity/jobs/message-coverage-linux-green-v1/proof.json",
+  "fix_commit": "d69f0a20fd7a8b9a00fef1680365364522a51706",
+  "capture_reused": true,
+  "source_pin_count": 1175,
+  "local_normalized_pins_verified": true,
+  "bounded_by_predecessor": "great-divide-sm-music-fade-first-repair-v1",
+  "sequential_jobs": [
+    {
+      "job": "koi-ssc-message-coverage-final-repair-v1",
+      "source_simfile": "Koi [UPS2016]/koi.ssc",
+      "attempt": 2,
+      "final": true
+    },
+    {
+      "job": "rite-ssc-message-coverage-first-repair-v1",
+      "source_simfile": "rite of spring/rite.ssc",
+      "attempt": 1,
+      "remaining_after_this_attempt": 1
+    }
+  ],
+  "full_comparisons_unchanged": true,
+  "passing_charts_reopened": false
+}

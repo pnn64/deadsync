@@ -1,0 +1,12 @@
+{
+  "fix_commit": "d69f0a20fd7a8b9a00fef1680365364522a51706",
+  "build_proof": "/home/parity/jobs/message-coverage-linux-green-v1/proof.json",
+  "binary_sha256": "04af4ff5dfcbbf4a0290dfe81b5e1b5690fa28289a2e2fdbebb293006a88bce2",
+  "validated_source_root": "/home/parity/workspace/message-coverage-v1/deadsync",
+  "source_pin_count": 1175,
+  "all_tested_source_pins_verified": true,
+  "active_source_files_modified": false,
+  "local_user_views_edited": false,
+  "running_replays_restarted": false,
+  "native_harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4"
+}
