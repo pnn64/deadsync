@@ -936,6 +936,57 @@
         }
       ],
       "report_sha256": "d7f6e2f7fb1032c9c5b2fec3c22c49f5caa9ef30a5feba75e4698f51499cdb7b"
+    },
+    {
+      "position": 456,
+      "source_simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.ssc",
+      "simfile_sha256": "912debac3e2475cdb5de2f6c83150b6ebb21c4a277cb6fc0789f524c23e5f248",
+      "retained_original_archive": "16ee975a29ffd54734737990cb30e29212e3875519d2ad294e5e47afe15a5c91.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 153.8265720329946,
+      "trace_sha256": "821c6582efab446134fcb2a48cd32a01db11beed807d42409eba92a07443f5ee",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-456/candidates/e795701483b2110e9df849aae2746700407f7c250698bb7a1ea4b57cf464e2c0.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1760.8825417199987,
+      "candidate_sha256": "e795701483b2110e9df849aae2746700407f7c250698bb7a1ea4b57cf464e2c0",
+      "native_frames": 62094,
+      "replayed_frames": 62094,
+      "compared_stage_fields": 1419,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY",
+        "native drawable state/resources: ActorProxy, Quad"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "72532fc8d8f4aed594afa41e73c8f5b15bc36a3a2734c1510f36a9a86fd5126a",
+      "archive": "aa67ae2d8f3c460bf22297e829fa759d1a397e69a85459eee53780cc71908e18.tar.zst",
+      "archive_sha256": "aa67ae2d8f3c460bf22297e829fa759d1a397e69a85459eee53780cc71908e18",
+      "compressed_bytes": 6896133,
+      "pack_seconds": 8.309024354995927,
+      "harness_version": "0.1.80",
+      "title": "Ultra B.B.K.K.B.K.K",
+      "retained_original_entry": {
+        "title": "Ultra B.B.K.K.B.K.K",
+        "source_simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.ssc",
+        "harness_version": "0.1.0",
+        "archive": "16ee975a29ffd54734737990cb30e29212e3875519d2ad294e5e47afe15a5c91.tar.zst",
+        "sha256": "16ee975a29ffd54734737990cb30e29212e3875519d2ad294e5e47afe15a5c91",
+        "compressed_bytes": 44397,
+        "uncompressed_sha256": "0a24384aff2f500efff098495722e3a7b256c8712cf3cf22ea020e8a14b97864",
+        "compression_level": 22,
+        "aliases": [
+          "f43e636ac3b604721e8988bc36ac8aad186f71c2eeb853f8e5e943248cf5ac78.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -944,9 +995,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+  "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 7,
+  "passed_fixtures": 8,
   "pending_charts": 6,
-  "processed_charts": 13
+  "processed_charts": 14
 }
