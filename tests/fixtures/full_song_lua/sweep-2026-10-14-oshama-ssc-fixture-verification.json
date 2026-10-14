@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc",
+  "native_frames": 18767,
+  "replayed_frames": 18767,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "d441d4c287d27fbb6967b69910a192dcec820d04a41bda5d91b5964f73d76c90.tar.zst",
+  "compressed_sha256": "d441d4c287d27fbb6967b69910a192dcec820d04a41bda5d91b5964f73d76c90",
+  "uncompressed_sha256": "dec1a3902949424ad5c8447d4b2e48fe29f77f60378526c7e2387f0944b3ca9b",
+  "compressed_bytes": 11254235,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
