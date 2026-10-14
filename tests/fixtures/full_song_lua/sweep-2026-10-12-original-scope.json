@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T21:08:11Z",
+  "updated_utc": "2026-10-14T21:15:05Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 325,
+    "passed": 326,
     "pending": 99,
-    "unprocessed": 77
+    "unprocessed": 76
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3453,7 +3453,9 @@
       "position": 412,
       "source_simfile": "Spooky/1.09 - Spooky.sm",
       "simfile_sha256": "cba3c91cadabeb4d866f942beb4434686e1ad8760ae3497d26828e5fd558588b",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 413,
