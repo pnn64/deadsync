@@ -1,0 +1,37 @@
+{
+  "source_simfile": "Turn A - [Freya]/turn_a.ssc",
+  "repair_attempts": 0,
+  "native_frames": 69833,
+  "replayed_frames": 69833,
+  "actual_errors": [
+    "string.lower receives nil from LastSeenVideoDriver preference",
+    "nonterminating zero-time actor command queue"
+  ],
+  "mismatch_count": 59715,
+  "neutral_capture_preferences": {
+    "default_sync_offset": "SyncOffset_ITG",
+    "display_aspect_ratio": 1.7777777910232544,
+    "global_offset_seconds": -0.00800000037997961,
+    "visual_delay_seconds": 0
+  },
+  "last_seen_video_driver_not_recorded_as_neutral_input": true,
+  "primary_sources": [
+    {
+      "path": "C:/GitHub/itgmania-harness/vendor/itgmania/src/PrefsManager.cpp",
+      "sha256": "a522c490a5db7ebc994fdcf918c5eed729c7821322c55f7528e85ff25d25285b"
+    },
+    {
+      "path": "C:/GitHub/itgmania-harness/vendor/itgmania/src/StepMania.cpp",
+      "sha256": "39b33a70985013f79dd0d7fefbd96402328eb71020551b0e0c8e012c917aa41f"
+    },
+    {
+      "path": "C:/GitHub/itgmania-harness/src/song_lua_runtime.rs",
+      "sha256": "2282d197834c8451622a0cff3dbc38e971ae9a764c792244a18a2f33feb95515"
+    }
+  ],
+  "primary_behavior": "PrefsManager declares string defaults for LastSeenVideoDriver and VideoRenderers. Native harness null setup sets LastSeenVideoDriver from GetVideoDriverName; non-Windows literal OpenGL, Windows primary adapter name. Host currently lacks LastSeenVideoDriver preference.",
+  "no_expected_query_result_injected_as_input": true,
+  "full_repair_not_started": true,
+  "secondary_queue_error_requires_diagnosis": true,
+  "passing_charts_reopened": false
+}

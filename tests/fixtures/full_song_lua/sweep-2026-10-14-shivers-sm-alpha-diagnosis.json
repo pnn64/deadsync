@@ -1,0 +1,75 @@
+{
+  "position": 398,
+  "source_simfile": "Shivers/Shivers.sm",
+  "candidate_sha256": "e23af6a90319bad75d4aeb566e96bbe9d2a09d4d5fb99687dbf1e7d52d7e8c40",
+  "trace_sha256": "2e8003011ad4feec85a7c2648478ddbfb018ed32a679369636f0bb722234bb1d",
+  "simfile_sha256": "89d4e89a6631069369c535f3ec692e0b5d2f2388042726fbb0ea950c61f38716",
+  "repair_attempts": 0,
+  "native_frames": 8501,
+  "replayed_frames": 8501,
+  "mismatch_count": 1731,
+  "errors": [],
+  "cause": "Same ArrowEffects.GetAlpha constant1 stub as diagnosed SSC; recorded Actor.diffusealpha receives native -infinity versus1.",
+  "full_repair_attempt": 1,
+  "one_further_repair_after_attempt": true,
+  "existing_helper": "/home/parity/jobs/arrow-alpha-linux-green-v1/full-song-lua",
+  "helper_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+  "capture_reused": true,
+  "comparisons_unchanged": true,
+  "first_mismatch": [
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0090",
+        "args": [
+          {
+            "type": "number",
+            "value": "-infinity"
+          }
+        ],
+        "beat": 2.0226516723632812,
+        "callback": "SetUpdateFunction",
+        "caller": {
+          "line": 940,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "InitCommand",
+        "definition_id": "def-0262",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 940,
+        "operation": "Actor.diffusealpha",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 1.0907028913497925,
+        "seq": 8763,
+        "source": "song:/lua/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.diffusealpha",
+        "source": "song:/lua/default.lua",
+        "line": 940,
+        "phase": "callback",
+        "beat": 2.0226516723632812,
+        "seconds": 1.0907028913497925,
+        "args": [
+          1
+        ],
+        "results": [
+          {
+            "actor": "0x64636242ff60",
+            "name": "MultitapP1_3",
+            "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_3"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    }
+  ]
+}
