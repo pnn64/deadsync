@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Slamurai/Slamurai.ssc",
+  "native_frames": 38157,
+  "replayed_frames": 38157,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "3afc561ade572a35984d87e0f54492911ce2d84b41d25c1db4cb3a1fce84b8d9.tar.zst",
+  "compressed_sha256": "3afc561ade572a35984d87e0f54492911ce2d84b41d25c1db4cb3a1fce84b8d9",
+  "uncompressed_sha256": "df1ec5e9291bd9927bf75965be75e9d56040ca6c46dc3f6d55e3261635e3a22e",
+  "compressed_bytes": 11406579,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
