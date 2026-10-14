@@ -2246,15 +2246,12 @@
     {
       "title": "45|HALF|[MASTER] Tacos",
       "source_simfile": "Doubles-45-HALF-[MASTER] Tacos/Tacos.ssc",
-      "harness_version": "0.1.0",
-      "archive": "75a3c312cad4f9207d66c3aa97b0f187e0aab91a4f58e0cbc505801be646df6f.tar.zst",
-      "sha256": "75a3c312cad4f9207d66c3aa97b0f187e0aab91a4f58e0cbc505801be646df6f",
-      "compressed_bytes": 42063,
-      "uncompressed_sha256": "c76ea0f80346c324a299f547309d5ecf03a3c503b4cb30f12d2ff997c0870455",
-      "compression_level": 22,
-      "aliases": [
-        "83638ccd08b2d3ccb62b96ef3c962068546dfa21e972978509ece05a78a07821.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "c41449a435a0dc060afda40bf56944a40d943f1a611f4f20b6771a71d409c07e.tar.zst",
+      "sha256": "c41449a435a0dc060afda40bf56944a40d943f1a611f4f20b6771a71d409c07e",
+      "compressed_bytes": 6966767,
+      "uncompressed_sha256": "9eacd92b49c7b90d2574891d5bcfe3e3f26ef7670e8e3eb17c08335e72e65862",
+      "aliases": []
     },
     {
       "title": "DREAMING-ING!!",

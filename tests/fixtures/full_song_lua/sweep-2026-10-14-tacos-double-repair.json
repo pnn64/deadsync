@@ -1,0 +1,65 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "e56f30a19e218e261ebbd1ad245ca2a49520f61b",
+  "results": [
+    {
+      "position": 177,
+      "source_simfile": "Doubles-45-HALF-[MASTER] Tacos/Tacos.ssc",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "9eacd92b49c7b90d2574891d5bcfe3e3f26ef7670e8e3eb17c08335e72e65862",
+      "trace_sha256": "7cacb9ed1417b6bdb06b2f891c90f4bc17a5299c95c885dde725c749769c3848",
+      "simfile_sha256": "6541bffd7e03ac02cb8cc92e4f14af7b44843572063f07609813c13bd0ba8b52",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/double-cue-rows-green-v2/proof.json",
+      "fix_commit": "e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "previous_failure": "error: ITGmania song Lua semantic trace failed: ITGmania probe script reported: no StepsType_Dance_Single chart matched difficulty Challenge; retained run directory /tmp/itgmania-harness-rs/song-lua-444050-1791845829037205558-0\n",
+      "previous_errors": [],
+      "replay_exit": 0,
+      "replay_seconds": 1547.6499473669974,
+      "native_frames": 63984,
+      "replayed_frames": 63984,
+      "compared_stage_fields": 1551,
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Shuffle, PlayerOptions.SuperShuffle",
+        "native drawable state/resources: Quad"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "d5eef540bbefd79508286608754e1f7bf520b303b9c6fcf14148aff8c3cc7317",
+      "archive": "c41449a435a0dc060afda40bf56944a40d943f1a611f4f20b6771a71d409c07e.tar.zst",
+      "archive_sha256": "c41449a435a0dc060afda40bf56944a40d943f1a611f4f20b6771a71d409c07e",
+      "compressed_bytes": 6966767,
+      "harness_version": "0.1.80",
+      "title": "45|HALF|[MASTER] Tacos",
+      "pack_seconds": 4.874177068006247,
+      "retained_original_entry": {
+        "title": "45|HALF|[MASTER] Tacos",
+        "source_simfile": "Doubles-45-HALF-[MASTER] Tacos/Tacos.ssc",
+        "harness_version": "0.1.0",
+        "archive": "75a3c312cad4f9207d66c3aa97b0f187e0aab91a4f58e0cbc505801be646df6f.tar.zst",
+        "sha256": "75a3c312cad4f9207d66c3aa97b0f187e0aab91a4f58e0cbc505801be646df6f",
+        "compressed_bytes": 42063,
+        "uncompressed_sha256": "c76ea0f80346c324a299f547309d5ecf03a3c503b4cb30f12d2ff997c0870455",
+        "compression_level": 22,
+        "aliases": [
+          "83638ccd08b2d3ccb62b96ef3c962068546dfa21e972978509ece05a78a07821.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first Tacos repair: replay actual double style and chart with eight-column production session and source-backed cue mapping; existing full comparisons unchanged",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
