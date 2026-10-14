@@ -4052,15 +4052,12 @@
     {
       "title": "ヌムジカac.10",
       "source_simfile": "Numujika ac.10/Numujika ac.10.sm",
-      "harness_version": "0.1.0",
-      "archive": "f7a4e675dc606d108be0983b49f66f0051e7b309f941740924d5251c2e238601.tar.zst",
-      "sha256": "f7a4e675dc606d108be0983b49f66f0051e7b309f941740924d5251c2e238601",
-      "compressed_bytes": 2624918,
-      "uncompressed_sha256": "3c1a13654ad06641030609bef5df321e6a0be1ff8856ebb005fa12f131ce5ef9",
-      "compression_level": 22,
-      "aliases": [
-        "03ef9cc9463cddaea32617872d3080d6ce39922d8eb1f4daea3f74d7393f59df.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "be146bff0ca90ebfaaeb710d830667ca06e743e970678978b50dc3c72ea11ce7.tar.zst",
+      "sha256": "be146bff0ca90ebfaaeb710d830667ca06e743e970678978b50dc3c72ea11ce7",
+      "compressed_bytes": 5954191,
+      "uncompressed_sha256": "3530fde92e7e3198e9ad503be0aa8b121b46856f166ef098aedd1b4a9892d981",
+      "aliases": []
     },
     {
       "title": "OIIA OIIA",
