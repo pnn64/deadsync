@@ -1,0 +1,28 @@
+{
+  "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.sm",
+  "position": 383,
+  "repair_attempts": 0,
+  "native_frames": 81952,
+  "replayed_frames": 81952,
+  "errors": [],
+  "mismatch_count": 1,
+  "native_command_queries": 279895,
+  "actual_command_queries": 279883,
+  "operation_count_difference": {
+    "GameState.GetSongBeat": 12
+  },
+  "native_last_query_seconds": 172.79483032226562,
+  "actual_last_query_seconds": 172.78541564941406,
+  "actual_first_navigation_seconds": 172.78541564941406,
+  "query_scene": 2,
+  "query_source": "song:/lua/default.lua",
+  "candidate_sha256": "84a19da50aef6811f60a0d57972b7dc2d68b1ae45130e307549d82de14f56a73",
+  "trace_sha256": "6168f790a3db17f36e1b1a9cfa3fbfedbf9a1be9b6e2db6d64610db780ffe762",
+  "simfile_sha256": "6141d6d76f0e80ec9ece060bac5bdee2d7edf282ec675ce795b44224dfa54dfa",
+  "original_build_proof": "/home/parity/jobs/next-screen-target-linux-green-v1/proof.json",
+  "source_cause": "Same authored Lua and terminal timing as the SSC failure accepted after fix3d314ba64: cached whole-song note bound lacks the9ms ITG pack group offset that selected note timings receive. The SM complete replay loses twelve terminal GetSongBeat calls and navigates9.4ms before the final native query.",
+  "validated_fix": "3d314ba64; SSC original67253-frame first repair passes zero errors/mismatches; Windows/Linux cache/gameplay/replay controls green.",
+  "next_action": "First bounded repair on unchanged original SM capture with the current tested immutable helper.",
+  "passing_charts_reopened": false,
+  "existing_acceptance_criteria_changed": false
+}
