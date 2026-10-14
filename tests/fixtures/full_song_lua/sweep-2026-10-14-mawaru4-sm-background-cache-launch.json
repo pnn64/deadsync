@@ -1,0 +1,30 @@
+{
+  "position": 302,
+  "source_simfile": "mawaru4/mawaru4.sm",
+  "attempt_started": 1,
+  "repairs_remaining_after_this_attempt": 1,
+  "launch": {
+    "supervisor_pid": 1459027,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_mawaru4_sm_background_cache_repair_v1.py"
+    ]
+  },
+  "native_capture_reused": true,
+  "all_manifest_members_byte_verified": true,
+  "build_evidence": "sweep-2026-10-14-double-cue-rows-build.json",
+  "binary_sha256": "74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234",
+  "candidate_sha256": "1607561d59af9e72612fce2e935cf8f45fa67b674646158fd0f02d83df14dfad",
+  "trace_sha256": "de501ee531f806a28f2d6668647b99858b094f9ac7ec5ca2a7c57e99223498ab",
+  "simfile_sha256": "598278a7dd8b93988b17fcdcbd3c560428fcca536324dc9654b0d42b23ffd411",
+  "previous_folder": "/home/parity/jobs/chart-sweep-20261012-v2/chart-302",
+  "diagnostic": {
+    "entry_frames": 1538,
+    "native_frames": 131824,
+    "errors": [],
+    "mismatches": [],
+    "archive_accepted": false,
+    "native_actor_definitions": 104
+  },
+  "no_acceptance_gate_added": true
+}

@@ -1,0 +1,30 @@
+{
+  "position": 276,
+  "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.sm",
+  "attempt_started": 1,
+  "repairs_remaining_after_this_attempt": 1,
+  "launch": {
+    "supervisor_pid": 1457786,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_door_rights_sm_screen_tree_repair_v1.py"
+    ]
+  },
+  "native_capture_reused": true,
+  "all_manifest_members_byte_verified": true,
+  "build_evidence": "sweep-2026-10-14-double-cue-rows-build.json",
+  "binary_sha256": "74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234",
+  "candidate_sha256": "98d69cfa880d38ae82657ab3e86000828b7df249a10a89300d30fabc29a92752",
+  "trace_sha256": "7e966623cb744edca3e2a1a357448f753b7260f184435fa840493277d78aece5",
+  "simfile_sha256": "54828cc3cb04d0df7df9f9886a29670cf9e19185c3f5c4758309ce105f6e9145",
+  "previous_folder": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-276",
+  "diagnostic": {
+    "entry_frames": 2050,
+    "native_frames": 79549,
+    "errors": [],
+    "mismatches": [],
+    "archive_accepted": false,
+    "native_actor_definitions": 14
+  },
+  "no_acceptance_gate_added": true
+}

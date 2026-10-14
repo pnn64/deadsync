@@ -1,0 +1,30 @@
+{
+  "position": 291,
+  "source_simfile": "Loyal Divide [TaroNuke]/Loyal Divide.sm",
+  "attempt_started": 1,
+  "repairs_remaining_after_this_attempt": 1,
+  "launch": {
+    "supervisor_pid": 1458102,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_loyal_divide_quirks_off_repair_v1.py"
+    ]
+  },
+  "native_capture_reused": true,
+  "all_manifest_members_byte_verified": true,
+  "build_evidence": "sweep-2026-10-14-double-cue-rows-build.json",
+  "binary_sha256": "74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234",
+  "candidate_sha256": "3798f249b84078d2e6a80afd3a6e96f8392a99a85523477cc4bbe73412f604c7",
+  "trace_sha256": "ac65b69803dbc4a12b3630f4157ed70688245ab45a8d23431c66867755932ee8",
+  "simfile_sha256": "1f9fcf1a405c0ef368adde7cb67e14f0eb96b6d4885a6748f650596aa528b825",
+  "previous_folder": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-291",
+  "diagnostic": {
+    "entry_frames": 1555,
+    "native_frames": 80691,
+    "errors": [],
+    "mismatches": [],
+    "archive_accepted": false,
+    "native_actor_definitions": 0
+  },
+  "no_acceptance_gate_added": true
+}

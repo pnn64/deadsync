@@ -1,0 +1,30 @@
+{
+  "position": 197,
+  "source_simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
+  "attempt_started": 1,
+  "repairs_remaining_after_this_attempt": 1,
+  "launch": {
+    "supervisor_pid": 1459647,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_fortuna_quirks_off_repair_v1.py"
+    ]
+  },
+  "native_capture_reused": true,
+  "all_manifest_members_byte_verified": true,
+  "build_evidence": "sweep-2026-10-14-double-cue-rows-build.json",
+  "binary_sha256": "74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234",
+  "candidate_sha256": "b637897cc508ebf3e4149376a02f3445f279d4814d16ddcd22e825a881ca76f0",
+  "trace_sha256": "a5d8f4725fa1823bffc9a909c0ac4b9436d10b91513df6fbeb8eea89ab9e82c1",
+  "simfile_sha256": "535ed73ac6613a9c4a4f565cc8496e3c87f3a4825fd023237d7c34afbd5b6025",
+  "previous_folder": "/home/parity/jobs/chart-sweep-20261012-v2/chart-197",
+  "diagnostic": {
+    "entry_frames": 6354,
+    "native_frames": 215375,
+    "errors": [],
+    "mismatches": [],
+    "archive_accepted": false,
+    "native_actor_definitions": 0
+  },
+  "no_acceptance_gate_added": true
+}
