@@ -9112,6 +9112,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 412,
+      "source_simfile": "Spooky/1.09 - Spooky.sm",
+      "simfile_sha256": "cba3c91cadabeb4d866f942beb4434686e1ad8760ae3497d26828e5fd558588b",
+      "retained_original_archive": "6f6e31e07826d04ea9b91f35c489264cd1407dde2d93c35b9902f40163fd5ea6.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef",
+      "build_proof": "/home/parity/jobs/arrow-alpha-linux-green-v1/proof.json",
+      "capture_seconds": 152.8489587479853,
+      "trace_sha256": "a596793ff9706cd180f9920908a39ae498a513b5f51f2ccf5007971a217e7a27",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-412/candidates/18538bd5b99bbda867558b90f69a258edd82dbfcf090a3bd2b82fabe32a4deb6.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1098.276083867997,
+      "candidate_sha256": "18538bd5b99bbda867558b90f69a258edd82dbfcf090a3bd2b82fabe32a4deb6",
+      "native_frames": 51828,
+      "replayed_frames": 51828,
+      "compared_stage_fields": 1397,
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.basezoom, Actor.cropleft, Actor.cropright, Actor.skewx, Actor.stretchto, Actor.xy, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.CMod, PlayerOptions.Centered, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.MMod, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.XMod",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "c5c151e02acdecf1c7ded0489f2c29fd35001756e775a1823eafc612ede914d9",
+      "archive": "0213a8705721d48d9446737d13641426df1ca49818e99d26317cfd08fd26eaac.tar.zst",
+      "archive_sha256": "0213a8705721d48d9446737d13641426df1ca49818e99d26317cfd08fd26eaac",
+      "compressed_bytes": 7625971,
+      "pack_seconds": 9.195536382001592,
+      "harness_version": "0.1.80",
+      "title": "Spooky",
+      "retained_original_entry": {
+        "title": "Spooky",
+        "source_simfile": "Spooky/1.09 - Spooky.sm",
+        "harness_version": "0.1.0",
+        "archive": "6f6e31e07826d04ea9b91f35c489264cd1407dde2d93c35b9902f40163fd5ea6.tar.zst",
+        "sha256": "6f6e31e07826d04ea9b91f35c489264cd1407dde2d93c35b9902f40163fd5ea6",
+        "compressed_bytes": 150428,
+        "uncompressed_sha256": "424872d095ba020f803e28ae44412ea57ea9951cb37197a4945216c193f2702a",
+        "compression_level": 22,
+        "aliases": [
+          "515ee0a4353be682aa150c0d96776ec61b34dc934f0192011c8d1aa24663e1ec.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -9121,9 +9172,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
+  "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 36,
+  "passed_fixtures": 37,
   "pending_charts": 33,
-  "processed_charts": 69
+  "processed_charts": 70
 }

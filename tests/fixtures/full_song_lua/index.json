@@ -4841,15 +4841,12 @@
     {
       "title": "Spooky",
       "source_simfile": "Spooky/1.09 - Spooky.sm",
-      "harness_version": "0.1.0",
-      "archive": "6f6e31e07826d04ea9b91f35c489264cd1407dde2d93c35b9902f40163fd5ea6.tar.zst",
-      "sha256": "6f6e31e07826d04ea9b91f35c489264cd1407dde2d93c35b9902f40163fd5ea6",
-      "compressed_bytes": 150428,
-      "uncompressed_sha256": "424872d095ba020f803e28ae44412ea57ea9951cb37197a4945216c193f2702a",
-      "compression_level": 22,
-      "aliases": [
-        "515ee0a4353be682aa150c0d96776ec61b34dc934f0192011c8d1aa24663e1ec.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "0213a8705721d48d9446737d13641426df1ca49818e99d26317cfd08fd26eaac.tar.zst",
+      "sha256": "0213a8705721d48d9446737d13641426df1ca49818e99d26317cfd08fd26eaac",
+      "compressed_bytes": 7625971,
+      "uncompressed_sha256": "18538bd5b99bbda867558b90f69a258edd82dbfcf090a3bd2b82fabe32a4deb6",
+      "aliases": []
     },
     {
       "title": "Spooky",
