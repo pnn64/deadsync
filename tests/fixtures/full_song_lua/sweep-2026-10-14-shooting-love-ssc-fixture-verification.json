@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Shooting Love/Shooting Love.ssc",
+  "native_frames": 10303,
+  "replayed_frames": 10303,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "04dedb98d93afd4eea6f313562278fecdbed326146fb7a9e4c959cbe33f0a479.tar.zst",
+  "compressed_sha256": "04dedb98d93afd4eea6f313562278fecdbed326146fb7a9e4c959cbe33f0a479",
+  "uncompressed_sha256": "e8517928428413dacdbc68ca35037915fa0d9a5f07731c9d1cc04bddb6f0076b",
+  "compressed_bytes": 14909658,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
