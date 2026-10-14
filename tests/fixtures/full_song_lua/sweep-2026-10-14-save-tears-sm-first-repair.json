@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "first SM pack-sync repair complete",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "b97bcedd8f8d8d88dac55531a7d287cb7bbccd69",
