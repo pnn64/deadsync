@@ -1494,6 +1494,8 @@ pub struct SongLuaCompileContext {
     /// Capability of the selected renderer, independent of theme helpers.
     pub render_to_texture: bool,
     pub video_renderers: String,
+    /// Last driver recorded by the engine, independent of renderer selection.
+    pub last_seen_video_driver: String,
     pub players: [SongLuaPlayerContext; LUA_PLAYERS],
     pub confusion_offset_available: bool,
     pub confusion_available: bool,
@@ -1537,6 +1539,8 @@ impl SongLuaCompileContext {
             display_aspect_ratio: 16.0 / 9.0,
             render_to_texture: true,
             video_renderers: "software".to_string(),
+            // PrefsManager initializes this preference before video setup.
+            last_seen_video_driver: String::new(),
             players: std::array::from_fn(|_| SongLuaPlayerContext::default()),
             confusion_offset_available: true,
             confusion_available: true,
@@ -14361,6 +14365,39 @@ return Def.ActorFrame{}
             compiled.messages[0].message,
             "1.7778:1280:720:false:0.70:0.02"
         );
+    }
+
+    #[test]
+    fn compile_song_lua_video_driver_preference_is_known_and_mutable() {
+        let song_dir = test_dir("video-driver-preference");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+assert(PREFSMAN:PreferenceExists("LastSeenVideoDriver"), "native video driver preference must exist")
+assert(PREFSMAN:GetPreference("LastSeenVideoDriver") == "", "native fresh preference is an empty string")
+PREFSMAN:SetPreference("LastSeenVideoDriver", "NVIDIA Test Adapter")
+assert(PREFSMAN:GetPreference("LastSeenVideoDriver") == "NVIDIA Test Adapter")
+assert(string.find(string.lower(PREFSMAN:GetPreference("LastSeenVideoDriver")), "nvidia"))
+return Def.ActorFrame{}
+"#).unwrap();
+        let context = SongLuaCompileContext::new(&song_dir, "Video Driver");
+        test_compile_song_lua(&entry, &context).expect("native video driver preference must exist");
+
+        fs::write(&entry, r#"
+local driver = PREFSMAN:GetPreference("LastSeenVideoDriver")
+local nvidia = string.find(string.lower(driver), "nvidia") ~= nil
+assert(PREFSMAN:PreferenceExists("lastseenvideodriver"))
+assert(PREFSMAN:GetPreference("lastseenvideodriver") == driver)
+assert(PREFSMAN:GetPreference("VideoRenderers") == "null")
+mod_actions = {{1, driver .. ":" .. tostring(nvidia), true}}
+return Def.ActorFrame{}
+"#).unwrap();
+        let mut context = context;
+        context.video_renderers = "null".into();
+        for (driver, expected) in [("NVIDIA Test Adapter", "NVIDIA Test Adapter:true"), ("OpenGL", "OpenGL:false")] {
+            context.last_seen_video_driver = driver.into();
+            let compiled = test_compile_song_lua(&entry, &context).unwrap();
+            assert_eq!(compiled.messages[0].message, expected);
+        }
     }
 
     #[test]

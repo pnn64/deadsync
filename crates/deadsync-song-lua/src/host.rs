@@ -789,6 +789,7 @@ pub fn install_manager_globals(lua: &Lua, context: &SongLuaCompileContext) -> ml
             display_width,
             display_height,
             context.video_renderers.as_str(),
+            context.last_seen_video_driver.as_str(),
             context.event_mode,
         )?,
     )?;

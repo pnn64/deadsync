@@ -1832,12 +1832,15 @@ pub fn create_prefsmgr_table(
     display_width: i32,
     display_height: i32,
     video_renderers: &str,
+    last_seen_video_driver: &str,
     event_mode: bool,
 ) -> mlua::Result<Table> {
     let prefsmgr = lua.create_table()?;
     let pref_store = lua.create_table()?;
     pref_store.set("EventMode", event_mode)?;
     let video_renderers = video_renderers.to_string();
+    let last_seen_video_driver = last_seen_video_driver.to_string();
+    let get_video_driver = last_seen_video_driver.clone();
     let get_video_renderers = video_renderers.clone();
     let get_pref_store = pref_store.clone();
     prefsmgr.set(
@@ -1858,12 +1861,14 @@ pub fn create_prefsmgr_table(
                 display_width,
                 display_height,
                 &get_video_renderers,
+                &get_video_driver,
             )
         })?,
     )?;
     let set_pref_store = pref_store.clone();
     let prefsmgr_for_set = prefsmgr.clone();
     let set_video_renderers = video_renderers.clone();
+    let set_video_driver = last_seen_video_driver.clone();
     prefsmgr.set(
         "SetPreference",
         lua.create_function(move |lua, args: MultiValue| {
@@ -1880,6 +1885,7 @@ pub fn create_prefsmgr_table(
                     display_width,
                     display_height,
                     &set_video_renderers,
+                    &set_video_driver,
                 )?,
                 Value::Nil
             ) {
@@ -1891,6 +1897,7 @@ pub fn create_prefsmgr_table(
     )?;
     prefsmgr.set("PreferenceExists", {
         let exists_video_renderers = video_renderers;
+        let exists_video_driver = last_seen_video_driver;
         lua.create_function(move |lua, args: MultiValue| {
             let Some(key) = method_arg(&args, 0).cloned().and_then(read_string) else {
                 return Ok(false);
@@ -1904,6 +1911,7 @@ pub fn create_prefsmgr_table(
                     display_width,
                     display_height,
                     &exists_video_renderers,
+                    &exists_video_driver,
                 )?,
                 Value::Nil
             ))
@@ -1940,6 +1948,7 @@ pub fn prefsmgr_default_value(
     display_width: i32,
     display_height: i32,
     video_renderers: &str,
+    last_seen_video_driver: &str,
 ) -> mlua::Result<Value> {
     with_ascii_lowercase(key, |lower| {
         prefsmgr_default_value_normalized(
@@ -1950,6 +1959,7 @@ pub fn prefsmgr_default_value(
             display_width,
             display_height,
             video_renderers,
+            last_seen_video_driver,
         )
     })
 }
@@ -1979,6 +1989,7 @@ fn prefsmgr_default_value_normalized(
     display_width: i32,
     display_height: i32,
     video_renderers: &str,
+    last_seen_video_driver: &str,
 ) -> mlua::Result<Value> {
     if lower == "globaloffsetseconds" {
         Ok(Value::Number(f64::from(global_offset_seconds)))
@@ -1990,6 +2001,8 @@ fn prefsmgr_default_value_normalized(
         Ok(Value::Integer(i64::from(display_height)))
     } else if lower == "videorenderers" {
         Ok(Value::String(lua.create_string(video_renderers)?))
+    } else if lower == "lastseenvideodriver" {
+        Ok(Value::String(lua.create_string(last_seen_video_driver)?))
     } else if lower == "eventmode" {
         Ok(Value::Boolean(true))
     } else if lower == "visualdelayseconds" {

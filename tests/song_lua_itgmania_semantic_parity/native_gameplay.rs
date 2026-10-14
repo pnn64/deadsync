@@ -2726,6 +2726,7 @@ pub(crate) fn replay(
     trace: &Value,
     trace_path: &Path,
     simfile: &Path,
+    last_seen_video_driver: Option<&str>,
     scope: Scope,
     mut progress: impl FnMut(usize, usize),
 ) -> Result<Value, String> {
@@ -2863,6 +2864,11 @@ pub(crate) fn replay(
         native_random_seed(trace)?,
         true,
     )?;
+    // Optional input comes from retained machine configuration or the native
+    // input snapshot. Query observations remain expectations only.
+    context.last_seen_video_driver = last_seen_video_driver
+        .or_else(|| preferences.get("last_seen_video_driver").and_then(Value::as_str))
+        .unwrap_or_default().to_string();
     context.message_actor_order = native_creation_order_for_entries(trace, 1, song.background_lua_changes.len())?;
     // Native ScreenGameplay updates song position before its first Update(0).
     // Defer preparation's placeholder update and run every recorded frame,

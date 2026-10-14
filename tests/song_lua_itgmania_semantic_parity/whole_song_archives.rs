@@ -68,7 +68,14 @@ struct ArchiveRuntime {
     update_hz: Option<f32>,
     #[serde(default)]
     frame_clock: Option<String>,
+    #[serde(default)]
+    machine_preferences: Option<ArchiveMachinePreferences>,
     random_state: RandomState,
+}
+
+#[derive(Deserialize)]
+struct ArchiveMachinePreferences {
+    last_seen_video_driver: String,
 }
 
 #[derive(Deserialize)]
@@ -1460,6 +1467,7 @@ fn replay_native_archive(
         native_gameplay::Scope::ThroughSecond(_) => "replaying native frames through the diagnostic cutoff",
     });
     let mut report = native_gameplay::replay(&trace, &trace_path, &archive.root.join(&archive.manifest.chart.simfile),
+        archive.manifest.runtime.machine_preferences.as_ref().map(|prefs| prefs.last_seen_video_driver.as_str()),
         scope, |frame, frames| {
             progress.frame.store(frame, Ordering::Relaxed);
             progress.frames.store(frames, Ordering::Relaxed);
