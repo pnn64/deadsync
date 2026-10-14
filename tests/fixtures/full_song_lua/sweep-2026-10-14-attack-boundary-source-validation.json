@@ -42,12 +42,13 @@
   "native_capture_modified": false,
   "comparison_rules_changed": false,
   "full_repair_attempts_spent_by_controls": 0,
-  "final_chart_repair_launched": false,
+  "final_chart_repair_launched": true,
   "bootstrap_observations": "Early controls lacked an ActorFrame lifetime or had nonseparate measure delimiters, causing premature foreground/song exit. These are excluded as cause evidence. The final control verifies an active song at attack time, fails on Linux before the fix, and passes on Windows after the fix.",
   "fix_commit": "254c36811",
   "linux_green_v1": "Production attack control passed; lib-test compilation found a reused frame requiring clone. This is corrected, Windows 61 live controls pass, and fresh green-v2 is confirmed live in the isolated checkout.",
   "final_chart_repair_attempt": 2,
-  "final_chart_repair_not_yet_launched": true,
+  "final_chart_repair_not_yet_launched": false,
   "selected_binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c",
-  "linux_completed_build": "sweep-2026-10-14-attack-boundary-linux-build.json"
+  "linux_completed_build": "sweep-2026-10-14-attack-boundary-linux-build.json",
+  "final_chart_repair_launch": "sweep-2026-10-14-door-cringle-sm-attack-final-launch.json"
 }
