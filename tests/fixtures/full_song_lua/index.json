@@ -4803,15 +4803,12 @@
     {
       "title": "粛聖!! ロリ神レクイエム☆",
       "source_simfile": "Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem.ssc",
-      "harness_version": "0.1.0",
-      "archive": "4ba543256995b864147dce3e20a8b4290ad7ba8dee482782227cd7580374b4d1.tar.zst",
-      "sha256": "4ba543256995b864147dce3e20a8b4290ad7ba8dee482782227cd7580374b4d1",
-      "compressed_bytes": 107734,
-      "uncompressed_sha256": "09f272a276af5ef0f4a8abf142c9edc6a157e2b6e097ef41103b473cc26900cd",
-      "compression_level": 22,
-      "aliases": [
-        "9e04b2d12e93ff60e42340385765e9b721d4f5cb45e497a45b0db8df37d1668c.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "cace9c244aabf2214a771ef33cab536daf86c892d6751b5cfd7d56ef482c3594.tar.zst",
+      "sha256": "cace9c244aabf2214a771ef33cab536daf86c892d6751b5cfd7d56ef482c3594",
+      "compressed_bytes": 5307104,
+      "uncompressed_sha256": "bdcd318455a7fe0cc81c821bfe972cd0c04179c14af081dda3015f4cf9cd0603",
+      "aliases": []
     },
     {
       "title": "Slamurai",
