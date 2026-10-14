@@ -104,6 +104,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 361,
+      "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).ssc",
+      "simfile_sha256": "1c769ffa86dce0c11dcfa5c67e20acc2381f20b7cfd11520a3e299d5d1483ff5",
+      "retained_original_archive": "1f88d5ee979dcc03da989bc8795de8e308fcd17749e9abfe801f4a973784fc6f.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "254c36811 + e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/attack-boundary-linux-green-v2/proof.json",
+      "capture_seconds": 159.61889376898762,
+      "trace_sha256": "b14a2671a58a9db5345d57055409b0c0817c952bbd1bb2a81470fdece69e7304",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-361/candidates/440061762cf3789e5993e41ffa0bf7a86d2988a186067106c9c96a4059047596.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1764.8617337180185,
+      "candidate_sha256": "440061762cf3789e5993e41ffa0bf7a86d2988a186067106c9c96a4059047596",
+      "native_frames": 83299,
+      "replayed_frames": 83299,
+      "compared_stage_fields": 1606,
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Beat, PlayerOptions.Confusion, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Tipsy"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "3e08602a2be3d88cb20931a70eed01a36790ea42a47c55fe7b1e5d9b0c6a2b32",
+      "archive": "78c4ebe2a0dfcba212d4b900bea3807fb7ec9e25b0e36b73c0bfb3e8cebad262.tar.zst",
+      "archive_sha256": "78c4ebe2a0dfcba212d4b900bea3807fb7ec9e25b0e36b73c0bfb3e8cebad262",
+      "compressed_bytes": 6493102,
+      "pack_seconds": 5.465513016009936,
+      "harness_version": "0.1.80",
+      "title": "Potion",
+      "retained_original_entry": {
+        "title": "Potion",
+        "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).ssc",
+        "harness_version": "0.1.0",
+        "archive": "1f88d5ee979dcc03da989bc8795de8e308fcd17749e9abfe801f4a973784fc6f.tar.zst",
+        "sha256": "1f88d5ee979dcc03da989bc8795de8e308fcd17749e9abfe801f4a973784fc6f",
+        "compressed_bytes": 103027,
+        "uncompressed_sha256": "09937adea8dbfe38d9d2227bec5043bd9553d26a203a82e4a8a8d2d9f3cc3f76",
+        "compression_level": 22,
+        "aliases": [
+          "250b827e68b93e5517fc8bc25c1a52edb9bd3955db27d1bc40363a8804db37df.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -114,7 +164,7 @@
   },
   "binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 2,
+  "passed_fixtures": 3,
   "pending_charts": 0,
-  "processed_charts": 2
+  "processed_charts": 3
 }

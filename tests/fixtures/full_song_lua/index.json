@@ -4312,15 +4312,12 @@
     {
       "title": "Potion",
       "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).ssc",
-      "harness_version": "0.1.0",
-      "archive": "1f88d5ee979dcc03da989bc8795de8e308fcd17749e9abfe801f4a973784fc6f.tar.zst",
-      "sha256": "1f88d5ee979dcc03da989bc8795de8e308fcd17749e9abfe801f4a973784fc6f",
-      "compressed_bytes": 103027,
-      "uncompressed_sha256": "09937adea8dbfe38d9d2227bec5043bd9553d26a203a82e4a8a8d2d9f3cc3f76",
-      "compression_level": 22,
-      "aliases": [
-        "250b827e68b93e5517fc8bc25c1a52edb9bd3955db27d1bc40363a8804db37df.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "78c4ebe2a0dfcba212d4b900bea3807fb7ec9e25b0e36b73c0bfb3e8cebad262.tar.zst",
+      "sha256": "78c4ebe2a0dfcba212d4b900bea3807fb7ec9e25b0e36b73c0bfb3e8cebad262",
+      "compressed_bytes": 6493102,
+      "uncompressed_sha256": "440061762cf3789e5993e41ffa0bf7a86d2988a186067106c9c96a4059047596",
+      "aliases": []
     },
     {
       "title": "Quarantine",
