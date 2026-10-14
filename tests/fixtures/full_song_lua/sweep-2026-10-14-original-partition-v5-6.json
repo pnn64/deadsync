@@ -1495,6 +1495,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 409,
+      "source_simfile": "SPLAK IT DOWN - [Zaia +ruunix2]/SPLAK IT DOWN.ssc",
+      "simfile_sha256": "5807f8222a01ca5fb8407c16aeb0e5e915bfecb5f99fca21f2bdbd7941589e76",
+      "retained_original_archive": "edf407ed75008ed2da8a1fc40922a146973aa26f79fbde739c2ec56612f367be.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "745eee7daaa9bd844dd8092d43d02e25b6b5e05a2a8967cca909eba5a2e487b7",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "771646c8d58dc1170f1e2b9f332a701f8bd518b7",
+      "build_proof": "/home/parity/jobs/song-selector-observations-linux-green-v1/proof.json",
+      "capture_seconds": 140.18557301399414,
+      "trace_sha256": "01700823743dcf9381283937135a53d4854cf02d482668750858ad4acd7751b0",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-6/chart-409/candidates/29f76fc9364618a5ba600deecc28a4560c777fa56f18bfccc72aa86ccbe7d9f8.tar",
+      "replay_exit": 0,
+      "replay_seconds": 453.84058366098907,
+      "candidate_sha256": "29f76fc9364618a5ba600deecc28a4560c777fa56f18bfccc72aa86ccbe7d9f8",
+      "native_frames": 21002,
+      "replayed_frames": 21002,
+      "compared_stage_fields": 1276,
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.BumpyPeriod, PlayerOptions.Confusion, PlayerOptions.Cross, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Split, PlayerOptions.Tipsy, PlayerOptions.Wave"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "0871be26f5674a0c07e637b97fc0035a0d75b19c3bdacb75f65681e7f7abb941",
+      "archive": "cbada3366920c1a87ae28e095511c6f66bfc434cc6d9d46f30837498bcd65501.tar.zst",
+      "archive_sha256": "cbada3366920c1a87ae28e095511c6f66bfc434cc6d9d46f30837498bcd65501",
+      "compressed_bytes": 6449249,
+      "pack_seconds": 6.900508277001791,
+      "harness_version": "0.1.80",
+      "title": "SPLAK IT DOWN",
+      "retained_original_entry": {
+        "title": "SPLAK IT DOWN",
+        "source_simfile": "SPLAK IT DOWN - [Zaia +ruunix2]/SPLAK IT DOWN.ssc",
+        "harness_version": "0.1.0",
+        "archive": "edf407ed75008ed2da8a1fc40922a146973aa26f79fbde739c2ec56612f367be.tar.zst",
+        "sha256": "edf407ed75008ed2da8a1fc40922a146973aa26f79fbde739c2ec56612f367be",
+        "compressed_bytes": 136810,
+        "uncompressed_sha256": "194d2d2f5dd40e4ab1c972f3579393b5b7c51a3bd7617f0f9cb44677a346205f",
+        "compression_level": 22,
+        "aliases": [
+          "20e1103e719c388920084ae44798400cc07465ad4bb0690e11cf2429311ca373.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -1503,9 +1553,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "fc937c1ae18f5ffc8bc3716cc10f755ae0c4dd23172c9a055955844fef0c3a28",
+  "binary_sha256": "745eee7daaa9bd844dd8092d43d02e25b6b5e05a2a8967cca909eba5a2e487b7",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 4,
+  "passed_fixtures": 5,
   "pending_charts": 3,
-  "processed_charts": 7
+  "processed_charts": 8
 }

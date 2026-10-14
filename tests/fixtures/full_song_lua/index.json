@@ -4853,15 +4853,12 @@
     {
       "title": "SPLAK IT DOWN",
       "source_simfile": "SPLAK IT DOWN - [Zaia +ruunix2]/SPLAK IT DOWN.ssc",
-      "harness_version": "0.1.0",
-      "archive": "edf407ed75008ed2da8a1fc40922a146973aa26f79fbde739c2ec56612f367be.tar.zst",
-      "sha256": "edf407ed75008ed2da8a1fc40922a146973aa26f79fbde739c2ec56612f367be",
-      "compressed_bytes": 136810,
-      "uncompressed_sha256": "194d2d2f5dd40e4ab1c972f3579393b5b7c51a3bd7617f0f9cb44677a346205f",
-      "compression_level": 22,
-      "aliases": [
-        "20e1103e719c388920084ae44798400cc07465ad4bb0690e11cf2429311ca373.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "cbada3366920c1a87ae28e095511c6f66bfc434cc6d9d46f30837498bcd65501.tar.zst",
+      "sha256": "cbada3366920c1a87ae28e095511c6f66bfc434cc6d9d46f30837498bcd65501",
+      "compressed_bytes": 6449249,
+      "uncompressed_sha256": "29f76fc9364618a5ba600deecc28a4560c777fa56f18bfccc72aa86ccbe7d9f8",
+      "aliases": []
     },
     {
       "title": "spooky",
