@@ -1,0 +1,26 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "MODULO/modulo.ssc",
+      "acceptance_commit": "cbad1eb4e",
+      "native_frames": 69793,
+      "replayed_frames": 69793,
+      "compared_stage_fields": 1276,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "dd8c07e6b1af04f2b6d133384f10c44b470e133c85c5b025f7ef26f33f2d0e4b.tar.zst",
+      "compressed_sha256": "dd8c07e6b1af04f2b6d133384f10c44b470e133c85c5b025f7ef26f33f2d0e4b",
+      "uncompressed_sha256": "1656e72fc18dcd4daf1fc5c2316e242df3ec0703d5a65d54e2cc4cf942c3f006",
+      "compressed_bytes": 23894356,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.halign, Actor.valign, BitmapText.settext, PlayerOptions.MMod, Song.GetAllSteps",
+        "native drawable state/resources: BitmapText, Quad, Sound, Sprite"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
