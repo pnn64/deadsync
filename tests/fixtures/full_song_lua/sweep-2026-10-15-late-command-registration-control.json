@@ -1,0 +1,25 @@
+{
+  "actual_native_lua51_used": true,
+  "actual_observer_functions_extracted": true,
+  "command_wrapper_stubbed_for_registration_control": true,
+  "red_expected_failure_and_green_pass_verified": true,
+  "checks": [
+    {
+      "mode": "red",
+      "exit_code": 1,
+      "source_sha256": "246a7007d2ac268dd74c4b5b465dfbd566940614d91a3c1cf9f900ef60daaff8",
+      "output": "/home/parity/jobs/native-lua51-sparse-control-v1/lua51: /home/parity/jobs/late-command-observer-control-v1/late-command-red-control-v1.lua:312: late OnCommand must be observed before native loading\nstack traceback:\n\t[C]: in function 'assert'\n\t/home/parity/jobs/late-command-observer-control-v1/late-command-red-control-v1.lua:312: in main chunk\n\t[C]: ?\n"
+    },
+    {
+      "mode": "green",
+      "exit_code": 0,
+      "source_sha256": "d878f54b2bb0a660a5725b494a708c348c2f1f349fd574219981ace6bb594168",
+      "output": "late callbacks wrapped once; native sparse order: yolo,leader,border,badge,left,black,sound,right\n"
+    }
+  ],
+  "chart_repair_attempts_spent": 0,
+  "harness_fix_commit": "ca0b435",
+  "windows_runtime_tests_passed": 12,
+  "proposal_sha256": "b8309c7d88ac3f8a4010ba5cd2f9c73f1ff10b78935c155e6a592b88db283c6e",
+  "complete_native_capture_control_pending": true
+}

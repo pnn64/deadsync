@@ -1,0 +1,179 @@
+{
+  "fix_commit": "ca0b435",
+  "windows_runtime_controls_passed": 12,
+  "linux_checks": [
+    {
+      "label": "runtime-tests",
+      "exit_code": 0,
+      "seconds": 189.18949560599867,
+      "log_sha256": "a01b37e19d9de299c861dae48d99b2e9c277a1f7bf909879d002bd2a3c4daee1",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 18.27769822999835,
+      "log_sha256": "034e1726df6d85ead402803a59989ef9162ef4780ac7a63969036295ec25f9d6",
+      "results": []
+    }
+  ],
+  "source_root": "/home/parity/workspace/late-command-observer-v1/itgmania-harness",
+  "source_pin_count": 2223,
+  "binary_sha256": "2f2ef99fc977f900bae2f65fc96e550418720d3abb03b045a25e2ea35b7f5e3f",
+  "native_control": {
+    "input_sha256": {
+      "/home/parity/jobs/late-command-native-control-v1/input/control.sm": "73646be979a7caf41e98e5cb1037867dbef8a64940451820e1d8c938d0ee73d9",
+      "/home/parity/jobs/late-command-native-control-v1/input/control.wav": "71d93ef76e5ff6087d522277e83309f1d8d790e9b756324dec73d216ea57cc75",
+      "/home/parity/jobs/late-command-native-control-v1/input/control.lua": "65a09e71bcc128d4ea76d6786ba43faf38d47a4da7093382bd35b6779abef5c0"
+    },
+    "checks": [
+      {
+        "mode": "baseline",
+        "harness_sha256": "ea7314391554e3fc933a5531ba71f6a93a70a35f8e3b8c8706358dc60420e36c",
+        "native_sha256": "a9d70b63dc11601634e67cb59fe1a7e7d12c57788bd525dba014f51a99d110fe",
+        "capture_exit": 0,
+        "existing_complete_native_capture_reused": true,
+        "seconds": 0.6254077699850313,
+        "native_frames": 5956,
+        "trace_sha256": "35d7a9bede0f8be58bf3bfe51e3f27d019ed8aeed7802098d1c2e56fbcdc46b7",
+        "late_on_begin_count": 0,
+        "late_on_end_count": 0,
+        "actual_call_events": [
+          {
+            "actor": "def-0001",
+            "args": [
+              999
+            ],
+            "beat": 0.00241723470389843,
+            "caller": {
+              "line": 2,
+              "source": "song:/control.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "native_tween_time_left": 999
+            },
+            "kind": "call",
+            "line": 2,
+            "operation": "Actor.sleep",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 0.018208617344498634,
+            "seq": 1,
+            "source": "song:/control.lua"
+          },
+          {
+            "actor": "def-0001",
+            "args": [
+              17
+            ],
+            "beat": 0.00241723470389843,
+            "caller": {
+              "line": 2,
+              "source": "song:/control.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "native_tween_time_left": 999
+            },
+            "kind": "call",
+            "line": 2,
+            "operation": "Actor.x",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 0.018208617344498634,
+            "seq": 2,
+            "source": "song:/control.lua"
+          }
+        ],
+        "completion": {
+          "next_screen": "ScreenEvaluationStage",
+          "reason": "gameplay-exit",
+          "stage_committed": true,
+          "stages_played_after": 1,
+          "stages_played_before": 0
+        }
+      },
+      {
+        "mode": "fixed",
+        "harness_sha256": "2f2ef99fc977f900bae2f65fc96e550418720d3abb03b045a25e2ea35b7f5e3f",
+        "native_sha256": "a9d70b63dc11601634e67cb59fe1a7e7d12c57788bd525dba014f51a99d110fe",
+        "capture_exit": 0,
+        "existing_complete_native_capture_reused": false,
+        "seconds": 10.91482844701386,
+        "native_frames": 5762,
+        "trace_sha256": "4676c78ef95f14cf108642806b099a3845b379f294d2dc26e1dfced95846193c",
+        "late_on_begin_count": 1,
+        "late_on_end_count": 1,
+        "actual_call_events": [
+          {
+            "actor": "def-0001",
+            "args": [
+              999
+            ],
+            "beat": 0.00033106468617916107,
+            "caller": {
+              "line": 2,
+              "source": "song:/control.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "native_tween_time_left": 999
+            },
+            "kind": "call",
+            "line": 2,
+            "operation": "Actor.sleep",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.017165532335639,
+            "seq": 2,
+            "source": "song:/control.lua"
+          },
+          {
+            "actor": "def-0001",
+            "args": [
+              17
+            ],
+            "beat": 0.00033106468617916107,
+            "caller": {
+              "line": 2,
+              "source": "song:/control.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "native_tween_time_left": 999
+            },
+            "kind": "call",
+            "line": 2,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.017165532335639,
+            "seq": 3,
+            "source": "song:/control.lua"
+          }
+        ],
+        "completion": {
+          "next_screen": "ScreenEvaluationStage",
+          "reason": "gameplay-exit",
+          "stage_committed": true,
+          "stages_played_after": 1,
+          "stages_played_before": 0
+        }
+      }
+    ],
+    "actual_complete_native_captures": true,
+    "baseline_missing_late_command_reproduced": true,
+    "fixed_command_observer_captures_callback_once": true,
+    "chart_repair_attempts_spent": 0,
+    "acceptance_changed": false
+  },
+  "initial_control_driver_issue": "Native successful trace omits optional errors array; corrected driver reused complete baseline capture and checked get(errors, []). Original KeyError log retained.",
+  "acceptance_comparisons_changed": false
+}

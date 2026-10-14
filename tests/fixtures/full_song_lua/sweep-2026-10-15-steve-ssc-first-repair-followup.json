@@ -1,0 +1,121 @@
+{
+  "position": 420,
+  "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
+  "repair_attempts": 1,
+  "native_frames": 77402,
+  "replayed_frames": 77402,
+  "replay_exit": 2,
+  "errors": [],
+  "mismatch_count": 179679,
+  "candidate_sha256": "2e92a0a629194a9e1f5c1439af104b9c9b236fa1d55ad91186158db2dabbcad6",
+  "trace_sha256": "148b27f2faf5631a08aa6c1956b44321c7804fd3efad79c2eef30383dbde0275",
+  "simfile_sha256": "1588e4386ca32a812af78557b4748679f28e382476cc90cb30249922380daf8f",
+  "report_sha256": "129b629d6a64873e6cb3bea18a2eb0ba1415265dbb1e53af7b2e3a51e07f55b8",
+  "one_full_repair_remaining": true,
+  "final_attempt_not_started": true,
+  "actual_followup": "Scoped loader restores the secondary ready function and full update execution. All stage comparisons match; actual remaining query mismatches include recursive ActorFrame.GetNumChildren native theme topology versus skeletal owned theme children. Read primary Simply Love actors and populate actual runtime children; do not import native counts or rank arrays as gameplay data.",
+  "first_mismatches": [
+    {
+      "field": "command_query_count",
+      "native": 182777,
+      "deadsync": 179703
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "external-0023",
+        "args": [],
+        "beat": -2.3859763145446777,
+        "caller": {
+          "line": 43,
+          "source": "song:/code/update.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0008",
+        "detail": {
+          "native_tween_time_left": 0,
+          "results": [
+            1
+          ]
+        },
+        "kind": "query",
+        "line": 43,
+        "operation": "ActorFrame.GetNumChildren",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": -1.9999773502349854,
+        "seq": 33,
+        "source": "song:/code/update.lua",
+        "results": [
+          1
+        ]
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "ActorFrame.GetNumChildren",
+        "source": "song:/code/update.lua",
+        "line": 43,
+        "phase": "callback",
+        "beat": -2.3859763145446777,
+        "seconds": -1.9999773502349854,
+        "args": [],
+        "results": [
+          0
+        ]
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "external-0025",
+        "args": [],
+        "beat": -2.3859763145446777,
+        "caller": {
+          "line": 43,
+          "source": "song:/code/update.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0008",
+        "detail": {
+          "native_tween_time_left": {
+            "type": "number",
+            "value": "infinity"
+          },
+          "results": [
+            2
+          ]
+        },
+        "kind": "query",
+        "line": 43,
+        "operation": "ActorFrame.GetNumChildren",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": -1.9999773502349854,
+        "seq": 66,
+        "source": "song:/code/update.lua",
+        "results": [
+          2
+        ]
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "ActorFrame.GetNumChildren",
+        "source": "song:/code/update.lua",
+        "line": 43,
+        "phase": "callback",
+        "beat": -2.3859763145446777,
+        "seconds": -1.9999773502349854,
+        "args": [],
+        "results": [
+          1
+        ]
+      }
+    }
+  ],
+  "acceptance_comparisons_changed": false,
+  "full_native_capture_preserved": true
+}

@@ -1,0 +1,69 @@
+{
+  "position": 394,
+  "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
+  "repair_attempts": 1,
+  "native_frames": 14728,
+  "replayed_frames": 14728,
+  "replay_exit": 2,
+  "errors": [
+    "UpdateCommand failed for Quad: runtime error: [string \"/tmp/.tmp7nTzSh/song/lua/default.lua\"]:717: attempt to index global 'char_ayaze' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t[string \"/tmp/.tmp7nTzSh/song/lua/default.lua\"]:717: in field '?'\n\t[string \"/tmp/.tmp7nTzSh/song/lua/default.lua\"]:1983: in function <[string \"/tmp/.tmp7nTzSh/song/lua/default.lua\"]:1693>"
+  ],
+  "mismatch_count": 19749,
+  "candidate_sha256": "fc6374ff0559eb18cef7f6d068fd68607827c40134a87b939dd10704e9cae095",
+  "trace_sha256": "703601abd9aaa6d037c653ad94984d787f5f25c1846bf35fb67cd4fe0b614d7f",
+  "simfile_sha256": "45d9d5f8655020c9086fbeef5ad48616f82fb351961223046e68d95bed94e0bf",
+  "report_sha256": "3dd4ef854520625057a86efffa21c1419562956f1f24d8720b28e35e94bacf96",
+  "one_full_repair_remaining": true,
+  "final_attempt_not_started": true,
+  "actual_followup": "Captured-identity gaps no longer abort delivery. Shared background compile fails first: bg/default.lua:35-36 contains sleep,0 followed by pulse without a semicolon. Native lparser.c cmd_body continues with another Name after cmd_funcargs/explist1; Rust cmd.rs splits commands only on top-level semicolons. The resulting missing background suppresses char_ayaze On initialization; later foreground Update errors at lua/default.lua:717. Implement native expression boundaries in cmd parsing, preserving source lines, strings, nested expressions/functions, then validate before final repair 2 using the unchanged complete native capture.",
+  "first_mismatches": [
+    {
+      "field": "source_broadcast_count",
+      "native": 47,
+      "deadsync": 1
+    },
+    {
+      "field": "command_query_count",
+      "native": 366527,
+      "deadsync": 21127
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0002",
+        "args": [],
+        "beat": 0.001085430383682251,
+        "command": "OnCommand",
+        "definition_id": "def-0002",
+        "detail": {
+          "name": "OnCommand"
+        },
+        "kind": "command",
+        "line": 3,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": 1.0263946056365967,
+        "seq": 83,
+        "source": "song:/bg/default.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "OnCommand",
+        "source": "song:/lua/default.lua",
+        "line": 573,
+        "beat": 0.001085430383682251,
+        "seconds": 1.0263946056365967,
+        "args": null
+      }
+    }
+  ],
+  "acceptance_comparisons_changed": false,
+  "full_native_capture_preserved": true,
+  "primary_source_sha256": {
+    "..\\itgmania-harness\\vendor\\itgmania\\extern\\lua-5.1\\src\\lparser.c": "2be66f89bb3ae97c8d4253c068928d0e18252793a24b8a0b86fbf646c4039510",
+    "crates\\deadsync-song-lua\\src\\cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+    "..\\rework\\lua-songs\\Shakunetsu2 [TaroNuke]\\bg\\default.lua": "b49563560cf5e12cb40b13ddde391efc4231e16d54f95cab54fa7aabe3fbdcc2"
+  }
+}
