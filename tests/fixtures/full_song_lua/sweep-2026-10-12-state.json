@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T18:35:43Z",
-  "previous_goal_turn": "Current turn is progress: Raving With Fire SSC6112 and SM6394, SPLAK IT DOWN SSC21002 and REASON for RED SSC86821 pass existing full replay criteria. Four archives saved/committed and compressed/decompressed bytes verified against accepted candidates; passing charts closed. Save Tears SSC residual16 terminal queries traced to whole-song cached note bound missing ITG pack group offset9ms while selected note timings include it. Primary Song/TimingData/Player/ScreenGameplay establish group-adjusted note conversion followed by comparison with absolute LASTSECONDHINT. Existing whole-song control extended over pack settings, three rates, player-offset changes and hints4.004/8.0, red before Windows/Linux. Fix3d314ba64 persists optional note-only bound, cache69 metadata, resolves pack offset before hint, retains resolved bound for recomputation. Windows62 live/31 native/815 gameplay/256 simfile; Linux64 live/31 native/815 gameplay/257 simfile and both builds all exit zero. Reference cache serializer updated to new schema after meaningful byte-equality test exposed missing field; checks rerun green. Isolated baseline interface mismatch resolved by read-only committed-source synchronization; local protected views unmodified. All1175 local/Linux normalized source hashes match and immutable helper151a68b24584a9730b6cdf893009fb4a59873684ac28bc89b79e85f1a8752e39 verified. Active repository sources untouched; worker startup validation reads proof source_root instead of assuming working directory. Existing workers not restarted; selection points to immutable tested checkout. Save Tears SSC first repair runs original67253-frame d6abe31f candidate/fb24e5c9 trace, child3862940, one later repair remains. Great Divide gap190ms is distinct and cause unconfirmed, no repair spent. Koi SSC first repair full116240 ends1080 mismatches and three missing subscriber-identity errors for ScreenGameplay/19/1; remains pending1, one repair left. PizzaBoy initial stops43823/85655 with native scene2 versus independent1, no repair spent; cause unconfirmed. Additional initial failures recorded by publisher, coverage separate, eight queues continue with Showtime final and Mawaru8 first repair. Publisher105 streams. Original501 scope/capture bytes preserved, oversized fixtures retained/Git ignored, full comparisons/tolerances unchanged, sweep active and incomplete.",
+  "updated_utc": "2026-10-14T19:10:44Z",
+  "previous_goal_turn": "Current turn is progress: Ruin SM passes113993 frames and Rayc Fire2 SSC76020, archives saved/committed and compressed/decompressed bytes verified. Ruin105403244-byte archive retained locally/Git ignored. Save Tears first repair passesall67253 frames/no errors/mismatches; archivee8be9c74 saved/committed, decompression equals originald6abe31f candidate, chart closed. Pack-sync fix3d314ba64 accepted on its failing chart. Great Divide original85375 failure missing19 update cycles325057 vs324696 queries traced to native music fade/transition alignment. Native input rate1/ITG, canonicallast199.11081/audio204.416; primary ScreenGameplay with SL fade0.25/inherited declared transition5 raises boundarynear199.666 beyond notes199.471. Fixb97bcedd8 stores theme fade policy, uses raw audio EOF/nativef32 equation, retains policy through rate/player-offset recomputation. New controlled EOF-before/inside/after test and three rates/offset edits red before Windows/Linux, green after. Windows62 live/32 replay/815 gameplay; Linux64/32/815 and both helper builds zero exit. All1175 local/Linux normalized pins match, immutable helper4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188 verified/selected, active sources and local views untouched. Great Divide first repair starts original0f995844 candidate/abbc6e38 trace after successful Save closure, child4070869, one later repair remains. Koi first full116240 pending1080 mismatches plus3 missing subscriber identity errors for owned FailOnHoldStart listener mixed with authored Judgment. Neutral inventory242 authored identities/278 runtime actors has no overlay listener pointer; authentic mixed-order coverage missing, recorded separately, no pointer inferred or extra repair spent, one final repair remains. Showtime final repair now completesall145878 frames but2 callback errors Actor.hidden unsupported and14855 mismatches; cap2 reached, recorded pending/no third repair. Eight original queues and Mawaru8 first repair continue, publisher106 streams. Three fixtures saved/byte verified this turn. Original501 scope retained, coverage separate, oversized fixtures ignored/local, existing full acceptance criteria unchanged, sweep active/incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "6304c519bdd2f683ddaf82510cf6a0c35ed1e428",
+      "deadsync": "62f778d6a8442169e60446bacfa7a9408f15f94f",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -80,7 +80,8 @@
     "native_background_effect_family": "3f4ddc793: primary effect sources and original neutral factory tree confirm authored child ownership. Control fails before on both platforms and passes after; Windows30/Linux63 live/30 native plus both builds all exit zero. Actual original31593-frame Retrospective first full repair passes zero errors/mismatches; fixture saved/committed and local original bytes verified, passing chart closed. Pointer/parent/scene/ordinal/provenance/ownership guards, comparison fields and tolerances preserved.",
     "native_song_selector_observations": "771646c8d: primary metadata and authored-request invocation fix controls green on both platforms. Actual original Sputnik final repair now passes all40632 frames, zero errors/mismatches; original archive saved, committed, decompressed bytes verified, chart closed. Existing full acceptance preserved.",
     "native_next_screen_target": "e1d9c9995: primary Screen/ScreenGameplay resolve explicit next screen after native out completion. Latest-target production control red before Windows/Linux and green after; Windows62 live/31 native, Linux64 live/31 native and both executable builds zero exit. All36 source pins and immutable helper verified; Showtime final repair launched on original archive, no passing charts reopened.",
-    "native_whole_song_pack_sync": "3d314ba64: native whole-song note timing includes pack group offset before absolute hint. Extended control red before Windows/Linux and green after; Windows62/31/815/256, Linux64/31/815/257 and both builds zero exit. Cache69 optional note-only metadata and resolved boundary retained. All1175 sources match local normalized content; tested immutable checkout validated without editing active sources or local views. Save Tears first repair launched original capture, full acceptance unchanged."
+    "native_whole_song_pack_sync": "3d314ba64 controls green both platforms. Save Tears actual first full repair now passes67253 frames/zero errors/mismatches; original bytes verified and fixture closed. Existing acceptance unchanged.",
+    "native_music_fade_end": "b97bcedd8: primary SL/native music-fade end alignment, controlled EOF/rate/offset test red before both platforms then green. Windows62/32/815; Linux64/32/815 and both builds zero exit. All1175 source pins/immutable binary verified; Great Divide first repair starts unchanged original archive after Save pass, active sources/local views untouched."
   },
   "corpus_transfer": {
     "tar_sha256": "37febe98e2e47b325b9f9b96f4d29ddf32eedda84514191252d043c5fd4a4d1a",
@@ -143,9 +144,9 @@
       "pending": 60,
       "processed": 94,
       "last_log_lines": [
-        "[286.1s] replaying every native gameplay frame: frame 14080/104414 (13.5%)",
-        "[288.1s] replaying every native gameplay frame: frame 14172/104414 (13.6%)",
-        "[290.1s] replaying every native gameplay frame: frame 14259/104414 (13.7%)"
+        "[2388.8s] replaying every native gameplay frame: frame 100557/104414 (96.3%)",
+        "[2390.8s] replaying every native gameplay frame: frame 100638/104414 (96.4%)",
+        "[2392.8s] replaying every native gameplay frame: frame 100715/104414 (96.5%)"
       ],
       "supervisor_running": true
     },
@@ -1747,6 +1748,13 @@
         "record": "sweep-2026-10-14-save-tears-ssc-first-repair.json",
         "fix_commit": "3d314ba64cfadf2dbdb8ac761bbaf34890c84127",
         "finish_status": "first whole-song pack sync repair complete"
+      },
+      {
+        "name": "great-divide-sm-music-fade-first-repair",
+        "remote": "/home/parity/jobs/great-divide-sm-music-fade-first-repair-v1",
+        "record": "sweep-2026-10-14-great-divide-sm-first-repair.json",
+        "fix_commit": "b97bcedd8f8d8d88dac55531a7d287cb7bbccd69",
+        "finish_status": "first native music fade boundary repair complete"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -1786,26 +1794,37 @@
         "child_running": false
       },
       {
-        "job": "save-tears-ssc-whole-song-pack-sync-first-repair-v1",
+        "job": "great-divide-sm-music-fade-first-repair-v1",
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
         "pending": 0,
         "processed": 0,
         "last_phase": "replay",
-        "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.ssc",
+        "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.sm",
         "child_running": true
       },
       {
-        "job": "showtime-next-screen-final-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "job": "save-tears-ssc-whole-song-pack-sync-first-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
+        "processed": 1,
+        "last_phase": "pack",
+        "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.ssc",
+        "child_running": false
+      },
+      {
+        "job": "showtime-next-screen-final-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "replay",
         "source_simfile": "It's Showtime/mettaton.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "showtime-numeric-first-repair-v1",
@@ -1857,12 +1876,12 @@
         "complete": false,
         "supervisor_running": true,
         "passed": 3,
-        "pending": 1,
-        "processed": 4,
-        "last_phase": "replay",
-        "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.sm",
+        "pending": 2,
+        "processed": 5,
+        "last_phase": "capture",
+        "source_simfile": "See Tinh/See Tinh.ssc",
         "child_running": true,
-        "position": 383
+        "position": 391
       },
       {
         "job": "chart-sweep-parallel-v5-5",
@@ -2091,25 +2110,25 @@
         "job": "chart-sweep-parallel-v4-1",
         "complete": false,
         "supervisor_running": true,
-        "passed": 32,
+        "passed": 33,
         "pending": 33,
-        "processed": 65,
+        "processed": 66,
         "last_phase": "replay",
-        "source_simfile": "Ruin Our Friendship/RuinOurFriendship.sm",
+        "source_simfile": "Save Your Tears/SaveYourTears.ssc",
         "child_running": true,
-        "position": 379
+        "position": 388
       },
       {
         "job": "chart-sweep-parallel-v4-2",
         "complete": false,
         "supervisor_running": true,
-        "passed": 21,
+        "passed": 22,
         "pending": 29,
-        "processed": 50,
+        "processed": 51,
         "last_phase": "replay",
-        "source_simfile": "Rayc Fire 2 (SM5)/Rayc Fire 2.ssc",
+        "source_simfile": "saitama2000/Saitama2000.sm",
         "child_running": true,
-        "position": 369
+        "position": 381
       }
     ],
     "paradise_children_linux_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-paradise-children-linux-build.json",
@@ -2164,10 +2183,10 @@
     "attack_boundary_completed_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-attack-boundary-linux-build.json",
     "cringle_sm_attack_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-door-cringle-sm-attack-final-launch.json",
     "reason_red_zero_seed": "tests/fixtures/full_song_lua/sweep-2026-10-14-reason-red-zero-seed-diagnosis.json",
-    "selected_replay_binary_sha256": "151a68b24584a9730b6cdf893009fb4a59873684ac28bc89b79e85f1a8752e39",
+    "selected_replay_binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 105,
+    "publisher_stream_count": 106,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -2242,15 +2261,24 @@
     "raving_fire_sm_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-raving-with-fire-sm-fixture-verification.json",
     "splak_down_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-splak-down-ssc-fixture-verification.json",
     "reason_red_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-reason-red-ssc-fixture-verification.json",
-    "selected_tested_source_root": "/home/parity/workspace/whole-song-pack-sync-v1/deadsync",
-    "selected_source_pin_count": 1175
+    "selected_tested_source_root": "/home/parity/workspace/music-fade-end-v1/deadsync",
+    "selected_source_pin_count": 1175,
+    "music_fade_end_validation": "tests/fixtures/full_song_lua/sweep-2026-10-14-music-fade-end-validation.json",
+    "music_fade_end_selection": "tests/fixtures/full_song_lua/sweep-2026-10-14-music-fade-end-selection.json",
+    "great_divide_first_queue": "tests/fixtures/full_song_lua/sweep-2026-10-14-great-divide-sm-first-repair-queue.json",
+    "great_divide_end_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-great-divide-sm-end-diagnosis.json",
+    "koi_ssc_first_residual": "tests/fixtures/full_song_lua/sweep-2026-10-14-koi-ssc-first-residual.json",
+    "showtime_final_residual": "tests/fixtures/full_song_lua/sweep-2026-10-14-showtime-final-residual.json",
+    "ruin_sm_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-ruin-sm-fixture-verification.json",
+    "rayc_fire2_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-rayc-fire2-ssc-fixture-verification.json",
+    "save_tears_ssc_first_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-save-tears-ssc-first-fixture-verification.json"
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 159,
+    "new_passed_fixtures": 162,
     "new_pending_charts": 90,
-    "new_processed_sources": 249,
+    "new_processed_sources": 252,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 104,
+    "unprocessed_sources": 101,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -2672,11 +2700,20 @@
     },
     {
       "source_simfile": "It's Showtime/mettaton.ssc",
-      "repair_attempts": 1,
-      "failure": ".8s] replaying every native gameplay frame: frame 54268/145878 (37.2%)\n[2258.8s] replaying every native gameplay frame: frame 54311/145878 (37.2%)\n[2260.8s] replaying every native gameplay frame: frame 54352/145878 (37.3%)\n[2262.8s] replaying every native gameplay frame: frame 54396/145878 (37.3%)\n[2264.8s] replaying every native gameplay frame: frame 54439/145878 (37.3%)\n[2266.8s] replaying every native gameplay frame: frame 54483/145878 (37.3%)\n[2268.8s] replaying every native gameplay frame: frame 54527/145878 (37.4%)\n[2270.8s] replaying every native gameplay frame: frame 54569/145878 (37.4%)\n[2272.8s] replaying every native gameplay frame: frame 54611/145878 (37.4%)\n[2274.9s] replaying every native gameplay frame: frame 54656/145878 (37.5%)\n[2276.9s] replaying every native gameplay frame: frame 54699/145878 (37.5%)\n[2278.9s] replaying every native gameplay frame: frame 54742/145878 (37.5%)\n[2280.9s] replaying every native gameplay frame: frame 54786/145878 (37.6%)\n[2282.9s] replaying every native gameplay frame: frame 54829/145878 (37.6%)\n[2284.9s] replaying every native gameplay frame: frame 54873/145878 (37.6%)\n[2286.9s] replaying every native gameplay frame: frame 54918/145878 (37.6%)\n[2288.9s] replaying every native gameplay frame: frame 54962/145878 (37.7%)\n[2290.9s] replaying every native gameplay frame: frame 55004/145878 (37.7%)\n[2292.9s] replaying every native gameplay frame: frame 55047/145878 (37.7%)\n[2294.9s] replaying every native gameplay frame: frame 55091/145878 (37.8%)\n[2296.9s] replaying every native gameplay frame: frame 55136/145878 (37.8%)\n[2298.9s] replaying every native gameplay frame: frame 55179/145878 (37.8%)\n[2300.9s] replaying every native gameplay frame: frame 55223/145878 (37.9%)\n[2302.9s] replaying every native gameplay frame: frame 55268/145878 (37.9%)\n[2304.9s] replaying every native gameplay frame: frame 55313/145878 (37.9%)\n[2306.9s] replaying every native gameplay frame: frame 55355/145878 (37.9%)\n[2308.9s] replaying every native gameplay frame: frame 55401/145878 (38.0%)\n[2310.9s] replaying every native gameplay frame: frame 55445/145878 (38.0%)\n[2312.9s] replaying every native gameplay frame: frame 55488/145878 (38.0%)\n[2314.9s] replaying every native gameplay frame: frame 55533/145878 (38.1%)\n[2316.9s] replaying every native gameplay frame: frame 55579/145878 (38.1%)\n[2318.9s] replaying every native gameplay frame: frame 55622/145878 (38.1%)\n[2320.9s] replaying every native gameplay frame: frame 55668/145878 (38.2%)\n[2322.9s] replaying every native gameplay frame: frame 55715/145878 (38.2%)\n[2324.9s] replaying every native gameplay frame: frame 55762/145878 (38.2%)\n[2326.9s] replaying every native gameplay frame: frame 55808/145878 (38.3%)\n[2328.9s] replaying every native gameplay frame: frame 55853/145878 (38.3%)\n[2330.9s] replaying every native gameplay frame: frame 55900/145878 (38.3%)\n[2332.9s] replaying every native gameplay frame: frame 55944/145878 (38.3%)\n[2334.9s] replaying every native gameplay frame: frame 55990/145878 (38.4%)\n[2336.9s] replaying every native gameplay frame: frame 56035/145878 (38.4%)\n[2338.9s] replaying every native gameplay frame: frame 56078/145878 (38.4%)\n[2340.9s] replaying every native gameplay frame: frame 56125/145878 (38.5%)\n[2342.9s] replaying every native gameplay frame: frame 56171/145878 (38.5%)\n[2344.9s] replaying every native gameplay frame: frame 56219/145878 (38.5%)\n[2346.9s] replaying every native gameplay frame: frame 56263/145878 (38.6%)\n[2348.9s] replaying every native gameplay frame: frame 56305/145878 (38.6%)\n[2350.9s] replaying every native gameplay frame: frame 56348/145878 (38.6%)\n\nthread 'main' (3078528) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native scene 2 differs from independent scene 1 at frame 56383\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[2352.9s] replaying every native gameplay frame: frame 56382/145878 (38.7%)\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
+      "repair_attempts": 2,
+      "failure": null,
+      "errors": [
+        "OnCommand failed for Quad: runtime error: native actor method hidden has no semantic implementation\nstack traceback:\n\t[C]: in function 'Actor.hidden'\n\t[string \"/tmp/.tmpQd1p5d/song/cooking_with_a_killer_...\"]:331: in function <[string \"/tmp/.tmpQd1p5d/song/cooking_with_a_killer_...\"]:326>\n",
+        "OnCommand failed for ActorFrame 'cooking_with_a_killer_robot': runtime error: native actor method hidden has no semantic implementation\nstack traceback:\n\t[C]: in function 'Actor.hidden'\n\t[string \"/tmp/.tmpQd1p5d/song/cooking_with_a_killer_...\"]:11: in function <[string \"/tmp/.tmpQd1p5d/song/cooking_with_a_killer_...\"]:8>\n"
+      ],
+      "mismatch_count": 14855,
+      "first_mismatch": [
+        {
+          "field": "screen_end_navigation_clock",
+          "native": 113.77668762207031,
+          "deadsync": 113.76746368408203
+        }
+      ]
     },
     {
       "source_simfile": "Jumper/Jumper.ssc",
@@ -3948,7 +3985,7 @@
       "first_mismatch": []
     },
     {
-      "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.ssc",
+      "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.sm",
       "repair_attempts": 0,
       "failure": null,
       "errors": [],
@@ -3956,8 +3993,8 @@
       "first_mismatch": [
         {
           "field": "command_query_count",
-          "native": 228637,
-          "deadsync": 228621
+          "native": 279895,
+          "deadsync": 279883
         }
       ]
     },

@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T18:35:42Z",
+  "updated_utc": "2026-10-14T19:10:44Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 306,
+    "passed": 309,
     "pending": 91,
-    "unprocessed": 104
+    "unprocessed": 101
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2174,8 +2174,8 @@
       "source_simfile": "It's Showtime/mettaton.ssc",
       "simfile_sha256": "73e611898e40fd3b7a07a6257a3b38e4a6a07cf8f39b0f3e4bd8e7cebbbde128",
       "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-14-showtime-numeric-first-repair.json"
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-14-showtime-final-repair.json"
     },
     {
       "position": 252,
@@ -3117,7 +3117,9 @@
       "position": 369,
       "source_simfile": "Rayc Fire 2 (SM5)/Rayc Fire 2.ssc",
       "simfile_sha256": "3d8c9f881802a7b324735dbe784bb0ea4a4090eda4750dfba9c2ba3dbbdb8ace",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 370,
@@ -3193,7 +3195,9 @@
       "position": 379,
       "source_simfile": "Ruin Our Friendship/RuinOurFriendship.sm",
       "simfile_sha256": "5b07ecdb5659eb3877dc1fcd3046df38777e831e5f44ecdd24b53784ad577633",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 380,
@@ -3221,15 +3225,17 @@
       "position": 383,
       "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.sm",
       "simfile_sha256": "6141d6d76f0e80ec9ece060bac5bdee2d7edf282ec675ce795b44224dfa54dfa",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-4.json"
     },
     {
       "position": 384,
       "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.ssc",
       "simfile_sha256": "8b57aae087794bf0c7f0bb19c297c69c58f2d0d6bac97c4cfde344875e29c3c1",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-save-tears-ssc-first-repair.json"
     },
     {
       "position": 385,
