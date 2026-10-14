@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T23:39:38Z",
-  "previous_goal_turn": "Progress: Jack the Reaper first retained-capture listener repair passes all40,101 frames, zero errors/mismatches, saved and local decompressed bytes verified, chart closed after one repair. My Exes SM first repair now live. Tear Jerker SSC original replay passes all36,060 frames and Ultra B.B.K.K.B.K.K original replay passes all62,094 frames, zero mismatches/errors; both fixtures immediately saved, committed and local decompressed bytes verified, charts closed. Actual U.N. Owen native callback gap fixed in harness ca0b435: late-added command fields are observed through DefMetatable newindex while preserving authored raw insertion and existing setter behavior. Native Lua registration control baseline fails, fixed observes each callback once and preserves sparse slots/order. Both hosts pass12 runtime controls; isolated harness2f2ef99f build, all2,223 source pins and log/binary hashes verified. Complete native baseline/fixed captures prove old zero late On boundaries versus fixed exactly one begin/end with identical actor calls999/17. Control driver optional errors-array KeyError corrected by reusing complete baseline capture; no chart attempt spent on controls. U.N. Owen first full repair is now replaying a corrected native capture on frozen sparse helper375fb5fa, original full capture retained, at most one later repair. STEVE SSC first retained-input repair completes77,402 frames, no errors,179,679 command/query mismatches, stage fields match; remaining native theme child topology differences recorded, final repair held. STEVE SM first repair continues. Shakunetsu first repair completes14,728 frames, one char_ayaze nil error and19,749 mismatches; actual prior background compilation failed because owned cmd parser requires semicolons whereas primary native lparser accepts next command Name after argument expressions. Exact sleep,0 newline pulse fragment succeeds in actual native Lua control. Final repair2 must wait for expression-boundary parsing and controls, original complete capture reused. Pokemon first repair, Talk About first capture repair, queued Entity first, Jack/My Exes first listener chain, Wake first, Koi final2, Mawaru8 first and original queues continue. Global original sweep helper711a5230 and old harness058ed059 remain immutable; new observer stays private to validated paired captures. All501 original simfile bytes unchanged; missing coverage separate, existing comparisons unchanged, oversized fixtures ignored/local, sweep active and incomplete.",
+  "updated_utc": "2026-10-14T23:56:49Z",
+  "previous_goal_turn": "Progress: Talk About first storage-recovery repair passes all41,146 frames, Watching original replay passes all40,042 frames, and Pokemon first corrected-observer repair passes all42,446 frames. All three have zero mismatches/errors, saved/committed fixtures and local decompressed SHA verification; charts closed, no second Pokemon repair. Entity first replay follows Talk About in the recovered storage slot. Actual Shakunetsu background syntax error reproduced by one-test Windows and Linux regressions, both fail near pulse; primary native Lua matrix accepts13 adjacent commands with arithmetic, strings, nested functions/tables and call results. Fix5e44aa8e7 parses complete Lua argument-expression boundaries before next command Name rather than splitting on newlines or requiring semicolons; all consumed source lines retained. Initial10 parser tests green; final source passes all Windows target1/parser10/live69/replay33/identity1/both builds, all1,175 normalized pins and six log hashes verified. Isolated Linux expected-red proof valid, fixed target1/parser10/live69 pass and remaining checks running. New helper includes committed nonfatal progress reporter fix814d6cf84. Diagnostic waiter1407065 verifies both complete six-check proofs and all1,175 raw/crossplatform pins before reusing exact Shakunetsu capture through second12; final full repair2 remains held until actual diagnostic review, no third allowed. First result still19749 mismatches with char_ayaze nil caused by missing background compile; no native data or expected events injected. U.N. Owen first late-command repair, My Exes SM first, STEVE SM first, Wake first, Koi final2, Mawaru8 first and original queues continue. Global original-sweep helper711a5230 remains unchanged; parser helper private. All501 original simfile bytes unchanged, missing coverage separate, oversized fixtures ignored/local, sweep active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "a738ec0d16bc38479e7cb08020562aa2bdce59e4",
+      "deadsync": "82ac8b88e833e773c0181191d13b121d0249db8a",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -151,9 +151,9 @@
       "pending": 64,
       "processed": 102,
       "last_log_lines": [
-        "[1626.6s] replaying every native gameplay frame: frame 31432/107886 (29.1%)",
-        "[1628.6s] replaying every native gameplay frame: frame 31470/107886 (29.2%)",
-        "[1630.6s] replaying every native gameplay frame: frame 31507/107886 (29.2%)"
+        "[2657.0s] replaying every native gameplay frame: frame 49944/107886 (46.3%)",
+        "[2659.0s] replaying every native gameplay frame: frame 49975/107886 (46.3%)",
+        "[2661.0s] replaying every native gameplay frame: frame 50008/107886 (46.4%)"
       ],
       "supervisor_running": true
     },
@@ -1917,9 +1917,9 @@
         "pending": 64,
         "processed": 102,
         "last_log_lines": [
-          "[1626.6s] replaying every native gameplay frame: frame 31432/107886 (29.1%)",
-          "[1628.6s] replaying every native gameplay frame: frame 31470/107886 (29.2%)",
-          "[1630.6s] replaying every native gameplay frame: frame 31507/107886 (29.2%)"
+          "[2657.0s] replaying every native gameplay frame: frame 49944/107886 (46.3%)",
+          "[2659.0s] replaying every native gameplay frame: frame 49975/107886 (46.3%)",
+          "[2661.0s] replaying every native gameplay frame: frame 50008/107886 (46.4%)"
         ],
         "supervisor_running": true
       },
@@ -1940,13 +1940,13 @@
           "job": "storage-capture-first-repairs-v1",
           "complete": false,
           "supervisor_running": true,
-          "passed": 0,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
+          "processed": 1,
           "last_phase": "replay",
-          "source_simfile": "Talk About/talkabout.sm",
+          "source_simfile": "The Entity/The Entity.ssc",
           "child_running": true,
-          "position": 424
+          "position": 432
         },
         {
           "job": "jack-reaper-listener-first-repair-v1",
@@ -1972,14 +1972,14 @@
         },
         {
           "job": "pokemon-sparse-declaration-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "Pokemon Gym Battle Remix/pokes.ssc",
-          "child_running": true,
+          "child_running": false,
           "position": 498
         },
         {
@@ -3125,13 +3125,13 @@
           "job": "chart-sweep-parallel-v4-1",
           "complete": false,
           "supervisor_running": true,
-          "passed": 38,
-          "pending": 38,
-          "processed": 76,
-          "last_phase": "replay",
-          "source_simfile": "Watching/watching-fakemines.ssc",
+          "passed": 39,
+          "pending": 39,
+          "processed": 78,
+          "last_phase": "capture",
+          "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
           "child_running": true,
-          "position": 468
+          "position": 484
         },
         {
           "job": "chart-sweep-parallel-v4-2",
@@ -3418,7 +3418,9 @@
       "pokemon_full_repairs_spent": 1,
       "pokemon_held_for_actual_entry_mismatches": false,
       "followup": "tests/fixtures/full_song_lua/sweep-2026-10-15-pokemon-callback-order-followup.json",
-      "pokemon_first_corrected_observer_repair_running": true
+      "pokemon_first_corrected_observer_repair_running": false,
+      "pokemon_status": "passed",
+      "pokemon_passing_chart_closed": true
     },
     "scoped_loader_multi_return": {
       "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
@@ -3467,9 +3469,9 @@
       "pokemon_first_queue": "tests/fixtures/full_song_lua/sweep-2026-10-15-pokemon-sparse-first-repair-queue.json",
       "queue_observation": {
         "pokemon-sparse-declaration-first-repair-queue-v1.json": {
-          "status": "starting_first_repair",
-          "full_repairs_previously_spent": 0,
-          "one_later_full_repair_maximum": true
+          "status": "first_repair_driver_finished",
+          "driver_exit": 0,
+          "repair_limit": 2
         },
         "additional-listener-first-repairs-queue-v1.json": {
           "status": "starting_first_listener_repair",
@@ -3490,7 +3492,10 @@
       "helper_sha256": "375fb5facffc717409b9b22e354eb2bddfd03358b9d9126ec5d00ceb3318b195",
       "pokemon_first_full_repair_started": true,
       "pokemon_full_repairs_spent": 1,
-      "one_later_full_repair_maximum": true
+      "pokemon_status": "passed",
+      "pokemon_passing_chart_closed": true,
+      "pokemon_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-pokemon-fixture-verification.json",
+      "pokemon_further_replay_allowed": false
     },
     "fresh_prince_sm_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-15-fresh-prince-fixture-verification.json",
     "spooky_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-15-spooky-ssc-fixture-verification.json",
@@ -3511,7 +3516,11 @@
       "talk_about_first_capture_started": true,
       "the_entity_first_capture_queued": true,
       "one_later_full_repair_maximum_each": true,
-      "complete_native_capture_available_before_repair": false
+      "complete_native_capture_available_before_repair": false,
+      "talk_about_status": "passed",
+      "talk_about_passing_chart_closed": true,
+      "talk_about_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-talk-about-sm-fixture-verification.json",
+      "the_entity_first_replay_running": true
     },
     "un_owen_late_command_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-un-owen-late-command-observer-diagnosis.json",
     "late_added_command_observer": {
@@ -3538,14 +3547,30 @@
       "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-jack-reaper-fixture-verification.json",
       "native_capture_reused": true,
       "further_replay_allowed": false
-    }
+    },
+    "native_cmd_parser": {
+      "fix_commit": "5e44aa8e7",
+      "all_windows_six_checks_passed": true,
+      "linux_expected_red_verified": true,
+      "linux_green_complete": false,
+      "windows_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-native-cmd-windows-validation.json",
+      "linux_red_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-native-cmd-linux-red-validation.json",
+      "native_control": "tests/fixtures/full_song_lua/sweep-2026-10-15-native-cmd-argument-matrix.json",
+      "diagnostic_queue": "tests/fixtures/full_song_lua/sweep-2026-10-15-shakunetsu-cmd-diagnostic-queue.json",
+      "linux_green_waiter_pid": 1396316,
+      "diagnostic_waiter_pid": 1407065,
+      "shakunetsu_full_repairs_spent": 1,
+      "shakunetsu_final_full_repair_not_started": true,
+      "helper_private_to_diagnosed_repair": true
+    },
+    "watching_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-watching-fixture-verification.json"
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 199,
-    "new_pending_charts": 111,
-    "new_processed_sources": 310,
+    "new_passed_fixtures": 202,
+    "new_pending_charts": 110,
+    "new_processed_sources": 312,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 43,
+    "unprocessed_sources": 41,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -5391,14 +5416,6 @@
       ]
     },
     {
-      "source_simfile": "Talk About/talkabout.sm",
-      "repair_attempts": 0,
-      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania wrote invalid runtime JSON to /tmp/itgmania-harness-rs/song-lua-861840-1792016033629593579-0/Save/itgmania-harness/song-lua-trace.json: EOF while parsing a value at line 1 column 116531200; retained run directory /tmp/itgmania-harness-rs/song-lua-861840-1792016033629593579-0\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
-    },
-    {
       "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
       "repair_attempts": 0,
       "failure": null,
@@ -5803,6 +5820,14 @@
       "first_mismatch": []
     },
     {
+      "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
+      "repair_attempts": 0,
+      "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Wobbpotato': error converting Lua nil to function; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Wobbpotato' from '/tmp/.tmpbZSdUN/song/lua/default.lua': error converting Lua nil to function\n\nthread 'main' (1384391) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
       "source_simfile": "Young Dumb And Broke/YDB.ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-744563-1792014784884695162-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-744563-1792014784884695162-0\n",
@@ -5889,14 +5914,6 @@
       "source_simfile": "mr sandman/mr sandman.sm",
       "repair_attempts": 0,
       "failure": "y frame: frame 0/5040 (0.0%)\n[140.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[142.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[144.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[146.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[148.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[150.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[152.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[154.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[156.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[158.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[160.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[162.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[164.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[166.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[168.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[170.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[172.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[174.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[176.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[178.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[180.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[182.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[184.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[186.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[188.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[190.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[192.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[194.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Mr. Sandman': failed to execute '/tmp/.tmpwS40jd/song/sand/Default.lua': out of Lua stack, too many arguments to a Lua function or too many return values from a callback\nstack traceback:\n\t[C]: in function 'Def.Quad'\n\t[string \"/tmp/.tmpwS40jd/song/sand/default.lua\"]:147: in main chunk\n\t>[C]: in ?\n; retrying layers independently\n[196.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[198.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[200.0s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[202.1s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[204.1s] replaying every native gameplay frame: frame 0/5040 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Mr. Sandman' from '/tmp/.tmpwS40jd/song/sand/Default.lua': failed to execute '/tmp/.tmpwS40jd/song/sand/Default.lua': out of Lua stack, too many arguments to a Lua function or too many return values from a callback\nstack traceback:\n\t[C]: in function 'Def.Quad'\n\t[string \"/tmp/.tmpwS40jd/song/sand/default.lua\"]:147: in main chunk\n\t>[C]: in ?\n\n\nthread 'main' (918560) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[206.1s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n[208.1s] replaying every native gameplay frame: frame 0/5040 (0.0%)\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
-    },
-    {
-      "source_simfile": "Pokemon Gym Battle Remix/pokes.ssc",
-      "repair_attempts": 0,
-      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[9.9s] replaying every native gameplay frame\n[10.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n\nthread 'main' (577333) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[12.0s] replaying every native gameplay frame: frame 0/46563 (0.0%)\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []

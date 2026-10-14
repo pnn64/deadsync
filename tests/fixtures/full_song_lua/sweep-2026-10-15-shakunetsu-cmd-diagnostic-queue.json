@@ -1,0 +1,18 @@
+{
+  "pid": 1407065,
+  "command": [
+    "python3",
+    "/home/parity/jobs/wait_native_cmd_validation_then_diagnostic_v1.py"
+  ],
+  "scope": "through-second 12 diagnostic only",
+  "full_repairs_spent": 1,
+  "final_full_repair_not_started": true,
+  "parser_fix_commit": "5e44aa8e7",
+  "windows_validation": "sweep-2026-10-15-native-cmd-windows-validation.json",
+  "native_matrix": "sweep-2026-10-15-native-cmd-argument-matrix.json",
+  "linux_red_validation": "sweep-2026-10-15-native-cmd-linux-red-validation.json",
+  "linux_green_waiter_pid": 1396316,
+  "windows_proof_uploader_pid": 12868,
+  "full_native_capture_reused": true,
+  "all_final_attempts_held_until_diagnostic_review": true
+}

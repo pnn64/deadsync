@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T23:39:38Z",
+  "updated_utc": "2026-10-14T23:56:49Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 346,
-    "pending": 112,
-    "unprocessed": 43
+    "passed": 349,
+    "pending": 111,
+    "unprocessed": 41
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3551,9 +3551,9 @@
       "position": 424,
       "source_simfile": "Talk About/talkabout.sm",
       "simfile_sha256": "3f1bd2e358d9712250fa99601b6101386464a5ea59a62c754aa7286fa27bb1b4",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-storage-capture-first-repairs.json"
     },
     {
       "position": 425,
@@ -3875,7 +3875,9 @@
       "position": 468,
       "source_simfile": "Watching/watching-fakemines.ssc",
       "simfile_sha256": "e42c012f9336930e77c2e70f8625975e43ab2b8f3241279f1be69f345e50691c",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 469,
@@ -3927,7 +3929,9 @@
       "position": 476,
       "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
       "simfile_sha256": "b401ffe8880d652b2da8c5347cbf8db01be52038899e6c19b80ab748e93ae5aa",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 477,
@@ -4069,9 +4073,9 @@
       "position": 498,
       "source_simfile": "Pokemon Gym Battle Remix/pokes.ssc",
       "simfile_sha256": "04a6fbf5926825207a7a520403db97e5bdb24d456bdc54775ca157a7ef9be4c6",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-pokemon-sparse-declaration-first-repair.json"
     },
     {
       "position": 499,
