@@ -5286,15 +5286,12 @@
     {
       "title": "U.N. Owen Was Who?",
       "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.ssc",
-      "harness_version": "0.1.0",
-      "archive": "9aacd48f51ab522240c344c4f774c79af43480cc6f7ef68df0c7fdd65b6b8fd7.tar.zst",
-      "sha256": "9aacd48f51ab522240c344c4f774c79af43480cc6f7ef68df0c7fdd65b6b8fd7",
-      "compressed_bytes": 177037,
-      "uncompressed_sha256": "dcd3ad98fcaa929fbd7bd9b3e62ef0bbbd1025c2abae5584757c870c55f6ed33",
-      "compression_level": 22,
-      "aliases": [
-        "7314b46e6319d9fd59e8e65db3330948b51a112affa7d5c40fad404a3c86be50.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "a33ae65163b0e5c6bc4f784c70d2cdd6b692db99b4bd751480d9b01cf43af83d.tar.zst",
+      "sha256": "a33ae65163b0e5c6bc4f784c70d2cdd6b692db99b4bd751480d9b01cf43af83d",
+      "compressed_bytes": 4548055,
+      "uncompressed_sha256": "3ccaa5d1cce22480fcb2d603de500ebf082ad5d5f68933564f67030a7f26d23d",
+      "aliases": []
     },
     {
       "title": "Ultimate taste",
