@@ -1,0 +1,62 @@
+{
+  "source_simfile": "MISSION SPUTNIK/sputnik.ssc",
+  "repair_attempts": 1,
+  "repair_attempts_remaining": 1,
+  "native_frames": 40632,
+  "replayed_frames": 40632,
+  "errors": [],
+  "mismatch_count": 13,
+  "original_candidate_sha256": "e6a8401d7558a4e1b8139353c399ba09081d9bcabbcc083e0272a204bb9cd814",
+  "original_trace_sha256": "820041d226b5f71edaeb97fd96980d9cb205c57dd897d8c5ea59f483a31bf1ce",
+  "query_counts": {
+    "native": 16,
+    "actual": 36
+  },
+  "extra_getter_observations": {
+    "Steps.GetStepsType": 10,
+    "Steps.GetDifficulty": 10
+  },
+  "cause_from_source": "create_song_table selector loop calls the Lua GetStepsType/GetDifficulty methods on five Steps objects for each of two GetOneSteps calls. Native SongUtil filtering reads C++ metadata and creates no internal Lua method observations. These20 extra authored-context getter events cause query-count/order mismatches.",
+  "source_requests": {
+    "native": [
+      {
+        "seconds": 0.013673469424247742,
+        "operation": "SetNewScreen",
+        "args": [
+          "ScreenGameplay"
+        ]
+      },
+      {
+        "seconds": 0.013673469424247742,
+        "operation": "SetNewScreen",
+        "args": [
+          "ScreenGameplay"
+        ]
+      }
+    ],
+    "actual": [
+      {
+        "seconds": 0.013673469424247742,
+        "operation": "SetNewScreen",
+        "args": [
+          "ScreenGameplay"
+        ]
+      }
+    ]
+  },
+  "request_count_cause_from_source": "SetNewScreen logs each source call and overwrites SongLuaScreenRequest with the last pending target, as the native screen manager coalesces loads. Replay currently counts output.request once per frame rather than each authored call, so two same-frame calls are represented as one.",
+  "next_action": "Use native metadata for selector internals without public Lua getter callbacks; retain authored request-call observations separately from the coalesced production screen effect. Validate before the second/final full repair.",
+  "comparison_fields_and_tolerances_unchanged": true,
+  "native_results_not_fed_to_simulation": true,
+  "passing_charts_reopened": false,
+  "primary_source_sha256": {
+    "src/ScreenManager.cpp": "6c4edf63e2536ec63caa32cef582bbd41678423f87a9f4f45ab4ccd3a6e16e1e",
+    "src/SongUtil.cpp": "24c7f4110fffbe66eaa47f966d07b550791d90293f6bd102faad3ad50f98cc39",
+    "src/Song.cpp": "2fa0405d315ae467c49e138819552c4785f0e7f44b0211f39c2aa5422723d592"
+  },
+  "primary_source_lines": [
+    "ScreenManager.cpp:658-661: SetNewScreen overwrites one delayed target",
+    "Song.cpp:2237-2249: native GetOneSteps dispatches directly to SongUtil",
+    "SongUtil.cpp:225+: native Steps metadata filtering"
+  ]
+}
