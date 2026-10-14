@@ -1,0 +1,16 @@
+{
+  "position": 177,
+  "source_simfile": "Doubles-45-HALF-[MASTER] Tacos/Tacos.ssc",
+  "attempt_started": 1,
+  "repairs_remaining_after_this_attempt": 1,
+  "source_fix_commit": "e56f30a19e218e261ebbd1ad245ca2a49520f61b",
+  "launch": {
+    "supervisor_pid": 1294509,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_tacos_double_repair_v1.py"
+    ]
+  },
+  "native_capture_reused": true,
+  "build_evidence": "sweep-2026-10-14-double-cue-rows-build.json"
+}

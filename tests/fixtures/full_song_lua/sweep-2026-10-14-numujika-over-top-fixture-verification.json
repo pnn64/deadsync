@@ -1,0 +1,38 @@
+{
+  "verification": "Storage bytes only; accepted full replays remain closed.",
+  "passing_charts_reopened": false,
+  "acceptance_gate_added": false,
+  "results": [
+    {
+      "source_simfile": "Numujika ac.10/Numujika ac.10.sm",
+      "native_frames": 64275,
+      "replayed_frames": 64275,
+      "compared_stage_fields": 1507,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "be146bff0ca90ebfaaeb710d830667ca06e743e970678978b50dc3c72ea11ce7.tar.zst",
+      "compressed_sha256": "be146bff0ca90ebfaaeb710d830667ca06e743e970678978b50dc3c72ea11ce7",
+      "uncompressed_sha256": "3530fde92e7e3198e9ad503be0aa8b121b46856f166ef098aedd1b4a9892d981",
+      "local_decompression_byte_verified": true,
+      "pending_coverage": [
+        "uncompared song operations: Actor.xy, Actor.zoomy, GameState.Env, Song.MusicLengthSeconds, SongOptions.Haste",
+        "native drawable state/resources: Quad, Sound, Sprite"
+      ]
+    },
+    {
+      "source_simfile": "Over the Top - [Zaia][FX]/Over the Top.sm",
+      "native_frames": 170465,
+      "replayed_frames": 170465,
+      "compared_stage_fields": 2937,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "a7c136848c444b147dc9fc984ea6c7db228b7dc6c74290ec6bb2f1acb1c12a56.tar.zst",
+      "compressed_sha256": "a7c136848c444b147dc9fc984ea6c7db228b7dc6c74290ec6bb2f1acb1c12a56",
+      "uncompressed_sha256": "3b9d2b4ed50bbaf623976e544a42d493b8e02e0820af8e74b1625fbdf8c674e4",
+      "local_decompression_byte_verified": true,
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ]
+    }
+  ]
+}
