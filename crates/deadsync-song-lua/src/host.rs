@@ -46,6 +46,24 @@ pub struct SongLuaHostState {
 
 pub(crate) struct SongLuaScreenRequest(pub String);
 
+fn initialize_gameplay_steps(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<()> {
+    let Some(human) = context.players.iter().position(|player| player.enabled) else {
+        return Ok(());
+    };
+    let state = lua.app_data_ref::<SongLuaGameStateGlobals>()
+        .ok_or_else(|| mlua::Error::runtime("missing gameplay selection state"))?;
+    let steps = state.current_steps.raw_get::<Option<Table>>(human + 1)?;
+    // ScreenGameplay::Init seeds every nonhuman potential CPU player before
+    // screen actors are loaded. Preserve the owned Steps pointer directly;
+    // Lua SetCurrentSteps has a different, enabled-player-only policy.
+    for (other, player) in context.players.iter().enumerate() {
+        if !player.enabled {
+            state.current_steps.raw_set(other + 1, steps.clone())?;
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn selected_scene_context(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -83,10 +101,12 @@ pub(crate) fn replace_gameplay_screen(
     // Native screen deletion unsubscribes its actors even when Lua kept a
     // reference. A fresh scene must not receive its predecessor's messages.
     lua.globals().set("__songlua_actor_registry", lua.create_table()?)?;
-    let top = create_top_screen_table(lua, context, state.current_sort_order,
+    initialize_gameplay_steps(lua, context)?;
+    let context = selected_scene_context(lua, context)?;
+    let top = create_top_screen_table(lua, &context, state.current_sort_order,
         state.current_song, create_dummy_actor, create_named_child_actor)?;
     install_screen_manager_globals(lua, top.top_screen, top.players)?;
-    crate::tables::reset_stage_stats(lua, context)?;
+    crate::tables::reset_stage_stats(lua, &context)?;
     // LoadNextSong calls ResetMusicStatistics before loading authored actors.
     // End callbacks still observe the outgoing clock; constructors start at 0.
     crate::set_compile_song_runtime_values(lua, 0.0, 0.0)?;
@@ -149,6 +169,9 @@ fn install_compile_globals(
     let current_sort_order = game_state_globals.current_sort_order.clone();
     let current_song = game_state_globals.current_song.clone();
     lua.set_app_data(game_state_globals);
+    initialize_gameplay_steps(lua, context)?;
+    let selected_context = selected_scene_context(lua, context)?;
+    let context = &selected_context;
 
     // Native gameplay loads the theme's player actors after SL's profile
     // modifiers are initialized, including the hold-judgment graphic.

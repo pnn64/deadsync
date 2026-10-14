@@ -1420,6 +1420,67 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 #[cfg(test)]
 mod tests {
     #[test]
+    fn live_gameplay_reload_copies_human_steps_to_disabled_player() {
+        let mut compiled = compile_with_context("reload-cpu-steps", r#"
+SCENES = (SCENES or 0) + 1
+local scene = SCENES
+local p1 = GAMESTATE:GetCurrentSteps(PLAYER_1)
+local p2 = GAMESTATE:GetCurrentSteps(PLAYER_2)
+assert(GAMESTATE:IsPlayerEnabled(PLAYER_1) and not GAMESTATE:IsPlayerEnabled(PLAYER_2))
+if scene == 1 then
+    OLD_CPU_STEPS = p2
+else
+    assert(p1 == CHOSEN_STEPS and p2 == CHOSEN_STEPS,
+        'native gameplay Init copies human Steps to the nonhuman player')
+    assert(p2:GetDifficulty() == 'Difficulty_Edit')
+end
+return Def.Actor {
+    OnCommand = function(self)
+        if scene == 1 then
+            CHOSEN_STEPS = GAMESTATE:GetCurrentSong():GetAllSteps()[2]
+            GAMESTATE:SetCurrentSteps(PLAYER_1, CHOSEN_STEPS)
+            assert(GAMESTATE:GetCurrentSteps(PLAYER_2) == OLD_CPU_STEPS,
+                'SetCurrentSteps only forces enabled other players')
+            SCREENMAN:SetNewScreen('ScreenGameplay')
+        end
+    end,
+    EndCommand = function(self)
+        if scene == 1 then
+            END_SAW_OLD_CPU = GAMESTATE:GetCurrentSteps(PLAYER_2) == OLD_CPU_STEPS
+        end
+    end,
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.layer_start_beats = vec![0.0];
+            context.players[0].enabled = true;
+            context.players[1].enabled = false;
+            context.song_steps = [SongLuaDifficulty::Challenge, SongLuaDifficulty::Edit]
+                .into_iter().map(|difficulty| crate::SongLuaStep {
+                    steps_type: "StepsType_Dance_Single".into(), difficulty,
+                    description: format!("{difficulty:?}"), chart_name: String::new(),
+                    credit: String::new(), meter: 9, music_file: String::new(), possible_grade_points: 0,
+                }).collect();
+            context.player_step_indices = [Some(0), Some(0)];
+        });
+        let mut scene = compiled.live_scene.take().expect("first owned gameplay scene");
+        let output = scene.advance(SongLuaLiveFrame::default()).expect("first On selects Edit");
+        assert_eq!(output.request, Some(SongLuaLiveRequest::NewScreen("ScreenGameplay".into())));
+        let mut layers = crate::reload_song_lua_with_default_host(scene,
+            |_, _, _| Ok(Arc::<[()]>::from([])),
+            |_| None::<crate::SongLuaOverlayModelLayer<()>>, |_, _| None)
+            .expect("native gameplay Init copies human Steps to the nonhuman player");
+        let mut scene = layers[0].live_scene.take().expect("replacement gameplay scene");
+        assert_eq!(scene.lua.globals().get::<u32>("SCENES").unwrap(), 2);
+        assert!(scene.lua.globals().get::<bool>("END_SAW_OLD_CPU").unwrap(),
+            "outgoing End runs before the new gameplay initialization");
+        assert_eq!(scene.selected_context().unwrap().player_step_indices, [Some(1), Some(1)]);
+        let output = scene.advance(SongLuaLiveFrame::default()).expect("replacement On");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(output.request, None, "Edit construction does not replay the introduction");
+    }
+
+    #[test]
     fn live_get_all_steps_returns_native_array_without_internal_getter_calls() {
         let compiled = compile_with_context("all-steps-native-array", "return Def.Actor{}", |context| {
             context.song_steps = [SongLuaDifficulty::Challenge, SongLuaDifficulty::Edit]

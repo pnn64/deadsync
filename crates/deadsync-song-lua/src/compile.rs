@@ -295,7 +295,8 @@ where
     lua.set_app_data(crate::song_tables::SongLuaSpeedWrites::default());
     #[cfg(feature = "test-support")]
     lua.set_app_data(crate::host::SongLuaStateCalls::default());
-    let mut scene_context = context.clone();
+    let mut scene_context = crate::host::selected_scene_context(&lua, context)
+        .map_err(|err| err.to_string())?;
     let mut reloads = 0u32;
     let mut prior_broadcasts = Vec::new();
     let (root, screen_layer_states, mut captured_startup, initialized_global_actions,
@@ -468,6 +469,8 @@ where
         }
         crate::host::replace_gameplay_screen(&lua, &scene_context,
             create_dummy_actor, create_named_child_actor).map_err(|err| err.to_string())?;
+        scene_context = crate::host::selected_scene_context(&lua, &scene_context)
+            .map_err(|err| err.to_string())?;
         crate::live::install_query_trace(&lua).map_err(|err| err.to_string())?;
         reloads += 1;
     };
