@@ -10,6 +10,39 @@ pub(crate) const TAP_SCORES: [&str; 11] = [
 
 pub(crate) struct LiveMode(pub u64);
 
+#[derive(Default)]
+struct LiveChartAttacks {
+    windows: std::sync::Arc<[deadsync_gameplay::ChartAttackWindow]>,
+    active: Vec<usize>,
+    pending: Vec<usize>,
+}
+
+impl LiveChartAttacks {
+    fn update(&mut self, lua: &Lua, player: usize, master: bool,
+              windows: &std::sync::Arc<[deadsync_gameplay::ChartAttackWindow]>, seconds: f32)
+              -> mlua::Result<()> {
+        let replaced = !std::sync::Arc::ptr_eq(&self.windows, windows);
+        if replaced {
+            self.windows = windows.clone();
+            self.pending.reserve(windows.len());
+            self.active.reserve(windows.len());
+        }
+        self.pending.clear();
+        for (index, attack) in windows.iter().enumerate() {
+            // PlayerState::Update uses strict endpoints, including expiry.
+            if attack.start_second < seconds && seconds < attack.start_second + attack.len_seconds {
+                self.pending.push(index);
+            }
+        }
+        if self.active != self.pending || (replaced && !self.active.is_empty()) {
+            crate::song_tables::rebuild_active_attack_options(lua, player, master,
+                self.pending.iter().map(|&index| windows[index].mods.as_str()))?;
+            std::mem::swap(&mut self.active, &mut self.pending);
+        }
+        Ok(())
+    }
+}
+
 struct LiveForeground {
     actor: Table,
     start_beat: f32,
@@ -616,7 +649,7 @@ pub(crate) fn update_player_judgment(lua: &Lua, actor: &Table) -> mlua::Result<(
     Ok(())
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct SongLuaLiveFrame {
     pub beat: f64,
     pub music_seconds: f64,
@@ -626,6 +659,8 @@ pub struct SongLuaLiveFrame {
     pub uptime_seconds: Option<f64>,
     /// The gameplay core reached its outro and removed active attacks.
     pub gameplay_outro: bool,
+    /// The actual gameplay-owned attack schedule, independent of Lua writes.
+    pub chart_attacks: Option<[std::sync::Arc<[deadsync_gameplay::ChartAttackWindow]>; LUA_PLAYERS]>,
     pub players: [SongLuaLivePlayer; LUA_PLAYERS],
 }
 
@@ -661,6 +696,7 @@ impl SongLuaLiveFrame {
             delta_seconds: f64::from(delta_seconds),
             uptime_seconds: None,
             gameplay_outro: game.mods.attacks.cleared_for_outro,
+            chart_attacks: Some(game.mods.attacks.option_windows.clone()),
             players: std::array::from_fn(|player| game.stage_itg_score_inputs(player).map_or_else(
                 SongLuaLivePlayer::default, |score| {
                     let mut value = SongLuaLivePlayer::from_player(
@@ -821,6 +857,7 @@ pub struct SongLuaLiveScene {
     outro_off_pending: bool,
     ended: bool,
     updated: bool,
+    chart_attacks: [LiveChartAttacks; LUA_PLAYERS],
 }
 
 impl fmt::Debug for SongLuaLiveScene {
@@ -894,7 +931,8 @@ impl SongLuaLiveScene {
         Ok(Self { lua, root, stage, players, actors, states, tracked, registry,
             targets: Vec::new(), context, entry_paths, primary_index, last_beat,
             last_music_seconds: -9999.0, backgrounds, background_layers, background_order, foregrounds, startup_output,
-            outro_started: false, outro_options_reset: false, outro_off_pending: false, ended: false, updated: false })
+            outro_started: false, outro_options_reset: false, outro_off_pending: false, ended: false, updated: false,
+            chart_attacks: std::array::from_fn(|_| LiveChartAttacks::default()) })
     }
 
     /// Advance one complete active-screen frame: update, then draw.
@@ -934,6 +972,13 @@ impl SongLuaLiveScene {
         self.last_beat = beat;
         crate::lua_util::set_live_frame(&self.lua, frame.screen_seconds, beat, frame.delta_seconds);
         self.lua.set_app_data(LivePlayers(frame.players));
+        if !self.outro_started && let Some(windows) = &frame.chart_attacks {
+            let master = self.context.players.iter().position(|player| player.enabled);
+            for (player, attacks) in self.chart_attacks.iter_mut().enumerate() {
+                attacks.update(&self.lua, player, master == Some(player),
+                    &windows[player], frame.music_seconds as f32)?;
+            }
+        }
         crate::song_tables::advance_option_levels(&self.lua, frame.screen_seconds)?;
         self.advance_backgrounds(beat as f32, frame.music_seconds as f32)?;
         let lua = self.lua.clone();
@@ -1859,7 +1904,7 @@ return Def.ActorMultiVertex {
         frame.players[0].life = 0.5;
         frame.players[0].autoplay = true;
         frame.players[0].fail_enabled = true;
-        let output = scene.advance(frame).expect("owned gameplay frame");
+        let output = scene.advance(frame.clone()).expect("owned gameplay frame");
         assert!(output.errors.is_empty(), "{:?}", output.errors);
         let subscribers = crate::song_lua_actor_registry(&scene.lua).unwrap()
             .sequence_values::<Table>().filter(|actor|
@@ -2200,7 +2245,7 @@ end }
             let mut scene = compiled.live_scene.take().expect("owned scene");
             let mut frame = SongLuaLiveFrame { delta_seconds: 0.1, ..Default::default() };
             frame.players[0].autoplay = autoplay;
-            scene.advance(frame).expect("controller frame");
+            scene.advance(frame.clone()).expect("controller frame");
             assert_eq!(scene.lua.load("return IsAutoplay(PLAYER_1)").eval::<bool>().unwrap(), autoplay);
             if judgment {
                 let params = scene.lua.create_table().unwrap();
@@ -2211,10 +2256,10 @@ end }
             // is disabled. Merely selecting autoplay does not fail a player.
             frame.players[0].autoplay = false;
             frame.gameplay_outro = true;
-            let boundary = scene.advance(frame).expect("NotesEnded posted");
+            let boundary = scene.advance(frame.clone()).expect("NotesEnded posted");
             assert!(boundary.player_writes.is_empty());
             assert_eq!(scene.lua.globals().get::<i64>("OFFS").unwrap(), 0);
-            let off = scene.advance(frame).expect("LeaveGameplay after actor update");
+            let off = scene.advance(frame.clone()).expect("LeaveGameplay after actor update");
             assert_eq!(scene.lua.globals().get::<i64>("OFFS").unwrap(), 1,
                 "autoplay fails inside successful Off, without posting BeginFailed");
             assert_eq!(scene.lua.globals().get::<bool>("FAILED_AT_OFF").unwrap(), autoplay && judgment,
@@ -2223,7 +2268,7 @@ end }
                 vec![SongLuaLivePlayerWrite::Fail { player: 0 }]
             } else { vec![] });
             frame.players[0].failed = autoplay && judgment;
-            assert!(scene.advance(frame).unwrap().player_writes.is_empty(), "Off runs once");
+            assert!(scene.advance(frame.clone()).unwrap().player_writes.is_empty(), "Off runs once");
             assert_eq!(scene.lua.globals().get::<i64>("OFFS").unwrap(), 1);
         }
     }
@@ -2249,7 +2294,7 @@ return Def.ActorFrame {
             for index in 0..5 {
                 frame.screen_seconds = (index + 1) as f64 * 0.125;
                 frame.gameplay_outro = index >= 1;
-                scene.advance(frame).expect("outro frame");
+                scene.advance(frame.clone()).expect("outro frame");
                 let expected = i64::from(index >= if failed { 3 } else { 2 });
                 assert_eq!(scene.lua.globals().get::<i64>("OFFS").expect("Off count"), expected,
                     "NotesEnded dispatches after actors; BeginFailed waits another update");
@@ -2312,7 +2357,7 @@ return Def.ActorFrame {
             delta_seconds: 0.1, ..Default::default() };
         frame.players[0].life = 0.7;
         frame.players[0].fail_enabled = true;
-        let output = scene.advance(frame).expect("life frame");
+        let output = scene.advance(frame.clone()).expect("life frame");
         assert!(output.errors.is_empty(), "{:?}", output.errors);
         assert_eq!(scene.lua.globals().get::<u32>("HEALTH_CHANGES").expect("health change"), 1);
         assert_eq!(output.player_writes, vec![
@@ -2449,45 +2494,45 @@ return Def.ActorFrame {
             beat: 0.2, delta_seconds: 0.1,
             players: [SongLuaLivePlayer { fail_enabled: true, ..Default::default() }; LUA_PLAYERS],
             ..Default::default() };
-        scene.update(frame).expect("update without draw");
+        scene.update(frame.clone()).expect("update without draw");
         assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 1);
         assert_eq!(scene.lua.globals().get::<u32>("QUEUED").unwrap(), 1);
         scene.draw().expect("separate draw");
         assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 2);
 
         scene.lua.load("ROOT:visible(false)").exec().unwrap();
-        scene.advance(frame).unwrap();
+        scene.advance(frame.clone()).unwrap();
         assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 2);
         scene.lua.load("ROOT:visible(true):hibernate(0.25)").exec().unwrap();
-        scene.advance(frame).unwrap();
+        scene.advance(frame.clone()).unwrap();
         assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 2);
         scene.lua.load("ROOT:hibernate(0):diffusealpha(0)").exec().unwrap();
-        scene.advance(frame).unwrap();
+        scene.advance(frame.clone()).unwrap();
         assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 2,
             "transparent actors do not reach native DrawPrimitives");
         scene.lua.load("ROOT:glow(1,1,1,1)").exec().unwrap();
-        scene.advance(frame).unwrap();
+        scene.advance(frame.clone()).unwrap();
         assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 3,
             "glow makes a transparent actor partially opaque");
 
         scene.lua.load("ROOT:diffusealpha(1):glow(0,0,0,0):AddWrapperState(); ROOT:GetWrapperState(1):visible(false)").exec().unwrap();
-        scene.advance(frame).unwrap();
+        scene.advance(frame.clone()).unwrap();
         assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 3,
             "an invisible wrapper aborts the nested draw");
         scene.lua.load("ROOT:GetWrapperState(1):visible(true); ROOT:SetDrawFunction(nil)").exec().unwrap();
-        scene.advance(frame).unwrap();
+        scene.advance(frame.clone()).unwrap();
         assert_eq!(scene.lua.globals().get::<u32>("DRAWS").unwrap(), 3);
         assert_eq!(scene.lua.globals().get::<u32>("AUTOMATIC").unwrap(), 1,
             "removing a callback restores ordinary child traversal");
         scene.lua.load("ROOT:SetDrawFunction(function(actor) actor:x(42) end)").exec().unwrap();
-        scene.advance(frame).unwrap();
+        scene.advance(frame.clone()).unwrap();
         assert_eq!(scene.states().iter().find(|state| state.x == 42.0).unwrap().x, 42.0,
             "draw mutations are reflected in the current live visual poses");
         scene.lua.load("ROOT:SetDrawFunction(ORIGINAL_DRAW)").exec().unwrap();
         for index in 0..2000 {
             let output = scene.advance(SongLuaLiveFrame { screen_seconds: 1.0 + index as f64 * 0.1,
                 music_seconds: 1.0 + index as f64 * 0.1, beat: 1.0 + index as f64 * 0.1,
-                ..frame }).unwrap();
+                ..frame.clone() }).unwrap();
             assert!(output.errors.is_empty(), "{:?}", output.errors);
             let (frames, calls, bytes) = crate::draw_capture::live_storage(&scene.lua);
             assert_eq!(frames, 1, "draw storage must retain only the current frame");
@@ -2803,6 +2848,52 @@ return Def.Actor{}
     }
 
     #[test]
+    fn live_chart_attacks_use_strict_boundaries_and_keep_song_writes_between_them() {
+        let mut compiled = compile_with_context("attack-boundaries", r#"
+return Def.ActorFrame {
+    OnCommand = function(self)
+        self:sleep(9999)
+        STATE = GAMESTATE:GetPlayerState(PLAYER_1)
+        STATE:SetPlayerOptions('ModsLevel_Stage', '25% Dark')
+        STATE:SetPlayerOptions('ModsLevel_Song', '75% Drunk')
+        OPTIONS = STATE:GetPlayerOptions('ModsLevel_Song')
+    end,
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.players[0].enabled = true;
+            context.players[1].enabled = false;
+        });
+        let mut scene = compiled.live_scene.take().unwrap();
+        let windows: Arc<[deadsync_gameplay::ChartAttackWindow]> = Arc::from([
+            deadsync_gameplay::ChartAttackWindow { start_second: 2.0, len_seconds: 1.0,
+                mods: "Overhead, Onlyonecouples".into() },
+            deadsync_gameplay::ChartAttackWindow { start_second: 2.5, len_seconds: 1.5,
+                mods: "25% Drunk".into() },
+        ]);
+        let schedule = [windows, Arc::from([])];
+        let mut previous = 0.0;
+        for (seconds, drunk) in [(0.0, 0.75), (2.0, 0.75), (2.25, 0.0),
+            (2.5, 0.5), (2.75, 0.25), (3.0, 0.25), (4.0, 0.0)] {
+            let output = scene.advance(SongLuaLiveFrame {
+                music_seconds: seconds, screen_seconds: seconds, beat: seconds * 2.0,
+                delta_seconds: seconds - previous, chart_attacks: Some(schedule.clone()),
+                ..Default::default()
+            }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            previous = seconds;
+            scene.lua.load(format!(r#"
+assert(STATE:GetPlayerOptions('ModsLevel_Song') == OPTIONS)
+assert(OPTIONS:Drunk() == {drunk}, 'attack targets at {seconds}')
+"#)).exec().unwrap();
+            if seconds == 2.25 {
+                scene.lua.load("OPTIONS:Drunk(0.5)").exec().unwrap();
+            }
+        }
+        scene.lua.load("assert(OPTIONS:Dark() == 0.25)").exec().unwrap();
+    }
+
+    #[test]
     fn live_column_cues_derive_owned_tweens_from_chart_notes() {
         let compiled = compile_with_context("column-cue-owned-tweens", "return Def.Actor{}", |context| {
             context.players[0].column_cues = true;
@@ -2910,7 +3001,7 @@ end }
             ..Default::default() };
         for index in 0..4 {
             frame.gameplay_outro = index > 0;
-            scene.advance(frame).expect("outro frame");
+            scene.advance(frame.clone()).expect("outro frame");
             if index == 2 {
                 let current = scene.lua.load("return CURRENT:Reverse()")
                     .eval::<f32>().expect("current retained after Song assignment");
@@ -2929,7 +3020,7 @@ end }
         }
         assert_eq!(scene.lua.load("return CURRENT:Reverse()")
             .eval::<f32>().expect("Current approaches the rebuilt Song target"), 0.0625);
-        scene.advance(frame).expect("continued outro");
+        scene.advance(frame.clone()).expect("continued outro");
         assert_eq!(speeds.raw_get::<Table>(5).expect("continued setter").raw_get::<f32>(2)
             .expect("reset occurs once"), 1000.0);
         assert_eq!(scene.lua.load("return PREFERRED:Reverse(), STAGE:Reverse(), SONG == GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song')")
@@ -3070,7 +3161,7 @@ return Def.ActorFrame {
             beat: 0.25, delta_seconds: 0.125, ..Default::default() };
         input.players[0] = SongLuaLivePlayer::from_player(&runtime, 100);
         assert_eq!(input.players[0].tap_scores, [0; 11], "autoplay feedback does not require scoring");
-        scene.advance(input).expect("first judgment");
+        scene.advance(input.clone()).expect("first judgment");
         let left = |actor: &Table| crate::lua_util::actor_tween_time_left(&scene.lua, actor).expect("tween time");
         assert!((left(&sprite) - 0.9).abs() < 1e-6);
         assert!((left(&player) - 0.9).abs() < 1e-6);
@@ -3083,30 +3174,30 @@ return Def.ActorFrame {
 
         input.screen_seconds += 0.0625;
         input.delta_seconds = 0.0625;
-        scene.advance(input).expect("existing judgment advances");
+        scene.advance(input.clone()).expect("existing judgment advances");
         assert!((crate::lua_util::actor_tween_time_left(&scene.lua, &player).expect("P1 time") - 0.8375).abs() < 1e-6,
             "the named child advances once and the unchanged snapshot does not restart it");
         deadsync_gameplay::set_player_last_judgment(&mut runtime,
             deadsync_rules::judgment::Judgment { grade: deadsync_rules::judgment::JudgeGrade::Miss, window: None, ..judgment }, 0.25);
         input.players[0] = SongLuaLivePlayer::from_player(&runtime, 100);
         input.screen_seconds = 0.25;
-        scene.advance(input).expect("replacement judgment");
+        scene.advance(input.clone()).expect("replacement judgment");
         assert!((crate::lua_util::actor_tween_time_left(&scene.lua, &sprite).expect("sprite time") - 0.9).abs() < 1e-6);
         assert_eq!(sprite.get::<Function>("GetState").expect("state getter").call::<usize>(sprite.clone()).expect("miss frame"), 5);
 
         player.get::<Function>("hibernate").expect("hibernate").call::<()>((player.clone(), 0.125)).expect("pause player");
         input.screen_seconds += 0.0625;
-        scene.advance(input).expect("hibernating player");
+        scene.advance(input.clone()).expect("hibernating player");
         assert!((crate::lua_util::actor_tween_time_left(&scene.lua, &sprite).expect("paused child") - 0.9).abs() < 1e-6);
         assert!((crate::lua_util::actor_tween_time_left(&scene.lua, &player).expect("paused parent") - 0.9625).abs() < 1e-6);
         input.screen_seconds += 0.125;
         input.delta_seconds = 0.125;
-        scene.advance(input).expect("wake remainder");
+        scene.advance(input.clone()).expect("wake remainder");
         assert!((crate::lua_util::actor_tween_time_left(&scene.lua, &sprite).expect("wake child") - 0.8375).abs() < 1e-6);
         player.get::<Function>("SetUpdateRate").expect("update rate").call::<()>((player.clone(), 2.0)).expect("double rate");
         input.screen_seconds += 0.0625;
         input.delta_seconds = 0.0625;
-        scene.advance(input).expect("rated child update");
+        scene.advance(input.clone()).expect("rated child update");
         assert!((crate::lua_util::actor_tween_time_left(&scene.lua, &sprite).expect("rated child") - 0.7125).abs() < 1e-6);
     }
 
@@ -3139,7 +3230,7 @@ return Def.ActorFrame {
         input.players[0].hold_judgments[1] = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
             result: deadsync_rules::note::HoldResult::Held, started_at_screen_s: 0.125,
         });
-        scene.advance(input).expect("held feedback without tap feedback or scoring");
+        scene.advance(input.clone()).expect("held feedback without tap feedback or scoring");
         assert!((crate::lua_util::actor_tween_time_left(&scene.lua, &sprite).expect("hold queue") - 0.8).abs() < 1e-6);
         assert!((scene.states()[0].aux - 0.8).abs() < 1e-6, "authored callbacks see hold descendants");
         assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &other).expect("P2 queue"), 0.0);
@@ -3150,23 +3241,23 @@ return Def.ActorFrame {
 
         input.screen_seconds += 0.0625;
         input.delta_seconds = 0.0625;
-        scene.advance(input).expect("unchanged hold feedback");
+        scene.advance(input.clone()).expect("unchanged hold feedback");
         assert!((scene.states()[0].aux - 0.7375).abs() < 1e-6, "the snapshot does not restart the queue");
         input.players[0].hold_judgments[1] = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
             result: deadsync_rules::note::HoldResult::LetGo, started_at_screen_s: 0.25,
         });
-        scene.advance(input).expect("let-go replaces the old queue");
+        scene.advance(input.clone()).expect("let-go replaces the old queue");
         assert!((scene.states()[0].aux - 0.8).abs() < 1e-6);
         assert_eq!(sprite.get::<Function>("GetState").expect("state getter")
             .call::<usize>(sprite.clone()).expect("let-go frame"), 1);
         input.players[0].hold_judgments[1] = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
             result: deadsync_rules::note::HoldResult::Missed, started_at_screen_s: 0.3125,
         });
-        scene.advance(input).expect("native empty MissedHold command");
+        scene.advance(input.clone()).expect("native empty MissedHold command");
         assert!((scene.states()[0].aux - 0.7375).abs() < 1e-6);
         input.players[0].hold_judgments.fill(None);
         input.delta_seconds = 1.0;
-        scene.advance(input).expect("feedback expires independently of the snapshot");
+        scene.advance(input.clone()).expect("feedback expires independently of the snapshot");
         assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &player).expect("finished player"), 0.0);
     }
 
@@ -3271,49 +3362,49 @@ FIELD:SetUpdateFunction(function() COLUMN_BEFORE = COL:GetTweenTimeLeft() end)
         assert_eq!(left(&column), 1.0);
         let mut input = SongLuaLiveFrame { screen_seconds: 0.25, delta_seconds: 0.125,
             ..Default::default() };
-        scene.advance(input).expect("column update after the field callback");
+        scene.advance(input.clone()).expect("column update after the field callback");
         assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.875,
             "NoteField's owned column vector advances once per screen update");
         assert_eq!(scene.lua.globals().get::<f32>("COLUMN_BEFORE").unwrap(), 1.0);
         let x = column.get::<Function>("GetX").unwrap().call::<f32>(column.clone()).unwrap();
         assert_eq!(x, 12.5, "the real column tween updates its authored pose");
         input.delta_seconds = 0.0;
-        scene.advance(input).expect("zero delta preserves the column queue");
+        scene.advance(input.clone()).expect("zero delta preserves the column queue");
         assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.875);
         scene.lua.load("FIELD:SetUpdateRate(3); WRAP = COL:AddWrapperState():sleep(1)")
             .exec().expect("field rate and column wrapper");
         let wrapper: Table = scene.lua.globals().get("WRAP").unwrap();
         input.delta_seconds = 0.125;
         input.screen_seconds += 0.125;
-        scene.advance(input).expect("columns use the field's original delta");
+        scene.advance(input.clone()).expect("columns use the field's original delta");
         assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.75);
         assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &wrapper).unwrap(), 0.875);
         scene.lua.load("FIELD:hibernate(0.25)").exec().unwrap();
         input.screen_seconds += 0.125;
-        scene.advance(input).expect("NoteField still updates columns while its ActorFrame sleeps");
+        scene.advance(input.clone()).expect("NoteField still updates columns while its ActorFrame sleeps");
         assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.625);
         let player: Table = scene.lua.globals().get("__songlua_top_screen_player_1").unwrap();
         player.get::<Function>("hibernate").unwrap().call::<()>((player.clone(), 0.25)).unwrap();
         for _ in 0..2 {
             input.screen_seconds += 0.125;
-            scene.advance(input).expect("hibernating ancestor skips the field; wake has zero overshoot");
+            scene.advance(input.clone()).expect("hibernating ancestor skips the field; wake has zero overshoot");
             assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.625);
         }
         input.screen_seconds += 0.125;
-        scene.advance(input).expect("field wake and column vector receive the original delta");
+        scene.advance(input.clone()).expect("field wake and column vector receive the original delta");
         assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.5);
         player.get::<Function>("SetUpdateRate").unwrap().call::<()>((player.clone(), 2.0)).unwrap();
         input.screen_seconds += 0.125;
-        scene.advance(input).expect("column vector inherits its ancestor's rate");
+        scene.advance(input.clone()).expect("column vector inherits its ancestor's rate");
         assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.25);
         column.get::<Function>("hibernate").unwrap().call::<()>((column.clone(), 0.125)).unwrap();
         input.screen_seconds += 0.125;
-        scene.advance(input).expect("column hibernation passes only its wake overshoot to wrappers");
+        scene.advance(input.clone()).expect("column hibernation passes only its wake overshoot to wrappers");
         assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.125);
         assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &wrapper).unwrap(), 0.25);
         for _ in 0..2 {
             input.screen_seconds += 0.125;
-            scene.advance(input).expect("column tween and queued command complete");
+            scene.advance(input.clone()).expect("column tween and queued command complete");
         }
         assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &column).unwrap(), 0.0);
         assert_eq!(column.get::<Function>("GetX").unwrap().call::<f32>(column).unwrap(), 100.0);
@@ -3501,26 +3592,26 @@ return Def.ActorFrame {
         let mut frame = SongLuaLiveFrame { screen_seconds: 0.5, delta_seconds: 0.5,
             players: [SongLuaLivePlayer::from_player(&player, 10), SongLuaLivePlayer::default()],
             ..SongLuaLiveFrame::default() };
-        let output = scene.advance(frame).expect("first half frame");
+        let output = scene.advance(frame.clone()).expect("first half frame");
         assert!(output.errors.is_empty() && output.broadcasts.is_empty());
         assert!((scene.states()[global].x - 50.0).abs() < 1e-5);
         player.current_possible_points = 10;
         frame.players[0] = SongLuaLivePlayer::from_player(&player, 10);
         frame.screen_seconds = 1.0;
-        let output = scene.advance(frame).expect("queue completion");
+        let output = scene.advance(frame.clone()).expect("queue completion");
         assert!(output.errors.is_empty() && output.broadcasts.is_empty());
         assert_eq!(scene.states()[global].x, 100.0);
         // Actor.cpp::UpdateTweening stops when the positive delta is exhausted.
         // A trailing zero-time command runs on the next positive update.
         frame.screen_seconds = 1.1;
         frame.delta_seconds = 0.1;
-        let output = scene.advance(frame).expect("trailing command");
+        let output = scene.advance(frame.clone()).expect("trailing command");
         assert!(output.errors.is_empty());
         assert_eq!(output.broadcasts.len(), 1);
         assert_eq!(output.broadcasts[0].1, "ActualTick");
         assert_eq!(scene.states()[global].aux, 10.0);
         frame.screen_seconds = 1.2;
-        assert!(scene.advance(frame).expect("later frame").broadcasts.is_empty(), "drain events exactly once");
+        assert!(scene.advance(frame.clone()).expect("later frame").broadcasts.is_empty(), "drain events exactly once");
     }
 
     #[test]
@@ -3709,7 +3800,7 @@ end }
                 time_error_ms: 0.0, time_error_music_ns: 0, miss_because_held: false,
             },
         });
-        let output = scene.advance(frame).expect("first foreground On");
+        let output = scene.advance(frame.clone()).expect("first foreground On");
         assert_eq!(output.request, Some(SongLuaLiveRequest::NewScreen("ScreenGameplay".into())));
         let mut layers = crate::reload_song_lua_with_default_host(scene,
             |_, _, _| Ok(Arc::<[()]>::from([])),
@@ -3952,7 +4043,7 @@ end }
         assert!(layers[0].live_scene.is_none());
         let mut scene = layers[1].live_scene.take().expect("primary owns the VM");
         let frame = SongLuaLiveFrame { screen_seconds: 0.1, delta_seconds: 0.1, ..SongLuaLiveFrame::default() };
-        assert!(scene.advance(frame).expect("shared update").errors.is_empty());
+        assert!(scene.advance(frame.clone()).expect("shared update").errors.is_empty());
         for (layer, name, x) in [(0, "Background", 1.0), (1, "Foreground", 2.0)] {
             let local = layers[layer].overlays.iter().position(|actor|
                 actor.name.as_deref() == Some(name)).expect("layer actor");
@@ -4139,10 +4230,10 @@ return Def.ActorFrame {
 "#);
         let mut scene = compiled.live_scene.take().expect("scene");
         let frame = SongLuaLiveFrame { screen_seconds: 0.1, delta_seconds: 0.1, ..SongLuaLiveFrame::default() };
-        let output = scene.advance(frame).expect("native partial callback");
+        let output = scene.advance(frame.clone()).expect("native partial callback");
         assert_eq!(output.request, Some(SongLuaLiveRequest::Transition("SM_DoNextScreen".into())));
         assert_eq!(output.errors.len(), 1);
         assert!(output.errors[0].contains("live diagnostic"), "{:?}", output.errors);
-        assert!(scene.advance(frame).expect("next frame").errors.is_empty(), "native error is reported once");
+        assert!(scene.advance(frame.clone()).expect("next frame").errors.is_empty(), "native error is reported once");
     }
 }

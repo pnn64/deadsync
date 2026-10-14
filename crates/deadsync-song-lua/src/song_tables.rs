@@ -93,6 +93,31 @@ pub(crate) fn clear_active_attack_options(lua: &Lua) -> mlua::Result<()> {
     Ok(())
 }
 
+pub(crate) fn rebuild_active_attack_options<'a>(
+    lua: &Lua, player: usize, master: bool, modifiers: impl Iterator<Item = &'a str>,
+) -> mlua::Result<()> {
+    let Some(levels) = lua.app_data_ref::<SongLuaOptionLevels>() else { return Ok(()); };
+    let options = levels.players[player].clone();
+    let songs = levels.songs.clone();
+    drop(levels);
+    // PlayerState::RebuildPlayerOptionsFromActiveAttacks copies Stage to Song,
+    // then applies enabled attacks in launch order. Current approaches later.
+    assign_player_options(lua, &options[2], &options[1])?;
+    if master {
+        for key in SONG_OPTION_SWITCHES.into_iter().chain([
+            "__songlua_music_rate", "__songlua_music_rate_speed",
+            "__songlua_haste", "__songlua_haste_speed",
+        ]) {
+            songs[2].raw_set(key, songs[1].raw_get::<Value>(key)?)?;
+        }
+    }
+    for text in modifiers {
+        apply_player_options_string(lua, &options[2], text)?;
+        if master { apply_song_options_string(&songs[2], text)?; }
+    }
+    Ok(())
+}
+
 fn option_approach(value: f32, target: f32, amount: f32) -> mlua::Result<f32> {
     if !(amount >= 0.0) {
         return Err(mlua::Error::runtime("negative native option approach"));

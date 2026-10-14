@@ -5241,6 +5241,8 @@ pub struct ActiveAttackRefreshOutput {
 
 #[derive(Clone, Debug)]
 pub struct GameplayAttackRuntimeState {
+    /// Authored/random chart attacks retained for Lua PlayerState option rebuilds.
+    pub option_windows: [std::sync::Arc<[ChartAttackWindow]>; MAX_PLAYERS],
     pub mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS],
     pub song_lua_ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
     window_indices: [GameplayPlayerWindowIndex; MAX_PLAYERS],
@@ -5505,6 +5507,7 @@ const fn ease_window_expiry(window: &SongLuaEaseMaskWindow) -> f32 {
 impl Default for GameplayAttackRuntimeState {
     fn default() -> Self {
         Self {
+            option_windows: std::array::from_fn(|_| std::sync::Arc::from([])),
             mask_windows: std::array::from_fn(|_| Vec::new()),
             song_lua_ease_windows: std::array::from_fn(|_| Vec::new()),
             window_indices: std::array::from_fn(|_| GameplayPlayerWindowIndex::default()),

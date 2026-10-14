@@ -775,22 +775,17 @@ where
             config.center_1player_notefield,
             &player_global_offset_shift_seconds,
         ));
-    let attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] = std::array::from_fn(|player| {
+    let attack_option_windows: [Arc<[ChartAttackWindow]>; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
-            return Vec::new();
+            return Arc::from([]);
         }
-        let attack_mode = player_profiles[player].attack_mode();
-        let mut windows = if attack_mode == GameplayAttackMode::Off {
-            Vec::new()
-        } else {
-            build_attack_mask_windows_for_player(
-                gameplay_charts[player].chart_attacks.as_deref(),
-                attack_mode,
-                player,
-                song_seed,
-                attack_song_length_seconds,
-            )
-        };
+        build_attack_windows_for_mode(gameplay_charts[player].chart_attacks.as_deref(),
+            player_profiles[player].attack_mode(), player, song_seed,
+            attack_song_length_seconds).into()
+    });
+    let attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player >= num_players { return Vec::new(); }
+        let mut windows = build_attack_mask_windows(&attack_option_windows[player]);
         windows.extend(song_lua_mask_windows[player].iter().copied());
         if let Some(window) = course_modifiers
             .as_deref()
@@ -1226,6 +1221,7 @@ where
             attacks: {
                 let mut attacks =
                     GameplayAttackRuntimeState::new(attack_mask_windows, song_lua_ease_windows);
+                attacks.option_windows = attack_option_windows;
                 attacks.current_appearance = base_attack_appearance;
                 attacks.target_appearance = base_attack_appearance;
                 attacks.speed_appearance = [AppearanceEffects::approach_speeds(); MAX_PLAYERS];

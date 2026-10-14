@@ -947,11 +947,15 @@ end }
     }
 
     fn owned_judgment_control(name: &str, notes: &str, script: &str, offset: f32) -> gameplay::State {
+        owned_judgment_control_with_attacks(name, notes, script, offset, "")
+    }
+
+    fn owned_judgment_control_with_attacks(name: &str, notes: &str, script: &str, offset: f32, attacks: &str) -> gameplay::State {
         paths::init();
         let dir = std::env::temp_dir().join(format!("deadsync-judgment-{name}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let simfile = dir.join("control.sm");
-        std::fs::write(&simfile, format!("#TITLE:{name};#OFFSET:{offset};#BPMS:0=144;#FGCHANGES:-24=default.lua=1=0=0=1;#NOTES:dance-single:Control:Hard:1:0,0,0,0,0:\n{notes};")).unwrap();
+        std::fs::write(&simfile, format!("#TITLE:{name};#OFFSET:{offset};#BPMS:0=144;#ATTACKS:{attacks};#FGCHANGES:-24=default.lua=1=0=0=1;#NOTES:dance-single:Control:Hard:1:0,0,0,0,0:\n{notes};")).unwrap();
         std::fs::write(dir.join("default.lua"), script).unwrap();
         let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, -0.008).unwrap());
         let chart = Arc::new(song.charts[0].clone());
@@ -960,7 +964,11 @@ end }
         context.live = true;
         context.defer_initial_live_update = true;
         context.song_timing = song.song_timing.clone();
-        let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+        let profiles = std::array::from_fn(|_| {
+            let mut profile = deadsync_profile::Profile::default();
+            if !attacks.is_empty() { profile.attack_mode = deadsync_profile::AttackMode::On; }
+            profile
+        });
         let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
         let prepared = deadsync_song_lua::playback::prepare_song_lua(
             &song, &context, deadsync_assets::song_lua::compile_song_lua,
@@ -987,6 +995,49 @@ end }
         let output = state.take_song_lua_output();
         assert!(output.errors.is_empty(), "{:?}", output.errors);
         output
+    }
+
+    #[test]
+    fn gameplay_chart_attack_rebuilds_song_options() {
+        let notes = std::iter::repeat_n("1000\n0000\n0000\n0000\n", 24).collect::<Vec<_>>().join(",\n");
+        let mut state = owned_judgment_control_with_attacks("attack-option-levels", &notes, r#"
+return Def.ActorFrame {
+    OnCommand = function(self)
+        self:sleep(9999)
+        local p1 = GAMESTATE:GetPlayerState(PLAYER_1)
+        local p2 = GAMESTATE:GetPlayerState(PLAYER_2)
+        p1:SetPlayerOptions('ModsLevel_Stage', '25% Dark')
+        p1:SetPlayerOptions('ModsLevel_Song', '75% Drunk, 25% Tornado, Tipsy')
+        p2:SetPlayerOptions('ModsLevel_Song', '50% Drunk')
+        local song = p1:GetPlayerOptions('ModsLevel_Song')
+        self:SetUpdateFunction(function()
+            local seconds = GAMESTATE:GetCurMusicSeconds()
+            assert(p1:GetPlayerOptions('ModsLevel_Song') == song, 'option object is retained')
+            assert(p2:GetPlayerOptions('ModsLevel_Song'):Drunk() == 0.5, 'disabled P2 has no attack')
+            if seconds > 2.81 then
+                assert(song:Drunk() == 0 and song:Tornado() == 0 and song:Tipsy() == 0,
+                    'chart attack boundary rebuilds Song from Stage')
+                assert(song:Dark() == 0.25, 'Stage options survive the rebuild')
+                MESSAGEMAN:Broadcast('AttackOptionsRebuilt')
+            else
+                assert(song:Drunk() == 0.75, 'Song writes survive before attack activation')
+            end
+        end)
+    end,
+}
+"#, 0.0, "TIME=2.802432:LEN=0.405405:MODS=Overhead, Onlyonecouples");
+        assert_eq!(state.gameplay.mods.attacks.option_windows[0].len(), 1);
+        assert!(state.gameplay.mods.attacks.option_windows[1].is_empty());
+        update_judgment_control(&mut state, -250_000_000, 1_000_000_000);
+        update_judgment_control(&mut state, 1_000_000_000, 2_000_000_000);
+        update_judgment_control(&mut state, 2_000_000_000, 3_000_000_000);
+        assert!(!state.gameplay.mods.attacks.cleared_for_outro,
+            "control ended before attack: last={}", state.gameplay.source.song.precise_last_second());
+        for seconds in [3_i64, 4] {
+            let output = update_judgment_control(&mut state, seconds * 1_000_000_000, (seconds as u64 + 1) * 1_000_000_000);
+            assert!(output.source_broadcasts.iter().any(|event| event.name == "AttackOptionsRebuilt"),
+                "music={} output={output:?}", state.gameplay.clock.song_position.current_music_time_ns);
+        }
     }
 
     #[test]
@@ -1632,6 +1683,7 @@ end}
                 delta_seconds: 0.01,
                 uptime_seconds: None,
                 gameplay_outro: false,
+                chart_attacks: None,
                 players: std::array::from_fn(|_| deadsync_song_lua::SongLuaLivePlayer::default()),
             })
             .expect("advance update callback");
