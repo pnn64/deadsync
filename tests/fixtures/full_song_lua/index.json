@@ -3803,15 +3803,12 @@
     {
       "title": "MISSION SPUTNIK",
       "source_simfile": "MISSION SPUTNIK/sputnik.ssc",
-      "harness_version": "0.1.0",
-      "archive": "b13247db1ef7475bbb3960e1be844c4e63852b8e72e76f26563cd59333fef2ee.tar.zst",
-      "sha256": "b13247db1ef7475bbb3960e1be844c4e63852b8e72e76f26563cd59333fef2ee",
-      "compressed_bytes": 45083,
-      "uncompressed_sha256": "07b750a7ff8db14734bd47456e357bb7f337c981703896aa63beea7a5bd98c7d",
-      "compression_level": 22,
-      "aliases": [
-        "1dd12b99b71666ab0a65127e9d442753fe6fc96f7c7f418d2a3aab22647e2bbf.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "2c6b45c8860c78056ca088300af1efb561cd9f9549dbfd9241ce46bac204f728.tar.zst",
+      "sha256": "2c6b45c8860c78056ca088300af1efb561cd9f9549dbfd9241ce46bac204f728",
+      "compressed_bytes": 16385770,
+      "uncompressed_sha256": "e6a8401d7558a4e1b8139353c399ba09081d9bcabbcc083e0272a204bb9cd814",
+      "aliases": []
     },
     {
       "title": "MODULO",
