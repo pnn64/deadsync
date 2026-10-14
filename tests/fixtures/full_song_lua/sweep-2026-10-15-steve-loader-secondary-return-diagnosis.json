@@ -1,0 +1,32 @@
+{
+  "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
+  "position": 420,
+  "full_repair_attempts_spent": 0,
+  "initial_full_replay": {
+    "native_frames": 77402,
+    "replayed_frames": 77402,
+    "callback_errors": 0,
+    "mismatch_count": 176807,
+    "native_command_query_count": 182777,
+    "owned_command_query_count": 176822
+  },
+  "first_observed_divergence": "Native executes code/update.lua ready callback during OnCommand, including ScreenManager.GetTopScreen and GetNumChildren; owned session proceeds to core/main.lua SetUpdateFunction without that ready callback.",
+  "actual_source_contract": {
+    "core/main.lua:17": "update, ScreenReady[next] = loadfile code/update.lua",
+    "code/update.lua:4-26": "Chunk returns the update function and a second ready callback.",
+    "default.lua:23-28": "Custom environment loadfile forwards all chunk return values.",
+    "core/main.lua:43": "All ready functions execute before SetUpdateFunction."
+  },
+  "owned_cause": "lua_util.rs load_script_file_with_source wraps the loaded function with inner.call::<Value>, discarding secondary return values; root executors may still intentionally request one actor value.",
+  "proposed_next_fix": "Forward MultiValue from the scoped loaded chunk, preserving script directory, path and environment scopes. Add a regression for a secondary ready function plus nil positions and varargs before a retained-capture first repair.",
+  "source_sha256": {
+    "default.lua": "fb57976d7d7e616bd261562a65aba30f3b09f663efbaa79b17f2a76d0622e0f8",
+    "core/main.lua": "64a6586387798f4ffa8296ca59d979588bc233015321cacd2cb1aec7c7ac8d11",
+    "code/update.lua": "9f8334114fe067e347f495ab14ca1629ca20ba888d3b79a3f3d4eed5a0b643ab"
+  },
+  "native_capture_reuse_available": true,
+  "native_expected_results_used_as_input": false,
+  "passing_charts_reopened": false,
+  "acceptance_gates_changed": false,
+  "implementation_deferred_until_current_pokemon_validation_source_pins_are_frozen": true
+}
