@@ -1963,6 +1963,14 @@ end}
         let expected = vec![("1".into(),64),("1/1".into(),48),("1/2".into(),32),("2".into(),16)];
         assert_eq!(super::native_creation_order_for_entries(&trace,1,1)
             .expect("instantiated effect ownership"), expected);
+        for effect in ["Centered", "StretchNoLoop", "StretchRewind"] {
+            let mut wrapped = trace.clone();
+            for index in [0, 1] {
+                wrapped["actor_definitions"][index]["source"] = json!(format!("@/BackgroundEffects/{effect}.lua"));
+            }
+            assert_eq!(super::native_creation_order_for_entries(&wrapped,1,1)
+                .expect("native background effect retains its authored child"), expected);
+        }
         let mut background_only = trace.clone();
         background_only["actor_creation_inputs"].as_array_mut().unwrap().pop();
         background_only["runtime_actors"].as_array_mut().unwrap().remove(4);
@@ -1977,6 +1985,7 @@ end}
             ("/actor_creation_inputs/1/parent",json!(null)),
             ("/actor_creation_inputs/1/scene",json!(2)),
             ("/actor_creation_inputs/2/provenance",json!("expected-handler-order")),
+            ("/actor_definitions/0/source",json!("song:/BackgroundEffects/StretchNoLoop.lua")),
         ] {
             let mut invalid = trace.clone();
             *invalid.pointer_mut(path).expect("input field") = value;
@@ -2372,8 +2381,9 @@ fn native_creation_order_for_entries(trace: &Value, scene: u64, background_entri
             let definition = input["definition_id"].as_str().and_then(|id| defs.get(id));
             let effect = definition.is_some_and(|definition| definition["class"] == "ActorFrame"
                 && definition["source"].as_str().is_some_and(|source|
-                    source.ends_with("/BackgroundEffects/UpperLeft.lua")
-                        || source.ends_with("/BackgroundEffects/Centered.lua")));
+                    source.starts_with("@/")
+                        && source.rsplit_once("/BackgroundEffects/").is_some_and(|(_, file)|
+                            file.ends_with(".lua") && !file.contains('/'))));
             if effect {
                 let actor = input["actor"].as_str().ok_or("invalid native background effect identity")?;
                 let children = inputs.iter().filter(|child| child["scene"].as_u64() == Some(scene)

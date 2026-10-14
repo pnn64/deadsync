@@ -1,0 +1,50 @@
+{
+  "source_simfile": "Retrospective/Retrospective.ssc",
+  "position": 376,
+  "repair_attempts_before": 0,
+  "original_failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (2505340) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+  "candidate_sha256": "4e0dff450b7809723759f86bffdd9946e73764a949e0578a54d9d00677486015",
+  "trace_sha256": "cf068cd4a21fb0c99885ef1bafea0980660b36d6086af6f5729132cb4fb49e1b",
+  "simfile_sha256": "6b8b605a11579a2bcf5f699c422a28a0aac0ec1178bd7a39d4f99964c4684095",
+  "native_frames": 31593,
+  "external_root_inputs": [
+    {
+      "actor": "def-0005",
+      "parent": null,
+      "parent_path": null,
+      "definition": "def-0005",
+      "class": "ActorFrame",
+      "source": "@/BackgroundEffects/StretchNoLoop.lua"
+    },
+    {
+      "actor": "def-0007",
+      "parent": "external-0009",
+      "parent_path": "SongForeground",
+      "definition": "def-0007",
+      "class": "ActorFrame",
+      "source": "song:/./lua/curtainsClosed.lua"
+    },
+    {
+      "actor": "def-0009",
+      "parent": "external-0009",
+      "parent_path": "SongForeground",
+      "definition": "def-0009",
+      "class": "ActorFrame",
+      "source": "song:/./lua/curtainsDrawn.lua"
+    }
+  ],
+  "cause": "The native background effect root is ActorFrame from external BackgroundEffects/StretchNoLoop.lua. Its authored Lua child is inside that wrapper. Identity mapping recognizes only UpperLeft/Centered, so it omits this wrapper and reports zero background owners against one prepared entry. Background.cpp resolves effect Lua from BackgroundEffects; StretchNoLoop.lua, StretchRewind.lua and UpperLeft.lua each wrap LoadActor(File1) in one ActorFrame.",
+  "primary_source_sha256": {
+    "src/Background.cpp": "8ac3e579ba9b3adf41acd425c4ad921d0ed17f511761dd9e80301119d76eba2c",
+    "src/BackgroundUtil.cpp": "72839c7ee3a7b95fc26251843fbf9846407cee15b2a4f10895390a105758d447",
+    "BackgroundEffects/StretchNoLoop.lua": "5118524d950e050269af1561468873e79001080ddc26c1c2dc0bdbd57f6ab84e",
+    "BackgroundEffects/StretchRewind.lua": "5f88ce9e61c3bb5f5774b2aa36284b0e12d5464e385bcdca4b56160f97597502",
+    "BackgroundEffects/UpperLeft.lua": "f8c948a7f83b1caf1cb09716a6a94ed9d8237ee8a4a69427babc8d6aa47cd359"
+  },
+  "fix": "Recognize external BackgroundEffects Lua ActorFrame roots by source category, while retaining the single-authored-child, pointer, parent, scene, ordinal and provenance checks. Song-owned similarly named directories remain distinct.",
+  "callback_results_used_for_mapping": false,
+  "comparison_fields_and_tolerances_unchanged": true,
+  "original_chart_and_capture_unchanged": true,
+  "full_repair_attempts_spent": 0,
+  "passing_charts_reopened": false
+}
