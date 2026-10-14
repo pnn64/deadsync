@@ -4535,15 +4535,12 @@
     {
       "title": "Riddle",
       "source_simfile": "Riddle/Riddle.ssc",
-      "harness_version": "0.1.0",
-      "archive": "ec6585b656c257900d6681251dab8a34659cb18d5ab5e8332b2aba51a11f4554.tar.zst",
-      "sha256": "ec6585b656c257900d6681251dab8a34659cb18d5ab5e8332b2aba51a11f4554",
-      "compressed_bytes": 80020,
-      "uncompressed_sha256": "8ffcc4eebf7c79e939d3e5b14b0a309ac443a56f4494d41467e8b4526e883345",
-      "compression_level": 22,
-      "aliases": [
-        "88b3886c8a9ad27b1355491af6fa15ddd0f2ef2d447f84d73c83f011a5f4b907.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "4b7b80740baf5fb7e9c7deed3a5cdd99d55d7283345b8f45a89f9b4c0457ff41.tar.zst",
+      "sha256": "4b7b80740baf5fb7e9c7deed3a5cdd99d55d7283345b8f45a89f9b4c0457ff41",
+      "compressed_bytes": 5803313,
+      "uncompressed_sha256": "fbd12687ae2fb14c23eb59b66a77e1e4622b35ff83c2312873d142f7b216e669",
+      "aliases": []
     },
     {
       "title": "The Rite of Spring",
