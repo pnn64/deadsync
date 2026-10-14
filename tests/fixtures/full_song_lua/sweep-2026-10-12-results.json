@@ -13732,6 +13732,37 @@
         }
       ],
       "report_sha256": "c3c61dd5855865c0da7692a9c922a7600e3f31e979cc15cc375fed07d72f7893"
+    },
+    {
+      "position": 427,
+      "source_simfile": "tamashi/tamashi.sm",
+      "simfile_sha256": "cafe0801b0cc0958ccb8a2ec113186feb7c177f5db76be400e4227acacac1250",
+      "retained_original_archive": "1414b286088f609e5e172ae1da2e503ee7428b3941a8092d0bc9b8fcef7bba0e.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+      "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+      "capture_seconds": 222.15802162198815,
+      "trace_sha256": "53e366e98483456c72130859a36912166226702f85387a9003bbd4f7cfaa7d21",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-427/candidates/31ef6bbdaf25f8c4fd58df095851c681a7e73853e173fc236d53f6fef623c6ed.tar",
+      "replay_exit": 1,
+      "replay_seconds": 1163.8030807890173,
+      "candidate_sha256": "31ef6bbdaf25f8c4fd58df095851c681a7e73853e173fc236d53f6fef623c6ed",
+      "native_frames": 41714,
+      "replayed_frames": 41714,
+      "compared_stage_fields": 1518,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.accelerate, Actor.blend, Actor.finishtweening, Actor.hibernate, Actor.skewx, Actor.z, Actor.zoomz, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Hallway, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Incoming, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Roll, PlayerOptions.Space, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave, PlayerOptions.Xmode",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "26d46cfb6cdff69406943abdc0009157afb43e2dc0767f2254aa33af7269e392"
     }
   ],
   "historical_pending": [
@@ -13755,9 +13786,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+  "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 37,
-  "pending_charts": 63,
-  "processed_charts": 100
+  "pending_charts": 64,
+  "processed_charts": 101
 }
