@@ -125,10 +125,71 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 436,
+      "source_simfile": "The Scale/The Scale.ssc",
+      "simfile_sha256": "c8074e00d27e85d053acf991a1886b8232d63ddb052494f4b6303e1cba072ede",
+      "retained_original_archive": "35a72751e27dab1f63e9a07b154a2431cec0811e16be3e3cd94d4085e759a887.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+      "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+      "capture_seconds": 241.122041797993,
+      "trace_sha256": "0cc011846f28a93046b0b659df6bf3722401dcc31e34f92f26e81a12b38a8d8f",
+      "candidate": "/home/parity/jobs/post-accept-reporter-recovery-v1/chart-436/521c95c37ccd314c2d187aea542dd5a4e14f6f8258f96a8e3b74e1371088b1b2.tar",
+      "replay_exit": 1,
+      "replay_seconds": 1276.3480926959892,
+      "candidate_sha256": "521c95c37ccd314c2d187aea542dd5a4e14f6f8258f96a8e3b74e1371088b1b2",
+      "native_frames": 48428,
+      "replayed_frames": 48428,
+      "compared_stage_fields": 1749,
+      "pending_coverage": [
+        "uncompared song operations: Actor.CenterX, GameState.GetHumanPlayers, Screen.AddInputCallback",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "068fdf6fb066b99f2fb4a7ee3aa3fdf9160837537cc189c768051b62678aa1f1",
+      "original_result": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-436/result.json",
+      "original_replay_exit_preserved": true,
+      "post_accept_progress_failure": true,
+      "post_accept_failure": "Reporter Drop poisoned stop mutex after complete accepted report and candidate rehash; no comparison failed",
+      "replay_comparisons_passed": true,
+      "native_capture_reused": true,
+      "full_replay_repeated": false,
+      "chart_repair_attempt_spent": false,
+      "archive": "d153bc6241e4cf132e47862bf85701360f18fa7e58daa4553873f0c8bf6db2ad.tar.zst",
+      "archive_sha256": "d153bc6241e4cf132e47862bf85701360f18fa7e58daa4553873f0c8bf6db2ad",
+      "compressed_bytes": 16161753,
+      "pack_seconds": 48.48715955601074,
+      "pack_exit": 0,
+      "harness_version": "0.1.80",
+      "title": "The Scale (feat. BabyTron)",
+      "all_manifest_members_byte_verified": true,
+      "retained_original_entry": {
+        "title": "The Scale",
+        "source_simfile": "The Scale/The Scale.ssc",
+        "harness_version": "0.1.0",
+        "archive": "35a72751e27dab1f63e9a07b154a2431cec0811e16be3e3cd94d4085e759a887.tar.zst",
+        "sha256": "35a72751e27dab1f63e9a07b154a2431cec0811e16be3e3cd94d4085e759a887",
+        "compressed_bytes": 158922,
+        "uncompressed_sha256": "d08686a6c53029e3d942d360a4f8454bf3977be47d2e6eb80b6bd3da67bf5c1f",
+        "compression_level": 22,
+        "aliases": [
+          "41391f98524c1aff01f703e9ace8011f1bd9f5789ef003ac2344e79ca91c51fc.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "repair": "recover completed passing replay reports after progress reporter shutdown panic; no new replay or chart repair",
-  "passed_fixtures": 2,
+  "passed_fixtures": 3,
   "pending_charts": 0,
-  "processed_charts": 2
+  "processed_charts": 3
 }

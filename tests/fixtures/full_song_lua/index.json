@@ -5091,17 +5091,14 @@
       "aliases": []
     },
     {
-      "title": "The Scale",
+      "title": "The Scale (feat. BabyTron)",
       "source_simfile": "The Scale/The Scale.ssc",
-      "harness_version": "0.1.0",
-      "archive": "35a72751e27dab1f63e9a07b154a2431cec0811e16be3e3cd94d4085e759a887.tar.zst",
-      "sha256": "35a72751e27dab1f63e9a07b154a2431cec0811e16be3e3cd94d4085e759a887",
-      "compressed_bytes": 158922,
-      "uncompressed_sha256": "d08686a6c53029e3d942d360a4f8454bf3977be47d2e6eb80b6bd3da67bf5c1f",
-      "compression_level": 22,
-      "aliases": [
-        "41391f98524c1aff01f703e9ace8011f1bd9f5789ef003ac2344e79ca91c51fc.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "d153bc6241e4cf132e47862bf85701360f18fa7e58daa4553873f0c8bf6db2ad.tar.zst",
+      "sha256": "d153bc6241e4cf132e47862bf85701360f18fa7e58daa4553873f0c8bf6db2ad",
+      "compressed_bytes": 16161753,
+      "uncompressed_sha256": "521c95c37ccd314c2d187aea542dd5a4e14f6f8258f96a8e3b74e1371088b1b2",
+      "aliases": []
     },
     {
       "title": "The Video Boaboaboaboaboaboaboab",
