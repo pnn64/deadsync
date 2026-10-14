@@ -7965,6 +7965,37 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 405,
+      "source_simfile": "Someone Special - hubert/Someone Special.ssc",
+      "simfile_sha256": "b279384ecd66c19bd62f6969503bb0c93854027ec88fbf6e21d59fe361116cf2",
+      "retained_original_archive": "c41e7b12a9fa27155d4244917c25db042a1e3d84b1a7a9449b71f7986b2182a8.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef",
+      "build_proof": "/home/parity/jobs/arrow-alpha-linux-green-v1/proof.json",
+      "capture_seconds": 257.20105932900333,
+      "trace_sha256": "9b6f979bb3fa0ebde37499ac2be48993d9561c1cdc157b0d8f3b2fe57e86b688",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-405/candidates/38e462e6da9413e8e1ccd729d8ed8150f4cfd748ac41f56540934c8905d70e0f.tar",
+      "replay_exit": 1,
+      "replay_seconds": 1902.8307631200005,
+      "candidate_sha256": "38e462e6da9413e8e1ccd729d8ed8150f4cfd748ac41f56540934c8905d70e0f",
+      "native_frames": 14218,
+      "replayed_frames": 14218,
+      "compared_stage_fields": 1683,
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.addrotationy, Actor.baserotationz, Actor.bounce, Actor.effectclock, Actor.rotationx, Actor.rotationy, Actor.spring, Actor.stopeffect, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: ActorProxy, BitmapText, Model, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "acc4ddd61371557a23cc7dc06d6470176d424676a52cc35d293c69d9bb86492f"
     }
   ],
   "scope": {
@@ -7977,6 +8008,6 @@
   "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 24,
-  "pending_charts": 30,
-  "processed_charts": 54
+  "pending_charts": 31,
+  "processed_charts": 55
 }
