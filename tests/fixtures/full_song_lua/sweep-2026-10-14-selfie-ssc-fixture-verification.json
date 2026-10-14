@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Selfie - [JNero]/Selfie.ssc",
+  "native_frames": 95390,
+  "replayed_frames": 95390,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "146977c6c7ecc43ce6fd0b9c791614e4eb61a68bd44b435b1c2628f1409f8ad9.tar.zst",
+  "compressed_sha256": "146977c6c7ecc43ce6fd0b9c791614e4eb61a68bd44b435b1c2628f1409f8ad9",
+  "uncompressed_sha256": "8885f6fcc1002d839c64d6b57e954a838a67fd50f188da2e86d274d18a27ffa4",
+  "compressed_bytes": 8940220,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

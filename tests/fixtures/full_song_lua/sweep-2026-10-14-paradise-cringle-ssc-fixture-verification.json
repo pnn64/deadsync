@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Paradise [Cringle Desolation]/Paradise.ssc",
+  "native_frames": 63634,
+  "replayed_frames": 63634,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "7812ef559aeaa6c94c59e833563c5af23e4a421ab47221266ff169abaee8bd52.tar.zst",
+  "compressed_sha256": "7812ef559aeaa6c94c59e833563c5af23e4a421ab47221266ff169abaee8bd52",
+  "uncompressed_sha256": "deaf4d88b7148587cf506804c8de112d33c854d45cb3597914b81793050f1dd9",
+  "compressed_bytes": 14409451,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

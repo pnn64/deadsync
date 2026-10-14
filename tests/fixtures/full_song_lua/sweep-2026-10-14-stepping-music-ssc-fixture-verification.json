@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Stepping Music/simfile.ssc",
+  "native_frames": 116925,
+  "replayed_frames": 116925,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "2e1f186f45b34cf844d6fab09b484684fd2e32cb7c806655896e37970a85d2a3.tar.zst",
+  "compressed_sha256": "2e1f186f45b34cf844d6fab09b484684fd2e32cb7c806655896e37970a85d2a3",
+  "uncompressed_sha256": "3b5109cba87a715d6fb5c540288cb9389eb5d1df555fe8bf707a41bcd21df687",
+  "compressed_bytes": 2721963,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
