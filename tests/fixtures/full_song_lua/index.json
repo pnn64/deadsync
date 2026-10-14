@@ -5014,17 +5014,14 @@
       ]
     },
     {
-      "title": "Tear Jerker",
+      "title": "Tear Jerker (Soltan Remix)",
       "source_simfile": "Tear Jerker/tearjerker.sm",
-      "harness_version": "0.1.0",
-      "archive": "77f0b1a1dc7ffdc2fd5f75fc06fe92f4241305b70dde7af789b71ef96fd2a08f.tar.zst",
-      "sha256": "77f0b1a1dc7ffdc2fd5f75fc06fe92f4241305b70dde7af789b71ef96fd2a08f",
-      "compressed_bytes": 63639,
-      "uncompressed_sha256": "d7d005c63124bbd87b63ad4f3df9645bc56ced612dc93295de540a4a0c930302",
-      "compression_level": 22,
-      "aliases": [
-        "cc6ffa47c69458d56cce521be92b41e8d4e3e6899bfcf7a2e760c056023d6f15.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "121042357e260c1baabb923978a335d629e4f83850472a367a4c40e7789f441e.tar.zst",
+      "sha256": "121042357e260c1baabb923978a335d629e4f83850472a367a4c40e7789f441e",
+      "compressed_bytes": 14155328,
+      "uncompressed_sha256": "c41fab62e13a9874dafeb66d1ecaf7becc44cfb0030ee907a7b4b5bc4e41a452",
+      "aliases": []
     },
     {
       "title": "Tear Jerker",
