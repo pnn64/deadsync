@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Stuck in the Abyss [DDDAAA]/stuckintheabyss.ssc",
+  "native_frames": 75750,
+  "replayed_frames": 75750,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "f2dbadd55e6cf464268be9ffb28d3a0fbc98466b6f16769c8b7ab87b8a49c87d.tar.zst",
+  "compressed_sha256": "f2dbadd55e6cf464268be9ffb28d3a0fbc98466b6f16769c8b7ab87b8a49c87d",
+  "uncompressed_sha256": "1a06707ce02b21e170b87b6fa201026c7cd31308af2c72da7b5a2e3fd33de3e0",
+  "compressed_bytes": 7355813,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
