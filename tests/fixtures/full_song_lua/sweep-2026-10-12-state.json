@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T16:35:24Z",
-  "previous_goal_turn": "Current turn is progress: Paradise Cringle SSC passes63634 frames, Selfie SSC passes95390, Stepping Music SSC passes116925. All three fixtures saved/committed promptly and local compressed/decompressed hashes match original accepted candidates; passing charts closed. Retrospective fails native background-owner count during preparation because its authored reveal.lua entry is inside external StretchNoLoop ActorFrame; previous mapper recognizes only UpperLeft/Centered. Original neutral factory trace confirms one effect root and its authored child; primary Background.cpp/BackgroundUtil.cpp and effect Lua scripts establish this ownership. Existing effect control extended to Centered/StretchNoLoop/StretchRewind plus invalid song-owned lookalike, fails before both platforms and passes after. Fix3f4ddc793 recognizes external BackgroundEffects Lua ActorFrames while preserving single-child/pointer/parent/scene/ordinal/provenance guards; no callback results drive mapping. Windows30 and Linux63 live/30 native controls plus both executable builds exit zero. All36 local/Linux normalized content pins and all36 active raw source pins verified; harness unchanged. Immutable helperfc937c1ae18f5ffc8bc3716cc10f755ae0c4dd23172c9a055955844fef0c3a28 selected; Retrospective first full repair runs original31593-frame archive4e0dff45/tracecf068cd4 with one later repair available. MISSION SPUTNIK first numeric repair completes40632 frames/no Lua errors but13 mismatches, remains pending1 with one repair remaining. Actual36 vs native16 command queries contain20 extra internal Steps getters from GetOneSteps filtering; source request report coalesces two same-frame authored SetNewScreen calls to one output while native ScreenManager also coalesces actual loads. Primary evidence and retained report receipts establish next fix: direct metadata lookup without Lua getter callbacks plus authored request observation separate from the coalesced effect. Its Showtime has started its first numeric repair before active source selection advanced, so its already-running pinned helper remains valid; no replay restarted. Eight original-scope workers, Koi/Mawaru8/Showtime repairs confirmed live; publisher102 streams. All original501 source scope/capture bytes preserved, oversized fixtures retained/Git ignored, coverage separate, existing comparison fields/tolerances/full zero-exit acceptance preserved, sweep incomplete. Retrospective first repair now completes all31593 native frames, zero errors/mismatches. Background ownership fix3f4ddc793 accepted on its failing chart.4938188-byte fixture saved/committed and local decompression matches unchanged original4e0dff45 candidate; passing Retrospective chart closed. Four accepted fixtures saved and verified this turn.",
+  "updated_utc": "2026-10-14T17:05:57Z",
+  "previous_goal_turn": "Current turn is progress: Oshama SSC passes18767 frames, Potion SM105281, September SSC81616 and Tamamo SSC42872. Planet Calling SSC6820 and ShockWAVE SSC94923 also pass. All six archives saved and committed by publisher; storage-only verification checks compressed SHA and decompressed bytes against original accepted candidates, receipts committed, passing charts closed. Sputnik actual repair1 has13 residual mismatches: native16 vs actual36 command queries expose20 internal Lua Steps getter callbacks; two authored SetNewScreen calls coalesced into one request observation. Fix771646c8d reads immutable Steps metadata and retains every authored request separately from the final production target. Both controls fail before Windows/Linux and pass after; Windows62 live/30 native and Linux64 live/30 native plus both executable builds exit zero. All36 local/Linux normalized and active raw source pins verified; harness unchanged. Immutable helper745eee7daaa9bd844dd8092d43d02e25b6b5e05a2a8967cca909eba5a2e487b7 selected; Sputnik second/final repair runs original40632-frame candidatee6a8401d/trace820041d2, child3357624, no further repair allowed this sweep. An isolated green setup mkdir error was corrected with baseline restoration before any checks or chart repair; failed setup evidence retained. Showtime first repair exits1 at56383/145878: native scene2 vs independent scene1. Primary Screen/ScreenGameplay and authored beat160 show explicit next ScreenGameplay ignored by production transition completion, which always navigates Evaluation; one final repair remains after target handling fix/controls. Save Your Tears Cringle SSC original full67253-frame failure is exactly16 missing terminal GetSongBeat observations after actual navigation at172.7837677 while native continues to172.7938538; exit sequencing cause unconfirmed, no repair spent. Existing8 sweep queues and Koi/Mawaru8 repairs continue; publisher103 streams. Original501 scope preserved, oversized fixtures retained/Git ignored, missing coverage separate and existing full acceptance comparisons unchanged. Sweep remains active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "0f22fd3ece85f4d093111a37b54366030d93d9f4",
+      "deadsync": "42ee4d6774309c9201871329dc3d075bab8d5e0c",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -77,7 +77,8 @@
     "native_keysound_indices": "7fae1f026: native four-cell/real-hold/real-roll control reproduced failure before on both platforms. Native-compatible note input projection and cache68 tested on Windows256 parser and Linux257 parser/62 live/29 native controls, both executable builds; actual unchanged original No13 parses1192 taps and zero holds/rolls matching native. First full repair running original retained candidate/capture. Existing full replay acceptance, tolerances and pending coverage unchanged. Original full No13 repair1 now passes125239 frames, zero errors/mismatches; fixture saved/committed and local bytes verified, passing chart closed.",
     "native_player_stats_identity": "94e70049b: genuine numeric/enum aliases proven by primary native bindings and recorder path construction. Identical control fails before both platforms and passes after, retaining wrong-player/stage/literal/unknown-identity distinctions. Windows30 and Linux62 live/30 native controls plus both builds exit zero. Only typed identity alias spelling corrected; fields, numeric tolerances, raw arguments and full zero-exit/frame/error requirements preserved. Original Mawaru8 first full repair running.",
     "native_numeric_song_selectors": "1482e4b75: native zero-based numeric StepsType/Difficulty lookup implemented; all38 StepsType order checked against primary enum. Meaningful live numeric selector/reload control reproduced before and passes after on both platforms. Windows61 and Linux63 live/30 native controls, both executable builds exit zero. Original MISSION SPUTNIK first full repair running; Its Showtime first repair queued behind it, each one later repair remaining. Existing fields/tolerances/full acceptance and raw chart/capture bytes unchanged.",
-    "native_background_effect_family": "3f4ddc793: primary effect sources and original neutral factory tree confirm authored child ownership. Control fails before on both platforms and passes after; Windows30/Linux63 live/30 native plus both builds all exit zero. Actual original31593-frame Retrospective first full repair passes zero errors/mismatches; fixture saved/committed and local original bytes verified, passing chart closed. Pointer/parent/scene/ordinal/provenance/ownership guards, comparison fields and tolerances preserved."
+    "native_background_effect_family": "3f4ddc793: primary effect sources and original neutral factory tree confirm authored child ownership. Control fails before on both platforms and passes after; Windows30/Linux63 live/30 native plus both builds all exit zero. Actual original31593-frame Retrospective first full repair passes zero errors/mismatches; fixture saved/committed and local original bytes verified, passing chart closed. Pointer/parent/scene/ordinal/provenance/ownership guards, comparison fields and tolerances preserved.",
+    "native_song_selector_observations": "771646c8d: primary SongUtil and ScreenManager establish direct metadata filtering and separate source invocation multiplicity from coalesced loads. Both controls red before Windows/Linux, green after. Windows62 live/30 native; Linux64 live/30 native and both executables build exit zero. All36 source pins and immutable binary verified. Sputnik final repair launched on original candidate and trace; full comparisons/tolerances unchanged, no passing chart reopened."
   },
   "corpus_transfer": {
     "tar_sha256": "37febe98e2e47b325b9f9b96f4d29ddf32eedda84514191252d043c5fd4a4d1a",
@@ -140,9 +141,9 @@
       "pending": 59,
       "processed": 92,
       "last_log_lines": [
-        "[9829.9s] replaying every native gameplay frame: frame 32894/85655 (38.4%)",
-        "[9831.9s] replaying every native gameplay frame: frame 32902/85655 (38.4%)",
-        "[9833.9s] replaying every native gameplay frame: frame 32909/85655 (38.4%)"
+        "[11662.5s] replaying every native gameplay frame: frame 38495/85655 (44.9%)",
+        "[11664.5s] replaying every native gameplay frame: frame 38501/85655 (44.9%)",
+        "[11666.5s] replaying every native gameplay frame: frame 38508/85655 (45.0%)"
       ],
       "supervisor_running": true
     },
@@ -1723,6 +1724,13 @@
         "remote": "/home/parity/jobs/retrospective-background-effect-first-repair-v1",
         "record": "sweep-2026-10-14-retrospective-background-first-repair.json",
         "finish_status": "Retrospective first background-effect full repair complete"
+      },
+      {
+        "name": "mission-sputnik-selector-observations-final-repair",
+        "remote": "/home/parity/jobs/mission-sputnik-selector-observations-final-repair-v1",
+        "record": "sweep-2026-10-14-mission-sputnik-final-repair.json",
+        "fix_commit": "771646c8d58dc1170f1e2b9f332a701f8bd518b7",
+        "finish_status": "second and final selector metadata and authored-request repair complete"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -1740,6 +1748,17 @@
         "child_running": false
       },
       {
+        "job": "mission-sputnik-selector-observations-final-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "MISSION SPUTNIK/sputnik.ssc",
+        "child_running": true
+      },
+      {
         "job": "mission-sputnik-numeric-first-repair-v1",
         "complete": true,
         "supervisor_running": false,
@@ -1752,14 +1771,14 @@
       },
       {
         "job": "showtime-numeric-first-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
+        "complete": true,
+        "supervisor_running": false,
         "passed": 0,
-        "pending": 0,
-        "processed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "replay",
         "source_simfile": "It's Showtime/mettaton.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "mawaru8-player-stats-identity-first-repair-v1",
@@ -1799,49 +1818,49 @@
         "job": "chart-sweep-parallel-v5-4",
         "complete": false,
         "supervisor_running": true,
-        "passed": 1,
+        "passed": 2,
         "pending": 1,
-        "processed": 2,
+        "processed": 3,
         "last_phase": "replay",
-        "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).sm",
+        "source_simfile": "REASON for RED/reasonforgay.ssc",
         "child_running": true,
-        "position": 360
+        "position": 372
       },
       {
         "job": "chart-sweep-parallel-v5-5",
         "complete": false,
         "supervisor_running": true,
-        "passed": 5,
+        "passed": 6,
         "pending": 1,
-        "processed": 6,
+        "processed": 7,
         "last_phase": "replay",
-        "source_simfile": "ShockWAVE Syndrome  [-YOSEFU-]/ShockWAVE Syndrome.ssc",
+        "source_simfile": "Spectrum Sequence/spectrumsequence.ssc",
         "child_running": true,
-        "position": 400
+        "position": 408
       },
       {
         "job": "chart-sweep-parallel-v5-6",
         "complete": false,
         "supervisor_running": true,
-        "passed": 2,
+        "passed": 3,
         "pending": 3,
-        "processed": 5,
+        "processed": 6,
         "last_phase": "replay",
-        "source_simfile": "September/september.ssc",
+        "source_simfile": "Shooting Love/Shooting Love.ssc",
         "child_running": true,
-        "position": 393
+        "position": 401
       },
       {
         "job": "chart-sweep-parallel-v5-7",
         "complete": false,
         "supervisor_running": true,
-        "passed": 4,
+        "passed": 5,
         "pending": 5,
-        "processed": 9,
+        "processed": 10,
         "last_phase": "replay",
-        "source_simfile": "Tamamo no Mae/Tamamo no Mae.ssc",
+        "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.sm",
         "child_running": true,
-        "position": 426
+        "position": 434
       },
       {
         "job": "koi-ssc-rec-print-repair-v1",
@@ -2034,13 +2053,13 @@
         "job": "chart-sweep-parallel-v4-1",
         "complete": false,
         "supervisor_running": true,
-        "passed": 29,
+        "passed": 31,
         "pending": 33,
-        "processed": 62,
-        "last_phase": "replay",
-        "source_simfile": "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc",
+        "processed": 64,
+        "last_phase": "capture",
+        "source_simfile": "Raving With Fire/Raving With Fire.ssc",
         "child_running": true,
-        "position": 337
+        "position": 367
       },
       {
         "job": "chart-sweep-parallel-v4-2",
@@ -2107,10 +2126,10 @@
     "attack_boundary_completed_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-attack-boundary-linux-build.json",
     "cringle_sm_attack_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-door-cringle-sm-attack-final-launch.json",
     "reason_red_zero_seed": "tests/fixtures/full_song_lua/sweep-2026-10-14-reason-red-zero-seed-diagnosis.json",
-    "selected_replay_binary_sha256": "fc937c1ae18f5ffc8bc3716cc10f755ae0c4dd23172c9a055955844fef0c3a28",
+    "selected_replay_binary_sha256": "745eee7daaa9bd844dd8092d43d02e25b6b5e05a2a8967cca909eba5a2e487b7",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 102,
+    "publisher_stream_count": 103,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -2159,14 +2178,25 @@
     "paradise_cringle_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-paradise-cringle-ssc-fixture-verification.json",
     "selfie_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-selfie-ssc-fixture-verification.json",
     "stepping_music_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-stepping-music-ssc-fixture-verification.json",
-    "retrospective_first_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-retrospective-first-fixture-verification.json"
+    "retrospective_first_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-retrospective-first-fixture-verification.json",
+    "song_selector_observations_validation": "tests/fixtures/full_song_lua/sweep-2026-10-14-song-selector-observations-validation.json",
+    "song_selector_observations_selection": "tests/fixtures/full_song_lua/sweep-2026-10-14-song-selector-observations-selection.json",
+    "mission_sputnik_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-mission-sputnik-final-repair-launch.json",
+    "showtime_first_residual": "tests/fixtures/full_song_lua/sweep-2026-10-14-showtime-first-residual.json",
+    "save_tears_ssc_residual": "tests/fixtures/full_song_lua/sweep-2026-10-14-save-tears-ssc-residual.json",
+    "oshama_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-oshama-ssc-fixture-verification.json",
+    "potion_sm_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-potion-sm-fixture-verification.json",
+    "september_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-september-ssc-fixture-verification.json",
+    "tamamo_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-tamamo-ssc-fixture-verification.json",
+    "planet_calling_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-planet-calling-ssc-fixture-verification.json",
+    "shockwave_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-shockwave-ssc-fixture-verification.json"
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 146,
+    "new_passed_fixtures": 152,
     "new_pending_charts": 84,
-    "new_processed_sources": 230,
+    "new_processed_sources": 236,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 123,
+    "unprocessed_sources": 117,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -2588,8 +2618,8 @@
     },
     {
       "source_simfile": "It's Showtime/mettaton.ssc",
-      "repair_attempts": 0,
-      "failure": " 45682/145878 (31.3%)\n[698.1s] replaying every native gameplay frame: frame 45809/145878 (31.4%)\n[700.1s] replaying every native gameplay frame: frame 45944/145878 (31.5%)\n[702.1s] replaying every native gameplay frame: frame 46072/145878 (31.6%)\n[704.1s] replaying every native gameplay frame: frame 46205/145878 (31.7%)\n[706.1s] replaying every native gameplay frame: frame 46337/145878 (31.8%)\n[708.1s] replaying every native gameplay frame: frame 46477/145878 (31.9%)\n[710.1s] replaying every native gameplay frame: frame 46618/145878 (32.0%)\n[712.1s] replaying every native gameplay frame: frame 46756/145878 (32.1%)\n[714.1s] replaying every native gameplay frame: frame 46896/145878 (32.1%)\n[716.1s] replaying every native gameplay frame: frame 47033/145878 (32.2%)\n[718.1s] replaying every native gameplay frame: frame 47162/145878 (32.3%)\n[720.2s] replaying every native gameplay frame: frame 47292/145878 (32.4%)\n[722.2s] replaying every native gameplay frame: frame 47422/145878 (32.5%)\n[724.2s] replaying every native gameplay frame: frame 47554/145878 (32.6%)\n[726.2s] replaying every native gameplay frame: frame 47686/145878 (32.7%)\n[728.2s] replaying every native gameplay frame: frame 47817/145878 (32.8%)\n[730.2s] replaying every native gameplay frame: frame 47927/145878 (32.9%)\n[732.2s] replaying every native gameplay frame: frame 48058/145878 (32.9%)\n[734.2s] replaying every native gameplay frame: frame 48189/145878 (33.0%)\n[736.2s] replaying every native gameplay frame: frame 48323/145878 (33.1%)\n[738.2s] replaying every native gameplay frame: frame 48455/145878 (33.2%)\n[740.2s] replaying every native gameplay frame: frame 48589/145878 (33.3%)\n[742.2s] replaying every native gameplay frame: frame 48717/145878 (33.4%)\n[744.2s] replaying every native gameplay frame: frame 48846/145878 (33.5%)\n[746.2s] replaying every native gameplay frame: frame 48973/145878 (33.6%)\n[748.2s] replaying every native gameplay frame: frame 49099/145878 (33.7%)\n[750.2s] replaying every native gameplay frame: frame 49225/145878 (33.7%)\n[752.2s] replaying every native gameplay frame: frame 49352/145878 (33.8%)\n[754.2s] replaying every native gameplay frame: frame 49477/145878 (33.9%)\n[756.2s] replaying every native gameplay frame: frame 49601/145878 (34.0%)\n[758.2s] replaying every native gameplay frame: frame 49721/145878 (34.1%)\n[760.2s] replaying every native gameplay frame: frame 49840/145878 (34.2%)\n[762.2s] replaying every native gameplay frame: frame 49964/145878 (34.3%)\n[764.2s] replaying every native gameplay frame: frame 50088/145878 (34.3%)\n[766.2s] replaying every native gameplay frame: frame 50213/145878 (34.4%)\n[768.2s] replaying every native gameplay frame: frame 50332/145878 (34.5%)\n[770.2s] replaying every native gameplay frame: frame 50459/145878 (34.6%)\n[772.2s] replaying every native gameplay frame: frame 50586/145878 (34.7%)\n[774.2s] replaying every native gameplay frame: frame 50709/145878 (34.8%)\n[776.2s] replaying every native gameplay frame: frame 50839/145878 (34.9%)\n[778.2s] replaying every native gameplay frame: frame 50971/145878 (34.9%)\n[780.2s] replaying every native gameplay frame: frame 51100/145878 (35.0%)\n[782.2s] replaying every native gameplay frame: frame 51231/145878 (35.1%)\n\nthread 'main' (1572481) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: GAMESTATE has no selected P1 chart\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "repair_attempts": 1,
+      "failure": ".8s] replaying every native gameplay frame: frame 54268/145878 (37.2%)\n[2258.8s] replaying every native gameplay frame: frame 54311/145878 (37.2%)\n[2260.8s] replaying every native gameplay frame: frame 54352/145878 (37.3%)\n[2262.8s] replaying every native gameplay frame: frame 54396/145878 (37.3%)\n[2264.8s] replaying every native gameplay frame: frame 54439/145878 (37.3%)\n[2266.8s] replaying every native gameplay frame: frame 54483/145878 (37.3%)\n[2268.8s] replaying every native gameplay frame: frame 54527/145878 (37.4%)\n[2270.8s] replaying every native gameplay frame: frame 54569/145878 (37.4%)\n[2272.8s] replaying every native gameplay frame: frame 54611/145878 (37.4%)\n[2274.9s] replaying every native gameplay frame: frame 54656/145878 (37.5%)\n[2276.9s] replaying every native gameplay frame: frame 54699/145878 (37.5%)\n[2278.9s] replaying every native gameplay frame: frame 54742/145878 (37.5%)\n[2280.9s] replaying every native gameplay frame: frame 54786/145878 (37.6%)\n[2282.9s] replaying every native gameplay frame: frame 54829/145878 (37.6%)\n[2284.9s] replaying every native gameplay frame: frame 54873/145878 (37.6%)\n[2286.9s] replaying every native gameplay frame: frame 54918/145878 (37.6%)\n[2288.9s] replaying every native gameplay frame: frame 54962/145878 (37.7%)\n[2290.9s] replaying every native gameplay frame: frame 55004/145878 (37.7%)\n[2292.9s] replaying every native gameplay frame: frame 55047/145878 (37.7%)\n[2294.9s] replaying every native gameplay frame: frame 55091/145878 (37.8%)\n[2296.9s] replaying every native gameplay frame: frame 55136/145878 (37.8%)\n[2298.9s] replaying every native gameplay frame: frame 55179/145878 (37.8%)\n[2300.9s] replaying every native gameplay frame: frame 55223/145878 (37.9%)\n[2302.9s] replaying every native gameplay frame: frame 55268/145878 (37.9%)\n[2304.9s] replaying every native gameplay frame: frame 55313/145878 (37.9%)\n[2306.9s] replaying every native gameplay frame: frame 55355/145878 (37.9%)\n[2308.9s] replaying every native gameplay frame: frame 55401/145878 (38.0%)\n[2310.9s] replaying every native gameplay frame: frame 55445/145878 (38.0%)\n[2312.9s] replaying every native gameplay frame: frame 55488/145878 (38.0%)\n[2314.9s] replaying every native gameplay frame: frame 55533/145878 (38.1%)\n[2316.9s] replaying every native gameplay frame: frame 55579/145878 (38.1%)\n[2318.9s] replaying every native gameplay frame: frame 55622/145878 (38.1%)\n[2320.9s] replaying every native gameplay frame: frame 55668/145878 (38.2%)\n[2322.9s] replaying every native gameplay frame: frame 55715/145878 (38.2%)\n[2324.9s] replaying every native gameplay frame: frame 55762/145878 (38.2%)\n[2326.9s] replaying every native gameplay frame: frame 55808/145878 (38.3%)\n[2328.9s] replaying every native gameplay frame: frame 55853/145878 (38.3%)\n[2330.9s] replaying every native gameplay frame: frame 55900/145878 (38.3%)\n[2332.9s] replaying every native gameplay frame: frame 55944/145878 (38.3%)\n[2334.9s] replaying every native gameplay frame: frame 55990/145878 (38.4%)\n[2336.9s] replaying every native gameplay frame: frame 56035/145878 (38.4%)\n[2338.9s] replaying every native gameplay frame: frame 56078/145878 (38.4%)\n[2340.9s] replaying every native gameplay frame: frame 56125/145878 (38.5%)\n[2342.9s] replaying every native gameplay frame: frame 56171/145878 (38.5%)\n[2344.9s] replaying every native gameplay frame: frame 56219/145878 (38.5%)\n[2346.9s] replaying every native gameplay frame: frame 56263/145878 (38.6%)\n[2348.9s] replaying every native gameplay frame: frame 56305/145878 (38.6%)\n[2350.9s] replaying every native gameplay frame: frame 56348/145878 (38.6%)\n\nthread 'main' (3078528) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native scene 2 differs from independent scene 1 at frame 56383\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[2352.9s] replaying every native gameplay frame: frame 56382/145878 (38.7%)\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []

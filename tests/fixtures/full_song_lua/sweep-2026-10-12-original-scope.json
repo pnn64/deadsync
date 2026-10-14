@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T16:35:23Z",
+  "updated_utc": "2026-10-14T17:05:56Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 293,
+    "passed": 299,
     "pending": 85,
-    "unprocessed": 123
+    "unprocessed": 117
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2174,8 +2174,8 @@
       "source_simfile": "It's Showtime/mettaton.ssc",
       "simfile_sha256": "73e611898e40fd3b7a07a6257a3b38e4a6a07cf8f39b0f3e4bd8e7cebbbde128",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-showtime-numeric-first-repair.json"
     },
     {
       "position": 252,
@@ -2861,7 +2861,9 @@
       "position": 337,
       "source_simfile": "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc",
       "simfile_sha256": "a88c9337515e95bdf15d244cc788b446f837e9f215d7671cf8181fe229281c42",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 338,
@@ -3001,7 +3003,9 @@
       "position": 355,
       "source_simfile": "Planet Calling/Planet Calling.ssc",
       "simfile_sha256": "2f232179ed67004f2cfcd167093ff3c7354c380edcdbf85dd15853da4f5a38a1",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 356,
@@ -3039,7 +3043,9 @@
       "position": 360,
       "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).sm",
       "simfile_sha256": "b60d8f125c21bf91b6d7a4da43964427245a21d7b1f4786f401d12790bcb0c44",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-4.json"
     },
     {
       "position": 361,
@@ -3273,7 +3279,9 @@
       "position": 393,
       "source_simfile": "September/september.ssc",
       "simfile_sha256": "a0bc086398a4f8682345c2ed7b9c9dfff26cea64eba493597b44bfae279275ba",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 394,
@@ -3317,7 +3325,9 @@
       "position": 400,
       "source_simfile": "ShockWAVE Syndrome  [-YOSEFU-]/ShockWAVE Syndrome.ssc",
       "simfile_sha256": "51aa717b34654f7f4bbad091afb0e9621718e57977d78fe36702c21f580ed3c7",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 401,
@@ -3479,7 +3489,9 @@
       "position": 426,
       "source_simfile": "Tamamo no Mae/Tamamo no Mae.ssc",
       "simfile_sha256": "eec264efef2401e6e519391de04b63e44b7c9540c88b7c7bf97b15aa151e3cab",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 427,
