@@ -2623,15 +2623,12 @@
     {
       "title": "Get Into It",
       "source_simfile": "Get Into It/GetIntoIt.sm",
-      "harness_version": "0.1.0",
-      "archive": "9163226a31da0586f252f1c418bbdfd663159cfb2aa3d4b5cd7a8e216afbb3dc.tar.zst",
-      "sha256": "9163226a31da0586f252f1c418bbdfd663159cfb2aa3d4b5cd7a8e216afbb3dc",
-      "compressed_bytes": 7374051,
-      "uncompressed_sha256": "73b630334b584af2a4114c62ac2cfa63729b8f249aea806a0f1348f108030ce7",
-      "compression_level": 22,
-      "aliases": [
-        "70bb37500de7f1ac571630127100007314b91cd38a470a7fc08bdfd3a85fa565.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "0f930b5c92c851793a6a4ddcac966901028639f31d42079fedb8e431a2a27d7c.tar.zst",
+      "sha256": "0f930b5c92c851793a6a4ddcac966901028639f31d42079fedb8e431a2a27d7c",
+      "compressed_bytes": 13210404,
+      "uncompressed_sha256": "c8525597f7140851887306420f697065b157204649f38c77434fb24b5fa69c27",
+      "aliases": []
     },
     {
       "title": "Get Into It (Yuh)",
