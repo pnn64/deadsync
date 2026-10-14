@@ -1,0 +1,69 @@
+{
+  "source_simfile": "Pokemon Gym Battle Remix/pokes.ssc",
+  "evidence_only": true,
+  "native_file_state_across_reload": [
+    {
+      "scene": 1,
+      "song_dir_query_counts": [
+        {
+          "source": "song:/jokes/default.lua",
+          "line": 3,
+          "count": 1
+        },
+        {
+          "source": "song:/pokes/default.lua",
+          "line": 7,
+          "count": 1
+        },
+        {
+          "source": "song:/pokes/default.lua",
+          "line": 15,
+          "count": 1
+        },
+        {
+          "source": "song:/pokes/default.lua",
+          "line": 143,
+          "count": 1
+        },
+        {
+          "source": "song:/pokes/default.lua",
+          "line": 230,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "scene": 2,
+      "song_dir_query_counts": [
+        {
+          "source": "song:/jokes/default.lua",
+          "line": 3,
+          "count": 1
+        },
+        {
+          "source": "song:/pokes/default.lua",
+          "line": 7,
+          "count": 1
+        },
+        {
+          "source": "song:/pokes/default.lua",
+          "line": 15,
+          "count": 1
+        },
+        {
+          "source": "song:/pokes/default.lua",
+          "line": 143,
+          "count": 2
+        },
+        {
+          "source": "song:/pokes/default.lua",
+          "line": 230,
+          "count": 1611
+        }
+      ]
+    }
+  ],
+  "source_statement": "Both native scenes contain the song-directory query from writeSaveFile once. This proves the branch is entered again after reload, not that the requested file write persisted. Preserve observed branch behavior and diagnose from replay output; do not infer filesystem input from a requested write.",
+  "trace_sha256": "c1e8191cb872cb3b2a89d7059c9cf58fc4335b53ce9e1f1f5e485b51594219f4",
+  "expected_query_results_used_as_input": false
+}

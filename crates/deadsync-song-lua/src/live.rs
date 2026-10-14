@@ -4338,6 +4338,57 @@ end }
     }
 
     #[test]
+    fn live_failed_actor_load_keeps_vm_and_rebuilds_on_reload() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-load-fallback-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("song directory");
+        let background = dir.join("background.lua");
+        let foreground = dir.join("foreground.lua");
+        let invalid = dir.join("invalid.lua");
+        fs::write(&background, r#"
+BACKGROUND_LOADS = (BACKGROUND_LOADS or 0) + 1
+if COUNTER == nil then error('native failed actor load uses a dummy') end
+return Def.ActorFrame{InitCommand=function(self) BACKGROUND_INITS = COUNTER end}
+"#).expect("background source");
+        fs::write(&foreground, r#"
+COUNTER = COUNTER or 0
+return Def.ActorFrame{OnCommand=function(self)
+    if not RELOADED then RELOADED = true; SCREENMAN:SetNewScreen('ScreenGameplay') end
+end}
+"#).expect("foreground source");
+        fs::write(&invalid, "INVALID_LOADS = (INVALID_LOADS or 0) + 1; return 42").expect("invalid return source");
+        let mut context = SongLuaCompileContext::new(&dir, "native actor load fallback");
+        context.live = true;
+        context.background_layer_count = 1;
+        context.layer_start_beats = vec![4.0, 0.0, 0.0];
+        context.foreground_names = vec!["foreground".into(), "invalid".into()];
+        let mut layers: Vec<Compiled> = crate::compile_song_lua_layers_with_default_host(
+            &[&background, &foreground, &invalid], 1, &context, SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None)
+            .expect("native failed actor load uses a dummy and preserves the shared VM");
+        let mut scene = layers[1].live_scene.take().expect("primary retains shared scene");
+        assert_eq!(scene.lua.globals().get::<u32>("BACKGROUND_LOADS").unwrap(), 1);
+        assert_eq!(scene.lua.globals().get::<u32>("INVALID_LOADS").unwrap(), 1);
+        assert!(scene.lua.globals().get::<Option<u32>>("BACKGROUND_INITS").unwrap().is_none());
+        scene.lua.load(r#"
+local children = SCREENMAN:GetTopScreen():GetChild('SongForeground'):GetChildren()
+assert(children.foreground ~= children.invalid)
+assert(children.invalid.__songlua_actor_type == 'Actor')
+"#).exec().expect("native dummy occupies its foreground slot");
+        let output = scene.advance(SongLuaLiveFrame { music_seconds: 0.1, beat: 0.1,
+            screen_seconds: 0.1, delta_seconds: 0.1, ..Default::default() }).expect("activate foreground");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(output.request, Some(SongLuaLiveRequest::NewScreen("ScreenGameplay".into())));
+        let mut layers: Vec<Compiled> = crate::reload_song_lua_with_default_host(scene,
+            |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).expect("reload same process VM");
+        let mut scene = layers[1].live_scene.take().expect("replacement retains scene");
+        assert_eq!(scene.lua.globals().get::<u32>("BACKGROUND_LOADS").unwrap(), 2);
+        assert_eq!(scene.lua.globals().get::<u32>("BACKGROUND_INITS").unwrap(), 0);
+        assert_eq!(scene.lua.globals().get::<u32>("INVALID_LOADS").unwrap(), 2);
+        assert!(scene.advance(SongLuaLiveFrame { music_seconds: 1.0, beat: 4.0,
+            screen_seconds: 1.0, delta_seconds: 0.1, ..Default::default() }).unwrap().errors.is_empty());
+    }
+
+    #[test]
     fn live_layers() {
         let dir = std::env::temp_dir().join(format!("deadsync-live-layers-{}", std::process::id()));
         fs::create_dir_all(&dir).expect("layer directory");

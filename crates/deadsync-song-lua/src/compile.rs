@@ -337,9 +337,24 @@ where
                         crate::file_path_string(&context.song_dir).trim_end_matches('/')))
                 })
                 .unwrap_or_else(|| entry_path.clone());
-            let root = crate::lua_util::execute_script_file_with_source(
+            let root = match crate::lua_util::execute_script_file_with_source(
                 &lua, entry_path, &source_path, context.song_dir.as_path())
-                .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
+            {
+                Ok(root) if !context.live || matches!(&root, Value::Table(_)) => root,
+                Ok(_) => {
+                    // ActorUtil::MakeActor substitutes a plain Actor when a
+                    // Lua chunk fails to return a declaration table.
+                    log::warn!("Failed to load song actor '{}': must return a table; using native dummy Actor", entry_path.display());
+                    Value::Table(create_dummy_actor(&lua, "Actor").map_err(|err| err.to_string())?)
+                }
+                Err(err) if context.live => {
+                    // Native construction catches the load error without
+                    // replacing the process Lua VM or its earlier side effects.
+                    log::warn!("Failed to load song actor '{}': {err}; using native dummy Actor", entry_path.display());
+                    Value::Table(create_dummy_actor(&lua, "Actor").map_err(|err| err.to_string())?)
+                }
+                Err(err) => return Err(format!("failed to execute '{}': {err}", entry_path.display())),
+            };
             let root = crate::lua_util::own_actor_root(&lua, root, install_actor_methods)
                 .map_err(|err| err.to_string())?;
             let parent = if let Value::Table(actor) = &root {

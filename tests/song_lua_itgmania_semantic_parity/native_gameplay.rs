@@ -2112,6 +2112,24 @@ end}
     }
 
     #[test]
+    fn creation_identities_keep_foreground_when_background_factory_is_unobserved() {
+        let trace = json!({
+            "capabilities":{"native_actor_creation":true}, "roots":["fg"],
+            "actor_definitions":[{"id":"fg","children":[]}], "events":[],
+            "runtime_actors":[{"id":"fg-instance","definition_id":"fg"},
+                {"id":"parent","path":"SongForeground"}],
+            "actor_creation_inputs":[{"actor":"fg-instance","definition_id":"fg","parent":"parent",
+                "pointer_hex":"20","ordinal":1,"scene":1,"before_seq":1,
+                "provenance":"native-ActorUtil-before-LoadFromNode"}]
+        });
+        let (order, coverage) = super::native_creation_order_with_coverage_for_entries(&trace,1,1)
+            .expect("native failed background has no observed factory allocation");
+        assert_eq!(order, vec![("2".into(),32)]);
+        assert_eq!(coverage.len(), 1);
+        assert!(coverage[0].contains("foreground ranks retained"));
+    }
+
+    #[test]
     fn creation_identities_use_allocations_and_validate_ownership() {
         use serde_json::json;
         let trace = json!({
@@ -2435,7 +2453,13 @@ fn native_creation_order_for_scene(trace: &Value, scene: u64) -> Result<Vec<(Str
 }
 
 fn native_creation_order_for_entries(trace: &Value, scene: u64, background_entries: usize) -> Result<Vec<(String, usize)>, String> {
-    if trace["capabilities"]["native_actor_creation"] != true { return Ok(Vec::new()); }
+    native_creation_order_with_coverage_for_entries(trace, scene, background_entries)
+        .map(|(order, _)| order)
+}
+
+fn native_creation_order_with_coverage_for_entries(trace: &Value, scene: u64, background_entries: usize) -> Result<(Vec<(String, usize)>, Vec<String>), String> {
+    let mut pending_coverage = Vec::new();
+    if trace["capabilities"]["native_actor_creation"] != true { return Ok((Vec::new(), Vec::new())); }
     if !trace["actor_creation_error"].is_null() {
         return Err("native actor creation observer failed".into());
     }
@@ -2446,7 +2470,7 @@ fn native_creation_order_for_entries(trace: &Value, scene: u64, background_entri
         && trace["runtime_actors"].as_array().is_some_and(|actors|
             actors.iter().all(|actor| actor["definition_id"].is_null()))
     {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), Vec::new()));
     }
     let mut defs = BTreeMap::new();
     for definition in definitions {
@@ -2519,7 +2543,17 @@ fn native_creation_order_for_entries(trace: &Value, scene: u64, background_entri
             }
         }
         if background_owners.len() != background_entries {
-            return Err("native background containers do not match the prepared entry count".into());
+            // MakeActor returns an unobserved plain Actor after a Lua load
+            // failure. When every observed tree is owned by Foreground, retain
+            // its independent entry slots without inventing background ranks.
+            let only_foreground_roots = !foreground_roots.is_empty()
+                && inputs.iter().filter(|input| input["scene"].as_u64() == Some(scene)
+                    && input["parent"].as_str().is_none_or(|parent| !instances.contains_key(parent)))
+                    .all(|input| input["actor"].as_str().is_some_and(|actor| foreground_roots.contains_key(actor)));
+            if !background_owners.is_empty() || !only_foreground_roots {
+                return Err("native background containers do not match the prepared entry count".into());
+            }
+            pending_coverage.push(format!("native scene {scene}: no captured factory identity for {background_entries} background entries; foreground ranks retained"));
         }
         for (index, (owner, instantiated)) in background_owners.into_iter().enumerate() {
             if instantiated {
@@ -2592,7 +2626,7 @@ fn native_creation_order_for_entries(trace: &Value, scene: u64, background_entri
         result.push((path, pointer));
     }
     if result.is_empty() { return Err("native scene has no instantiated actor root".into()); }
-    Ok(result)
+    Ok((result, pending_coverage))
 }
 
 // The overlay records progress in frame order. Pause/unpause can move the
@@ -2869,7 +2903,9 @@ pub(crate) fn replay(
     context.last_seen_video_driver = last_seen_video_driver
         .or_else(|| preferences.get("last_seen_video_driver").and_then(Value::as_str))
         .unwrap_or_default().to_string();
-    context.message_actor_order = native_creation_order_for_entries(trace, 1, song.background_lua_changes.len())?;
+    let (creation_order, factory_coverage) = native_creation_order_with_coverage_for_entries(
+        trace, 1, song.background_lua_changes.len())?;
+    context.message_actor_order = creation_order;
     // Native ScreenGameplay updates song position before its first Update(0).
     // Defer preparation's placeholder update and run every recorded frame,
     // including zero-delta inputs, through the actual gameplay entry point.
@@ -2941,6 +2977,7 @@ pub(crate) fn replay(
     let mut pending_reload = false;
     let mut errors = startup.errors;
     let mut runtime_coverage: BTreeSet<String> = startup.coverage_gaps.into_iter().collect();
+    runtime_coverage.extend(factory_coverage);
     let mut broadcasts: Vec<_> = startup
         .source_broadcasts
         .iter()
@@ -2968,8 +3005,10 @@ pub(crate) fn replay(
                 .song_lua
                 .take()
                 .ok_or("reload has no retained Lua scene")?;
-            scene.set_message_actor_order(native_creation_order_for_entries(trace, scene_count + 1,
-                scene.context().background_layer_count)?);
+            let (creation_order, factory_coverage) = native_creation_order_with_coverage_for_entries(
+                trace, scene_count + 1, scene.context().background_layer_count)?;
+            runtime_coverage.extend(factory_coverage);
+            scene.set_message_actor_order(creation_order);
             let prepared = deadsync_song_lua::playback::reload_song_lua(
                 &song,
                 scene,

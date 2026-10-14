@@ -1,0 +1,66 @@
+{
+  "fix": "Native live actor-load failure substitutes plain Actor in same VM; preserve known foreground creation ranks and record absent background factory coverage",
+  "windows": {
+    "all_five_checks_passed": true,
+    "checks": [
+      {
+        "label": "target-control",
+        "exit_code": 0,
+        "seconds": 316.15895759999694,
+        "log_sha256": "ee213ff5183935b8d4693b02c2e458a66653fd0a44cf92e99cffe7191985298c",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out; finished in 0.44s"
+        ]
+      },
+      {
+        "label": "live-controls",
+        "exit_code": 0,
+        "seconds": 36.79286549999961,
+        "log_sha256": "1fd79a07be16f164476bafda5567a0747e07bfb6517e8473bc7e1adb4176c194",
+        "results": [
+          "test result: ok. 67 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 35.31s"
+        ]
+      },
+      {
+        "label": "replay-controls",
+        "exit_code": 0,
+        "seconds": 58.393564699996205,
+        "log_sha256": "1aa25760f8a59e329781bd25d4b7b12beb8fe550972b25855848cc9b9d8c4be5",
+        "results": [
+          "test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.16s"
+        ]
+      },
+      {
+        "label": "identity-control",
+        "exit_code": 0,
+        "seconds": 1.4827899000010802,
+        "log_sha256": "3774209938aaf51ac1cc05b46a6a92b11aa31462dc45aed8944e6abd50456ea8",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "label": "build",
+        "exit_code": 0,
+        "seconds": 22.78540630000498,
+        "log_sha256": "a47f4935afeb2a6770957d87b8fecca7788728c9450b701f6214dfe046126a52",
+        "results": []
+      }
+    ],
+    "source_pin_count": 1175,
+    "all_normalized_source_pins_and_check_logs_verified": true
+  },
+  "linux": {
+    "baseline_regression_reproduced": true,
+    "new_target_control_passed": true,
+    "remaining_checks_status": "running",
+    "build_proof": "/home/parity/jobs/pokemon-failed-load-linux-green-v1/proof.json"
+  },
+  "full_chart_repair_attempts_spent": 0,
+  "entry_diagnostic_waiter_pid": 830312,
+  "passing_charts_reopened": false,
+  "acceptance_comparisons_changed": false,
+  "native_trace_bytes_changed": false,
+  "expected_query_results_used_as_input": false,
+  "local_user_views_edited": false
+}
