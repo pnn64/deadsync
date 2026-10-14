@@ -74,6 +74,20 @@ pub const TOP_SCREEN_THEME_CHILD_NAMES: &[&str] = &[
     "ScoreP2",
     "StepsDisplayP1",
     "StepsDisplayP2",
+    "StepsDescriptionP1",
+    "StepsDescriptionP2",
+    "PlayerOptionsP1",
+    "PlayerOptionsP2",
+    "SongOptions",
+    "ActiveAttackListP1",
+    "ActiveAttackListP2",
+    "LyricDisplay",
+    "OniGameOverP1",
+    "OniGameOverP2",
+    "Header",
+    "Footer",
+    "Out",
+    "Cancel",
 ];
 
 pub const UNDERLAY_THEME_CHILD_NAMES: &[&str] = &[

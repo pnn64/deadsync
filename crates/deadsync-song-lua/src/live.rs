@@ -1481,6 +1481,57 @@ return Def.Actor {
     }
 
     #[test]
+    fn live_gameplay_children_retain_native_owned_inventory() {
+        let mut compiled = compile_with_context("native-screen-children", r#"
+return Def.Actor {
+    OnCommand=function(self)
+        SCREEN = SCREENMAN:GetTopScreen()
+        CHILDREN = SCREEN:GetChildren()
+        CHILD_KEYS = {}
+        for name, child in pairs(CHILDREN) do CHILD_KEYS[#CHILD_KEYS+1] = name end
+    end,
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.layer_start_beats = vec![0.0];
+            context.players[0].enabled = true;
+            context.players[1].enabled = false;
+        });
+        let mut scene = compiled.live_scene.take().expect("owned gameplay screen");
+        let output = scene.advance(SongLuaLiveFrame::default()).expect("first foreground On");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        let keys = scene.lua.globals().get::<Table>("CHILD_KEYS").unwrap();
+        assert_eq!(keys.raw_len(), 22,
+            "native gameplay child collection includes engine and adopted decoration owners");
+        scene.lua.load(r#"
+local expected = {'', 'ActiveAttackListP1', 'ActiveAttackListP2', 'Cancel', 'Debug',
+    'Footer', 'Header', 'In', 'LifeP1', 'LyricDisplay', 'OniGameOverP1', 'Out',
+    'Overlay', 'PlayerOptionsP1', 'PlayerP1', 'ScoreP1', 'SongBackground',
+    'SongForeground', 'SongOptions', 'StepsDescriptionP1', 'StepsDisplayP1', 'Underlay'}
+local nextChildren = SCREEN:GetChildren()
+for _, name in ipairs(expected) do
+    assert(CHILDREN[name] ~= nil, 'missing native owned child: ' .. name)
+    if name ~= '' then
+        assert(nextChildren[name] == CHILDREN[name] and SCREEN:GetChild(name) == CHILDREN[name],
+            'named child lookup preserves owned actor identity: ' .. name)
+        assert(CHILDREN[name]:GetParent() == SCREEN)
+    end
+end
+assert(#CHILDREN[''] == 5, 'native duplicate empty names retain all five screen actors')
+for i, child in ipairs(CHILDREN['']) do
+    assert(nextChildren[''][i] == child and child:GetParent() == SCREEN)
+end
+assert(SCREEN:GetNumChildren() == 26, 'native screen counts owned actors, not table keys')
+local relevant = {}
+for _, name in ipairs(CHILD_KEYS) do
+    if name == 'In' or name == 'Underlay' then relevant[#relevant+1] = name end
+end
+assert(relevant[1] == 'In' and relevant[2] == 'Underlay',
+    'native child table traversal visits In before the Underlay score loop')
+"#).exec().expect("native inventory, grouping, identity and traversal");
+    }
+
+    #[test]
     fn live_get_all_steps_returns_native_array_without_internal_getter_calls() {
         let compiled = compile_with_context("all-steps-native-array", "return Def.Actor{}", |context| {
             context.song_steps = [SongLuaDifficulty::Challenge, SongLuaDifficulty::Edit]

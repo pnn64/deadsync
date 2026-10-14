@@ -2172,6 +2172,27 @@ pub(crate) fn set_actor_name(actor: &Table, name: mlua::LuaString) -> mlua::Resu
 
 pub fn actor_named_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     let children = lua.create_table()?;
+    if actor.raw_get::<Option<bool>>("__songlua_owned_child_lookup")?.unwrap_or(false) {
+        // Native PushChildrenTable traverses m_SubActors after BeginScreen's
+        // stable draw-order sort, not the named lookup registry's insertion order.
+        for child in actor.sequence_values::<Table>() {
+            let child = child?;
+            let name = actor_name(&child)?;
+            match children.raw_get::<Value>(name.as_str())? {
+                Value::Table(group) if actor_is_child_group(&group)? => {
+                    push_sequence_child_once(&group, child)?;
+                }
+                Value::Table(previous) => {
+                    let group = create_actor_child_group(lua)?;
+                    group.raw_set(1, previous)?;
+                    group.raw_set(2, child)?;
+                    children.raw_set(name.as_str(), group)?;
+                }
+                _ => children.raw_set(name.as_str(), child)?,
+            }
+        }
+        return Ok(children);
+    }
     let source = actor_children(lua, actor)?;
     let mut copy = |key: Value, value: Value| -> mlua::Result<()> {
         if value.is_nil() || !children.raw_get::<Value>(key.clone())?.is_nil() {
@@ -13361,6 +13382,11 @@ pub fn create_top_screen_theme_actor(
     if name.eq_ignore_ascii_case("Underlay")
         || name.eq_ignore_ascii_case("Overlay")
         || name.eq_ignore_ascii_case("In")
+        || name.eq_ignore_ascii_case("Out")
+        || name.eq_ignore_ascii_case("Cancel")
+        || name.eq_ignore_ascii_case("Header")
+        || name.eq_ignore_ascii_case("Footer")
+        || name.eq_ignore_ascii_case("LyricDisplay")
     {
         let actor = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
         if name.eq_ignore_ascii_case("Underlay") {
@@ -13409,6 +13435,19 @@ return {
     if top_screen_steps_display_index(name).is_some() {
         // StepsDisplay derives from ActorFrame, not BitmapText.
         return Ok(Some(create_named_actor(lua, "StepsDisplay", name, create_dummy_actor)?));
+    }
+    if name.starts_with("StepsDescription") || name.starts_with("PlayerOptions")
+        || name.starts_with("ActiveAttackList") || name == "SongOptions"
+    {
+        let actor = create_named_text_actor(lua, "BitmapText", name, String::new(), create_dummy_actor)?;
+        // These engine displays are hidden by the inherited gameplay metrics.
+        // StepsDescription additionally hibernates in Simply Love's On.
+        actor.get::<Function>("visible")?.call::<()>((actor.clone(), false))?;
+        return Ok(Some(actor));
+    }
+    if name.starts_with("OniGameOver") {
+        // The inherited oni-gameover redirection resolves to Graphics/_blank.png.
+        return Ok(Some(create_named_actor(lua, "Sprite", name, create_dummy_actor)?));
     }
     if name.eq_ignore_ascii_case("SongBackground")
         || name.eq_ignore_ascii_case("SongForeground")
@@ -13691,21 +13730,30 @@ pub fn install_top_screen_theme_children(
     for &name in TOP_SCREEN_THEME_CHILD_NAMES {
         // ScreenGameplay::Init creates score and difficulty displays only
         // for enabled players; Simply Love hibernates those engine actors.
-        let player = top_screen_score_index(name).or_else(|| top_screen_steps_display_index(name));
+        let player = top_screen_score_index(name).or_else(|| top_screen_steps_display_index(name))
+            .or_else(|| ["StepsDescription", "PlayerOptions", "OniGameOver"].iter()
+                .find_map(|prefix| name.strip_prefix(prefix)
+                    .and_then(|side| match side { "P1" => Some(0), "P2" => Some(1), _ => None })));
         if player.is_some_and(|index| !players[index].enabled) {
             continue;
         }
         let child = create_named_child_actor(lua, top_screen, name)?;
-        if player.is_some() {
+        if top_screen_score_index(name).is_some() || top_screen_steps_display_index(name).is_some()
+            || name.starts_with("StepsDescription") || matches!(name, "Header" | "Footer") {
             child.raw_set("__songlua_theme_hibernating", true)?;
         }
         children.set(name, child)?;
     }
     // ActorFrame traverses its ordered actor tree. Named lookup aliases must
     // not let Lua hash order place foreground Off before the theme overlay.
-    for name in ["SongBackground", "Underlay", "PlayerP1", "PlayerP2",
+    for name in ["SongBackground", "Underlay", "PlayerP1", "PlayerP2", "LifeP1", "LifeP2",
         "ScoreP1", "ScoreP2", "StepsDisplayP1", "StepsDisplayP2",
         "Overlay", "SongForeground", "In", "Debug"] {
+        if let Some(child) = children.raw_get::<Option<Table>>(name)? {
+            push_sequence_child_once(top_screen, child)?;
+        }
+    }
+    for &name in TOP_SCREEN_THEME_CHILD_NAMES {
         if let Some(child) = children.raw_get::<Option<Table>>(name)? {
             push_sequence_child_once(top_screen, child)?;
         }
@@ -14015,6 +14063,56 @@ pub fn create_top_screen_table(
         }
     }
     install_top_screen_theme_children(lua, &top_screen, &players, create_named_child_actor)?;
+    // Toasty and the four empty gameplay transitions are real unnamed owners.
+    // Keep the duplicate-name group as lookup aliases of the same actor tree.
+    let unnamed = create_actor_child_group(lua)?;
+    for role in ["Toasty", "NextSong", "Ready", "Go", "Failed"] {
+        let actor = create_named_actor(lua, if role == "Toasty" { "Actor" } else { "ActorFrame" }, "", create_dummy_actor)?;
+        actor.raw_set("__songlua_parent", top_screen.clone())?;
+        actor.raw_set("__songlua_screen_actor_role", role)?;
+        if role == "Toasty" {
+            actor.get::<Function>("visible")?.call::<()>((actor.clone(), false))?;
+        }
+        unnamed.raw_set(unnamed.raw_len() + 1, actor.clone())?;
+        push_sequence_child_once(&top_screen, actor)?;
+    }
+    children.set("", unnamed)?;
+    top_screen.raw_set("__songlua_owned_child_lookup", true)?;
+    let mut ordered = top_screen.sequence_values::<Table>()
+        .collect::<mlua::Result<Vec<_>>>()?;
+    // ScreenWithMenuElements adopts Header/Footer before gameplay creates its
+    // player displays. Stable draw sorting preserves this construction order
+    // among the default-order actors (ActorFrame.cpp).
+    let construction_names = ["Underlay", "Overlay", "Header", "Footer", "In", "Out", "Cancel",
+        "SongBackground", "SongForeground", "Toasty", "PlayerP1", "OniGameOverP1", "PlayerP2", "OniGameOverP2",
+        "NextSong", "LifeP1", "LifeP2", "ScoreP1", "ScoreP2", "StepsDescriptionP1", "PlayerOptionsP1",
+        "StepsDisplayP1", "StepsDescriptionP2", "PlayerOptionsP2", "StepsDisplayP2", "SongOptions",
+        "ActiveAttackListP1", "ActiveAttackListP2", "LyricDisplay", "Ready", "Go", "Failed", "Debug"];
+    ordered.sort_by_key(|actor| {
+        let name = actor.raw_get::<Option<String>>("__songlua_screen_actor_role")
+            .ok().flatten().or_else(|| actor_name(actor).ok());
+        name.and_then(|name| construction_names.iter().position(|known| *known == name))
+            .unwrap_or(construction_names.len())
+    });
+    for actor in &ordered {
+        let order = match actor_name(actor)?.as_str() {
+            "SongBackground" => -200,
+            "Underlay" => -100,
+            "Overlay" => 100,
+            "SongForeground" => 101,
+            "Debug" => 199,
+            "In" | "Out" | "Cancel" => 200,
+            _ => match actor.raw_get::<Option<String>>("__songlua_screen_actor_role")?.as_deref() {
+                Some("NextSong" | "Failed") => 199,
+                _ => 0,
+            },
+        };
+        actor.raw_set("__songlua_state_draw_order", order)?;
+    }
+    ordered.sort_by_key(|actor| actor.raw_get::<i32>("__songlua_state_draw_order").unwrap_or(0));
+    for (index, actor) in ordered.into_iter().enumerate() {
+        top_screen.raw_set(index + 1, actor)?;
+    }
     top_screen.set(
         "SetMinSecondsToMusic",
         lua.create_function(|_, (screen, seconds): (Table, f32)| {
