@@ -1,0 +1,107 @@
+{
+  "actual_failure": {
+    "position": 399,
+    "source_simfile": "Shivers/Shivers.ssc",
+    "status": "pending",
+    "repair_attempts": 0,
+    "candidate_sha256": "b21eb1ce481bb1bae0813c98741fd296cc08c27e4197f4f9c691a51ea2b9c59e",
+    "trace_sha256": "d811e5f30cd5e6bed13a66196a2e9e78b98ddc1d4c805755af42d6ec3ad6f50b",
+    "simfile_sha256": "420c147c6ae52db11935b39d26fbcaabb9c034c21700a7467ebde927abb1aee9",
+    "native_frames": 8392,
+    "replayed_frames": 8392,
+    "errors": [],
+    "mismatch_count": 1787,
+    "first_mismatch": [
+      {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0090",
+          "args": [
+            {
+              "type": "number",
+              "value": "-infinity"
+            }
+          ],
+          "beat": 2.0691723823547363,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 940,
+            "source": "song:/lua/default.lua",
+            "tail_call": false
+          },
+          "command": "InitCommand",
+          "definition_id": "def-0262",
+          "detail": {
+            "native_tween_time_left": 0
+          },
+          "kind": "call",
+          "line": 940,
+          "operation": "Actor.diffusealpha",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 1.1104989051818848,
+          "seq": 7755,
+          "source": "song:/lua/default.lua",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.diffusealpha",
+          "source": "song:/lua/default.lua",
+          "line": 940,
+          "phase": "callback",
+          "beat": 2.0691723823547363,
+          "seconds": 1.1104989051818848,
+          "args": [
+            1
+          ],
+          "results": [
+            {
+              "actor": "0x595440640960",
+              "name": "MultitapP1_3",
+              "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_3"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      }
+    ]
+  },
+  "all_mismatch_groups": [
+    {
+      "operation": "Actor.diffusealpha",
+      "native_args": [
+        {
+          "type": "number",
+          "value": "-infinity"
+        }
+      ],
+      "count": 1787
+    }
+  ],
+  "captured_authored_caller": "song/lua/default.lua:940 function copy_transforms_arrow, calls ArrowEffects.GetAlpha at line967",
+  "cause": "ArrowEffects.GetAlpha returns a constant1 in the host. The native visibility/far-edge fade returns raw negative infinity beyond the far edge when the theme fade width is zero. The actor alpha setter already preserves infinity.",
+  "primary_sources": [
+    {
+      "path": "C:/GitHub/itgmania-harness/vendor/itgmania/src/ArrowEffects.cpp",
+      "sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8"
+    },
+    {
+      "path": "C:/GitHub/itgmania-harness/vendor/simply-love/metrics.ini",
+      "sha256": "221b449c94e5ed38bbdfb4cee157582f20c85ffa8e234398309768945b370a80"
+    },
+    {
+      "path": "C:/GitHub/itgmania-harness/vendor/itgmania/Themes/_fallback/metrics.ini",
+      "sha256": "470ae3b31c17ca4e194530b9ca543a15439c134a3aefa47d6d25dd55d1f5bff5"
+    }
+  ],
+  "theme_defaults": "Player DrawDistanceBeforeTargetsPixels=_screen.h*1.5; NoteField FadeBeforeTargetsPercent=0",
+  "change": "Compute native alpha with Current appearance options, Y without reverse, fail fade and optional draw/fade arguments. Preserve the native f32 far-edge result, including negative values and infinities. No actor-argument comparisons or tolerances change.",
+  "control": "Owned live source exercises default/explicit far-edge boundaries, fail fade threshold, reverse independence, hidden/sudden, Mini, per-column/global stealth, past receptors and raw infinity reaching an owned actor.",
+  "first_full_repair_planned": 1,
+  "one_further_repair_after_this_attempt": true,
+  "native_capture_reused": true,
+  "passing_charts_reopened": false,
+  "missing_coverage_retained_separately": true
+}

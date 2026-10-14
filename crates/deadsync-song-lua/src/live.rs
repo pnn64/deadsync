@@ -1510,6 +1510,53 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 #[cfg(test)]
 mod tests {
     #[test]
+    fn live_arrow_alpha_uses_visibility_and_native_far_edge_fade() {
+        let mut compiled = compile_with_context("native-arrow-alpha", "return Def.Actor {InitCommand = function(self) ALPHA_ACTOR = self end}",
+            |context| context.defer_initial_live_update = true);
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.advance(SongLuaLiveFrame {
+            music_seconds: 2.0, screen_seconds: 2.0, beat: 4.0,
+            delta_seconds: 0.01, ..Default::default()
+        }).unwrap();
+        scene.lua.load(r#"
+local ps = GAMESTATE:GetPlayerState(PLAYER_1)
+local o = ps:GetCurrentPlayerOptions()
+local alpha = ArrowEffects.GetAlpha
+assert(alpha(ps, 1, 720) == 1)
+assert(alpha(ps, 1, 721) == -math.huge, 'native far-edge fade retains negative infinity')
+assert(math.abs(alpha(ps, 1, 600, nil, nil, 1000, 0.5) - 0.8) < 0.000001)
+assert(alpha(ps, 1, 1000, nil, nil, 1000, 0.5) == 0)
+assert(alpha(ps, 1, 1250, nil, nil, 1000, 0.5) == -0.5)
+assert(alpha(ps, 1, 100, 0.5) == 0 and alpha(ps, 1, 100, 0.499) == 1)
+o:Reverse(1)
+assert(alpha(ps, 1, 721) == -math.huge, 'alpha uses position without reverse')
+o:Stealth(0.6)
+assert(alpha(ps, 1, 100) == 0)
+assert(alpha(ps, 1, -1) == 1, 'past receptors remain visible by default')
+o:StealthPastReceptors(true)
+assert(alpha(ps, 1, -1) == 0)
+assert(alpha(ps, 1, 100, 0) == 1, 'fail fade overrides appearance visibility')
+o:Stealth(0)
+o:Stealth1(0.6)
+assert(alpha(ps, 1, 100) == 0 and alpha(ps, 2, 100) == 1)
+o:Stealth1(0)
+o:Hidden(1)
+assert(alpha(ps, 1, 100) == 0 and alpha(ps, 1, 161) == 1)
+o:Hidden(0)
+o:Sudden(1)
+assert(alpha(ps, 1, 201) == 0 and alpha(ps, 1, 159) == 1)
+o:Sudden(0)
+o:Mini(1)
+o:Hidden(1)
+assert(alpha(ps, 1, 250) == 0 and alpha(ps, 1, 321) == 1,
+    'mini scales the appearance center line')
+local actor = ALPHA_ACTOR
+actor:diffusealpha(alpha(ps, 1, 721))
+assert(actor:GetDiffuseAlpha() == -math.huge, 'the raw alpha reaches the real actor')
+"#).exec().expect("native alpha visibility and far-edge fade");
+    }
+
+    #[test]
     fn live_game_state_class_methods_dispatch_on_owned_instance() {
         let mut compiled = compile_with_context("game-state-class-extension", r#"
 assert(type(GameState) == 'table', 'GameState class methods must be available')

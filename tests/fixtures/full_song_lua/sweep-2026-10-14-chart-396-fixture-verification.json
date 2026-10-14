@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "SharpNel/HashtagNel.ssc",
+  "native_frames": 138581,
+  "replayed_frames": 138581,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "b55315bf1fa89a576ff67b1145ce03a4055d7e72de9fc20bbfe5b94ebc110407.tar.zst",
+  "compressed_sha256": "b55315bf1fa89a576ff67b1145ce03a4055d7e72de9fc20bbfe5b94ebc110407",
+  "uncompressed_sha256": "6bee5d84ced17df1e6edf135dfc393842e18bdea575c56a7ffd63334e181cc22",
+  "compressed_bytes": 8428603,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

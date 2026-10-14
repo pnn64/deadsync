@@ -1194,13 +1194,140 @@ pub fn create_arrow_effects_table(
     )?;
     table.set(
         "GetAlpha",
-        lua.create_function(|_, _args: MultiValue| Ok(1.0_f32))?,
+        lua.create_function({
+            let draw_distance = context.screen_height.max(1.0) * 1.5;
+            move |lua, args: MultiValue| arrow_effects_alpha(lua, &args, draw_distance, current_style_name)
+        })?,
     )?;
     table.set(
         "GetGlow",
         lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
     )?;
     Ok(table)
+}
+
+fn arrow_effects_alpha(
+    lua: &Lua, args: &MultiValue, default_draw_distance: f32,
+    current_style_name: fn(&Lua) -> String,
+) -> mlua::Result<f32> {
+    // ArrowEffects.cpp uses the owned Current options and the position without
+    // reverse. Read option state directly so engine math creates no Lua queries.
+    let options = arrow_effects_player_options(args)?;
+    let state = options.as_ref().map(|options|
+        options.raw_get::<Option<Table>>("__songlua_player_option_state"))
+        .transpose()?.flatten();
+    let value = |name: &str| -> mlua::Result<f32> {
+        state.as_ref().map(|state| state.raw_get::<Option<f32>>(name))
+            .transpose().map(|value| value.flatten().unwrap_or(0.0))
+    };
+    let flag = |name: &str| -> mlua::Result<bool> {
+        state.as_ref().map(|state| state.raw_get::<Option<bool>>(name))
+            .transpose().map(|value| value.flatten().unwrap_or(false))
+    };
+    let number = |index: usize, default: f32| -> mlua::Result<f32> {
+        match args.get(index).filter(|value| !value.is_nil()) {
+            Some(value) => lua.coerce_number(value.clone())?
+                .map(|value| value as f32)
+                .ok_or_else(|| mlua::Error::runtime("expected numeric ArrowEffects argument")),
+            None => Ok(default),
+        }
+    };
+    let column = number(1, 1.0)? as i32 - 1;
+    let offset = number(2, 0.0)?;
+    let fade_to_fail = number(3, -1.0)?;
+    // Argument five controls reverse placement, which GetAlpha deliberately
+    // disables in GetYPos. It still accepts the native optional argument.
+    let _reverse_offset = number(4, THEME_RECEPTOR_Y_REV - THEME_RECEPTOR_Y_STD)?;
+    let draw_distance = number(5, default_draw_distance)?;
+    let fade_in = number(6, 0.0)?;
+    let runtime = lua.globals().get::<Table>(SONG_LUA_RUNTIME_KEY)?;
+    let beat = runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?;
+    let seconds = runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)?;
+    let uptime = runtime.get::<Option<f64>>("__songlua_uptime_seconds")?.unwrap_or(f64::from(seconds));
+    let timer = state.as_ref().map(|state| state.raw_get::<Option<u8>>("modtimersetting"))
+        .transpose()?.flatten().unwrap_or(3);
+    let base_time = match timer { 1 => f64::from(beat), 2 => f64::from(seconds), _ => uptime };
+    let time = ((base_time + f64::from(value("modtimeroffset")?))
+        * (1.0 + f64::from(value("modtimermult")?))) as f32;
+    let mut y = offset;
+    let tipsy = value("tipsy")?;
+    if tipsy != 0.0 {
+        let phase = time * (value("tipsyspeed")? * 1.2 + 1.2)
+            + column as f32 * (value("tipsyoffset")? * 1.8 + 1.8);
+        y += tipsy * (phase.cos() * (64.0 * 0.4));
+    }
+    let tan_tipsy = value("tantipsy")?;
+    if tan_tipsy != 0.0 {
+        let phase = time * (value("tantipsyspeed")? * 1.2 + 1.2)
+            + column as f32 * (value("tantipsyoffset")? * 1.8 + 1.8);
+        let wave = if flag("cosecant")? { 1.0 / phase.sin() } else { phase.tan() };
+        y += tan_tipsy * (wave * (64.0 * 0.4));
+    }
+    let attenuate = value("attenuatey")?;
+    if attenuate != 0.0 {
+        let x = song_lua_style_column_x(&current_style_name(lua), column.max(0) as usize);
+        y += attenuate * (offset / 64.0) * (offset / 64.0) * (x / 64.0);
+    }
+    let beat_y = value("beaty")?;
+    if beat_y != 0.0 {
+        let mut pulse = (beat + 0.2 + value("beatyoffset")?) * (value("beatymult")? + 1.0);
+        let odd = (pulse as i32) % 2 != 0;
+        let mut factor = 0.0;
+        if pulse >= 0.0 {
+            pulse -= pulse.trunc(); pulse += 1.0; pulse -= pulse.trunc();
+            if pulse < 0.5 {
+                factor = if pulse < 0.2 {
+                    let phase = pulse / 0.2; phase * phase
+                } else {
+                    let phase = 1.0 - (pulse - 0.2) / (0.5 - 0.2);
+                    1.0 - (1.0 - phase) * (1.0 - phase)
+                };
+                if odd { factor = -factor; }
+                factor *= 20.0;
+            }
+        }
+        y += beat_y * (factor * (offset / (value("beatyperiod")? * 15.0 + 15.0)
+            + std::f32::consts::PI / 2.0).sin());
+    }
+    let center = 160.0 / (1.0 - value("mini")? * 0.5);
+    let appearance_y = if flag("stealthtype")? { offset } else { y };
+    let mut visible = 1.0;
+    if appearance_y >= 0.0 || flag("stealthpastreceptors")? {
+        let hidden = value("hidden")?;
+        let sudden = value("sudden")?;
+        let combined = hidden * sudden;
+        let scale = |x: f32, low: f32, high: f32, from: f32, to: f32| {
+            (x - low) / (high - low) * (to - from) + from
+        };
+        let mut adjust = 0.0;
+        if hidden != 0.0 {
+            let start = center + 40.0 * (-0.25 * combined) + center * value("hiddenoffset")?;
+            let end = center + 40.0 * (-1.0 - 0.25 * combined) + center * value("hiddenoffset")?;
+            adjust += hidden * scale(appearance_y, start, end, 0.0, -1.0).clamp(-1.0, 0.0);
+        }
+        if sudden != 0.0 {
+            let start = center + 40.0 * (1.0 + 0.25 * combined) + center * value("suddenoffset")?;
+            let end = center + 40.0 * (0.25 * combined) + center * value("suddenoffset")?;
+            adjust += sudden * scale(appearance_y, start, end, -1.0, 0.0).clamp(-1.0, 0.0);
+        }
+        adjust -= value("stealth")?;
+        adjust -= value(&format!("stealth{}", column + 1))?;
+        if value("blink")? != 0.0 {
+            let wave = ((time * 10.0).sin() / 0.3333).round() * 0.3333;
+            adjust += scale(wave, 0.0, 1.0, -1.0, 0.0);
+        }
+        let vanish = value("randomvanish")?;
+        if vanish != 0.0 { adjust += scale((y - center).abs(), 80.0, 160.0, -1.0, 0.0) * vanish; }
+        visible = (1.0 + adjust).clamp(0.0, 1.0);
+    }
+    if fade_to_fail != -1.0 { visible = 1.0 - fade_to_fail; }
+    let full_alpha_y = draw_distance * (1.0 - fade_in);
+    if y > full_alpha_y {
+        // Preserve the native raw float result: zero fade width divides by
+        // zero, and positions beyond the far edge produce negative alpha.
+        return Ok((y - full_alpha_y) / (draw_distance - full_alpha_y) * -1.0 + 1.0);
+    }
+    Ok(if visible > 0.5 { 1.0 } else { 0.0 })
 }
 
 pub(crate) const fn arrow_effects_rotation_x(column: i32) -> f32 {
