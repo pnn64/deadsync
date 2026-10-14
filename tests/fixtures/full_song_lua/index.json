@@ -4843,15 +4843,12 @@
     {
       "title": "Spectrum Sequence",
       "source_simfile": "Spectrum Sequence/spectrumsequence.ssc",
-      "harness_version": "0.1.0",
-      "archive": "eb5ec789e6f5cb86e47dd64d1c5b184245357e239f0f203254f5c3847c87a45d.tar.zst",
-      "sha256": "eb5ec789e6f5cb86e47dd64d1c5b184245357e239f0f203254f5c3847c87a45d",
-      "compressed_bytes": 102429,
-      "uncompressed_sha256": "9b7c504859dc995e299576ce849ab60341240686bd327b006647ca82fade8d77",
-      "compression_level": 22,
-      "aliases": [
-        "ec09520f91b79a6aa14fc7ac2d78016e500114815fd0cb291e0d17aee10aa234.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "86a513ce1d948e1de2dc18dc749689170598ca9ab5faafe96f90982b19ef7efd.tar.zst",
+      "sha256": "86a513ce1d948e1de2dc18dc749689170598ca9ab5faafe96f90982b19ef7efd",
+      "compressed_bytes": 7175371,
+      "uncompressed_sha256": "70092bc97dcfc063dfe09c9b56148f0280cf9865195f7935a6de0dbe77923a18",
+      "aliases": []
     },
     {
       "title": "SPLAK IT DOWN",

@@ -344,6 +344,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 408,
+      "source_simfile": "Spectrum Sequence/spectrumsequence.ssc",
+      "simfile_sha256": "c6cb1fcd9137d0fe2e5e729aee4be12096ab08097333f391e64c9521759a06e9",
+      "retained_original_archive": "eb5ec789e6f5cb86e47dd64d1c5b184245357e239f0f203254f5c3847c87a45d.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "fc937c1ae18f5ffc8bc3716cc10f755ae0c4dd23172c9a055955844fef0c3a28",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "3f4ddc7930765c8fd5664024873a7775a52f0473 + 1482e4b757f930b960eb09678730b6d68d331a0c + 94e70049b59e83b86566a9adb5fd18f8835c65cb + 7fae1f026237ee5431a1a2b3e907f4270715556a + 1ed84cd471a8eeb8511474ca8881aa1516acbf96 + 254c36811 + e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/background-effect-family-linux-green-v1/proof.json",
+      "capture_seconds": 166.8639322030067,
+      "trace_sha256": "14242819a6045c041a4ece08fc37ac237ad92bd06d5e5bf54a10ec1044bfa87d",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-408/candidates/70092bc97dcfc063dfe09c9b56148f0280cf9865195f7935a6de0dbe77923a18.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1274.3953298630076,
+      "candidate_sha256": "70092bc97dcfc063dfe09c9b56148f0280cf9865195f7935a6de0dbe77923a18",
+      "native_frames": 62146,
+      "replayed_frames": 62146,
+      "compared_stage_fields": 1606,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetEasiestStepsDifficulty, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "349da58013fb7dd99d0bf079910567fc20fe5f43acc47092d8352a1eb5adbc28",
+      "archive": "86a513ce1d948e1de2dc18dc749689170598ca9ab5faafe96f90982b19ef7efd.tar.zst",
+      "archive_sha256": "86a513ce1d948e1de2dc18dc749689170598ca9ab5faafe96f90982b19ef7efd",
+      "compressed_bytes": 7175371,
+      "pack_seconds": 6.124635400017723,
+      "harness_version": "0.1.80",
+      "title": "Spectrum Sequence",
+      "retained_original_entry": {
+        "title": "Spectrum Sequence",
+        "source_simfile": "Spectrum Sequence/spectrumsequence.ssc",
+        "harness_version": "0.1.0",
+        "archive": "eb5ec789e6f5cb86e47dd64d1c5b184245357e239f0f203254f5c3847c87a45d.tar.zst",
+        "sha256": "eb5ec789e6f5cb86e47dd64d1c5b184245357e239f0f203254f5c3847c87a45d",
+        "compressed_bytes": 102429,
+        "uncompressed_sha256": "9b7c504859dc995e299576ce849ab60341240686bd327b006647ca82fade8d77",
+        "compression_level": 22,
+        "aliases": [
+          "ec09520f91b79a6aa14fc7ac2d78016e500114815fd0cb291e0d17aee10aa234.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -354,7 +404,7 @@
   },
   "binary_sha256": "fc937c1ae18f5ffc8bc3716cc10f755ae0c4dd23172c9a055955844fef0c3a28",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 6,
+  "passed_fixtures": 7,
   "pending_charts": 1,
-  "processed_charts": 7
+  "processed_charts": 8
 }
