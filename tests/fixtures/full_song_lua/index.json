@@ -5336,15 +5336,12 @@
     {
       "title": "Ultra B+K",
       "source_simfile": "Ultra B+K/ultrabk.ssc",
-      "harness_version": "0.1.0",
-      "archive": "ecb71826a557b950afab9efb4ba6e0e5b4c538a416e449d9527579dc54d344da.tar.zst",
-      "sha256": "ecb71826a557b950afab9efb4ba6e0e5b4c538a416e449d9527579dc54d344da",
-      "compressed_bytes": 38492,
-      "uncompressed_sha256": "773b2aa9e745d8cbc7fcb4ed1e18df09183789629d3a309ee3550a5d0015d658",
-      "compression_level": 22,
-      "aliases": [
-        "fc9950be2e1517bf8f3e8f7cf56c53bb694c0b12a2be40dad9571ab8a264e2e0.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "657845ce93522155cbf01c97333d48fc8537834da0b644da6b4848800dd6a902.tar.zst",
+      "sha256": "657845ce93522155cbf01c97333d48fc8537834da0b644da6b4848800dd6a902",
+      "compressed_bytes": 12810606,
+      "uncompressed_sha256": "4fea64b2ca9241b556b8e8872bdad45b79ee864d46c2e3201a4c40ef6fa09c98",
+      "aliases": []
     },
     {
       "title": "Ultra B.B.K.K.B.K.K",

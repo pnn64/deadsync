@@ -2759,6 +2759,57 @@
         }
       ],
       "report_sha256": "2be5846604615c5e6a7d3f26b76871a9129ce3d646b18ae1b754fdddfac3c939"
+    },
+    {
+      "position": 454,
+      "source_simfile": "Ultra B+K/ultrabk.ssc",
+      "simfile_sha256": "f48bd0315c0c37bde102b362865ac78a3df5aa982a6d37da4e8d49504e67baf6",
+      "retained_original_archive": "ecb71826a557b950afab9efb4ba6e0e5b4c538a416e449d9527579dc54d344da.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+      "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+      "capture_seconds": 131.25664414500352,
+      "trace_sha256": "848b1504b4a644195047a24526ee29bf7ac22afacb7c09b68076f9afff3203b9",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-3/chart-454/candidates/4fea64b2ca9241b556b8e8872bdad45b79ee864d46c2e3201a4c40ef6fa09c98.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1594.396460946009,
+      "candidate_sha256": "4fea64b2ca9241b556b8e8872bdad45b79ee864d46c2e3201a4c40ef6fa09c98",
+      "native_frames": 76117,
+      "replayed_frames": 76117,
+      "compared_stage_fields": 1452,
+      "pending_coverage": [
+        "uncompared song operations: Actor.blend, Actor.zoomtowidth",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "134d854c92ff0c0a8c845de26d4ebfd19cfb8dbb0d607d214852d8dd8c50f301",
+      "archive": "657845ce93522155cbf01c97333d48fc8537834da0b644da6b4848800dd6a902.tar.zst",
+      "archive_sha256": "657845ce93522155cbf01c97333d48fc8537834da0b644da6b4848800dd6a902",
+      "compressed_bytes": 12810606,
+      "pack_seconds": 2.0129405800253153,
+      "harness_version": "0.1.80",
+      "title": "Ultra B+K",
+      "retained_original_entry": {
+        "title": "Ultra B+K",
+        "source_simfile": "Ultra B+K/ultrabk.ssc",
+        "harness_version": "0.1.0",
+        "archive": "ecb71826a557b950afab9efb4ba6e0e5b4c538a416e449d9527579dc54d344da.tar.zst",
+        "sha256": "ecb71826a557b950afab9efb4ba6e0e5b4c538a416e449d9527579dc54d344da",
+        "compressed_bytes": 38492,
+        "uncompressed_sha256": "773b2aa9e745d8cbc7fcb4ed1e18df09183789629d3a309ee3550a5d0015d658",
+        "compression_level": 22,
+        "aliases": [
+          "fc9950be2e1517bf8f3e8f7cf56c53bb694c0b12a2be40dad9571ab8a264e2e0.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -2769,7 +2820,7 @@
   },
   "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 5,
+  "passed_fixtures": 6,
   "pending_charts": 8,
-  "processed_charts": 13
+  "processed_charts": 14
 }
