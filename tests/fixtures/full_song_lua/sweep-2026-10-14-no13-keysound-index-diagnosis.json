@@ -1,0 +1,53 @@
+{
+  "original_chart_unchanged": true,
+  "full_repair_attempts_spent": 0,
+  "diagnostic_only": true,
+  "native_chart_oracle_unchanged_original_tap_rows": 1192,
+  "native_holds": 0,
+  "native_rolls": 0,
+  "results": [
+    {
+      "label": "unchanged-original",
+      "path": "/home/parity/workspace/lua-songs/No.13/no13.ssc",
+      "exit_code": 0,
+      "output": "difficulty=Hard steps=1192 holds=1 rolls=4 parsed_notes=1210\ndifficulty=Medium steps=1192 holds=8 rolls=1 parsed_notes=1250\ndifficulty=Challenge steps=1192 holds=1 rolls=4 parsed_notes=1210\n",
+      "input_sha256": "fd7bbfeee391ed68c8be20fe1784e08d3b3b4fb7ca9839720d3d04dd9d11d94f"
+    },
+    {
+      "label": "private-diagnostic-removing-only-note-keysound-index-annotations",
+      "path": "/home/parity/jobs/no13-native-chart-diagnosis-v1/no13-without-keysound-index-annotations.ssc",
+      "exit_code": 0,
+      "output": "difficulty=Hard steps=1192 holds=0 rolls=0 parsed_notes=1192\ndifficulty=Medium steps=1192 holds=0 rolls=0 parsed_notes=1192\ndifficulty=Challenge steps=1192 holds=0 rolls=0 parsed_notes=1192\n",
+      "input_sha256": "938d46387aaa93a87d31d54e2b0c125186cd61605cbbb5f8a434801f2e7fe5ef"
+    }
+  ],
+  "selected_simfile_rlib": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_simfile-35425ee25e15db5b.rlib",
+  "source_simfile": "No.13/no13.ssc",
+  "position": 331,
+  "original_full_replay": {
+    "native_frames": 125239,
+    "replayed_frames": 125239,
+    "errors": [],
+    "mismatch_count": 183,
+    "replay_exit": 2,
+    "first_mismatch": {
+      "phase": "screen-active",
+      "seconds": -1.9999773502349854,
+      "field": "possible",
+      "native": 5960,
+      "deadsync": 5985
+    }
+  },
+  "native_chart_oracle_exit_code": 0,
+  "native_chart_oracle_sha256": "7987fbade1b039a1d6b42281f9bed21460cd8990f5f5f49f02fdc681db406123",
+  "primary_native_source": "/home/parity/native/source-v1/src/NoteDataUtil.cpp",
+  "primary_native_source_sha256": "c4a4fcf5a846751968312b03c8b3025bb40205b08284429fc215d75d01918d8f",
+  "primary_native_lines": "233-248: optional keysound index is metadata; skip through closing bracket before the next note column.",
+  "locked_rssp_git_revision": "483b00022c0d75b5ba372be03bf994881a94430b",
+  "selected_simfile_rlib_sha256": "1ce572a425955c84ba6308a4380a0466ba41b41808e073d75992d3a0413bbe16",
+  "cause": "Digits inside optional keysound index annotations enter the RSSP note parser as note symbols. The selected Hard/Challenge chart gains one hold and four rolls, adding 25 possible points, although the unchanged native note data contains only 1192 taps. Removing only annotations in a private diagnostic copy removes all five false holds/rolls and all18 extra parsed notes.",
+  "next_repair": "Add native-compatible optional keysound annotation handling to Deadsync simfile parsing, validate against primary note parsing, then replay the unchanged retained original candidate as repair1. No fix or full repair has been performed yet.",
+  "expected_results_injected": false,
+  "acceptance_or_tolerance_changes": false,
+  "passing_chart_reopened": false
+}

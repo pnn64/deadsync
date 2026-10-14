@@ -1,0 +1,13 @@
+{
+  "pid": 2356255,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_ruin_ssc_transition_order_repair_v1.py"
+  ],
+  "repair_attempt": 1,
+  "repair_attempts_remaining_after_this": 1,
+  "source_simfile": "Ruin Our Friendship/RuinOurFriendship.ssc",
+  "position": 380,
+  "original_capture_reused": true,
+  "selection_receipt": "/home/parity/jobs/ruin-transition-selection-installed-v1.json"
+}
