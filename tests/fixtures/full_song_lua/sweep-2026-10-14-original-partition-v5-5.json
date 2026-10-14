@@ -428,6 +428,21 @@
       "capture_exit": 1,
       "capture_seconds": 154.3108463230019,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania wrote invalid runtime JSON to /tmp/itgmania-harness-rs/song-lua-861840-1792016033629593579-0/Save/itgmania-harness/song-lua-trace.json: EOF while parsing a value at line 1 column 116531200; retained run directory /tmp/itgmania-harness-rs/song-lua-861840-1792016033629593579-0\n"
+    },
+    {
+      "position": 432,
+      "source_simfile": "The Entity/The Entity.ssc",
+      "simfile_sha256": "c4808c70ab4505fe4cd87d3e39a55be8629cb03628ca4e19aef9568d20b77eff",
+      "retained_original_archive": "2903b6b8ced3d1703649aa31554a6d63ee9e378b18638d9599b9a7d2705653dc.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+      "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 0.01874377200147137,
+      "failure": "error: ITGmania song Lua semantic trace failed: could not create directory /tmp/itgmania-harness-rs/song-lua-877132-1792016188607742587-0/Data: No space left on device (os error 28); retained run directory /tmp/itgmania-harness-rs/song-lua-877132-1792016188607742587-0\n"
     }
   ],
   "scope": {
@@ -439,6 +454,6 @@
   "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 7,
-  "pending_charts": 3,
-  "processed_charts": 10
+  "pending_charts": 4,
+  "processed_charts": 11
 }
