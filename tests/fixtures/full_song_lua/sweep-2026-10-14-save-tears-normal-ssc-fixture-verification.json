@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Save Your Tears/SaveYourTears.ssc",
+  "native_frames": 73663,
+  "replayed_frames": 73663,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "bd0195591367ef356e084148cb31ffa386da50e64c2ebdf4272185f22abebf5f.tar.zst",
+  "compressed_sha256": "bd0195591367ef356e084148cb31ffa386da50e64c2ebdf4272185f22abebf5f",
+  "uncompressed_sha256": "f4ed2576123dc0763d8927bfee21813699f701685e08c9b67c152beb10639494",
+  "compressed_bytes": 22796641,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
