@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T16:02:04Z",
+  "updated_utc": "2026-10-14T16:35:23Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 289,
-    "pending": 83,
-    "unprocessed": 129
+    "passed": 293,
+    "pending": 85,
+    "unprocessed": 123
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2669,7 +2669,9 @@
       "position": 313,
       "source_simfile": "Megalovania SM5 [TaroNuke]/megalovania.ssc",
       "simfile_sha256": "7009b23d689889ebb16e9b0f6c87612f19b6530a6e1656c980e48b62bf4affde",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 314,
@@ -2692,8 +2694,8 @@
       "source_simfile": "MISSION SPUTNIK/sputnik.ssc",
       "simfile_sha256": "1241e37b8933c76c957ed2217eebd3cd53c1e2efd27cc84fba9a24938ba7f688",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-mission-sputnik-numeric-first-repair.json"
     },
     {
       "position": 317,
@@ -2929,7 +2931,9 @@
       "position": 346,
       "source_simfile": "Paradise [Cringle Desolation]/Paradise.ssc",
       "simfile_sha256": "1b7370ebc6a69a753e628b6f1d893ba3d58e58cfae3b9ad84c12bfcb24175368",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-4.json"
     },
     {
       "position": 347,
@@ -3107,7 +3111,9 @@
       "position": 370,
       "source_simfile": "Reach The Light Switch, Without Asking you/Reach The Light Switch, Without Asking you.ssc",
       "simfile_sha256": "483ce56a841d250956961fcd0199d08564d029ef0304d1e44683be0d2a2a35a0",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 371,
@@ -3151,9 +3157,9 @@
       "position": 376,
       "source_simfile": "Retrospective/Retrospective.ssc",
       "simfile_sha256": "6b8b605a11579a2bcf5f699c422a28a0aac0ec1178bd7a39d4f99964c4684095",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-retrospective-background-first-repair.json"
     },
     {
       "position": 377,
@@ -3213,7 +3219,9 @@
       "position": 385,
       "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
       "simfile_sha256": "8fe26f5a104dc99f0cea900b336f5404b18f0048a758829f1f4c09c00f99d5c4",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 386,
@@ -3257,7 +3265,9 @@
       "position": 392,
       "source_simfile": "Selfie - [JNero]/Selfie.ssc",
       "simfile_sha256": "2127506d801e1bd3b47774fbf41ab690041a5f9129a5c6f7231c0d63b672cba1",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 393,
@@ -3419,7 +3429,9 @@
       "position": 418,
       "source_simfile": "Stepping Music/simfile.ssc",
       "simfile_sha256": "10012ad27ef9d7d1f1011b4ea0ee35c2a2aa082a36cbd57578a5f32605db804d",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 419,
