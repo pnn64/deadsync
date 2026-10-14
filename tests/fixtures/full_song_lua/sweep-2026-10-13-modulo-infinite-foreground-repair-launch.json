@@ -1,0 +1,82 @@
+{
+  "selected_build": {
+    "build_proof": "/home/parity/jobs/all-steps-green-v1/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "binary_sha256": "69832cbca5fdc07f6ccb21e0f84bd5f45f6573b11c02acd65a4e090d6d8007f5",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "actual_source_pins": 29,
+  "harness_source_pins": 3,
+  "repairs": [
+    {
+      "position": 317,
+      "source_simfile": "MODULO/modulo.ssc",
+      "attempt_started": 1,
+      "per_chart_limit": 2,
+      "remaining_repairs_after_this_attempt": 1,
+      "launch_receipt": {
+        "position": 317,
+        "supervisor_pid": 3245499,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_modulo_infinite_foreground_repair_v1.py",
+          "317"
+        ]
+      },
+      "live_observation": {
+        "pid": 3245554,
+        "command": [
+          "/home/parity/jobs/all-steps-green-v1/full-song-lua-stage-modifier-v1",
+          "--archive",
+          "/home/parity/jobs/modulo-infinite-foreground-repair-v1/chart-317/1656e72fc18dcd4daf1fc5c2316e242df3ec0703d5a65d54e2cc4cf942c3f006.tar",
+          "--report",
+          "/home/parity/jobs/modulo-infinite-foreground-repair-v1/chart-317/report.json"
+        ],
+        "label": "replay",
+        "source_simfile": "MODULO/modulo.ssc"
+      },
+      "exact_process_matches": [
+        true,
+        true
+      ],
+      "attempt_start": {
+        "position": 317,
+        "source_simfile": "MODULO/modulo.ssc",
+        "status": "pending",
+        "repair_attempts": 1,
+        "previous_concrete_failures": [],
+        "previous_errors": [],
+        "previous_failure": "0s] replaying every native gameplay frame: frame 6958/69793 (10.0%)\n[120.0s] replaying every native gameplay frame: frame 7048/69793 (10.1%)\n[122.0s] replaying every native gameplay frame: frame 7149/69793 (10.2%)\n[124.0s] replaying every native gameplay frame: frame 7246/69793 (10.4%)\n[126.0s] replaying every native gameplay frame: frame 7341/69793 (10.5%)\n[128.0s] replaying every native gameplay frame: frame 7443/69793 (10.7%)\n[130.0s] replaying every native gameplay frame: frame 7545/69793 (10.8%)\n[132.0s] replaying every native gameplay frame: frame 7653/69793 (11.0%)\n[134.0s] replaying every native gameplay frame: frame 7747/69793 (11.1%)\n[136.0s] replaying every native gameplay frame: frame 7850/69793 (11.2%)\n[138.0s] replaying every native gameplay frame: frame 7955/69793 (11.4%)\n[140.0s] replaying every native gameplay frame: frame 8053/69793 (11.5%)\n[142.0s] replaying every native gameplay frame: frame 8151/69793 (11.7%)\n[144.0s] replaying every native gameplay frame: frame 8253/69793 (11.8%)\n[146.0s] replaying every native gameplay frame: frame 8355/69793 (12.0%)\n[148.0s] replaying every native gameplay frame: frame 8452/69793 (12.1%)\n[150.0s] replaying every native gameplay frame: frame 8534/69793 (12.2%)\n[152.0s] replaying every native gameplay frame: frame 8625/69793 (12.4%)\n[154.1s] replaying every native gameplay frame: frame 8726/69793 (12.5%)\n[156.1s] replaying every native gameplay frame: frame 8827/69793 (12.6%)\n[158.1s] replaying every native gameplay frame: frame 8933/69793 (12.8%)\n[160.1s] replaying every native gameplay frame: frame 9032/69793 (12.9%)\n[162.1s] replaying every native gameplay frame: frame 9129/69793 (13.1%)\n[164.1s] replaying every native gameplay frame: frame 9221/69793 (13.2%)\n[166.1s] replaying every native gameplay frame: frame 9315/69793 (13.3%)\n[168.1s] replaying every native gameplay frame: frame 9411/69793 (13.5%)\n[170.1s] replaying every native gameplay frame: frame 9505/69793 (13.6%)\n[172.1s] replaying every native gameplay frame: frame 9588/69793 (13.7%)\n[174.1s] replaying every native gameplay frame: frame 9687/69793 (13.9%)\n[176.1s] replaying every native gameplay frame: frame 9788/69793 (14.0%)\n[178.1s] replaying every native gameplay frame: frame 9883/69793 (14.2%)\n[180.1s] replaying every native gameplay frame: frame 9981/69793 (14.3%)\n[182.1s] replaying every native gameplay frame: frame 10087/69793 (14.5%)\n[184.1s] replaying every native gameplay frame: frame 10192/69793 (14.6%)\n[186.1s] replaying every native gameplay frame: frame 10298/69793 (14.8%)\n[188.1s] replaying every native gameplay frame: frame 10406/69793 (14.9%)\n[190.1s] replaying every native gameplay frame: frame 10508/69793 (15.1%)\n[192.1s] replaying every native gameplay frame: frame 10614/69793 (15.2%)\n[194.1s] replaying every native gameplay frame: frame 10713/69793 (15.3%)\n[196.1s] replaying every native gameplay frame: frame 10810/69793 (15.5%)\n[198.1s] replaying every native gameplay frame: frame 10913/69793 (15.6%)\n[200.1s] replaying every native gameplay frame: frame 11021/69793 (15.8%)\n[202.1s] replaying every native gameplay frame: frame 11125/69793 (15.9%)\n[204.1s] replaying every native gameplay frame: frame 11228/69793 (16.1%)\n\nthread 'main' (2081216) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native scene 2 differs from independent scene 1 at frame 11256\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+        "binary_sha256": "69832cbca5fdc07f6ccb21e0f84bd5f45f6573b11c02acd65a4e090d6d8007f5",
+        "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+        "candidate_sha256": "1656e72fc18dcd4daf1fc5c2316e242df3ec0703d5a65d54e2cc4cf942c3f006",
+        "trace_sha256": "5c2e4ad31164c75384e68e8b68680db692ea18e474285dbe78bef29f07a41164",
+        "simfile_sha256": "b0333bc4289473ed6ba3116ff13f169ebf313c93994d35eece21451ceef6d941",
+        "build_proof": "/home/parity/jobs/all-steps-green-v1/proof.json",
+        "fix_commit": "e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+        "native_capture_reused": true,
+        "all_candidate_manifest_members_byte_verified": true
+      },
+      "replay_log_tail": [
+        "[28.0s] replaying every native gameplay frame: frame 1340/69793 (1.9%)",
+        "[30.0s] replaying every native gameplay frame: frame 1444/69793 (2.1%)",
+        "[32.0s] replaying every native gameplay frame: frame 1547/69793 (2.2%)"
+      ],
+      "completed_result": null
+    }
+  ],
+  "status": "first bounded MODULO infinite foreground sleep repair launched; existing complete replay comparisons determine acceptance",
+  "validated_build": "sweep-2026-10-13-all-steps-build.json",
+  "native_capture_reused": true,
+  "all_uncompressed_candidate_members_verified": true,
+  "publisher_streams": 65,
+  "publisher_count": 1,
+  "actual_publisher": {
+    "ProcessId": 60312,
+    "CommandLine": "\"C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe\" -B -X utf8 C:/GitHub/itgmania-harness/target/server-parity/publish_chart_sweep_v1.py"
+  },
+  "comparisons_modified": false,
+  "passing_charts_reopened": false,
+  "capped_lower_ssc_not_retried": true
+}
