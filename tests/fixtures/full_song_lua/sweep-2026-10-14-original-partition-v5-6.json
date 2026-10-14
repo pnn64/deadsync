@@ -2200,6 +2200,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 473,
+      "source_simfile": "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc",
+      "simfile_sha256": "66dba9f19596561f280a582920a90e18425191544e0051909d81b7bbb239abd9",
+      "retained_original_archive": "b22f74de2e8fbe69396870627e62559db93553c4dab1372bfad3ee0c5832765c.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef",
+      "build_proof": "/home/parity/jobs/arrow-alpha-linux-green-v1/proof.json",
+      "capture_seconds": 309.17215250901063,
+      "trace_sha256": "957cd370a135ee942a635583e2824a4a18a9dc3adf1c120990bbc5363df2bfa8",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-6/chart-473/candidates/f15ee0cddf02932b656262f9a5878f32f12a844ddd1e2d7ec5baff30df231a93.tar",
+      "replay_exit": 1,
+      "replay_seconds": 20.82211343300878,
+      "candidate_sha256": "f15ee0cddf02932b656262f9a5878f32f12a844ddd1e2d7ec5baff30df231a93",
+      "failure": ""
     }
   ],
   "scope": {
@@ -2211,6 +2230,6 @@
   "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 9,
-  "pending_charts": 6,
-  "processed_charts": 15
+  "pending_charts": 7,
+  "processed_charts": 16
 }
