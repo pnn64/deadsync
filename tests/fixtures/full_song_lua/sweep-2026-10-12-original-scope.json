@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T02:50:21Z",
+  "updated_utc": "2026-10-14T03:22:34Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,8 +13,8 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 237,
-    "pending": 82,
+    "passed": 238,
+    "pending": 81,
     "unprocessed": 182
   },
   "complete": false,
@@ -1845,9 +1845,9 @@
       "position": 210,
       "source_simfile": "Get Into It/GetIntoIt.sm",
       "simfile_sha256": "5577279c57ba4255fcec3f2f7e105c0e2627731193ee239d4ecc2486806027af",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-13-get-into-it-sm-frames-repair.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json"
     },
     {
       "position": 211,
@@ -2606,8 +2606,8 @@
       "source_simfile": "mawaru6/mawaru6.sm",
       "simfile_sha256": "394d4b03ce745a22d46dfef9bf581301840ee654ebd382d2c76412260694c37c",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-13-mawaru6-foreground-row-repair.json"
     },
     {
       "position": 306,
