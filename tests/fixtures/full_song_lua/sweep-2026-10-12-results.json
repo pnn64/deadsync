@@ -12034,6 +12034,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 354,
+      "source_simfile": "PizzaBoy/PizzaBoy.ssc",
+      "simfile_sha256": "f11f346c34640724590614b3c1801a6723d54c349801574c2a809dbdce09ff16",
+      "retained_original_archive": "44938af597b6bdbfe37bc629cc1117143e6025d6e6313e885196ab5d5c241ff4.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "254c36811 + e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/attack-boundary-linux-green-v2/proof.json",
+      "capture_seconds": 138.10282538598403,
+      "trace_sha256": "4cd6f4fa73e99fa69ae5892593708ac732e06de46c064e3429399ce55a7ea55d",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-354/candidates/f676ad7b99352896ac20acfd205319de36ac480b98ca0e947d2a11671a40f4b5.tar",
+      "replay_exit": 1,
+      "replay_seconds": 13510.895500550017,
+      "candidate_sha256": "f676ad7b99352896ac20acfd205319de36ac480b98ca0e947d2a11671a40f4b5",
+      "failure": " frame 43579/85655 (50.9%)\n[13425.1s] replaying every native gameplay frame: frame 43584/85655 (50.9%)\n[13427.1s] replaying every native gameplay frame: frame 43590/85655 (50.9%)\n[13429.1s] replaying every native gameplay frame: frame 43596/85655 (50.9%)\n[13431.1s] replaying every native gameplay frame: frame 43603/85655 (50.9%)\n[13433.1s] replaying every native gameplay frame: frame 43608/85655 (50.9%)\n[13435.1s] replaying every native gameplay frame: frame 43613/85655 (50.9%)\n[13437.1s] replaying every native gameplay frame: frame 43619/85655 (50.9%)\n[13439.1s] replaying every native gameplay frame: frame 43625/85655 (50.9%)\n[13441.1s] replaying every native gameplay frame: frame 43631/85655 (50.9%)\n[13443.1s] replaying every native gameplay frame: frame 43637/85655 (50.9%)\n[13445.1s] replaying every native gameplay frame: frame 43642/85655 (51.0%)\n[13447.1s] replaying every native gameplay frame: frame 43647/85655 (51.0%)\n[13449.1s] replaying every native gameplay frame: frame 43653/85655 (51.0%)\n[13451.1s] replaying every native gameplay frame: frame 43659/85655 (51.0%)\n[13453.1s] replaying every native gameplay frame: frame 43665/85655 (51.0%)\n[13455.1s] replaying every native gameplay frame: frame 43671/85655 (51.0%)\n[13457.1s] replaying every native gameplay frame: frame 43677/85655 (51.0%)\n[13459.1s] replaying every native gameplay frame: frame 43682/85655 (51.0%)\n[13461.1s] replaying every native gameplay frame: frame 43688/85655 (51.0%)\n[13463.1s] replaying every native gameplay frame: frame 43695/85655 (51.0%)\n[13465.1s] replaying every native gameplay frame: frame 43701/85655 (51.0%)\n[13467.1s] replaying every native gameplay frame: frame 43708/85655 (51.0%)\n[13469.1s] replaying every native gameplay frame: frame 43713/85655 (51.0%)\n[13471.1s] replaying every native gameplay frame: frame 43718/85655 (51.0%)\n[13473.1s] replaying every native gameplay frame: frame 43723/85655 (51.0%)\n[13475.1s] replaying every native gameplay frame: frame 43729/85655 (51.1%)\n[13477.1s] replaying every native gameplay frame: frame 43736/85655 (51.1%)\n[13479.1s] replaying every native gameplay frame: frame 43741/85655 (51.1%)\n[13481.1s] replaying every native gameplay frame: frame 43746/85655 (51.1%)\n[13483.1s] replaying every native gameplay frame: frame 43751/85655 (51.1%)\n[13485.1s] replaying every native gameplay frame: frame 43758/85655 (51.1%)\n[13487.1s] replaying every native gameplay frame: frame 43764/85655 (51.1%)\n[13489.1s] replaying every native gameplay frame: frame 43770/85655 (51.1%)\n[13491.1s] replaying every native gameplay frame: frame 43775/85655 (51.1%)\n[13493.1s] replaying every native gameplay frame: frame 43780/85655 (51.1%)\n[13495.1s] replaying every native gameplay frame: frame 43786/85655 (51.1%)\n[13497.1s] replaying every native gameplay frame: frame 43793/85655 (51.1%)\n[13499.1s] replaying every native gameplay frame: frame 43799/85655 (51.1%)\n[13501.1s] replaying every native gameplay frame: frame 43804/85655 (51.1%)\n[13503.1s] replaying every native gameplay frame: frame 43809/85655 (51.1%)\n[13505.1s] replaying every native gameplay frame: frame 43815/85655 (51.2%)\n[13507.1s] replaying every native gameplay frame: frame 43821/85655 (51.2%)\n\nthread 'main' (2320592) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native scene 2 differs from independent scene 1 at frame 43823\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "historical_pending": [
@@ -12060,6 +12079,6 @@
   "binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 33,
-  "pending_charts": 59,
-  "processed_charts": 92
+  "pending_charts": 60,
+  "processed_charts": 93
 }
