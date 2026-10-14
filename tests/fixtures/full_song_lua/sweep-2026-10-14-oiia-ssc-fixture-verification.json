@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "OIIA OIIA - [Zaia]/OIIA OIIA.ssc",
+  "native_frames": 41614,
+  "replayed_frames": 41614,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "8bf23fdba3be4dc8f5b12cccf4af905ce31a855c265a3bfa3c0ff235e481c51b.tar.zst",
+  "compressed_sha256": "8bf23fdba3be4dc8f5b12cccf4af905ce31a855c265a3bfa3c0ff235e481c51b",
+  "uncompressed_sha256": "e69146da77da636ef638a7ce6d439ce85d83824e163ebd2c43956c7e32f159dc",
+  "compressed_bytes": 10227676,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
