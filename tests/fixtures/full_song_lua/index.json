@@ -4977,15 +4977,12 @@
     {
       "title": "Subway Surfers Main Theme",
       "source_simfile": "Subway Surfers/subwaysurfers.ssc",
-      "harness_version": "0.1.0",
-      "archive": "fd5b7925d948b2e1935453daf0e9c5680b9806ff27f683f77b1f8b8692cd3612.tar.zst",
-      "sha256": "fd5b7925d948b2e1935453daf0e9c5680b9806ff27f683f77b1f8b8692cd3612",
-      "compressed_bytes": 20828,
-      "uncompressed_sha256": "e5ac74f73ef014cea2136554dcf733c13985393be956a430539d4f3039c091f8",
-      "compression_level": 22,
-      "aliases": [
-        "8175071c7dbcac7b36430150b2a6a97941d2deb9b7d7052cc2da8767b65e6da4.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "0c86dc9497389da2992ac1c00ee37ee7749b3b88e9a791f7fee8910e88b11291.tar.zst",
+      "sha256": "0c86dc9497389da2992ac1c00ee37ee7749b3b88e9a791f7fee8910e88b11291",
+      "compressed_bytes": 12559630,
+      "uncompressed_sha256": "02ac5f775ddd79556a96a42bb517ddfddabd8bed5554b575a5544b8c2841b305",
+      "aliases": []
     },
     {
       "title": "Tacos",
