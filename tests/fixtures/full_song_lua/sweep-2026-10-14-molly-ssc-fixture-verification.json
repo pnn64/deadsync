@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Molly/Molly.ssc",
+  "native_frames": 142186,
+  "replayed_frames": 142186,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "c30d5ed45b93df0b119e5e483f90d121cfc0980a0dde6f773fbedcf0d605bfd0.tar.zst",
+  "compressed_sha256": "c30d5ed45b93df0b119e5e483f90d121cfc0980a0dde6f773fbedcf0d605bfd0",
+  "uncompressed_sha256": "7e9910dc84aa32739e9429524fbff0affc0178ddb2db327a29f098bafba6f51c",
+  "compressed_bytes": 214896171,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
