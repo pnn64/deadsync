@@ -1,0 +1,1000 @@
+{
+  "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.sm",
+  "position": 347,
+  "status": "pending",
+  "full_repair_attempts": 0,
+  "full_repairs_remaining": 2,
+  "native_frames": 64119,
+  "replayed_frames": 64119,
+  "compared_stage_fields": 1892,
+  "mismatch_count": 5,
+  "errors": [],
+  "first_failure": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "external-0037",
+      "args": [
+        false
+      ],
+      "beat": 0.0008530388004146516,
+      "caller": {
+        "line": 185,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0014",
+      "detail": {
+        "native_tween_time_left": 0
+      },
+      "kind": "call",
+      "line": 185,
+      "operation": "Actor.visible",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 0.45541951060295105,
+      "seq": 47,
+      "source": "song:/lua/default.lua",
+      "tween_time_left": 0
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "query",
+      "operation": "ActorFrame.GetChild",
+      "source": "song:/lua/default.lua",
+      "line": 185,
+      "phase": "callback",
+      "beat": 0.0008530388004146516,
+      "seconds": 0.45541951060295105,
+      "args": [
+        "P1Score"
+      ],
+      "results": [
+        {
+          "actor": 4,
+          "name": "P1Score",
+          "path": "ScreenGameplay/Underlay/P1Score"
+        }
+      ]
+    }
+  },
+  "candidate_sha256": "3fc6f429db3328543e9a62d8223acc6bf2801683e78701d4bf12ec227c7d819a",
+  "native_trace_sha256": "1db0a19dacefa1859ec533c970bc3b9946906793c9a7763b0fd6e0d27a782fde",
+  "simfile_sha256": "e01810132a83e902b1bae013cf2df744957e13cddbdec65e63898b55dabde7a8",
+  "native_inventory_proof_sha256": "21d6d9bf4bafdaa66d0ea8c5fcd6863e2ffadf2a0f9d1bd5fa9609430b1e5d42",
+  "independent_inventory_proof_sha256": "01d38932263dca471f131201626217555750bc2c05b9b4822abb374121ee0bbb",
+  "native_inventory": {
+    "actor": "external-0021",
+    "args": [],
+    "beat": 0.0008530388004146516,
+    "caller": {
+      "line": 185,
+      "source": "song:/lua/default.lua",
+      "tail_call": false
+    },
+    "command": "OnCommand",
+    "definition_id": "def-0014",
+    "detail": {
+      "native_tween_time_left": {
+        "type": "number",
+        "value": "infinity"
+      },
+      "results": [
+        {
+          "": [
+            {
+              "actor": "external-0045",
+              "name": "",
+              "path": "ScreenGameplay"
+            },
+            {
+              "actor": "external-0046",
+              "name": "",
+              "path": "ScreenGameplay"
+            },
+            {
+              "actor": "external-0047",
+              "name": "",
+              "path": "ScreenGameplay"
+            },
+            {
+              "actor": "external-0048",
+              "name": "",
+              "path": "ScreenGameplay"
+            },
+            {
+              "actor": "external-0049",
+              "name": "",
+              "path": "ScreenGameplay"
+            }
+          ],
+          "ActiveAttackListP1": {
+            "actor": "external-0038",
+            "name": "ActiveAttackListP1",
+            "path": "ScreenGameplay/ActiveAttackListP1"
+          },
+          "ActiveAttackListP2": {
+            "actor": "external-0034",
+            "name": "ActiveAttackListP2",
+            "path": "ScreenGameplay/ActiveAttackListP2"
+          },
+          "Cancel": {
+            "actor": "external-0030",
+            "name": "Cancel",
+            "path": "ScreenGameplay/Cancel"
+          },
+          "Debug": {
+            "actor": "external-0035",
+            "name": "Debug",
+            "path": "ScreenGameplay/Debug"
+          },
+          "Footer": {
+            "actor": "external-0042",
+            "name": "Footer",
+            "path": "ScreenGameplay/Footer"
+          },
+          "Header": {
+            "actor": "external-0041",
+            "name": "Header",
+            "path": "ScreenGameplay/Header"
+          },
+          "In": {
+            "actor": "external-0037",
+            "name": "In",
+            "path": "ScreenGameplay/In"
+          },
+          "LifeP1": {
+            "actor": "external-0023",
+            "name": "LifeP1",
+            "path": "ScreenGameplay/LifeP1"
+          },
+          "LyricDisplay": {
+            "actor": "external-0033",
+            "name": "LyricDisplay",
+            "path": "ScreenGameplay/LyricDisplay"
+          },
+          "OniGameOverP1": {
+            "actor": "external-0031",
+            "name": "OniGameOverP1",
+            "path": "ScreenGameplay/OniGameOverP1"
+          },
+          "Out": {
+            "actor": "external-0036",
+            "name": "Out",
+            "path": "ScreenGameplay/Out"
+          },
+          "Overlay": {
+            "actor": "external-0040",
+            "name": "Overlay",
+            "path": "ScreenGameplay/Overlay"
+          },
+          "PlayerOptionsP1": {
+            "actor": "external-0044",
+            "name": "PlayerOptionsP1",
+            "path": "ScreenGameplay/PlayerOptionsP1"
+          },
+          "PlayerP1": {
+            "actor": "external-0022",
+            "name": "PlayerP1",
+            "path": "ScreenGameplay/PlayerP1"
+          },
+          "ScoreP1": {
+            "actor": "external-0032",
+            "name": "ScoreP1",
+            "path": "ScreenGameplay/ScoreP1"
+          },
+          "SongBackground": {
+            "actor": "external-0050",
+            "name": "SongBackground",
+            "path": "ScreenGameplay/SongBackground"
+          },
+          "SongForeground": {
+            "actor": "external-0005",
+            "name": "SongForeground",
+            "path": "ScreenGameplay/SongForeground"
+          },
+          "SongOptions": {
+            "actor": "external-0029",
+            "name": "SongOptions",
+            "path": "ScreenGameplay/SongOptions"
+          },
+          "StepsDescriptionP1": {
+            "actor": "external-0043",
+            "name": "StepsDescriptionP1",
+            "path": "ScreenGameplay/StepsDescriptionP1"
+          },
+          "StepsDisplayP1": {
+            "actor": "external-0039",
+            "name": "StepsDisplayP1",
+            "path": "ScreenGameplay/StepsDisplayP1"
+          },
+          "Underlay": {
+            "actor": "external-0027",
+            "name": "Underlay",
+            "path": "ScreenGameplay/Underlay"
+          }
+        }
+      ]
+    },
+    "kind": "query",
+    "line": 185,
+    "operation": "ActorFrame.GetChildren",
+    "phase": "callback",
+    "scene": 1,
+    "seconds": 0.45541951060295105,
+    "seq": 46,
+    "source": "song:/lua/default.lua"
+  },
+  "independent_inventory": {
+    "diagnostic_only": true,
+    "full_chart_attempts_spent": 0,
+    "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.sm",
+    "scope": "Fresh production owned live scene, P1 enabled/P2 disabled, first foreground On child inventory; not a chart replay.",
+    "source_sha256": {
+      "crates/deadsync-song-lua/src/files.rs": "f508be8c3b012ac11d01333554ba33c987b88d6dbe6aac74f6a7fc0cbd47659a",
+      "crates/deadsync-song-lua/src/compile.rs": "2936b935f47f663a9f0ad507da13aa6dd3d0f8ea81ffee1970fe25d024a29c00",
+      "crates/deadsync-song-lua/src/cmd.rs": "073fcea836c5d21493160c76dcdea221ad15df10cd78a8c281167189830c852e",
+      "crates/deadsync-song-lua/src/top_screen.rs": "2d86a2d51075a31c10baa414287b0016c8cae9a7175a18f7160a56a2e49ff1d9",
+      "crates/deadsync-song-lua/src/host.rs": "2029c882dd4034e7c249b60ee9a5575a495cb61b42f1674b0d4c972055df882f",
+      "crates/deadsync-song-lua/src/live.rs": "ee64022bc5ecddd5ed7dffa75a0d9014171bf500f997c28f54507bb4f04a49a4",
+      "crates/deadsync-song-lua/src/song_tables.rs": "4766af3f6f75f6ab6ae4ca8b764d9e9cf990eb65277d7d66a52006afc70e995a",
+      "crates/deadsync-song-lua/src/lua_util.rs": "e02d1a57a17065aa8f8f4aa27a4f5b29abaa8a8f5ffc0e635e23a570367d5c21",
+      "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "090ee7ef08a554972b5bba9fb72d2bb51d065cd5e324427a9a256e417735c10d",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "4557382910b8a36b6b51df8d871904e1b937e71d46ba32c6aa921f09733c848a",
+      "crates/deadsync-simfile/src/song.rs": "74203d827263879a7882bc49f1c5abcffa20a3f9efa6bd431a7228bcdf763452",
+      "crates/deadsync-simfile/src/cache.rs": "ebe77a06d35e6d662754faee5ee46658f4ca6b50803379683c9a7a10333992ed",
+      "crates/deadsync-gameplay/src/runtime_state.rs": "6a52092c53d4441b96c609aafc3fdc315fb6d8988ae04d0c3133d5e243651673",
+      "crates/deadsync-gameplay/src/runtime_init.rs": "642ff0d5ed5f9365bdc1c9c54c2353bf293c21b813fdd967bb8511fe52c256bd",
+      "crates/deadsync-gameplay/src/runtime_methods.rs": "aacfd41959a6c1795ffd9a3854c25f161dde783d0e40dee8dc1aec5368b06470",
+      "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "3d4e4ec033727d60449713937a5dc2506b3d3402d6570f4033a0a3be75e85722",
+      "crates/deadsync-profile-gameplay/src/lib.rs": "469a3e23ba4cc16eff5059cbebe347366f2c0de9c8fb59a330b99aa451957b68",
+      "crates/deadsync-profile-gameplay/src/song_lua_runtime_tests.rs": "ebbb756b94ce17c6b39528ea6a252e5f0ddad1e09398126dadfb4937addcc305",
+      "crates/deadsync-gameplay/src/note_timing.rs": "886175144364c629410e91f6d82781e23298a811f9ae4248cce812fc0c7ab5ff",
+      "crates/deadsync-gameplay/src/runtime_update.rs": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "crates/deadsync-song-lua/src/tables.rs": "ffef84cf89d219cb5b5db225a83f46cecb4ea014aa43b6ff819cd7edd6a4c6b0",
+      "crates/deadsync-song-lua/src/lib.rs": "245e390fe9b6fe5e7002f98aa3b212065ba4cbf9598e23389d5be9608281a5e5",
+      "crates/deadsync-song-lua/src/sl.rs": "053f3346c9c4e18a7b9eff2c3130b219a3d81cd282e34ef317e587437a78fd1f",
+      "crates/deadsync-song-lua/src/compat.rs": "75b2163b55c11b323424e6e85061e83c9fec584c57092d4edea5da1c56dade9b",
+      "crates/deadsync-shell/src/gameplay_entry.rs": "549a7fb9e81f2f7602350a364ed64c619f7b4e4c221226fea963e89f88a11801",
+      "crates/deadsync-song-lua/src/draw_capture.rs": "a1bf137efc4e2f24f9d2ec50752873b121c73396ddcff29c7db690026c64fa57",
+      "crates/deadsync-song-lua/src/playback/prepare.rs": "2072e176ebf168f404dd55ee1344a35b0621cf22f4561a82376843b9f11ae41d",
+      "crates/deadsync-song-lua/src/theme_colors.rs": "56dccc788960021d78e9fc2c8933ad2d15a5f87830268779b2132e1467010a69",
+      "crates/deadsync-song-lua/src/runtime.rs": "8e3a8101d520d8d21e1c7cd40233e257fefd001a6a911cd8864d0e7539e73567",
+      "crates/deadsync-simfile/src/changes.rs": "f3746338821adc608f723ff7032dba255138de160bc28014707a59e040269ecd",
+      "crates/deadsync-simfile/src/bgchanges.rs": "e141477167e30b4ccbf4a5c7b8e325154942803364924f0d9d35b47b17f2480c",
+      "crates/deadsync-chart/src/song.rs": "2b51a868bb98bf8079c80641ae6dfe038eba78085638b6360ff340140fb3f4ac",
+      "crates/deadsync-simfile/src/cache_perf.rs": "4e1516a5a87636e56b2afb85c6d3f96599e2c196861cb48c31d057c2034311e6",
+      "crates/deadsync-shell/src/gameplay_regression_tests.rs": "3449973bb74c87e80deb73bbfb4d3cdddbc325dffc40f2f7e6fc7ff5f6ba3d48"
+    },
+    "frozen_library_sha256": "edbc8195d468e66f401d9f9e12c6b6353efb7b37b629fefad04375dd2cb792c4",
+    "probe_binary_sha256": "d51d966f7a2d01b1d658a7409b8c0a076af98658cd5c419739d7f2d633a04d73",
+    "probe_lua_sha256": "ca61a38b59791f038b82aa51a02fc8d5cd1a30b76b5a860fd91e68c8f10ef41d",
+    "probe_rust_sha256": "e5f6f6d6184ab6db878355821b7037e7decc8e3ebd59cae672906f2d8386de72",
+    "build_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "probe_log_sha256": "8d77e97d4252673aac5d0e72fe2cfcf00f5c0af37b07edc6ff9ad7d0ac563bbb",
+    "seconds": 4.522524823987624,
+    "actual_child_keys_in_pairs_order": [
+      "Overlay",
+      "PlayerP1",
+      "Debug",
+      "SongForeground",
+      "ScoreP1",
+      "Underlay",
+      "In",
+      "StepsDisplayP1",
+      "LifeP1",
+      "SongBackground"
+    ],
+    "native_child_keys": [
+      "",
+      "ActiveAttackListP1",
+      "ActiveAttackListP2",
+      "Cancel",
+      "Debug",
+      "Footer",
+      "Header",
+      "In",
+      "LifeP1",
+      "LyricDisplay",
+      "OniGameOverP1",
+      "Out",
+      "Overlay",
+      "PlayerOptionsP1",
+      "PlayerP1",
+      "ScoreP1",
+      "SongBackground",
+      "SongForeground",
+      "SongOptions",
+      "StepsDescriptionP1",
+      "StepsDisplayP1",
+      "Underlay"
+    ],
+    "missing_native_keys": [
+      "",
+      "ActiveAttackListP1",
+      "ActiveAttackListP2",
+      "Cancel",
+      "Footer",
+      "Header",
+      "LyricDisplay",
+      "OniGameOverP1",
+      "Out",
+      "PlayerOptionsP1",
+      "SongOptions",
+      "StepsDescriptionP1"
+    ],
+    "extra_actual_keys": [],
+    "actual_underlay_in_order": [
+      "Underlay",
+      "In"
+    ],
+    "native_in_precedes_underlay_calls": true,
+    "native_capture_all_members_byte_verified": true
+  },
+  "invalid_first_probe_exclusion": {
+    "reason": "Non-live compile did not execute the On callback; empty message output is not evidence of missing children. Use fresh v2 owned live startup inventory.",
+    "valid_child_inventory": false,
+    "full_attempts_spent": 0
+  },
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "simply_love_commit": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+  "pinned_source": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ActorFrame.cpp",
+      "commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "sha256": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+      "lines": [
+        {
+          "line": 364,
+          "text": "void ActorFrame::PushChildrenTable(lua_State* L) {"
+        },
+        {
+          "line": 365,
+          "text": "  lua_newtable(L);  // stack: all_actors"
+        },
+        {
+          "line": 366,
+          "text": "  for (Actor* a : m_SubActors) {"
+        },
+        {
+          "line": 367,
+          "text": "    LuaHelpers::Push(L, a->GetName());  // stack: all_actors, name"
+        },
+        {
+          "line": 368,
+          "text": "    lua_gettable(L, -2);                // stack: all_actors, entry"
+        },
+        {
+          "line": 369,
+          "text": "    if (lua_isnil(L, -1)) {"
+        },
+        {
+          "line": 370,
+          "text": "      lua_pop(L, 1);                      // stack: all_actors"
+        },
+        {
+          "line": 371,
+          "text": "      LuaHelpers::Push(L, a->GetName());  // stack: all_actors, name"
+        },
+        {
+          "line": 372,
+          "text": "      a->PushSelf(L);                     // stack: all_actors, name, actor"
+        },
+        {
+          "line": 373,
+          "text": "      lua_rawset(L, -3);                  // stack: all_actors"
+        },
+        {
+          "line": 374,
+          "text": "    } else {"
+        },
+        {
+          "line": 375,
+          "text": "      // Fun fact:  PushSelf pushes a table."
+        },
+        {
+          "line": 376,
+          "text": "      if (lua_objlen(L, -1) > 0) {"
+        },
+        {
+          "line": 377,
+          "text": "        // stack: all_actors, table_entry"
+        },
+        {
+          "line": 378,
+          "text": "        AddToChildTable(L, a);  // stack: all_actors, table_entry"
+        },
+        {
+          "line": 379,
+          "text": "        lua_pop(L, 1);          // stack: all_actors"
+        },
+        {
+          "line": 380,
+          "text": "      } else {"
+        },
+        {
+          "line": 381,
+          "text": "        // stack: all_actors, old_entry"
+        },
+        {
+          "line": 382,
+          "text": "        CreateChildTable(L, a);  // stack: all_actors, table_entry"
+        },
+        {
+          "line": 383,
+          "text": "        LuaHelpers::Push("
+        },
+        {
+          "line": 384,
+          "text": "            L, a->GetName());  // stack: all_actors, table_entry, name"
+        },
+        {
+          "line": 385,
+          "text": "        lua_insert(L, -2);     // stack: all_actors, name, table_entry"
+        },
+        {
+          "line": 386,
+          "text": "        lua_rawset(L, -3);     // stack: all_actors"
+        },
+        {
+          "line": 387,
+          "text": "      }"
+        },
+        {
+          "line": 388,
+          "text": "    }"
+        },
+        {
+          "line": 389,
+          "text": "  }"
+        },
+        {
+          "line": 390,
+          "text": "}"
+        },
+        {
+          "line": 391,
+          "text": ""
+        },
+        {
+          "line": 392,
+          "text": "void ActorFrame::PushChildTable(lua_State* L, const std::string& sName) {"
+        },
+        {
+          "line": 393,
+          "text": "  int found = 0;"
+        }
+      ]
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ScreenWithMenuElements.cpp",
+      "commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "sha256": "88f95ddf0c66f672f3fa79ab26be6925f1dce019b7544a710e9593c60da7e3ba",
+      "lines": [
+        {
+          "line": 91,
+          "text": "  // decorations"
+        },
+        {
+          "line": 92,
+          "text": "  {"
+        },
+        {
+          "line": 93,
+          "text": "    AutoActor decorations;"
+        },
+        {
+          "line": 94,
+          "text": "    decorations.LoadB(m_sName, \"decorations\");"
+        },
+        {
+          "line": 95,
+          "text": "    decorations->SetName(\"Decorations\");"
+        },
+        {
+          "line": 96,
+          "text": "    decorations->SetDrawOrder(DRAW_ORDER_DECORATIONS);"
+        },
+        {
+          "line": 97,
+          "text": "    ActorFrame* pFrame ="
+        },
+        {
+          "line": 98,
+          "text": "        dynamic_cast<ActorFrame*>(static_cast<Actor*>(decorations));"
+        },
+        {
+          "line": 99,
+          "text": "    if (pFrame) {"
+        },
+        {
+          "line": 100,
+          "text": "      m_vDecorations = pFrame->GetChildren();"
+        },
+        {
+          "line": 101,
+          "text": "      for (Actor* child : m_vDecorations) {"
+        },
+        {
+          "line": 102,
+          "text": "        this->AddChild(child);"
+        },
+        {
+          "line": 103,
+          "text": "      }"
+        },
+        {
+          "line": 104,
+          "text": "      pFrame->RemoveAllChildren();"
+        },
+        {
+          "line": 105,
+          "text": "    }"
+        },
+        {
+          "line": 106,
+          "text": "  }"
+        },
+        {
+          "line": 107,
+          "text": ""
+        },
+        {
+          "line": 108,
+          "text": "  m_In.SetName(\"In\");"
+        },
+        {
+          "line": 109,
+          "text": "  m_In.Load(THEME->GetPathB(m_sName, \"in\"));"
+        },
+        {
+          "line": 110,
+          "text": "  m_In.SetDrawOrder(DRAW_ORDER_TRANSITIONS);"
+        },
+        {
+          "line": 111,
+          "text": "  this->AddChild(&m_In);"
+        },
+        {
+          "line": 112,
+          "text": "  LOAD_ALL_COMMANDS(m_In);"
+        },
+        {
+          "line": 113,
+          "text": ""
+        },
+        {
+          "line": 114,
+          "text": "  m_Out.SetName(\"Out\");"
+        },
+        {
+          "line": 115,
+          "text": "  m_Out.Load(THEME->GetPathB(m_sName, \"out\"));"
+        },
+        {
+          "line": 116,
+          "text": "  m_Out.SetDrawOrder(DRAW_ORDER_TRANSITIONS);"
+        },
+        {
+          "line": 117,
+          "text": "  this->AddChild(&m_Out);"
+        },
+        {
+          "line": 118,
+          "text": "  LOAD_ALL_COMMANDS(m_Out);"
+        },
+        {
+          "line": 119,
+          "text": ""
+        },
+        {
+          "line": 120,
+          "text": "  m_Cancel.SetName(\"Cancel\");"
+        },
+        {
+          "line": 121,
+          "text": "  m_Cancel.Load(THEME->GetPathB(m_sName, \"cancel\"));"
+        },
+        {
+          "line": 122,
+          "text": "  m_Cancel.SetDrawOrder(DRAW_ORDER_TRANSITIONS);"
+        },
+        {
+          "line": 123,
+          "text": "  this->AddChild(&m_Cancel);"
+        },
+        {
+          "line": 124,
+          "text": "  LOAD_ALL_COMMANDS(m_Cancel);"
+        }
+      ]
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ScreenGameplay.cpp",
+      "commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+      "lines": [
+        {
+          "line": 556,
+          "text": "    m_BeginnerHelper.SetXY(SCREEN_CENTER_X, SCREEN_CENTER_Y);"
+        },
+        {
+          "line": 557,
+          "text": "    this->AddChild(&m_BeginnerHelper);"
+        },
+        {
+          "line": 558,
+          "text": "  }"
+        },
+        {
+          "line": 559,
+          "text": ""
+        },
+        {
+          "line": 560,
+          "text": "  if (!GAMESTATE"
+        },
+        {
+          "line": 561,
+          "text": "           ->m_bDemonstrationOrJukebox)  // only load if we're going to use it"
+        },
+        {
+          "line": 562,
+          "text": "  {"
+        },
+        {
+          "line": 563,
+          "text": "    m_Toasty.Load(THEME->GetPathB(m_sName, \"toasty\"));"
+        },
+        {
+          "line": 564,
+          "text": "    this->AddChild(&m_Toasty);"
+        },
+        {
+          "line": 565,
+          "text": "  }"
+        },
+        {
+          "line": 566,
+          "text": ""
+        },
+        {
+          "line": 628,
+          "text": "      pi->m_sprOniGameOver->SetName("
+        },
+        {
+          "line": 629,
+          "text": "          ssprintf(\"OniGameOver%s\", pi->GetName().c_str()));"
+        },
+        {
+          "line": 630,
+          "text": "      LOAD_ALL_COMMANDS_AND_SET_XY(pi->m_sprOniGameOver);"
+        },
+        {
+          "line": 631,
+          "text": "      this->AddChild(pi->m_sprOniGameOver);"
+        },
+        {
+          "line": 632,
+          "text": "    }"
+        },
+        {
+          "line": 633,
+          "text": "  }"
+        },
+        {
+          "line": 634,
+          "text": ""
+        },
+        {
+          "line": 635,
+          "text": "  m_NextSong.Load(THEME->GetPathB(m_sName, \"next course song\"));"
+        },
+        {
+          "line": 636,
+          "text": "  m_NextSong.SetDrawOrder(DRAW_ORDER_TRANSITIONS - 1);"
+        },
+        {
+          "line": 637,
+          "text": "  this->AddChild(&m_NextSong);"
+        },
+        {
+          "line": 638,
+          "text": ""
+        },
+        {
+          "line": 639,
+          "text": "  // Add combined life meter"
+        },
+        {
+          "line": 728,
+          "text": "    pi->m_ptextStepsDescription = new BitmapText;"
+        },
+        {
+          "line": 729,
+          "text": "    pi->m_ptextStepsDescription->LoadFromFont("
+        },
+        {
+          "line": 730,
+          "text": "        THEME->GetPathF(m_sName, \"StepsDescription\"));"
+        },
+        {
+          "line": 731,
+          "text": "    pi->m_ptextStepsDescription->SetName("
+        },
+        {
+          "line": 732,
+          "text": "        ssprintf(\"StepsDescription%s\", pi->GetName().c_str()));"
+        },
+        {
+          "line": 733,
+          "text": "    LOAD_ALL_COMMANDS_AND_SET_XY(pi->m_ptextStepsDescription);"
+        },
+        {
+          "line": 734,
+          "text": "    this->AddChild(pi->m_ptextStepsDescription);"
+        },
+        {
+          "line": 735,
+          "text": ""
+        },
+        {
+          "line": 736,
+          "text": "    // Player/Song options"
+        },
+        {
+          "line": 737,
+          "text": "    ASSERT(pi->m_ptextPlayerOptions == nullptr);"
+        },
+        {
+          "line": 738,
+          "text": "    pi->m_ptextPlayerOptions = new BitmapText;"
+        },
+        {
+          "line": 739,
+          "text": "    pi->m_ptextPlayerOptions->LoadFromFont("
+        },
+        {
+          "line": 740,
+          "text": "        THEME->GetPathF(m_sName, \"player options\"));"
+        },
+        {
+          "line": 741,
+          "text": "    pi->m_ptextPlayerOptions->SetName("
+        },
+        {
+          "line": 742,
+          "text": "        ssprintf(\"PlayerOptions%s\", pi->GetName().c_str()));"
+        },
+        {
+          "line": 743,
+          "text": "    LOAD_ALL_COMMANDS_AND_SET_XY(pi->m_ptextPlayerOptions);"
+        },
+        {
+          "line": 744,
+          "text": "    this->AddChild(pi->m_ptextPlayerOptions);"
+        },
+        {
+          "line": 770,
+          "text": ""
+        },
+        {
+          "line": 771,
+          "text": "  m_textSongOptions.LoadFromFont(THEME->GetPathF(m_sName, \"song options\"));"
+        },
+        {
+          "line": 772,
+          "text": "  m_textSongOptions.SetShadowLength(0);"
+        },
+        {
+          "line": 773,
+          "text": "  m_textSongOptions.SetName(\"SongOptions\");"
+        },
+        {
+          "line": 774,
+          "text": "  LOAD_ALL_COMMANDS_AND_SET_XY(m_textSongOptions);"
+        },
+        {
+          "line": 775,
+          "text": "  m_textSongOptions.SetText("
+        },
+        {
+          "line": 776,
+          "text": "      GAMESTATE->m_SongOptions.GetStage().GetLocalizedString());"
+        },
+        {
+          "line": 777,
+          "text": "  this->AddChild(&m_textSongOptions);"
+        },
+        {
+          "line": 778,
+          "text": ""
+        },
+        {
+          "line": 779,
+          "text": "  FOREACH_VisiblePlayerInfo(m_vPlayerInfo, pi) {"
+        },
+        {
+          "line": 780,
+          "text": "    ASSERT(pi->m_pActiveAttackList == nullptr);"
+        },
+        {
+          "line": 781,
+          "text": "    pi->m_pActiveAttackList = new ActiveAttackList;"
+        },
+        {
+          "line": 782,
+          "text": "    pi->m_pActiveAttackList->LoadFromFont("
+        },
+        {
+          "line": 783,
+          "text": "        THEME->GetPathF(m_sName, \"ActiveAttackList\"));"
+        },
+        {
+          "line": 784,
+          "text": "    pi->m_pActiveAttackList->Init(pi->GetPlayerState());"
+        },
+        {
+          "line": 785,
+          "text": "    pi->m_pActiveAttackList->SetName("
+        },
+        {
+          "line": 786,
+          "text": "        ssprintf(\"ActiveAttackList%s\", pi->GetName().c_str()));"
+        },
+        {
+          "line": 787,
+          "text": "    LOAD_ALL_COMMANDS_AND_SET_XY(pi->m_pActiveAttackList);"
+        },
+        {
+          "line": 788,
+          "text": "    this->AddChild(pi->m_pActiveAttackList);"
+        },
+        {
+          "line": 789,
+          "text": "  }"
+        },
+        {
+          "line": 790,
+          "text": ""
+        },
+        {
+          "line": 791,
+          "text": "  if (g_bShowLyrics) {"
+        },
+        {
+          "line": 792,
+          "text": "    m_LyricDisplay.SetName(\"LyricDisplay\");"
+        },
+        {
+          "line": 793,
+          "text": "    LOAD_ALL_COMMANDS(m_LyricDisplay);"
+        },
+        {
+          "line": 794,
+          "text": "    this->AddChild(&m_LyricDisplay);"
+        },
+        {
+          "line": 795,
+          "text": "  }"
+        },
+        {
+          "line": 796,
+          "text": ""
+        },
+        {
+          "line": 797,
+          "text": "  if (!GAMESTATE"
+        },
+        {
+          "line": 798,
+          "text": "           ->m_bDemonstrationOrJukebox)  // only load if we're going to use it"
+        },
+        {
+          "line": 799,
+          "text": "  {"
+        },
+        {
+          "line": 800,
+          "text": "    m_Ready.Load(THEME->GetPathB(m_sName, \"ready\"));"
+        },
+        {
+          "line": 801,
+          "text": "    this->AddChild(&m_Ready);"
+        },
+        {
+          "line": 802,
+          "text": ""
+        },
+        {
+          "line": 803,
+          "text": "    m_Go.Load(THEME->GetPathB(m_sName, \"go\"));"
+        },
+        {
+          "line": 804,
+          "text": "    this->AddChild(&m_Go);"
+        },
+        {
+          "line": 805,
+          "text": ""
+        },
+        {
+          "line": 806,
+          "text": "    m_Failed.Load(THEME->GetPathB(m_sName, \"failed\"));"
+        },
+        {
+          "line": 807,
+          "text": "    m_Failed.SetDrawOrder("
+        },
+        {
+          "line": 808,
+          "text": "        DRAW_ORDER_TRANSITIONS - 1);  // on top of everything else"
+        },
+        {
+          "line": 809,
+          "text": "    this->AddChild(&m_Failed);"
+        },
+        {
+          "line": 810,
+          "text": ""
+        },
+        {
+          "line": 811,
+          "text": "    m_textDebug.LoadFromFont(THEME->GetPathF(m_sName, \"debug\"));"
+        },
+        {
+          "line": 812,
+          "text": "    m_textDebug.SetName(\"Debug\");"
+        },
+        {
+          "line": 813,
+          "text": "    LOAD_ALL_COMMANDS_AND_SET_XY(m_textDebug);"
+        },
+        {
+          "line": 814,
+          "text": "    m_textDebug.SetDrawOrder("
+        }
+      ]
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\BGAnimations\\ScreenWithMenuElements decorations.lua",
+      "commit": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+      "sha256": "d2a818281d38db5afbb064fac49499a2fa55efd8e277e851231120e77a1a873f",
+      "lines": [
+        {
+          "line": 1,
+          "text": "local t =  Def.ActorFrame {}"
+        },
+        {
+          "line": 2,
+          "text": ""
+        },
+        {
+          "line": 3,
+          "text": "t[#t+1] = StandardDecorationFromFile( \"Header\", \"Header\" )"
+        },
+        {
+          "line": 4,
+          "text": "t[#t+1] = StandardDecorationFromFile( \"Footer\", \"Footer\" )"
+        },
+        {
+          "line": 5,
+          "text": ""
+        },
+        {
+          "line": 6,
+          "text": "return t"
+        }
+      ]
+    }
+  ],
+  "concrete_cause": "The production gameplay screen child collection contains ten keys instead of the twenty-two returned by the retained native screen. It omits twelve keys, including the five unnamed screen actors. The native On callback visits In before the Underlay score loop; the independent owned live host visits Underlay before In, matching the five cyclic command-query differences in the complete pending replay.",
+  "native_actor_count": 26,
+  "independent_actor_count": 10,
+  "source_observation": "ActorFrame::PushChildrenTable returns every owned subactor, grouping duplicate names. ScreenWithMenuElements adopts decoration children directly and owns In/Out/Cancel. ScreenGameplay creates StepsDescription/PlayerOptions/SongOptions, attack lists, lyrics, Oni gameover and unnamed Toasty/NextSong/Ready/Go/Failed actors. Simply Love creates Header and Footer decorations.",
+  "repair_scope": "Restore the native owned top-screen child inventory, duplicate-name grouping, identities and child traversal. The missing inventory is established; an implementation and complete chart replay remain necessary.",
+  "diagnostic_only": true,
+  "new_full_repair_launched": false,
+  "acceptance_comparisons_changed": false,
+  "passing_charts_reopened": false
+}
