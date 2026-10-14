@@ -2081,6 +2081,23 @@ pub fn install_game_state_globals(
             Ok(())
         })?,
     )?;
+    // LuaBinding.cpp publishes a writable GameState methods table, and the
+    // owned instance resolves methods through that table. Authored mod readers
+    // can add or replace class methods without changing the instance identity.
+    let class = lua.create_table()?;
+    let members = gamestate.pairs::<Value, Value>().collect::<mlua::Result<Vec<_>>>()?;
+    for (name, value) in members {
+        if let Value::Function(method) = value {
+            class.raw_set(name.clone(), method)?;
+            gamestate.raw_set(name, Value::Nil)?;
+        }
+    }
+    let metatable = lua.create_table()?;
+    metatable.raw_set("__index", class.clone())?;
+    metatable.raw_set("__metatable", "(hidden)")?;
+    gamestate.set_metatable(Some(metatable))?;
+    gamestate.raw_set("__songlua_class_methods", class.clone())?;
+    globals.set("GameState", class)?;
     globals.set("GAMESTATE", gamestate)?;
 
     Ok(SongLuaGameStateGlobals {

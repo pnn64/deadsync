@@ -242,6 +242,12 @@ pub(crate) fn trace_bound_method(lua: &Lua, name: &'static str, args: &MultiValu
 }
 
 fn hook_query(lua: &Lua, table: &Table, class: &'static str, name: &'static str) -> mlua::Result<()> {
+    // Hook the native class binding itself. An instance-local recorder wrapper
+    // would shadow a later authored GameState method override.
+    let class_methods = if class == "GameState" {
+        table.raw_get::<Option<Table>>("__songlua_class_methods")?
+    } else { None };
+    let table = class_methods.as_ref().unwrap_or(table);
     if lua.app_data_ref::<QueryTrace>().is_some_and(|trace| trace.hooks.iter().any(|(known, method)|
         known.to_pointer() == table.to_pointer() && *method == name)) { return Ok(()); }
     let original: Function = table.get(name)?;
@@ -1503,6 +1509,58 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn live_game_state_class_methods_dispatch_on_owned_instance() {
+        let mut compiled = compile_with_context("game-state-class-extension", r#"
+assert(type(GameState) == 'table', 'GameState class methods must be available')
+assert(GameState ~= GAMESTATE, 'class methods and owned instance are distinct')
+function GameState:ApplyModifiers(level)
+    assert(self == GAMESTATE)
+    self:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song'):Mini(level)
+    return self
+end
+return Def.Actor {}
+"#, |context| context.defer_initial_live_update = true);
+        let mut scene = compiled.live_scene.take().expect("owned gameplay scene");
+        scene.advance(SongLuaLiveFrame {
+            music_seconds: 2.0, screen_seconds: 2.0, beat: 4.0,
+            delta_seconds: 0.01, ..Default::default()
+        }).unwrap();
+        scene.lua.set_app_data(QueryTrace::default());
+        let game = scene.lua.globals().get::<Table>("GAMESTATE").unwrap();
+        let class = scene.lua.globals().get::<Table>("GameState").unwrap();
+        let native = class.get::<Function>("GetSongBeat").unwrap();
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        class.set("GetSongBeat", scene.lua.create_function({
+            let calls = calls.clone();
+            move |_, args: MultiValue| {
+                calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                native.call::<MultiValue>(args)
+            }
+        }).unwrap()).unwrap();
+        hook_query(&scene.lua, &game, "GameState", "GetSongBeat").unwrap();
+        hook_query(&scene.lua, &game, "GameState", "GetSongBeat").unwrap();
+        scene.lua.load(r#"
+local nativeBeat = GameState.GetSongBeat
+function GameState:GetSongBeat()
+    assert(self == GAMESTATE)
+    return nativeBeat(self) + 0.125
+end
+assert(GAMESTATE:GetSongBeat() == 4.125)
+assert(GAMESTATE:ApplyModifiers(0.25) == GAMESTATE)
+assert(GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song'):Mini() == 0.25)
+assert(GameState.GetSongBeat(GAMESTATE) == 4.125)
+"#).exec().expect("class extension and override through the instance");
+        let trace = scene.lua.app_data_ref::<QueryTrace>().unwrap();
+        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 2,
+            "hooking must not manufacture extra native getter calls");
+        assert_eq!(trace.hooks.len(), 1, "one hook per native class method");
+        assert_eq!(trace.hooks[0].0.to_pointer(), class.to_pointer(),
+            "native hooks preserve class override lookup through the instance");
+        assert!(matches!(game.raw_get::<Value>("GetSongBeat").unwrap(), Value::Nil),
+            "a recorder wrapper must not shadow the authored class override");
+    }
+
     #[test]
     fn live_screen_request_calls_preserve_duplicates_and_final_target() {
         let compiled = compile_with_context("screen-request-calls", "return Def.Actor{}", |_| {});
