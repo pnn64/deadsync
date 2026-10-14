@@ -2084,6 +2084,123 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 430,
+      "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
+      "simfile_sha256": "24e12ec68bb719cc2aa9b42899c6ae403dba4e9be2190540bb43417186c71433",
+      "retained_original_archive": "532ec728623e8d26b0fbe9870baae63a0956af54c1a6631d671d7bb5f8f76c98.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e0f16f89374ce78a1b07cafdb6d13c8e5c04de3e",
+      "build_proof": "/home/parity/jobs/game-state-class-linux-green-v1/proof.json",
+      "capture_seconds": 116.49503608999657,
+      "trace_sha256": "633d2917339fe488c5873e23ce72e8b6c19ffa9e7a3bb41b0f28a962facb23c1",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-3/chart-430/candidates/a79eb8ce97868808d5b52de078643cab0dce3082a4c6426548b2aa04a3f5b3e2.tar",
+      "replay_exit": 2,
+      "replay_seconds": 645.611129486002,
+      "candidate_sha256": "a79eb8ce97868808d5b52de078643cab0dce3082a4c6426548b2aa04a3f5b3e2",
+      "native_frames": 28766,
+      "replayed_frames": 28766,
+      "compared_stage_fields": 946,
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.Draw, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.addcommand, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.xy, Actor.z, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov, ActorFrame.vanishpoint, GameState.GetSongPosition, Player.SetLife, PlayerStageStats.FailPlayer, PlayerState.GetHealthState, ScreenGameplay.GetLifeMeter, Song.GetTimingData, Sprite.GetNumStates, Sprite.setstate",
+        "native drawable state/resources: Quad",
+        "missing captured subscriber identity for ScreenGameplay/19/1"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 64,
+      "concrete_failures": [
+        {
+          "phase": "progress",
+          "seconds": 48.00101852416992,
+          "field": "life_latest",
+          "native": 0.515999972820282,
+          "deadsync": 0.5320000052452087
+        },
+        {
+          "phase": "progress",
+          "seconds": 49.00204086303711,
+          "field": "life_latest",
+          "native": 0.5159999132156372,
+          "deadsync": 0.5640000104904175
+        },
+        {
+          "phase": "progress",
+          "seconds": 50.00013732910156,
+          "field": "life_latest",
+          "native": 0.48399993777275085,
+          "deadsync": 0.5640000104904175
+        },
+        {
+          "phase": "progress",
+          "seconds": 51.000770568847656,
+          "field": "life_latest",
+          "native": 0.48399999737739563,
+          "deadsync": 0.5960000157356262
+        },
+        {
+          "phase": "progress",
+          "seconds": 52.00086212158203,
+          "field": "life_latest",
+          "native": 0.4840000569820404,
+          "deadsync": 0.628000020980835
+        },
+        {
+          "phase": "progress",
+          "seconds": 53.000999450683594,
+          "field": "life_latest",
+          "native": 0.46000009775161743,
+          "deadsync": 0.628000020980835
+        },
+        {
+          "phase": "progress",
+          "seconds": 54.001224517822266,
+          "field": "life_latest",
+          "native": 0.4520001709461212,
+          "deadsync": 0.6600000262260437
+        },
+        {
+          "phase": "progress",
+          "seconds": 55.00065612792969,
+          "field": "life_latest",
+          "native": 0.42000022530555725,
+          "deadsync": 0.6600000262260437
+        },
+        {
+          "phase": "progress",
+          "seconds": 56.00129318237305,
+          "field": "life_latest",
+          "native": 0.4360003173351288,
+          "deadsync": 0.7240000367164612
+        },
+        {
+          "phase": "progress",
+          "seconds": 57.006439208984375,
+          "field": "life_latest",
+          "native": 0.4120003581047058,
+          "deadsync": 0.7240000367164612
+        },
+        {
+          "phase": "progress",
+          "seconds": 58.00074768066406,
+          "field": "life_latest",
+          "native": 0.4120004177093506,
+          "deadsync": 0.7560000419616699
+        },
+        {
+          "phase": "progress",
+          "seconds": 59.000701904296875,
+          "field": "life_latest",
+          "native": 0.40400049090385437,
+          "deadsync": 0.7880000472068787
+        }
+      ],
+      "report_sha256": "4388244b57939757d273f6557219ac766da014fd51170bcc52002d43c1a76806"
     }
   ],
   "scope": {
@@ -2092,9 +2209,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "04af4ff5dfcbbf4a0290dfe81b5e1b5690fa28289a2e2fdbebb293006a88bce2",
+  "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 5,
-  "pending_charts": 5,
-  "processed_charts": 10
+  "pending_charts": 6,
+  "processed_charts": 11
 }
