@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T00:38:54Z",
-  "previous_goal_turn": "Panopticon original passed 53843 frames and 1518 fields with zero differences or errors and is saved, committed and locally byte verified. No Tears first repair 1 and earlier passing fixtures remain saved, committed and byte verified without reopening. Get Into It SM and SSC final repairs 2 and New Earth final reset BPS repair 2 continue with their immutable validated helpers and reused captures. Excluded Get Into It wrong-path bootstrap receipts remain preserved with zero frames and repair spend. MODULO infinity fix c7e86d882dfd86fd3bd84631508113b56f410991 passed unchanged meaningful red/green controls and all five checks on both hosts. The actual first-request diagnostic retains 11255 frames with zero errors, native infinity number tags and the exact native reload at 12.491405487060547 seconds. Six command differences identify 22 internal Steps getters from unfiltered GetAllSteps construction over 11 charts. Pinned native Song directly returns a fresh pointer array. Source fix e57d57322ff3603fa812f27b6c623e6473657553 now returns that complete array without metadata getter callbacks, preserving object identities, order and explicitly authored getters. The unchanged real owned two-chart/two-array control failed eight internal calls versus zero on both hosts before production. All five green checks pass on both hosts: focused array control, all 54 live controls, captured ordering, all 26 native gameplay controls and both executable builds. All 29 physical source pins, three unchanged native harness pins, bundles, logs and immutable helper 69832cbca5fdc07f6ccb21e0f84bd5f45f6573b11c02acd65a4e090d6d8007f5 are verified. MODULO first full repair 1 now runs with the combined validated fixes and byte-identical original capture; one final repair remains after this attempt. No validation or diagnostic spent a full repair. Paint the Town Red original replay was kernel-killed for global OOM at PID 2866010 with 32440484 kB anonymous RSS and no report; its capture and logs are preserved, no repair launched, and original main advanced to panopticon. Mawaru6 first repair 1, Koi SM final repair 2 and both original partition workers continue without restart. Frozen partition ownership was not duplicated. Mawaru4 and Mawaru5 cached BackgroundDef ownership remains diagnosed with no repair spent; My Exes Bestfriend's wider tween cause is unestablished. Capped charts remain pending without another retry. Singleton publisher 60312 watches 65 preserved streams. Existing complete uncompressed comparisons determine acceptance; missing coverage stays separate. All 501 original simfiles remain byte unchanged, RUNWAY stays outside scope and the goal remains active and incomplete.",
+  "updated_utc": "2026-10-14T00:41:03Z",
+  "previous_goal_turn": "Panopticon original passed 53843 frames and 1518 fields with zero differences or errors and is saved, committed and locally byte verified. No Tears first repair 1 and earlier passing fixtures remain saved, committed and byte verified without reopening. Get Into It SM and SSC final repairs 2 continue with their immutable validated helpers and reused captures. New Earth final repair 2 passed all 89954 frames and 1408 fields with zero differences or errors; its fixture is compressed, committed as eb136bf75583b0bc437d977205b178762084b499 and locally byte verified. No passing chart was reopened. Excluded Get Into It wrong-path bootstrap receipts remain preserved with zero frames and repair spend. MODULO infinity fix c7e86d882dfd86fd3bd84631508113b56f410991 passed unchanged meaningful red/green controls and all five checks on both hosts. The actual first-request diagnostic retains 11255 frames with zero errors, native infinity number tags and the exact native reload at 12.491405487060547 seconds. Six command differences identify 22 internal Steps getters from unfiltered GetAllSteps construction over 11 charts. Pinned native Song directly returns a fresh pointer array. Source fix e57d57322ff3603fa812f27b6c623e6473657553 now returns that complete array without metadata getter callbacks, preserving object identities, order and explicitly authored getters. The unchanged real owned two-chart/two-array control failed eight internal calls versus zero on both hosts before production. All five green checks pass on both hosts: focused array control, all 54 live controls, captured ordering, all 26 native gameplay controls and both executable builds. All 29 physical source pins, three unchanged native harness pins, bundles, logs and immutable helper 69832cbca5fdc07f6ccb21e0f84bd5f45f6573b11c02acd65a4e090d6d8007f5 are verified. MODULO first full repair 1 now runs with the combined validated fixes and byte-identical original capture; one final repair remains after this attempt. No validation or diagnostic spent a full repair. Paint the Town Red original replay was kernel-killed for global OOM at PID 2866010 with 32440484 kB anonymous RSS and no report; its capture and logs are preserved, no repair launched, and original main advanced to panopticon. Mawaru6 first repair 1, Koi SM final repair 2 and both original partition workers continue without restart. Frozen partition ownership was not duplicated. Mawaru4 and Mawaru5 cached BackgroundDef ownership remains diagnosed with no repair spent; My Exes Bestfriend's wider tween cause is unestablished. Capped charts remain pending without another retry. Singleton publisher 60312 watches 65 preserved streams. Existing complete uncompressed comparisons determine acceptance; missing coverage stays separate. All 501 original simfiles remain byte unchanged, RUNWAY stays outside scope and the goal remains active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "9b225a6d6019efb3d47bb2c0458046b6b5e1f383",
+      "deadsync": "b1511e36135b643530ece370396ee7fa5439b827",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -73,6 +73,8 @@
     "transfer_verified": true
   },
   "worker": {
+    "new_earth_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-new-earth-fixture-verification.json",
+    "new_earth_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-new-earth-reset-bps-final-repair.json",
     "paint_town_oom_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-paint-town-oom-diagnosis.json",
     "modulo_first_infinite_launch": "tests/fixtures/full_song_lua/sweep-2026-10-13-modulo-infinite-foreground-repair-launch.json",
     "all_steps_build": "tests/fixtures/full_song_lua/sweep-2026-10-13-all-steps-build.json",
@@ -112,9 +114,9 @@
       "pending": 54,
       "processed": 78,
       "last_log_lines": [
-        "[36.0s] replaying every native gameplay frame: frame 1028/64119 (1.6%)",
-        "[38.0s] replaying every native gameplay frame: frame 1098/64119 (1.7%)",
-        "[40.0s] replaying every native gameplay frame: frame 1168/64119 (1.8%)"
+        "[164.1s] replaying every native gameplay frame: frame 5854/64119 (9.1%)",
+        "[166.1s] replaying every native gameplay frame: frame 5926/64119 (9.2%)",
+        "[168.1s] replaying every native gameplay frame: frame 5999/64119 (9.4%)"
       ],
       "supervisor_running": true
     },
@@ -1414,8 +1416,8 @@
     ]
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 87,
-    "new_pending_charts": 83,
+    "new_passed_fixtures": 88,
+    "new_pending_charts": 82,
     "new_processed_sources": 170,
     "charts_in_remaining_queue": 353,
     "unprocessed_sources": 183,
@@ -2042,65 +2044,6 @@
           "field": "failed",
           "native": true,
           "deadsync": false
-        }
-      ]
-    },
-    {
-      "source_simfile": "new earth/new earth.ssc",
-      "repair_attempts": 1,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 2,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0017",
-            "args": [
-              0.4
-            ],
-            "beat": 0,
-            "caller": {
-              "line": 171,
-              "source": "song:/lua/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0017",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 171,
-            "operation": "Actor.effectperiod",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 0,
-            "seq": 87,
-            "source": "song:/lua/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.effectperiod",
-            "source": "song:/lua/default.lua",
-            "line": 171,
-            "phase": "callback",
-            "beat": 0.0,
-            "seconds": 0.0,
-            "args": [
-              1.7777777777777777
-            ],
-            "results": [
-              {
-                "actor": "0x5b14ede87940",
-                "name": "SpaceshipSpriteP1",
-                "path": "ScreenGameplay/SongForeground/SpaceshipSpriteP1"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
         }
       ]
     },

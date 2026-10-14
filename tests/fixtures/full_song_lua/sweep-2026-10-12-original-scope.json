@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T00:38:52Z",
+  "updated_utc": "2026-10-14T00:41:01Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,8 +13,8 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 234,
-    "pending": 84,
+    "passed": 235,
+    "pending": 83,
     "unprocessed": 183
   },
   "complete": false,
@@ -2745,9 +2745,9 @@
       "position": 326,
       "source_simfile": "new earth/new earth.ssc",
       "simfile_sha256": "614f29f557e0e936a2650122071d9d408eaaa46690031b08dddb471f694a4abb",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-13-new-earth-hsva-repair.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-13-new-earth-reset-bps-final-repair.json"
     },
     {
       "position": 327,
