@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T07:02:57Z",
+  "updated_utc": "2026-10-14T07:06:25Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -14,8 +14,8 @@
   ],
   "counts": {
     "passed": 243,
-    "pending": 84,
-    "unprocessed": 174
+    "pending": 85,
+    "unprocessed": 173
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2993,7 +2993,9 @@
       "position": 362,
       "source_simfile": "Quarantine/Quarantine.sm",
       "simfile_sha256": "1cc54fe975c64299283b4fadf57edffae8145bfd8688f9e2c2c7f2f02f0eb9ca",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 363,

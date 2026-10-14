@@ -1,6 +1,6 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T07:02:58Z",
+  "updated_utc": "2026-10-14T07:06:26Z",
   "previous_goal_turn": "Inspected current worktree and actual live process argv. Resumed stopped singleton publisher and Windows validation, preserving interrupted and linker-failed logs. Five additional full passes are saved, separately committed and decompressed byte verified: Picture in My Mind, PO, Downfall, Max 300 and Mawaru4. Mawaru4 passes 119826 frames and 2079 fields after its first repair. Source fix 7960c8a1e restores native gameplay screen child ownership, duplicate-name grouping, identity and native stable traversal; all eight Linux checks pass including 57 live and 27 native controls and both executable builds. First Paradise full repair is running from the retained uncompressed capture with one repair left afterwards; no pass is claimed yet. Windows validation continues with incremental compilation disabled after an interrupted-cache linker failure. Mawaru5 first repair finished all 162894 frames with 770 source-path-only differences and no errors; local native parser sources identify matched directory-entry spelling as the cause, with one full repair left. Koi SM is pending at its two-repair cap, retaining concrete subscriber identity, failed-state and command differences. Original sweep workers remain live. Accepted passes remain closed, comparisons unchanged, missing coverage separate. All 501 original simfiles remain byte unchanged; full scope is incomplete.",
   "scope": {
     "original_simfiles": 501,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "d00fb6ad66209b7e127d250d653863fea5c1b1ff",
+      "deadsync": "b3afb523731ff5e04b93a2a3ed80095a399d1005",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -122,13 +122,17 @@
       "status": "running",
       "current": "Rapture/Rapture cut-fakemines.ssc",
       "position": 365,
-      "phase": "capture",
-      "pid": 175060,
+      "phase": "replay",
+      "pid": 190360,
       "process_matches": true,
       "passed": 27,
       "pending": 57,
       "processed": 84,
-      "last_log_lines": [],
+      "last_log_lines": [
+        "[18.0s] replaying every native gameplay frame: frame 718/37718 (1.9%)",
+        "[20.0s] replaying every native gameplay frame: frame 858/37718 (2.3%)",
+        "[22.0s] replaying every native gameplay frame: frame 999/37718 (2.6%)"
+      ],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -1535,10 +1539,10 @@
   },
   "counts_at_checkpoint": {
     "new_passed_fixtures": 96,
-    "new_pending_charts": 83,
-    "new_processed_sources": 179,
+    "new_pending_charts": 84,
+    "new_processed_sources": 180,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 174,
+    "unprocessed_sources": 173,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -2274,6 +2278,66 @@
                 "path": "ScreenGameplay/Underlay/P1Score"
               }
             ]
+          }
+        }
+      ]
+    },
+    {
+      "source_simfile": "Quarantine/Quarantine.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 248,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0086",
+            "args": [
+              -101.02710723876953
+            ],
+            "beat": 284.0167541503906,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 998,
+              "source": "song:/multitap/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0132",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 998,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 103.31460571289062,
+            "seq": 1150975,
+            "source": "song:/multitap/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/multitap/default.lua",
+            "line": 998,
+            "phase": "callback",
+            "beat": 284.0167541503906,
+            "seconds": 103.31460571289062,
+            "args": [
+              -96
+            ],
+            "results": [
+              {
+                "actor": "0x5df54c68c9e0",
+                "name": "MultitapP1_1",
+                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
+              }
+            ],
+            "tween_time_left": 0.0
           }
         }
       ]
