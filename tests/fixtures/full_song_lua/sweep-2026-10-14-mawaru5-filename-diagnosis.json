@@ -124,5 +124,18 @@
         335
       ]
     }
-  ]
+  ],
+  "focused_production_parser_red_control": {
+    "meaningful_red": true,
+    "exit_code": 101,
+    "production_parser_source_sha256": "e141477167e30b4ccbf4a5c7b8e325154942803364924f0d9d35b47b17f2480c",
+    "frozen_library_sha256": "ca0cf215225220b5c3143e33f6b85b776266948a42c3e5b36084b6975304c416",
+    "rust_source_sha256": "d1686727a3c4ded264c9c5f748658a95829889b4a25584cd1c58b3f93b2bf022",
+    "control_binary_sha256": "2c368dab7cd0af5dd77d2c7bcc72b9c776d48226a0fe5053e97bb20ff3763c26",
+    "build_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "control_log_sha256": "f9a412f933155937ead7da818a623a2fa3427b20d8d8c736982675be43fdc168",
+    "chart_full_repair_attempts_spent": 0,
+    "production_source_edited": false,
+    "remote_stage": "/home/parity/jobs/mawaru5-filename-red-v1"
+  }
 }
