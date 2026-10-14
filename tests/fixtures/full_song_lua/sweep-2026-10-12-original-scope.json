@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T21:40:29Z",
+  "updated_utc": "2026-10-14T21:53:43Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 329,
-    "pending": 100,
-    "unprocessed": 72
+    "passed": 332,
+    "pending": 101,
+    "unprocessed": 68
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3341,15 +3341,17 @@
       "position": 397,
       "source_simfile": "Shine!/Shine!.ssc",
       "simfile_sha256": "7650b40f62aee65b856e81d3a4efb60518d6e4e31d555d237aa3825ccec29665",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 398,
       "source_simfile": "Shivers/Shivers.sm",
       "simfile_sha256": "89d4e89a6631069369c535f3ec692e0b5d2f2388042726fbb0ea950c61f38716",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-shivers-sm-first-repair.json"
     },
     {
       "position": 399,
@@ -3511,7 +3513,9 @@
       "position": 420,
       "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
       "simfile_sha256": "1588e4386ca32a812af78557b4748679f28e382476cc90cb30249922380daf8f",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 421,
@@ -3805,7 +3809,9 @@
       "position": 465,
       "source_simfile": "Waiting/Waiting.ssc",
       "simfile_sha256": "41b880df985e8c91a2092c266e1f439e735d9dd82b600b4993cadb7b4a3fea4e",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 466,
@@ -3855,7 +3861,9 @@
       "position": 473,
       "source_simfile": "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc",
       "simfile_sha256": "66dba9f19596561f280a582920a90e18425191544e0051909d81b7bbb239abd9",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 474,

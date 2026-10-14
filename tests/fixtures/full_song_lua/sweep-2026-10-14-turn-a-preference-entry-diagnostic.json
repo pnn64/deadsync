@@ -1,0 +1,22 @@
+{
+  "source_simfile": "Turn A - [Freya]/turn_a.ssc",
+  "diagnostic_exit": 2,
+  "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+  "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+  "candidate_sha256": "6d7acf2ad83ffc057210fb0044639c6c0946c149a6676353b146cc8d111d254d",
+  "report_sha256": "9f436b83be481cc728f6628555f5c43d78cadb7b0958fc7878674b5c5d79d004",
+  "native_frames": 69833,
+  "replayed_frames": 2292,
+  "mismatch_count": 0,
+  "first_mismatches": [],
+  "errors": [],
+  "pending_coverage": [
+    "complete song frame replay",
+    "uncompared song operations: Actor.basezoom, Actor.basezoomx, Actor.basezoomy, BitmapText.GetText, PlayerOptions.CMod, PlayerOptions.FromString, PlayerOptions.MMod, PlayerOptions.Tiny, PlayerOptions.XMod, ScreenManager.SystemMessage",
+    "native drawable state/resources: ActorProxy, Quad"
+  ],
+  "archive_accepted": false,
+  "diagnostic_only": true,
+  "full_repair_attempts_spent": 0,
+  "native_trace_bytes_unchanged": true
+}

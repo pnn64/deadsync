@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T21:40:29Z",
-  "previous_goal_turn": "Progress: Shivers SSC first repair passes all 8,392 frames; Spooky SX 14 original capture passes all 128,284 frames; Up Up Up Up SM original capture passes all 139,034 frames. All three have zero callback errors and mismatches; saved fixtures committed and local uncompressed bytes verified; passing charts closed. Original partition v5-7 completes with six passes and thirteen pending, including retained concrete Dongo Bongo 2 and Pokemon replay failures; other original queues remain active. Turn A retained native run associated with original trace: every original field equal except appended semantic capability metadata; original capabilities unchanged; staged simfile and Preferences.ini hashes verified. Driver OpenGL and renderer null recovered from neutral Preferences.ini written before launch, independent of expected query results. Revised candidate preserves every original member including trace bytes, adds configuration and optional runtime machine input; no full repair spent. PrefsManager host proposal exposes the native string preference, with empty default and configured input. Corrected Linux baseline regression reproduced its missing preference failure; immutable green builder follows, Windows green controls running, diagnostic waits for five complete Linux checks. Zero-time queue remains an actual failure to diagnose after the preference path is repaired. Shivers SM first, Koi final, Mawaru8 first, capture-selection and additional listener chains remain active. Publisher 56856 live with 116 streams. All 501 original source hashes unchanged, RUNWAY separate; missing coverage separate, acceptance comparisons unchanged, oversized files ignored/local, sweep active and incomplete.",
+  "updated_utc": "2026-10-14T21:53:43Z",
+  "previous_goal_turn": "Progress: Shivers SSC first repair passes all 8,392 frames; Spooky SX 14, Up Up Up Up SM, Shine SSC and Waiting SSC original captures pass 128,284, 139,034, 114,978 and 56,745 frames. All five saved fixtures have zero callback errors and mismatches, committed and local uncompressed bytes verified, charts closed. Original partition v5-7 complete. Native video-driver preference fix ae3f7aa26 committed. Missing known preference regression reproduced on Linux baseline, then target control, all 66 live controls, all 32 replay controls, identity control and both executable builds pass on Windows and Linux. All 1,175 raw source pins and cross-platform normalized pins verified; tested immutable helper 3798f99e selected from turn-a-preferences-v2 source root without mutating active source roots or user views. Turn A retained native result associated with original archived trace; actual pre-launch Preferences.ini provides OpenGL independently of expected queries. Revised candidate preserves every original member including trace and simfile, adds retained neutral configuration. Entry diagnostic 2,292 of 69,833 frames has zero errors and mismatches; explicitly diagnostic and cannot accept archive; missing coverage separate. First full Turn A repair launched as supervisor 741527 in the completed v5-7 original partition slot, available memory 36,598,100 KiB, exactly one later full repair maximum. Shivers SM first, Koi final, Mawaru8 first, capture-selection and listener chains remain active. Actual Pokemon replay failure diagnosed: background absent in native scene 1, UpperLeft owner present after reload, source counter initialized in foreground/savefile logic; no repair spent. Dongo Bongo 2 has retained capture and killed replay exit -9 before a report. Seven original queues remain live. Publisher 56856 has 117 streams. All 501 original simfile hashes unchanged, RUNWAY separate; passing charts closed, missing coverage separate, acceptance comparisons unchanged, oversized files ignored/local, sweep active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "483e2889a5bdb941b2aef780f7f79e9bb9926824",
+      "deadsync": "16cffb22c727f71c75a9bbcd4c8c781df104161d",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -86,7 +86,8 @@
     "native_game_state_class_methods": "e0f16f893: primary LuaBinding class method lookup implemented, with owned class extension/override, modifier side effect, two native calls and single class recorder hook control. Linux red then green; Windows 65/32 and Linux 65/32/1 plus focused control and both helper builds pass. All 1175 raw/normalized source pins verified. Original See Tinh first repairs queued sequentially; existing full acceptance checks remain unchanged. Actual first See Tinh SM full repair now passes 42,817 frames, saved and byte verified; chart closed and fix accepted. Actual first See Tinh SSC full repair passes 42,885 frames, saved, committed and byte verified. Both See Tinh variants closed as passing.",
     "native_arrow_alpha": "f2a8bbc08: primary ArrowEffects native alpha calculation replaces constant 1; owned fade/visibility/raw-infinity control red before Linux then green, Windows 66/32 and Linux 66/32/1 plus focused control/both helper builds pass. All 1,175 raw/normalized pins verified; immutable f93db55d helper selected, original Shivers first repair queued behind See Tinh chain. Existing full counts, arguments, timing, state and error acceptance unchanged. Original Shivers SM also has 1,731 identical raw alpha argument mismatches; first SM repair queued after active SSC first, original captures reused.",
     "native_capture_selection_repair": "Original source metadata establishes Spooky single/Medium 12 and Fresh Prince double/Challenge 11. Initial captures requested absent single Challenge chart. Explicit first capture repairs queued with immutable tested alpha helper, existing full comparisons, original bytes unchanged, one later attempt available after each. Complete new capture necessary because failed startup probes contain no gameplay frames.",
-    "additional_captured_listener_repairs": "Primary d69f0a20f subscriber delivery fix included in tested immutable f93db55d helper. Actual Shakunetsu2/Wake Up missing identity failures with 14,728/84,024 full frames; first retained-capture repairs queued sequentially after capture-selection chain, one further attempt after each, existing full comparisons and native bytes unchanged."
+    "additional_captured_listener_repairs": "Primary d69f0a20f subscriber delivery fix included in tested immutable f93db55d helper. Actual Shakunetsu2/Wake Up missing identity failures with 14,728/84,024 full frames; first retained-capture repairs queued sequentially after capture-selection chain, one further attempt after each, existing full comparisons and native bytes unchanged.",
+    "native_video_driver_preference": "Both Windows and Linux target 1, live 66, replay 32, identity 1 and both executable builds pass. All 1,175 tested source pins verified. Native preferences and every original Turn A trace member byte verified; first full repair running, diagnostic cannot accept fixture; acceptance comparisons unchanged."
   },
   "corpus_transfer": {
     "tar_sha256": "37febe98e2e47b325b9f9b96f4d29ddf32eedda84514191252d043c5fd4a4d1a",
@@ -149,9 +150,9 @@
       "pending": 62,
       "processed": 99,
       "last_log_lines": [
-        "[272.1s] replaying every native gameplay frame: frame 11294/68814 (16.4%)",
-        "[274.1s] replaying every native gameplay frame: frame 11373/68814 (16.5%)",
-        "[276.1s] replaying every native gameplay frame: frame 11448/68814 (16.6%)"
+        "[1066.4s] replaying every native gameplay frame: frame 41794/68814 (60.7%)",
+        "[1068.4s] replaying every native gameplay frame: frame 41867/68814 (60.8%)",
+        "[1070.4s] replaying every native gameplay frame: frame 41945/68814 (61.0%)"
       ],
       "supervisor_running": true
     },
@@ -1830,6 +1831,13 @@
         "record": "sweep-2026-10-14-wake-up-ssc-listener-first-repair.json",
         "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef / includes d69f0a20f",
         "finish_status": "first retained-capture listener repair complete"
+      },
+      {
+        "name": "turn-a-preferences-first-repair",
+        "remote": "/home/parity/jobs/turn-a-preferences-first-repair-v1",
+        "record": "sweep-2026-10-14-turn-a-preference-first-repair.json",
+        "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+        "finish_status": "first retained-input video driver preference repair complete"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -1846,13 +1854,24 @@
         "pending": 62,
         "processed": 99,
         "last_log_lines": [
-          "[272.1s] replaying every native gameplay frame: frame 11294/68814 (16.4%)",
-          "[274.1s] replaying every native gameplay frame: frame 11373/68814 (16.5%)",
-          "[276.1s] replaying every native gameplay frame: frame 11448/68814 (16.6%)"
+          "[1066.4s] replaying every native gameplay frame: frame 41794/68814 (60.7%)",
+          "[1068.4s] replaying every native gameplay frame: frame 41867/68814 (60.8%)",
+          "[1070.4s] replaying every native gameplay frame: frame 41945/68814 (61.0%)"
         ],
         "supervisor_running": true
       },
       "jobs": [
+        {
+          "job": "turn-a-preferences-first-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "Turn A - [Freya]/turn_a.ssc",
+          "child_running": true
+        },
         {
           "job": "shakunetsu2-sm-listener-first-repair-v1",
           "complete": false,
@@ -1875,18 +1894,22 @@
           "supervisor_running": true,
           "passed": 0,
           "pending": 0,
-          "processed": 0
+          "processed": 0,
+          "last_phase": "capture",
+          "source_simfile": "spooky (SM 12)/spooky (Tech-Stam cut).ssc",
+          "child_running": true,
+          "position": 410
         },
         {
           "job": "shivers-sm-arrow-alpha-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "Shivers/Shivers.sm",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "shivers-ssc-arrow-alpha-first-repair-v1",
@@ -2090,13 +2113,13 @@
           "job": "chart-sweep-parallel-v5-6",
           "complete": false,
           "supervisor_running": true,
-          "passed": 8,
-          "pending": 6,
-          "processed": 14,
-          "last_phase": "replay",
-          "source_simfile": "Waiting/Waiting.ssc",
+          "passed": 9,
+          "pending": 7,
+          "processed": 16,
+          "last_phase": "capture",
+          "source_simfile": "Young Dumb And Broke/YDB.ssc",
           "child_running": true,
-          "position": 465
+          "position": 481
         },
         {
           "job": "chart-sweep-parallel-v5-7",
@@ -2946,24 +2969,24 @@
           "complete": false,
           "supervisor_running": true,
           "passed": 37,
-          "pending": 33,
-          "processed": 70,
+          "pending": 34,
+          "processed": 71,
           "last_phase": "replay",
-          "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
+          "source_simfile": "Tear Jerker/tearjerker.sm",
           "child_running": true,
-          "position": 420
+          "position": 428
         },
         {
           "job": "chart-sweep-parallel-v4-2",
           "complete": false,
           "supervisor_running": true,
-          "passed": 23,
+          "passed": 24,
           "pending": 30,
-          "processed": 53,
+          "processed": 54,
           "last_phase": "replay",
-          "source_simfile": "Shine!/Shine!.ssc",
+          "source_simfile": "Someone Special - hubert/Someone Special.ssc",
           "child_running": true,
-          "position": 397
+          "position": 405
         },
         {
           "job": "definition-concat-repair-v1",
@@ -3086,10 +3109,10 @@
     "attack_boundary_completed_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-attack-boundary-linux-build.json",
     "cringle_sm_attack_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-door-cringle-sm-attack-final-launch.json",
     "reason_red_zero_seed": "tests/fixtures/full_song_lua/sweep-2026-10-14-reason-red-zero-seed-diagnosis.json",
-    "selected_replay_binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+    "selected_replay_binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 116,
+    "publisher_stream_count": 117,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -3164,7 +3187,7 @@
     "raving_fire_sm_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-raving-with-fire-sm-fixture-verification.json",
     "splak_down_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-splak-down-ssc-fixture-verification.json",
     "reason_red_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-reason-red-ssc-fixture-verification.json",
-    "selected_tested_source_root": "/home/parity/workspace/arrow-alpha-v1/deadsync",
+    "selected_tested_source_root": "/home/parity/workspace/turn-a-preferences-v2/deadsync",
     "selected_source_pin_count": 1175,
     "music_fade_end_validation": "tests/fixtures/full_song_lua/sweep-2026-10-14-music-fade-end-validation.json",
     "music_fade_end_selection": "tests/fixtures/full_song_lua/sweep-2026-10-14-music-fade-end-selection.json",
@@ -3215,23 +3238,27 @@
     "additional_listener_first_queue": "tests/fixtures/full_song_lua/sweep-2026-10-14-additional-listener-first-repairs-launch.json",
     "spooky_sm_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-chart-412-fixture-verification.json",
     "turn_a_preference_work": {
-      "full_repair_attempts_spent": 0,
-      "status": "proposal undergoing validation; short diagnostic queued after Linux checks",
-      "linux_red_builder_pid": 622222,
-      "linux_green_waiter_pid": 660247,
-      "windows_green_builder_pid": 45356,
-      "entry_diagnostic_waiter_pid": 668504,
+      "full_repair_attempts_spent": 1,
+      "one_later_full_repair_maximum": true,
+      "status": "first full retained-capture repair running after passing diagnostic",
+      "supervisor_pid": 741527,
+      "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+      "selected_helper_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
       "native_association_receipt": "tests/fixtures/full_song_lua/sweep-2026-10-14-turn-a-retained-native-association.json",
       "unchanged_member_candidate_receipt": "tests/fixtures/full_song_lua/sweep-2026-10-14-turn-a-retained-machine-input-candidate.json",
-      "diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-turn-a-preference-repair-diagnosis.json"
-    }
+      "validation": "tests/fixtures/full_song_lua/sweep-2026-10-14-turn-a-preference-validation.json",
+      "selection": "tests/fixtures/full_song_lua/sweep-2026-10-14-turn-a-preference-selection.json",
+      "entry_diagnostic": "tests/fixtures/full_song_lua/sweep-2026-10-14-turn-a-preference-entry-diagnostic.json",
+      "first_full_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-turn-a-preference-first-repair-launch.json"
+    },
+    "pokemon_background_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-pokemon-background-reload-diagnosis.json"
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 182,
-    "new_pending_charts": 99,
-    "new_processed_sources": 281,
+    "new_passed_fixtures": 185,
+    "new_pending_charts": 100,
+    "new_processed_sources": 285,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 72,
+    "unprocessed_sources": 68,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -5060,75 +5087,26 @@
       ]
     },
     {
-      "source_simfile": "Shivers/Shivers.sm",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 1731,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0090",
-            "args": [
-              {
-                "type": "number",
-                "value": "-infinity"
-              }
-            ],
-            "beat": 2.0226516723632812,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 940,
-              "source": "song:/lua/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0262",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 940,
-            "operation": "Actor.diffusealpha",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 1.0907028913497925,
-            "seq": 8763,
-            "source": "song:/lua/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.diffusealpha",
-            "source": "song:/lua/default.lua",
-            "line": 940,
-            "phase": "callback",
-            "beat": 2.0226516723632812,
-            "seconds": 1.0907028913497925,
-            "args": [
-              1
-            ],
-            "results": [
-              {
-                "actor": "0x64636242ff60",
-                "name": "MultitapP1_3",
-                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_3"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        }
-      ]
-    },
-    {
       "source_simfile": "spooky (SM 12)/spooky (Tech-Stam cut).ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania probe script reported: no StepsType_Dance_Single chart matched difficulty Challenge; retained run directory /tmp/itgmania-harness-rs/song-lua-2941014-1791992890221485388-0\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
+    },
+    {
+      "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 176807,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 182777,
+          "deadsync": 176822
+        }
+      ]
     },
     {
       "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
@@ -5224,6 +5202,14 @@
           "deadsync": false
         }
       ]
+    },
+    {
+      "source_simfile": "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc",
+      "repair_attempts": 0,
+      "failure": "",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
     },
     {
       "source_simfile": "wndrwll/wndrwll.ssc",

@@ -1,0 +1,24 @@
+{
+  "pid": 741527,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_turn_a_preferences_first_repair_v1.py"
+  ],
+  "source_simfile": "Turn A - [Freya]/turn_a.ssc",
+  "position": 449,
+  "repair_attempt": 1,
+  "one_later_full_repair_maximum": true,
+  "native_capture_reused": true,
+  "native_trace_bytes_unchanged": true,
+  "explicit_fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+  "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+  "entry_diagnostic_frames": 2292,
+  "entry_errors": [],
+  "entry_mismatches": 0,
+  "entry_accepted_as_full_pass": false,
+  "completed_original_partition_slot_reused": "chart-sweep-parallel-v5-7",
+  "available_memory_kib": 36598100,
+  "publisher_stream_count": 117,
+  "passing_charts_reopened": false,
+  "acceptance_gates_changed": false
+}
