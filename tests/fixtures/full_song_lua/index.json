@@ -4273,17 +4273,12 @@
     {
       "title": "Potion",
       "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).sm",
-      "harness_version": "0.1.6",
-      "archive": "41de42083e4692a244bf2cd6cc48c5d03acc29788c785b6c01b07341dcba7f41.tar.zst",
-      "sha256": "41de42083e4692a244bf2cd6cc48c5d03acc29788c785b6c01b07341dcba7f41",
-      "compressed_bytes": 39205,
-      "uncompressed_sha256": "321ec0a47b7d35de081a2fa0afd68b75d921d8ee81298de9231fab8760490ff5",
-      "compression_level": 22,
-      "aliases": [
-        "aa49ec1b0afe32afd748af339f1475bf4b3c8d94c9926a032cb9f99ea18b54a6.tar.zst",
-        "6e6649efb33325f47090029b8cadcc72cfe8c803250a2669bb2a1b01dbc58dde.tar.zst",
-        "3a2bf4f8c398ec685e5b5b863c172595f9ccfc6066ec0c56720e43c73648986b.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "c5696d5e4c207ba22e6ac4adf5ac0d27f5b4c877ef9e49d8cd4d43fe8408d39f.tar.zst",
+      "sha256": "c5696d5e4c207ba22e6ac4adf5ac0d27f5b4c877ef9e49d8cd4d43fe8408d39f",
+      "compressed_bytes": 5096080,
+      "uncompressed_sha256": "3cbc7de389a109249afd2c3931e1d72da02ce0a4c590f2ff9d6b3c67ce18722e",
+      "aliases": []
     },
     {
       "title": "Potion",

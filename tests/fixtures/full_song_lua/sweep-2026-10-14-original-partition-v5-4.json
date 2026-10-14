@@ -69,6 +69,58 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 360,
+      "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).sm",
+      "simfile_sha256": "b60d8f125c21bf91b6d7a4da43964427245a21d7b1f4786f401d12790bcb0c44",
+      "retained_original_archive": "41de42083e4692a244bf2cd6cc48c5d03acc29788c785b6c01b07341dcba7f41.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "fc937c1ae18f5ffc8bc3716cc10f755ae0c4dd23172c9a055955844fef0c3a28",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "3f4ddc7930765c8fd5664024873a7775a52f0473 + 1482e4b757f930b960eb09678730b6d68d331a0c + 94e70049b59e83b86566a9adb5fd18f8835c65cb + 7fae1f026237ee5431a1a2b3e907f4270715556a + 1ed84cd471a8eeb8511474ca8881aa1516acbf96 + 254c36811 + e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/background-effect-family-linux-green-v1/proof.json",
+      "capture_seconds": 147.83954528102186,
+      "trace_sha256": "467522822dad0bfff01376f6d92b823ad7b00cbb399d3ee42ba2858d0663a70f",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-4/chart-360/candidates/3cbc7de389a109249afd2c3931e1d72da02ce0a4c590f2ff9d6b3c67ce18722e.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1799.4468212199863,
+      "candidate_sha256": "3cbc7de389a109249afd2c3931e1d72da02ce0a4c590f2ff9d6b3c67ce18722e",
+      "native_frames": 105281,
+      "replayed_frames": 105281,
+      "compared_stage_fields": 1606,
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "ce637944e8e202007ffd490302496632c0cc6e778c1818e39ea1325c88fb1e7b",
+      "archive": "c5696d5e4c207ba22e6ac4adf5ac0d27f5b4c877ef9e49d8cd4d43fe8408d39f.tar.zst",
+      "archive_sha256": "c5696d5e4c207ba22e6ac4adf5ac0d27f5b4c877ef9e49d8cd4d43fe8408d39f",
+      "compressed_bytes": 5096080,
+      "pack_seconds": 2.17716175399255,
+      "harness_version": "0.1.80",
+      "title": "Potion",
+      "retained_original_entry": {
+        "title": "Potion",
+        "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).sm",
+        "harness_version": "0.1.6",
+        "archive": "41de42083e4692a244bf2cd6cc48c5d03acc29788c785b6c01b07341dcba7f41.tar.zst",
+        "sha256": "41de42083e4692a244bf2cd6cc48c5d03acc29788c785b6c01b07341dcba7f41",
+        "compressed_bytes": 39205,
+        "uncompressed_sha256": "321ec0a47b7d35de081a2fa0afd68b75d921d8ee81298de9231fab8760490ff5",
+        "compression_level": 22,
+        "aliases": [
+          "aa49ec1b0afe32afd748af339f1475bf4b3c8d94c9926a032cb9f99ea18b54a6.tar.zst",
+          "6e6649efb33325f47090029b8cadcc72cfe8c803250a2669bb2a1b01dbc58dde.tar.zst",
+          "3a2bf4f8c398ec685e5b5b863c172595f9ccfc6066ec0c56720e43c73648986b.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -77,9 +129,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c",
+  "binary_sha256": "fc937c1ae18f5ffc8bc3716cc10f755ae0c4dd23172c9a055955844fef0c3a28",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 1,
+  "passed_fixtures": 2,
   "pending_charts": 1,
-  "processed_charts": 2
+  "processed_charts": 3
 }
