@@ -4668,17 +4668,14 @@
       "aliases": []
     },
     {
-      "title": "Shine!",
+      "title": "Shine! -UPSMH Edition-",
       "source_simfile": "Shine!/Shine!.ssc",
-      "harness_version": "0.1.0",
-      "archive": "e097ac6283e583804b5653fc221e4039c83a9265762c4292bf08776ab941e44c.tar.zst",
-      "sha256": "e097ac6283e583804b5653fc221e4039c83a9265762c4292bf08776ab941e44c",
-      "compressed_bytes": 25722,
-      "uncompressed_sha256": "5b71608c897a0e0e78b96cac49af4dc9cf837ace12427c0fd89689a109f9e4d4",
-      "compression_level": 22,
-      "aliases": [
-        "9430f5bf0282fe8fbb1c75102455745d2596ab45aacabe370bb5240f8fcdbde4.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "8fef0882043e27a300d78cf04d1ea6502a7997e040f3b7673875772b5a2c21af.tar.zst",
+      "sha256": "8fef0882043e27a300d78cf04d1ea6502a7997e040f3b7673875772b5a2c21af",
+      "compressed_bytes": 7221375,
+      "uncompressed_sha256": "22f72148896b397c7f44997b0e0fd7d1d547ff7612488fe00e376d5d2c698023",
+      "aliases": []
     },
     {
       "title": "Episode 10",

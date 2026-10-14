@@ -7914,6 +7914,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 397,
+      "source_simfile": "Shine!/Shine!.ssc",
+      "simfile_sha256": "7650b40f62aee65b856e81d3a4efb60518d6e4e31d555d237aa3825ccec29665",
+      "retained_original_archive": "e097ac6283e583804b5653fc221e4039c83a9265762c4292bf08776ab941e44c.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef",
+      "build_proof": "/home/parity/jobs/arrow-alpha-linux-green-v1/proof.json",
+      "capture_seconds": 144.85108999698423,
+      "trace_sha256": "9436c90c2cd19acb908120f30cc6852c60cc3b7bfe17ba028385f3b768819ea7",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-397/candidates/22f72148896b397c7f44997b0e0fd7d1d547ff7612488fe00e376d5d2c698023.tar",
+      "replay_exit": 0,
+      "replay_seconds": 2183.631660146988,
+      "candidate_sha256": "22f72148896b397c7f44997b0e0fd7d1d547ff7612488fe00e376d5d2c698023",
+      "native_frames": 114978,
+      "replayed_frames": 114978,
+      "compared_stage_fields": 1573,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers, GameState.GetSongOptionsString, PlayerState.GetPlayerOptionsArray",
+        "native drawable state/resources: Quad"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "1bb9db8ea1bc7282fd719781f6eb351b60fe24982bd924981a93fa68ca10b70d",
+      "archive": "8fef0882043e27a300d78cf04d1ea6502a7997e040f3b7673875772b5a2c21af.tar.zst",
+      "archive_sha256": "8fef0882043e27a300d78cf04d1ea6502a7997e040f3b7673875772b5a2c21af",
+      "compressed_bytes": 7221375,
+      "pack_seconds": 1.8808544350031298,
+      "harness_version": "0.1.80",
+      "title": "Shine! -UPSMH Edition-",
+      "retained_original_entry": {
+        "title": "Shine!",
+        "source_simfile": "Shine!/Shine!.ssc",
+        "harness_version": "0.1.0",
+        "archive": "e097ac6283e583804b5653fc221e4039c83a9265762c4292bf08776ab941e44c.tar.zst",
+        "sha256": "e097ac6283e583804b5653fc221e4039c83a9265762c4292bf08776ab941e44c",
+        "compressed_bytes": 25722,
+        "uncompressed_sha256": "5b71608c897a0e0e78b96cac49af4dc9cf837ace12427c0fd89689a109f9e4d4",
+        "compression_level": 22,
+        "aliases": [
+          "9430f5bf0282fe8fbb1c75102455745d2596ab45aacabe370bb5240f8fcdbde4.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -7923,9 +7974,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "04af4ff5dfcbbf4a0290dfe81b5e1b5690fa28289a2e2fdbebb293006a88bce2",
+  "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 23,
+  "passed_fixtures": 24,
   "pending_charts": 30,
-  "processed_charts": 53
+  "processed_charts": 54
 }
