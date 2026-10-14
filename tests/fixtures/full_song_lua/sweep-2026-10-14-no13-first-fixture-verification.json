@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "No.13/no13.ssc",
+  "native_frames": 125239,
+  "replayed_frames": 125239,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "db115e05c0fabdf0a6d0ecc9a479496d66b9b4c92a35fcbdd87796a2e1ffbb20.tar.zst",
+  "compressed_sha256": "db115e05c0fabdf0a6d0ecc9a479496d66b9b4c92a35fcbdd87796a2e1ffbb20",
+  "uncompressed_sha256": "bdf006310df58d85946fe0a76e943d7d90a0c1a8d3b316469b2767340e8b4d78",
+  "compressed_bytes": 13565176,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

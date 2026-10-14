@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "redesign your logo/Redesign your logo.ssc",
+  "native_frames": 112683,
+  "replayed_frames": 112683,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "3df709914f1980a195ba59f83e32e1f1517ce1782cf8c0110d517eb51628a791.tar.zst",
+  "compressed_sha256": "3df709914f1980a195ba59f83e32e1f1517ce1782cf8c0110d517eb51628a791",
+  "uncompressed_sha256": "8998c0ecd94aae7c64f574038dab31266ce403ee033f59aa18ab4b26b154d1a8",
+  "compressed_bytes": 7439559,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
