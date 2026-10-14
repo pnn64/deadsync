@@ -1,0 +1,101 @@
+{
+  "reason": "Emergency ENOSPC recovery from generated Cargo static library cache; all Rust compilers confirmed stopped",
+  "removed_generated_rlibs": [
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_theme_simply_love-e77beb5d14e3bc97.rlib",
+      "bytes": 80820266
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libash-d589bc5e97709199.rlib",
+      "bytes": 71218286
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_theme_simply_love-f71fbef7123dce04.rlib",
+      "bytes": 41367972
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_theme_simply_love-173a26761a523469.rlib",
+      "bytes": 41297736
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_theme_simply_love-d2607a8c4fb3fb52.rlib",
+      "bytes": 41268824
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_shell-b4eed7a7504981ed.rlib",
+      "bytes": 37039770
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_shell-748a62f25d7ff265.rlib",
+      "bytes": 37035418
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libx11rb_protocol-50e4e38ddf4fad4f.rlib",
+      "bytes": 32166868
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libx11rb_protocol-dac1da4266f00da3.rlib",
+      "bytes": 31742922
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libnaga-8679e1ffb16409e6.rlib",
+      "bytes": 30535310
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libnaga-0a061373664b41c7.rlib",
+      "bytes": 30496822
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_song_lua-5795cb1d556eaa0d.rlib",
+      "bytes": 29641204
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libwgpu_core-36dd90765852fb93.rlib",
+      "bytes": 29255958
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libwgpu_core-fe7c028425a2c88a.rlib",
+      "bytes": 29238906
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libwgpu_core-ec6043fc3ae87653.rlib",
+      "bytes": 29205026
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libwgpu_core-b4127e1c1f6311a0.rlib",
+      "bytes": 29169286
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_song_lua-cd5c1fdf6047d641.rlib",
+      "bytes": 28278308
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_song_lua-f17c287e26990c1f.rlib",
+      "bytes": 28230566
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_song_lua-5bb5241c54b65ccb.rlib",
+      "bytes": 28095906
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_song_lua-e67e4d23b423c2d5.rlib",
+      "bytes": 28044324
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_song_lua-049c798fecbbc986.rlib",
+      "bytes": 27999922
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_song_lua-0be91f1a8f2d9946.rlib",
+      "bytes": 27813700
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/libdeadsync_song_lua-eae1f0a7b896ebda.rlib",
+      "bytes": 27316868
+    }
+  ],
+  "bytes_reclaimed": 817280168,
+  "native_captures_or_fixtures_removed": false,
+  "immutable_replay_executables_removed": false,
+  "free_bytes": 808931328
+}

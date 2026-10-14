@@ -1,0 +1,33 @@
+{
+  "reason": "Three supervisors terminal with ENOSPC; all complete replay rows skipped, completed native trace reused for MR SANDMAN candidate construction",
+  "free_bytes_at_resume": 13737136128,
+  "jobs": [
+    {
+      "job": "chart-sweep-parallel-v5-3",
+      "pid": 909898,
+      "command": [
+        "python3",
+        "/home/parity/jobs/run_chart_sweep_partition_v5_enospc_resume_v1.py",
+        "chart-sweep-parallel-v5-3"
+      ]
+    },
+    {
+      "job": "chart-sweep-parallel-v5-5",
+      "pid": 909899,
+      "command": [
+        "python3",
+        "/home/parity/jobs/run_chart_sweep_partition_v5_enospc_resume_v1.py",
+        "chart-sweep-parallel-v5-5"
+      ]
+    },
+    {
+      "job": "chart-sweep-parallel-v5-6",
+      "pid": 909900,
+      "command": [
+        "python3",
+        "/home/parity/jobs/run_chart_sweep_partition_v5_enospc_resume_v1.py",
+        "chart-sweep-parallel-v5-6"
+      ]
+    }
+  ]
+}

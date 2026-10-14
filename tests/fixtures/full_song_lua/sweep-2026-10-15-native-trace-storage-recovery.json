@@ -1,0 +1,1281 @@
+{
+  "operation": "Lossless storage recovery after ENOSPC, no native captures replayed",
+  "started_utc": "2026-10-14T22:18:49Z",
+  "initial_free_bytes": 780324864,
+  "files": [
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-833471-1791969040384848405-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-833471-1791969040384848405-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "56524c3bb77fb9849448fe1ba02809c33882130d0801cc4300a04ea41696b11c",
+      "compressed_sha256": "26d8d67343cd720e7aa95c8a9ab6ef5a7868a2748216a6248ed9c7471b19bf03",
+      "uncompressed_bytes": 58712740,
+      "compressed_bytes": 3658784,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-92695-1791951645819773501-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-92695-1791951645819773501-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "888f4f24d6372064c46ac6b6514eb9fdc23fe75a99246c067a0d0a25cf383a09",
+      "compressed_sha256": "c142eef1b2d2d727ec85c401c052f86e4b3fe531475213dfe73f6d4f4580d7eb",
+      "uncompressed_bytes": 59975906,
+      "compressed_bytes": 3735931,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-975225-1791970656659405181-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-975225-1791970656659405181-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "ac463366bec378190f5dbc0b8f3242dce1c588314195d3657f9241a6074d4d18",
+      "compressed_sha256": "f3bbcbdf71a18717c69da055ea86bd416be71c8785695372891845abd852b02c",
+      "uncompressed_bytes": 62414633,
+      "compressed_bytes": 3924962,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-264171-1791842046952261461-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-264171-1791842046952261461-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "03df6f9ac0020100b48b56edd2b21589a8a43543e50cd55090de158ade29bb27",
+      "compressed_sha256": "3baa025739abd4718f65624521e6be7dff30bc21a38da86989f390218cbb8d87",
+      "uncompressed_bytes": 64413909,
+      "compressed_bytes": 3093159,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2955081-1791993038210333694-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2955081-1791993038210333694-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "6224a0182aaf14556cfe1360dfc299303ce7b90fc84301e833cc0bd20e5a6404",
+      "compressed_sha256": "30932c544b24b0c0e9a788f26d25215a0716d025b14433bd9ea92cbe3808c69a",
+      "uncompressed_bytes": 65581846,
+      "compressed_bytes": 4156162,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2252870-1791985168304912008-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2252870-1791985168304912008-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "a1ee881fd4eb440720c33466335ed7bffc19745915892fccbe0180c8d4aae727",
+      "compressed_sha256": "533ac78a13a8d71f423192e57f8bff799a9c7098d331b9a1922082fd1a3218bc",
+      "uncompressed_bytes": 65681061,
+      "compressed_bytes": 2978916,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2881964-1791992144627504340-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2881964-1791992144627504340-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "c802489a9e6331fef36ef90aa242f4c26bc4ba6a01657f27e15a797328b1076a",
+      "compressed_sha256": "3142bb02ba100ee50c73ef0d7d875837f02a8c38d482bcce00a5d6fff9222f7a",
+      "uncompressed_bytes": 66407308,
+      "compressed_bytes": 2804332,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2836146-1791991587430153427-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2836146-1791991587430153427-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "0c7e4b8da9b8e3d3e6c8a6f48864aae9665d0c4706428e64b819b57bc851d2f3",
+      "compressed_sha256": "9b2bbcc32b5ebf26ecf14a4fcdacdcd2cf058e55cdb31169c62c4686f4a5eb2e",
+      "uncompressed_bytes": 68713418,
+      "compressed_bytes": 3196144,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2902652-1791880397582919799-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2902652-1791880397582919799-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "011f27e1e763b8443f2e3d399587f211d7c4d386544d3febcea5e4e760ddb303",
+      "compressed_sha256": "f03325cb618cf9a9703198fa10a8cfca623047a377b060e04dd5d5f1ccd17566",
+      "uncompressed_bytes": 68785117,
+      "compressed_bytes": 4528620,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2027901-1791982709651132748-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2027901-1791982709651132748-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "fb758695b18043ccf71a56c6f94a61b198b4d4f08f5cd8237854d21aea6481bb",
+      "compressed_sha256": "916f0bb39e00a8b6137cd2223d39ab6b947f94e375146c213cac9f9ec5b165ea",
+      "uncompressed_bytes": 71878154,
+      "compressed_bytes": 5545730,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1286480-1791858433641004586-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1286480-1791858433641004586-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "dd789e8b026ab1cc71cb4d92aeb10f3b3d34b7bbc717e373e08284d012dac52b",
+      "compressed_sha256": "399441b327ef80aa23cf008bb0eec934ffd4f04afae788ab425e0a533c982af4",
+      "uncompressed_bytes": 73308835,
+      "compressed_bytes": 3874406,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-368245-1791902763430936436-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-368245-1791902763430936436-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "878ced97e12002df63f52813b6ef44fdb5d586cacd43c18598bd782dc7255990",
+      "compressed_sha256": "a32bf7248209bf1f704d1deac1128c9cc3c56d21c8d4112f9703221e7f2063ac",
+      "uncompressed_bytes": 74241292,
+      "compressed_bytes": 3790761,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1654183-1791863671879384563-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1654183-1791863671879384563-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "e8cf258342d889224669cb94eaa8346dac405331bcb7d8c4a8664e2eee0df514",
+      "compressed_sha256": "afce3b4355db47fa4b3ba4dffcabc29ca58dc10d13a641d8c00aba91b8b75c49",
+      "uncompressed_bytes": 74851949,
+      "compressed_bytes": 2728876,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2334157-1791986042343479142-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2334157-1791986042343479142-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "88c909010b6aa5ddb5eb2c8d0faee9196f39f930a5b60cdee514c761fbd962c0",
+      "compressed_sha256": "07e353c2b7c20f3b80c4e192f58580036a6a291c3c916c15195bf2ebfcad1563",
+      "uncompressed_bytes": 75788638,
+      "compressed_bytes": 3886011,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-4092850-1791896650897585986-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-4092850-1791896650897585986-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "c5864314a92a0f802b90e85425bf9df5a696f8906d85520196fa91350d136bbd",
+      "compressed_sha256": "9eac7b9b3d44167ddf97ba81e573d153a63b70444f388af261f9e11bee92fa6c",
+      "uncompressed_bytes": 77160410,
+      "compressed_bytes": 2648246,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-16581-1792006365536949226-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-16581-1792006365536949226-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "7d1c88ff1468a9fba7d497c870fd816b57643be7a50abd092be928b5eb9b9d14",
+      "compressed_sha256": "4e6505cafa81697e9590ddd5d06371742f93ab113ac1ff6fbd73a241a1d02dc3",
+      "uncompressed_bytes": 78848586,
+      "compressed_bytes": 4830705,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1736305-1791979420070542254-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1736305-1791979420070542254-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "1cf92b5e4c965acc8c648331d8f72b7066dbc0192bf1b8ed8a7eb692f5dca624",
+      "compressed_sha256": "6176ff2236e3c862f4c5106964e8bcfaf35de9a5c99015abebe273b72102462b",
+      "uncompressed_bytes": 78917883,
+      "compressed_bytes": 2795637,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-467842-1791846250734133353-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-467842-1791846250734133353-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "a3abfd08e1977d1309877ce3311b42728662cc6c1f469fc7620eaf29b61d7b72",
+      "compressed_sha256": "006429f8591e26d026b48d633977c96001bcc528a84892ca8d0f12994e6243bb",
+      "uncompressed_bytes": 79092148,
+      "compressed_bytes": 6333143,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-180632-1791839693069722771-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-180632-1791839693069722771-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "6bf629dfe57158378714ddf512f2202d3929db0572abd0481dda5ca8eda2eee6",
+      "compressed_sha256": "45816fcf6566276b73605a0009449de04d90b2a52f8447284d79862fb082e01f",
+      "uncompressed_bytes": 79825275,
+      "compressed_bytes": 4291828,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-9932-1792006311858291707-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-9932-1792006311858291707-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "bc45943ea91b6b486b6b88431be8c1148f287e721ba2ee2ca39b8f6c78f54e2d",
+      "compressed_sha256": "8ac7ee7415376e048c141e2e3cfb5711eb029d72ec48841e57c59e3dcf163c35",
+      "uncompressed_bytes": 80418365,
+      "compressed_bytes": 5049900,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-255856-1791901258315495253-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-255856-1791901258315495253-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "33dd5ef2c4dcde2f85f84a6bba56d429ffc3bb2508618b81bcd26156b77273cb",
+      "compressed_sha256": "8e76e8a1d3039490b0e757ddfc34a54d2d2ef28aac9dd50a1dee8e9dc8060a4a",
+      "uncompressed_bytes": 84250716,
+      "compressed_bytes": 4584260,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3326848-1791997114036218950-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3326848-1791997114036218950-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "22abf1ed5a146fe723a67c2d9355e8cf8af205a1e46f7a4def0c33b57b6f67a2",
+      "compressed_sha256": "df3468422aa043b29a014f6417b65bc83e6e28cf1b31d4e37814eb6056e112dc",
+      "uncompressed_bytes": 91434440,
+      "compressed_bytes": 3623722,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-114154-1792007391641321610-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-114154-1792007391641321610-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "7617af7de28a1995c0c4b6e9d46713ee20b5aa2c09b79571d95bad521b2249a5",
+      "compressed_sha256": "b7ac8973fb626dc1cbf1c2469058f2d35df0d1c1da1813bf983a46d7b13898b7",
+      "uncompressed_bytes": 93834375,
+      "compressed_bytes": 7309684,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3519982-1791999148003333180-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3519982-1791999148003333180-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "e8cd1d08723a22f7e8af4079a8970a6f7ee5b3e5f4dfadb97f1153a38960e7ea",
+      "compressed_sha256": "1c4e3a749550a86036d187a8fc38aa63878e2a99227fff9bfcdb2cf28a39ff30",
+      "uncompressed_bytes": 96239931,
+      "compressed_bytes": 5261282,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-388430-1791844729087931170-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-388430-1791844729087931170-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "fb5c601068860f8962215af707f8744f1addb957eb3b8bf4fa69401c10dd28dc",
+      "compressed_sha256": "eb92ad60efe81b04a3e8b16a9cc4feddc1c486941e7d29044eb13e9337b0fc3a",
+      "uncompressed_bytes": 103012554,
+      "compressed_bytes": 6289288,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1408818-1791860184109669259-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1408818-1791860184109669259-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "8156b5b551baea522dbb8b95ee11e4bb44d95c83ded3146e92b038209f534314",
+      "compressed_sha256": "929fa7940b2a4c35222c61139d0ebdb6abdc9b1ccc385155704a617a3051eb92",
+      "uncompressed_bytes": 103721921,
+      "compressed_bytes": 3287887,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-327841-1791843526528502724-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-327841-1791843526528502724-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "0cf36ecd23334e7b7c9874e4c5b00b886df8971e004d21159c9eef64b269b183",
+      "compressed_sha256": "4550c82b8a26b69d3a05cd47a1d79fa3e8e0ce573623c7231438c81bc8161448",
+      "uncompressed_bytes": 105165785,
+      "compressed_bytes": 4351878,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-347934-1791963260076709081-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-347934-1791963260076709081-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "64d046404d8748ddac9deab3b982a0e20e1d2a2fdea6088e85076cf5de4c3a48",
+      "compressed_sha256": "56aa1cad29411cc7f6fffb822aeb667d14541619f31398dc867fedab67459263",
+      "uncompressed_bytes": 106372417,
+      "compressed_bytes": 4489159,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3460417-1791998520807513412-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3460417-1791998520807513412-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "9ae70605ef3ae71bc675e0b54249ba36a77df24309edf0003d8478930a9b197a",
+      "compressed_sha256": "2c2e218a0d39453927c039850ffa4ec89837c02767ee7719e538cc129fdf77b5",
+      "uncompressed_bytes": 111707449,
+      "compressed_bytes": 3048353,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2097606-1791924185641941677-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2097606-1791924185641941677-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "4212de18c9277ecc8c607ea2a4253f17ef2878c63e433e97b475b085fc66bb74",
+      "compressed_sha256": "93aafa3287d55c77aedd47fd8b671a72d1361a55047a03b853eabe67e971627c",
+      "uncompressed_bytes": 113951425,
+      "compressed_bytes": 4743007,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-861840-1792016033629593579-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-861840-1792016033629593579-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "289abfc8f3381ce57e9c3769e70c1fbcb2ed4ec952be333d4088735318cbb51c",
+      "compressed_sha256": "7f0222e2cf589f3b4c77d4e6838dbc675a00e7095c27916c5061b30004b29219",
+      "uncompressed_bytes": 116531200,
+      "compressed_bytes": 3012185,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-5915-1791898041508177626-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-5915-1791898041508177626-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "96567649670912ca446d7889f5a67cfcf6bbc8a5d1ba5b534a9f9a92ef027320",
+      "compressed_sha256": "3f1a71274af7ec0ef51fec3af5505f4215f0546c6eaeae1eeabd9e6002cd5e68",
+      "uncompressed_bytes": 118007708,
+      "compressed_bytes": 3781603,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-877839-1791852627213112255-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-877839-1791852627213112255-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "6297390ba0894503a83fede578e98fe0f40ad5d9da8760e81bb1129285e6bbed",
+      "compressed_sha256": "ceb8591237baa879525af4e5980b48b9444a45a943be03c3a9eff51133c126ce",
+      "uncompressed_bytes": 120295045,
+      "compressed_bytes": 4368860,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-693192-1791849915603477867-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-693192-1791849915603477867-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "4a7f8d60bfaaaacb84e7a87e4f41b33b218167083ba2970c8f9354759ee0fa31",
+      "compressed_sha256": "075f5cf46531c734e7d7c108c47b61e5b9a396fa4dada2b490df27aaa3bf50f8",
+      "uncompressed_bytes": 122574807,
+      "compressed_bytes": 4402708,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2859187-1791879809843897449-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2859187-1791879809843897449-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "06e4cbc2e76aafc9a3b592acbdfc70a3294f8d675919e5987ea55f34e5ba961d",
+      "compressed_sha256": "e28afa2b879aa12880eb9c92dfc6de4a9fa5ca78b0a11f5b24781712e8b151cb",
+      "uncompressed_bytes": 122863927,
+      "compressed_bytes": 5431535,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-627393-1792013555378525468-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-627393-1792013555378525468-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "ff1412ff3d17b30e189bcef7852571adfccc686eccecb5253130d2db8b8aa0d8",
+      "compressed_sha256": "b268882b5ba18aea99be954b5d6bebc55452237b4032cb5edb47c0825e080470",
+      "uncompressed_bytes": 125309517,
+      "compressed_bytes": 6171675,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-525695-1791847284796345398-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-525695-1791847284796345398-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "2cd7ba7a58c45fa2a8e0633dc674ca0749033625d332566fde135678f0ec54ef",
+      "compressed_sha256": "4a5e7235226962cfa467555bfd3d78851f0156779a80931b7f46a7bacfc677fa",
+      "uncompressed_bytes": 128732146,
+      "compressed_bytes": 3903254,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-936770-1791853528760271515-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-936770-1791853528760271515-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "77842b808855ddf2c8dc3c317d7b1e23af95bc8e22aa0524a46442a3cba150e7",
+      "compressed_sha256": "db7e076f655ff9d464d2f3c3fb570e884d5b7af6f7edd87f3e88449b262f4b95",
+      "uncompressed_bytes": 135524651,
+      "compressed_bytes": 4076572,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-482689-1791964917444496479-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-482689-1791964917444496479-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "5a4661b20de2476a85d6a2065537cafffe4e48f91c709c2c95f4b0afa3d2a9c3",
+      "compressed_sha256": "476c4f2ad8b505967e2d2ee8139166c3108fcb972205a0e4b2463d664ea949b4",
+      "uncompressed_bytes": 140657082,
+      "compressed_bytes": 3342820,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-521420-1792012396625920116-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-521420-1792012396625920116-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "83650928b0db9bc6ffc92886bc923dffc98899348aec2e1c2c7a8f2716d4e84f",
+      "compressed_sha256": "2f9dee6baad0de4afce0be6b3b658a45826f92649d52ddca0eef6aa48bfd3f5f",
+      "uncompressed_bytes": 140663458,
+      "compressed_bytes": 6613302,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-876772-1791852611031387963-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-876772-1791852611031387963-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "b256c79c4532e73eebabfc559649a172bcbf7857df596713056e529a8debd651",
+      "compressed_sha256": "04962f8b4a79e472c34c94e311efd9418d3f31001077911ce856435ffc5f026f",
+      "uncompressed_bytes": 145273034,
+      "compressed_bytes": 4351743,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-520273-1791847179237304534-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-520273-1791847179237304534-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "dbb5643c3ee4ae76c5aa19ded1bee3ac7deb2316ebde3b6773e8a7f6ccea3d75",
+      "compressed_sha256": "41cdc74c189bf2faf0f5ceccea7a8ec4dd8b2e38c8092cbf619f0a8c2ff9efbf",
+      "uncompressed_bytes": 150630171,
+      "compressed_bytes": 2778460,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1285283-1791974162368904527-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1285283-1791974162368904527-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "523a7db00be285949bf2c68850cab0a518d7473bf108151cb8fd946a60becbca",
+      "compressed_sha256": "0cfe33f9cc536d74efd2f24f8cd5623aa993ea6a29ee15cd11b1553d33156b14",
+      "uncompressed_bytes": 151634444,
+      "compressed_bytes": 4977441,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-535155-1791847443348410139-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-535155-1791847443348410139-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "00168e48dfbe54ad899601beff39b8ed7214cd69440b43d25d8c5bee9aeacf4a",
+      "compressed_sha256": "a82e74f4a0d070ba02b09734166d9de0110bc24bfadb179c836ec60d652a0ed1",
+      "uncompressed_bytes": 158108647,
+      "compressed_bytes": 6820891,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2027892-1791982709605043942-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2027892-1791982709605043942-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "eb32e8ce0d04478bd0eb12037c1f896fba16b3606fdf00c39cdaa1d0007dc6f0",
+      "compressed_sha256": "933a46bc35caf5bfd9180311b8a988cbcaf77a28bff48d55cb96d66612c89067",
+      "uncompressed_bytes": 158311132,
+      "compressed_bytes": 4799787,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-142676-1792007683089469543-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-142676-1792007683089469543-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "c8363b1d7806c9e9b66e1bd8bbc8d5946b6dfc1ec02318eb529269a7394dbbb3",
+      "compressed_sha256": "05004d00779239dcc5bd7e426d1e29a302426bd7ba802568d110b15406e82d21",
+      "uncompressed_bytes": 160003979,
+      "compressed_bytes": 4646558,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2413226-1791986871659627925-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2413226-1791986871659627925-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "3bdd9d71b8bf6f8082241b898021aaac98114989878f204e77e8f8cdcb71fd74",
+      "compressed_sha256": "ffd370c28fc846897a6f54877fc83e3836fafe13eb272240beea8458fda116e1",
+      "uncompressed_bytes": 165848219,
+      "compressed_bytes": 5421919,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-400474-1792011100609474346-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-400474-1792011100609474346-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "c6089f24ea95aacfdd22cb26d937788a9258ad8356b1ca48db9db79006cddff9",
+      "compressed_sha256": "a345e4b469c73b143f1cf3205376b0aeb77a30312474a6f414a71c88d2d96054",
+      "uncompressed_bytes": 166696633,
+      "compressed_bytes": 5880463,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-901246-1791853006349261412-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-901246-1791853006349261412-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "f06f5f8ed97b3f307ed09c37b220a7e98a3b4af477a9e22de041954e8e5e663f",
+      "compressed_sha256": "ab6222e8ef603b259c3b7adfc2ce8ae83c50dcab8291dcce7948ec3a4e29bf0c",
+      "uncompressed_bytes": 167343229,
+      "compressed_bytes": 3776632,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-93111-1791955057002481785-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-93111-1791955057002481785-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "12f56f64f953439f2043bd2d9a1aed7c600424c0446c77faf3576228b79d068d",
+      "compressed_sha256": "8fd46b6cf09bb94ea0ce7c89011f13875b6798f92fba0a590851d8b88bf53e6f",
+      "uncompressed_bytes": 168462351,
+      "compressed_bytes": 8818976,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2506200-1791875129726430599-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2506200-1791875129726430599-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "e5dc648228a4a78da21432693215b39961e52f51905d2e90114b49a6d536281b",
+      "compressed_sha256": "8fdeafff9d403567297796c5dfa31e44c5b9687e1cacbbf9dabba9b741eec732",
+      "uncompressed_bytes": 171105858,
+      "compressed_bytes": 5278906,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-4169251-1791897653711589556-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-4169251-1791897653711589556-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "6922150f3f8f8b1cd68afcf91bafad14a9e2f61b8cba27d649b72b3daaf631a6",
+      "compressed_sha256": "935ba7829238651526a1dd73326b84324e5ab09962dfc557be4a55786de220fd",
+      "uncompressed_bytes": 177585758,
+      "compressed_bytes": 5168507,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-161176-1791839013493904183-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-161176-1791839013493904183-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "3c20b3aa203301e59a800b7d99f61f63582929d5a420d8ce06716c0e3c9971e5",
+      "compressed_sha256": "cb3c4d19f1984b00b03e2ecd57819f99fc8a00c807489bfb77c518a8a1ad080f",
+      "uncompressed_bytes": 181847242,
+      "compressed_bytes": 6420260,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1808432-1791980294021143801-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1808432-1791980294021143801-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "bf63ccd431a868edafeb7a373dfa602ab2f6accad20a0c0314f2149b3624512d",
+      "compressed_sha256": "2318569bb2d43ce44d09d33a6225afefff2a1d6ed1231f76b9ab15ddf5b96c30",
+      "uncompressed_bytes": 182876932,
+      "compressed_bytes": 7367620,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-146354-1791838310039845970-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-146354-1791838310039845970-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "2da498c17f0e4f27822413942e1ab7a1348661b35e14c09672891d05605c3c03",
+      "compressed_sha256": "2c2756b4d1cb3eb985533d8b6ed1a1132a50437e733bacdfdb4483494952c6f1",
+      "uncompressed_bytes": 185225864,
+      "compressed_bytes": 6550472,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3637469-1791890550948953778-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3637469-1791890550948953778-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "305f9a296b6ec6020e1e1ea7cdadf3ebe1ddd885f331bdf5fa9e789e54dd5591",
+      "compressed_sha256": "f1ee733d738c85ed9164174b830780c56507d9e08f90937a8abb51fbbcef83c6",
+      "uncompressed_bytes": 186844844,
+      "compressed_bytes": 5484843,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-93004-1791953180982457611-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-93004-1791953180982457611-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "15208a6f38693e6c0844cdec825e9309abf58acb6d2f6b043d30872668477cb3",
+      "compressed_sha256": "2d4dee969b21f4c54faaf7b3d138a39274407683e6ea995e018f04bb4f60394a",
+      "uncompressed_bytes": 187695796,
+      "compressed_bytes": 8046774,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2686070-1791931499150281629-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2686070-1791931499150281629-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "dab93d3739b803fe4290b58729c4397e5abfdbcb3d350a800d850dfb4bdc9462",
+      "compressed_sha256": "0a9cd1ab7584643ea124ed79d00ec88b1e5934850df355854fe781bfbf97b75c",
+      "uncompressed_bytes": 191777986,
+      "compressed_bytes": 6243832,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1202657-1791857265709412763-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1202657-1791857265709412763-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "9f3d54d9f1641b70bb46cf138be4b684a9c672fb1526ab4a0b3e75c494a540f5",
+      "compressed_sha256": "cc12407393783b3f1973377308994150ff35b9e3b60b5667b04a89cbb180824a",
+      "uncompressed_bytes": 191936579,
+      "compressed_bytes": 7751109,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-326266-1792010256878179315-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-326266-1792010256878179315-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "789d4a9aedffed9fb65af509ca8112fb39dfc8781bf8e46d6f7477ade25afc23",
+      "compressed_sha256": "206d2a8d6abce67452ae2d107fcd037fd4b658552f7ad3db7bc24518d5bc533a",
+      "uncompressed_bytes": 192277745,
+      "compressed_bytes": 6022823,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1582750-1791977678405169353-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1582750-1791977678405169353-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "4f4f9d8cec6637a55ac7779da7167504b1b986b402c9cce73a20285ff6b63d09",
+      "compressed_sha256": "8eb38f490f35c1ad41891cbdb48f48e766d7fd39f403e5896067834d5001918b",
+      "uncompressed_bytes": 197370184,
+      "compressed_bytes": 5626474,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2764954-1791990753763934743-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2764954-1791990753763934743-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "be2d2f66cf11beb78cfeb4c373b266fd0ac5fbe1e74db04081e217846e8a9afb",
+      "compressed_sha256": "f82e0ce911a04df7b071a07e02bc5765dd27249082fefac8dac965c301ac7a79",
+      "uncompressed_bytes": 197801511,
+      "compressed_bytes": 5867565,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1441996-1791860664301961378-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1441996-1791860664301961378-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "37c0e54a35e6b8d9e09ba66a17d876d9473b8e6fafe4723a3ebf3fb5f72cd8c4",
+      "compressed_sha256": "8af9cd3e3aa38ea7d620b983c95b7f6f36fbc77addf42b1aff99d913cf2d2800",
+      "uncompressed_bytes": 199987160,
+      "compressed_bytes": 5745025,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-583255-1791848230723350175-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-583255-1791848230723350175-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "dd31d43790403dbc83c49ec6cd58dc55415f34e4fb0e7fabbf9741e0d116312a",
+      "compressed_sha256": "c0723ed5f1d4b1c9525d5a85da8226070d8075881d5009674fa5686019c45b89",
+      "uncompressed_bytes": 200356564,
+      "compressed_bytes": 5886175,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1420888-1791975670391395317-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1420888-1791975670391395317-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "8b361d77ad05c855092e65130971cbe9a9c17f251646d3d94eada377b473b80f",
+      "compressed_sha256": "6f3376cac1e707456a91c25760bdde0e445fd32261a61281b54ee5327b065c44",
+      "uncompressed_bytes": 201294446,
+      "compressed_bytes": 5747372,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3011910-1791881931273877760-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3011910-1791881931273877760-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "d49050495fcf32c473f3a21e7fba2107a51a91a632ec5ab71748c6b481ca2253",
+      "compressed_sha256": "7fdcac5a49ee4dd8168fc991640167503677d616a0247cc7930f94d31849c4d9",
+      "uncompressed_bytes": 201800215,
+      "compressed_bytes": 6136009,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2111671-1791983610309843933-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2111671-1791983610309843933-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "0b3a20f5872f95cc29c1c4791a9bcef4891e3a7b3c89122ca41943644416bc4f",
+      "compressed_sha256": "a1147975753350c247ebba5fa69b00e167a6b1e76a744951e14e38b87fa19720",
+      "uncompressed_bytes": 202529914,
+      "compressed_bytes": 5726740,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3634237-1792000375741425334-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3634237-1792000375741425334-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "b5796677f6ffc970c6c860bc6dd53538b8e6c3745c9b0263bc17ee8827535eef",
+      "compressed_sha256": "832b32caa15d753fbe34558906d72908362ca910c81faacc8d7637cac1d9460a",
+      "uncompressed_bytes": 202537661,
+      "compressed_bytes": 8165924,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3225117-1791938047859526309-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3225117-1791938047859526309-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "a609389e3f5883eb464cdbc6423f6b5917779413165dd738ba1327b90aebf2e1",
+      "compressed_sha256": "dcb6e77184625d28c447c0b02c677f989431473cd3b735251211059f1afc0f72",
+      "uncompressed_bytes": 204260106,
+      "compressed_bytes": 5756763,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1547895-1791862173152612546-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1547895-1791862173152612546-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "a8be0e8ba262aa93593fd1c372b759a17971d9289abf463a9551c9584d570cf1",
+      "compressed_sha256": "0698a5857ebf66239028cbe94c15c5d313d582baba3c69cca0c320d9adc731f0",
+      "uncompressed_bytes": 206760744,
+      "compressed_bytes": 5912350,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3401246-1791940155047402653-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3401246-1791940155047402653-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "bea55e6474db3729d04c2aee3ad3e9d582a92808a382a12114a35b4a601deb33",
+      "compressed_sha256": "7e22546f9ac31e78bb86e27cb3d178694587c93fd993bd0216f57e5e5867955c",
+      "uncompressed_bytes": 207498831,
+      "compressed_bytes": 5856950,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-285306-1791901656809178469-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-285306-1791901656809178469-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "44c0b6807c7ed124fa0aef91f165ce7613b385aca36eb83ca53e66f4c91360f5",
+      "compressed_sha256": "763f0d8b5c64d0317d89e3e63a3c9e80414bf646c83da796a930007cf2d29419",
+      "uncompressed_bytes": 215427932,
+      "compressed_bytes": 6396477,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3916677-1792003306403692566-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3916677-1792003306403692566-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "acc29562622698e3b0940aee2450fbde55c7c74dc5c33553ea50105b4efc2892",
+      "compressed_sha256": "5da5e2649ab649c35be3f2ca4b3224cd464457eb8d57982ab0649f22a8552ef8",
+      "uncompressed_bytes": 218644451,
+      "compressed_bytes": 6442304,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-723505-1791850379252863389-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-723505-1791850379252863389-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "6a5f17db83add61418eaca90720ae69699c8754d92ad05b07e290072412c605c",
+      "compressed_sha256": "6bc07165e31847cce58537cf08daf32c859fef3399a2ab4b3fef25e0902c833f",
+      "uncompressed_bytes": 222413407,
+      "compressed_bytes": 8924732,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3720200-1791891715126006307-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3720200-1791891715126006307-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "6e6c360709e4e005449aa5cca75e2b5a13a8a568d2633acceff17762d0f1ec42",
+      "compressed_sha256": "e92c31827fdea340c666cce699644e6788934eaec65021a3f37d8647002d85b4",
+      "uncompressed_bytes": 226342785,
+      "compressed_bytes": 6750180,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-306543-1791843067606732955-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-306543-1791843067606732955-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "20411a8eac602a0410feaa57eea77eaffa741231b179604d267d96801fe1e986",
+      "compressed_sha256": "da040a5ce7e9045bcd894d54ee9b92e01f8c411c68c2e2264af7e41c88238a49",
+      "uncompressed_bytes": 226485226,
+      "compressed_bytes": 6461507,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2779649-1791878769217419214-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2779649-1791878769217419214-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "d712661f1e42c7f67f4923ea085ce67701aadad435799a8138fb4d011e0544e8",
+      "compressed_sha256": "ded7f7d5909f9188fae9e16b193c5281545c646cddd3a21141a496ba5ab31cfe",
+      "uncompressed_bytes": 228144146,
+      "compressed_bytes": 6896010,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-4091684-1792005149572251084-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-4091684-1792005149572251084-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "6483d4deb3c13545689f6b016bbc160138a92b6d54852e095ab5b5d9fb26d29a",
+      "compressed_sha256": "594ac08b22adca9225c554995810932787117fa9dc530dbba8b52be1ae66ac65",
+      "uncompressed_bytes": 233402644,
+      "compressed_bytes": 6884486,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2505649-1791987954498905174-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2505649-1791987954498905174-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "7cf91a18ad0585b420c70dda3e87be6afc16273359ee63fcfc3a218e9e3eb420",
+      "compressed_sha256": "55f144f4bcb3c6093a134a1be0fc6a3dbc84d361fa58200c50a94726bcf155d5",
+      "uncompressed_bytes": 233780131,
+      "compressed_bytes": 6868192,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1249431-1791857905531218287-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1249431-1791857905531218287-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "23ef22c288bb9ff23a998a240ac5e068a4187f5a0705bb815c653f5132bd3d2c",
+      "compressed_sha256": "b35326f32b2d85f8f74f6c0cdd17a897b52aed9d1f5073c92851ccbbeadc75e9",
+      "uncompressed_bytes": 234082604,
+      "compressed_bytes": 6151709,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-175060-1791961364420651991-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-175060-1791961364420651991-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "93f6e90104270c0368b3b0523c7a66382543acf406e0ab366f90fe1e446f051e",
+      "compressed_sha256": "af21ba5cbbdc363cc0b4a9902543e240db0c842fb6813979ff9e9e4ddb5071f5",
+      "uncompressed_bytes": 235219325,
+      "compressed_bytes": 6997031,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2805548-1791991218616232605-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2805548-1791991218616232605-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "c44d81d929e15f40314ae16e2ccbffdede674b545f6db9ce0d92ff01a1abc01d",
+      "compressed_sha256": "681e873cd5466479e44caab6596192f6f1c7030f8814834ca0fb72347019e7bf",
+      "uncompressed_bytes": 237000287,
+      "compressed_bytes": 7080866,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-982333-1791854162756392911-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-982333-1791854162756392911-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "f1cb2dcb10e0940f10a6f36c73b558a12ac7ad506c0904ea11d1c3d89acd95b3",
+      "compressed_sha256": "51f1805e1f7891f8556a4db20b475e638a63b9042c4576ef1fb9ce716547ddaf",
+      "uncompressed_bytes": 238149365,
+      "compressed_bytes": 6825773,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-324530-1792009586635484377-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-324530-1792009586635484377-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "fec6a84d4f5d075861813023bc5cfb8c7dfe774af0cd396d867200272189eccf",
+      "compressed_sha256": "1f3191e819441fb98d87da3c5abe4b5d2aa5b902a5cb6704e84b57d12d3e1426",
+      "uncompressed_bytes": 239581924,
+      "compressed_bytes": 7117192,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3829899-1792002396030724803-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3829899-1792002396030724803-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "40de4f9eb7d393a0bdc25e9889ae5de10f1cc2eb94393d82caf328a95ed51553",
+      "compressed_sha256": "6992d0c05c739671a72c4ffc3bffbcac922837f84dcc78316ce444c475514eee",
+      "uncompressed_bytes": 242165176,
+      "compressed_bytes": 7109793,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2896272-1791992336211417598-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2896272-1791992336211417598-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "9fc31eb662f54e24e26cddf70c2a92b3b003469cad4338e654f7cb8239d6c973",
+      "compressed_sha256": "0618164262c2c6370164d06de5eed8a5d09e0f8167ace4d45d9361345f206792",
+      "uncompressed_bytes": 243279644,
+      "compressed_bytes": 7064318,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2963471-1791881269138160492-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2963471-1791881269138160492-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "9b3bd346791d78dbfb485595ab69f0b6daa6ac94324c346916c05b3c93d9d0d3",
+      "compressed_sha256": "6e1d0538435a5f5f20564d3e267eb7fd90144629f7019e5ae5453739f3b171e8",
+      "uncompressed_bytes": 243834524,
+      "compressed_bytes": 7274371,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2198782-1791984591882040030-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2198782-1791984591882040030-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "4c2f09e96f97dc0aea4439c3d23f41f16d8942c185f7ae337ed674fe3b7da2c8",
+      "compressed_sha256": "cd4b3c34f717dd6d9b1df7ffb86671d3adfa09bd1cc0b1a614335de73522f27b",
+      "uncompressed_bytes": 243916652,
+      "compressed_bytes": 7390023,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1626816-1791978173729037991-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1626816-1791978173729037991-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "43ec7c35b9330b3618566b226fa2881a79682299dce9331fb664bac8520d6d6b",
+      "compressed_sha256": "047f835064115f1bb4a27d7c2b4baf8a045aaaec84362280aa2e3d7ca0a7b411",
+      "uncompressed_bytes": 247564438,
+      "compressed_bytes": 7403164,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2097139-1791983469734176766-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2097139-1791983469734176766-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "499977fee98ed9d70828a85672f654ee3f471c06263cb441ca95dfa446915ab2",
+      "compressed_sha256": "0b39134e483fd736ddccd705d1e07cad8e78fe7acc677828067b060cee6ec2c4",
+      "uncompressed_bytes": 248695034,
+      "compressed_bytes": 7016701,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-52313-1791898661804954581-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-52313-1791898661804954581-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "57ed00879f0ab0f7dbdc64047d22f4938a7c880c55fe16380901f065e41f3e8f",
+      "compressed_sha256": "2f1e00c373ad265589ecc1c8101a694eadec1b97377995b0339df1c95db6773c",
+      "uncompressed_bytes": 252668998,
+      "compressed_bytes": 7269948,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3142970-1791995147955214262-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3142970-1791995147955214262-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "f48279ca000315c9ff68d4a28998de8b89339d9cbd8ebe820d1984b84aa13e25",
+      "compressed_sha256": "1e5ecee5626b69266d745c2abd983263eff7ba9d63083dbbf2ef35662ec4467b",
+      "uncompressed_bytes": 254480457,
+      "compressed_bytes": 7737305,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-90464-1791899161417714972-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-90464-1791899161417714972-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "82bfcf666708f2e1d0b4ffad7acb36a82208f78402ab72bdbd4fbe6b0be8d25e",
+      "compressed_sha256": "7958cd99544e29a3f4697e425a74bc1bbc657bbb0d49db4c33a533d88ac221fb",
+      "uncompressed_bytes": 257084183,
+      "compressed_bytes": 7392454,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-247409-1792008774508778954-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-247409-1792008774508778954-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "ad148814ba43ee0a4cf88a2b431d6774552e1619cc6fe7d31e3e18bf7c4f5647",
+      "compressed_sha256": "871c0de1da2b35c90bdf6de8780851d2eef2b6aaf4de5f465ce0847c4102037c",
+      "uncompressed_bytes": 257883575,
+      "compressed_bytes": 7402809,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-150240-1792007767351121549-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-150240-1792007767351121549-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "717b01bad744d0fddef443fc4ef473ba1f8b3f8ba60c638624309dbf246205ca",
+      "compressed_sha256": "d38778de5dabe8e8aef1b00c350af3cddd175ed47959322f6f49d96918894e63",
+      "uncompressed_bytes": 259296510,
+      "compressed_bytes": 9324953,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2228031-1791925885586357456-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2228031-1791925885586357456-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "51f3459dddc0eb8b18b5925417e2c5d8313c958471c51c090334ef073c3b98a5",
+      "compressed_sha256": "db852f599c3db18643455d252b4400e147406ba980ddaa1612143f6a194bb282",
+      "uncompressed_bytes": 261666156,
+      "compressed_bytes": 7646667,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-843215-1792015846149933891-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-843215-1792015846149933891-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "c41abe1c4ed8fed04c6d447a3ef34eb755eddc70e201c4b1ff1b87403444166c",
+      "compressed_sha256": "3f9cd8e3d259234f4f4f2721399391d831b92a87a2efe6a35e09495ad1bc36b1",
+      "uncompressed_bytes": 262496928,
+      "compressed_bytes": 7629299,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-212106-1791900678368281555-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-212106-1791900678368281555-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "68f83f49298f3f79ed284e3e390538084d897663b7b69c2f0a72d2dc084675d4",
+      "compressed_sha256": "1d8c9e2325b4343d7e609763723677a244a1c5fb862a2503fbeaff09f1d6d370",
+      "uncompressed_bytes": 264224671,
+      "compressed_bytes": 7792326,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-23579-1792006445364292828-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-23579-1792006445364292828-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "a3f23af63a8361143ce6238d09c5b7fa534096713f45bf079cad0c0f99ac2a19",
+      "compressed_sha256": "c7a066a04fca8726b10b6506607ba4accad12b5293c51c1f03a58f0edba66ab1",
+      "uncompressed_bytes": 268465007,
+      "compressed_bytes": 8065222,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1627726-1791863298059715428-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1627726-1791863298059715428-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "5f7aa57ada3e5aeef0d4598d6cb21ca59c92f4074efa5107147927d4b3e7953e",
+      "compressed_sha256": "f2e430eb816b8244e0656bf65c807ad9c7f9d7e93e4a06119c83d5bf175096d6",
+      "uncompressed_bytes": 270877706,
+      "compressed_bytes": 8055930,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-712789-1792014472829208542-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-712789-1792014472829208542-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "5006ea47aa15ee8858be708c24bcc9462ad4f844716956b104f10e1e28f3b1e6",
+      "compressed_sha256": "511c4eeef503d652e08953fd1a92f6df15dfe89ac94f28073fdf2b5f083678e2",
+      "uncompressed_bytes": 272317930,
+      "compressed_bytes": 8079112,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1971237-1791922571117671098-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1971237-1791922571117671098-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "f5b1bb1099f3188d47595a728930b6dc598080f6c6e6202452e2f79636d5019a",
+      "compressed_sha256": "53c483620d97c920bc585b317640931a5c8f1e8f7968eb9892e2061b92c29106",
+      "uncompressed_bytes": 272928646,
+      "compressed_bytes": 8280708,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-152562-1791899936545542653-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-152562-1791899936545542653-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "79f60207d54ac1090decb14efe1fdec61da55f3720ceabc27786841cd76603fd",
+      "compressed_sha256": "9a6087957af4319a428e19b8f446ba47f1d09df2a5f6567626c0615f1d39413a",
+      "uncompressed_bytes": 273376746,
+      "compressed_bytes": 11810382,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-551064-1792012737385062327-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-551064-1792012737385062327-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "e5d8273060f018ae40df9e576f3c568db7997ec31f9a1b88cb27ca523095d326",
+      "compressed_sha256": "f461c4b6099f19f4785f75763892df2a89f7043d2ba7ee95b73931cbd6dfd16d",
+      "uncompressed_bytes": 278474202,
+      "compressed_bytes": 8879566,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2078634-1791983266776532435-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2078634-1791983266776532435-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "8ee38066ac6acd273806cf4976aed938bb586f1de91d9a4e7ed749946fce8b4c",
+      "compressed_sha256": "e528364680da9cfb5cd416c758d3e0c97e933dd220fc62ba439b4d8d56d38e43",
+      "uncompressed_bytes": 278627179,
+      "compressed_bytes": 8457276,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-269386-1792009003073536261-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-269386-1792009003073536261-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "2be722fc716d0fe873ccde2c60c03ec8cb7fa19d21ec2b9195996732715d6b16",
+      "compressed_sha256": "68bb867d5ab4b21b22a483e88e9f76d10909a741c40219462a69fe3f1576d8de",
+      "uncompressed_bytes": 281469546,
+      "compressed_bytes": 8405468,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3598868-1791890026182802863-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3598868-1791890026182802863-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "54aa0e8fff78adcad85bcc3de94c3a03a07f2ff2f4d7c5b0bc75cb7f3e12fbaa",
+      "compressed_sha256": "2e2c523980f5e74f8a02099b276011cd86d31c1556ba54283552199ffd224d16",
+      "uncompressed_bytes": 282775700,
+      "compressed_bytes": 7406589,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-647914-1791906436212532814-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-647914-1791906436212532814-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "03416e80780c88d5398baaf27dbd6b3381d3b3bbd9545a6d333b5a00f2fe9877",
+      "compressed_sha256": "1d0cb0a256074d3a3ac7305fa7fcf54080e71fb0cdac79e2080b61cbfa20253b",
+      "uncompressed_bytes": 285453049,
+      "compressed_bytes": 9379237,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-48621-1791792273381542141-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-48621-1791792273381542141-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "b7cc3f9529db3b4da74636928238393057d6eb1cdb375847457eb3a8a8d8e428",
+      "compressed_sha256": "0945a1fdafb2e4985c84593251a91e25cfd5f06fe0ce8053f54480083788d1f4",
+      "uncompressed_bytes": 296452313,
+      "compressed_bytes": 9758305,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1457748-1791860882846352731-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1457748-1791860882846352731-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "4916b2e8770ba8221e09ca2ddaa05c6b2209a824428028258e03f24a959360fc",
+      "compressed_sha256": "82029033d2e4403f3b64ab0e7151d1cb25f1214231ac0266fb30723b725033ba",
+      "uncompressed_bytes": 298053928,
+      "compressed_bytes": 8693382,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2713822-1791877900921405390-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2713822-1791877900921405390-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "89edc4571d01fd83745227a6e664922510ba4ca38d7beab37339c5c1db63c538",
+      "compressed_sha256": "9c63f64c73d420902f7bd88f8b0d8d25a3f03de841d7a401b96d39185cf7c352",
+      "uncompressed_bytes": 298095722,
+      "compressed_bytes": 8574174,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-355313-1791844077651770144-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-355313-1791844077651770144-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "17d828be1fe2085b4cf03f03235e1a4b6bfd7ca1e8f8f33b912379af152c5190",
+      "compressed_sha256": "f683d65e1809565c35defcd175c176f82a9f41a87ccbf231304f479de02d191b",
+      "uncompressed_bytes": 298636375,
+      "compressed_bytes": 8908911,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2668251-1791877283489335717-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2668251-1791877283489335717-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "5210eca538066a699c18fad1f67b14b394e59bd34c3a930006d936f9f3572a96",
+      "compressed_sha256": "eb4b4b3c851ac3a3db7f5d8e4b72da4b3946cb54d57b155d2309883e59385336",
+      "uncompressed_bytes": 302179689,
+      "compressed_bytes": 9025207,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-820769-1792015605901855972-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-820769-1792015605901855972-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "651c7970f978138299ea5dbe5b3f1bbaf498a858319b9307928c23cc8c1700c6",
+      "compressed_sha256": "141a280c3805afa046274ceef347889375345975983ba41fc4430e0e7a504cad",
+      "uncompressed_bytes": 305731234,
+      "compressed_bytes": 6540602,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-92806-1791952101798141611-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-92806-1791952101798141611-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "baf8a36e5ea36f90c2d2bbb34fb1c1a9c386555ab0fe2672158e7d9e58fe4bc3",
+      "compressed_sha256": "170984f7d8c0bd00e52dc9c487476ccfb2ad328f7333dadf7358c63eb32477e6",
+      "uncompressed_bytes": 313452408,
+      "compressed_bytes": 9365973,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-112905-1791827925929890510-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-112905-1791827925929890510-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "cd21f04664392a6e2b2db452e1ed2b15d7a1be646f5ca038c0fb9f96ecc213bb",
+      "compressed_sha256": "e0d0e909ef91c50af83c8434ba61a47deb359a5d721b9103020d90a815d800dd",
+      "uncompressed_bytes": 316337443,
+      "compressed_bytes": 10527828,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3443244-1791998333929940584-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3443244-1791998333929940584-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "8d817ca668028ea7a6408a46203a6e4fe8a5ac65c5ac46f63a066bf272a13221",
+      "compressed_sha256": "75c56abef05baff948fd18e7fb6f846bddbca11a0f7b0c1d9656fc94c6ec1d68",
+      "uncompressed_bytes": 317581527,
+      "compressed_bytes": 11943017,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-261899-1791962321933271022-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-261899-1791962321933271022-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "ec88d59cc3e8e50591c9318013df92265e421fc5898a981a6a769ab41da7a272",
+      "compressed_sha256": "b220883b7f21b28fa7f5dca02e3d6e7ea56e27541a54bf8706469af1e35a1800",
+      "uncompressed_bytes": 317939257,
+      "compressed_bytes": 11237873,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-355312-1791844077654862665-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-355312-1791844077654862665-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "0c791d6aa2d8bb9d4db0800a6a1990917077f4bd869399a3286557936aa943d1",
+      "compressed_sha256": "c437436650d8ed630f8f6a60f32c3942f6cc433495dd6a2861687584719b5248",
+      "uncompressed_bytes": 320517343,
+      "compressed_bytes": 7204320,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-103990-1791824100703258880-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-103990-1791824100703258880-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "c5327383792722e2059e5a2c6e332d75800aba83e21d5684834478f57ce23a48",
+      "compressed_sha256": "7e31fc4a2e31d6021cd12a6d793c4c3d39d645a63e7fa03a44e71ca32a75a69f",
+      "uncompressed_bytes": 321625324,
+      "compressed_bytes": 10690889,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-429767-1791845550264402757-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-429767-1791845550264402757-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "1bd543d20e082a7e367d983b75c4e2537f0e4b766e7855bf11bd45dc26566cba",
+      "compressed_sha256": "90d2cad026c9b7628845eec6906a9a4249103bc8e3d754c70e14b94f4920fc35",
+      "uncompressed_bytes": 322079985,
+      "compressed_bytes": 9616550,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2959334-1791993092398160815-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2959334-1791993092398160815-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "7a889c6b782462a99c3ea89b95065b645591db4821d8715caeccabd8207c2e79",
+      "compressed_sha256": "d6edfe799cc9ae435104d9513f8e4e9b07fd3ff6b34a48e71fa80063be24c2f1",
+      "uncompressed_bytes": 322326906,
+      "compressed_bytes": 11509521,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-118948-1791831429582682153-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-118948-1791831429582682153-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "0ab40e4ba67f8410b66f09d6653efef9960e422c9ad73eb25bbb4c3b57837f32",
+      "compressed_sha256": "8f952d6a223f584cad6172552d4f28e398bb7d7f6e15eca1c43502267b2e17ce",
+      "uncompressed_bytes": 322917789,
+      "compressed_bytes": 10705795,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-121722-1791833039615749822-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-121722-1791833039615749822-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "bd94dd167389fd9d5edf1a9dc4f57219aa19060e0c53f312f0c6fdd183d38d0b",
+      "compressed_sha256": "47d17331b38b075c3a5bff77480645db3c46553f1d89e53aa3455ad01ef64452",
+      "uncompressed_bytes": 323566167,
+      "compressed_bytes": 10731254,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-108156-1791826490589753187-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-108156-1791826490589753187-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "7f95b8b7de42883b9fb83d62e03f970fc2a7c8e67692f7e5847d68218601fcc1",
+      "compressed_sha256": "9a9174af1e5576be7a0dc938071a5738e46351beb835ddf8a9034a023e65d6fb",
+      "uncompressed_bytes": 328234660,
+      "compressed_bytes": 10897464,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-829507-1792015688343485627-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-829507-1792015688343485627-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "8ab7cdf23e901ac5330bc5de79e96f336618849cd97e1ef712ff3a1a7b498b89",
+      "compressed_sha256": "d4694de02d1250ef7ae9fcd48a784c68b8e2e31923a8d3aedf029b357e5dd48a",
+      "uncompressed_bytes": 329928489,
+      "compressed_bytes": 7759060,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-4122851-1791897037148464421-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-4122851-1791897037148464421-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "886da29026a6e4933166a22653f4622b5a183d07598b874fab5c0d167badb4d4",
+      "compressed_sha256": "1d0259d5d38d5a11c1f16bf20b5ec62b40fa1cff95636ce8050d95aca7c7d76f",
+      "uncompressed_bytes": 333055047,
+      "compressed_bytes": 10839435,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3774739-1791892391822691033-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3774739-1791892391822691033-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "b6024e2b4ec5b0298c159a37d641b9674f0113049f923536a95c3ce5f1a28374",
+      "compressed_sha256": "3b55417fa78cdcbdc125d1b8059c12327260d2d1f3c8a39a9e0e74261952f94a",
+      "uncompressed_bytes": 338882857,
+      "compressed_bytes": 9529205,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-405035-1791845078520252160-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-405035-1791845078520252160-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "ed6501555e4f4fbafbd4da927825b977cb7292cbb2f891b1cc1e0b658db9dec6",
+      "compressed_sha256": "251aea2b9b2f1018509959031f7793c5ae391f311ef65f1b1306c8e98e19f9b2",
+      "uncompressed_bytes": 345700004,
+      "compressed_bytes": 7746625,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-396464-1792011064078453011-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-396464-1792011064078453011-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "a0e5e063169aa87f028fb213d9b97678ab38a11fc97c96d355a61645a63333af",
+      "compressed_sha256": "de826c7f8a1f438bcb7a495658a7a16c9559f2319e1945b9b0cb333f8d3883f6",
+      "uncompressed_bytes": 345911992,
+      "compressed_bytes": 8737050,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-997759-1791854391924425789-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-997759-1791854391924425789-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "f671e2a52513ce496e0a9004ec5e66e3f486b5b9dbf301575b2f00e4efd038fb",
+      "compressed_sha256": "0215da330578205037be889bffa97f4fb9c96de9688d649aa481c98f086fd012",
+      "uncompressed_bytes": 346673228,
+      "compressed_bytes": 10076253,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2027893-1791982709605037129-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2027893-1791982709605037129-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "cee03cc8301feb56036fbc96acb38976801f5020a6be87f9c8c76527b6bf1322",
+      "compressed_sha256": "600a476d10e812fa8aacce1f6a50c76612918cd462656e4cdcce40d6e085672c",
+      "uncompressed_bytes": 347224926,
+      "compressed_bytes": 11416871,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1675111-1791863963938881231-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1675111-1791863963938881231-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "b013dca82315eb6648d1283e93d218d13458df4b7d4d6cc67aaf759f72fdab5c",
+      "compressed_sha256": "6caf6708ef10499e6e1c4ff137abc6b1480d291b19381535462bc2d2f0b9008e",
+      "uncompressed_bytes": 347765685,
+      "compressed_bytes": 10554017,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-347915-1791902487933394705-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-347915-1791902487933394705-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "0928fafe19a8753075b806b4995f6d35d53234c5a3e2c1d6f03d0b3ad19cc71f",
+      "compressed_sha256": "ac29d7ab23deab26b21531cfd265890c3da575a98074d9d6cc0a177af0539e6a",
+      "uncompressed_bytes": 352925891,
+      "compressed_bytes": 9859432,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2517006-1791988071334908705-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2517006-1791988071334908705-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "29302e3cd1f6f4e311766db92a5a9930d7e9c58cd4ae0e99955b6eda2a001d4b",
+      "compressed_sha256": "27192183d5b8fe782c77a918d8b8f0309d584a70e8f4133449150dffbb3211f7",
+      "uncompressed_bytes": 353581385,
+      "compressed_bytes": 6525562,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1294594-1791858552771665584-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1294594-1791858552771665584-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "958a4d6f9b09076775b4c466184f0acb55ca842aed4f192c61643151539e57e6",
+      "compressed_sha256": "7191774b3da8434005cd91f6df7773ee32108b449ef5c1767105767e56e2df5f",
+      "uncompressed_bytes": 356965352,
+      "compressed_bytes": 10055101,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3255393-1791996344761547336-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3255393-1791996344761547336-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "2328ddda47e00ffe3233d32546204f120e20f9a4906b5a07268ea23c7ad14057",
+      "compressed_sha256": "d3c24565cd90678258b0e23ae8e91d75f8201e0332a0ac8b66f861f5471c896f",
+      "uncompressed_bytes": 365265192,
+      "compressed_bytes": 9188813,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-99094-1791959903972993413-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-99094-1791959903972993413-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "0f5ca824a0284f2c3eced42cd52c6e675a04713e9d286bc0af6323a24defaa51",
+      "compressed_sha256": "9058b03e15a2ba4761926409800e1ab6e3feed913b37b6d8502243a16652e1b4",
+      "uncompressed_bytes": 365459103,
+      "compressed_bytes": 11982982,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-1042007-1791854996398773305-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-1042007-1791854996398773305-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "2f5166710bf8dfc20bf1fe3162fed18b682d9852f6e03e05a3de3f0bf5fc9f1b",
+      "compressed_sha256": "561c0603c7adc73eed9f5638ec289da5de7306f9dd87238a0ce7cb01869f0e42",
+      "uncompressed_bytes": 371696976,
+      "compressed_bytes": 8837689,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-2663973-1791989637987705980-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-2663973-1791989637987705980-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "6ec8a1ecb8710a5ac1832894b061fd74fcb4db67e0e7633af450704974fb6a3e",
+      "compressed_sha256": "cc8778fd3cd22fff3e054eb8a7c68c1f8263d9e0c34e1c60e0219f20d7ad2d77",
+      "uncompressed_bytes": 378846310,
+      "compressed_bytes": 9951731,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    },
+    {
+      "original_path": "/tmp/itgmania-harness-rs/song-lua-3558686-1791999557318188710-0/Save/itgmania-harness/song-lua-trace.json",
+      "compressed_path": "/tmp/itgmania-harness-rs/song-lua-3558686-1791999557318188710-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "uncompressed_sha256": "4009c8f1e9b43ef1f1112ad5683120d50911cfc0d9467f87d526447c17cc8907",
+      "compressed_sha256": "264f604625597ea104bd357ffa176921f8223b552b35abab9fb5892c8cfc3d6e",
+      "uncompressed_bytes": 385930683,
+      "compressed_bytes": 10287322,
+      "decompressed_bytes_verified_before_raw_unlink": true
+    }
+  ],
+  "bytes_reclaimed": 28699460937,
+  "preserved_preferences_and_source_files": true,
+  "active_captures_skipped": true,
+  "free_bytes": 30378496000,
+  "status": "complete"
+}
