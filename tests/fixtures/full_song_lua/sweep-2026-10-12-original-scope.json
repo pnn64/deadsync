@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T10:42:00Z",
+  "updated_utc": "2026-10-14T11:10:55Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 253,
-    "pending": 85,
-    "unprocessed": 163
+    "passed": 257,
+    "pending": 82,
+    "unprocessed": 162
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1581,9 +1581,9 @@
       "position": 177,
       "source_simfile": "Doubles-45-HALF-[MASTER] Tacos/Tacos.ssc",
       "simfile_sha256": "6541bffd7e03ac02cb8cc92e4f14af7b44843572063f07609813c13bd0ba8b52",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-tacos-double-repair.json"
     },
     {
       "position": 178,
@@ -2723,9 +2723,9 @@
       "position": 321,
       "source_simfile": "My Exes Bestfriend/ExBestFriend.ssc",
       "simfile_sha256": "0ce6cbf0793e2bb4c8dae2f6281fbc9bdb8427dca167be28daa77280db804f10",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-14-my-exes-ssc-tweens-repair.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-14-my-exes-row-beats-final-repair.json"
     },
     {
       "position": 322,
@@ -2877,7 +2877,9 @@
       "position": 342,
       "source_simfile": "Pale/Pale.sm",
       "simfile_sha256": "39427e652325088ac74a2428c1a48d0568718be22ce1fa62f33f160c8189b304",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 343,
@@ -2929,9 +2931,9 @@
       "position": 350,
       "source_simfile": "Paradise/Paradise.ssc",
       "simfile_sha256": "1b7370ebc6a69a753e628b6f1d893ba3d58e58cfae3b9ad84c12bfcb24175368",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-paradise-ssc-children-repair.json"
     },
     {
       "position": 351,
