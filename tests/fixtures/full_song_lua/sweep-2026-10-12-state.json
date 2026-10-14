@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T21:53:43Z",
-  "previous_goal_turn": "Progress: Shivers SSC first repair passes all 8,392 frames; Spooky SX 14, Up Up Up Up SM, Shine SSC and Waiting SSC original captures pass 128,284, 139,034, 114,978 and 56,745 frames. All five saved fixtures have zero callback errors and mismatches, committed and local uncompressed bytes verified, charts closed. Original partition v5-7 complete. Native video-driver preference fix ae3f7aa26 committed. Missing known preference regression reproduced on Linux baseline, then target control, all 66 live controls, all 32 replay controls, identity control and both executable builds pass on Windows and Linux. All 1,175 raw source pins and cross-platform normalized pins verified; tested immutable helper 3798f99e selected from turn-a-preferences-v2 source root without mutating active source roots or user views. Turn A retained native result associated with original archived trace; actual pre-launch Preferences.ini provides OpenGL independently of expected queries. Revised candidate preserves every original member including trace and simfile, adds retained neutral configuration. Entry diagnostic 2,292 of 69,833 frames has zero errors and mismatches; explicitly diagnostic and cannot accept archive; missing coverage separate. First full Turn A repair launched as supervisor 741527 in the completed v5-7 original partition slot, available memory 36,598,100 KiB, exactly one later full repair maximum. Shivers SM first, Koi final, Mawaru8 first, capture-selection and listener chains remain active. Actual Pokemon replay failure diagnosed: background absent in native scene 1, UpperLeft owner present after reload, source counter initialized in foreground/savefile logic; no repair spent. Dongo Bongo 2 has retained capture and killed replay exit -9 before a report. Seven original queues remain live. Publisher 56856 has 117 streams. All 501 original simfile hashes unchanged, RUNWAY separate; passing charts closed, missing coverage separate, acceptance comparisons unchanged, oversized files ignored/local, sweep active and incomplete.",
+  "updated_utc": "2026-10-14T21:54:53Z",
+  "previous_goal_turn": "Progress: Shivers SSC and SM first repairs pass all 8,392 and 8,501 frames; Spooky SX 14, Up Up Up Up SM, Shine SSC and Waiting SSC original captures pass 128,284, 139,034, 114,978 and 56,745 frames. All six saved fixtures have zero callback errors and mismatches, committed and local uncompressed bytes verified, charts closed. Original partition v5-7 complete. Native video-driver preference fix ae3f7aa26 committed. Missing known preference regression reproduced on Linux baseline, then target control, all 66 live controls, all 32 replay controls, identity control and both executable builds pass on Windows and Linux. All 1,175 raw source pins and cross-platform normalized pins verified; tested immutable helper 3798f99e selected from turn-a-preferences-v2 source root without mutating active source roots or user views. Turn A retained native result associated with original archived trace; actual pre-launch Preferences.ini provides OpenGL independently of expected queries. Revised candidate preserves every original member including trace and simfile, adds retained neutral configuration. Entry diagnostic 2,292 of 69,833 frames has zero errors and mismatches; explicitly diagnostic and cannot accept archive; missing coverage separate. First full Turn A repair launched as supervisor 741527 in the completed v5-7 original partition slot, available memory 36,598,100 KiB, exactly one later full repair maximum. Both Shivers variants closed; capture-selection first repairs now active, then listener chain; Koi final and Mawaru8 first remain active. Actual Pokemon replay failure diagnosed: background absent in native scene 1, UpperLeft owner present after reload, source counter initialized in foreground/savefile logic; no repair spent. Dongo Bongo 2 has retained capture and killed replay exit -9 before a report. Seven original queues remain live. Publisher 56856 has 117 streams. All 501 original simfile hashes unchanged, RUNWAY separate; passing charts closed, missing coverage separate, acceptance comparisons unchanged, oversized files ignored/local, sweep active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "16cffb22c727f71c75a9bbcd4c8c781df104161d",
+      "deadsync": "7748b3d072e41555072565313578ecf09a74e02f",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -150,9 +150,9 @@
       "pending": 62,
       "processed": 99,
       "last_log_lines": [
-        "[1066.4s] replaying every native gameplay frame: frame 41794/68814 (60.7%)",
-        "[1068.4s] replaying every native gameplay frame: frame 41867/68814 (60.8%)",
-        "[1070.4s] replaying every native gameplay frame: frame 41945/68814 (61.0%)"
+        "[1136.4s] replaying every native gameplay frame: frame 44280/68814 (64.3%)",
+        "[1138.4s] replaying every native gameplay frame: frame 44347/68814 (64.4%)",
+        "[1140.4s] replaying every native gameplay frame: frame 44416/68814 (64.5%)"
       ],
       "supervisor_running": true
     },
@@ -1854,9 +1854,9 @@
         "pending": 62,
         "processed": 99,
         "last_log_lines": [
-          "[1066.4s] replaying every native gameplay frame: frame 41794/68814 (60.7%)",
-          "[1068.4s] replaying every native gameplay frame: frame 41867/68814 (60.8%)",
-          "[1070.4s] replaying every native gameplay frame: frame 41945/68814 (61.0%)"
+          "[1136.4s] replaying every native gameplay frame: frame 44280/68814 (64.3%)",
+          "[1138.4s] replaying every native gameplay frame: frame 44347/68814 (64.4%)",
+          "[1140.4s] replaying every native gameplay frame: frame 44416/68814 (64.5%)"
         ],
         "supervisor_running": true
       },
@@ -1895,7 +1895,7 @@
           "passed": 0,
           "pending": 0,
           "processed": 0,
-          "last_phase": "capture",
+          "last_phase": "replay",
           "source_simfile": "spooky (SM 12)/spooky (Tech-Stam cut).ssc",
           "child_running": true,
           "position": 410
@@ -3251,7 +3251,8 @@
       "entry_diagnostic": "tests/fixtures/full_song_lua/sweep-2026-10-14-turn-a-preference-entry-diagnostic.json",
       "first_full_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-turn-a-preference-first-repair-launch.json"
     },
-    "pokemon_background_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-pokemon-background-reload-diagnosis.json"
+    "pokemon_background_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-pokemon-background-reload-diagnosis.json",
+    "shivers_sm_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-shivers-sm-fixture-verification.json"
   },
   "counts_at_checkpoint": {
     "new_passed_fixtures": 185,
