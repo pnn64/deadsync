@@ -4176,17 +4176,14 @@
       ]
     },
     {
-      "title": "Episode 09",
+      "title": "Episode 09 Paradise",
       "source_simfile": "Paradise/Paradise.sm",
-      "harness_version": "0.1.0",
-      "archive": "23c86a31465111cd8d16560ef36b3158389b7963624f47e46486dfebc6525244.tar.zst",
-      "sha256": "23c86a31465111cd8d16560ef36b3158389b7963624f47e46486dfebc6525244",
-      "compressed_bytes": 1747059,
-      "uncompressed_sha256": "c0e56aa08a61421ebed4346138a20808fad0dedbb0b6492f71f71fd58fca560b",
-      "compression_level": 22,
-      "aliases": [
-        "35926e4cc9f57192cb5112af0a3f520226e8c4268f696ca591cffd9c6b79a466.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "77f0ebd903c9c46fd7d1fd69f8fd30c963b84100a1374dca3efa5c7149566a2f.tar.zst",
+      "sha256": "77f0ebd903c9c46fd7d1fd69f8fd30c963b84100a1374dca3efa5c7149566a2f",
+      "compressed_bytes": 15407890,
+      "uncompressed_sha256": "da9205c23d10d4ed10d61cba43237c1f8357b4d590f241481ddb6a3bad9681a2",
+      "aliases": []
     },
     {
       "title": "Episode 09 Paradise",
