@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T07:06:25Z",
+  "updated_utc": "2026-10-14T07:40:38Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 243,
-    "pending": 85,
-    "unprocessed": 173
+    "passed": 246,
+    "pending": 84,
+    "unprocessed": 171
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2701,7 +2701,9 @@
       "position": 318,
       "source_simfile": "Molly/Molly.sm",
       "simfile_sha256": "4dc406d21ee14d3025c2a827936b9c688dc9ff25d7208259b9fc3f7f4d8b7c08",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 319,
@@ -2893,9 +2895,9 @@
       "position": 347,
       "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.sm",
       "simfile_sha256": "e01810132a83e902b1bae013cf2df744957e13cddbdec65e63898b55dabde7a8",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-paradise-children-repair.json"
     },
     {
       "position": 348,
@@ -3013,7 +3015,9 @@
       "position": 365,
       "source_simfile": "Rapture/Rapture cut-fakemines.ssc",
       "simfile_sha256": "2b0433f5169a5a90b4febb71cfcb8f5748ac857e1e06b0a4632915de5a54cb37",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 366,

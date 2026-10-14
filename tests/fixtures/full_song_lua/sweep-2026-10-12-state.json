@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T07:06:26Z",
-  "previous_goal_turn": "Inspected current worktree and actual live process argv. Resumed stopped singleton publisher and Windows validation, preserving interrupted and linker-failed logs. Five additional full passes are saved, separately committed and decompressed byte verified: Picture in My Mind, PO, Downfall, Max 300 and Mawaru4. Mawaru4 passes 119826 frames and 2079 fields after its first repair. Source fix 7960c8a1e restores native gameplay screen child ownership, duplicate-name grouping, identity and native stable traversal; all eight Linux checks pass including 57 live and 27 native controls and both executable builds. First Paradise full repair is running from the retained uncompressed capture with one repair left afterwards; no pass is claimed yet. Windows validation continues with incremental compilation disabled after an interrupted-cache linker failure. Mawaru5 first repair finished all 162894 frames with 770 source-path-only differences and no errors; local native parser sources identify matched directory-entry spelling as the cause, with one full repair left. Koi SM is pending at its two-repair cap, retaining concrete subscriber identity, failed-state and command differences. Original sweep workers remain live. Accepted passes remain closed, comparisons unchanged, missing coverage separate. All 501 original simfiles remain byte unchanged; full scope is incomplete.",
+  "updated_utc": "2026-10-14T07:40:39Z",
+  "previous_goal_turn": "Previous turn was progress: five saved fixture passes, source fix and first Paradise repair launch. Current turn completed native screen child validation on Windows and Linux, with all eight checks on each host passing. Paradise SM first repair passes all 64119 frames and 1892 fields with zero differences or errors; saved in 439660cbe and locally byte verified, with missing coverage retained separately. Rapture and Molly also pass and are saved, committed and byte verified; Molly replays 150215 frames and 3608 fields. Source fix 1a142e6e7 makes matched BG/FG filenames retain filesystem spelling as native SMLoader does, and invalidates cached old metadata with cache version 67. Unchanged focused parser control fails before and passes after; 256 Linux and 255 Windows simfile tests pass, 57 Linux live and 27 native replay controls pass, both full replay executables build, and all 34 source pins and unchanged harness pins are verified. Mawaru5 final repair 2 is running from its byte-identical retained capture; it has no repair left afterwards. Paradise SSC first repair 1 is running from its retained capture after identifying the same five cyclic startup differences and byte-identical Lua script as the closed SM pass. It retains one repair after this attempt. Immutable selected helper is 1d1cab219618a1d98d02e54498de7297f6f533cd9347db517e629a49b4b12638. Original sweep workers and singleton publisher remain live and advance to the next chart. Capped charts remain pending without retries. No passing chart is reopened and no acceptance comparison or gate is added. All 501 original simfiles remain byte unchanged; full scope is incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "b3afb523731ff5e04b93a2a3ed80095a399d1005",
+      "deadsync": "e724ef0d6177fae9ae3123fe3b3147f2a5b7e61b",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -66,7 +66,8 @@
     "startup_provenance": "34e1a7ba8 passed Windows 34/21 controls and fresh Linux 815/34/21 checks; 22 source pins, host-local build mtimes, helper 7f64d791 selected; GREAT final 2 is pending at its cap with one identity path difference; sweep-2026-10-12-startup-provenance-build.json",
     "density_graph_and_lifecycle": "d851d0c3b passed Windows 38/21 controls and both builds, and fresh Linux 815/38/21 plus both builds against 23 frozen pins. Helper 66d32bf5 selected; freg first repair is pending on two Off clocks, with queue and count failures resolved. sweep-2026-10-13-density-graph-build.json",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved",
-    "native_screen_child_inventory": "7960c8a1e: eight Linux checks pass, 57 live/27 native controls, both builds; retained 34-source immutable helper 400675cce091d55ed711664a1834ce613b219496a7cee832a12b30e8f41756ff; Windows rebuild pending; first Paradise full repair running."
+    "native_screen_child_inventory": "7960c8a1e: eight Windows and Linux checks pass, 57 live/27 native controls and both builds; retained 34-source immutable helper; complete Paradise SM repair passes 64119 frames and 1892 fields, saved and byte verified. SSC first repair running, missing coverage separate.",
+    "native_matched_filename_spelling": "1a142e6e7: unchanged meaningful parser red/green, 256 Linux and 255 Windows simfile tests, 57 live/27 native Linux controls and both builds; cache version 67; helper 1d1cab219618a1d98d02e54498de7297f6f533cd9347db517e629a49b4b12638 verified against all 34 source pins; Mawaru5 final full repair 2 running with original capture."
   },
   "corpus_transfer": {
     "tar_sha256": "37febe98e2e47b325b9f9b96f4d29ddf32eedda84514191252d043c5fd4a4d1a",
@@ -120,18 +121,18 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Rapture/Rapture cut-fakemines.ssc",
-      "position": 365,
+      "current": "Rayc Fire 2 (SM5)/Rayc Fire 2.sm",
+      "position": 368,
       "phase": "replay",
-      "pid": 190360,
+      "pid": 289697,
       "process_matches": true,
-      "passed": 27,
+      "passed": 28,
       "pending": 57,
-      "processed": 84,
+      "processed": 85,
       "last_log_lines": [
-        "[18.0s] replaying every native gameplay frame: frame 718/37718 (1.9%)",
-        "[20.0s] replaying every native gameplay frame: frame 858/37718 (2.3%)",
-        "[22.0s] replaying every native gameplay frame: frame 999/37718 (2.6%)"
+        "[986.3s] replaying every native gameplay frame: frame 7655/69301 (11.0%)",
+        "[988.3s] replaying every native gameplay frame: frame 7667/69301 (11.1%)",
+        "[990.3s] replaying every native gameplay frame: frame 7682/69301 (11.1%)"
       ],
       "supervisor_running": true
     },
@@ -1488,33 +1489,69 @@
         "record": "sweep-2026-10-14-paradise-children-repair.json",
         "fix_commit": "7960c8a1eb9f06e1626d636229daede097ab6b5c",
         "finish_status": "bounded first observed failure repair complete"
+      },
+      {
+        "name": "mawaru5-filename-final-repair",
+        "remote": "/home/parity/jobs/mawaru5-filename-final-repair-v1",
+        "record": "sweep-2026-10-14-mawaru5-filename-final-repair.json",
+        "fix_commit": "1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf",
+        "finish_status": "bounded final observed failure repair complete"
+      },
+      {
+        "name": "paradise-ssc-children-repair",
+        "remote": "/home/parity/jobs/paradise-ssc-children-repair-v1",
+        "record": "sweep-2026-10-14-paradise-ssc-children-repair.json",
+        "fix_commit": "7960c8a1eb9f06e1626d636229daede097ab6b5c + 1a142e6e7",
+        "finish_status": "bounded first observed failure repair complete"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
     "get_into_it_sm_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-get-into-it-sm-fixture-verification.json",
     "other_jobs_live_observation": [
       {
-        "job": "paradise-children-repair-v1",
+        "job": "paradise-ssc-children-repair-v1",
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
         "pending": 0,
         "processed": 0,
         "last_phase": "replay",
-        "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.sm",
+        "source_simfile": "Paradise/Paradise.ssc",
         "child_running": true
+      },
+      {
+        "job": "mawaru5-filename-final-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "mawaru5/mawaru5.sm",
+        "child_running": true
+      },
+      {
+        "job": "paradise-children-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
+        "pending": 0,
+        "processed": 1,
+        "last_phase": "pack",
+        "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.sm",
+        "child_running": false
       },
       {
         "job": "chart-sweep-parallel-v4-1",
         "complete": false,
         "supervisor_running": true,
-        "passed": 21,
+        "passed": 22,
         "pending": 29,
-        "processed": 50,
+        "processed": 51,
         "last_phase": "replay",
-        "source_simfile": "Molly/Molly.sm",
+        "source_simfile": "My Exes Bestfriend/ExBestFriend.ssc",
         "child_running": true,
-        "position": 318
+        "position": 321
       },
       {
         "job": "chart-sweep-parallel-v4-2",
@@ -1535,14 +1572,21 @@
     "mawaru5_filename_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-mawaru5-filename-diagnosis.json",
     "mawaru4_background_cache_completion": "tests/fixtures/full_song_lua/sweep-2026-10-14-mawaru4-background-cache-repair.json",
     "mawaru5_background_cache_completion": "tests/fixtures/full_song_lua/sweep-2026-10-14-mawaru5-background-cache-repair.json",
-    "koi_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-koi-sm-judgment-final-repair.json"
+    "koi_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-koi-sm-judgment-final-repair.json",
+    "paradise_children_completed_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-paradise-children-build.json",
+    "paradise_sm_children_completion": "tests/fixtures/full_song_lua/sweep-2026-10-14-paradise-children-repair.json",
+    "paradise_rapture_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-paradise-rapture-fixture-verification.json",
+    "mawaru5_filename_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-mawaru5-filename-build.json",
+    "mawaru5_filename_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-mawaru5-filename-final-launch.json",
+    "paradise_ssc_children_first_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-paradise-ssc-children-launch.json",
+    "molly_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-molly-fixture-verification.json"
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 96,
-    "new_pending_charts": 84,
-    "new_processed_sources": 180,
+    "new_passed_fixtures": 99,
+    "new_pending_charts": 83,
+    "new_processed_sources": 182,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 173,
+    "unprocessed_sources": 171,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -2165,64 +2209,6 @@
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
-    },
-    {
-      "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.sm",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 5,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "external-0037",
-            "args": [
-              false
-            ],
-            "beat": 0.0008530388004146516,
-            "caller": {
-              "line": 185,
-              "source": "song:/lua/default.lua",
-              "tail_call": false
-            },
-            "command": "OnCommand",
-            "definition_id": "def-0014",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 185,
-            "operation": "Actor.visible",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 0.45541951060295105,
-            "seq": 47,
-            "source": "song:/lua/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "query",
-            "operation": "ActorFrame.GetChild",
-            "source": "song:/lua/default.lua",
-            "line": 185,
-            "phase": "callback",
-            "beat": 0.0008530388004146516,
-            "seconds": 0.45541951060295105,
-            "args": [
-              "P1Score"
-            ],
-            "results": [
-              {
-                "actor": 4,
-                "name": "P1Score",
-                "path": "ScreenGameplay/Underlay/P1Score"
-              }
-            ]
-          }
-        }
-      ]
     },
     {
       "source_simfile": "Paradise/Paradise.ssc",
