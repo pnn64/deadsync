@@ -1545,6 +1545,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 417,
+      "source_simfile": "Step Your Game Up (Director's Cut)/stepyourgameup.ssc",
+      "simfile_sha256": "0a3d5f8740b9a803178783ad771478123c20159d33e697440d971c46c1f7aab7",
+      "retained_original_archive": "22387511d228b48e2eef93341c05345792b730497e88f5e68fb90885648ec217.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e1d9c9995fcf756f86445761fe965767a848dd24",
+      "build_proof": "/home/parity/jobs/next-screen-target-linux-green-v1/proof.json",
+      "capture_seconds": 178.26028406698606,
+      "trace_sha256": "07aa53fe1093bddd3b4cbb076e9240bad7d9e944f5cb8575ec6d5b1dea33bf2e",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-6/chart-417/candidates/421b056de3cffe73890513b11d6454ccb19beca50ab3463b13e8ed18719251d8.tar",
+      "replay_exit": 0,
+      "replay_seconds": 7083.307717746997,
+      "candidate_sha256": "421b056de3cffe73890513b11d6454ccb19beca50ab3463b13e8ed18719251d8",
+      "native_frames": 89897,
+      "replayed_frames": 89897,
+      "compared_stage_fields": 1760,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.accelerate, Actor.cropbottom, Actor.cropleft, Actor.cropright, Actor.croptop, Actor.diffuseshift, Actor.effectcolor1, Actor.effectcolor2, Actor.rotationx, Actor.rotationy, Actor.xy, Actor.z, Actor.zoomy, ActorFrame.fov, PlayerOptions.Beat, PlayerOptions.ConfusionYOffset, PlayerOptions.Dark, PlayerOptions.Stealth, PlayerOptions.StealthPastReceptors, Sprite.customtexturerect, Sprite.texcoordvelocity",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "4cc0f469d2621496a3f91f52830f0606eb1f04d51d0936083077faba30efdf48",
+      "archive": "e92ffe7f0f5e097b101b0f6b548d7901f59b8cd4087a05513d8d10a33361e5e9.tar.zst",
+      "archive_sha256": "e92ffe7f0f5e097b101b0f6b548d7901f59b8cd4087a05513d8d10a33361e5e9",
+      "compressed_bytes": 10660319,
+      "pack_seconds": 8.98866656300379,
+      "harness_version": "0.1.80",
+      "title": "Step Your Game Up (Director's Cut) [Tier 5]",
+      "retained_original_entry": {
+        "title": "Step Your Game Up",
+        "source_simfile": "Step Your Game Up (Director's Cut)/stepyourgameup.ssc",
+        "harness_version": "0.1.0",
+        "archive": "22387511d228b48e2eef93341c05345792b730497e88f5e68fb90885648ec217.tar.zst",
+        "sha256": "22387511d228b48e2eef93341c05345792b730497e88f5e68fb90885648ec217",
+        "compressed_bytes": 3197428,
+        "uncompressed_sha256": "d09135f5eebcd747ddb9dfe83a0f03d59413a6cedebb1b0a9f54da975f6c06b7",
+        "compression_level": 22,
+        "aliases": [
+          "029586416bbc84524bd08dd4a0b6e78fcf3bad3cf9625c438a602c4462ba1bd1.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -1553,9 +1604,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "745eee7daaa9bd844dd8092d43d02e25b6b5e05a2a8967cca909eba5a2e487b7",
+  "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 5,
+  "passed_fixtures": 6,
   "pending_charts": 3,
-  "processed_charts": 8
+  "processed_charts": 9
 }

@@ -4928,17 +4928,14 @@
       ]
     },
     {
-      "title": "Step Your Game Up",
+      "title": "Step Your Game Up (Director's Cut) [Tier 5]",
       "source_simfile": "Step Your Game Up (Director's Cut)/stepyourgameup.ssc",
-      "harness_version": "0.1.0",
-      "archive": "22387511d228b48e2eef93341c05345792b730497e88f5e68fb90885648ec217.tar.zst",
-      "sha256": "22387511d228b48e2eef93341c05345792b730497e88f5e68fb90885648ec217",
-      "compressed_bytes": 3197428,
-      "uncompressed_sha256": "d09135f5eebcd747ddb9dfe83a0f03d59413a6cedebb1b0a9f54da975f6c06b7",
-      "compression_level": 22,
-      "aliases": [
-        "029586416bbc84524bd08dd4a0b6e78fcf3bad3cf9625c438a602c4462ba1bd1.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "e92ffe7f0f5e097b101b0f6b548d7901f59b8cd4087a05513d8d10a33361e5e9.tar.zst",
+      "sha256": "e92ffe7f0f5e097b101b0f6b548d7901f59b8cd4087a05513d8d10a33361e5e9",
+      "compressed_bytes": 10660319,
+      "uncompressed_sha256": "421b056de3cffe73890513b11d6454ccb19beca50ab3463b13e8ed18719251d8",
+      "aliases": []
     },
     {
       "title": "Stepping Music ~Clapping Music arranged for two pad players~",
