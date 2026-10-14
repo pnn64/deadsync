@@ -1,0 +1,28 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "acceptance_gate_added": false,
+  "results": [
+    {
+      "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.sm",
+      "native_frames": 79549,
+      "replayed_frames": 79549,
+      "archive": "31194578b9a774cdd57f53f7f2d0a53260b0a628f83f23db6a2db4a4ee2a5279.tar.zst",
+      "compressed_sha256": "31194578b9a774cdd57f53f7f2d0a53260b0a628f83f23db6a2db4a4ee2a5279",
+      "uncompressed_sha256": "98d69cfa880d38ae82657ab3e86000828b7df249a10a89300d30fabc29a92752",
+      "compressed_bytes": 23334391,
+      "local_decompression_byte_verified": true,
+      "passing_chart_reopened": false
+    },
+    {
+      "source_simfile": "Longinus - [Zaia]/Longinus.sm",
+      "native_frames": 177342,
+      "replayed_frames": 177342,
+      "archive": "224ca750687b7b3f3c4b379c3622edadee87ba11bc7bac1ab138e6b63f03db75.tar.zst",
+      "compressed_sha256": "224ca750687b7b3f3c4b379c3622edadee87ba11bc7bac1ab138e6b63f03db75",
+      "uncompressed_sha256": "abe6d301ae65dbf4d720012c50e20255fa278137fc6dd923da774feba9777c77",
+      "compressed_bytes": 12816603,
+      "local_decompression_byte_verified": true,
+      "passing_chart_reopened": false
+    }
+  ]
+}
