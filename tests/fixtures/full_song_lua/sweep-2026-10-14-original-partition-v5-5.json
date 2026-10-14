@@ -413,6 +413,21 @@
       "replay_seconds": 17217.964996602008,
       "candidate_sha256": "3915e33e35d9673760c8cc9dfc88495631aaa4cf5e0886cdd03309b6f4ba762b",
       "failure": "Expecting value: line 1 column 1 (char 0)"
+    },
+    {
+      "position": 424,
+      "source_simfile": "Talk About/talkabout.sm",
+      "simfile_sha256": "3f1bd2e358d9712250fa99601b6101386464a5ea59a62c754aa7286fa27bb1b4",
+      "retained_original_archive": "780974ec4621b1223f8af891d098be559b60904c7d03fede92d2138c76e8a1fd.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+      "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 154.3108463230019,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania wrote invalid runtime JSON to /tmp/itgmania-harness-rs/song-lua-861840-1792016033629593579-0/Save/itgmania-harness/song-lua-trace.json: EOF while parsing a value at line 1 column 116531200; retained run directory /tmp/itgmania-harness-rs/song-lua-861840-1792016033629593579-0\n"
     }
   ],
   "scope": {
@@ -421,9 +436,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "745eee7daaa9bd844dd8092d43d02e25b6b5e05a2a8967cca909eba5a2e487b7",
+  "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 7,
-  "pending_charts": 2,
-  "processed_charts": 9
+  "pending_charts": 3,
+  "processed_charts": 10
 }
