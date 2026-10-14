@@ -4997,17 +4997,14 @@
       ]
     },
     {
-      "title": "Stepping Music",
+      "title": "Stepping Music ~Clapping Music arranged for two pad players~",
       "source_simfile": "Stepping Music/simfile.ssc",
-      "harness_version": "0.1.0",
-      "archive": "bd3590158d0ac0d81ca614d6f89f05847f11fbedd8905ac513abea999652425a.tar.zst",
-      "sha256": "bd3590158d0ac0d81ca614d6f89f05847f11fbedd8905ac513abea999652425a",
-      "compressed_bytes": 42333,
-      "uncompressed_sha256": "390c89455628310a5e8acbf7fe3076b2f5d3add702bcf183ed43fdbf2fc2ea78",
-      "compression_level": 22,
-      "aliases": [
-        "3cc240fc110f2670d643d00d489c1fef2e3d0332ce85b974c6dda430713b59bd.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "2e1f186f45b34cf844d6fab09b484684fd2e32cb7c806655896e37970a85d2a3.tar.zst",
+      "sha256": "2e1f186f45b34cf844d6fab09b484684fd2e32cb7c806655896e37970a85d2a3",
+      "compressed_bytes": 2721963,
+      "uncompressed_sha256": "3b5109cba87a715d6fb5c540288cb9389eb5d1df555fe8bf707a41bcd21df687",
+      "aliases": []
     },
     {
       "title": "STEVE VERY HARD",

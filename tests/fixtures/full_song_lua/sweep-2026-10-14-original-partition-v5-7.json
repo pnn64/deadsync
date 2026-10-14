@@ -805,6 +805,56 @@
       "capture_exit": 1,
       "capture_seconds": 1.6535030129889492,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania probe script reported: no StepsType_Dance_Single chart matched difficulty Challenge; retained run directory /tmp/itgmania-harness-rs/song-lua-2941014-1791992890221485388-0\n"
+    },
+    {
+      "position": 418,
+      "source_simfile": "Stepping Music/simfile.ssc",
+      "simfile_sha256": "10012ad27ef9d7d1f1011b4ea0ee35c2a2aa082a36cbd57578a5f32605db804d",
+      "retained_original_archive": "bd3590158d0ac0d81ca614d6f89f05847f11fbedd8905ac513abea999652425a.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "dde531bd61c48d752748b8343e61715839944afdde5c5c7b028bb9308de85a15",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "94e70049b59e83b86566a9adb5fd18f8835c65cb + 7fae1f026237ee5431a1a2b3e907f4270715556a + 1ed84cd471a8eeb8511474ca8881aa1516acbf96 + 254c36811 + e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/player-stats-identity-linux-green-v1/proof.json",
+      "capture_seconds": 167.656872794003,
+      "trace_sha256": "090cd331b850088ba12b02ed25dee00547f29ef49219fb9458f29acbfcc89fe0",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-7/chart-418/candidates/3b5109cba87a715d6fb5c540288cb9389eb5d1df555fe8bf707a41bcd21df687.tar",
+      "replay_exit": 0,
+      "replay_seconds": 2082.978887829988,
+      "candidate_sha256": "3b5109cba87a715d6fb5c540288cb9389eb5d1df555fe8bf707a41bcd21df687",
+      "native_frames": 116925,
+      "replayed_frames": 116925,
+      "compared_stage_fields": 1815,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetEnabledPlayers, ScreenManager.SystemMessage"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "c8bf5db8dc72c1ae1f06269bc923e1fca018973e0f1c0feec1bbf06abb4949f2",
+      "archive": "2e1f186f45b34cf844d6fab09b484684fd2e32cb7c806655896e37970a85d2a3.tar.zst",
+      "archive_sha256": "2e1f186f45b34cf844d6fab09b484684fd2e32cb7c806655896e37970a85d2a3",
+      "compressed_bytes": 2721963,
+      "pack_seconds": 2.236432084988337,
+      "harness_version": "0.1.80",
+      "title": "Stepping Music ~Clapping Music arranged for two pad players~",
+      "retained_original_entry": {
+        "title": "Stepping Music",
+        "source_simfile": "Stepping Music/simfile.ssc",
+        "harness_version": "0.1.0",
+        "archive": "bd3590158d0ac0d81ca614d6f89f05847f11fbedd8905ac513abea999652425a.tar.zst",
+        "sha256": "bd3590158d0ac0d81ca614d6f89f05847f11fbedd8905ac513abea999652425a",
+        "compressed_bytes": 42333,
+        "uncompressed_sha256": "390c89455628310a5e8acbf7fe3076b2f5d3add702bcf183ed43fdbf2fc2ea78",
+        "compression_level": 22,
+        "aliases": [
+          "3cc240fc110f2670d643d00d489c1fef2e3d0332ce85b974c6dda430713b59bd.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -815,7 +865,7 @@
   },
   "binary_sha256": "dde531bd61c48d752748b8343e61715839944afdde5c5c7b028bb9308de85a15",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 3,
+  "passed_fixtures": 4,
   "pending_charts": 5,
-  "processed_charts": 8
+  "processed_charts": 9
 }
