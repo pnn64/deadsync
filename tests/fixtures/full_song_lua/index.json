@@ -4023,17 +4023,14 @@
       "aliases": []
     },
     {
-      "title": "Oshama Scramble!",
+      "title": "Oshama Scramble! (Cranky Remix)",
       "source_simfile": "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc",
-      "harness_version": "0.1.0",
-      "archive": "1048d7c8760b6944303f6c3b938563dadcf614e3d7a6e1fd979bf83bba01584b.tar.zst",
-      "sha256": "1048d7c8760b6944303f6c3b938563dadcf614e3d7a6e1fd979bf83bba01584b",
-      "compressed_bytes": 2432826,
-      "uncompressed_sha256": "2b6a8cf321c2677ab519c8d502742e3d1959b53e595386139467b0db8908abaa",
-      "compression_level": 22,
-      "aliases": [
-        "85aa883a5bb3c6799e78f7fe6cfd916740447c03e996ac0cd4a2cdea2b7ad124.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "d441d4c287d27fbb6967b69910a192dcec820d04a41bda5d91b5964f73d76c90.tar.zst",
+      "sha256": "d441d4c287d27fbb6967b69910a192dcec820d04a41bda5d91b5964f73d76c90",
+      "compressed_bytes": 11254235,
+      "uncompressed_sha256": "dec1a3902949424ad5c8447d4b2e48fe29f77f60378526c7e2387f0944b3ca9b",
+      "aliases": []
     },
     {
       "title": "Other Guy",
