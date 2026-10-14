@@ -1,0 +1,11 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.ssc",
+  "archive": "b9cc9c15f2e22c16e779cdb78d432c9017b7a8e3c7c801bd9ef70e479b0dcc8b.tar.zst",
+  "compressed_sha256": "b9cc9c15f2e22c16e779cdb78d432c9017b7a8e3c7c801bd9ef70e479b0dcc8b",
+  "uncompressed_sha256": "078122148caffc8c5de1b574841c10689cd8448e6fdd774085920c87b396253b",
+  "compressed_bytes": 63445994,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T11:10:55Z",
+  "updated_utc": "2026-10-14T11:42:33Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 257,
-    "pending": 82,
-    "unprocessed": 162
+    "passed": 264,
+    "pending": 76,
+    "unprocessed": 161
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2022,8 +2022,8 @@
       "source_simfile": "I Really Like You [dbk2]/I Really Like You.sm",
       "simfile_sha256": "4a47bd207f8c9a72cc73dfd5ab263dd151cb26c3ed1ee713c772aa965f1f249f",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-really-like-empty-layers-repair.json"
     },
     {
       "position": 233,
@@ -2069,9 +2069,9 @@
       "position": 238,
       "source_simfile": "If You Crump Stand Up/crump.sm",
       "simfile_sha256": "f4a05dc2796ca3b02322b3e889af3f6ad5e4db2f18435a63941e65c33119f3eb",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-crump-quirks-off-repair.json"
     },
     {
       "position": 239,
@@ -2358,16 +2358,16 @@
       "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
       "simfile_sha256": "ddcc948b1b0fb8f936faf2cc1c8e3556149e9305db7d8eaaf7347724aeb3aeea",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-door-cringle-sm-screen-tree-repair.json"
     },
     {
       "position": 275,
       "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.ssc",
       "simfile_sha256": "7ca43e1f96be94fe1fb6fd4a7f06c310516d39c959fb0725b853d29bed1150ac",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-door-cringle-ssc-screen-tree-repair.json"
     },
     {
       "position": 276,
@@ -2381,9 +2381,9 @@
       "position": 277,
       "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.ssc",
       "simfile_sha256": "e008bc1e32614bb02ae854f73c994f3d0a8043797b0c027b9757ef0e86275417",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-door-open-screen-tree-repair.json"
     },
     {
       "position": 278,
@@ -2405,9 +2405,9 @@
       "position": 280,
       "source_simfile": "Life Cheating Game/lifecheatinggame.ssc",
       "simfile_sha256": "12d76e3e3171fab6fe19a2d94d5462f45d079ec365a6c12d153bd49f22347e7a",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-life-cheating-screen-tree-repair.json"
     },
     {
       "position": 281,
@@ -2493,9 +2493,9 @@
       "position": 291,
       "source_simfile": "Loyal Divide [TaroNuke]/Loyal Divide.sm",
       "simfile_sha256": "1f9fcf1a405c0ef368adde7cb67e14f0eb96b6d4885a6748f650596aa528b825",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-loyal-divide-quirks-off-repair.json"
     },
     {
       "position": 292,
@@ -2557,9 +2557,9 @@
       "position": 299,
       "source_simfile": "mawaru1/mawaru.sm",
       "simfile_sha256": "cb10489b3cf018ea822152693fe3d682db32e0319d1169cc826e6ae110c9ae5d",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-mawaru1-empty-layers-repair.json"
     },
     {
       "position": 300,
@@ -2899,7 +2899,9 @@
       "position": 345,
       "source_simfile": "Paradise [Cringle Desolation]/Paradise.sm",
       "simfile_sha256": "574c082e56fc722d2414d47ff780788616d38df3c322f47527cc891016fdbc25",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 346,

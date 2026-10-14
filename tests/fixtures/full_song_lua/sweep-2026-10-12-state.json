@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T11:10:56Z",
-  "previous_goal_turn": "Current turn is progress: Paradise SSC, Pale, Tacos double and final My Exes SSC pass complete replay with zero errors/mismatches, saved and committed; local compressed and decompressed archive bytes verified. Tacos 63984 frames/1551 fields closes first repair; My Exes 62908 frames/1650 fields closes final repair 2. Seven more first repairs reuse byte-verified original captures and tested immutable helper 74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234: three remaining DoorOpen variants, Loyal Divide, Fortuna Redux, Mawaru1 and Mawaru4 SM. Entry diagnostics pass without accepting fixtures. Initial five Life Cheating/Doors SSC/I Really Like You/Crump/Longinus first repairs remain live. All twelve first repair processes matched, one repair remains after each. Mamono entry diagnosis fails during actual startup with mlua out-of-stack, no full repair attempt spent and archive unaccepted. Primary native sources explain default blank XML; no source charts/profile/scripts changed. Original three sweep workers and Mawaru5 final remain live, singleton publisher 50760 watches 88 streams and saves/ignores archives above 100000000 bytes locally. Passing fixtures remain closed and missing coverage separate; scope incomplete.",
+  "updated_utc": "2026-10-14T11:42:34Z",
+  "previous_goal_turn": "Current turn is progress: Paradise SSC, Pale, Tacos double, final My Exes SSC, Life Cheating Game, Crump, Loyal Divide, DoorOpen RIGHTS SSC, Paradise Cringle SM and DoorOpen Cringle SSC pass complete replay with zero errors/mismatches and are saved/committed. Every local accepted archive has compressed and uncompressed byte verification without reopening acceptance. Tacos first repair closes at 63984 frames/1551 fields and My Exes final repair 2 at 62908 frames/1650 fields. First repairs for the remaining RIGHTS SM, Longinus, Fortuna Redux, Mawaru1, Mawaru4 SM and Koi SSC remain live with the tested immutable 74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234 helper; one repair remains after each. First I Really Like You SM repair completes 100091 frames with one failed-flag mismatch at 120 seconds, no callback errors; exact native samples and primary end timing source recorded, cause unconfirmed, final repair unspent. First DoorOpen Cringle SM repair completes 55331 frames, zero errors and four option-string mismatches; chart attack switches at 2.802432/3.207837 seconds. Primary PlayerState resets Song from Stage at attack boundaries, while current Lua host resets only at outro; diagnosis recorded, final repair unspent. Mamono actual startup and separate 2160-cell production control fail with Lua stack errors; different failure phases acknowledged, primary native/vendored 8000-slot limit and mlua allocation evidence pinned. No cause/fix claimed, no full repair spent, temporary failing control kept outside repository suite and source restored cleanly. Original three sweep workers and Mawaru5 final remain live; publisher 50760 watches 89 streams and saves/ignores >100000000-byte archives locally. Missing coverage separate, original source bytes unchanged, all acceptance/tolerance rules unchanged, sweep incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "ce274410e7f3ab9554ff9518eda3651cd8a56861",
+      "deadsync": "67da93621c6efcbcaf20847fad9d36afd57233ac",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -66,12 +66,12 @@
     "startup_provenance": "34e1a7ba8 passed Windows 34/21 controls and fresh Linux 815/34/21 checks; 22 source pins, host-local build mtimes, helper 7f64d791 selected; GREAT final 2 is pending at its cap with one identity path difference; sweep-2026-10-12-startup-provenance-build.json",
     "density_graph_and_lifecycle": "d851d0c3b passed Windows 38/21 controls and both builds, and fresh Linux 815/38/21 plus both builds against 23 frozen pins. Helper 66d32bf5 selected; freg first repair is pending on two Off clocks, with queue and count failures resolved. sweep-2026-10-13-density-graph-build.json",
     "pack_control": "passes on Windows and Linux; missing/stale/failed reports rejected and coverage-bearing passes preserved",
-    "native_screen_child_inventory": "7960c8a1e: eight Windows and Linux checks pass, 57 live/27 native controls and both builds; retained 34-source immutable helper; complete Paradise SM repair passes 64119 frames and 1892 fields, saved and byte verified. SSC first repair running, missing coverage separate.",
+    "native_screen_child_inventory": "7960c8a1e: eight Windows and Linux checks pass, 57 live/27 native controls and both builds; retained 34-source immutable helper; complete Paradise SM repair passes 64119 frames and 1892 fields, saved and byte verified. SSC first repair passes 65346 frames/1892 fields, saved/byte verified; missing coverage separate.",
     "native_matched_filename_spelling": "1a142e6e7: unchanged meaningful parser red/green, 256 Linux and 255 Windows simfile tests, 57 live/27 native Linux controls and both builds; cache version 67; helper 1d1cab219618a1d98d02e54498de7297f6f533cd9347db517e629a49b4b12638 verified against all 34 source pins; Mawaru5 final full repair 2 running with original capture.",
     "native_day_of_year": "5b3fb64dd: zero-based native tm_yday getter; unchanged production red/green, Windows calendar regression, Linux 3 host/57 live/27 native controls and both builds; 34 source/3 harness pins verified; Genshin first full repair passes all 105754 frames / 1309 stage fields, zero errors/mismatches, saved and byte verified.",
-    "native_transition_column_cues": "dccc3cd0d: unchanged meaningful red/green transition control, two focused controls, 59 live/256 simfile/27 native replay controls and both binaries on Linux; 35 source pins; first My Exes SSC full repair running. Windows disk-full failure retained and not counted as a passing check.",
+    "native_transition_column_cues": "dccc3cd0d: unchanged meaningful red/green transition control, two focused controls, 59 live/256 simfile/27 native replay controls and both binaries on Linux; 35 source pins; first My Exes SSC full repair leaves one mismatch, subsequently closed by final row-map repair. Windows disk-full failure retained and not counted as a passing check.",
     "native_lead_in_metrics": "3eac32e9e: primary query-time metric expressions, unchanged red/green production control, five Linux checks, complete Numujika first repair passed; accepted and byte verified.",
-    "double_and_minimized_cues": "e56f30a19: 60 live/256 simfile/28 native controls, dedicated eight-column production-session control, both executables built; Windows 60 live controls exit zero. Same My Exes cutoff changes one mismatch to zero. No full acceptance claimed from diagnostics; final SSC and first Tacos full repairs are live."
+    "double_and_minimized_cues": "e56f30a19: 60 live/256 simfile/28 native controls, dedicated eight-column production-session control and both executables built; Windows 60 live controls exit zero. Tacos first full double repair passes 63984 frames/1551 fields; My Exes final full SSC repair 2 passes 62908 frames/1650 fields. Both fixtures saved, committed and locally byte verified; passing fixtures closed."
   },
   "corpus_transfer": {
     "tar_sha256": "37febe98e2e47b325b9f9b96f4d29ddf32eedda84514191252d043c5fd4a4d1a",
@@ -134,9 +134,9 @@
       "pending": 57,
       "processed": 86,
       "last_log_lines": [
-        "[3393.2s] replaying every native gameplay frame: frame 56597/84068 (67.3%)",
-        "[3395.2s] replaying every native gameplay frame: frame 56624/84068 (67.4%)",
-        "[3397.2s] replaying every native gameplay frame: frame 56652/84068 (67.4%)"
+        "[5289.9s] replaying every native gameplay frame: frame 83906/84068 (99.8%)",
+        "[5291.9s] replaying every native gameplay frame: frame 83935/84068 (99.8%)",
+        "[5293.9s] replaying every native gameplay frame: frame 83963/84068 (99.9%)"
       ],
       "supervisor_running": true
     },
@@ -1626,11 +1626,29 @@
         "record": "sweep-2026-10-14-fortuna-quirks-off-repair.json",
         "fix_commit": "e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
         "finish_status": "bounded first observed failure repair complete"
+      },
+      {
+        "name": "koi-ssc-rec-print-repair",
+        "remote": "/home/parity/jobs/koi-ssc-rec-print-repair-v1",
+        "record": "sweep-2026-10-14-koi-ssc-rec-print-repair.json",
+        "fix_commit": "e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+        "finish_status": "bounded first observed failure repair complete"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
     "get_into_it_sm_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-get-into-it-sm-fixture-verification.json",
     "other_jobs_live_observation": [
+      {
+        "job": "koi-ssc-rec-print-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Koi [UPS2016]/koi.ssc",
+        "child_running": true
+      },
       {
         "job": "fortuna-quirks-off-repair-v1",
         "complete": false,
@@ -1644,25 +1662,25 @@
       },
       {
         "job": "door-cringle-sm-screen-tree-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
+        "complete": true,
+        "supervisor_running": false,
         "passed": 0,
-        "pending": 0,
-        "processed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "replay",
         "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "door-cringle-ssc-screen-tree-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "door-rights-sm-screen-tree-repair-v1",
@@ -1677,25 +1695,25 @@
       },
       {
         "job": "loyal-divide-quirks-off-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "Loyal Divide [TaroNuke]/Loyal Divide.sm",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "mawaru1-empty-layers-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "mawaru1/mawaru.sm",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "mawaru4-sm-background-cache-repair-v1",
@@ -1721,47 +1739,47 @@
       },
       {
         "job": "crump-quirks-off-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "If You Crump Stand Up/crump.sm",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "really-like-empty-layers-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
+        "complete": true,
+        "supervisor_running": false,
         "passed": 0,
-        "pending": 0,
-        "processed": 0,
+        "pending": 1,
+        "processed": 1,
         "last_phase": "replay",
         "source_simfile": "I Really Like You [dbk2]/I Really Like You.sm",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "door-open-screen-tree-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "life-cheating-screen-tree-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "Life Cheating Game/lifecheatinggame.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "my-exes-row-beats-final-repair-v1",
@@ -1855,13 +1873,13 @@
         "job": "chart-sweep-parallel-v4-1",
         "complete": false,
         "supervisor_running": true,
-        "passed": 27,
+        "passed": 28,
         "pending": 32,
-        "processed": 59,
+        "processed": 60,
         "last_phase": "replay",
-        "source_simfile": "Paradise [Cringle Desolation]/Paradise.sm",
+        "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.ssc",
         "child_running": true,
-        "position": 345
+        "position": 348
       },
       {
         "job": "chart-sweep-parallel-v4-2",
@@ -1907,14 +1925,24 @@
     "double_cue_rows_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-double-cue-rows-build.json",
     "tacos_double_first_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-tacos-double-launch.json",
     "my_exes_row_beats_cutoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-my-exes-row-beats-cutoff.json",
-    "my_exes_row_beats_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-my-exes-row-beats-final-launch.json"
+    "my_exes_row_beats_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-my-exes-row-beats-final-launch.json",
+    "pale_tacos_my_exes_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-pale-tacos-my-exes-fixture-verification.json",
+    "life_cheating_crump_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-life-cheating-crump-fixture-verification.json",
+    "loyal_divide_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-loyal-divide-fixture-verification.json",
+    "doors_paradise_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-door-rights-ssc-paradise-cringle-fixture-verification.json",
+    "door_cringle_ssc_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-door-cringle-ssc-fixture-verification.json",
+    "retained_failure_diagnoses": "tests/fixtures/full_song_lua/sweep-2026-10-14-retained-known-fixes-diagnoses.json",
+    "mamono_stack_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-mamono-stack-diagnosis.json",
+    "really_like_remaining_failure": "tests/fixtures/full_song_lua/sweep-2026-10-14-really-like-remaining-failure.json",
+    "door_cringle_sm_attack_boundary": "tests/fixtures/full_song_lua/sweep-2026-10-14-door-cringle-sm-attack-boundary-diagnosis.json",
+    "koi_ssc_first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-koi-ssc-rec-print-launch.json"
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 110,
-    "new_pending_charts": 81,
-    "new_processed_sources": 191,
+    "new_passed_fixtures": 117,
+    "new_pending_charts": 75,
+    "new_processed_sources": 192,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 162,
+    "unprocessed_sources": 161,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -2401,75 +2429,9 @@
       ]
     },
     {
-      "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 5,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "external-0038",
-            "args": [
-              false
-            ],
-            "beat": 0.0015325864078477025,
-            "caller": {
-              "line": 224,
-              "source": "song:/lua/default.lua",
-              "tail_call": false
-            },
-            "command": "OnCommand",
-            "definition_id": "def-0021",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 224,
-            "operation": "Actor.visible",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 0.39662131667137146,
-            "seq": 103,
-            "source": "song:/lua/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "query",
-            "operation": "ActorFrame.GetChild",
-            "source": "song:/lua/default.lua",
-            "line": 224,
-            "phase": "callback",
-            "beat": 0.0015325864078477025,
-            "seconds": 0.39662131667137146,
-            "args": [
-              "P1Score"
-            ],
-            "results": [
-              {
-                "actor": 4,
-                "name": "P1Score",
-                "path": "ScreenGameplay/Underlay/P1Score"
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
       "source_simfile": "Lesson by DJ/Lesson by DJ.ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-3720042-1791891709207637875-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-3720042-1791891709207637875-0\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
-    },
-    {
-      "source_simfile": "mawaru1/mawaru.sm",
-      "repair_attempts": 0,
-      "failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (137260) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
@@ -3040,14 +3002,6 @@
       ]
     },
     {
-      "source_simfile": "Loyal Divide [TaroNuke]/Loyal Divide.sm",
-      "repair_attempts": 0,
-      "failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (629000) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
-    },
-    {
       "source_simfile": "Mamono/sm.sm",
       "repair_attempts": 0,
       "failure": "[0.7s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\n[4.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\n[6.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\n[8.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\n[10.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Hustle Beach': failed to run actor startup commands for song lua session '/tmp/.tmpRhXVna/song/lua/mamono.lua': out of Lua stack, too many arguments to a Lua function or too many return values from a callback; retrying layers independently\n[12.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\n[14.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\n[16.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\n[18.0s] replaying every native gameplay frame: frame 0/72178 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Hustle Beach' from '/tmp/.tmpRhXVna/song/lua/mamono.lua': failed to run actor startup commands for song lua session '/tmp/.tmpRhXVna/song/lua/mamono.lua': out of Lua stack, too many arguments to a Lua function or too many return values from a callback\n\nthread 'main' (646884) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
@@ -3275,19 +3229,19 @@
     },
     {
       "source_simfile": "I Really Like You [dbk2]/I Really Like You.sm",
-      "repair_attempts": 0,
-      "failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (1697278) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "repair_attempts": 1,
+      "failure": null,
       "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
-    },
-    {
-      "source_simfile": "If You Crump Stand Up/crump.sm",
-      "repair_attempts": 0,
-      "failure": "[0.3s] replaying every native gameplay frame\n\nthread 'main' (2713451) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
+      "mismatch_count": 1,
+      "first_mismatch": [
+        {
+          "phase": "progress",
+          "seconds": 120.00083923339844,
+          "field": "failed",
+          "native": false,
+          "deadsync": true
+        }
+      ]
     },
     {
       "source_simfile": "iLLness LiLin/iLLness LiLin.ssc",
@@ -3454,186 +3408,59 @@
     },
     {
       "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
-      "repair_attempts": 0,
+      "repair_attempts": 1,
       "failure": null,
       "errors": [],
-      "mismatch_count": 9,
+      "mismatch_count": 4,
       "first_mismatch": [
         {
           "field": "command_query_event",
           "native": {
-            "actor": "external-0038",
+            "actor": "player-state:PlayerNumber_P1",
             "args": [
-              false
+              "ModsLevel_Song"
             ],
-            "beat": 0.003098694607615471,
-            "caller": {
-              "line": 224,
-              "source": "song:/lua/default.lua",
-              "tail_call": false
-            },
-            "command": "OnCommand",
-            "definition_id": "def-0021",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 224,
-            "operation": "Actor.visible",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 0.3972562253475189,
-            "seq": 103,
-            "source": "song:/lua/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "query",
-            "operation": "ActorFrame.GetChild",
-            "source": "song:/lua/default.lua",
-            "line": 224,
-            "phase": "callback",
-            "beat": 0.003098694607615471,
-            "seconds": 0.3972562253475189,
-            "args": [
-              "P1Score"
-            ],
-            "results": [
-              {
-                "actor": 4,
-                "name": "P1Score",
-                "path": "ScreenGameplay/Underlay/P1Score"
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 5,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "external-0041",
-            "args": [
-              false
-            ],
-            "beat": 0.0006376465316861868,
-            "caller": {
-              "line": 224,
-              "source": "song:/lua/default.lua",
-              "tail_call": false
-            },
-            "command": "OnCommand",
-            "definition_id": "def-0021",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 224,
-            "operation": "Actor.visible",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 0.39625850319862366,
-            "seq": 125,
-            "source": "song:/lua/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "query",
-            "operation": "ActorFrame.GetChild",
-            "source": "song:/lua/default.lua",
-            "line": 224,
-            "phase": "callback",
-            "beat": 0.0006376465316861868,
-            "seconds": 0.39625850319862366,
-            "args": [
-              "P1Score"
-            ],
-            "results": [
-              {
-                "actor": 4,
-                "name": "P1Score",
-                "path": "ScreenGameplay/Underlay/P1Score"
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "source_simfile": "Life Cheating Game/lifecheatinggame.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 79171,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "external-0011",
-            "args": [
-              0,
-              0,
-              0
-            ],
-            "beat": 0.002668180037289858,
+            "beat": 16.00544548034668,
             "callback": "SetUpdateFunction",
             "caller": {
-              "line": 10,
-              "source": "song:/boys/default.lua",
+              "line": 71,
+              "source": "song:/lua/default.lua",
               "tail_call": false
             },
             "command": "OnCommand",
-            "definition_id": "def-0003",
+            "definition_id": "def-0021",
             "detail": {
-              "native_tween_time_left": {
-                "type": "number",
-                "value": "infinity"
-              }
+              "results": [
+                "NoHideLights, PlayerAutoPlay, Overhead"
+              ]
             },
-            "kind": "call",
-            "line": 10,
-            "operation": "Actor.effectmagnitude",
+            "kind": "query",
+            "line": 71,
+            "operation": "PlayerState.GetPlayerOptionsString",
             "phase": "callback",
             "scene": 1,
-            "seconds": 0.017800454050302505,
-            "seq": 11,
-            "source": "song:/boys/default.lua",
-            "tween_time_left": {
-              "type": "number",
-              "value": "infinity"
-            }
+            "seconds": 6.8846940994262695,
+            "seq": 14315,
+            "source": "song:/lua/default.lua",
+            "results": [
+              "NoHideLights, PlayerAutoPlay, Overhead"
+            ]
           },
           "deadsync": {
             "scene": 1,
-            "kind": "call",
-            "operation": "Actor.effectmagnitude",
-            "source": "song:/boys/default.lua",
-            "line": 10,
+            "kind": "query",
+            "operation": "PlayerState.GetPlayerOptionsString",
+            "source": "song:/lua/default.lua",
+            "line": 71,
             "phase": "callback",
-            "beat": 0.002668183296918869,
-            "seconds": 0.017800454050302505,
+            "beat": 16.00544548034668,
+            "seconds": 6.8846940994262695,
             "args": [
-              0,
-              0,
-              0
+              "ModsLevel_Song"
             ],
             "results": [
-              {
-                "actor": "0x5eda9359ec40",
-                "name": "ScreenGameplay",
-                "path": "ScreenGameplay"
-              }
-            ],
-            "tween_time_left": 0.0
+              "NoHideLights, 80% Drunk, 25% Tornado, Tipsy, PlayerAutoPlay, Overhead"
+            ]
           }
         }
       ]
