@@ -5142,17 +5142,14 @@
       ]
     },
     {
-      "title": "The Great Divide",
+      "title": "The Great Divide Seven Lions Remix",
       "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.sm",
-      "harness_version": "0.1.0",
-      "archive": "04ec281a4c93dacfe84756dab5a3df423f1ab623017f8f51aa99d66bce57b95c.tar.zst",
-      "sha256": "04ec281a4c93dacfe84756dab5a3df423f1ab623017f8f51aa99d66bce57b95c",
-      "compressed_bytes": 448664,
-      "uncompressed_sha256": "e2cd9b1ee1438f06d666aa4197c38440d29d6a860e71fe115e6b4a6a72feceb7",
-      "compression_level": 22,
-      "aliases": [
-        "c3cfa679ea1d4ea12744e66b0308a2819e3d1f25187a1b5cb6bc8173edeff246.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "2290466f7f2cd10f04b79111349e8b52822952497cc312473564f8cf73ac1640.tar.zst",
+      "sha256": "2290466f7f2cd10f04b79111349e8b52822952497cc312473564f8cf73ac1640",
+      "compressed_bytes": 17805352,
+      "uncompressed_sha256": "0f995844217de709779d63ea0ae47ef542c3b1810b785057fe287c616e3ae052",
+      "aliases": []
     },
     {
       "title": "The Great Divide",
