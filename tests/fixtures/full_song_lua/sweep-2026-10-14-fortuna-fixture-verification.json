@@ -1,0 +1,13 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
+  "native_frames": 215375,
+  "replayed_frames": 215375,
+  "archive": "6589c2b07c731ec217c837f3cc633f6425635c371fd31702b21dff8d85a937c1.tar.zst",
+  "compressed_sha256": "6589c2b07c731ec217c837f3cc633f6425635c371fd31702b21dff8d85a937c1",
+  "uncompressed_sha256": "b637897cc508ebf3e4149376a02f3445f279d4814d16ddcd22e825a881ca76f0",
+  "compressed_bytes": 12904209,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
