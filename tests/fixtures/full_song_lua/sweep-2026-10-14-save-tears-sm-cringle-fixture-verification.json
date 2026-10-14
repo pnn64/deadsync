@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.sm",
+  "native_frames": 81952,
+  "replayed_frames": 81952,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "29566108c71bda8175c1400d31027f61e94e7b84e91ce313eb16d962faeb6e58.tar.zst",
+  "compressed_sha256": "29566108c71bda8175c1400d31027f61e94e7b84e91ce313eb16d962faeb6e58",
+  "uncompressed_sha256": "84a19da50aef6811f60a0d57972b7dc2d68b1ae45130e307549d82de14f56a73",
+  "compressed_bytes": 23331508,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
