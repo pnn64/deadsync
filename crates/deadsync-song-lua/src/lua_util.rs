@@ -12226,6 +12226,7 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
     if lua.app_data_ref::<SongLuaCompileUpdatePlan>().is_none() {
         let mut jobs = Vec::new();
         let mut order = 0;
+        let mut after_song = Vec::new();
         // ScreenWithMenuElements owns these actors outside the authored song
         // roots. Their own tween queues still advance every screen Update.
         // GetChild returns this same owner; adding a later tween must not keep
@@ -12234,9 +12235,17 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
             let children = actor_children(lua, &screen)?;
             // SongBackground's entries are already visited through the song
             // root below; traversing its child aliases would update them twice.
-            for name in ["Underlay", "Overlay", "In", "Out", "Cancel", "Debug"] {
+            for name in ["Underlay", "Overlay", "Debug"] {
                 if let Some(actor) = children.raw_get::<Option<Table>>(name)? {
                     collect_compile_update_jobs(lua, &actor, None, SongLuaCompileParentDelta::Children, &mut jobs, &mut order)?;
+                }
+            }
+            // ScreenGameplay sorts SongForeground at OVERLAY + 1 and the
+            // transitions at TRANSITIONS. Foreground On
+            // and Update callbacks therefore see their preceding-frame queues.
+            for name in ["In", "Out", "Cancel"] {
+                if let Some(actor) = children.raw_get::<Option<Table>>(name)? {
+                    after_song.push(actor);
                 }
             }
             for actor in screen.sequence_values::<Table>() {
@@ -12258,6 +12267,9 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
             }
         }
         collect_compile_update_jobs(lua, root, None, SongLuaCompileParentDelta::Children, &mut jobs, &mut order)?;
+        for actor in after_song {
+            collect_compile_update_jobs(lua, &actor, None, SongLuaCompileParentDelta::Children, &mut jobs, &mut order)?;
+        }
         lua.set_app_data(SongLuaCompileUpdatePlan { jobs: jobs.into() });
     }
     Ok(lua

@@ -2146,6 +2146,38 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn live_foreground_observes_transition_before_current_frame_update() {
+        let mut compiled = compile_with_context("foreground-transition-order", r#"
+IN = SCREENMAN:GetTopScreen():GetChild('In')
+LEFT = {}
+return Def.ActorFrame {
+    OnCommand = function(self)
+        self:aux(IN:GetTweenTimeLeft()):sleep(10)
+        self:SetUpdateFunction(function()
+            LEFT[#LEFT + 1] = IN:GetTweenTimeLeft()
+        end)
+    end,
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.layer_start_beats = vec![0.0];
+        });
+        let mut scene = compiled.live_scene.take().expect("scene");
+        scene.advance(SongLuaLiveFrame { music_seconds: -0.5, beat: -1.0,
+            screen_seconds: 0.125, delta_seconds: 0.125, ..Default::default() }).unwrap();
+        scene.advance(SongLuaLiveFrame { music_seconds: 0.0625, beat: 0.125,
+            screen_seconds: 0.1875, delta_seconds: 0.0625, ..Default::default() }).unwrap();
+        assert_eq!(scene.states()[0].aux, 1.875,
+            "foreground On precedes the transition's current-frame Update");
+        let left = scene.lua.globals().get::<Table>("LEFT").unwrap();
+        assert_eq!(left.raw_get::<f32>(1).unwrap(), 1.875,
+            "foreground Update also precedes the transition");
+        let transition = scene.lua.globals().get::<Table>("IN").unwrap();
+        assert_eq!(crate::actor_tween_time_left(&scene.lua, &transition).unwrap(), 1.8125,
+            "the same frame advances the transition after the foreground");
+    }
+
+    #[test]
     fn live_empty_callback_slots_preserve_single_update_detection() {
         let mut compiled = compile("callback-slots", r#"
 return Def.ActorFrame {
