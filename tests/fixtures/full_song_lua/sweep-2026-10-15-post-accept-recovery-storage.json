@@ -1,0 +1,37 @@
+{
+  "no_passing_chart_replayed": true,
+  "original_reports_and_candidates_preserved": true,
+  "new_duplicates_retained_losslessly": [
+    {
+      "position": 405,
+      "source_simfile": "Someone Special - hubert/Someone Special.ssc",
+      "raw_candidate_sha256": "38e462e6da9413e8e1ccd729d8ed8150f4cfd748ac41f56540934c8905d70e0f",
+      "accepted_archive_sha256": "c39fefdc2202790e09a0b143171f1ff2e61d819d60154faec857a5f89d1e469a",
+      "report_sha256": "acc4ddd61371557a23cc7dc06d6470176d424676a52cc35d293c69d9bb86492f",
+      "report_compressed_sha256": "ee484c812c21131073dbf377945ea98f5d44ef973fdb1ddd26beb6c6b18b33a1",
+      "raw_duplicate_bytes_removed": 1374103730,
+      "all_decompressed_bytes_verified": true
+    },
+    {
+      "position": 427,
+      "source_simfile": "tamashi/tamashi.sm",
+      "raw_candidate_sha256": "31ef6bbdaf25f8c4fd58df095851c681a7e73853e173fc236d53f6fef623c6ed",
+      "accepted_archive_sha256": "ee7720ae718b0505a82b5f13b654563edb79c8394e9b48a64d13a9ac8299c9e3",
+      "report_sha256": "26d46cfb6cdff69406943abdc0009157afb43e2dc0767f2254aa33af7269e392",
+      "report_compressed_sha256": "8a2e05d57c8e1ddfe4107ff311a4b2bf26f095bb04e35306b34c426678c4247e",
+      "raw_duplicate_bytes_removed": 652303044,
+      "all_decompressed_bytes_verified": true
+    },
+    {
+      "position": 436,
+      "source_simfile": "The Scale/The Scale.ssc",
+      "raw_candidate_sha256": "521c95c37ccd314c2d187aea542dd5a4e14f6f8258f96a8e3b74e1371088b1b2",
+      "accepted_archive_sha256": "d153bc6241e4cf132e47862bf85701360f18fa7e58daa4553873f0c8bf6db2ad",
+      "report_sha256": "068fdf6fb066b99f2fb4a7ee3aa3fdf9160837537cc189c768051b62678aa1f1",
+      "report_compressed_sha256": "33025d8e6aaa90dfa4466869f867cda065ef67d76492fef1a9f7fa548b316349",
+      "raw_duplicate_bytes_removed": 1850008093,
+      "all_decompressed_bytes_verified": true
+    }
+  ],
+  "bytes_reclaimed": 3876414867
+}

@@ -1,0 +1,59 @@
+{
+  "all_1175_raw_pins_verified": true,
+  "all_1175_cross_platform_normalized_pins_verified": true,
+  "binary_sha256": "375fb5facffc717409b9b22e354eb2bddfd03358b9d9126ec5d00ceb3318b195",
+  "all_five_log_hashes_verified": true,
+  "fix_commit": "cc145ab04",
+  "source_root": "/home/parity/workspace/sparse-declaration-v1/deadsync",
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 304.3631021080073,
+      "log_sha256": "bf00db7fae8527d0d80bfd09789d3ecc4b4631b0c29229a73d7ba3461ef3da05",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out; finished in 0.28s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 41.90719137698761,
+      "log_sha256": "7ca738d1a42cf40d9911963088e97f1eb319e41c4ba428b6b834dc13f44cef6d",
+      "results": [
+        "test result: ok. 69 passed; 0 failed; 0 ignored; 0 measured; 535 filtered out; finished in 40.75s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 286.77484107602504,
+      "log_sha256": "9621dc5c5a795cebfed43ef3e094eee2a7a0bae228f04f3aeba9412409a99deb",
+      "results": [
+        "test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.17s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 0.9325308029947337,
+      "log_sha256": "4368062dcbf0476b0c7292198b80689ff8c944df1f34b889f649bc4fb996fd43",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 57.92438435999793,
+      "log_sha256": "5ab9ecfe41ddbbb90bbb0aa2b38f9367ecbcc8c2aabd438c130ed7eecfcebdd3",
+      "results": []
+    }
+  ],
+  "all_windows_checks_passed": true,
+  "new_harness_validation": "sweep-2026-10-15-sparse-observer-build-validation.json",
+  "helper_private_to_corrected_capture_pair": true,
+  "global_original_sweep_selection_unchanged": true,
+  "subsequent_local_progress_logger_fix_not_selected_in_this_frozen_helper": true,
+  "full_acceptance_comparisons_unchanged": true
+}
