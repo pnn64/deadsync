@@ -2219,6 +2219,21 @@
       "replay_seconds": 20.82211343300878,
       "candidate_sha256": "f15ee0cddf02932b656262f9a5878f32f12a844ddd1e2d7ec5baff30df231a93",
       "failure": ""
+    },
+    {
+      "position": 481,
+      "source_simfile": "Young Dumb And Broke/YDB.ssc",
+      "simfile_sha256": "8768a55012287ef1a6fb4f70a6b18e53f129ec03782bb3d2dfdbdf0517377d4c",
+      "retained_original_archive": "8022849c5f08e058cf3f8d79201fe4b86bec82b04f3ffa51ce7ed7bf5e83ba40.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+      "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 900.2390823260066,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-744563-1792014784884695162-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-744563-1792014784884695162-0\n"
     }
   ],
   "scope": {
@@ -2227,9 +2242,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+  "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 9,
-  "pending_charts": 7,
-  "processed_charts": 16
+  "pending_charts": 8,
+  "processed_charts": 17
 }
