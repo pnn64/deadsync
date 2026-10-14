@@ -4217,15 +4217,12 @@
     {
       "title": "Planet Calling",
       "source_simfile": "Planet Calling/Planet Calling.ssc",
-      "harness_version": "0.1.0",
-      "archive": "1f946d0f87a1110695ec6b3d25dc9ffd322ef21f4f83b84f7f5dc179f5a9513d.tar.zst",
-      "sha256": "1f946d0f87a1110695ec6b3d25dc9ffd322ef21f4f83b84f7f5dc179f5a9513d",
-      "compressed_bytes": 676447,
-      "uncompressed_sha256": "20c740aa5d69674ec56656814843462cf3f2bce68737d023c9c32e3ce118490e",
-      "compression_level": 22,
-      "aliases": [
-        "732e68927f9dbe99091a8e83968b8086e37a98db12bb47a99203ae74df76574e.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "6f671caa7eff7cd5c9c49309debfa6f58ae0683cb3cf3864af444e8964e3a935.tar.zst",
+      "sha256": "6f671caa7eff7cd5c9c49309debfa6f58ae0683cb3cf3864af444e8964e3a935",
+      "compressed_bytes": 11303469,
+      "uncompressed_sha256": "bc92d0d1dd09a4937ef7cc939da1f0380c259ac14afb414edd62b044d798aad1",
+      "aliases": []
     },
     {
       "title": "ぽ (wrashi Bootleg)",
