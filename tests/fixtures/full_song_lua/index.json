@@ -3738,15 +3738,12 @@
     {
       "title": "media offline",
       "source_simfile": "media offline/media offline.sm",
-      "harness_version": "0.1.0",
-      "archive": "37ab9e3214210590a2a79a272fb17189ea159945b97c5ac531357c0157362a9d.tar.zst",
-      "sha256": "37ab9e3214210590a2a79a272fb17189ea159945b97c5ac531357c0157362a9d",
-      "compressed_bytes": 74682,
-      "uncompressed_sha256": "1a5c1b774227a5f324d1928e470f285ee5048836a2c14314a95da9e3bcf4bdba",
-      "compression_level": 22,
-      "aliases": [
-        "4ee1071fd7c399ec502e17790fc27093b6fb1fd424cd33eee7b92addc48373e8.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "44f953605b29363142729d5a45a74a0b0352cc5bc072acbf33e91b2b2ff73887.tar.zst",
+      "sha256": "44f953605b29363142729d5a45a74a0b0352cc5bc072acbf33e91b2b2ff73887",
+      "compressed_bytes": 16117087,
+      "uncompressed_sha256": "d1a3eab6e9745a3cd685abd951d3128bbebdcf8aa5fbbf4edcf6b0fd62bfb0c9",
+      "aliases": []
     },
     {
       "title": "media offline",
