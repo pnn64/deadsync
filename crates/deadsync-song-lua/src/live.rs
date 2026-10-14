@@ -1453,6 +1453,14 @@ impl SongLuaLiveScene {
 
     pub fn states(&self) -> &[SongLuaOverlayState] { &self.states }
 
+    /// Screen::GetNextScreenName reads the stored override when the transition
+    /// completes. An empty override leaves the theme's default destination.
+    pub fn next_screen_name(&self) -> mlua::Result<Option<String>> {
+        let screen: Table = self.lua.globals().raw_get("__songlua_top_screen")?;
+        Ok(screen.raw_get::<Option<String>>("__songlua_next_screen_name")?
+            .filter(|name| !name.is_empty()))
+    }
+
     pub fn tracked_states(&self) -> impl Iterator<Item = (SongLuaTrackedActorTarget, SongLuaOverlayState)> + '_ {
         self.tracked.iter().map(|(target, _, state)| (*target, *state))
     }

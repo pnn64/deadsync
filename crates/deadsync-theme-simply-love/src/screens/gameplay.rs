@@ -1012,8 +1012,14 @@ impl State {
             // The newly started Transition receives its first delta next frame.
             self.song_lua_out = Some(SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY });
         } else if self.song_lua_out.as_mut().is_some_and(|out| out.advance(delta)) {
+            let target = scene.next_screen_name().map_err(|error| error.to_string())?;
+            let destination = song_lua_transition_screen(target.as_deref())?;
             self.end_song_lua()?;
-            effects.push(ThemeEffect::NavigateNoFade(crate::screens::SimplyLoveScreen::Evaluation));
+            if destination == crate::screens::SimplyLoveScreen::Gameplay {
+                effects.push(ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::ReloadSongLua));
+            } else {
+                effects.push(ThemeEffect::NavigateNoFade(destination));
+            }
         }
         Ok(())
     }
@@ -2636,6 +2642,22 @@ pub fn prepare_update(state: &mut State, effects: &mut Vec<ThemeEffect>) -> bool
 struct SongLuaOut {
     phase: u8,
     left: f32,
+}
+
+fn song_lua_transition_screen(name: Option<&str>) -> Result<crate::screens::SimplyLoveScreen, String> {
+    use crate::screens::SimplyLoveScreen as Screen;
+    let Some(name) = name.filter(|name| !name.is_empty()) else { return Ok(Screen::Evaluation); };
+    [
+        Screen::Menu, Screen::Gameplay, Screen::Practice, Screen::Options,
+        Screen::Credits, Screen::ContentBrowser, Screen::ManageLocalProfiles, Screen::Init,
+        Screen::Initials, Screen::GameOver, Screen::Mappings, Screen::Input,
+        Screen::SelectProfile, Screen::GrooveStatsLogin, Screen::ArrowCloudLogin, Screen::SelectColor,
+        Screen::SelectStyle, Screen::SelectPlayMode, Screen::ProfileLoad, Screen::SelectMusic,
+        Screen::SelectCourse, Screen::Sandbox, Screen::Evaluation, Screen::EvaluationSummary,
+        Screen::PlayerOptions, Screen::TestLights, Screen::OverscanAdjustment, Screen::ConfigurePads,
+        Screen::SmxAssignPads,
+    ].into_iter().find(|screen| screen.current_screen_file_name() == name)
+        .ok_or_else(|| format!("unsupported song Lua next screen {name}"))
 }
 
 impl SongLuaOut {

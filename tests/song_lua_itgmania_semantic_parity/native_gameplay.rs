@@ -1046,6 +1046,71 @@ end }
     }
 
     #[test]
+    fn gameplay_out_transition_resolves_latest_explicit_next_screen() {
+        use deadsync_theme_simply_love::{SimplyLoveEffect as Effect, SimplyLoveRuntimeRequest as Runtime};
+        use deadsync_theme_simply_love::screens::SimplyLoveScreen;
+        let notes = std::iter::repeat_n("1000\n0000\n0000\n0000\n", 32).collect::<Vec<_>>().join(",\n");
+        for target in ["ScreenGameplay", "ScreenSelectMusic"] {
+            let script = format!(r#"
+local screen = SCREENMAN:GetTopScreen()
+local changed = false
+return Def.ActorFrame {{
+    OnCommand = function(self)
+        self:sleep(9999)
+        screen:SetNextScreenName('ScreenEvaluationStage')
+        screen:StartTransitioningScreen('SM_DoNextScreen')
+        self:SetUpdateFunction(function()
+            if not changed and GAMESTATE:GetCurMusicSeconds() >= 0.25 then
+                changed = true
+                screen:SetNextScreenName('{target}')
+            end
+        end)
+    end,
+    OffCommand = function() MESSAGEMAN:Broadcast('TargetOff') end,
+    EndCommand = function()
+        assert(SCREENMAN:GetTopScreen() == nil, 'screen is popped before End')
+        MESSAGEMAN:Broadcast('TargetEnd')
+    end,
+}}
+"#);
+            let mut state = owned_judgment_control(target, &notes, &script, 0.0);
+            let mut lifecycle = Vec::new();
+            let mut completion = None;
+            for index in 0..32 {
+                let nanos = index * 125_000_000;
+                let mut effects = Vec::new();
+                gameplay::update(&mut state, if index == 0 { 0.0 } else { 0.125 }, GameplayAudioSnapshot {
+                    stream_clock: GameplayStreamClockSnapshot { music_nanos: nanos,
+                        has_music_mapping: true, valid_at_host_nanos: nanos as u64 + 1_000_000_000,
+                        ..Default::default() }, ..Default::default()
+                }, || nanos as u64 + 1_000_000_000, &mut effects);
+                let output = state.take_song_lua_output();
+                assert!(output.errors.is_empty(), "{:?}", output.errors);
+                lifecycle.extend(output.source_broadcasts.iter()
+                    .filter(|event| matches!(event.name.as_str(), "TargetOff" | "TargetEnd"))
+                    .map(|event| event.name.clone()));
+                if !effects.is_empty() {
+                    assert!(nanos >= 1_500_000_000, "screen load waits for the native out tween");
+                    completion = Some(effects);
+                    break;
+                }
+            }
+            assert_eq!(lifecycle, ["TargetOff", "TargetEnd"], "Off and popped End run once before loading");
+            let effects = completion.expect("out transition completes");
+            let matches_target = match effects.as_slice() {
+                [Effect::Runtime(Runtime::ReloadSongLua)] => target == "ScreenGameplay",
+                [Effect::NavigateNoFade(SimplyLoveScreen::SelectMusic)] => target == "ScreenSelectMusic",
+                _ => false,
+            };
+            assert!(matches_target, "explicit target must select completed transition destination: {effects:?}");
+            let mut effects = Vec::new();
+            gameplay::update(&mut state, 1.0, GameplayAudioSnapshot::default(), || 100_000_000_000, &mut effects);
+            assert!(effects.is_empty() && state.take_song_lua_output().source_broadcasts.is_empty(),
+                "completed transition is consumed once");
+        }
+    }
+
+    #[test]
     fn gameplay_chart_attack_rebuilds_song_options() {
         let notes = std::iter::repeat_n("1000\n0000\n0000\n0000\n", 24).collect::<Vec<_>>().join(",\n");
         let mut state = owned_judgment_control_with_attacks("attack-option-levels", &notes, r#"
