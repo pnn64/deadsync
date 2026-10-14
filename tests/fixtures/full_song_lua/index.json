@@ -4098,17 +4098,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 17",
+      "title": "Episode 17 『 Pale 』",
       "source_simfile": "Pale/Pale.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a1cc4e84aa2f2b64dabd5fec32a816f5dfa0c39ea96787f8fb494a3e2b69cab5.tar.zst",
-      "sha256": "a1cc4e84aa2f2b64dabd5fec32a816f5dfa0c39ea96787f8fb494a3e2b69cab5",
-      "compressed_bytes": 27286,
-      "uncompressed_sha256": "335fc9749b43d82ef12b4fd0f9408ed44905210ffef2ad2e54eb4b300bf92d75",
-      "compression_level": 22,
-      "aliases": [
-        "b4f85c8e97661baca817ab99cf8950812817d66b34277bf7f891e8ebec94d167.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "144acc3ebdb0afaa6950b57aca4328044cfb546fdbb81432bfcff84724c06d35.tar.zst",
+      "sha256": "144acc3ebdb0afaa6950b57aca4328044cfb546fdbb81432bfcff84724c06d35",
+      "compressed_bytes": 7226933,
+      "uncompressed_sha256": "b060231df6a0c6c0d0c0febfa57f3fc173094f9a44127b18234deaed4fe1f445",
+      "aliases": []
     },
     {
       "title": "Panopticon",
