@@ -1,0 +1,19 @@
+{
+  "verification": "Storage byte integrity only; complete replay acceptance remains closed.",
+  "source_simfile": "Paradise/Paradise.ssc",
+  "native_frames": 65346,
+  "replayed_frames": 65346,
+  "compared_stage_fields": 1892,
+  "mismatches": 0,
+  "callback_errors": 0,
+  "archive": "7b303821702d16bfa6a55c1a2f0846bfc93a14d0c37d5aeebc45cac05d01040d.tar.zst",
+  "compressed_sha256": "7b303821702d16bfa6a55c1a2f0846bfc93a14d0c37d5aeebc45cac05d01040d",
+  "uncompressed_sha256": "6bd6703168a950201852b158fc3e702d5ffd4e5e566038f788dc1224d6bd9665",
+  "local_decompression_byte_verified": true,
+  "pending_coverage": [
+    "uncompared song operations: Actor.addz, Actor.playcommand, Actor.stretchto, Actor.z, ActorFrame.GetChildren, ActorFrame.fov",
+    "native drawable state/resources: ActorProxy, Quad, Sprite"
+  ],
+  "acceptance_gate_added": false,
+  "passing_chart_reopened": false
+}
