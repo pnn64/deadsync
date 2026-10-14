@@ -7590,6 +7590,263 @@
       "replay_seconds": 1.5788179430091986,
       "candidate_sha256": "c74ddfd683990fbeec17a8693b4914325bb19c0a496f8d0438d5f5dd8201ad96",
       "failure": "[0.4s] replaying every native gameplay frame\n\nthread 'main' (1135414) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 306,
+      "source_simfile": "mawaru7/mawaru7.sm",
+      "simfile_sha256": "16daf42ecde7e00d77cd7bd7b68bda40a6fda0949ea7d16d838ea6d98ce227cd",
+      "retained_original_archive": "dd009566e5b52b87169e2b641303dd1b60d8596e8115e0f81342f21d3e28c18c.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "dc33e10eb25790fe5f57e0adf311eb04f8029fa0983e22ce00e25f125eb8111c",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/palette-green-v1/proof.json",
+      "capture_seconds": 589.6090673279978,
+      "trace_sha256": "cba3da413bf805819c7e08a84c7a5ba0e104aa01250fb66f6e3ea52d9bc7a116",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-306/candidates/52f42c6c6d1576dd9026d5a7b43092040367466c54fb194db3a929b9c457dcef.tar",
+      "replay_exit": 2,
+      "replay_seconds": 38350.99748059499,
+      "candidate_sha256": "52f42c6c6d1576dd9026d5a7b43092040367466c54fb194db3a929b9c457dcef",
+      "native_frames": 70609,
+      "replayed_frames": 70609,
+      "compared_stage_fields": 3399,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetWidth, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.accelerate, Actor.addx, Actor.addy, Actor.addz, Actor.basezoomx, Actor.basezoomy, Actor.blend, Actor.bob, Actor.bounce, Actor.bouncebegin, Actor.bounceend, Actor.cropbottom, Actor.cropleft, Actor.cropright, Actor.croptop, Actor.diffuseshift, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.fadebottom, Actor.fadetop, Actor.finishtweening, Actor.glow, Actor.glowshift, Actor.horizalign, Actor.playcommand, Actor.pulse, Actor.rotationx, Actor.rotationy, Actor.shadowlength, Actor.stopeffect, Actor.stoptweening, Actor.vertalign, Actor.wag, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, Actor.zoomz, Actor.ztest, Actor.ztestmode, Actor.zwrite, ActorFrame.SetDrawByZPosition, ActorFrame.fov, BitmapText.maxwidth, BitmapText.settext, GameState.IsHumanPlayer, GameState.PlayerIsUsingModifier, PlayerOptions.Beat, PlayerOptions.Bumpy, PlayerOptions.CMod, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Incoming, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tipsy, PlayerOptions.Tornado, Screen.AddInputCallback, Sprite.Load, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: BitmapText, Model, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 1393678,
+      "concrete_failures": [
+        {
+          "field": "source_broadcast_count",
+          "native": 854,
+          "deadsync": 853
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 184.22406005859375,
+            "beat": 490.2895202636719,
+            "name": "AvoidMineP1",
+            "args": [
+              "AvoidMineP1"
+            ]
+          },
+          "deadsync": {
+            "seconds": 184.3041534423828,
+            "beat": 490.54339599609375,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 184.3041534423828,
+            "beat": 490.54339599609375,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ]
+          },
+          "deadsync": {
+            "seconds": 184.48512268066406,
+            "beat": 491.11700439453125,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 184.48512268066406,
+            "beat": 491.11700439453125,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ]
+          },
+          "deadsync": {
+            "seconds": 184.7697296142578,
+            "beat": 492.0191345214844,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 184.7697296142578,
+            "beat": 492.0191345214844,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ]
+          },
+          "deadsync": {
+            "seconds": 184.99600219726562,
+            "beat": 492.736328125,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 184.99600219726562,
+            "beat": 492.736328125,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ]
+          },
+          "deadsync": {
+            "seconds": 185.26333618164062,
+            "beat": 493.58367919921875,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 185.26333618164062,
+            "beat": 493.58367919921875,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ]
+          },
+          "deadsync": {
+            "seconds": 185.58872985839844,
+            "beat": 494.6150817871094,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 185.58872985839844,
+            "beat": 494.6150817871094,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ]
+          },
+          "deadsync": {
+            "seconds": 186.0598907470703,
+            "beat": 496.1085205078125,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 186.0598907470703,
+            "beat": 496.1085205078125,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ]
+          },
+          "deadsync": {
+            "seconds": 186.69332885742188,
+            "beat": 498.1163024902344,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 186.69332885742188,
+            "beat": 498.1163024902344,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ]
+          },
+          "deadsync": {
+            "seconds": 187.29827880859375,
+            "beat": 500.0338134765625,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 187.29827880859375,
+            "beat": 500.0338134765625,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ]
+          },
+          "deadsync": {
+            "seconds": 187.76119995117188,
+            "beat": 501.5010681152344,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 187.76119995117188,
+            "beat": 501.5010681152344,
+            "name": "W1P1",
+            "args": [
+              "W1P1"
+            ]
+          },
+          "deadsync": {
+            "seconds": 188.26612854003906,
+            "beat": 503.1015319824219,
+            "name": "Close1",
+            "args": [
+              "Close1"
+            ],
+            "params_error": null
+          }
+        }
+      ],
+      "report_sha256": "6fb56555ec6e5623b2ddf29e0e76d956da5fd6710c41252455812834e05421d9"
     }
   ],
   "scope": {
@@ -7599,9 +7856,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "dc33e10eb25790fe5f57e0adf311eb04f8029fa0983e22ce00e25f125eb8111c",
+  "binary_sha256": "62659d350949f3074029c04eefbe46b03ab09c55a49e5abd6593087868cb7d50",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 20,
-  "pending_charts": 26,
-  "processed_charts": 46
+  "pending_charts": 27,
+  "processed_charts": 47
 }
