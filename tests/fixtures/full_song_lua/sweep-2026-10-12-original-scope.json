@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T23:26:46Z",
+  "updated_utc": "2026-10-14T23:28:42Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -3318,8 +3318,8 @@
       "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
       "simfile_sha256": "45d9d5f8655020c9086fbeef5ad48616f82fb351961223046e68d95bed94e0bf",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-shakunetsu2-sm-listener-first-repair.json"
     },
     {
       "position": 395,
