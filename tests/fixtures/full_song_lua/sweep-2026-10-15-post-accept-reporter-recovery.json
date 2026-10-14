@@ -64,10 +64,71 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 427,
+      "source_simfile": "tamashi/tamashi.sm",
+      "simfile_sha256": "cafe0801b0cc0958ccb8a2ec113186feb7c177f5db76be400e4227acacac1250",
+      "retained_original_archive": "1414b286088f609e5e172ae1da2e503ee7428b3941a8092d0bc9b8fcef7bba0e.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+      "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+      "capture_seconds": 222.15802162198815,
+      "trace_sha256": "53e366e98483456c72130859a36912166226702f85387a9003bbd4f7cfaa7d21",
+      "candidate": "/home/parity/jobs/post-accept-reporter-recovery-v1/chart-427/31ef6bbdaf25f8c4fd58df095851c681a7e73853e173fc236d53f6fef623c6ed.tar",
+      "replay_exit": 1,
+      "replay_seconds": 1163.8030807890173,
+      "candidate_sha256": "31ef6bbdaf25f8c4fd58df095851c681a7e73853e173fc236d53f6fef623c6ed",
+      "native_frames": 41714,
+      "replayed_frames": 41714,
+      "compared_stage_fields": 1518,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.accelerate, Actor.blend, Actor.finishtweening, Actor.hibernate, Actor.skewx, Actor.z, Actor.zoomz, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Hallway, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Incoming, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Roll, PlayerOptions.Space, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave, PlayerOptions.Xmode",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "26d46cfb6cdff69406943abdc0009157afb43e2dc0767f2254aa33af7269e392",
+      "original_result": "/home/parity/jobs/chart-sweep-20261012-v2/chart-427/result.json",
+      "original_replay_exit_preserved": true,
+      "post_accept_progress_failure": true,
+      "post_accept_failure": "Reporter Drop poisoned stop mutex after complete accepted report and candidate rehash; no comparison failed",
+      "replay_comparisons_passed": true,
+      "native_capture_reused": true,
+      "full_replay_repeated": false,
+      "chart_repair_attempt_spent": false,
+      "archive": "ee7720ae718b0505a82b5f13b654563edb79c8394e9b48a64d13a9ac8299c9e3.tar.zst",
+      "archive_sha256": "ee7720ae718b0505a82b5f13b654563edb79c8394e9b48a64d13a9ac8299c9e3",
+      "compressed_bytes": 18919484,
+      "pack_seconds": 19.02936586100259,
+      "pack_exit": 0,
+      "harness_version": "0.1.80",
+      "title": "大輪の魂 feat. AO、司芭扶 (!FUNKOT Remix)",
+      "all_manifest_members_byte_verified": true,
+      "retained_original_entry": {
+        "title": "大輪の魂 feat. AO、司芭扶",
+        "source_simfile": "tamashi/tamashi.sm",
+        "harness_version": "0.1.0",
+        "archive": "1414b286088f609e5e172ae1da2e503ee7428b3941a8092d0bc9b8fcef7bba0e.tar.zst",
+        "sha256": "1414b286088f609e5e172ae1da2e503ee7428b3941a8092d0bc9b8fcef7bba0e",
+        "compressed_bytes": 1296146,
+        "uncompressed_sha256": "f4ce97446ee58f94a07c29206da3c9137377a0869b605d098a9de9e23045b9e0",
+        "compression_level": 22,
+        "aliases": [
+          "0d820a4e5ae96748ceac70954ecfc15e9caa58b3290855711d7cd938a1f78cce.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "repair": "recover completed passing replay reports after progress reporter shutdown panic; no new replay or chart repair",
-  "passed_fixtures": 1,
+  "passed_fixtures": 2,
   "pending_charts": 0,
-  "processed_charts": 1
+  "processed_charts": 2
 }

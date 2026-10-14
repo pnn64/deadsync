@@ -4989,17 +4989,14 @@
       "aliases": []
     },
     {
-      "title": "大輪の魂 feat. AO、司芭扶",
+      "title": "大輪の魂 feat. AO、司芭扶 (!FUNKOT Remix)",
       "source_simfile": "tamashi/tamashi.sm",
-      "harness_version": "0.1.0",
-      "archive": "1414b286088f609e5e172ae1da2e503ee7428b3941a8092d0bc9b8fcef7bba0e.tar.zst",
-      "sha256": "1414b286088f609e5e172ae1da2e503ee7428b3941a8092d0bc9b8fcef7bba0e",
-      "compressed_bytes": 1296146,
-      "uncompressed_sha256": "f4ce97446ee58f94a07c29206da3c9137377a0869b605d098a9de9e23045b9e0",
-      "compression_level": 22,
-      "aliases": [
-        "0d820a4e5ae96748ceac70954ecfc15e9caa58b3290855711d7cd938a1f78cce.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "ee7720ae718b0505a82b5f13b654563edb79c8394e9b48a64d13a9ac8299c9e3.tar.zst",
+      "sha256": "ee7720ae718b0505a82b5f13b654563edb79c8394e9b48a64d13a9ac8299c9e3",
+      "compressed_bytes": 18919484,
+      "uncompressed_sha256": "31ef6bbdaf25f8c4fd58df095851c681a7e73853e173fc236d53f6fef623c6ed",
+      "aliases": []
     },
     {
       "title": "Tear Jerker (Soltan Remix)",
