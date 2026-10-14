@@ -6748,6 +6748,493 @@
       "replay_seconds": 25.747621471993625,
       "candidate_sha256": "e6a8401d7558a4e1b8139353c399ba09081d9bcabbcc083e0272a204bb9cd814",
       "failure": "[0.1s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: frame 90/40632 (0.2%)\n[4.0s] replaying every native gameplay frame: frame 231/40632 (0.6%)\n[6.0s] replaying every native gameplay frame: frame 366/40632 (0.9%)\n[8.0s] replaying every native gameplay frame: frame 507/40632 (1.2%)\n[10.0s] replaying every native gameplay frame: frame 639/40632 (1.6%)\n[12.0s] replaying every native gameplay frame: frame 769/40632 (1.9%)\n[14.0s] replaying every native gameplay frame: frame 897/40632 (2.2%)\n[16.0s] replaying every native gameplay frame: frame 1023/40632 (2.5%)\n[18.0s] replaying every native gameplay frame: frame 1156/40632 (2.8%)\n[20.0s] replaying every native gameplay frame: frame 1282/40632 (3.2%)\n[22.0s] replaying every native gameplay frame: frame 1412/40632 (3.5%)\n[24.0s] replaying every native gameplay frame: frame 1536/40632 (3.8%)\n\nthread 'main' (2506008) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: GAMESTATE has no selected P1 chart\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 340,
+      "source_simfile": "Paint the Town Red/PaintTheTownRed.sm",
+      "simfile_sha256": "a876df80258c0fb9a9c0eb23294c0857e7a249fc8c37e96f6305f2c4b5456173",
+      "retained_original_archive": "a38a1138ca11d0face83a5f5eca6869efcfc165accc945116a9178a003eb1df3.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "1f0beb2612f19d67900331a90493ac35fe0c66b7bbe36ba0ceab5b7cfa7b4d03",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "1ed84cd471a8eeb8511474ca8881aa1516acbf96 + 254c36811 + e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/ruin-transition-linux-green-v2/proof.json",
+      "capture_seconds": 486.06535109199467,
+      "trace_sha256": "a2a52901e9b45c2909e6f3cdd25c6d38544a1d9b3234b13b86c5aa99df9ba4d8",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-340/candidates/542e91a756c07df3af331660a439cbddd9b85b4e32d218048b1751082e8709cd.tar",
+      "replay_exit": 2,
+      "replay_seconds": 3382.9850318599783,
+      "candidate_sha256": "542e91a756c07df3af331660a439cbddd9b85b4e32d218048b1751082e8709cd",
+      "native_frames": 5268,
+      "replayed_frames": 5268,
+      "compared_stage_fields": 2288,
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.MaskDest, Actor.MaskSource, Actor.accelerate, Actor.addrotationy, Actor.addrotationz, Actor.addx, Actor.addy, Actor.baserotationz, Actor.blend, Actor.bob, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.setstate, Actor.smooth, Actor.stopeffect, Actor.stoptweening, Actor.texturetranslate, Actor.wag, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetVertices, ActorSound.play, ActorSound.stop, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.LinearFrames, Sprite.SetAllStateDelays, Sprite.SetStateProperties, Sprite.setstate",
+        "native drawable state/resources: ActorMultiVertex, ActorProxy, BitmapText, Model, Quad, Sound, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 755057,
+      "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 885845,
+          "deadsync": 894577
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0001",
+            "args": [],
+            "beat": 84.512939453125,
+            "command": "UpdateCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "name": "UpdateCommand"
+            },
+            "kind": "command",
+            "line": 83,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 25.481882095336914,
+            "seq": 253405,
+            "source": "song:/lua/Ambience/snow-simple.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/lua/Ambience/snow-simple.lua",
+            "line": 83,
+            "phase": "callback",
+            "beat": 84.512939453125,
+            "seconds": 25.481882095336914,
+            "args": [
+              true
+            ],
+            "results": [
+              {
+                "actor": "0x63094e2ef5b0",
+                "name": "",
+                "path": "ScreenGameplay/SongForeground/lua"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 84.512939453125,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 203,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0109",
+            "detail": {
+              "results": [
+                84.512939453125
+              ]
+            },
+            "kind": "query",
+            "line": 203,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 25.481882095336914,
+            "seq": 253406,
+            "source": "song:/lua/default.lua",
+            "results": [
+              84.512939453125
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Actor.getaux",
+            "source": "song:/lua/Ambience/snow-simple.lua",
+            "line": 83,
+            "phase": "callback",
+            "beat": 84.512939453125,
+            "seconds": 25.481882095336914,
+            "args": [],
+            "results": [
+              0
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0604",
+            "args": [],
+            "beat": 84.512939453125,
+            "command": "UpdateCommand",
+            "definition_id": "def-0604",
+            "detail": {
+              "name": "UpdateCommand"
+            },
+            "kind": "command",
+            "line": 1017,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 25.481882095336914,
+            "seq": 253409,
+            "source": "song:/lua/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Actor.getaux",
+            "source": "song:/lua/Ambience/snow-simple.lua",
+            "line": 83,
+            "phase": "callback",
+            "beat": 84.512939453125,
+            "seconds": 25.481882095336914,
+            "args": [],
+            "results": [
+              0
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 84.512939453125,
+            "caller": {
+              "line": 1017,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0604",
+            "detail": {
+              "results": [
+                84.512939453125
+              ]
+            },
+            "kind": "query",
+            "line": 1017,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 25.481882095336914,
+            "seq": 253410,
+            "source": "song:/lua/default.lua",
+            "results": [
+              84.512939453125
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.aux",
+            "source": "song:/lua/Ambience/snow-simple.lua",
+            "line": 83,
+            "phase": "callback",
+            "beat": 84.512939453125,
+            "seconds": 25.481882095336914,
+            "args": [
+              0.03580474853515625
+            ],
+            "results": [
+              {
+                "actor": "0x63094e2ef5b0",
+                "name": "",
+                "path": "ScreenGameplay/SongForeground/lua"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0604",
+            "args": [],
+            "beat": 84.512939453125,
+            "command": "UpdateCommand",
+            "definition_id": "def-0604",
+            "detail": {
+              "name": "UpdateCommand"
+            },
+            "kind": "command",
+            "line": 1017,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 25.481882095336914,
+            "seq": 253412,
+            "source": "song:/lua/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Actor.getaux",
+            "source": "song:/lua/Ambience/snow-simple.lua",
+            "line": 83,
+            "phase": "callback",
+            "beat": 84.512939453125,
+            "seconds": 25.481882095336914,
+            "args": [],
+            "results": [
+              0.03580474853515625
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0608",
+            "args": [],
+            "beat": 84.512939453125,
+            "command": "UpdateCommand",
+            "definition_id": "def-0608",
+            "detail": {
+              "name": "UpdateCommand"
+            },
+            "kind": "command",
+            "line": 1017,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 25.481882095336914,
+            "seq": 253414,
+            "source": "song:/lua/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.diffusealpha",
+            "source": "song:/lua/Ambience/snow-simple.lua",
+            "line": 83,
+            "phase": "callback",
+            "beat": 84.512939453125,
+            "seconds": 25.481882095336914,
+            "args": [
+              0.03580474853515625
+            ],
+            "results": [
+              {
+                "actor": "0x63094e2ef5b0",
+                "name": "",
+                "path": "ScreenGameplay/SongForeground/lua"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 84.512939453125,
+            "caller": {
+              "line": 1017,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0608",
+            "detail": {
+              "results": [
+                84.512939453125
+              ]
+            },
+            "kind": "query",
+            "line": 1017,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 25.481882095336914,
+            "seq": 253415,
+            "source": "song:/lua/default.lua",
+            "results": [
+              84.512939453125
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "UpdateCommand",
+            "source": "song:/lua/Ambience/snow-simple.lua",
+            "line": 83,
+            "beat": 84.512939453125,
+            "seconds": 25.481882095336914,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0608",
+            "args": [],
+            "beat": 84.512939453125,
+            "command": "UpdateCommand",
+            "definition_id": "def-0608",
+            "detail": {
+              "name": "UpdateCommand"
+            },
+            "kind": "command",
+            "line": 1017,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 25.481882095336914,
+            "seq": 253417,
+            "source": "song:/lua/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/lua/default.lua",
+            "line": 203,
+            "phase": "callback",
+            "beat": 84.512939453125,
+            "seconds": 25.481882095336914,
+            "args": [],
+            "results": [
+              84.512939453125
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 84.512939453125,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 203,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0109",
+            "detail": {
+              "results": [
+                84.512939453125
+              ]
+            },
+            "kind": "query",
+            "line": 203,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 25.481882095336914,
+            "seq": 253458,
+            "source": "song:/lua/default.lua",
+            "results": [
+              84.512939453125
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "UpdateCommand",
+            "source": "song:/lua/default.lua",
+            "line": 1017,
+            "beat": 84.512939453125,
+            "seconds": 25.481882095336914,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 84.512939453125,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 203,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0109",
+            "detail": {
+              "results": [
+                84.512939453125
+              ]
+            },
+            "kind": "query",
+            "line": 203,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 25.481882095336914,
+            "seq": 253460,
+            "source": "song:/lua/default.lua",
+            "results": [
+              84.512939453125
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/lua/default.lua",
+            "line": 1017,
+            "phase": "callback",
+            "beat": 84.512939453125,
+            "seconds": 25.481882095336914,
+            "args": [],
+            "results": [
+              84.512939453125
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 84.512939453125,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 203,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0109",
+            "detail": {
+              "results": [
+                84.512939453125
+              ]
+            },
+            "kind": "query",
+            "line": 203,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 25.481882095336914,
+            "seq": 253462,
+            "source": "song:/lua/default.lua",
+            "results": [
+              84.512939453125
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "UpdateCommand",
+            "source": "song:/lua/default.lua",
+            "line": 1017,
+            "beat": 84.512939453125,
+            "seconds": 25.481882095336914,
+            "args": null
+          }
+        }
+      ],
+      "report_sha256": "05324cf95516e604434112d791ed7b4b9a11a7eb8610eacfc16e88359a4a1d9f"
     }
   ],
   "scope": {
@@ -6760,6 +7247,6 @@
   "binary_sha256": "1f0beb2612f19d67900331a90493ac35fe0c66b7bbe36ba0ceab5b7cfa7b4d03",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 20,
-  "pending_charts": 28,
-  "processed_charts": 48
+  "pending_charts": 29,
+  "processed_charts": 49
 }
