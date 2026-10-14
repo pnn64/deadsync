@@ -1,0 +1,23 @@
+{
+  "checks": [
+    {
+      "variant": "baseline",
+      "exit_code": 101,
+      "seconds": 2.2588985759939533,
+      "stderr_destination": "/dev/full",
+      "source_sha256": "b187738f68a92833a3fe7c7ece120f7536bc92c45efbd86adb869c851320b2df",
+      "standalone_source_uses_actual_reporter": true
+    },
+    {
+      "variant": "fixed",
+      "exit_code": 0,
+      "seconds": 2.2575144639995415,
+      "stderr_destination": "/dev/full",
+      "source_sha256": "43905891d5a03bb02c35b832df93a54cc95a159c610c4ac3508e2799cd54c45f",
+      "standalone_source_uses_actual_reporter": true
+    }
+  ],
+  "baseline_logging_failure_reproduced": true,
+  "fixed_reporter_survives_failed_heartbeat_and_shutdown": true,
+  "acceptance_comparisons_changed": false
+}

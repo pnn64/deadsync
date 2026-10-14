@@ -1,0 +1,333 @@
+{
+  "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.sm",
+  "full_repair_attempts_spent": 0,
+  "trace_sha256": "29ee1eaf9cec98eaebc3f8c117518d27eb552419005ceaf625b20b65c8f15b95",
+  "native_samples": [
+    {
+      "beat": 341.9539794921875,
+      "gameplay_seconds": 128.83526611328125,
+      "phase": "progress",
+      "players": [
+        {
+          "actual": 0,
+          "alive_seconds": 128.83526611328125,
+          "autoplay": 1,
+          "current_max_score": 0,
+          "current_possible": 0,
+          "description": "TaroNuke",
+          "difficulty": "Difficulty_Challenge",
+          "failed": false,
+          "life_begin": 0.5,
+          "life_latest": 0.5,
+          "meter": 9,
+          "misses": 0,
+          "player": "PlayerNumber_P1",
+          "possible": 2715,
+          "score": 0,
+          "w1": 0,
+          "w2": 0
+        }
+      ],
+      "scene": 1,
+      "seconds": 108.00147247314453
+    },
+    {
+      "beat": 345.11785888671875,
+      "gameplay_seconds": 129.83480834960938,
+      "phase": "progress",
+      "players": [
+        {
+          "actual": 0,
+          "alive_seconds": 129.83480834960938,
+          "autoplay": 1,
+          "current_max_score": 0,
+          "current_possible": 0,
+          "description": "TaroNuke",
+          "difficulty": "Difficulty_Challenge",
+          "failed": false,
+          "life_begin": 0.5,
+          "life_latest": 0.5,
+          "meter": 9,
+          "misses": 0,
+          "player": "PlayerNumber_P1",
+          "possible": 2715,
+          "score": 0,
+          "w1": 0,
+          "w2": 0
+        }
+      ],
+      "scene": 1,
+      "seconds": 109.0005874633789
+    },
+    {
+      "beat": 348.2855224609375,
+      "gameplay_seconds": 129.83480834960938,
+      "phase": "progress",
+      "players": [
+        {
+          "actual": 0,
+          "alive_seconds": 129.83480834960938,
+          "autoplay": 1,
+          "current_max_score": 0,
+          "current_possible": 0,
+          "description": "TaroNuke",
+          "difficulty": "Difficulty_Challenge",
+          "failed": true,
+          "life_begin": 0.5,
+          "life_latest": 0.5,
+          "meter": 9,
+          "misses": 0,
+          "player": "PlayerNumber_P1",
+          "possible": 2715,
+          "score": 0,
+          "w1": 0,
+          "w2": 0
+        }
+      ],
+      "scene": 1,
+      "seconds": 110.00090789794922
+    },
+    {
+      "beat": 349.8720397949219,
+      "gameplay_seconds": 129.83480834960938,
+      "phase": "screen-end",
+      "players": [
+        {
+          "actual": 0,
+          "alive_seconds": 129.83480834960938,
+          "autoplay": 1,
+          "current_max_score": 0,
+          "current_possible": 0,
+          "description": "TaroNuke",
+          "difficulty": "Difficulty_Challenge",
+          "failed": true,
+          "life_begin": 0.5,
+          "life_latest": 0.5,
+          "meter": 9,
+          "misses": 0,
+          "player": "PlayerNumber_P1",
+          "possible": 2715,
+          "score": 0,
+          "w1": 0,
+          "w2": 0
+        }
+      ],
+      "scene": 1,
+      "seconds": 110.50190734863281
+    },
+    {
+      "beat": 349.8720397949219,
+      "gameplay_seconds": 129.83480834960938,
+      "phase": "gameplay-exit",
+      "players": [
+        {
+          "actual": 0,
+          "alive_seconds": 129.83480834960938,
+          "autoplay": 1,
+          "current_max_score": 0,
+          "current_possible": 0,
+          "description": "TaroNuke",
+          "difficulty": "Difficulty_Challenge",
+          "failed": true,
+          "life_begin": 0.5,
+          "life_latest": 0.5,
+          "meter": 9,
+          "misses": 0,
+          "player": "PlayerNumber_P1",
+          "possible": 2715,
+          "score": 0,
+          "w1": 0,
+          "w2": 0
+        }
+      ],
+      "scene": 1,
+      "seconds": 110.50190734863281
+    }
+  ],
+  "nearby_native_clock_frames": [
+    {
+      "beat": 345.1144104003906,
+      "delta": 0.007215000223368406,
+      "scene": 1,
+      "seconds": 108.99950408935547,
+      "sequence": 34269,
+      "wall_seconds": 131.353947
+    },
+    {
+      "beat": 345.11785888671875,
+      "delta": 0.0010849999962374568,
+      "scene": 1,
+      "seconds": 109.0005874633789,
+      "sequence": 34270,
+      "wall_seconds": 131.354898
+    },
+    {
+      "beat": 345.1262512207031,
+      "delta": 0.0026499999221414328,
+      "scene": 1,
+      "seconds": 109.00324249267578,
+      "sequence": 34271,
+      "wall_seconds": 131.357778
+    },
+    {
+      "beat": 345.1304931640625,
+      "delta": 0.0013589999871328473,
+      "scene": 1,
+      "seconds": 109.00457763671875,
+      "sequence": 34272,
+      "wall_seconds": 131.359621
+    },
+    {
+      "beat": 345.1357116699219,
+      "delta": 0.0016380000161007047,
+      "scene": 1,
+      "seconds": 109.00623321533203,
+      "sequence": 34273,
+      "wall_seconds": 131.360741
+    },
+    {
+      "beat": 345.1388854980469,
+      "delta": 0.0010110000148415565,
+      "scene": 1,
+      "seconds": 109.00723266601562,
+      "sequence": 34274,
+      "wall_seconds": 131.361723
+    },
+    {
+      "beat": 345.1419982910156,
+      "delta": 0.0009689999860711396,
+      "scene": 1,
+      "seconds": 109.00820922851562,
+      "sequence": 34275,
+      "wall_seconds": 131.362585
+    },
+    {
+      "beat": 345.144775390625,
+      "delta": 0.0008839999791234732,
+      "scene": 1,
+      "seconds": 109.00909423828125,
+      "sequence": 34276,
+      "wall_seconds": 131.363441
+    },
+    {
+      "beat": 345.1474304199219,
+      "delta": 0.0008440000237897038,
+      "scene": 1,
+      "seconds": 109.00993347167969,
+      "sequence": 34277,
+      "wall_seconds": 131.364273
+    }
+  ],
+  "input": {
+    "autoplay": 1,
+    "gameplay_preferences": {
+      "column_cue_min_time": 1.5,
+      "default_modifiers": "",
+      "game_mode": "ITG",
+      "initialization": "theme-game-mode",
+      "max_input_latency_seconds": 0,
+      "mod_level": "ModsLevel_Preferred",
+      "music_rate": 1,
+      "players": [
+        {
+          "disabled_timing_windows": [],
+          "fail_setting": "FailType_Immediate",
+          "min_tns_to_hide_notes": "TapNoteScore_W3",
+          "options_string": "NoHideLights, PlayerAutoPlay, Overhead",
+          "player": "PlayerNumber_P1",
+          "theme_modifiers": {
+            "ActionOnMissedTarget": "Nothing",
+            "BackgroundFilter": "Darker",
+            "ColumnCues": true,
+            "ComboFont": "Wendy",
+            "DataVisualizations": "Step Statistics",
+            "DisplayScorebox": true,
+            "ErrorBar": "None",
+            "ErrorBarMultiTick": false,
+            "ErrorBarTrim": "Off",
+            "ErrorBarUp": false,
+            "FlashDecent": false,
+            "FlashExcellent": false,
+            "FlashFantastic": false,
+            "FlashGreat": false,
+            "FlashMiss": false,
+            "FlashWayOff": false,
+            "HideCombo": false,
+            "HideComboExplosions": false,
+            "HideDanger": false,
+            "HideEarlyDecentWayOffFlash": false,
+            "HideEarlyDecentWayOffJudgments": false,
+            "HideLifebar": false,
+            "HideLookahead": false,
+            "HideScore": false,
+            "HideSongBG": false,
+            "HideTargets": false,
+            "HoldJudgment": "Love 1x2 (doubleres).png",
+            "JudgmentGraphic": "Love 2x6 (doubleres).png",
+            "JudgmentTilt": false,
+            "LifeMeterType": "Standard",
+            "MeasureCounter": "None",
+            "MeasureCounterLeft": false,
+            "MeasureCounterUp": true,
+            "MeasureLines": "Off",
+            "Mini": "0%",
+            "NPSGraphAtTop": false,
+            "NoteFieldOffsetX": 0,
+            "NoteFieldOffsetY": 0,
+            "Pacemaker": false,
+            "ShowExScore": false,
+            "ShowFaPlusPane": true,
+            "ShowFaPlusWindow": false,
+            "SpeedMod": 250,
+            "SpeedModType": "M",
+            "SubtractiveScoring": false,
+            "TargetScore": 11,
+            "TiltMultiplier": 1,
+            "TimingWindows": [
+              true,
+              true,
+              true,
+              true,
+              true
+            ],
+            "VisualDelay": "0ms"
+          }
+        }
+      ],
+      "timing_window_add": 0.001500000013038516,
+      "timing_window_scale": 1,
+      "timing_windows": {
+        "Attack": 0.13500000536441803,
+        "Checkpoint": 0.1664000004529953,
+        "Hold": 0.3199999928474426,
+        "Mine": 0.07000000029802322,
+        "Roll": 0.3499999940395355,
+        "W1": 0.0215000007301569,
+        "W2": 0.0430000014603138,
+        "W3": 0.10199999809265137,
+        "W4": 0.13500000536441803,
+        "W5": 0.18000000715255737
+      }
+    },
+    "injected_inputs": false,
+    "preferences": {
+      "default_sync_offset": "SyncOffset_ITG",
+      "display_aspect_ratio": 1.7777777910232544,
+      "global_offset_seconds": -0.00800000037997961,
+      "visual_delay_seconds": 0
+    },
+    "requested_difficulty": "Challenge",
+    "style": "single"
+  },
+  "conclusion": "Native life remains 0.5 throughout the failure flag transition. Progress sample at 109.000587 still reads failed=false; next sample failed=true. Native gameplay/alive seconds stops at 129.834808. Concrete remaining investigation is the progress observer phase relative to queued NotesEnded and Simply Love overlay Off, which fails judged autoplay without draining life.",
+  "primary_sources": {
+    "Screen.cpp:123-181": "ActorFrame Update runs before delivery of queued screen messages.",
+    "ScreenGameplay.cpp:1912-1927": "NotesEnded is posted after Screen Update when music end threshold is reached.",
+    "ScreenGameplay.cpp:2746-2860": "NotesEnded/LeaveGameplay routes TweenOffScreen.",
+    "Simply Love/BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua:18-46": "Off calls FailPlayer after a Judgment autoplay latch."
+  },
+  "existing_owned_order": "live.rs advances actor tree, then queued outro Off; full stage comparator currently samples state after complete gameplay update. Need a phase-specific independent observation rather than changing failure values or timing to satisfy the trace.",
+  "acceptance_changed": false,
+  "native_expectations_fed_into_gameplay": false,
+  "passing_charts_reopened": false
+}
