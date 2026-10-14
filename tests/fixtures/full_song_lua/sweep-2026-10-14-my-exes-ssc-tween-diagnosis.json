@@ -310,7 +310,7 @@
       }
     }
   ],
-  "transition_cause": "Five observed differences are calls on In, Out, Cancel and an unnamed transition owner. The existing production actor_tween_time_left treats these as ordinary ActorFrames and includes their authored 1.5-second own tween. Native Transition::GetTweenTimeLeft overrides this: it returns zero outside transitioning and otherwise only the loaded transition child time, ignoring its own tween queue.",
+  "transition_cause": "Four observed differences are calls on the known In, Out and Cancel transition owners. The production actor_tween_time_left treats these as ordinary ActorFrames and includes their authored 1.5-second own tween. Native Transition::GetTweenTimeLeft overrides this: it returns zero outside transitioning and otherwise only the loaded transition child time, ignoring its own tween queue.",
   "remaining_underlay_failure": "Underlay Actor.visible(false) has native 1.3322865962982178 seconds versus production 0.2305031716823578. Native ActorFrame takes the maximum over its own and child tween times; the specific descendant contributing the native maximum remains unestablished.",
   "repair_scope": "Restore source-backed Transition getter/lifecycle behavior and identify the actual native Underlay descendant before a first full repair. No chart replay launched by this diagnosis.",
   "source_pins": [
@@ -328,5 +328,6 @@
     }
   ],
   "passing_charts_reopened": false,
-  "acceptance_comparisons_changed": false
+  "acceptance_comparisons_changed": false,
+  "unmapped_unnamed_failure": "A fifth zero-versus-1.5 difference is recorded on native external-0044 and an unnamed production receiver. The specific native owner must be mapped before attributing it to a transition."
 }
