@@ -13046,6 +13046,56 @@
         }
       ],
       "report_sha256": "ca9c196f53df63be9e971262e9f74ff1f174a1414faab3db2ee99c015982a609"
+    },
+    {
+      "position": 403,
+      "source_simfile": "Slamurai/Slamurai.ssc",
+      "simfile_sha256": "ad13580d8964e7fc062aea34c7c68c32fe24785b4f8ce00a20beb6a2873cd0c6",
+      "retained_original_archive": "0ea8829ba0181ac193576415941d4493c23c5e373c85e387c1f5d710ae862c4a.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e0f16f89374ce78a1b07cafdb6d13c8e5c04de3e",
+      "build_proof": "/home/parity/jobs/game-state-class-linux-green-v1/proof.json",
+      "capture_seconds": 168.52950899599819,
+      "trace_sha256": "cfd681a08d98ffcf4d72bd288235f9562cb24aff6fcd3e11fb7dc90fae255625",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-403/candidates/df1ec5e9291bd9927bf75965be75e9d56040ca6c46dc3f6d55e3261635e3a22e.tar",
+      "replay_exit": 0,
+      "replay_seconds": 861.6603709750052,
+      "candidate_sha256": "df1ec5e9291bd9927bf75965be75e9d56040ca6c46dc3f6d55e3261635e3a22e",
+      "native_frames": 38157,
+      "replayed_frames": 38157,
+      "compared_stage_fields": 1419,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "7d3f40d7f8066a0ced8fa972084b75ef7b37aabec8c4a51fd3d329fb782b336b",
+      "archive": "3afc561ade572a35984d87e0f54492911ce2d84b41d25c1db4cb3a1fce84b8d9.tar.zst",
+      "archive_sha256": "3afc561ade572a35984d87e0f54492911ce2d84b41d25c1db4cb3a1fce84b8d9",
+      "compressed_bytes": 11406579,
+      "pack_seconds": 14.41425871400861,
+      "harness_version": "0.1.80",
+      "title": "Slamurai",
+      "retained_original_entry": {
+        "title": "Slamurai",
+        "source_simfile": "Slamurai/Slamurai.ssc",
+        "harness_version": "0.1.0",
+        "archive": "0ea8829ba0181ac193576415941d4493c23c5e373c85e387c1f5d710ae862c4a.tar.zst",
+        "sha256": "0ea8829ba0181ac193576415941d4493c23c5e373c85e387c1f5d710ae862c4a",
+        "compressed_bytes": 38122,
+        "uncompressed_sha256": "bcb38f7562469dba5c561bf05ea2e359fa098f2db37cb1f2dc852f2f24f16593",
+        "compression_level": 22,
+        "aliases": [
+          "f9dde941b2735eec549979be22eda06b4994350d1d9468c2a9665ea3c31fd91a.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -13069,9 +13119,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "04af4ff5dfcbbf4a0290dfe81b5e1b5690fa28289a2e2fdbebb293006a88bce2",
+  "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 35,
+  "passed_fixtures": 36,
   "pending_charts": 62,
-  "processed_charts": 97
+  "processed_charts": 98
 }

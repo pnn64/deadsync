@@ -4745,15 +4745,12 @@
     {
       "title": "Slamurai",
       "source_simfile": "Slamurai/Slamurai.ssc",
-      "harness_version": "0.1.0",
-      "archive": "0ea8829ba0181ac193576415941d4493c23c5e373c85e387c1f5d710ae862c4a.tar.zst",
-      "sha256": "0ea8829ba0181ac193576415941d4493c23c5e373c85e387c1f5d710ae862c4a",
-      "compressed_bytes": 38122,
-      "uncompressed_sha256": "bcb38f7562469dba5c561bf05ea2e359fa098f2db37cb1f2dc852f2f24f16593",
-      "compression_level": 22,
-      "aliases": [
-        "f9dde941b2735eec549979be22eda06b4994350d1d9468c2a9665ea3c31fd91a.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "3afc561ade572a35984d87e0f54492911ce2d84b41d25c1db4cb3a1fce84b8d9.tar.zst",
+      "sha256": "3afc561ade572a35984d87e0f54492911ce2d84b41d25c1db4cb3a1fce84b8d9",
+      "compressed_bytes": 11406579,
+      "uncompressed_sha256": "df1ec5e9291bd9927bf75965be75e9d56040ca6c46dc3f6d55e3261635e3a22e",
+      "aliases": []
     },
     {
       "title": "Ｓｏｍｅｏｎｅ Ｓｐｅｃｉａｌ",
