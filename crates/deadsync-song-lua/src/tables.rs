@@ -428,6 +428,11 @@ pub fn create_theme_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::R
             let Some(name) = method_arg(&args, 1).cloned().and_then(read_string) else {
                 return Ok(false);
             };
+            // Native HasMetric checks the definition, without evaluating its
+            // Lua expression against mutable globals.
+            if crate::sl::gameplay_lead_in_seconds(&group, &name).is_some() {
+                return Ok(true);
+            }
             Ok(!matches!(
                 theme_metric_value_for_human_players(
                     lua,

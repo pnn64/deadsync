@@ -1010,6 +1010,8 @@ pub fn theme_metric_bool(value: mlua::Value) -> bool {
 pub fn theme_metric_names(group: &str) -> Vec<String> {
     let mut names = Vec::new();
     if group.eq_ignore_ascii_case("ScreenGameplay") {
+        names.extend(["MinSecondsToStep", "MinSecondsToMusic", "MinSecondsToStepNextSong"]
+            .into_iter().map(str::to_string));
         for player in 1..=2 {
             names.extend(THEME_PLAYER_X_STYLES.map(|style| format!("PlayerP{player}{style}X")));
         }

@@ -484,7 +484,21 @@ fn create_sl_metrics(lua: &Lua, mode: &str) -> mlua::Result<Table> {
     Ok(table)
 }
 
+pub(super) fn gameplay_lead_in_seconds(group: &str, name: &str) -> Option<f64> {
+    if !group.eq_ignore_ascii_case("ScreenGameplay") { return None; }
+    [("MinSecondsToStep", 6.0), ("MinSecondsToMusic", 2.0), ("MinSecondsToStepNextSong", 4.0)]
+        .into_iter().find_map(|(metric, seconds)| name.eq_ignore_ascii_case(metric).then_some(seconds))
+}
+
 pub(super) fn read_sl_metric(lua: &Lua, group: &str, name: &str) -> mlua::Result<Option<Value>> {
+    if let Some(seconds) = gameplay_lead_in_seconds(group, name) {
+        // ThemeManager::PushMetric runs the metrics.ini Lua expression at
+        // every query. Use SL's current Lua number without rate clamping or
+        // float narrowing; it can differ from GAMESTATE's song options.
+        let rate = lua.globals().get::<Table>("SL")?.get::<Table>("Global")?
+            .get::<Table>("ActiveModifiers")?.get::<f64>("MusicRate")?;
+        return Ok(Some(Value::Number(seconds * rate)));
+    }
     // Simply Love metrics.ini evaluates these expressions against the active
     // mode. Keep unrelated sections from seeing fields of SL.Metrics.
     let mapped = group.eq_ignore_ascii_case("ScoreKeeperNormal")

@@ -2775,6 +2775,34 @@ end }
     }
 
     #[test]
+    fn live_gameplay_lead_in_metrics_evaluate_current_theme_rate() {
+        let compiled = compile_with_context("gameplay-lead-in-metrics", r#"
+local MusicLengthSeconds = GAMESTATE:GetCurrentSong():MusicLengthSeconds()
+local MinSecondsToStep = THEME:GetMetric('ScreenGameplay', 'MinSecondsToStep')
+local MinSecondsToMusic = THEME:GetMetric('ScreenGameplay', 'MinSecondsToMusic')
+local TotalSeconds = MusicLengthSeconds + math.max(MinSecondsToStep, MinSecondsToMusic)
+assert(TotalSeconds == 69, 'Numujika lead-in calculation with 1.5x theme rate')
+GAMESTATE:GetSongOptionsObject('ModsLevel_Song'):MusicRate(2.5)
+SL.Global.ActiveModifiers.MusicRate = 1.03
+assert(THEME:GetMetric('ScreenGameplay', 'MinSecondsToStep') == 6.18)
+assert(THEME:GetMetric('ScreenGameplay', 'MinSecondsToMusic') == 2.06)
+assert(THEME:GetMetric('ScreenGameplay', 'MinSecondsToStepNextSong') == 4.12)
+local names = {}
+for _, name in ipairs(THEME:GetMetricNamesInGroup('ScreenGameplay')) do names[name] = true end
+SL.Global.ActiveModifiers.MusicRate = nil
+for _, name in ipairs({'MinSecondsToStep', 'MinSecondsToMusic', 'MinSecondsToStepNextSong'}) do
+    assert(THEME:HasMetric('ScreenGameplay', name) and names[name])
+    assert(not pcall(function() return THEME:GetMetric('ScreenGameplay', name) end))
+end
+SL.Global.ActiveModifiers.MusicRate = 0
+assert(THEME:GetMetric('ScreenGameplay', 'MinSecondsToStep') == 0)
+SL.Global.ActiveModifiers.MusicRate = 1.5
+return Def.Actor{}
+"#, |context| context.song_music_rate = 1.5);
+        assert!(compiled.live_scene.is_some());
+    }
+
+    #[test]
     fn live_column_cues_derive_owned_tweens_from_chart_notes() {
         let compiled = compile_with_context("column-cue-owned-tweens", "return Def.Actor{}", |context| {
             context.players[0].column_cues = true;
