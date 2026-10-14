@@ -11180,6 +11180,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 368,
+      "source_simfile": "Rayc Fire 2 (SM5)/Rayc Fire 2.sm",
+      "simfile_sha256": "b1e55b2fc8c284f90f7c1cf67778e35fa7b1d0e67d879b26adc00a53702179b1",
+      "retained_original_archive": "29f0dca15e2b9d47fbb45eef635299713b07b301de8043a2c03acae11b4772c4.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "400675cce091d55ed711664a1834ce613b219496a7cee832a12b30e8f41756ff",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/paradise-children-green-v4/proof.json",
+      "capture_seconds": 254.09971865601256,
+      "trace_sha256": "8e72736a5f55756df4bb24cea3e7cf53b553ca1e00ba338660be002ba294f5c3",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-368/candidates/87c2c059000de30f69a249552d192539ffc5189aa7ee7f08645e0b99b32dd31f.tar",
+      "replay_exit": 0,
+      "replay_seconds": 10039.477248068986,
+      "candidate_sha256": "87c2c059000de30f69a249552d192539ffc5189aa7ee7f08645e0b99b32dd31f",
+      "native_frames": 69301,
+      "replayed_frames": 69301,
+      "compared_stage_fields": 1705,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetVisible, Actor.xy, GameState.GetCurMusicSeconds",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "ff0df6772b3f1979965339a7da859eb8cb220e2cce6a986658cd7624ea53d348",
+      "archive": "16a290b2221a0920ef3d4ecc96be934abb892c7698ac7a816ae1a72a4fe3254e.tar.zst",
+      "archive_sha256": "16a290b2221a0920ef3d4ecc96be934abb892c7698ac7a816ae1a72a4fe3254e",
+      "compressed_bytes": 17869357,
+      "pack_seconds": 23.587257592997048,
+      "harness_version": "0.1.80",
+      "title": "Rayc Fire 2",
+      "retained_original_entry": {
+        "title": "Rayc Fire 2",
+        "source_simfile": "Rayc Fire 2 (SM5)/Rayc Fire 2.sm",
+        "harness_version": "0.1.0",
+        "archive": "29f0dca15e2b9d47fbb45eef635299713b07b301de8043a2c03acae11b4772c4.tar.zst",
+        "sha256": "29f0dca15e2b9d47fbb45eef635299713b07b301de8043a2c03acae11b4772c4",
+        "compressed_bytes": 2346983,
+        "uncompressed_sha256": "8d731239ef2da8030f68b78651513e3b7457c4b2adc5e88d525f9342d99ad9c5",
+        "compression_level": 22,
+        "aliases": [
+          "0c1cdcfc23d44d7241013de60fcd097c1f2106534dd29a369a9a307689e3f27d.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -11205,7 +11256,7 @@
   },
   "binary_sha256": "400675cce091d55ed711664a1834ce613b219496a7cee832a12b30e8f41756ff",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 28,
+  "passed_fixtures": 29,
   "pending_charts": 57,
-  "processed_charts": 85
+  "processed_charts": 86
 }

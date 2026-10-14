@@ -4484,15 +4484,12 @@
     {
       "title": "Rayc Fire 2",
       "source_simfile": "Rayc Fire 2 (SM5)/Rayc Fire 2.sm",
-      "harness_version": "0.1.0",
-      "archive": "29f0dca15e2b9d47fbb45eef635299713b07b301de8043a2c03acae11b4772c4.tar.zst",
-      "sha256": "29f0dca15e2b9d47fbb45eef635299713b07b301de8043a2c03acae11b4772c4",
-      "compressed_bytes": 2346983,
-      "uncompressed_sha256": "8d731239ef2da8030f68b78651513e3b7457c4b2adc5e88d525f9342d99ad9c5",
-      "compression_level": 22,
-      "aliases": [
-        "0c1cdcfc23d44d7241013de60fcd097c1f2106534dd29a369a9a307689e3f27d.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "16a290b2221a0920ef3d4ecc96be934abb892c7698ac7a816ae1a72a4fe3254e.tar.zst",
+      "sha256": "16a290b2221a0920ef3d4ecc96be934abb892c7698ac7a816ae1a72a4fe3254e",
+      "compressed_bytes": 17869357,
+      "uncompressed_sha256": "87c2c059000de30f69a249552d192539ffc5189aa7ee7f08645e0b99b32dd31f",
+      "aliases": []
     },
     {
       "title": "Rayc Fire 2",
