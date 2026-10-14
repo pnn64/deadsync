@@ -4667,15 +4667,12 @@
     {
       "title": "自撮ーる",
       "source_simfile": "Selfie - [JNero]/Selfie.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a6ff684844f24363390393b8107b2b8ea06089966c8e1c5e00c4188920cbadd4.tar.zst",
-      "sha256": "a6ff684844f24363390393b8107b2b8ea06089966c8e1c5e00c4188920cbadd4",
-      "compressed_bytes": 100748,
-      "uncompressed_sha256": "6abb0b829a6d522fdf52b0d99a070c00960b6e08c9a93995702daf88f6dd1a9d",
-      "compression_level": 22,
-      "aliases": [
-        "89d2b5a1e0a3941f641d4b944721b985f130121c460b1bdba19032dc1d124406.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "146977c6c7ecc43ce6fd0b9c791614e4eb61a68bd44b435b1c2628f1409f8ad9.tar.zst",
+      "sha256": "146977c6c7ecc43ce6fd0b9c791614e4eb61a68bd44b435b1c2628f1409f8ad9",
+      "compressed_bytes": 8940220,
+      "uncompressed_sha256": "8885f6fcc1002d839c64d6b57e954a838a67fd50f188da2e86d274d18a27ffa4",
+      "aliases": []
     },
     {
       "title": "September",
