@@ -1,0 +1,20 @@
+{
+  "expected_native_parser_baseline_failure_observed": true,
+  "source_pin_count": 1175,
+  "source_root": "/home/parity/workspace/native-cmd-arguments-v1/deadsync",
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 301.7540960430051,
+      "log_sha256": "282fd67b9e626475de64f51b2481e0eb02ee9475db2326628fe9c305b60c8617",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 604 filtered out; finished in 0.01s"
+      ]
+    }
+  ],
+  "target_failure_output": "    Finished `test` profile [unoptimized] target(s) in 5m 01s\n     Running unittests src/lib.rs (/home/parity/build/deadsync-v1/debug/deps/deadsync_song_lua-fd71db1c24d40168)\n\nrunning 1 test\ntest cmd::tests::preprocess_lua_cmd_accepts_native_adjacent_commands ... FAILED\n\nfailures:\n\n---- cmd::tests::preprocess_lua_cmd_accepts_native_adjacent_commands stdout ----\n\nthread 'cmd::tests::preprocess_lua_cmd_accepts_native_adjacent_commands' (1406292) panicked at crates/deadsync-song-lua/src/cmd.rs:333:14:\nnative cmd argument expressions end before the next command name: SyntaxError { message: \"crates/deadsync-song-lua/src/cmd.rs:332:2: ')' expected (to close '(' at line 1) near 'pulse'\", incomplete_input: false }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    cmd::tests::preprocess_lua_cmd_accepts_native_adjacent_commands\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 604 filtered out; finished in 0.01s\n\nerror: test failed, to rerun pass `-p deadsync-song-lua --lib`\n",
+  "green_validation_running": true,
+  "full_repair_attempts_spent": 1,
+  "final_full_repair_not_started": true
+}

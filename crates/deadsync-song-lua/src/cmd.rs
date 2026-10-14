@@ -65,13 +65,19 @@ fn lua_cmd_function(body: &str, out: &mut String) -> Result<(), String> {
             continue;
         }
         let (name, rest) = lua_cmd_name(command)?;
-        let name_lines = rest[..rest.len() - rest.trim_start().len()].chars().filter(|&ch| ch == '\n').count();
+        let name_lines = rest[..rest.len() - rest.trim_start().len()]
+            .chars()
+            .filter(|&ch| ch == '\n')
+            .count();
         let rest = rest.trim_start();
         let (args, argument_lines) = if rest.is_empty() {
             ("", 0)
         } else if let Some(args) = rest.strip_prefix(',') {
             let leading = args.len() - args.trim_start().len();
-            (args.trim(), args[..leading].chars().filter(|&ch| ch == '\n').count())
+            (
+                args.trim(),
+                args[..leading].chars().filter(|&ch| ch == '\n').count(),
+            )
         } else {
             return Err(format!("invalid cmd command '{command}'"));
         };
@@ -148,48 +154,256 @@ fn lua_cmd_commands(body: &str) -> Result<smallvec::SmallVec<[&str; 8]>, String>
     let mut out = smallvec::SmallVec::new();
     let mut start = 0;
     let mut index = 0;
-    let mut paren = 0_i32;
-    let mut brace = 0_i32;
-    let mut bracket = 0_i32;
-    let mut block = 0_i32;
-    while index < bytes.len() {
-        if body[index..].starts_with("--") {
-            index = lua_comment_end(body, index);
-        } else if matches!(bytes[index], b'\'' | b'"') {
-            index = lua_quoted_end(body, index)?;
-        } else if let Some(open_end) = lua_long_bracket_end(body, index) {
-            index = lua_long_string_end(body, index, open_end)?;
-        } else if bytes[index].is_ascii_alphabetic() || bytes[index] == b'_' {
-            let word = index;
-            while index < bytes.len() && lua_ident_byte(bytes[index]) {
+    loop {
+        index = lua_cmd_space(body, index);
+        if index == body.len() {
+            out.push(&body[start..]);
+            break;
+        }
+        if bytes[index] == b';' {
+            out.push(&body[start..index]);
+            index += 1;
+            start = index;
+            continue;
+        }
+        let (name, _) = lua_cmd_name(&body[index..])?;
+        index = lua_cmd_space(body, index + name.len());
+        if bytes.get(index) == Some(&b',') {
+            loop {
+                index = lua_cmd_expression(body, lua_cmd_space(body, index + 1))?;
+                index = lua_cmd_space(body, index);
+                if bytes.get(index) != Some(&b',') {
+                    break;
+                }
+            }
+        } else if index != body.len() && bytes[index] != b';' {
+            return Err(format!("invalid cmd command '{}'", body[start..].trim()));
+        }
+        // Native cmd_body resumes at the next Name after explist1. In
+        // particular, `sleep,0 pulse` contains two commands without a `;`.
+        out.push(&body[start..index]);
+        start = index;
+        if bytes.get(index) == Some(&b';') {
+            index += 1;
+            start = index;
+        }
+    }
+    Ok(out)
+}
+
+fn lua_cmd_space(source: &str, mut index: usize) -> usize {
+    while source
+        .as_bytes()
+        .get(index)
+        .is_some_and(u8::is_ascii_whitespace)
+    {
+        index += 1;
+    }
+    index
+}
+
+fn lua_cmd_word_end(source: &str, mut index: usize) -> usize {
+    while source
+        .as_bytes()
+        .get(index)
+        .is_some_and(|byte| lua_ident_byte(*byte))
+    {
+        index += 1;
+    }
+    index
+}
+
+// Find an expression's token boundary rather than evaluating it. Operator
+// precedence changes grouping, but not the end of a Lua expression.
+fn lua_cmd_expression(source: &str, mut index: usize) -> Result<usize, String> {
+    loop {
+        index = lua_cmd_operand(source, index)?;
+        let next = lua_cmd_space(source, index);
+        let rest = &source[next..];
+        let operator = [
+            "..", "==", "~=", "<=", ">=", "+", "-", "*", "/", "%", "^", "<", ">",
+        ]
+        .into_iter()
+        .find(|operator| rest.starts_with(operator))
+        .map(str::len)
+        .or_else(|| {
+            ["and", "or"]
+                .into_iter()
+                .find(|word| {
+                    rest.starts_with(word)
+                        && rest
+                            .as_bytes()
+                            .get(word.len())
+                            .is_none_or(|byte| !lua_ident_byte(*byte))
+                })
+                .map(str::len)
+        });
+        let Some(operator) = operator else {
+            return Ok(next);
+        };
+        index = lua_cmd_space(source, next + operator);
+    }
+}
+
+fn lua_cmd_operand(source: &str, mut index: usize) -> Result<usize, String> {
+    let bytes = source.as_bytes();
+    loop {
+        index = lua_cmd_space(source, index);
+        if matches!(bytes.get(index), Some(b'-' | b'#')) {
+            index += 1;
+        } else if source[index..].starts_with("not")
+            && bytes
+                .get(index + 3)
+                .is_none_or(|byte| !lua_ident_byte(*byte))
+        {
+            index += 3;
+        } else {
+            break;
+        }
+    }
+    let Some(&first) = bytes.get(index) else {
+        return Err("missing cmd argument expression".into());
+    };
+    let mut suffixes = false;
+    if matches!(first, b'\'' | b'"') {
+        index = lua_quoted_end(source, index)?;
+    } else if let Some(open_end) = lua_long_bracket_end(source, index) {
+        index = lua_long_string_end(source, index, open_end)?;
+    } else if first.is_ascii_digit()
+        || first == b'.' && bytes.get(index + 1).is_some_and(u8::is_ascii_digit)
+    {
+        index = lua_cmd_numeral_end(source, index)?;
+    } else if source[index..].starts_with("...") {
+        index += 3;
+    } else if first == b'(' || first == b'{' {
+        suffixes = first == b'(';
+        index = lua_cmd_group_end(source, index)?;
+    } else if first.is_ascii_alphabetic() || first == b'_' {
+        let end = lua_cmd_word_end(source, index);
+        if &source[index..end] == "function" {
+            index = lua_cmd_function_end(source, end)?;
+        } else {
+            suffixes = !matches!(&source[index..end], "nil" | "true" | "false");
+            index = end;
+        }
+    } else {
+        return Err(format!(
+            "invalid cmd argument expression near '{}'",
+            &source[index..]
+        ));
+    }
+    while suffixes {
+        let next = lua_cmd_space(source, index);
+        match bytes.get(next) {
+            Some(b'.' | b':') if !source[next..].starts_with("..") => {
+                let name = lua_cmd_space(source, next + 1);
+                let (word, _) = lua_cmd_name(&source[name..])?;
+                index = name + word.len();
+            }
+            Some(b'[') if lua_long_bracket_end(source, next).is_some() => {
+                index =
+                    lua_long_string_end(source, next, lua_long_bracket_end(source, next).unwrap())?;
+            }
+            Some(b'(' | b'{' | b'[') => index = lua_cmd_group_end(source, next)?,
+            Some(b'\'' | b'"') => index = lua_quoted_end(source, next)?,
+            _ => break,
+        }
+    }
+    Ok(index)
+}
+
+fn lua_cmd_numeral_end(source: &str, mut index: usize) -> Result<usize, String> {
+    let bytes = source.as_bytes();
+    if source[index..].starts_with("0x") || source[index..].starts_with("0X") {
+        index += 2;
+        while bytes.get(index).is_some_and(u8::is_ascii_hexdigit) {
+            index += 1;
+        }
+    } else {
+        while bytes
+            .get(index)
+            .is_some_and(|byte| byte.is_ascii_digit() || *byte == b'.')
+        {
+            index += 1;
+        }
+        if matches!(bytes.get(index), Some(b'e' | b'E')) {
+            index += 1;
+            if matches!(bytes.get(index), Some(b'+' | b'-')) {
                 index += 1;
             }
-            // Native cmd arguments are Lua expressions, including functions.
-            // A for/while block opens at `do`; elseif shares its existing if.
-            match &body[word..index] {
-                "function" | "if" | "do" | "repeat" => block += 1,
-                "end" | "until" => block -= 1,
-                _ => {}
+            while bytes.get(index).is_some_and(u8::is_ascii_digit) {
+                index += 1;
             }
+        }
+    }
+    if bytes.get(index).is_some_and(|byte| lua_ident_byte(*byte)) {
+        return Err("invalid numeral in cmd argument".into());
+    }
+    Ok(index)
+}
+
+fn lua_cmd_group_end(source: &str, open: usize) -> Result<usize, String> {
+    let bytes = source.as_bytes();
+    let mut closing = smallvec::SmallVec::<[u8; 8]>::new();
+    let mut index = open;
+    while index < bytes.len() {
+        if matches!(bytes[index], b'\'' | b'"') {
+            index = lua_quoted_end(source, index)?;
+        } else if let Some(open_end) = lua_long_bracket_end(source, index) {
+            index = lua_long_string_end(source, index, open_end)?;
         } else {
             match bytes[index] {
-                b'(' => paren += 1,
-                b')' => paren -= 1,
-                b'{' => brace += 1,
-                b'}' => brace -= 1,
-                b'[' => bracket += 1,
-                b']' => bracket -= 1,
-                b';' if paren == 0 && brace == 0 && bracket == 0 && block == 0 => {
-                    out.push(&body[start..index]);
-                    start = index + 1;
+                b'(' => closing.push(b')'),
+                b'{' => closing.push(b'}'),
+                b'[' => closing.push(b']'),
+                b')' | b'}' | b']' => {
+                    if closing.pop() != Some(bytes[index]) {
+                        return Err("unmatched cmd argument delimiter".into());
+                    }
+                    if closing.is_empty() {
+                        return Ok(index + 1);
+                    }
                 }
                 _ => {}
             }
-            index += 1;
+            index += source[index..]
+                .chars()
+                .next()
+                .expect("character boundary")
+                .len_utf8();
         }
     }
-    out.push(&body[start..]);
-    Ok(out)
+    Err("unterminated cmd argument delimiter".into())
+}
+
+fn lua_cmd_function_end(source: &str, mut index: usize) -> Result<usize, String> {
+    let bytes = source.as_bytes();
+    let mut blocks = 1;
+    while index < bytes.len() {
+        if matches!(bytes[index], b'\'' | b'"') {
+            index = lua_quoted_end(source, index)?;
+        } else if let Some(open_end) = lua_long_bracket_end(source, index) {
+            index = lua_long_string_end(source, index, open_end)?;
+        } else if bytes[index].is_ascii_alphabetic() || bytes[index] == b'_' {
+            let end = lua_cmd_word_end(source, index);
+            match &source[index..end] {
+                "function" | "if" | "do" | "repeat" => blocks += 1,
+                "end" | "until" => blocks -= 1,
+                _ => {}
+            }
+            if blocks == 0 {
+                return Ok(end);
+            }
+            index = end;
+        } else {
+            index += source[index..]
+                .chars()
+                .next()
+                .expect("character boundary")
+                .len_utf8();
+        }
+    }
+    Err("unterminated cmd function argument".into())
 }
 
 fn lua_matching_paren(source: &str, open: usize) -> Result<usize, String> {
@@ -317,6 +531,65 @@ mod tests {
     }
 
     #[test]
+    fn preprocess_lua_cmd_accepts_native_adjacent_commands() {
+        let source = r#"return cmd(sleep,0
+pulse; effectmagnitude,1,1,1;
+value, (2 + 3) * 4 nextvalue, false or 7;
+value, function() return {3, 4} end nextvalue, ({9, 10})[2];
+value, "literal" nextvalue, [=[long literal]=];
+value, math.max(2, 3) nextvalue, .5e+1;
+value, (function(x) return x end){11} nextvalue, -2^3;
+)"#;
+        let expanded = preprocess_lua_cmd_syntax(source).unwrap();
+        assert_eq!(expanded.matches('\n').count(), source.matches('\n').count());
+        let lua = mlua::Lua::new();
+        let command = lua
+            .load(expanded)
+            .eval::<mlua::Function>()
+            .expect("native cmd argument expressions end before the next command name");
+        let actor = lua
+            .load(
+                r#"
+            local a = {calls={}}
+            for _, name in ipairs({'sleep','pulse','effectmagnitude','value','nextvalue'}) do
+                a[name] = function(self, ...) self.calls[#self.calls+1] = {name, ...} end
+            end
+            return a
+        "#,
+            )
+            .eval::<mlua::Table>()
+            .unwrap();
+        command.call::<()>(actor.clone()).unwrap();
+        let calls: mlua::Table = actor.get("calls").unwrap();
+        assert_eq!(calls.raw_len(), 13);
+        assert_eq!(
+            calls.get::<mlua::Table>(1).unwrap().get::<i32>(2).unwrap(),
+            0
+        );
+        assert_eq!(calls.get::<mlua::Table>(2).unwrap().raw_len(), 1);
+        assert_eq!(
+            calls.get::<mlua::Table>(4).unwrap().get::<i32>(2).unwrap(),
+            20
+        );
+        assert_eq!(
+            calls.get::<mlua::Table>(5).unwrap().get::<i32>(2).unwrap(),
+            7
+        );
+        assert_eq!(
+            calls.get::<mlua::Table>(7).unwrap().get::<i32>(2).unwrap(),
+            10
+        );
+        assert_eq!(
+            calls.get::<mlua::Table>(11).unwrap().get::<i32>(2).unwrap(),
+            5
+        );
+        assert_eq!(
+            calls.get::<mlua::Table>(13).unwrap().get::<i32>(2).unwrap(),
+            -8
+        );
+    }
+
+    #[test]
     fn preprocess_lua_cmd_accepts_comments_between_commands_and_arguments() {
         let source = r#"return cmd(
             -- Disabled: x, 99; )
@@ -440,7 +713,11 @@ mod tests {
         let expanded = preprocess_lua_cmd_syntax(source).unwrap();
         assert_eq!(expanded.matches('\n').count(), source.matches('\n').count());
         let lua = mlua::Lua::new();
-        let functions = lua.load(expanded).set_name("@cmd-source-lines.lua").eval::<mlua::Table>().unwrap();
+        let functions = lua
+            .load(expanded)
+            .set_name("@cmd-source-lines.lua")
+            .eval::<mlua::Table>()
+            .unwrap();
         let first = functions.get::<mlua::Function>(1).unwrap().info();
         assert_eq!(first.line_defined, Some(2));
         assert_eq!(first.last_line_defined, Some(5));
