@@ -2813,16 +2813,10 @@ return Def.Actor{}
                 meter: 9, music_file: String::new(), possible_grade_points: 0,
             }];
             context.player_step_indices = [Some(0), None];
-            // Gameplay payloads use one minimized line per native note row,
-            // rather than authored measure divisions. A measure is 192 rows.
-            let mut notes = Vec::new();
-            for row in 0..=576 {
-                notes.extend_from_slice(match row {
-                    0 => b"1000\n", 192 => b"0M00\n", 384 => b"00F0\n",
-                    576 => b"000L\n", _ => b"0000\n",
-                });
-            }
-            context.song_step_notes = vec![notes.into()];
+            // Real payloads minimize row divisions. Four stored rows can
+            // span twelve beats; their indices are not native 48ths.
+            context.song_step_notes = vec![Arc::from(&b"1000\n0M00\n00F0\n000L\n"[..])];
+            context.song_step_row_beats = vec![Arc::from([0.0, 4.0, 8.0, 12.0])];
         });
         let mut scene = compiled.live_scene.expect("cue scene");
         scene.lua.load(r#"

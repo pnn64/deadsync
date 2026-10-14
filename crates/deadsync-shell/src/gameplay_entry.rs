@@ -235,10 +235,11 @@ pub fn song_lua_context(
     } else {
         0.0
     };
-    for (mut timing, notes) in inputs {
+    for (mut timing, notes, row_beats) in inputs {
         timing.shift_song_offset_seconds(sync_offset);
         context.song_step_timing.push(timing);
         context.song_step_notes.push(notes.into());
+        context.song_step_row_beats.push(row_beats.into());
     }
     for (player, profile) in context.players.iter_mut().zip(player_profiles) {
         let Some(choice) = deadsync_assets::textures::resolve_texture_choice_entry(

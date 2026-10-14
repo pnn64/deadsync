@@ -872,7 +872,7 @@ pub fn create_steps_table(
         lua.create_function(move |_, _args: MultiValue| Ok(radar.clone()))?,
     )?;
     set_string_method(lua, &table, "GetDisplayBPMType", "DISPLAY_BPM_ACTUAL")?;
-    install_step_column_cues(lua, &table, std::sync::Arc::from([]), steps_type)?;
+    install_step_column_cues(lua, &table, std::sync::Arc::from([]), std::sync::Arc::from([]), steps_type)?;
     Ok(table)
 }
 
@@ -2729,7 +2729,8 @@ fn create_song_steps(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result
             timing,
         )?;
         if let Some(notes) = context.song_step_notes.get(index) {
-            install_step_column_cues(lua, &value, notes.clone(), &step.steps_type)?;
+            let row_beats = context.song_step_row_beats.get(index).cloned().unwrap_or_default();
+            install_step_column_cues(lua, &value, notes.clone(), row_beats, &step.steps_type)?;
         }
         set_string_method(lua, &value, "GetDescription", &step.description)?;
         set_string_method(lua, &value, "GetChartName", &step.chart_name)?;
@@ -2746,6 +2747,7 @@ fn install_step_column_cues(
     lua: &Lua,
     steps: &Table,
     notes: std::sync::Arc<[u8]>,
+    row_beats: std::sync::Arc<[f32]>,
     steps_type: &str,
 ) -> mlua::Result<()> {
     let lanes = deadsync_chart::notes::step_type_lanes(
@@ -2778,7 +2780,10 @@ fn install_step_column_cues(
             let mut cursor = 0;
             while cursor < notes.len() {
                 let row = notes[cursor].row_index;
-                let beat = deadsync_core::timing::note_row_to_beat(row as i32);
+                // Payload rows retain their minimized divisions. Their beat
+                // map is the same input used by production gameplay timing.
+                let beat = row_beats.get(row).copied()
+                    .ok_or_else(|| mlua::Error::runtime("missing chart row beat for column cue"))?;
                 let time = elapsed.call::<f32>((timing.clone(), beat))?;
                 let duration = time - previous;
                 let emit = duration > minimum || previous == 0.0;

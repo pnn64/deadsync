@@ -1456,6 +1456,8 @@ pub struct SongLuaCompileContext {
     pub song_step_timing: Vec<deadsync_rules::timing::TimingData>,
     /// Minimized chart notes in `song_steps` order, loaded on the song worker.
     pub song_step_notes: Vec<Arc<[u8]>>,
+    /// Beat positions for minimized rows, in the same chart and row order.
+    pub song_step_row_beats: Vec<Arc<[f32]>>,
     pub song_music_rate: f32,
     /// Initial ITGmania PRNG seed; fixed per compilation for repeatable playback.
     /// Scripts may reseed it through math.randomseed or MersenneTwister.Seed.
@@ -1507,6 +1509,7 @@ impl SongLuaCompileContext {
             player_timing: std::array::from_fn(|_| None),
             song_step_timing: Vec::new(),
             song_step_notes: Vec::new(),
+            song_step_row_beats: Vec::new(),
             song_music_rate: 1.0,
             random_seed: 1,
             #[cfg(feature = "test-support")]

@@ -701,6 +701,66 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn native_double_session_selects_double_steps_and_runs_eight_column_scene() {
+        paths::init();
+        let dir = std::env::temp_dir().join(format!("deadsync-double-native-session-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let simfile = dir.join("mixed.sm");
+        std::fs::write(&simfile, "#TITLE:Double session;#BPMS:0=120;#FGCHANGES:-24=default.lua=1=0=0=1;\n#NOTES:dance-single:Single:Challenge:1:0,0,0,0,0:\n0001\n0000\n0000\n0000\n;\n#NOTES:dance-double:Double:Challenge:1:0,0,0,0,0:\n00000001\n00000000\n00000000\n00000000\n;").unwrap();
+        std::fs::write(dir.join("default.lua"), r#"
+return Def.ActorFrame { OnCommand=function(self)
+    local style = GAMESTATE:GetCurrentStyle()
+    assert(style:GetName() == 'double' and style:ColumnsPerPlayer() == 8)
+    assert(GAMESTATE:GetCurrentSteps(PLAYER_1):GetStepsType() == 'StepsType_Dance_Double')
+    local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+    local columns = player:GetChild('NoteField'):GetColumnActors()
+    assert(#columns == 8 and columns[8] ~= nil)
+    local spline = columns[8]:GetZoomHandler():GetSpline()
+    spline:SetSize(1); spline:SetPoint(1, {2,2,2}); spline:Solve()
+    local options = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Preferred')
+    local mapping = GetColumnMapping(PLAYER_1)
+    assert(#mapping == 8 and mapping[8] == 8)
+    options:Mirror(true)
+    mapping = GetColumnMapping(PLAYER_1)
+    for column=1,8 do assert(mapping[column] == 9-column) end
+    options:Mirror(false); options:NoHolds(true)
+    assert(GetColumnMapping(PLAYER_1) == nil, 'unsupported cue transform declines mapping')
+    options:NoHolds(false)
+    MESSAGEMAN:Broadcast('DoubleSceneReady')
+end }
+"#).unwrap();
+        let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, -0.008).unwrap());
+        let session = super::native_gameplay_session(&json!({"style":"double"})).unwrap();
+        let selected = super::native_starting_chart(&song, &session, Some("Challenge")).unwrap();
+        assert_eq!(selected, 1, "same-difficulty single chart is not the double chart");
+        assert!(super::native_starting_chart(&song, &session, Some("Hard")).is_err());
+        let chart = Arc::new(song.charts[selected].clone());
+        let charts = [chart.clone(), chart];
+        let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[selected], -0.008).unwrap().remove(0));
+        let payloads = [payload.clone(), payload];
+        let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+        let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
+        let config = GameplayConfig { global_offset_seconds: -0.008, ..Default::default() };
+        let viewport = GameplayViewport::default();
+        let mut context = deadsync_shell::gameplay_entry::song_lua_context(&song, &charts,
+            std::array::from_fn(|p| &payloads[p].timing), &profiles, &scroll, 1.0, viewport,
+            (854, 480), 16.0/9.0, 1.0, &session, &config, "null", 1, true).unwrap();
+        context.defer_initial_live_update = true;
+        let prepared = deadsync_song_lua::playback::prepare_song_lua(&song, &context,
+            deadsync_assets::song_lua::compile_song_lua, deadsync_assets::song_lua::compile_song_lua_layers);
+        let mut state = gameplay::init(song, charts, payloads, viewport, session, config,
+            5, 1.0, scroll, profiles, None, None, None, Arc::from("EVENT"), None, None, None,
+            None, None, [deadsync_gameplay::CourseLifeConfig::Bar; 2], false, None, None,
+            [0; 2], prepared, Default::default());
+        assert_eq!(state.gameplay.cols_per_player(), 8);
+        let output = state.song_lua.as_mut().expect("retained double scene")
+            .advance(deadsync_song_lua::SongLuaLiveFrame { music_seconds: 0.0,
+                screen_seconds: 0.1, delta_seconds: 0.1, ..Default::default() }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert!(output.broadcasts.iter().any(|(_, name, _)| name == "DoubleSceneReady"), "double On executed");
+    }
+
+    #[test]
     fn native_capture_rejects_incomplete_or_failed_traces() {
         let complete = serde_json::json!({
             "oracle": "itgmania_song_lua_semantic_trace",
@@ -2415,6 +2475,25 @@ fn compare_stage_sample(
     Ok(fields.len())
 }
 
+fn native_gameplay_session(trace: &Value) -> Result<GameplaySession, String> {
+    use deadsync_gameplay::GameplayInputPlayStyle;
+    let play_style = match trace["style"].as_str() {
+        Some("single") => GameplayInputPlayStyle::Single,
+        Some("double") => GameplayInputPlayStyle::Double,
+        _ => return Err("live replay currently supports dance-single and dance-double; other styles remain pending".into()),
+    };
+    Ok(GameplaySession { play_style, ..Default::default() })
+}
+
+fn native_starting_chart(
+    song: &deadsync_chart::SongData, session: &GameplaySession, difficulty: Option<&str>,
+) -> Result<usize, String> {
+    let steps_type = if session.play_style.is_double() { "dance-double" } else { "dance-single" };
+    song.charts.iter().position(|chart| chart.chart_type == steps_type
+        && difficulty.is_none_or(|wanted| chart.difficulty.eq_ignore_ascii_case(wanted)))
+        .ok_or_else(|| "requested native starting chart is absent".into())
+}
+
 pub(crate) fn replay(
     trace: &Value,
     trace_path: &Path,
@@ -2424,12 +2503,7 @@ pub(crate) fn replay(
 ) -> Result<Value, String> {
     validate_capture(&trace)?;
     let autoplay = native_autoplay(&trace)?;
-    if trace["style"] != "single" {
-        return Err(
-            "live replay currently supports dance-single; other styles remain pending"
-                .into(),
-        );
-    }
+    let session = native_gameplay_session(trace)?;
     let frames = trace["update_frames"]
         .as_array()
         .filter(|frames| !frames.is_empty())
@@ -2520,14 +2594,7 @@ pub(crate) fn replay(
         simfile,
         config.global_offset_seconds,
     )?);
-    let initial = song
-        .charts
-        .iter()
-        .position(|chart| {
-            chart.chart_type == "dance-single"
-                && difficulty.is_none_or(|wanted| chart.difficulty.eq_ignore_ascii_case(wanted))
-        })
-        .ok_or("requested native starting chart is absent")?;
+    let initial = native_starting_chart(&song, &session, difficulty)?;
     let first = Arc::new(song.charts[initial].clone());
     let charts = [first.clone(), first];
     let initial_payload = Arc::new(
@@ -2541,7 +2608,6 @@ pub(crate) fn replay(
     let payloads = [initial_payload.clone(), initial_payload];
     let profiles = native_profile_inputs(&trace)?;
     let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
-    let session = GameplaySession::default();
     let viewport = GameplayViewport::new(
         number(&trace["display"], "logical_width")? as f32,
         number(&trace["display"], "logical_height")? as f32,

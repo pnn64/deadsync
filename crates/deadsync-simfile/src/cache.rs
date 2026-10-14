@@ -2455,7 +2455,7 @@ pub fn load_chart_timings(
 ) -> Result<Vec<TimingData>, String> {
     Ok(load_chart_timing_and_notes(song, options, music_len)?
         .into_iter()
-        .map(|(timing, _)| timing)
+        .map(|(timing, _, _)| timing)
         .collect())
 }
 
@@ -2464,7 +2464,7 @@ pub fn load_chart_timing_and_notes(
     song: &SongData,
     options: &GameplayChartLoadOptions<'_>,
     music_len: impl FnOnce(Option<&Path>) -> f32,
-) -> Result<Vec<(TimingData, Vec<u8>)>, String> {
+) -> Result<Vec<(TimingData, Vec<u8>, Vec<f32>)>, String> {
     if options.allow_cache_read {
         let cached = (|| {
             let cache_path = song_cache_path(options.cache_dir, &song.simfile_path).ok()?;
@@ -2487,6 +2487,7 @@ pub fn load_chart_timing_and_notes(
                             &[],
                         ),
                         payload.notes,
+                        payload.row_to_beat,
                     ))
                 })
                 .collect::<Option<Vec<_>>>()
@@ -2513,6 +2514,7 @@ pub fn load_chart_timing_and_notes(
                     &[],
                 ),
                 chart.notes,
+                chart.row_to_beat,
             )
         })
         .collect())

@@ -274,14 +274,14 @@ pub fn load_chart_timings(
 ) -> Result<Vec<deadsync_rules::timing::TimingData>, String> {
     Ok(load_chart_timing_and_notes(song, global_offset_seconds)?
         .into_iter()
-        .map(|(timing, _)| timing)
+        .map(|(timing, _, _)| timing)
         .collect())
 }
 
 pub fn load_chart_timing_and_notes(
     song: &SongData,
     global_offset_seconds: f32,
-) -> Result<Vec<(deadsync_rules::timing::TimingData, Vec<u8>)>, String> {
+) -> Result<Vec<(deadsync_rules::timing::TimingData, Vec<u8>, Vec<f32>)>, String> {
     let parse_options = parse_song_options();
     let options = crate::runtime::gameplay_chart_load_options(
         song, &paths().song_cache, &parse_options,
