@@ -3482,17 +3482,12 @@
     {
       "title": "Longinus",
       "source_simfile": "Longinus - [Zaia]/Longinus.sm",
-      "harness_version": "0.1.6",
-      "archive": "130bf8daad51399eabf6a5bd26afdc90173cc76c67da654a96a06ab176fdd3eb.tar.zst",
-      "sha256": "130bf8daad51399eabf6a5bd26afdc90173cc76c67da654a96a06ab176fdd3eb",
-      "compressed_bytes": 77385,
-      "uncompressed_sha256": "44b75262ee935042b75c127922f12c8fd737d90b684d8904b48f5d98aced1a74",
-      "compression_level": 22,
-      "aliases": [
-        "924fafa319452c80fb356a940e1758660ede80d43b96bf5cd0a45b5968e1176b.tar.zst",
-        "fc7d293d344b4bd1bf11b6866bcb4ccd32c142ef9c018c930bec7bcfbffaee12.tar.zst",
-        "c1f98347facad7734640f71dd4c9d3850dd60ab29253c51f2828798219342634.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "224ca750687b7b3f3c4b379c3622edadee87ba11bc7bac1ab138e6b63f03db75.tar.zst",
+      "sha256": "224ca750687b7b3f3c4b379c3622edadee87ba11bc7bac1ab138e6b63f03db75",
+      "compressed_bytes": 12816603,
+      "uncompressed_sha256": "abe6d301ae65dbf4d720012c50e20255fa278137fc6dd923da774feba9777c77",
+      "aliases": []
     },
     {
       "title": "LOOP",
