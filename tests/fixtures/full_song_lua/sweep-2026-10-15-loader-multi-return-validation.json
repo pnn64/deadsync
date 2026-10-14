@@ -51,9 +51,15 @@
     "all_normalized_source_pins_and_check_logs_verified": true
   },
   "linux": {
-    "status": "waiting for ENOSPC recovery and immutable Pokemon green baseline; expected red then green scheduled",
+    "status": "green checks running after verified one-test red reproduction",
     "red_waiter_pid": 898940,
-    "green_waiter_pid": 898941
+    "green_waiter_pid": 982188,
+    "expected_single_test_failure_reproduced": true,
+    "zero_matching_test_result_rejected": true,
+    "source_timestamp_refresh_forces_actual_rebuild": true,
+    "red_proof": "/home/parity/jobs/loader-multi-return-linux-red-v1/proof.json",
+    "tested_selector_pid": 982189,
+    "first_repair_queue_pid": 1000682
   },
   "affected_actual_failures": [
     "STEVE VERY HARD/STEVE VERY HARD.ssc",

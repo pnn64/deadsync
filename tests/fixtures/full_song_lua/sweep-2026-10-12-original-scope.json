@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T21:54:53Z",
+  "updated_utc": "2026-10-14T22:42:24Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 332,
-    "pending": 101,
-    "unprocessed": 68
+    "passed": 335,
+    "pending": 112,
+    "unprocessed": 54
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3405,7 +3405,9 @@
       "position": 405,
       "source_simfile": "Someone Special - hubert/Someone Special.ssc",
       "simfile_sha256": "b279384ecd66c19bd62f6969503bb0c93854027ec88fbf6e21d59fe361116cf2",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 406,
@@ -3441,9 +3443,9 @@
       "position": 410,
       "source_simfile": "spooky (SM 12)/spooky (Tech-Stam cut).ssc",
       "simfile_sha256": "c511f139ca6b9687612ea5fd120aec3973e1eb2a24a8d9b1920e1bbca49b579d",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-capture-selection-first-repairs.json"
     },
     {
       "position": 411,
@@ -3485,7 +3487,9 @@
       "position": 416,
       "source_simfile": "Stella Glow/Stella Glow.ssc",
       "simfile_sha256": "55b95249b44773d770c1700d4791173ca3a7ec04b3bd57dc39e51e349ce15edc",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 417,
@@ -3507,7 +3511,9 @@
       "position": 419,
       "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
       "simfile_sha256": "7da60c3cba1434e6c4eb48937abb9dcb0266a9a2686196274252fa555c3af30d",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 420,
@@ -3541,7 +3547,9 @@
       "position": 424,
       "source_simfile": "Talk About/talkabout.sm",
       "simfile_sha256": "3f1bd2e358d9712250fa99601b6101386464a5ea59a62c754aa7286fa27bb1b4",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 425,
@@ -3563,13 +3571,17 @@
       "position": 427,
       "source_simfile": "tamashi/tamashi.sm",
       "simfile_sha256": "cafe0801b0cc0958ccb8a2ec113186feb7c177f5db76be400e4227acacac1250",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 428,
       "source_simfile": "Tear Jerker/tearjerker.sm",
       "simfile_sha256": "b8069e6cb3ce841a80cd9ee7c413108e9a450f19a481dd3ea5145dd210ecc031",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 429,
@@ -3595,7 +3607,9 @@
       "position": 432,
       "source_simfile": "The Entity/The Entity.ssc",
       "simfile_sha256": "c4808c70ab4505fe4cd87d3e39a55be8629cb03628ca4e19aef9568d20b77eff",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 433,
@@ -3623,7 +3637,9 @@
       "position": 436,
       "source_simfile": "The Scale/The Scale.ssc",
       "simfile_sha256": "c8074e00d27e85d053acf991a1886b8232d63ddb052494f4b6303e1cba072ede",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 437,
@@ -3635,7 +3651,9 @@
       "position": 438,
       "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.sm",
       "simfile_sha256": "325e86230449989c83c5e1a2fb2ff61c36220675dfd3ea95582decc85711177f",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 439,
@@ -3647,7 +3665,9 @@
       "position": 440,
       "source_simfile": "Think About You/Think About You.sm",
       "simfile_sha256": "d01ff4ef09316dc0d24520e9ae7df0c98d8f3754bcacb2aa20fef875c3c3ec99",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 441,
@@ -3687,7 +3707,9 @@
       "position": 446,
       "source_simfile": "Trancing Pulse (Random)/Trancing Pulse (Random).ssc",
       "simfile_sha256": "84256242f02679956d7bd96c469f22cc2363690497e69efc63830e75e5fc6552",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 447,
@@ -3705,9 +3727,9 @@
       "position": 449,
       "source_simfile": "Turn A - [Freya]/turn_a.ssc",
       "simfile_sha256": "7877692800f17f5cb85481cc652be8317830640b81c55b87d7c3c49da5a55990",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-turn-a-preference-first-repair.json"
     },
     {
       "position": 450,
@@ -3913,7 +3935,9 @@
       "position": 481,
       "source_simfile": "Young Dumb And Broke/YDB.ssc",
       "simfile_sha256": "8768a55012287ef1a6fb4f70a6b18e53f129ec03782bb3d2dfdbdf0517377d4c",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 482,
@@ -3963,7 +3987,9 @@
       "position": 489,
       "source_simfile": "Cursed Metamorph - [Zaia]/saved/Cursed Metamorph.ssc",
       "simfile_sha256": "08f8865ca23a834cbed37f92c94f5c5439c2cf6eec65fbaff66d9d827e60aa50",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 490,
@@ -4013,7 +4039,9 @@
       "position": 497,
       "source_simfile": "mr sandman/mr sandman.sm",
       "simfile_sha256": "e2262781ebdd5afd187dbdb5ce568db701ed7a4b6f8b856dbeb4f471c17b27c3",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 498,
