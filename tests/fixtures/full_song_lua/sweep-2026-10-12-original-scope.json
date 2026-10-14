@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-13T23:50:03Z",
+  "updated_utc": "2026-10-14T00:17:06Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -14,8 +14,8 @@
   ],
   "counts": {
     "passed": 233,
-    "pending": 83,
-    "unprocessed": 185
+    "pending": 84,
+    "unprocessed": 184
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2845,7 +2845,9 @@
       "position": 341,
       "source_simfile": "Paint the Town Red/PaintTheTownRed.ssc",
       "simfile_sha256": "8a10265702779990b74a9f9e49c21f41c8eb645e8677a59c98f6d808b628ad5c",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 342,
