@@ -4470,15 +4470,12 @@
     {
       "title": "Rapture",
       "source_simfile": "Rapture/Rapture cut-fakemines.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a87bf7a4c94d98225592ba15938593cb194fc907656032ffe5bc203da1c23b90.tar.zst",
-      "sha256": "a87bf7a4c94d98225592ba15938593cb194fc907656032ffe5bc203da1c23b90",
-      "compressed_bytes": 62543,
-      "uncompressed_sha256": "1ed3b2e11cfe31e90ff80dc4c3d30a54122b99175b99c30c3b3c576e3013f1e4",
-      "compression_level": 22,
-      "aliases": [
-        "34cee9b215bec0960072357544220667c479ad3008ce60667594b7c1360c034c.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "f5e7ed7e18dbbb16c8a117999116c7f52d5e82ea0ded217242f4059ee4ca2e71.tar.zst",
+      "sha256": "f5e7ed7e18dbbb16c8a117999116c7f52d5e82ea0ded217242f4059ee4ca2e71",
+      "compressed_bytes": 11975186,
+      "uncompressed_sha256": "be51e78675303f2ec02c628d281ff954dac626b766a5e5a0050876a1f4459107",
+      "aliases": []
     },
     {
       "title": "Raving With Fire",
