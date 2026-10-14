@@ -1,0 +1,24 @@
+{
+  "verification": "Storage byte integrity only; complete replay acceptance remains closed.",
+  "acceptance_gate_added": false,
+  "results": [
+    {
+      "source_simfile": "Life Cheating Game/lifecheatinggame.ssc",
+      "archive": "ea53614c9457f9fa41248be5afcdfadffcc9f7408f74f879acdd83978a24b54b.tar.zst",
+      "compressed_sha256": "ea53614c9457f9fa41248be5afcdfadffcc9f7408f74f879acdd83978a24b54b",
+      "uncompressed_sha256": "d6c3def5524b1ff5b8d0e8dfea1b11916b7656f8d08ef366370b9c2300a63e6c",
+      "compressed_bytes": 7976788,
+      "local_decompression_byte_verified": true,
+      "passing_chart_reopened": false
+    },
+    {
+      "source_simfile": "If You Crump Stand Up/crump.sm",
+      "archive": "51dc07f45646ee7ee65906490783ca6f631f2103890f09a309b18fb2f22495c4.tar.zst",
+      "compressed_sha256": "51dc07f45646ee7ee65906490783ca6f631f2103890f09a309b18fb2f22495c4",
+      "uncompressed_sha256": "97a083ba096c2ecf217eb4a6ccee7c5bd8c37e2448ea2436d0e209a0f662da97",
+      "compressed_bytes": 6617127,
+      "local_decompression_byte_verified": true,
+      "passing_chart_reopened": false
+    }
+  ]
+}
