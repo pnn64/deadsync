@@ -1,0 +1,14 @@
+{
+  "red_report_sha256": "1e14d2b2d3305b1955cf7b6fd2184c7adc77f4c8267444d74cd05d5fbe2e3007",
+  "green_report_sha256": "b9007ca86b43519194b39cf81044da0b6f25301561a3e68f7f7f0124f2453642",
+  "red_mismatches": 1,
+  "green_mismatches": 0,
+  "green_errors": [],
+  "cutoff_frames": 4128,
+  "archive_accepted": false,
+  "native_capture_sha256": "f813961ad235573b82a041951b36cbc587888d3c1758f0261bc3f2d0af71f0a7",
+  "source_fix_commit": "e56f30a19e218e261ebbd1ad245ca2a49520f61b",
+  "full_repairs_spent_before_launch": 1,
+  "full_repairs_remaining_before_launch": 1,
+  "cutoff_checks_are_not_full_acceptance": true
+}
