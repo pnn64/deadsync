@@ -3436,15 +3436,12 @@
     {
       "title": "Life Cheating Game",
       "source_simfile": "Life Cheating Game/lifecheatinggame.ssc",
-      "harness_version": "0.1.0",
-      "archive": "bcf3e7f0e00b0eac4974127394505aac8facfd8402cd6b3f4b917d738de458ea.tar.zst",
-      "sha256": "bcf3e7f0e00b0eac4974127394505aac8facfd8402cd6b3f4b917d738de458ea",
-      "compressed_bytes": 75572,
-      "uncompressed_sha256": "cdb35c605900f615727597e0b3e5f7ea1b79e8aaefb2ee146902be02493ad4f1",
-      "compression_level": 22,
-      "aliases": [
-        "a8a804898b629629351d04998a8f470451037ba16a80d54cf826062fc097382d.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "ea53614c9457f9fa41248be5afcdfadffcc9f7408f74f879acdd83978a24b54b.tar.zst",
+      "sha256": "ea53614c9457f9fa41248be5afcdfadffcc9f7408f74f879acdd83978a24b54b",
+      "compressed_bytes": 7976788,
+      "uncompressed_sha256": "d6c3def5524b1ff5b8d0e8dfea1b11916b7656f8d08ef366370b9c2300a63e6c",
+      "aliases": []
     },
     {
       "title": "Limitless",
