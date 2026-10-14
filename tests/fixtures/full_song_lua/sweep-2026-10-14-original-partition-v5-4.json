@@ -209,6 +209,25 @@
         }
       ],
       "report_sha256": "b236f3165f33e14a587d5e32775bf7df4eb61dc922eda1378eb4738ccfe385ac"
+    },
+    {
+      "position": 391,
+      "source_simfile": "See Tinh/See Tinh.ssc",
+      "simfile_sha256": "38cead7310020cd16c5bf90eb8ca7d0026e562364eb34d7db18a320e43cc5546",
+      "retained_original_archive": "77176aa9c15fab64849e08157302aab7ff3cccb0956e31261b058bbd5eac3e73.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "b97bcedd8f8d8d88dac55531a7d287cb7bbccd69",
+      "build_proof": "/home/parity/jobs/music-fade-end-linux-green-v1/proof.json",
+      "capture_seconds": 243.97626814400428,
+      "trace_sha256": "22ba88d152a667bcc0ce08301aae4bfab314b8d27bdf2d6b8339ae6900c3a565",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-4/chart-391/candidates/fd6d290bc5da6313c089b3000d454ca65023587404fbad506f86235387d18131.tar",
+      "replay_exit": 1,
+      "replay_seconds": 33.77065298598609,
+      "candidate_sha256": "fd6d290bc5da6313c089b3000d454ca65023587404fbad506f86235387d18131",
+      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[13.8s] replaying every native gameplay frame\n[14.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'See Tinh 「Cukak Remix」': failed to execute '/tmp/.tmp2gH3Yk/song/lua/default.lua': runtime error: [string \"/tmp/.tmp2gH3Yk/song/lua/mods-taro.lua\"]:514: attempt to index global 'GameState' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/mods-taro.lua\"]:514: in main chunk\n\t[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\nstack traceback:\n\t>[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'See Tinh 「Cukak Remix」' from '/tmp/.tmp2gH3Yk/song/lua/default.lua': failed to execute '/tmp/.tmp2gH3Yk/song/lua/default.lua': runtime error: [string \"/tmp/.tmp2gH3Yk/song/lua/mods-taro.lua\"]:514: attempt to index global 'GameState' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/mods-taro.lua\"]:514: in main chunk\n\t[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\nstack traceback:\n\t>[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\n\n[16.0s] replaying every native gameplay frame: frame 0/42885 (0.0%)\n\nthread 'main' (4106265) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[18.0s] replaying every native gameplay frame: frame 0/42885 (0.0%)\n"
     }
   ],
   "scope": {
@@ -217,9 +236,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
+  "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 3,
-  "pending_charts": 2,
-  "processed_charts": 5
+  "pending_charts": 3,
+  "processed_charts": 6
 }
