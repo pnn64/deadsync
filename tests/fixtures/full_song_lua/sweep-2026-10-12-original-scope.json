@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T23:12:30Z",
+  "updated_utc": "2026-10-14T23:26:46Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 339,
-    "pending": 113,
-    "unprocessed": 49
+    "passed": 343,
+    "pending": 112,
+    "unprocessed": 46
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3405,9 +3405,9 @@
       "position": 405,
       "source_simfile": "Someone Special - hubert/Someone Special.ssc",
       "simfile_sha256": "b279384ecd66c19bd62f6969503bb0c93854027ec88fbf6e21d59fe361116cf2",
-      "status": "pending",
+      "status": "passed",
       "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "evidence": "sweep-2026-10-15-post-accept-reporter-recovery.json"
     },
     {
       "position": 406,
@@ -3529,7 +3529,9 @@
       "position": 421,
       "source_simfile": "Stuck in the Abyss [DDDAAA]/stuckintheabyss.ssc",
       "simfile_sha256": "3b95302912ee6f885ec870171eaf713ed6243dffe37d648f1333fa6c2480cdb8",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 422,
@@ -3573,9 +3575,9 @@
       "position": 427,
       "source_simfile": "tamashi/tamashi.sm",
       "simfile_sha256": "cafe0801b0cc0958ccb8a2ec113186feb7c177f5db76be400e4227acacac1250",
-      "status": "pending",
+      "status": "passed",
       "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "evidence": "sweep-2026-10-15-post-accept-reporter-recovery.json"
     },
     {
       "position": 428,
@@ -3641,9 +3643,9 @@
       "position": 436,
       "source_simfile": "The Scale/The Scale.ssc",
       "simfile_sha256": "c8074e00d27e85d053acf991a1886b8232d63ddb052494f4b6303e1cba072ede",
-      "status": "pending",
+      "status": "passed",
       "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "evidence": "sweep-2026-10-15-post-accept-reporter-recovery.json"
     },
     {
       "position": 437,
@@ -3757,7 +3759,9 @@
       "position": 452,
       "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.ssc",
       "simfile_sha256": "6089de409f4818e67acada887c3d1e8ad147c8b080d874ebe4b05aa5aa24e4e4",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 453,
@@ -3811,7 +3815,9 @@
       "position": 460,
       "source_simfile": "Velvet LEFTS 1/chart.ssc",
       "simfile_sha256": "a38146c07ea9483591ae94748621822e163c8ad283e60fe1273048a229f94514",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 461,

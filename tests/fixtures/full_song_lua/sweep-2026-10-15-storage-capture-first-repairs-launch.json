@@ -1,0 +1,44 @@
+{
+  "scope": {
+    "original_simfiles": 501,
+    "charts": 2,
+    "original_scope_preserved": true
+  },
+  "charts": [
+    {
+      "position": 424,
+      "source_simfile": "Talk About/talkabout.sm",
+      "simfile_sha256": "3f1bd2e358d9712250fa99601b6101386464a5ea59a62c754aa7286fa27bb1b4",
+      "style": "single",
+      "difficulty": "Challenge",
+      "previous_result": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-424/result.json",
+      "complete_native_capture_available": false,
+      "previous_failure": "runtime native JSON truncated at 116531200 bytes during the verified full-disk incident"
+    },
+    {
+      "position": 432,
+      "source_simfile": "The Entity/The Entity.ssc",
+      "simfile_sha256": "c4808c70ab4505fe4cd87d3e39a55be8629cb03628ca4e19aef9568d20b77eff",
+      "style": "single",
+      "difficulty": "Challenge",
+      "previous_result": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-432/result.json",
+      "complete_native_capture_available": false,
+      "previous_failure": "native staging mkdir failed with ENOSPC before capture"
+    }
+  ],
+  "first_repair_only": true,
+  "one_later_full_repair_maximum_each": true,
+  "storage_recovery_evidence": "sweep-2026-10-15-native-trace-storage-recovery.json",
+  "source_selection_from_original_simfile": true,
+  "acceptance_changed": false,
+  "pid": 1267736,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_storage_capture_first_repairs_v1.py"
+  ],
+  "first_repairs_only": true,
+  "fresh_capture_reason": "incomplete or absent native data during verified ENOSPC; original failure data preserved",
+  "paired_sparse_helper_sha256": "375fb5facffc717409b9b22e354eb2bddfd03358b9d9126ec5d00ceb3318b195",
+  "paired_harness_sha256": "ea7314391554e3fc933a5531ba71f6a93a70a35f8e3b8c8706358dc60420e36c",
+  "publisher_stream_count": 125
+}
