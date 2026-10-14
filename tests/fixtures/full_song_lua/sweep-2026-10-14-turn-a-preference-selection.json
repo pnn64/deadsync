@@ -1,0 +1,13 @@
+{
+  "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+  "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+  "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+  "validated_source_root": "/home/parity/workspace/turn-a-preferences-v2/deadsync",
+  "source_pin_count": 1175,
+  "all_tested_raw_and_normalized_source_pins_verified": true,
+  "windows_and_linux_all_five_checks_passed": true,
+  "active_source_files_modified": false,
+  "local_user_views_edited": false,
+  "running_replays_restarted": false,
+  "native_harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4"
+}
