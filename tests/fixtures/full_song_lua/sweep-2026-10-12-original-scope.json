@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T13:07:50Z",
+  "updated_utc": "2026-10-14T13:22:47Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 269,
-    "pending": 74,
-    "unprocessed": 158
+    "passed": 271,
+    "pending": 75,
+    "unprocessed": 155
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2357,9 +2357,9 @@
       "position": 274,
       "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
       "simfile_sha256": "ddcc948b1b0fb8f936faf2cc1c8e3556149e9305db7d8eaaf7347724aeb3aeea",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-14-door-cringle-sm-screen-tree-repair.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-14-door-cringle-sm-attack-final-repair.json"
     },
     {
       "position": 275,
@@ -2731,7 +2731,9 @@
       "position": 322,
       "source_simfile": "My Penny/My Penny.ssc",
       "simfile_sha256": "c068da62f7dc51d0898f667568ec7b043295b6e31abe654fdd32d0110f4ef754",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-4.json"
     },
     {
       "position": 323,
@@ -2753,7 +2755,9 @@
       "position": 325,
       "source_simfile": "Neon Nights - [Zaia]/Neon Nights.ssc",
       "simfile_sha256": "edb425865ce2261b1e659f875a343dc7436b893af2c8188adcca704ff399e531",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 326,
@@ -3133,7 +3137,9 @@
       "position": 380,
       "source_simfile": "Ruin Our Friendship/RuinOurFriendship.ssc",
       "simfile_sha256": "f6ca5379055f264bcf41c1c1efe9b022a22789529220240dd6870d34e31ccb8a",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-v5-ruin-report-recovery.json"
     },
     {
       "position": 381,
