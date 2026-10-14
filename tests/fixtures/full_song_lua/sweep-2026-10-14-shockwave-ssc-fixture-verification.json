@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "ShockWAVE Syndrome  [-YOSEFU-]/ShockWAVE Syndrome.ssc",
+  "native_frames": 94923,
+  "replayed_frames": 94923,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "a602f638e6e7ab3f1395b1bf19fefcb927f6cb0c3037bc3e0891cfe27e3b06c3.tar.zst",
+  "compressed_sha256": "a602f638e6e7ab3f1395b1bf19fefcb927f6cb0c3037bc3e0891cfe27e3b06c3",
+  "uncompressed_sha256": "e811b74abefbfc8071629aa12dd54b599eeb2bbdcfd877f1cff88496b344b3c4",
+  "compressed_bytes": 5075649,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Planet Calling/Planet Calling.ssc",
+  "native_frames": 6820,
+  "replayed_frames": 6820,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "6f671caa7eff7cd5c9c49309debfa6f58ae0683cb3cf3864af444e8964e3a935.tar.zst",
+  "compressed_sha256": "6f671caa7eff7cd5c9c49309debfa6f58ae0683cb3cf3864af444e8964e3a935",
+  "uncompressed_sha256": "bc92d0d1dd09a4937ef7cc939da1f0380c259ac14afb414edd62b044d798aad1",
+  "compressed_bytes": 11303469,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
