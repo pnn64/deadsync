@@ -1,0 +1,81 @@
+{
+  "selected_build": {
+    "build_proof": "/home/parity/jobs/modulo-cpu-green-v1/proof.json",
+    "harness_proof": "/home/parity/jobs/listed-lua-schema-build-v1/proof.json",
+    "fix_commit": "5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a"
+  },
+  "binary_sha256": "62659d350949f3074029c04eefbe46b03ab09c55a49e5abd6593087868cb7d50",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "actual_source_pins": 34,
+  "harness_source_pins": 3,
+  "repairs": [
+    {
+      "position": 317,
+      "source_simfile": "MODULO/modulo.ssc",
+      "attempt_started": 2,
+      "per_chart_limit": 2,
+      "remaining_repairs_after_this_attempt": 0,
+      "launch_receipt": {
+        "supervisor_pid": 3771192,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_modulo_cpu_steps_final_repair_v1.py",
+          "317"
+        ]
+      },
+      "live_observation": {
+        "pid": 3771451,
+        "command": [
+          "/home/parity/jobs/modulo-cpu-green-v1/full-song-lua-stage-modifier-v1",
+          "--archive",
+          "/home/parity/jobs/modulo-cpu-steps-final-repair-v1/chart-317/1656e72fc18dcd4daf1fc5c2316e242df3ec0703d5a65d54e2cc4cf942c3f006.tar",
+          "--report",
+          "/home/parity/jobs/modulo-cpu-steps-final-repair-v1/chart-317/report.json"
+        ],
+        "label": "replay",
+        "source_simfile": "MODULO/modulo.ssc"
+      },
+      "exact_process_matches": [
+        true,
+        true
+      ],
+      "attempt_start": {
+        "position": 317,
+        "source_simfile": "MODULO/modulo.ssc",
+        "status": "pending",
+        "repair_attempts": 2,
+        "previous_concrete_failures": [],
+        "previous_errors": [],
+        "previous_failure": "play frame: frame 17940/69793 (25.7%)\n[346.1s] replaying every native gameplay frame: frame 18071/69793 (25.9%)\n[348.1s] replaying every native gameplay frame: frame 18204/69793 (26.1%)\n[350.1s] replaying every native gameplay frame: frame 18343/69793 (26.3%)\n[352.1s] replaying every native gameplay frame: frame 18478/69793 (26.5%)\n[354.1s] replaying every native gameplay frame: frame 18611/69793 (26.7%)\n[356.1s] replaying every native gameplay frame: frame 18742/69793 (26.9%)\n[358.1s] replaying every native gameplay frame: frame 18873/69793 (27.0%)\n[360.1s] replaying every native gameplay frame: frame 19003/69793 (27.2%)\n[362.1s] replaying every native gameplay frame: frame 19134/69793 (27.4%)\n[364.1s] replaying every native gameplay frame: frame 19264/69793 (27.6%)\n[366.1s] replaying every native gameplay frame: frame 19396/69793 (27.8%)\n[368.1s] replaying every native gameplay frame: frame 19525/69793 (28.0%)\n[370.1s] replaying every native gameplay frame: frame 19655/69793 (28.2%)\n[372.1s] replaying every native gameplay frame: frame 19787/69793 (28.4%)\n[374.1s] replaying every native gameplay frame: frame 19917/69793 (28.5%)\n[376.1s] replaying every native gameplay frame: frame 20050/69793 (28.7%)\n[378.1s] replaying every native gameplay frame: frame 20185/69793 (28.9%)\n[380.1s] replaying every native gameplay frame: frame 20319/69793 (29.1%)\n[382.1s] replaying every native gameplay frame: frame 20453/69793 (29.3%)\n[384.1s] replaying every native gameplay frame: frame 20585/69793 (29.5%)\n[386.1s] replaying every native gameplay frame: frame 20728/69793 (29.7%)\n[388.1s] replaying every native gameplay frame: frame 20861/69793 (29.9%)\n[390.1s] replaying every native gameplay frame: frame 20991/69793 (30.1%)\n[392.1s] replaying every native gameplay frame: frame 21100/69793 (30.2%)\n[394.1s] replaying every native gameplay frame: frame 21198/69793 (30.4%)\n[396.1s] replaying every native gameplay frame: frame 21292/69793 (30.5%)\n[398.1s] replaying every native gameplay frame: frame 21384/69793 (30.6%)\n[400.1s] replaying every native gameplay frame: frame 21486/69793 (30.8%)\n[402.2s] replaying every native gameplay frame: frame 21583/69793 (30.9%)\n[404.2s] replaying every native gameplay frame: frame 21683/69793 (31.1%)\n[406.2s] replaying every native gameplay frame: frame 21777/69793 (31.2%)\n[408.2s] replaying every native gameplay frame: frame 21878/69793 (31.3%)\n[410.2s] replaying every native gameplay frame: frame 21977/69793 (31.5%)\n[412.2s] replaying every native gameplay frame: frame 22076/69793 (31.6%)\n[414.2s] replaying every native gameplay frame: frame 22179/69793 (31.8%)\n[416.2s] replaying every native gameplay frame: frame 22278/69793 (31.9%)\n[418.2s] replaying every native gameplay frame: frame 22381/69793 (32.1%)\n[420.2s] replaying every native gameplay frame: frame 22483/69793 (32.2%)\n[422.2s] replaying every native gameplay frame: frame 22584/69793 (32.4%)\n[424.2s] replaying every native gameplay frame: frame 22684/69793 (32.5%)\n[426.2s] replaying every native gameplay frame: frame 22784/69793 (32.6%)\n[428.2s] replaying every native gameplay frame: frame 22881/69793 (32.8%)\n[430.2s] replaying every native gameplay frame: frame 22981/69793 (32.9%)\n[432.2s] replaying every native gameplay frame: frame 23078/69793 (33.1%)\n[434.2s] replaying every native gameplay frame: frame 23177/69793 (33.2%)\n[436.2s] replaying every native gameplay frame: frame 23272/69793 (33.3%)\n[438.2s] replaying every native gameplay frame: frame 23373/69793 (33.5%)\n[440.2s] replaying every native gameplay frame: frame 23467/69793 (33.6%)\n[442.2s] replaying every native gameplay frame: frame 23565/69793 (33.8%)\n[444.2s] replaying every native gameplay frame: frame 23659/69793 (33.9%)\n\nthread 'main' (3245554) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native scene has no instantiated actor root\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+        "binary_sha256": "62659d350949f3074029c04eefbe46b03ab09c55a49e5abd6593087868cb7d50",
+        "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+        "candidate_sha256": "1656e72fc18dcd4daf1fc5c2316e242df3ec0703d5a65d54e2cc4cf942c3f006",
+        "trace_sha256": "5c2e4ad31164c75384e68e8b68680db692ea18e474285dbe78bef29f07a41164",
+        "simfile_sha256": "b0333bc4289473ed6ba3116ff13f169ebf313c93994d35eece21451ceef6d941",
+        "build_proof": "/home/parity/jobs/modulo-cpu-green-v1/proof.json",
+        "fix_commit": "5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+        "native_capture_reused": true,
+        "all_candidate_manifest_members_byte_verified": true
+      },
+      "replay_log_tail": [
+        "[854.3s] replaying every native gameplay frame: frame 46898/69793 (67.2%)",
+        "[856.3s] replaying every native gameplay frame: frame 47006/69793 (67.4%)",
+        "[858.3s] replaying every native gameplay frame: frame 47120/69793 (67.5%)"
+      ],
+      "completed_result": null
+    }
+  ],
+  "status": "Final MODULO CPU Steps repair 2 launched; no repair remains after this attempt. Existing complete uncompressed replay comparisons determine acceptance.",
+  "validated_build": "sweep-2026-10-14-modulo-cpu-steps-build.json",
+  "native_captures_reused": true,
+  "all_uncompressed_candidate_members_verified": true,
+  "publisher_streams": 68,
+  "publisher_count": 1,
+  "actual_publisher": {
+    "ProcessId": 60312,
+    "CommandLine": "\"C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe\" -B -X utf8 C:/GitHub/itgmania-harness/target/server-parity/publish_chart_sweep_v1.py"
+  },
+  "comparisons_modified": false,
+  "passing_charts_reopened": false,
+  "capped_charts_not_retried": true
+}
