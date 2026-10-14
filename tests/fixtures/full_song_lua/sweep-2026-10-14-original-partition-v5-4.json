@@ -18,6 +18,57 @@
       "capture_exit": 1,
       "capture_seconds": 900.0533858190174,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-2027895-1791982709619865985-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-2027895-1791982709619865985-0\n"
+    },
+    {
+      "position": 346,
+      "source_simfile": "Paradise [Cringle Desolation]/Paradise.ssc",
+      "simfile_sha256": "1b7370ebc6a69a753e628b6f1d893ba3d58e58cfae3b9ad84c12bfcb24175368",
+      "retained_original_archive": "7441c912bfee6d0731a8f2b0ee138241b0a6b414b7d19dffdd85ddf2c7dc097c.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "254c36811 + e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/attack-boundary-linux-green-v2/proof.json",
+      "capture_seconds": 209.18265850801254,
+      "trace_sha256": "c633fc86b867013404487e33a2423bc500733cce0bac968326bed7946300b631",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-4/chart-346/candidates/deaf4d88b7148587cf506804c8de112d33c854d45cb3597914b81793050f1dd9.tar",
+      "replay_exit": 0,
+      "replay_seconds": 11108.347685857007,
+      "candidate_sha256": "deaf4d88b7148587cf506804c8de112d33c854d45cb3597914b81793050f1dd9",
+      "native_frames": 63634,
+      "replayed_frames": 63634,
+      "compared_stage_fields": 1936,
+      "pending_coverage": [
+        "uncompared song operations: Actor.addz, Actor.playcommand, Actor.stretchto, Actor.z, ActorFrame.GetChildren, ActorFrame.fov",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "8f2e4f126a21ea258ed94672275ffc72bbc1fd0f601aeb51706567baf619d75d",
+      "archive": "7812ef559aeaa6c94c59e833563c5af23e4a421ab47221266ff169abaee8bd52.tar.zst",
+      "archive_sha256": "7812ef559aeaa6c94c59e833563c5af23e4a421ab47221266ff169abaee8bd52",
+      "compressed_bytes": 14409451,
+      "pack_seconds": 10.147799403988756,
+      "harness_version": "0.1.80",
+      "title": "Episode 09 Paradise",
+      "retained_original_entry": {
+        "title": "Episode 09",
+        "source_simfile": "Paradise [Cringle Desolation]/Paradise.ssc",
+        "harness_version": "0.1.0",
+        "archive": "7441c912bfee6d0731a8f2b0ee138241b0a6b414b7d19dffdd85ddf2c7dc097c.tar.zst",
+        "sha256": "7441c912bfee6d0731a8f2b0ee138241b0a6b414b7d19dffdd85ddf2c7dc097c",
+        "compressed_bytes": 8889943,
+        "uncompressed_sha256": "c5607d0b8b22c49725d926a7ee545e3ca2c8ba3b66f5c1947b4064d20e1e62a3",
+        "compression_level": 22,
+        "aliases": [
+          "3985b811f8e4bf39d313f0850fdeb6a01f3ce8c62f8f149793c4b896ad7dba89.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -28,7 +79,7 @@
   },
   "binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 0,
+  "passed_fixtures": 1,
   "pending_charts": 1,
-  "processed_charts": 1
+  "processed_charts": 2
 }
