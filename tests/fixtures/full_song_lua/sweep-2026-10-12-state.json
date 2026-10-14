@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T11:44:03Z",
-  "previous_goal_turn": "Current turn is progress: Paradise SSC, Pale, Tacos double, final My Exes SSC, Life Cheating Game, Crump, Loyal Divide, DoorOpen RIGHTS SSC, Paradise Cringle SM, DoorOpen Cringle SSC and Mawaru1 pass complete replay with zero errors/mismatches and are saved/committed. Every local accepted archive has compressed and uncompressed byte verification without reopening acceptance. Tacos first repair closes at 63984 frames/1551 fields and My Exes final repair 2 at 62908 frames/1650 fields. First repairs for the remaining RIGHTS SM, Longinus, Fortuna Redux, Mawaru4 SM and Koi SSC remain live with the tested immutable 74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234 helper; one repair remains after each. First I Really Like You SM repair completes 100091 frames with one failed-flag mismatch at 120 seconds, no callback errors; exact native samples and primary end timing source recorded, cause unconfirmed, final repair unspent. First DoorOpen Cringle SM repair completes 55331 frames, zero errors and four option-string mismatches; chart attack switches at 2.802432/3.207837 seconds. Primary PlayerState resets Song from Stage at attack boundaries, while current Lua host resets only at outro; diagnosis recorded, final repair unspent. Mamono actual startup and separate 2160-cell production control fail with Lua stack errors; different failure phases acknowledged, primary native/vendored 8000-slot limit and mlua allocation evidence pinned. No cause/fix claimed, no full repair spent, temporary failing control kept outside repository suite and source restored cleanly. Original three sweep workers and Mawaru5 final remain live; publisher 50760 watches 89 streams and saves/ignores >100000000-byte archives locally. Missing coverage separate, original source bytes unchanged, all acceptance/tolerance rules unchanged, sweep incomplete.",
+  "updated_utc": "2026-10-14T12:30:04Z",
+  "previous_goal_turn": "Current turn is progress: DoorOpen RIGHTS SM passes 79549 frames, Longinus 177342 and Fortuna Redux 215375, zero callback errors/mismatches; all three archives saved/committed and compressed/decompressed local bytes verified. Original sweep advances beyond REASON for RED, which is recorded pending with concrete RNG/command mismatches and zero repairs; captures/replays continue without restarting live handles. Source fix 254c36811 implements primary PlayerState attack-boundary Song option rebuilds from the actual gameplay-owned authored/random attack schedule, preserving Stage, Current approach, object identity, master SongOptions, disabled-player options and intervening Lua writes. It targets four residual Cringle SM option-string mismatches; original native capture unchanged, final full repair 2 unspent. The same final production control verifies the song is still active at attack time, fails before on Linux and passes after on Windows; all 61 Windows live controls pass, including strict endpoints/overlap control. Early bootstrap controls with expired actors or nonseparate measure delimiters are excluded as cause evidence. Isolated Linux green-v1 passes the production control but stops on a cfg(test) moved-frame compile error; corrected clone calls are committed, Windows checks pass, and fresh six-check green-v2 Cargo handle is live in /home/parity/workspace/attack-boundary-v1/deadsync. Active sweep source root and selected immutable 74460bce helper remain unchanged until all Linux checks/builds complete. Koi SSC first, Mawaru4 SM first and Mawaru5 final repairs plus original three workers remain live. I Really Like You one failed-flag mismatch and Mamono stack failure remain concrete pending diagnoses, no new full attempts spent. Publisher 50760 watches 89 streams; passing fixtures stay closed, missing coverage separate, large archives retained/ignored, original 501-source corpus unchanged, goal active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "2e1047bce30b9876b0fc5a5ff21b0dc3115d54d1",
+      "deadsync": "254c368113f517b663d11aab5ef0ba75f9cb5b13",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -125,15 +125,19 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Remind The Souls/remindthesouls-fakemines.sm",
-      "position": 374,
-      "phase": "capture",
-      "pid": 1626816,
+      "current": "Ruin Our Friendship/RuinOurFriendship.ssc",
+      "position": 380,
+      "phase": "replay",
+      "pid": 1834225,
       "process_matches": true,
-      "passed": 29,
+      "passed": 31,
       "pending": 58,
-      "processed": 87,
-      "last_log_lines": [],
+      "processed": 89,
+      "last_log_lines": [
+        "[424.1s] replaying every native gameplay frame: frame 17025/102848 (16.6%)",
+        "[426.1s] replaying every native gameplay frame: frame 17106/102848 (16.6%)",
+        "[428.1s] replaying every native gameplay frame: frame 17191/102848 (16.7%)"
+      ],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -1647,14 +1651,14 @@
       },
       {
         "job": "fortuna-quirks-off-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "door-cringle-sm-screen-tree-repair-v1",
@@ -1680,14 +1684,14 @@
       },
       {
         "job": "door-rights-sm-screen-tree-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.sm",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "loyal-divide-quirks-off-repair-v1",
@@ -1724,14 +1728,14 @@
       },
       {
         "job": "longinus-quirks-off-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "Longinus - [Zaia]/Longinus.sm",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "crump-quirks-off-repair-v1",
@@ -1932,14 +1936,20 @@
     "really_like_remaining_failure": "tests/fixtures/full_song_lua/sweep-2026-10-14-really-like-remaining-failure.json",
     "door_cringle_sm_attack_boundary": "tests/fixtures/full_song_lua/sweep-2026-10-14-door-cringle-sm-attack-boundary-diagnosis.json",
     "koi_ssc_first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-koi-ssc-rec-print-launch.json",
-    "mawaru1_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-mawaru1-fixture-verification.json"
+    "mawaru1_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-mawaru1-fixture-verification.json",
+    "attack_boundary_source_validation": "tests/fixtures/full_song_lua/sweep-2026-10-14-attack-boundary-source-validation.json",
+    "attack_boundary_green_build": "/home/parity/jobs/attack-boundary-linux-green-v2",
+    "attack_boundary_isolated_source": "/home/parity/workspace/attack-boundary-v1/deadsync",
+    "attack_boundary_fix_commit": "254c36811",
+    "rights_sm_longinus_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-door-rights-sm-longinus-fixture-verification.json",
+    "fortuna_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-fortuna-fixture-verification.json"
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 117,
-    "new_pending_charts": 75,
-    "new_processed_sources": 192,
+    "new_passed_fixtures": 122,
+    "new_pending_charts": 73,
+    "new_processed_sources": 195,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 161,
+    "unprocessed_sources": 158,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -2208,14 +2218,6 @@
           "deadsync": 605974
         }
       ]
-    },
-    {
-      "source_simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
-      "repair_attempts": 0,
-      "failure": "[0.7s] replaying every native gameplay frame\n\nthread 'main' (923739) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
     },
     {
       "source_simfile": "freg/freg.sm",
@@ -2546,6 +2548,20 @@
             ],
             "tween_time_left": 0.0
           }
+        }
+      ]
+    },
+    {
+      "source_simfile": "REASON for RED/reasonforgay.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 34021,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 61508,
+          "deadsync": 61507
         }
       ]
     },
@@ -2923,64 +2939,6 @@
           "field": "command_query_count",
           "native": 4909,
           "deadsync": 3694
-        }
-      ]
-    },
-    {
-      "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.sm",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 5,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "external-0041",
-            "args": [
-              false
-            ],
-            "beat": 0.0008054753416217864,
-            "caller": {
-              "line": 224,
-              "source": "song:/lua/default.lua",
-              "tail_call": false
-            },
-            "command": "OnCommand",
-            "definition_id": "def-0021",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 224,
-            "operation": "Actor.visible",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 0.39632654190063477,
-            "seq": 125,
-            "source": "song:/lua/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "query",
-            "operation": "ActorFrame.GetChild",
-            "source": "song:/lua/default.lua",
-            "line": 224,
-            "phase": "callback",
-            "beat": 0.0008054753416217864,
-            "seconds": 0.39632654190063477,
-            "args": [
-              "P1Score"
-            ],
-            "results": [
-              {
-                "actor": 4,
-                "name": "P1Score",
-                "path": "ScreenGameplay/Underlay/P1Score"
-              }
-            ]
-          }
         }
       ]
     },
@@ -3461,14 +3419,6 @@
           }
         }
       ]
-    },
-    {
-      "source_simfile": "Longinus - [Zaia]/Longinus.sm",
-      "repair_attempts": 0,
-      "failure": "[0.6s] replaying every native gameplay frame\n\nthread 'main' (514836) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
     },
     {
       "source_simfile": "Lower Times/Lower Times.ssc",

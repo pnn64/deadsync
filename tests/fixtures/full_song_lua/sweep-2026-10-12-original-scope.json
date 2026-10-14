@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T11:44:02Z",
+  "updated_utc": "2026-10-14T12:30:04Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 264,
-    "pending": 76,
-    "unprocessed": 161
+    "passed": 269,
+    "pending": 74,
+    "unprocessed": 158
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1741,9 +1741,9 @@
       "position": 197,
       "source_simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
       "simfile_sha256": "535ed73ac6613a9c4a4f565cc8496e3c87f3a4825fd023237d7c34afbd5b6025",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-fortuna-quirks-off-repair.json"
     },
     {
       "position": 198,
@@ -2373,9 +2373,9 @@
       "position": 276,
       "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.sm",
       "simfile_sha256": "54828cc3cb04d0df7df9f9886a29670cf9e19185c3f5c4758309ce105f6e9145",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-door-rights-sm-screen-tree-repair.json"
     },
     {
       "position": 277,
@@ -2453,9 +2453,9 @@
       "position": 286,
       "source_simfile": "Longinus - [Zaia]/Longinus.sm",
       "simfile_sha256": "c95e7f1e7d82078d37b387f357822305bb0233bfb4adb7c881848f6bb8bb82af",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-longinus-quirks-off-repair.json"
     },
     {
       "position": 287,
@@ -3073,7 +3073,9 @@
       "position": 371,
       "source_simfile": "REASON for RED/reasonforgay.sm",
       "simfile_sha256": "1002753a6f9c3c38f92aa9a35e5600e2b4bf0175ee05ebdf36f48efd67e78173",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 372,
@@ -3091,7 +3093,9 @@
       "position": 374,
       "source_simfile": "Remind The Souls/remindthesouls-fakemines.sm",
       "simfile_sha256": "b9e46c982fbd3f28c7a8f18557329b410255458ab3cdc8b1cc8c791d12317324",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 375,
@@ -3109,7 +3113,9 @@
       "position": 377,
       "source_simfile": "Riddle/Riddle.ssc",
       "simfile_sha256": "92657c580b5d88305556271e3fa584c01170523f34cf45199084adf14f31b817",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 378,

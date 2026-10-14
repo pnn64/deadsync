@@ -36,12 +36,16 @@
     "crates/deadsync-song-lua/src/song_tables.rs": "3c87d161218dab0896fc89e80e1d01644010eec79805f4442b9ea9d80c1571f6",
     "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "d76747aa16e317e8e825b6d453dac21b0e60377f06c259d3333c89c185fa9693"
   },
-  "linux_green_build": "/home/parity/jobs/attack-boundary-linux-green-v1",
+  "linux_green_build": "/home/parity/jobs/attack-boundary-linux-green-v2",
   "linux_all_checks_complete": false,
   "selected_sweep_helper_changed": false,
   "native_capture_modified": false,
   "comparison_rules_changed": false,
   "full_repair_attempts_spent_by_controls": 0,
   "final_chart_repair_launched": false,
-  "bootstrap_observations": "Early controls lacked an ActorFrame lifetime or had nonseparate measure delimiters, causing premature foreground/song exit. These are excluded as cause evidence. The final control verifies an active song at attack time, fails on Linux before the fix, and passes on Windows after the fix."
+  "bootstrap_observations": "Early controls lacked an ActorFrame lifetime or had nonseparate measure delimiters, causing premature foreground/song exit. These are excluded as cause evidence. The final control verifies an active song at attack time, fails on Linux before the fix, and passes on Windows after the fix.",
+  "fix_commit": "254c36811",
+  "linux_green_v1": "Production attack control passed; lib-test compilation found a reused frame requiring clone. This is corrected, Windows 61 live controls pass, and fresh green-v2 is confirmed live in the isolated checkout.",
+  "final_chart_repair_attempt": 2,
+  "final_chart_repair_not_yet_launched": true
 }
