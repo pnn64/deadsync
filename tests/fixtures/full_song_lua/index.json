@@ -4244,17 +4244,14 @@
       "aliases": []
     },
     {
-      "title": "POP MY SHIT",
+      "title": "POP MY SHIT (FOXSKY REMIX)",
       "source_simfile": "POP MY SHIT (FOXSKY REMIX)/pop my shit.ssc",
-      "harness_version": "0.1.0",
-      "archive": "0ce97793c0850623e94eb3815bdfe378f446643ff0ec060141efedb643a12d16.tar.zst",
-      "sha256": "0ce97793c0850623e94eb3815bdfe378f446643ff0ec060141efedb643a12d16",
-      "compressed_bytes": 83874,
-      "uncompressed_sha256": "17aa484d862ddf33cb28266d3fa4b4ec16dd7b14b7e9648699c4ca8cea8ad6bc",
-      "compression_level": 22,
-      "aliases": [
-        "44fa048548500fbc8aba151d65c44fdf5c79099a15160a78db0614068a9fe82f.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "29fa1d5455aa196a4605c834cc74991f970113b2fcc325fc8398a0bf9e1d2b86.tar.zst",
+      "sha256": "29fa1d5455aa196a4605c834cc74991f970113b2fcc325fc8398a0bf9e1d2b86",
+      "compressed_bytes": 6783733,
+      "uncompressed_sha256": "52160093c3b47d359d99290165f3b7f48b87ecccc540f8fa0c93ecc745a70566",
+      "aliases": []
     },
     {
       "title": "Pop",

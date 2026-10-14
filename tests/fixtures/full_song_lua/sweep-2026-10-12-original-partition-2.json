@@ -7235,6 +7235,56 @@
         }
       ],
       "report_sha256": "05324cf95516e604434112d791ed7b4b9a11a7eb8610eacfc16e88359a4a1d9f"
+    },
+    {
+      "position": 357,
+      "source_simfile": "POP MY SHIT (FOXSKY REMIX)/pop my shit.ssc",
+      "simfile_sha256": "6a713c677818670d011a0c230ec0985fb4a3ba0c2609438de5a16d7fcc02bd97",
+      "retained_original_archive": "0ce97793c0850623e94eb3815bdfe378f446643ff0ec060141efedb643a12d16.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "dde531bd61c48d752748b8343e61715839944afdde5c5c7b028bb9308de85a15",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "94e70049b59e83b86566a9adb5fd18f8835c65cb + 7fae1f026237ee5431a1a2b3e907f4270715556a + 1ed84cd471a8eeb8511474ca8881aa1516acbf96 + 254c36811 + e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/player-stats-identity-linux-green-v1/proof.json",
+      "capture_seconds": 124.42285286798142,
+      "trace_sha256": "e6f721b6a619f8e32078d64da2fd0953ebe022f941dccdefdc5b24c0f5e8d657",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-357/candidates/52160093c3b47d359d99290165f3b7f48b87ecccc540f8fa0c93ecc745a70566.tar",
+      "replay_exit": 0,
+      "replay_seconds": 800.5804823700164,
+      "candidate_sha256": "52160093c3b47d359d99290165f3b7f48b87ecccc540f8fa0c93ecc745a70566",
+      "native_frames": 39614,
+      "replayed_frames": 39614,
+      "compared_stage_fields": 1210,
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Brake, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Flip, PlayerOptions.MoveX1, PlayerOptions.MoveX2, PlayerOptions.MoveX3, PlayerOptions.MoveX4, PlayerOptions.MoveX5, PlayerOptions.MoveX6, PlayerOptions.MoveX7, PlayerOptions.MoveX8, PlayerOptions.Stealth, PlayerOptions.Tiny"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "9224c2bb6c0c9a4b9bed549990e1119a5c9811546d11711cabb18722e5952317",
+      "archive": "29fa1d5455aa196a4605c834cc74991f970113b2fcc325fc8398a0bf9e1d2b86.tar.zst",
+      "archive_sha256": "29fa1d5455aa196a4605c834cc74991f970113b2fcc325fc8398a0bf9e1d2b86",
+      "compressed_bytes": 6783733,
+      "pack_seconds": 5.141233158996329,
+      "harness_version": "0.1.80",
+      "title": "POP MY SHIT (FOXSKY REMIX)",
+      "retained_original_entry": {
+        "title": "POP MY SHIT",
+        "source_simfile": "POP MY SHIT (FOXSKY REMIX)/pop my shit.ssc",
+        "harness_version": "0.1.0",
+        "archive": "0ce97793c0850623e94eb3815bdfe378f446643ff0ec060141efedb643a12d16.tar.zst",
+        "sha256": "0ce97793c0850623e94eb3815bdfe378f446643ff0ec060141efedb643a12d16",
+        "compressed_bytes": 83874,
+        "uncompressed_sha256": "17aa484d862ddf33cb28266d3fa4b4ec16dd7b14b7e9648699c4ca8cea8ad6bc",
+        "compression_level": 22,
+        "aliases": [
+          "44fa048548500fbc8aba151d65c44fdf5c79099a15160a78db0614068a9fe82f.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -7244,9 +7294,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 111
   },
-  "binary_sha256": "1f0beb2612f19d67900331a90493ac35fe0c66b7bbe36ba0ceab5b7cfa7b4d03",
+  "binary_sha256": "dde531bd61c48d752748b8343e61715839944afdde5c5c7b028bb9308de85a15",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 20,
+  "passed_fixtures": 21,
   "pending_charts": 29,
-  "processed_charts": 49
+  "processed_charts": 50
 }
