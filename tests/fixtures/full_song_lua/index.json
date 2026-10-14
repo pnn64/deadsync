@@ -3349,17 +3349,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 06",
+      "title": "Episode 06 Leave The Door Open",
       "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
-      "harness_version": "0.1.0",
-      "archive": "14c34714d1b0b526fb0497c3ddcaf89167a175c594ac363fb8912b6fa4f006c0.tar.zst",
-      "sha256": "14c34714d1b0b526fb0497c3ddcaf89167a175c594ac363fb8912b6fa4f006c0",
-      "compressed_bytes": 593720,
-      "uncompressed_sha256": "77f8a5aca940485e590de6bbddf3e5748c137a4fd3b0cccc3a520ba64980c03f",
-      "compression_level": 22,
-      "aliases": [
-        "a366d38ef3f34ea3011ef4a9bf780a92ec287201fa14e705a10c5be74aa902df.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "3d335853cef1098318e53cdf9fc8a84d531839c0af9f9a4cd7f744b52a76fa11.tar.zst",
+      "sha256": "3d335853cef1098318e53cdf9fc8a84d531839c0af9f9a4cd7f744b52a76fa11",
+      "compressed_bytes": 63178670,
+      "uncompressed_sha256": "0616f94607ea769ac606577ace6ef2a6aa0c9c1e0a9142ae3b31e65d2f18347c",
+      "aliases": []
     },
     {
       "title": "Episode 06 Leave The Door Open",
