@@ -1,0 +1,54 @@
+{
+  "reason": "Correct exit/cmdline race in supervisor-only adoption; original replay children unchanged",
+  "replacements": [
+    {
+      "job": "chart-sweep-parallel-v4-1",
+      "old_supervisor": {
+        "pid": 2027826,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_chart_sweep_partition_v5.py",
+          "chart-sweep-parallel-v4-1"
+        ]
+      },
+      "new_supervisor": {
+        "pid": 2103134,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_chart_sweep_partition_v5.py",
+          "chart-sweep-parallel-v4-1"
+        ]
+      },
+      "retained_child_pid": 1603266,
+      "child_command_matches": true
+    },
+    {
+      "job": "chart-sweep-parallel-v4-2",
+      "old_supervisor": {
+        "pid": 2027827,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_chart_sweep_partition_v5.py",
+          "chart-sweep-parallel-v4-2"
+        ]
+      },
+      "new_supervisor": {
+        "pid": 2103135,
+        "command": [
+          "python3",
+          "/home/parity/jobs/run_chart_sweep_partition_v5.py",
+          "chart-sweep-parallel-v4-2"
+        ]
+      },
+      "retained_child_pid": 2425243,
+      "child_command_matches": true
+    }
+  ],
+  "recovered_original_result": "sweep-2026-10-14-v5-ruin-report-recovery.json",
+  "recovered_frames": 102848,
+  "recovered_mismatches": 2,
+  "recovered_exit_code": 2,
+  "corrected_runner_sha256": "edcb9ac3d4a31f38d18ac480611d1cbca8af56d8b37b8963868d181204f2d212",
+  "single_publisher_streams": 96,
+  "full_replay_or_native_capture_repeated": false
+}
