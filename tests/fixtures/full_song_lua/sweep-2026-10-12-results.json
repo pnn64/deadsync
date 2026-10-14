@@ -13763,6 +13763,56 @@
       "mismatch_count": 0,
       "concrete_failures": [],
       "report_sha256": "26d46cfb6cdff69406943abdc0009157afb43e2dc0767f2254aa33af7269e392"
+    },
+    {
+      "position": 435,
+      "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.ssc",
+      "simfile_sha256": "831835da8009cc98965aa71ec3e997cbddd6c810da2470fea8f44f68bc82006c",
+      "retained_original_archive": "2e2d6d045606f42dba6a5cd24a8f137b9856b85702eea7503d0d338f49ae3125.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+      "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+      "capture_seconds": 298.2121290570067,
+      "trace_sha256": "2b1a2d9a00c98e9027cb094e1153255d33fff674c526775da688d8cbfed21b46",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-435/candidates/8f3bd201a949cc830c4d3c38e4acda64e1d043cb846068b26a3ae928e1e193a5.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1859.4839644699823,
+      "candidate_sha256": "8f3bd201a949cc830c4d3c38e4acda64e1d043cb846068b26a3ae928e1e193a5",
+      "native_frames": 83990,
+      "replayed_frames": 83990,
+      "compared_stage_fields": 2277,
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, PlayerOptions.Beat, PlayerOptions.Centered, PlayerOptions.ConfusionOffset1, PlayerOptions.ConfusionOffset2, PlayerOptions.ConfusionOffset3, PlayerOptions.ConfusionOffset4, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Skew, PlayerOptions.Stealth, PlayerOptions.StealthPastReceptors, PlayerOptions.Tilt, PlayerOptions.XMod, Screen.AddInputCallback, ScreenManager.SystemMessage"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "2f3837a90ef537011c48fadeb35271d98fade543316797a0722bc9c4123ad141",
+      "archive": "040c1d0c743a3a116aaeb996ebb028dc6e1ffda0f3411ccc627092b694f3ca7e.tar.zst",
+      "archive_sha256": "040c1d0c743a3a116aaeb996ebb028dc6e1ffda0f3411ccc627092b694f3ca7e",
+      "compressed_bytes": 17835623,
+      "pack_seconds": 29.374150843999814,
+      "harness_version": "0.1.80",
+      "title": "The Great Divide Seven Lions Remix",
+      "retained_original_entry": {
+        "title": "The Great Divide",
+        "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.ssc",
+        "harness_version": "0.1.0",
+        "archive": "2e2d6d045606f42dba6a5cd24a8f137b9856b85702eea7503d0d338f49ae3125.tar.zst",
+        "sha256": "2e2d6d045606f42dba6a5cd24a8f137b9856b85702eea7503d0d338f49ae3125",
+        "compressed_bytes": 450258,
+        "uncompressed_sha256": "cca6480d273ff662c8f9b768fe70e2231dcd01badaad53e1e5a3506ecda695d9",
+        "compression_level": 22,
+        "aliases": [
+          "d1625622e8454f7266c19527622ab0c583fd522c4cf969a92b3f5aee72fbbc56.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -13788,7 +13838,7 @@
   },
   "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 37,
+  "passed_fixtures": 38,
   "pending_charts": 64,
-  "processed_charts": 101
+  "processed_charts": 102
 }
