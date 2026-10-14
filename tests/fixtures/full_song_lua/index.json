@@ -4148,17 +4148,14 @@
       "aliases": []
     },
     {
-      "title": "Paradise",
+      "title": "Paradise Episode 09",
       "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.ssc",
-      "harness_version": "0.1.0",
-      "archive": "69782c63aa11278e9a3da5c860936dee4f2459a99c678c154ba7c09b6f37ac22.tar.zst",
-      "sha256": "69782c63aa11278e9a3da5c860936dee4f2459a99c678c154ba7c09b6f37ac22",
-      "compressed_bytes": 8792335,
-      "uncompressed_sha256": "9410546bbffa271093e6ed982fd1c2a1a2bd5f08458224caa9eff3dab52d83de",
-      "compression_level": 22,
-      "aliases": [
-        "569ebcdd0db486019737f792a8da2058bfb2a578ff734e1f35537a5864433218.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "c7c4264c485b0ce8da780d0d4c44c8f61d187a33e5b23993c6748555ec4b6250.tar.zst",
+      "sha256": "c7c4264c485b0ce8da780d0d4c44c8f61d187a33e5b23993c6748555ec4b6250",
+      "compressed_bytes": 14330383,
+      "uncompressed_sha256": "2db5ac9f92542a9ad43cecf09a8e54ebb9ebbc91bf07c1e8456077b57405e8ed",
+      "aliases": []
     },
     {
       "title": "Episode 09 Paradise",
