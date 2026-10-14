@@ -18,6 +18,7 @@ use rssp::{
     AnalysisOptions, AnalysisScratch, ChartNoteType, ParsedChartNote, PreparedAnalysis,
     SimfileSummary, analyze_prepared_in_with_notes,
 };
+use std::borrow::Cow;
 use std::cmp::Ordering;
 #[cfg(test)]
 use std::fs;
@@ -232,6 +233,56 @@ pub fn parse_song_bytes(
     )
 }
 
+/// Project native note-column syntax into RSSP's unannotated note input.
+fn note_analysis_bytes<'a>(
+    data: &'a [u8],
+    entries: &[rssp::parse::ParsedChartEntry<'a>],
+) -> Cow<'a, [u8]> {
+    let mut indices = Vec::new();
+    for entry in entries {
+        let Some(lanes) = rssp::supported_stepstype_lanes_bytes(entry.fields[0]) else { continue };
+        if !entry.note_data.contains(&b'[') { continue; }
+        // ParsedChartEntry borrows each note block directly from these bytes.
+        let offset = entry.note_data.as_ptr() as usize - data.as_ptr() as usize;
+        let mut line_start = 0;
+        for line in entry.note_data.split_inclusive(|byte| matches!(byte, b'\n' | b',')) {
+            let mut end = line.iter().position(|byte| matches!(byte, b'\n' | b','))
+                .unwrap_or(line.len());
+            if let Some(comment) = line[..end].windows(2).position(|bytes| bytes == b"//") {
+                end = comment;
+            }
+            while end > 0 && matches!(line[end - 1], b'\r' | b'\t' | b' ') { end -= 1; }
+            let mut cursor = 0;
+            while cursor < end && matches!(line[cursor], b'\r' | b'\t' | b' ') { cursor += 1; }
+            // NoteDataUtil::LoadFromSMNoteDataStringWithPlayer consumes one
+            // column, then skips its optional [keysound index] through ']'
+            // or the row end. Its digits must never enter RSSP as notes.
+            for _ in 0..lanes {
+                if cursor >= end { break; }
+                cursor += 1;
+                if cursor < end && line[cursor] == b'[' {
+                    let start = cursor;
+                    cursor += 1;
+                    while cursor < end && line[cursor] != b']' { cursor += 1; }
+                    if cursor < end { cursor += 1; }
+                    indices.push(offset + line_start + start..offset + line_start + cursor);
+                }
+            }
+            line_start += line.len();
+        }
+    }
+    if indices.is_empty() { return Cow::Borrowed(data); }
+    indices.sort_unstable_by_key(|range| range.start);
+    let mut notes = Vec::with_capacity(data.len());
+    let mut cursor = 0;
+    for index in indices {
+        notes.extend_from_slice(&data[cursor..index.start]);
+        cursor = index.end;
+    }
+    notes.extend_from_slice(&data[cursor..]);
+    Cow::Owned(notes)
+}
+
 /// The parse both entry points share once the bytes are in hand.
 fn parse_song_source(
     source: SimfileSource<'_>,
@@ -241,8 +292,11 @@ fn parse_song_source(
     parsed_notes: &mut Vec<Vec<CachedParsedNote>>,
     music_len: impl FnOnce(Option<&Path>) -> f32,
 ) -> Result<SerializableSongData, String> {
+    let parsed = rssp::parse::extract_sections(source.data, source.extension)
+        .map_err(|error| error.to_string())?;
+    let analysis_bytes = note_analysis_bytes(source.data, &parsed.notes_list);
     let mut summary = analyze_prepared_in_with_notes(
-        source.data,
+        &analysis_bytes,
         source.extension,
         &analyzer.prepared,
         analysis,
@@ -251,8 +305,6 @@ fn parse_song_source(
     )?;
     // RSSP rounds its report offset to milliseconds. Runtime song timing
     // uses the authored float, as NotesLoaderSM::SMSetOffset does.
-    let parsed = rssp::parse::extract_sections(source.data, source.extension)
-        .map_err(|error| error.to_string())?;
     summary.offset = rssp::parse::parse_offset_seconds(parsed.offset);
     if source.extension.eq_ignore_ascii_case("sm") {
         // RSSP trims Unicode whitespace for analysis. SMLoader::LoadFromTokens
@@ -763,6 +815,39 @@ fn chart_bpm_bounds(bpms: &[(f32, f32)]) -> (f64, f64) {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn keysound_indices_preserve_note_columns_and_real_holds() {
+        let root = test_dir("keysound-index-columns");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let notes = "1[24]000\n02[13]00\n0300\n004[23]0\n0030\n0001[4]\n0000\n0000\n";
+        for (extension, chart) in [
+            ("sm", format!("#NOTES2:dance-single:[12] Author:Challenge:1:0,0,0,0,0:\n{notes};")),
+            ("ssc", format!("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:[12] Author;\n\
+                #DIFFICULTY:Challenge;\n#METER:1;\n#NOTES2:\n{notes};")),
+        ] {
+            let source = format!("#VERSION:0.83;\n#TITLE:[24] Keysounds;\n#BPMS:0=120;\n{chart}");
+            let path = root.join(format!("song.{extension}"));
+            fs::write(&path, &source).unwrap();
+            for song in [parse_song_file(&path, &options, |_| 4.0).unwrap(),
+                parse_song_bytes(source.as_bytes(), extension, &path, &options, |_| 4.0).unwrap()] {
+                assert_eq!(song.title, "[24] Keysounds");
+                let chart = &song.charts[0];
+                assert_eq!(chart.description, "[12] Author");
+                assert_eq!((chart.stats.total_steps, chart.stats.holds, chart.stats.rolls), (4, 1, 1),
+                    "keysound index digits are metadata, not additional hold or roll notes");
+                assert_eq!(chart.parsed_notes.len(), 4,
+                    "keysound index digits must not create additional parsed note cells");
+                assert_eq!(chart.parsed_notes.iter().map(|note| note.column).collect::<Vec<_>>(), [0, 1, 2, 3]);
+                assert_eq!(chart.parsed_notes.iter().map(|note| NoteType::from(note.note_type)).collect::<Vec<_>>(),
+                    [NoteType::Tap, NoteType::Hold, NoteType::Roll, NoteType::Tap]);
+                for note in &chart.parsed_notes[1..3] {
+                    assert!(note.tail_row_index.is_some_and(|tail| tail > note.row_index));
+                }
+            }
+            assert_eq!(fs::read(&path).unwrap(), source.as_bytes());
+        }
+    }
 
     #[test]
     fn ssc_chart_description_preserves_non_ascii_whitespace() {
