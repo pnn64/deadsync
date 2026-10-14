@@ -1,0 +1,69 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+  "results": [
+    {
+      "position": 253,
+      "source_simfile": "Jack The Reaper/Jack The Reaper.sm",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "5bdf4ac66993479620bb2fea1f099169cfac09b164f249f6d48986cab112709c",
+      "trace_sha256": "8ff66d74b0e27cc94ab500bb8deb626237df0d57f8dc891aa034a8c5d5a743c5",
+      "simfile_sha256": "04baaf73d0577eff9e4316a41ac80ed5238bd4da0168929ac3591aea8c548723",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "previous_failure": null,
+      "previous_errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 20.002: missing captured subscriber identity for ScreenGameplay/6/1",
+        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 37.750: missing captured subscriber identity for ScreenGameplay/6/1"
+      ],
+      "applied_listener_fix": "d69f0a20f",
+      "one_later_attempt_maximum": true,
+      "replay_exit": 0,
+      "replay_seconds": 983.6658536859904,
+      "native_frames": 40101,
+      "replayed_frames": 40101,
+      "compared_stage_fields": 1287,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "f9e952fd4f2e8b6cbd961e73c4ceb48c9343b18fdcecf22b82e427e5901d65a9",
+      "archive": "668b5d9e3eb1f2d5789b3e194b478936406cae05d570336c110b3d5637aeb2ad.tar.zst",
+      "archive_sha256": "668b5d9e3eb1f2d5789b3e194b478936406cae05d570336c110b3d5637aeb2ad",
+      "compressed_bytes": 12889200,
+      "harness_version": "0.1.80",
+      "title": "Jack The Reaper",
+      "pack_seconds": 16.76409877598053,
+      "retained_original_entry": {
+        "title": "Jack The Reaper",
+        "source_simfile": "Jack The Reaper/Jack The Reaper.sm",
+        "harness_version": "0.1.0",
+        "archive": "77a743ef27050428b3cbd0dee06de3c7d96ce7ec7ec41a1224e98af43fa2dd9a.tar.zst",
+        "sha256": "77a743ef27050428b3cbd0dee06de3c7d96ce7ec7ec41a1224e98af43fa2dd9a",
+        "compressed_bytes": 62847,
+        "uncompressed_sha256": "c9414377c3d7858d6921d3312ac849419e97cb9acd474fa91f101863bbeb557b",
+        "compression_level": 22,
+        "aliases": [
+          "993492f6f55aaf5ca28d5daa7301bbdbfbd02de8d3bbec1ec0d5471f485444b5.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first repair: native delivery continues for subscribers absent from capture identity map; original capture and comparisons unchanged",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}

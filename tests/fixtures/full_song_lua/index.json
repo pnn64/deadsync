@@ -3117,15 +3117,12 @@
     {
       "title": "Jack The Reaper",
       "source_simfile": "Jack The Reaper/Jack The Reaper.sm",
-      "harness_version": "0.1.0",
-      "archive": "77a743ef27050428b3cbd0dee06de3c7d96ce7ec7ec41a1224e98af43fa2dd9a.tar.zst",
-      "sha256": "77a743ef27050428b3cbd0dee06de3c7d96ce7ec7ec41a1224e98af43fa2dd9a",
-      "compressed_bytes": 62847,
-      "uncompressed_sha256": "c9414377c3d7858d6921d3312ac849419e97cb9acd474fa91f101863bbeb557b",
-      "compression_level": 22,
-      "aliases": [
-        "993492f6f55aaf5ca28d5daa7301bbdbfbd02de8d3bbec1ec0d5471f485444b5.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "668b5d9e3eb1f2d5789b3e194b478936406cae05d570336c110b3d5637aeb2ad.tar.zst",
+      "sha256": "668b5d9e3eb1f2d5789b3e194b478936406cae05d570336c110b3d5637aeb2ad",
+      "compressed_bytes": 12889200,
+      "uncompressed_sha256": "5bdf4ac66993479620bb2fea1f099169cfac09b164f249f6d48986cab112709c",
+      "aliases": []
     },
     {
       "title": "Jack The Reaper",
