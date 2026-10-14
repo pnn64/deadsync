@@ -10556,6 +10556,56 @@
       "capture_exit": 1,
       "capture_seconds": 5.74982591799926,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-1256551-1792020219622826275-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1256551-1792020219622826275-0\n"
+    },
+    {
+      "position": 468,
+      "source_simfile": "Watching/watching-fakemines.ssc",
+      "simfile_sha256": "e42c012f9336930e77c2e70f8625975e43ab2b8f3241279f1be69f345e50691c",
+      "retained_original_archive": "2aab120a00988eb6f587fd0b033fba7d59df7edfb20d476a465df2de6c0fcc14.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 178.27045244598412,
+      "trace_sha256": "85237ac5b995fcde4e4ff3684fb151e74724b4acc88bf435043743961131e6f5",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-468/candidates/356664b10d3075bdfa0bad922bb89e383c0c75e93f9a425b9c90c2ef131d7782.tar",
+      "replay_exit": 0,
+      "replay_seconds": 952.888549403986,
+      "candidate_sha256": "356664b10d3075bdfa0bad922bb89e383c0c75e93f9a425b9c90c2ef131d7782",
+      "native_frames": 40042,
+      "replayed_frames": 40042,
+      "compared_stage_fields": 1463,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "1398ca63e747e9e4b3fd88828da4f0d01897f83f71c41595b4a453cfa84bb940",
+      "archive": "648d828db38c3b07e61058b2a50a757810ad734923258e5ce9a375aa0afe4ca4.tar.zst",
+      "archive_sha256": "648d828db38c3b07e61058b2a50a757810ad734923258e5ce9a375aa0afe4ca4",
+      "compressed_bytes": 13226442,
+      "pack_seconds": 17.644105070998194,
+      "harness_version": "0.1.80",
+      "title": "Watching",
+      "retained_original_entry": {
+        "title": "Watching",
+        "source_simfile": "Watching/watching-fakemines.ssc",
+        "harness_version": "0.1.0",
+        "archive": "2aab120a00988eb6f587fd0b033fba7d59df7edfb20d476a465df2de6c0fcc14.tar.zst",
+        "sha256": "2aab120a00988eb6f587fd0b033fba7d59df7edfb20d476a465df2de6c0fcc14",
+        "compressed_bytes": 114384,
+        "uncompressed_sha256": "abfb0bc93faa2705b88444f91872f3b7d70a15aea11e4947615931f2a93e52a9",
+        "compression_level": 22,
+        "aliases": [
+          "d72ca77c2a736d9bb5ed77fc602f214f7ef0ba5548acf0aba0899e0cf60abfe3.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -10567,7 +10617,7 @@
   },
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 38,
+  "passed_fixtures": 39,
   "pending_charts": 38,
-  "processed_charts": 76
+  "processed_charts": 77
 }

@@ -5482,15 +5482,12 @@
     {
       "title": "Watching",
       "source_simfile": "Watching/watching-fakemines.ssc",
-      "harness_version": "0.1.0",
-      "archive": "2aab120a00988eb6f587fd0b033fba7d59df7edfb20d476a465df2de6c0fcc14.tar.zst",
-      "sha256": "2aab120a00988eb6f587fd0b033fba7d59df7edfb20d476a465df2de6c0fcc14",
-      "compressed_bytes": 114384,
-      "uncompressed_sha256": "abfb0bc93faa2705b88444f91872f3b7d70a15aea11e4947615931f2a93e52a9",
-      "compression_level": 22,
-      "aliases": [
-        "d72ca77c2a736d9bb5ed77fc602f214f7ef0ba5548acf0aba0899e0cf60abfe3.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "648d828db38c3b07e61058b2a50a757810ad734923258e5ce9a375aa0afe4ca4.tar.zst",
+      "sha256": "648d828db38c3b07e61058b2a50a757810ad734923258e5ce9a375aa0afe4ca4",
+      "compressed_bytes": 13226442,
+      "uncompressed_sha256": "356664b10d3075bdfa0bad922bb89e383c0c75e93f9a425b9c90c2ef131d7782",
+      "aliases": []
     },
     {
       "title": "Watermelon",
