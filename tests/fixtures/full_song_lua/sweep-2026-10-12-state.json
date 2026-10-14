@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T12:49:25Z",
-  "previous_goal_turn": "Current turn is progress: isolated attack-boundary Linux green-v2 completes all six checks with zero exit: meaningful production control1, strict endpoint/overlap control1, 61 live, 65 attack-core and 29 native replay controls plus both executables. Binary 8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c, six log hashes and all 36 source pins verified. Local raw/LF comparisons explicitly handle the existing CRLF profile test file; source contents match. Active sweep source updates only the five fix files after completed validation and selects this immutable helper, unchanged pinned native harness, no live process restarted. Final Cringle SM repair2 starts against original uncompressed candidate 0616f94607ea769ac606577ace6ef2a6aa0c9c1e0a9142ae3b31e65d2f18347c, validates every manifest member and source chart, exact full replay child confirmed; no repairs remain afterwards. Publisher now watches90 streams. REASON for RED entry diagnosis reuses byte-verified capture and passes1548 frames with zero errors/mismatches but does not accept archive; original full failure has34021 mismatches. Primary native RandomNumbers Seed truncates captured0.24028495317907073 to0 and MersenneTwister uses time(nullptr), while retained capture records no effective wall-clock seed and marks RNG unreproducible. Concrete missing external input recorded, no seed inferred from expected outputs, no chart modified or full repair spent. Original three workers, Koi SSC first, Mawaru4 SM first and Mawaru5 final remain live; all accepted fixtures closed, missing coverage separate, large files locally retained/Git ignored, original501 scope unchanged and incomplete.",
+  "updated_utc": "2026-10-14T13:07:50Z",
+  "previous_goal_turn": "Current turn is progress: spare server capacity verified (40 cores,46GiB available, seven active replay jobs); unstarted original charts are repartitioned across eight disjoint original-scope workers. Handoff preserves all three current native captures and exact replay PIDs1834225/1603266/2425243; no replay or capture is restarted and no passing chart reopened. Original supervisors remain stopped solely until their children exit, so replacement supervisors can read actual kernel zombie wait status before reaping; standalone real exit7 control proves field52 status1792 decodes correctly. Existing zero-exit/full-comparison acceptance is preserved without inferring exit status from report success. All three frozen-state snapshots and PID commands validated; assignment proves195 completed new-sweep positions plus158 remaining positions cover exactly353 original-plan sources, no overlaps or omitted sources. Eight queues contain21/21/21/19/19/19/19/19 sources. Three replacements supervise retained replays; five new workers start Molly SSC, My Penny SSC, Neon Nights SSC, No Role Modelz SSC and No.13 SSC using tested immutable8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c helper and unchanged native harness. All eight supervisors and their retained/new child commands confirmed live. Singleton publisher now watches95 streams; handoff receipt committed b80fff2fa. Cringle SM final repair2, Koi SSC first, Mawaru4 SM first and Mawaru5 final remain live. No new full repair attempt spent on diagnostics or orchestration. Sources/acceptance/tolerances unchanged, missing coverage separate, oversized archives retained/ignored, goal active and original501 scope incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "e113e21fb87704b0aeeddd5a9ffd43066f6514ab",
+      "deadsync": "b80fff2fa890f3011e76d77c5ebdcbe868b3a95d",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -126,19 +126,15 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Ruin Our Friendship/RuinOurFriendship.ssc",
-      "position": 380,
-      "phase": "replay",
-      "pid": 1834225,
+      "current": "media offline/media offline.sm",
+      "position": 310,
+      "phase": "capture",
+      "pid": 2078634,
       "process_matches": true,
       "passed": 31,
-      "pending": 58,
-      "processed": 89,
-      "last_log_lines": [
-        "[1584.6s] replaying every native gameplay frame: frame 62433/102848 (60.7%)",
-        "[1586.6s] replaying every native gameplay frame: frame 62512/102848 (60.8%)",
-        "[1588.6s] replaying every native gameplay frame: frame 62592/102848 (60.9%)"
-      ],
+      "pending": 59,
+      "processed": 90,
+      "last_log_lines": [],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -1641,11 +1637,106 @@
         "record": "sweep-2026-10-14-door-cringle-sm-attack-final-repair.json",
         "fix_commit": "254c36811",
         "finish_status": "bounded final observed failure repair complete"
+      },
+      {
+        "name": "original-scope-partition-v5-3",
+        "remote": "/home/parity/jobs/chart-sweep-parallel-v5-3",
+        "record": "sweep-2026-10-14-original-partition-v5-3.json",
+        "finish_status": "original scope partition v5-3 initial replay complete",
+        "compact": false
+      },
+      {
+        "name": "original-scope-partition-v5-4",
+        "remote": "/home/parity/jobs/chart-sweep-parallel-v5-4",
+        "record": "sweep-2026-10-14-original-partition-v5-4.json",
+        "finish_status": "original scope partition v5-4 initial replay complete",
+        "compact": false
+      },
+      {
+        "name": "original-scope-partition-v5-5",
+        "remote": "/home/parity/jobs/chart-sweep-parallel-v5-5",
+        "record": "sweep-2026-10-14-original-partition-v5-5.json",
+        "finish_status": "original scope partition v5-5 initial replay complete",
+        "compact": false
+      },
+      {
+        "name": "original-scope-partition-v5-6",
+        "remote": "/home/parity/jobs/chart-sweep-parallel-v5-6",
+        "record": "sweep-2026-10-14-original-partition-v5-6.json",
+        "finish_status": "original scope partition v5-6 initial replay complete",
+        "compact": false
+      },
+      {
+        "name": "original-scope-partition-v5-7",
+        "remote": "/home/parity/jobs/chart-sweep-parallel-v5-7",
+        "record": "sweep-2026-10-14-original-partition-v5-7.json",
+        "finish_status": "original scope partition v5-7 initial replay complete",
+        "compact": false
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
     "get_into_it_sm_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-get-into-it-sm-fixture-verification.json",
     "other_jobs_live_observation": [
+      {
+        "job": "chart-sweep-parallel-v5-3",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Molly/Molly.ssc",
+        "child_running": true,
+        "position": 319
+      },
+      {
+        "job": "chart-sweep-parallel-v5-4",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "capture",
+        "source_simfile": "My Penny/My Penny.ssc",
+        "child_running": true,
+        "position": 322
+      },
+      {
+        "job": "chart-sweep-parallel-v5-5",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Neon Nights - [Zaia]/Neon Nights.ssc",
+        "child_running": true,
+        "position": 325
+      },
+      {
+        "job": "chart-sweep-parallel-v5-6",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "No Role Modelz/No Role Modelz.ssc",
+        "child_running": true,
+        "position": 328
+      },
+      {
+        "job": "chart-sweep-parallel-v5-7",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "No.13/no13.ssc",
+        "child_running": true,
+        "position": 331
+      },
       {
         "job": "door-cringle-sm-attack-final-repair-v1",
         "complete": false,
@@ -1965,7 +2056,10 @@
     "attack_boundary_completed_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-attack-boundary-linux-build.json",
     "cringle_sm_attack_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-door-cringle-sm-attack-final-launch.json",
     "reason_red_zero_seed": "tests/fixtures/full_song_lua/sweep-2026-10-14-reason-red-zero-seed-diagnosis.json",
-    "selected_replay_binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c"
+    "selected_replay_binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c",
+    "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
+    "original_scope_concurrency": 8,
+    "publisher_stream_count": 95
   },
   "counts_at_checkpoint": {
     "new_passed_fixtures": 122,
