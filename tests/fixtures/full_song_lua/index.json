@@ -4225,15 +4225,12 @@
     {
       "title": "Panopticon",
       "source_simfile": "panopticon/panopticon.ssc",
-      "harness_version": "0.1.0",
-      "archive": "1a89e58ef1e5b99eef7f394b80b71bcfaa0b7c90bf69682e0b48834491671bac.tar.zst",
-      "sha256": "1a89e58ef1e5b99eef7f394b80b71bcfaa0b7c90bf69682e0b48834491671bac",
-      "compressed_bytes": 74657,
-      "uncompressed_sha256": "9443fe44312e29b467f7fc7495c83d1ca4dba4fc5566cdfb380a7507c95c674d",
-      "compression_level": 22,
-      "aliases": [
-        "ed2f16bdd4c84fa1d5cf8656428c4de3cddf6fe1b281f6a596c030ed6a541dc9.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "cfc09a13e974abb9ba0a844955255cb0ffff840d0b8cc5786bc7c28dc52c0a37.tar.zst",
+      "sha256": "cfc09a13e974abb9ba0a844955255cb0ffff840d0b8cc5786bc7c28dc52c0a37",
+      "compressed_bytes": 6303192,
+      "uncompressed_sha256": "dabdcea931feb4de5bf387b115f2d999775db72608c7735bc22c19a9eeac5c24",
+      "aliases": []
     },
     {
       "title": "Episode 09",
