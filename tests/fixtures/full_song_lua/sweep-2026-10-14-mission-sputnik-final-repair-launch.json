@@ -1,0 +1,14 @@
+{
+  "pid": 3357378,
+  "supervisor_pid": 3357378,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_mission_sputnik_selector_observations_final_repair_v1.py"
+  ],
+  "fix_commit": "771646c8d58dc1170f1e2b9f332a701f8bd518b7",
+  "script_sha256": "6fae1545a093ea3e8f6f814bf2515fb627635e3c1a7c52a72bc7b8773b8252d6",
+  "repair_attempt": 2,
+  "maximum_repairs": 2,
+  "native_capture_reused": true,
+  "passing_charts_reopened": false
+}
