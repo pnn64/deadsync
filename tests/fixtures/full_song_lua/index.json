@@ -4667,17 +4667,14 @@
       ]
     },
     {
-      "title": "",
+      "title": "Probe",
       "source_simfile": "SharpNel/HashtagNel.ssc",
-      "harness_version": "0.1.0",
-      "archive": "5faf9046be843398d8ad2023fc326e3848c82b81807ada2e7bee9bff12bf2bf5.tar.zst",
-      "sha256": "5faf9046be843398d8ad2023fc326e3848c82b81807ada2e7bee9bff12bf2bf5",
-      "compressed_bytes": 363878,
-      "uncompressed_sha256": "d37528e1f9c03750a4e08c58e47e664bf97ee360e116d5aeb98126c4ef3dd260",
-      "compression_level": 22,
-      "aliases": [
-        "524114703ad755f1edccc99948c7ace1919d5e232219e1230f77898d275af448.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b55315bf1fa89a576ff67b1145ce03a4055d7e72de9fc20bbfe5b94ebc110407.tar.zst",
+      "sha256": "b55315bf1fa89a576ff67b1145ce03a4055d7e72de9fc20bbfe5b94ebc110407",
+      "compressed_bytes": 8428603,
+      "uncompressed_sha256": "6bee5d84ced17df1e6edf135dfc393842e18bdea575c56a7ffd63334e181cc22",
+      "aliases": []
     },
     {
       "title": "Shine!",
