@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T11:42:34Z",
-  "previous_goal_turn": "Current turn is progress: Paradise SSC, Pale, Tacos double, final My Exes SSC, Life Cheating Game, Crump, Loyal Divide, DoorOpen RIGHTS SSC, Paradise Cringle SM and DoorOpen Cringle SSC pass complete replay with zero errors/mismatches and are saved/committed. Every local accepted archive has compressed and uncompressed byte verification without reopening acceptance. Tacos first repair closes at 63984 frames/1551 fields and My Exes final repair 2 at 62908 frames/1650 fields. First repairs for the remaining RIGHTS SM, Longinus, Fortuna Redux, Mawaru1, Mawaru4 SM and Koi SSC remain live with the tested immutable 74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234 helper; one repair remains after each. First I Really Like You SM repair completes 100091 frames with one failed-flag mismatch at 120 seconds, no callback errors; exact native samples and primary end timing source recorded, cause unconfirmed, final repair unspent. First DoorOpen Cringle SM repair completes 55331 frames, zero errors and four option-string mismatches; chart attack switches at 2.802432/3.207837 seconds. Primary PlayerState resets Song from Stage at attack boundaries, while current Lua host resets only at outro; diagnosis recorded, final repair unspent. Mamono actual startup and separate 2160-cell production control fail with Lua stack errors; different failure phases acknowledged, primary native/vendored 8000-slot limit and mlua allocation evidence pinned. No cause/fix claimed, no full repair spent, temporary failing control kept outside repository suite and source restored cleanly. Original three sweep workers and Mawaru5 final remain live; publisher 50760 watches 89 streams and saves/ignores >100000000-byte archives locally. Missing coverage separate, original source bytes unchanged, all acceptance/tolerance rules unchanged, sweep incomplete.",
+  "updated_utc": "2026-10-14T11:44:03Z",
+  "previous_goal_turn": "Current turn is progress: Paradise SSC, Pale, Tacos double, final My Exes SSC, Life Cheating Game, Crump, Loyal Divide, DoorOpen RIGHTS SSC, Paradise Cringle SM, DoorOpen Cringle SSC and Mawaru1 pass complete replay with zero errors/mismatches and are saved/committed. Every local accepted archive has compressed and uncompressed byte verification without reopening acceptance. Tacos first repair closes at 63984 frames/1551 fields and My Exes final repair 2 at 62908 frames/1650 fields. First repairs for the remaining RIGHTS SM, Longinus, Fortuna Redux, Mawaru4 SM and Koi SSC remain live with the tested immutable 74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234 helper; one repair remains after each. First I Really Like You SM repair completes 100091 frames with one failed-flag mismatch at 120 seconds, no callback errors; exact native samples and primary end timing source recorded, cause unconfirmed, final repair unspent. First DoorOpen Cringle SM repair completes 55331 frames, zero errors and four option-string mismatches; chart attack switches at 2.802432/3.207837 seconds. Primary PlayerState resets Song from Stage at attack boundaries, while current Lua host resets only at outro; diagnosis recorded, final repair unspent. Mamono actual startup and separate 2160-cell production control fail with Lua stack errors; different failure phases acknowledged, primary native/vendored 8000-slot limit and mlua allocation evidence pinned. No cause/fix claimed, no full repair spent, temporary failing control kept outside repository suite and source restored cleanly. Original three sweep workers and Mawaru5 final remain live; publisher 50760 watches 89 streams and saves/ignores >100000000-byte archives locally. Missing coverage separate, original source bytes unchanged, all acceptance/tolerance rules unchanged, sweep incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "67da93621c6efcbcaf20847fad9d36afd57233ac",
+      "deadsync": "2e1047bce30b9876b0fc5a5ff21b0dc3115d54d1",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -125,19 +125,15 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "REASON for RED/reasonforgay.sm",
-      "position": 371,
-      "phase": "replay",
-      "pid": 1165411,
+      "current": "Remind The Souls/remindthesouls-fakemines.sm",
+      "position": 374,
+      "phase": "capture",
+      "pid": 1626816,
       "process_matches": true,
       "passed": 29,
-      "pending": 57,
-      "processed": 86,
-      "last_log_lines": [
-        "[5289.9s] replaying every native gameplay frame: frame 83906/84068 (99.8%)",
-        "[5291.9s] replaying every native gameplay frame: frame 83935/84068 (99.8%)",
-        "[5293.9s] replaying every native gameplay frame: frame 83963/84068 (99.9%)"
-      ],
+      "pending": 58,
+      "processed": 87,
+      "last_log_lines": [],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -1935,7 +1931,8 @@
     "mamono_stack_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-mamono-stack-diagnosis.json",
     "really_like_remaining_failure": "tests/fixtures/full_song_lua/sweep-2026-10-14-really-like-remaining-failure.json",
     "door_cringle_sm_attack_boundary": "tests/fixtures/full_song_lua/sweep-2026-10-14-door-cringle-sm-attack-boundary-diagnosis.json",
-    "koi_ssc_first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-koi-ssc-rec-print-launch.json"
+    "koi_ssc_first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-koi-ssc-rec-print-launch.json",
+    "mawaru1_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-mawaru1-fixture-verification.json"
   },
   "counts_at_checkpoint": {
     "new_passed_fixtures": 117,
