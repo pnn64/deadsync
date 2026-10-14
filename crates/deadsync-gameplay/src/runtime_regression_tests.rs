@@ -875,6 +875,7 @@ mod runtime_regression_tests {
             first_second: 0.0,
             total_length_seconds: 60,
             precise_last_second_seconds: 60.0,
+            precise_note_last_second_seconds: Some(60.0),
             last_second_hint: 0.0,
             charts: vec![regression_chart()],
         }

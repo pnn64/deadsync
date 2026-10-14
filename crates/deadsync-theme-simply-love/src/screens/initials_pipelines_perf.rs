@@ -258,6 +258,7 @@ fn test_song(path: &str, title: &str, seconds: f32) -> Arc<SongData> {
         first_second: 0.0,
         total_length_seconds: seconds.round() as i32,
         precise_last_second_seconds: seconds,
+        precise_note_last_second_seconds: Some(seconds),
         last_second_hint: 0.0,
         charts: Vec::new(),
     })

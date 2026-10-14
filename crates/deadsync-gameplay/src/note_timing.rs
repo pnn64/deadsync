@@ -279,6 +279,7 @@ pub struct GameplayEndTimingState {
     notes_end_time_ns: SongTimeNs,
     music_end_time_ns: SongTimeNs,
     audio_end_time_ns: SongTimeNs,
+    song_last_second_ns: SongTimeNs,
 }
 
 impl GameplayEndTimingState {
@@ -293,6 +294,7 @@ impl GameplayEndTimingState {
             notes_end_time_ns,
             music_end_time_ns,
             audio_end_time_ns,
+            song_last_second_ns: 0,
         }
     }
 
@@ -312,6 +314,18 @@ impl GameplayEndTimingState {
     #[must_use]
     pub const fn audio_end_time_ns(&self) -> SongTimeNs {
         self.audio_end_time_ns
+    }
+
+    /// Retain the resolved whole-song bound through rate and player-offset
+    /// changes, just as native Song keeps its calculated last second.
+    pub const fn with_song_last_second_ns(mut self, seconds: SongTimeNs) -> Self {
+        self.song_last_second_ns = seconds;
+        self
+    }
+
+    #[must_use]
+    pub const fn song_last_second_ns(&self) -> SongTimeNs {
+        self.song_last_second_ns
     }
 
     #[inline(always)]

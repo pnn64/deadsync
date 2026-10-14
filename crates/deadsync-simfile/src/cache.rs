@@ -26,8 +26,8 @@ use crate::song::{
     ParseSongOptions, SongAnalyzer, SongParseScratch, parse_song_data_file, parse_song_data_file_in,
 };
 
-// Rebuild notes and totals that previously counted keysound index digits.
-pub const SONG_CACHE_VERSION: u8 = 68;
+// Rebuild note-only song bounds used before pack sync and absolute hints.
+pub const SONG_CACHE_VERSION: u8 = 69;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
@@ -950,6 +950,7 @@ pub struct SerializableSongData {
     pub first_second: f32,
     pub total_length_seconds: i32,
     pub precise_last_second_seconds: f32,
+    pub precise_note_last_second_seconds: Option<f32>,
     pub last_second_hint: f32,
     pub charts: Vec<SerializableChartData>,
 }
@@ -963,6 +964,7 @@ pub fn update_precise_song_bounds(song: &mut SerializableSongData, global_offset
     // ITGmania seeds Song::ReCalculateStepStatsAndLastSecond with the hint,
     // then extends it for later notes. It is an absolute music second, not a beat.
     let mut last = song.last_second_hint;
+    let mut note_last = f32::NEG_INFINITY;
     for chart in &song.charts {
         if !song_length_chart_candidate(chart, has_non_edit) {
             continue;
@@ -1003,6 +1005,7 @@ pub fn update_precise_song_bounds(song: &mut SerializableSongData, global_offset
         }
         let sec = timing.get_time_for_beat(beat);
         if sec.is_finite() {
+            note_last = note_last.max(sec);
             last = last.max(sec.max(0.0));
         }
     }
@@ -1014,6 +1017,7 @@ pub fn update_precise_song_bounds(song: &mut SerializableSongData, global_offset
     };
     let fallback = song.total_length_seconds.max(0) as f32;
     song.precise_last_second_seconds = last.max(fallback);
+    song.precise_note_last_second_seconds = note_last.is_finite().then_some(note_last);
 }
 
 fn song_length_chart_candidate(chart: &SerializableChartData, has_non_edit: bool) -> bool {
@@ -1095,6 +1099,7 @@ pub struct CachedSongMeta {
     pub first_second: f32,
     pub total_length_seconds: i32,
     pub precise_last_second_seconds: f32,
+    pub precise_note_last_second_seconds: Option<f32>,
     pub last_second_hint: f32,
     pub charts: Vec<CachedChartMeta>,
 }
@@ -1200,6 +1205,7 @@ struct BorrowedCachedSongMeta<'a> {
     first_second: f32,
     total_length_seconds: i32,
     precise_last_second_seconds: f32,
+    precise_note_last_second_seconds: Option<f32>,
     last_second_hint: f32,
     charts: BorrowedCachedCharts<'a>,
 }
@@ -1751,6 +1757,7 @@ pub fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -
         first_second: song.first_second,
         total_length_seconds: song.total_length_seconds,
         precise_last_second_seconds: song.precise_last_second_seconds,
+        precise_note_last_second_seconds: song.precise_note_last_second_seconds,
         last_second_hint: song.last_second_hint,
         charts: song
             .charts
@@ -1796,6 +1803,7 @@ pub fn build_cached_song_meta(
         first_second: song.first_second,
         total_length_seconds: song.total_length_seconds,
         precise_last_second_seconds: song.precise_last_second_seconds,
+        precise_note_last_second_seconds: song.precise_note_last_second_seconds,
         last_second_hint: song.last_second_hint,
         charts: song
             .charts
@@ -1838,6 +1846,7 @@ impl<'a> BorrowedCachedSongMeta<'a> {
             first_second: song.first_second,
             total_length_seconds: song.total_length_seconds,
             precise_last_second_seconds: song.precise_last_second_seconds,
+            precise_note_last_second_seconds: song.precise_note_last_second_seconds,
             last_second_hint: song.last_second_hint,
             charts: BorrowedCachedCharts {
                 charts: &song.charts,
@@ -1901,6 +1910,7 @@ pub fn build_song_meta_from_cache(song: CachedSongMeta) -> SongData {
         first_second: song.first_second,
         total_length_seconds: song.total_length_seconds,
         precise_last_second_seconds: song.precise_last_second_seconds,
+        precise_note_last_second_seconds: song.precise_note_last_second_seconds,
         last_second_hint: song.last_second_hint,
         charts: song
             .charts
@@ -3362,6 +3372,7 @@ mod tests {
             first_second: 0.0,
             total_length_seconds: 2,
             precise_last_second_seconds: 2.0,
+            precise_note_last_second_seconds: Some(2.0),
             last_second_hint: 0.0,
             charts: vec![
                 test_serializable_chart("dance-single", "Edit", 1, None),
@@ -3803,6 +3814,7 @@ mod tests {
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
             charts: Vec::new(),
         }

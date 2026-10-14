@@ -95,6 +95,7 @@ fn song(measures: usize) -> Arc<SongData> {
         first_second: 0.0,
         total_length_seconds: 200,
         precise_last_second_seconds: 200.25,
+        precise_note_last_second_seconds: Some(200.25),
         last_second_hint: 0.0,
         charts,
     })

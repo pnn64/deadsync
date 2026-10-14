@@ -74,6 +74,7 @@ struct BorrowedCachedSongMeta<'a> {
     first_second: f32,
     total_length_seconds: i32,
     precise_last_second_seconds: f32,
+    precise_note_last_second_seconds: Option<f32>,
     last_second_hint: f32,
     charts: Vec<BorrowedCachedChartMeta<'a>>,
 }
@@ -121,6 +122,7 @@ impl<'a> BorrowedCachedSongMeta<'a> {
             first_second: song.first_second,
             total_length_seconds: song.total_length_seconds,
             precise_last_second_seconds: song.precise_last_second_seconds,
+            precise_note_last_second_seconds: song.precise_note_last_second_seconds,
             last_second_hint: song.last_second_hint,
             charts: song
                 .charts

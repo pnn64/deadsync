@@ -900,17 +900,24 @@ end }
         let simfile = dir.join("end.ssc");
         // Native Song.cpp includes fake rows on other playable charts in
         // GetLastSecond, then ScreenGameplay.cpp adds the resolution window.
-        fs::write(&simfile, "#VERSION:0.83;\n#TITLE:Whole song end;\n#BPMS:0=60;\n#FAKES:3=8;\n\
+        for (pack_offsets, sync, hint) in [
+            (false, deadsync_chart::SyncPref::Itg, 0.0_f32),
+            (true, deadsync_chart::SyncPref::Null, 0.0),
+            (true, deadsync_chart::SyncPref::Itg, 0.0),
+            (true, deadsync_chart::SyncPref::Itg, 4.004),
+            (true, deadsync_chart::SyncPref::Itg, 8.0),
+        ] {
+        fs::write(&simfile, format!("#LASTSECONDHINT:{hint};\n#VERSION:0.83;\n#TITLE:Whole song end;\n#BPMS:0=60;\n#FAKES:3=8;\n\
 #NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:Selected;\n#DIFFICULTY:Challenge;\n#METER:1;\n#NOTES:\n1000\n0000\n0000\n1000\n;\n\
-#NOTEDATA:;\n#STEPSTYPE:dance-double;\n#DESCRIPTION:Later fake;\n#DIFFICULTY:Challenge;\n#METER:1;\n#NOTES:\n10000000\n00000000\n00000000\n00000000\n,\n10000000\n00000000\n00000000\n00000000\n;\n").unwrap();
+#NOTEDATA:;\n#STEPSTYPE:dance-double;\n#DESCRIPTION:Later fake;\n#DIFFICULTY:Challenge;\n#METER:1;\n#NOTES:\n10000000\n00000000\n00000000\n00000000\n,\n10000000\n00000000\n00000000\n00000000\n;\n")).unwrap();
         let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap());
-        assert_eq!(song.precise_last_second(), 4.0);
+        assert_eq!(song.precise_last_second(), 4.0_f32.max(hint));
         let chart = Arc::new(song.charts[0].clone());
         let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
         let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
         let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
         let mut state = gameplay::init(song, [chart.clone(), chart], [payload.clone(), payload],
-            GameplayViewport::default(), GameplaySession::default(), GameplayConfig::default(),
+            GameplayViewport::default(), GameplaySession::default(), GameplayConfig { machine_pack_ini_offsets: pack_offsets, machine_default_sync_pref: sync, ..Default::default() },
             5, 1.0, scroll, profiles, None, None, None, Arc::from("EVENT"),
             None, None, None, None, None, [deadsync_gameplay::CourseLifeConfig::Bar; 2],
             false, None, None, [0; 2], Default::default(), Default::default());
@@ -919,11 +926,15 @@ end }
                 assert!(state.set_music_rate(rate));
             }
             // The native roll window is the largest window in this profile.
-            let expected = 4_000_000_000 +
+            // Song.cpp applies the group offset while converting note beats.
+            // LASTSECONDHINT remains an absolute music second.
+            let group_offset = if pack_offsets && sync == deadsync_chart::SyncPref::Itg { -0.009_f32 } else { 0.0 };
+            let last = (4.0_f32 - group_offset).max(hint);
+            let expected = (f64::from(last) * 1e9).round() as i64 +
                 (f64::from(deadsync_rules::note::TIMING_WINDOW_SECONDS_ROLL * rate) * 1e9).round() as i64;
-            assert_eq!(state.music_end_time_ns(), expected);
+            assert_eq!(state.music_end_time_ns(), expected, "whole-song end includes group sync before the absolute hint");
             assert!(state.apply_global_offset_delta(0.125));
-            assert_eq!(state.music_end_time_ns(), expected);
+            assert_eq!(state.music_end_time_ns(), expected, "whole-song end includes group sync before the absolute hint");
             state.set_current_music_time_ns(expected - 1);
             assert!(state.finish_gameplay_if_ready(false).is_none());
         }
@@ -931,6 +942,7 @@ end }
         state.set_current_music_time_ns(end);
         assert!(matches!(state.finish_gameplay_if_ready(false),
             Some(deadsync_gameplay::GameplayAction::Navigate(deadsync_gameplay::GameplayExit::Complete))));
+        }
     }
 
     #[test]

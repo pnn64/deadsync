@@ -290,6 +290,9 @@ pub struct SongData {
     pub total_length_seconds: i32,
     /// Float-precision song end time used by graph scaling and preview helpers.
     pub precise_last_second_seconds: f32,
+    /// Last eligible note second before the absolute hint and pack sync offset.
+    /// None means no chart contributes to the native whole-song note bound.
+    pub precise_note_last_second_seconds: Option<f32>,
     /// Minimum song end in music seconds from SSC `#LASTSECONDHINT`; zero if absent.
     pub last_second_hint: f32,
     pub charts: Vec<ChartData>,
@@ -885,6 +888,7 @@ mod tests {
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
             charts: Vec::new(),
         }

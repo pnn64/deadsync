@@ -533,6 +533,7 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
         first_second: 0.0,
         total_length_seconds: summary.total_length.max(last_second_hint as i32),
         precise_last_second_seconds: (summary.total_length.max(0) as f32).max(last_second_hint),
+        precise_note_last_second_seconds: Some(summary.total_length.max(0) as f32),
         last_second_hint,
         charts,
     }

@@ -598,6 +598,13 @@ where
 
     let timing_prep_started = Instant::now();
     let audio_end_time_ns = song_audio_end_time_ns(&song);
+    // Song.cpp converts eligible note beats with the pack's group offset,
+    // then compares that result with the absolute LASTSECONDHINT.
+    let song_last_second = song.precise_note_last_second_seconds
+        .map_or(0.0, |seconds| seconds - pack_sync_offset_seconds)
+        .max(song.last_second_hint)
+        .max(0.0);
+    let song_last_second_ns = song_time_ns_from_seconds(song_last_second);
     let GameplayTimeBounds {
         first_judgable_second: first_second,
         notes_end_time_ns,
@@ -610,7 +617,7 @@ where
         audio_end_time_ns,
         // Native GetMusicEndTiming adds the late-resolution window to the
         // whole Song last second, including later rows on unselected charts.
-        song_time_ns_from_seconds(song.precise_last_second()),
+        song_last_second_ns,
     );
     // ITGmania's ScreenGameplay::StartPlayingSong uses theme metrics
     // MinSecondsToStep / MinSecondsToMusic. Simply Love scales both by
@@ -1111,7 +1118,7 @@ where
                 notes_end_time_ns,
                 music_end_time_ns,
                 audio_end_time_ns,
-            ),
+            ).with_song_last_second_ns(song_last_second_ns),
             music_rate: GameplayMusicRateState::new(rate),
             offsets: GameplayOffsetState::new(
                 config.global_offset_seconds,
