@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Spooky/1.09 - Spooky.ssc",
+  "native_frames": 45058,
+  "replayed_frames": 45058,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "18ef7ff5db9acd8161644f2e5dfcf48d7f871ba235ea7228eb5b57f92d6ca2ca.tar.zst",
+  "compressed_sha256": "18ef7ff5db9acd8161644f2e5dfcf48d7f871ba235ea7228eb5b57f92d6ca2ca",
+  "uncompressed_sha256": "cd912f1edf7f7517a97f2946296b072a68d157966d1472e2d3441a31363ff614",
+  "compressed_bytes": 6867169,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
