@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T09:46:06Z",
-  "previous_goal_turn": "Current turn was progress: No Role Modelz, Genshin Quiz, no touchy and OK complete full replay, saved and committed, and local decompressed bytes verified against the original captures. Source commit dccc3cd0d retains native Transition virtual tween-time and child-update state and builds Lua-owned ColumnCues queues from original chart notes and neutral profile input. The unchanged transition control fails before and passes after; two focused controls, 59 live controls, 256 simfile tests, 27 native replay controls, and both full binaries pass/build on Linux. All 35 source and unchanged three harness pins are verified. Windows validation fails solely on disk full and is not counted as passing; cache deletion was rejected by automatic approval review and no caches were removed. My Exes Bestfriend SSC first full repair 1 is live against its original byte-verified 62908-frame capture, one repair remaining afterwards. Helper d3a3b73e18090558db59ed5d4903a39302a128fa019747f6b3068184a8aea921 is selected for subsequent charts. Tacos native --style double capture completes 63984 frames with zero errors/dropped data and original source bytes. Candidate 9eacd92b49c7b90d2574891d5bcfe3e3f26ef7670e8e3eb17c08335e72e65862 and all manifest members are byte-verified. Existing --entry diagnostic reports unsupported dance-single-only replay; zero full repairs spent. Numujika original preparation fails on missing MinSecondsToStep/MinSecondsToMusic metrics at math.max line 4; primary Simply Love definitions identified, zero full repairs spent. Singleton publisher 50760 watches 73 streams and saves archives above 100000000 bytes locally with exact .gitignore entries and committed metadata. All existing five large fixtures are already ignored/untracked. Accepted charts remain closed and missing coverage separate. The original sweep and Mawaru5 final/Paradise SSC first repairs remain live; the full sweep remains incomplete.",
+  "updated_utc": "2026-10-14T10:42:01Z",
+  "previous_goal_turn": "Current turn is progress: Rayc Fire 2, Numujika ac.10 and Over the Top complete full replay, are saved/committed and local decompressed bytes match original candidates. Numujika source fix 3eac32e9e evaluates Simply Love lead-in metrics from current Lua rate; unchanged production control fails before and passes after, five Linux checks pass, and first full repair passes 64275 frames / 1507 stage fields with zero errors/mismatches. My Exes first repair completes 62908 frames and fixes five of six mismatches; its one remaining Underlay time is caused by treating minimized row indices as native rows. Source fix e56f30a19 feeds the existing row_to_beat payload to Lua cue generation and supports captured double replay sessions with real double chart selection, eight-column actor/spline control and the complete primary Simply Love cue mapping algorithm. Linux cue, 60 live, 256 simfile, dedicated double and 28 native replay controls pass, both binaries build; Windows 60 live controls pass with native Cargo exit zero. All 35 source and unchanged three harness pins are verified; helper 74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234 is selected for later charts. The same 4128-frame My Exes cutoff reproduces one mismatch before and zero after, without errors or full acceptance. Final full My Exes repair 2 runs against original capture; no repairs remain afterwards. Tacos first full repair 1 runs against its retained 63984-frame double capture and byte-verified uncompressed candidate, one repair left afterwards. Original sweep plus Mawaru5 final/Paradise SSC first repairs remain live; publisher 50760 watches 76 streams and ignores accepted archives above 100000000 bytes while preserving local storage. Passing fixtures remain closed, missing coverage separate, all original source bytes unchanged and the sweep incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "4065f395d27c72bf5ddcf0055ce5576e07f4c28c",
+      "deadsync": "f70d5daa4e90a1e4b685e65cc42471f059201e92",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -69,7 +69,9 @@
     "native_screen_child_inventory": "7960c8a1e: eight Windows and Linux checks pass, 57 live/27 native controls and both builds; retained 34-source immutable helper; complete Paradise SM repair passes 64119 frames and 1892 fields, saved and byte verified. SSC first repair running, missing coverage separate.",
     "native_matched_filename_spelling": "1a142e6e7: unchanged meaningful parser red/green, 256 Linux and 255 Windows simfile tests, 57 live/27 native Linux controls and both builds; cache version 67; helper 1d1cab219618a1d98d02e54498de7297f6f533cd9347db517e629a49b4b12638 verified against all 34 source pins; Mawaru5 final full repair 2 running with original capture.",
     "native_day_of_year": "5b3fb64dd: zero-based native tm_yday getter; unchanged production red/green, Windows calendar regression, Linux 3 host/57 live/27 native controls and both builds; 34 source/3 harness pins verified; Genshin first full repair passes all 105754 frames / 1309 stage fields, zero errors/mismatches, saved and byte verified.",
-    "native_transition_column_cues": "dccc3cd0d: unchanged meaningful red/green transition control, two focused controls, 59 live/256 simfile/27 native replay controls and both binaries on Linux; 35 source pins; first My Exes SSC full repair running. Windows disk-full failure retained and not counted as a passing check."
+    "native_transition_column_cues": "dccc3cd0d: unchanged meaningful red/green transition control, two focused controls, 59 live/256 simfile/27 native replay controls and both binaries on Linux; 35 source pins; first My Exes SSC full repair running. Windows disk-full failure retained and not counted as a passing check.",
+    "native_lead_in_metrics": "3eac32e9e: primary query-time metric expressions, unchanged red/green production control, five Linux checks, complete Numujika first repair passed; accepted and byte verified.",
+    "double_and_minimized_cues": "e56f30a19: 60 live/256 simfile/28 native controls, dedicated eight-column production-session control, both executables built; Windows 60 live controls exit zero. Same My Exes cutoff changes one mismatch to zero. No full acceptance claimed from diagnostics; final SSC and first Tacos full repairs are live."
   },
   "corpus_transfer": {
     "tar_sha256": "37febe98e2e47b325b9f9b96f4d29ddf32eedda84514191252d043c5fd4a4d1a",
@@ -123,18 +125,18 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Rayc Fire 2 (SM5)/Rayc Fire 2.sm",
-      "position": 368,
+      "current": "REASON for RED/reasonforgay.sm",
+      "position": 371,
       "phase": "replay",
-      "pid": 289697,
+      "pid": 1165411,
       "process_matches": true,
-      "passed": 28,
+      "passed": 29,
       "pending": 57,
-      "processed": 85,
+      "processed": 86,
       "last_log_lines": [
-        "[8515.6s] replaying every native gameplay frame: frame 60516/69301 (87.3%)",
-        "[8517.6s] replaying every native gameplay frame: frame 60530/69301 (87.3%)",
-        "[8519.6s] replaying every native gameplay frame: frame 60543/69301 (87.4%)"
+        "[1656.6s] replaying every native gameplay frame: frame 29668/84068 (35.3%)",
+        "[1658.6s] replaying every native gameplay frame: frame 29702/84068 (35.3%)",
+        "[1660.6s] replaying every native gameplay frame: frame 29733/84068 (35.4%)"
       ],
       "supervisor_running": true
     },
@@ -1519,13 +1521,34 @@
         "record": "sweep-2026-10-14-my-exes-ssc-tweens-repair.json",
         "fix_commit": "dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b",
         "finish_status": "bounded first observed failure repair complete"
+      },
+      {
+        "name": "numujika-metrics-repair",
+        "remote": "/home/parity/jobs/numujika-metrics-repair-v1",
+        "record": "sweep-2026-10-14-numujika-metrics-repair.json",
+        "fix_commit": "3eac32e9ed58260e2f65a0c9d0b5edc74c521776",
+        "finish_status": "bounded first observed failure repair complete"
+      },
+      {
+        "name": "tacos-double-repair",
+        "remote": "/home/parity/jobs/tacos-double-repair-v1",
+        "record": "sweep-2026-10-14-tacos-double-repair.json",
+        "fix_commit": "e56f30a19e218e261ebbd1ad245ca2a49520f61b",
+        "finish_status": "bounded first observed failure repair complete"
+      },
+      {
+        "name": "my-exes-row-beats-final-repair",
+        "remote": "/home/parity/jobs/my-exes-row-beats-final-repair-v1",
+        "record": "sweep-2026-10-14-my-exes-row-beats-final-repair.json",
+        "fix_commit": "e56f30a19e218e261ebbd1ad245ca2a49520f61b",
+        "finish_status": "bounded final observed failure repair complete"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
     "get_into_it_sm_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-get-into-it-sm-fixture-verification.json",
     "other_jobs_live_observation": [
       {
-        "job": "my-exes-ssc-tweens-repair-v1",
+        "job": "my-exes-row-beats-final-repair-v1",
         "complete": false,
         "supervisor_running": true,
         "passed": 0,
@@ -1534,6 +1557,39 @@
         "last_phase": "replay",
         "source_simfile": "My Exes Bestfriend/ExBestFriend.ssc",
         "child_running": true
+      },
+      {
+        "job": "tacos-double-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Doubles-45-HALF-[MASTER] Tacos/Tacos.ssc",
+        "child_running": true
+      },
+      {
+        "job": "numujika-metrics-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
+        "pending": 0,
+        "processed": 1,
+        "last_phase": "pack",
+        "source_simfile": "Numujika ac.10/Numujika ac.10.sm",
+        "child_running": false
+      },
+      {
+        "job": "my-exes-ssc-tweens-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 0,
+        "pending": 1,
+        "processed": 1,
+        "last_phase": "replay",
+        "source_simfile": "My Exes Bestfriend/ExBestFriend.ssc",
+        "child_running": false
       },
       {
         "job": "genshin-day-of-year-repair-v1",
@@ -1583,13 +1639,13 @@
         "job": "chart-sweep-parallel-v4-1",
         "complete": false,
         "supervisor_running": true,
-        "passed": 25,
+        "passed": 26,
         "pending": 32,
-        "processed": 57,
+        "processed": 58,
         "last_phase": "replay",
-        "source_simfile": "Over the Top - [Zaia][FX]/Over the Top.sm",
+        "source_simfile": "Pale/Pale.sm",
         "child_running": true,
-        "position": 339
+        "position": 342
       },
       {
         "job": "chart-sweep-parallel-v4-2",
@@ -1628,14 +1684,21 @@
     "tacos_double_capture": "tests/fixtures/full_song_lua/sweep-2026-10-14-tacos-double-capture-diagnosis.json",
     "large_fixture_publisher": "tests/fixtures/full_song_lua/sweep-2026-10-14-large-fixture-publisher.json",
     "publisher_pid": 50760,
-    "numujika_metric_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-numujika-missing-metrics-diagnosis.json"
+    "numujika_metric_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-numujika-missing-metrics-diagnosis.json",
+    "numujika_metrics_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-numujika-metrics-build.json",
+    "numujika_metrics_first_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-numujika-metrics-launch.json",
+    "numujika_metrics_completion": "tests/fixtures/full_song_lua/sweep-2026-10-14-numujika-metrics-repair.json",
+    "double_cue_rows_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-double-cue-rows-build.json",
+    "tacos_double_first_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-tacos-double-launch.json",
+    "my_exes_row_beats_cutoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-my-exes-row-beats-cutoff.json",
+    "my_exes_row_beats_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-my-exes-row-beats-final-launch.json"
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 103,
-    "new_pending_charts": 85,
-    "new_processed_sources": 188,
+    "new_passed_fixtures": 106,
+    "new_pending_charts": 84,
+    "new_processed_sources": 190,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 165,
+    "unprocessed_sources": 163,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -2882,17 +2945,17 @@
     },
     {
       "source_simfile": "My Exes Bestfriend/ExBestFriend.ssc",
-      "repair_attempts": 0,
+      "repair_attempts": 1,
       "failure": null,
       "errors": [],
-      "mismatch_count": 6,
+      "mismatch_count": 1,
       "first_mismatch": [
         {
           "field": "command_query_event",
           "native": {
-            "actor": "external-0025",
+            "actor": "external-0022",
             "args": [
-              0
+              false
             ],
             "beat": 0.0012660399079322815,
             "caller": {
@@ -2903,38 +2966,38 @@
             "command": "OnCommand",
             "definition_id": "def-0009",
             "detail": {
-              "native_tween_time_left": 0
+              "native_tween_time_left": 1.3322865962982178
             },
             "kind": "call",
             "line": 173,
-            "operation": "Actor.diffusealpha",
+            "operation": "Actor.visible",
             "phase": "callback",
             "scene": 1,
             "seconds": 0.29260769486427307,
-            "seq": 42,
+            "seq": 71,
             "source": "song:/lua/default.lua",
-            "tween_time_left": 0
+            "tween_time_left": 1.3322865962982178
           },
           "deadsync": {
             "scene": 1,
             "kind": "call",
-            "operation": "Actor.diffusealpha",
+            "operation": "Actor.visible",
             "source": "song:/lua/default.lua",
             "line": 173,
             "phase": "callback",
             "beat": 0.0012660399079322815,
             "seconds": 0.29260769486427307,
             "args": [
-              0
+              false
             ],
             "results": [
               {
-                "actor": "0x5b5c4caa3600",
-                "name": "Cancel",
-                "path": "ScreenGameplay/Cancel"
+                "actor": "0x592742480640",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
               }
             ],
-            "tween_time_left": 1.5
+            "tween_time_left": 0.2305031716823578
           }
         }
       ]
@@ -2943,14 +3006,6 @@
       "source_simfile": "negator/NEGATOR.sm",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-482689-1791964917444496479-0\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
-    },
-    {
-      "source_simfile": "Numujika ac.10/Numujika ac.10.sm",
-      "repair_attempts": 0,
-      "failure": "[2.0s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'ヌムジカac.10': failed to execute '/tmp/.tmpnQxxZh/song/lua/default.lua': runtime error: [string \"/tmp/.tmpnQxxZh/song/lua/default.lua\"]:4: bad argument #1 to 'max' (number expected, got nil)\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'math.max'\n\t[string \"/tmp/.tmpnQxxZh/song/lua/default.lua\"]:4: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'ヌムジカac.10' from '/tmp/.tmpnQxxZh/song/lua/default.lua': failed to execute '/tmp/.tmpnQxxZh/song/lua/default.lua': runtime error: [string \"/tmp/.tmpnQxxZh/song/lua/default.lua\"]:4: bad argument #1 to 'max' (number expected, got nil)\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'math.max'\n\t[string \"/tmp/.tmpnQxxZh/song/lua/default.lua\"]:4: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (848205) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []

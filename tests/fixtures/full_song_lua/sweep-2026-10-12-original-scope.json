@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T09:46:05Z",
+  "updated_utc": "2026-10-14T10:42:00Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 250,
-    "pending": 86,
-    "unprocessed": 165
+    "passed": 253,
+    "pending": 85,
+    "unprocessed": 163
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2724,8 +2724,8 @@
       "source_simfile": "My Exes Bestfriend/ExBestFriend.ssc",
       "simfile_sha256": "0ce6cbf0793e2bb4c8dae2f6281fbc9bdb8427dca167be28daa77280db804f10",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-my-exes-ssc-tweens-repair.json"
     },
     {
       "position": 322,
@@ -2811,9 +2811,9 @@
       "position": 333,
       "source_simfile": "Numujika ac.10/Numujika ac.10.sm",
       "simfile_sha256": "0748c293677cfcd598e3ccf217be1886bbb0744a82f8eeb6741bc5bc36e5d8ce",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-numujika-metrics-repair.json"
     },
     {
       "position": 334,
@@ -2855,7 +2855,9 @@
       "position": 339,
       "source_simfile": "Over the Top - [Zaia][FX]/Over the Top.sm",
       "simfile_sha256": "62736f5663b06fa48c39c43f9408c108a0e0ee366810f767326f0d94dc60b694",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 340,
@@ -3047,7 +3049,9 @@
       "position": 368,
       "source_simfile": "Rayc Fire 2 (SM5)/Rayc Fire 2.sm",
       "simfile_sha256": "b1e55b2fc8c284f90f7c1cf67778e35fa7b1d0e67d879b26adc00a53702179b1",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 369,
