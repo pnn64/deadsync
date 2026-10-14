@@ -1,0 +1,377 @@
+{
+  "source_simfile": "MODULO/modulo.ssc",
+  "candidate_sha256": "1656e72fc18dcd4daf1fc5c2316e242df3ec0703d5a65d54e2cc4cf942c3f006",
+  "trace_sha256": "5c2e4ad31164c75384e68e8b68680db692ea18e474285dbe78bef29f07a41164",
+  "simfile_sha256": "b0333bc4289473ed6ba3116ff13f169ebf313c93994d35eece21451ceef6d941",
+  "binary_sha256": "69832cbca5fdc07f6ccb21e0f84bd5f45f6573b11c02acd65a4e090d6d8007f5",
+  "seconds": 217.88346548800473,
+  "report_sha256": "c0a55682fb96ad15d8ad35102eab65bf20bf3e447b565feaf26278ffa6b33313",
+  "diagnostic_only": true,
+  "whole_song_parity_proven": false,
+  "archive_accepted": false,
+  "scope": "entry",
+  "replayed_frames": 11256,
+  "native_frames": 69793,
+  "complete_chart_repairs_spent": 0,
+  "full_repair_attempts": 1,
+  "full_repair_attempts_remaining": 1,
+  "bounded_proof_sha256": "8fe2cacee3053ce0b8dacdc27119b5c8c2f932c088b47e3a331947ab0906bb39",
+  "all_candidate_manifest_members_byte_verified": true,
+  "mutable_worktree_not_a_dependency": true,
+  "actual_scene2_selection": [
+    {
+      "scene": 2,
+      "phase": "construction",
+      "operation": "GameState.GetCurrentSteps",
+      "args": [
+        0
+      ],
+      "results": [
+        {
+          "type": "Steps",
+          "song_dir": "song:/",
+          "index": 2,
+          "steps_type": "StepsType_Dance_Single",
+          "difficulty": "Difficulty_Edit",
+          "description": "y = 0",
+          "meter": 9
+        }
+      ]
+    },
+    {
+      "scene": 2,
+      "phase": "construction",
+      "operation": "Steps.GetDifficulty",
+      "args": [],
+      "results": [
+        "Difficulty_Edit"
+      ]
+    },
+    {
+      "scene": 2,
+      "phase": "construction",
+      "operation": "GameState.GetCurrentSteps",
+      "args": [
+        1
+      ],
+      "results": [
+        {
+          "type": "Steps",
+          "song_dir": "song:/",
+          "index": 1,
+          "steps_type": "StepsType_Dance_Single",
+          "difficulty": "Difficulty_Challenge",
+          "description": "Where were we again?",
+          "meter": 1
+        }
+      ]
+    },
+    {
+      "scene": 2,
+      "phase": "construction",
+      "operation": "Steps.GetDifficulty",
+      "args": [],
+      "results": [
+        "Difficulty_Challenge"
+      ]
+    }
+  ],
+  "native_scene2_selection_from_complete_capture": [
+    {
+      "scene": 2,
+      "phase": "construction",
+      "operation": "GameState.GetCurrentSteps",
+      "args": [
+        0
+      ],
+      "results": [
+        {
+          "description": "y = 0",
+          "difficulty": "Difficulty_Edit",
+          "index": 2,
+          "meter": 9,
+          "song_dir": "song:/",
+          "steps_type": "StepsType_Dance_Single",
+          "type": "Steps"
+        }
+      ]
+    },
+    {
+      "scene": 2,
+      "phase": "construction",
+      "operation": "Steps.GetDifficulty",
+      "args": [],
+      "results": [
+        "Difficulty_Edit"
+      ]
+    },
+    {
+      "scene": 2,
+      "phase": "construction",
+      "operation": "GameState.GetCurrentSteps",
+      "args": [
+        1
+      ],
+      "results": [
+        {
+          "description": "y = 0",
+          "difficulty": "Difficulty_Edit",
+          "index": 2,
+          "meter": 9,
+          "song_dir": "song:/",
+          "steps_type": "StepsType_Dance_Single",
+          "type": "Steps"
+        }
+      ]
+    },
+    {
+      "scene": 2,
+      "phase": "construction",
+      "operation": "Steps.GetDifficulty",
+      "args": [],
+      "results": [
+        "Difficulty_Edit"
+      ]
+    }
+  ],
+  "enabled_players_at_reload": {
+    "actual": [
+      {
+        "args": [
+          0
+        ],
+        "results": [
+          true
+        ]
+      },
+      {
+        "args": [
+          1
+        ],
+        "results": [
+          false
+        ]
+      }
+    ],
+    "native": [
+      {
+        "args": [
+          0
+        ],
+        "results": [
+          true
+        ]
+      },
+      {
+        "args": [
+          1
+        ],
+        "results": [
+          false
+        ]
+      }
+    ]
+  },
+  "native_first_scene2_frame": {
+    "beat": -4.722637176513672,
+    "delta": 0,
+    "scene": 2,
+    "seconds": -5.999977111816406,
+    "sequence": 11256,
+    "wall_seconds": 21.915935
+  },
+  "bounded_mismatches": [
+    {
+      "field": "command_query_count",
+      "native": 18466,
+      "deadsync": 18470
+    }
+  ],
+  "bounded_errors": [],
+  "bounded_reload_requests": [
+    {
+      "seconds": 12.491405487060547,
+      "operation": "SetNewScreen",
+      "args": [
+        "ScreenGameplay"
+      ]
+    }
+  ],
+  "diagnostic_cutoff_note": "The entry cutoff includes actual scene-2 construction at seconds zero but filters those native construction events because the first scene-2 update has a negative song clock. Its four-query count difference is diagnostic cutoff behavior, not an acceptance change. Native selection evidence comes from the complete retained uncompressed trace.",
+  "authored_script_sha256": "9619952f9c1d3177b5ddfd507b36f30bbb6a7595c37c7298d8d352a31916c198",
+  "authored_selection": [
+    {
+      "line": 130,
+      "text": "\t\t\tif GAMESTATE:GetSongBeat() > 19 then"
+    },
+    {
+      "line": 131,
+      "text": "\t\t\t\tMODULO_Pick = MODULO_Pick + 1"
+    },
+    {
+      "line": 132,
+      "text": "\t\t\t\tif MODULO_Pick > 9 then MODULO_Pick = 0 end"
+    },
+    {
+      "line": 133,
+      "text": "\t\t\t\tif GAMESTATE:IsPlayerEnabled(0) then"
+    },
+    {
+      "line": 134,
+      "text": "\t\t\t\t\tGAMESTATE:SetCurrentSteps(0, GAMESTATE:GetCurrentSong():GetAllSteps()[MODULO_Pick + 1 == 1 and 11 or MODULO_Pick + 1])"
+    },
+    {
+      "line": 135,
+      "text": "\t\t\t\t\tlocal speed, unused = GAMESTATE:GetPlayerState(0):GetPlayerOptions('ModsLevel_Song'):MMod()"
+    },
+    {
+      "line": 136,
+      "text": "\t\t\t\t\tif speed then MODULO_Speeds[1] = speed else MODULO_Speeds[1] = nil end"
+    },
+    {
+      "line": 137,
+      "text": "\t\t\t\tend"
+    },
+    {
+      "line": 138,
+      "text": "\t\t\t\tif GAMESTATE:IsPlayerEnabled(1) then"
+    },
+    {
+      "line": 139,
+      "text": "\t\t\t\t\tGAMESTATE:SetCurrentSteps(1, GAMESTATE:GetCurrentSong():GetAllSteps()[MODULO_Pick + 1 == 1 and 11 or MODULO_Pick + 1])"
+    },
+    {
+      "line": 140,
+      "text": "\t\t\t\t\tlocal speed, unused = GAMESTATE:GetPlayerState(1):GetPlayerOptions('ModsLevel_Song'):MMod()"
+    },
+    {
+      "line": 141,
+      "text": "\t\t\t\t\tif speed then MODULO_Speeds[2] = speed else MODULO_Speeds[2] = nil end"
+    },
+    {
+      "line": 142,
+      "text": "\t\t\t\tend"
+    },
+    {
+      "line": 143,
+      "text": "\t\t\t\tSCREENMAN:SetNewScreen(\"ScreenGameplay\")"
+    },
+    {
+      "line": 188,
+      "text": "if GAMESTATE:GetCurrentSteps(0):GetDifficulty() == 'Difficulty_Challenge' or GAMESTATE:GetCurrentSteps(1):GetDifficulty() == 'Difficulty_Challenge' then"
+    },
+    {
+      "line": 189,
+      "text": "\treturn t"
+    },
+    {
+      "line": 190,
+      "text": "else"
+    },
+    {
+      "line": 191,
+      "text": "\treturn u"
+    },
+    {
+      "line": 192,
+      "text": "end"
+    }
+  ],
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "pinned_native_source": {
+    "ScreenGameplay.cpp": {
+      "sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+      "lines": [
+        {
+          "line": 496,
+          "text": "    // fill in difficulty of CPU players with that of the first human player"
+        },
+        {
+          "line": 497,
+          "text": "    // this should not need to worry about step content."
+        },
+        {
+          "line": 498,
+          "text": "    FOREACH_PotentialCpuPlayer(p) {"
+        },
+        {
+          "line": 499,
+          "text": "      PlayerNumber human_pn = GAMESTATE->GetFirstHumanPlayer();"
+        },
+        {
+          "line": 500,
+          "text": "      GAMESTATE->m_pCurSteps[p].Set(GAMESTATE->m_pCurSteps[human_pn]);"
+        },
+        {
+          "line": 501,
+          "text": "      if (GAMESTATE->GetCurrentGame()->m_PlayersHaveSeparateStyles) {"
+        },
+        {
+          "line": 502,
+          "text": "        GAMESTATE->SetCurrentStyle(GAMESTATE->GetCurrentStyle(human_pn), p);"
+        },
+        {
+          "line": 503,
+          "text": "      }"
+        },
+        {
+          "line": 504,
+          "text": "    }"
+        },
+        {
+          "line": 505,
+          "text": ""
+        }
+      ]
+    },
+    "GameState.cpp": {
+      "sha256": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+      "lines": [
+        {
+          "line": 2651,
+          "text": "  for (enum_add(pn, 1); pn < NUM_PLAYERS; enum_add(pn, 1)) {"
+        },
+        {
+          "line": 2652,
+          "text": "    if (!GAMESTATE->IsHumanPlayer(pn)) {"
+        },
+        {
+          "line": 2653,
+          "text": "      return pn;"
+        },
+        {
+          "line": 2654,
+          "text": "    }"
+        },
+        {
+          "line": 2655,
+          "text": "  }"
+        },
+        {
+          "line": 2656,
+          "text": "  return PLAYER_INVALID;"
+        },
+        {
+          "line": 2657,
+          "text": "}"
+        },
+        {
+          "line": 2658,
+          "text": ""
+        },
+        {
+          "line": 2659,
+          "text": "MultiPlayer GetNextEnabledMultiPlayer(MultiPlayer mp) {"
+        }
+      ]
+    }
+  },
+  "prior_failure_diagnosis": "sweep-2026-10-14-modulo-first-reload-diagnosis.json",
+  "prior_diagnosis_commit": "9b6929fbd",
+  "concrete_cause": "ScreenGameplay::Init copies the first human player current Steps to every nonhuman potential CPU player before authored scene construction. With P1 enabled and P2 disabled, MODULO changes P1 to Edit y = 0. Native scene 2 then sees that exact Edit Steps for both players. Deadsync retains P2 Challenge, so the authored OR condition returns the introduction actors again and later requests an extra third screen absent from the native capture.",
+  "repair_scope": "Apply the native nonhuman Steps copy at gameplay screen initialization before authored construction; preserve enabled-player-only ForceOtherPlayers behavior in SetCurrentSteps and preserve exact Steps table identity.",
+  "root_cause_status": "Established by the bounded independent replay, complete native trace, authored branch and pinned native screen initialization.",
+  "new_full_repair_launched": false,
+  "acceptance_comparisons_changed": false,
+  "passing_charts_reopened": false
+}
