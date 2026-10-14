@@ -4399,15 +4399,12 @@
     {
       "title": "Downfall",
       "source_simfile": "Popek feat. Titans Fall Harder - Downfall/Downfall.ssc",
-      "harness_version": "0.1.0",
-      "archive": "aea3ad5d5ed71889b690a118d9f393d4118f38adf030b378511657fd86da0982.tar.zst",
-      "sha256": "aea3ad5d5ed71889b690a118d9f393d4118f38adf030b378511657fd86da0982",
-      "compressed_bytes": 339489,
-      "uncompressed_sha256": "fb355bd2efdf233550167af6e7fc9353eb30c577822be0c0c3741332d4f13450",
-      "compression_level": 22,
-      "aliases": [
-        "dfdb1d49ca7779cf0a014ad7bd221eb8a7c01af9a9d62914f967d6de47984d23.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "40c4d2543f0ade3e283d8100e76615c9b93fd14807ad1bf8a7eb7fbd73450848.tar.zst",
+      "sha256": "40c4d2543f0ade3e283d8100e76615c9b93fd14807ad1bf8a7eb7fbd73450848",
+      "compressed_bytes": 21199983,
+      "uncompressed_sha256": "df027af4b7910b4f48da0616bb8abf3119c50c01dedc6d0609d73716da12e5fb",
+      "aliases": []
     },
     {
       "title": "Potion",
