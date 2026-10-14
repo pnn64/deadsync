@@ -1,0 +1,34 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "updated_utc": "2026-10-14T11:05:47.371030+00:00",
+  "acceptance_gate_added": false,
+  "results": [
+    {
+      "source_simfile": "Pale/Pale.sm",
+      "archive": "7b47c47dd97584509f08f5496fdb74ab2ef3436567e11ef2f731ee8d0cda7541.tar.zst",
+      "compressed_sha256": "7b47c47dd97584509f08f5496fdb74ab2ef3436567e11ef2f731ee8d0cda7541",
+      "uncompressed_sha256": "aadd0149d9bba2065020d0f659cb52d59e721e26bf39e07a6c54ba642b9ab21e",
+      "compressed_bytes": 6854583,
+      "local_decompression_byte_verified": true,
+      "passing_chart_reopened": false
+    },
+    {
+      "source_simfile": "Doubles-45-HALF-[MASTER] Tacos/Tacos.ssc",
+      "archive": "c41449a435a0dc060afda40bf56944a40d943f1a611f4f20b6771a71d409c07e.tar.zst",
+      "compressed_sha256": "c41449a435a0dc060afda40bf56944a40d943f1a611f4f20b6771a71d409c07e",
+      "uncompressed_sha256": "9eacd92b49c7b90d2574891d5bcfe3e3f26ef7670e8e3eb17c08335e72e65862",
+      "compressed_bytes": 6966767,
+      "local_decompression_byte_verified": true,
+      "passing_chart_reopened": false
+    },
+    {
+      "source_simfile": "My Exes Bestfriend/ExBestFriend.ssc",
+      "archive": "75be6841e19dfa243d7f82d22aa356290b3a8540840705a2af7f65adead9b1e7.tar.zst",
+      "compressed_sha256": "75be6841e19dfa243d7f82d22aa356290b3a8540840705a2af7f65adead9b1e7",
+      "uncompressed_sha256": "f813961ad235573b82a041951b36cbc587888d3c1758f0261bc3f2d0af71f0a7",
+      "compressed_bytes": 84512078,
+      "local_decompression_byte_verified": true,
+      "passing_chart_reopened": false
+    }
+  ]
+}
