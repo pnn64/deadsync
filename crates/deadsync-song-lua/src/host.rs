@@ -931,6 +931,7 @@ pub fn install_screen_manager_globals(
             if let Some(_name) = method_arg(&args, 0).cloned().and_then(read_string) {
                 #[cfg(feature = "test-support")]
                 record_state_call(lua, "ScreenManager.SetNewScreen", vec![serde_json::json!(_name)])?;
+                crate::live::capture_source_request(lua, crate::live::SongLuaLiveRequest::NewScreen(_name.clone()))?;
                 lua.set_app_data(SongLuaScreenRequest(_name));
                 // Native ScreenManager queues the request; the current
                 // screen keeps its identity through this command/update.

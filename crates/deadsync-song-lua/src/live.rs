@@ -783,7 +783,24 @@ pub enum SongLuaLiveRequest {
     Transition(String),
 }
 
+#[derive(Debug)]
+pub struct SongLuaLiveSourceRequest {
+    pub music_seconds: f64,
+    pub request: SongLuaLiveRequest,
+}
+
 pub(crate) struct TransitionRequest(pub String);
+
+pub(crate) struct SourceRequests(pub Vec<SongLuaLiveSourceRequest>);
+
+pub(crate) fn capture_source_request(lua: &Lua, request: SongLuaLiveRequest) -> mlua::Result<()> {
+    if lua.app_data_ref::<SourceRequests>().is_none() { return Ok(()); }
+    let music_seconds = f64::from(crate::compile_song_runtime_values(lua)?.1);
+    if let Some(mut events) = lua.app_data_mut::<SourceRequests>() {
+        events.0.push(SongLuaLiveSourceRequest { music_seconds, request });
+    }
+    Ok(())
+}
 
 #[derive(Clone, Copy)]
 pub enum SongLuaLiveTarget {
@@ -805,6 +822,9 @@ pub struct SongLuaLiveBroadcast {
 #[derive(Debug, Default)]
 pub struct SongLuaLiveOutput {
     pub request: Option<SongLuaLiveRequest>,
+    /// Authored calls retain their multiplicity while the screen manager
+    /// consumes only the final queued screen target.
+    pub source_requests: Vec<SongLuaLiveSourceRequest>,
     pub broadcasts: Vec<(f32, String, bool)>,
     /// Explicit Lua MESSAGEMAN calls, including calls from engine-message
     /// listeners. Native source traces omit the engine-generated messages.
@@ -818,6 +838,7 @@ pub struct SongLuaLiveOutput {
 impl SongLuaLiveOutput {
     pub fn append(&mut self, mut next: Self) {
         if next.request.is_some() { self.request = next.request; }
+        self.source_requests.append(&mut next.source_requests);
         self.broadcasts.append(&mut next.broadcasts);
         self.source_broadcasts.append(&mut next.source_broadcasts);
         self.sounds.append(&mut next.sounds);
@@ -1449,6 +1470,8 @@ fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
     };
     let broadcasts = crate::lua_util::take_runtime_broadcasts(lua);
     let source_broadcasts = crate::lua_util::take_source_broadcasts(lua);
+    let source_requests = lua.app_data_mut::<SourceRequests>()
+        .map_or_else(Vec::new, |mut events| std::mem::take(&mut events.0));
     let sounds = crate::lua_util::take_runtime_sounds(lua);
     let errors = lua.remove_app_data::<crate::lua_util::SongLuaUpdateErrors>()
         .map_or_else(Vec::new, |errors| errors.0);
@@ -1456,7 +1479,7 @@ fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
         history.clear()?;
     }
     let player_writes = lua.remove_app_data::<PlayerWrites>().map_or_else(Vec::new, |writes| writes.0);
-    Ok(SongLuaLiveOutput { request, broadcasts, source_broadcasts, sounds, errors, player_writes })
+    Ok(SongLuaLiveOutput { request, source_requests, broadcasts, source_broadcasts, sounds, errors, player_writes })
 }
 
 pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
@@ -1468,6 +1491,33 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn live_screen_request_calls_preserve_duplicates_and_final_target() {
+        let compiled = compile_with_context("screen-request-calls", "return Def.Actor{}", |_| {});
+        let scene = compiled.live_scene.expect("live request observations");
+        crate::set_compile_song_runtime_values(&scene.lua, 2.0, 1.25).unwrap();
+        scene.lua.load(r#"
+SCREENMAN:SetNewScreen('ScreenSelectMusic')
+SCREENMAN:SetNewScreen('ScreenGameplay')
+SCREENMAN:SetNewScreen('ScreenGameplay')
+"#).exec().unwrap();
+        let mut output = take_output(&scene.lua).unwrap();
+        assert_eq!(output.request, Some(SongLuaLiveRequest::NewScreen("ScreenGameplay".into())));
+        assert_eq!(output.source_requests.len(), 3, "every authored screen request remains observable");
+        for (event, name) in output.source_requests.iter().zip(["ScreenSelectMusic", "ScreenGameplay", "ScreenGameplay"]) {
+            assert_eq!(event.music_seconds, 1.25);
+            assert_eq!(event.request, SongLuaLiveRequest::NewScreen(name.into()));
+        }
+        assert!(take_output(&scene.lua).unwrap().source_requests.is_empty(), "observations drain once");
+        scene.lua.load("SCREENMAN:GetTopScreen():StartTransitioningScreen('SM_DoNextScreen')").exec().unwrap();
+        let transition = take_output(&scene.lua).unwrap();
+        assert_eq!(transition.source_requests.len(), 1);
+        assert_eq!(transition.source_requests[0].request, SongLuaLiveRequest::Transition("SM_DoNextScreen".into()));
+        output.append(transition);
+        assert_eq!(output.source_requests.len(), 4, "output merging preserves all source calls");
+        assert_eq!(output.request, Some(SongLuaLiveRequest::Transition("SM_DoNextScreen".into())));
+    }
+
     #[test]
     fn live_gameplay_reload_copies_human_steps_to_disabled_player() {
         let mut compiled = compile_with_context("reload-cpu-steps", r#"
@@ -1667,10 +1717,18 @@ for _, step in ipairs(ORIGINAL) do
 end
 FIRST = SONG:GetAllSteps()
 SECOND = SONG:GetAllSteps()
+assert(SONG:GetOneSteps(0, 4) == ORIGINAL[1])
+assert(SONG:GetOneSteps('StepsType_Dance_Single', 'Difficulty_Edit') == ORIGINAL[2])
+assert(SONG:GetStepsByStepsType(0)[2] == ORIGINAL[2])
+assert(SONG:HasStepsType(0))
+assert(SONG:HasStepsTypeAndDifficulty(0, 5))
+assert(SONG:HasEdits(0))
+assert(not SONG:HasStepsType(1))
+assert(SONG:GetOneSteps(0, 2) == nil)
 "#).exec().unwrap();
         let globals = scene.lua.globals();
         assert_eq!(globals.get::<u32>("GETTER_CALLS").unwrap(), 0,
-            "native GetAllSteps returns its array without Lua metadata getter callbacks");
+            "native SongUtil selectors read metadata without Lua getter callbacks");
         let first = globals.get::<Table>("FIRST").unwrap();
         let second = globals.get::<Table>("SECOND").unwrap();
         let original = globals.get::<Table>("ORIGINAL").unwrap();

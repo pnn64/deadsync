@@ -2943,24 +2943,27 @@ pub(crate) fn replay(
                 .map(|event| broadcast_event(event, simfile)),
         );
         errors.extend(output.errors);
-        if let Some(request) = output.request {
+        // Production coalesces screen loads, while the source trace records
+        // every authored invocation. Validate the queued effect independently.
+        if let Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(name)) = &output.request {
+            if name != "ScreenGameplay" {
+                return Err(format!("unsupported reload target {name}"));
+            }
+            if !pending_reload {
+                return Err("gameplay reload did not emit the production runtime effect".into());
+            }
+        }
+        for event in output.source_requests {
+            let request = event.request;
             let (operation, name) = match request {
                 deadsync_song_lua::SongLuaLiveRequest::Transition(name) => {
                     ("StartTransitioningScreen", name)
                 }
                 deadsync_song_lua::SongLuaLiveRequest::NewScreen(name) => {
-                    if name != "ScreenGameplay" {
-                        return Err(format!("unsupported reload target {name}"));
-                    }
-                    if !pending_reload {
-                        return Err(
-                            "gameplay reload did not emit the production runtime effect".into()
-                        );
-                    }
                     ("SetNewScreen", name)
                 }
             };
-            requests.push(json!({"seconds":seconds, "operation":operation, "args":[name]}));
+            requests.push(json!({"seconds":event.music_seconds, "operation":operation, "args":[name]}));
         }
         // Compare independently simulated state only at the recorded observer
         // phase. Native stats are never fed back into gameplay or the Lua VM.

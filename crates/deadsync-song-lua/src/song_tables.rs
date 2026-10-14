@@ -2100,6 +2100,13 @@ pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Re
     let song_dir = song_dir_string(context.song_dir.as_path());
     let all_steps = create_song_steps(lua, context)?;
     table.raw_set("__songlua_steps", all_steps.clone())?;
+    // SongUtil filters native Steps data, without invoking Lua getters. Keep
+    // the corresponding handles stable even if a script edits an exposed array.
+    let native_steps: Arc<[(Table, SongLuaStep)]> = all_steps.clone()
+        .sequence_values::<Table>()
+        .zip(context.song_steps.iter().cloned())
+        .map(|(table, metadata)| table.map(|table| (table, metadata)))
+        .collect::<mlua::Result<Vec<_>>>()?.into();
     set_string_method(lua, &table, "GetSongDir", &song_dir)?;
     set_string_method(lua, &table, "GetMainTitle", &context.main_title)?;
     set_string_method(lua, &table, "GetDisplayMainTitle", &context.main_title)?;
@@ -2206,7 +2213,7 @@ pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Re
     )?;
     for method in ["GetAllSteps", "GetStepsByStepsType", "GetOneSteps", "HasStepsType",
         "HasStepsTypeAndDifficulty", "HasEdits"] {
-        let steps = all_steps.clone();
+        let steps = native_steps.clone();
         table.set(method, lua.create_function(move |lua, args: MultiValue| {
             let type_value = method_arg(&args, 0);
             let type_name = if method == "GetAllSteps" { None }
@@ -2222,24 +2229,21 @@ pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Re
                 return Err(mlua::Error::runtime("Expected Difficulty"));
             }
             let result = lua.create_table()?;
-            for step in steps.sequence_values::<Table>() {
-                let step = step?;
+            for (step, metadata) in steps.iter() {
                 if method == "GetAllSteps" {
-                    result.raw_set(result.raw_len() + 1, step)?;
+                    result.raw_set(result.raw_len() + 1, step.clone())?;
                     continue;
                 }
-                let step_type: String = step.get::<Function>("GetStepsType")?.call(step.clone())?;
-                let step_diff: String = step.get::<Function>("GetDifficulty")?.call(step.clone())?;
                 let type_matches = type_name.as_ref().is_some_and(|name| {
                     with_compact_ascii_lowercase_song_key(name, |name| {
-                        with_compact_ascii_lowercase_song_key(&step_type, |step_type| {
+                        with_compact_ascii_lowercase_song_key(&metadata.steps_type, |step_type| {
                             name.trim_start_matches("stepstype") == step_type.trim_start_matches("stepstype")
                         })
                     })
                 });
                 let diff_matches = !matches!(method, "GetOneSteps" | "HasStepsTypeAndDifficulty" | "HasEdits")
-                    || difficulty.is_some_and(|difficulty| difficulty.sm_name() == step_diff);
-                if type_matches && diff_matches { result.raw_set(result.raw_len() + 1, step)?; }
+                    || difficulty == Some(metadata.difficulty);
+                if type_matches && diff_matches { result.raw_set(result.raw_len() + 1, step.clone())?; }
             }
             match method {
                 "HasStepsType" | "HasStepsTypeAndDifficulty" | "HasEdits" => Ok(Value::Boolean(result.raw_len() != 0)),

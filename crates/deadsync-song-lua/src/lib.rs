@@ -26,7 +26,7 @@ mod host;
 mod json;
 mod lua_util;
 mod live;
-pub use live::{SongLuaLiveBroadcast, SongLuaLiveFrame, SongLuaLiveOutput, SongLuaLivePlayer, SongLuaLiveScene, SongLuaLiveRequest, SongLuaLiveTarget};
+pub use live::{SongLuaLiveBroadcast, SongLuaLiveFrame, SongLuaLiveOutput, SongLuaLivePlayer, SongLuaLiveScene, SongLuaLiveRequest, SongLuaLiveSourceRequest, SongLuaLiveTarget};
 mod mod_windows;
 mod model_texture;
 #[cfg(feature = "test-support")]

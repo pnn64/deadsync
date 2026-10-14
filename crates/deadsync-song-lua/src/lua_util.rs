@@ -10949,6 +10949,9 @@ pub(crate) fn begin_live_runtime(lua: &Lua) -> mlua::Result<()> {
     invalidate_compile_update_plan(lua);
     lua.set_app_data(LiveBroadcasts(Vec::new()));
     lua.set_app_data(LiveSourceBroadcasts(Vec::new()));
+    if lua.app_data_ref::<crate::live::SourceRequests>().is_none() {
+        lua.set_app_data(crate::live::SourceRequests(Vec::new()));
+    }
     let scene = lua.app_data_ref::<crate::live::LiveMode>().map_or(1, |mode| mode.0 + 1);
     lua.set_app_data(crate::live::LiveMode(scene));
     lua.remove_app_data::<crate::live::LivePlayers>();
@@ -14402,6 +14405,7 @@ pub fn create_top_screen_table(
                 if crate::live::active(lua) {
                     let message = method_arg(&args, 0).cloned().and_then(read_string)
                         .ok_or_else(|| mlua::Error::runtime("expected a screen transition message"))?;
+                    crate::live::capture_source_request(lua, crate::live::SongLuaLiveRequest::Transition(message.clone()))?;
                     run_named_command_on_children_recursively(lua, &top_screen, "OffCommand", None)?;
                     if let Some(transition) = actor_children(lua, &top_screen)?.raw_get::<Option<Table>>("Out")? {
                         start_actor_transition(lua, &transition)?;
