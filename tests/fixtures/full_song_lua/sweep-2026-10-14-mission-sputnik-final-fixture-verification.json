@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "MISSION SPUTNIK/sputnik.ssc",
+  "native_frames": 40632,
+  "replayed_frames": 40632,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "2c6b45c8860c78056ca088300af1efb561cd9f9549dbfd9241ce46bac204f728.tar.zst",
+  "compressed_sha256": "2c6b45c8860c78056ca088300af1efb561cd9f9549dbfd9241ce46bac204f728",
+  "uncompressed_sha256": "e6a8401d7558a4e1b8139353c399ba09081d9bcabbcc083e0272a204bb9cd814",
+  "compressed_bytes": 16385770,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
