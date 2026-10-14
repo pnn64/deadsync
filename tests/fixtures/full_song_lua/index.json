@@ -2636,15 +2636,12 @@
     {
       "title": "Get Into It (Yuh)",
       "source_simfile": "Get Into It/GetIntoIt.ssc",
-      "harness_version": "0.1.0",
-      "archive": "11a30849742f03b9b1288dbd7353ec347aa33897557952d0a069ea270d386994.tar.zst",
-      "sha256": "11a30849742f03b9b1288dbd7353ec347aa33897557952d0a069ea270d386994",
-      "compressed_bytes": 7403818,
-      "uncompressed_sha256": "18114cc87ea07d04684a7d32eee3edd6cfbcf66a1056ab09888c519c63665b40",
-      "compression_level": 22,
-      "aliases": [
-        "a1094435f4ddd1b1094a0c08aac1cacd0da78cead16b81aa0de926f4bd49fa91.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "7231617a36c1e3d64c03cbd164907558954e2a5a64bbe698315d24831ccf6327.tar.zst",
+      "sha256": "7231617a36c1e3d64c03cbd164907558954e2a5a64bbe698315d24831ccf6327",
+      "compressed_bytes": 12349908,
+      "uncompressed_sha256": "bc410b2ec660dea177cd25b913edd879070438441184378f20362174d5aed8fa",
+      "aliases": []
     },
     {
       "title": "IT'S A GHOST!!!!! AAAAAaAAAaAAaAaAAaAaAAAA",
