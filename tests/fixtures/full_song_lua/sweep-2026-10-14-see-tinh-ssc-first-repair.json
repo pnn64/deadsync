@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "first native GameState class-method repair complete",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "e0f16f89374ce78a1b07cafdb6d13c8e5c04de3e",
