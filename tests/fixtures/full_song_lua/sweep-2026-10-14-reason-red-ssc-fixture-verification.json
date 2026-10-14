@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "REASON for RED/reasonforgay.ssc",
+  "native_frames": 86821,
+  "replayed_frames": 86821,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "e72e37d50450553bbaeade1ad717122755d91dedb006873a46d226c22f4a3b47.tar.zst",
+  "compressed_sha256": "e72e37d50450553bbaeade1ad717122755d91dedb006873a46d226c22f4a3b47",
+  "uncompressed_sha256": "1ffba561031a377e82cc69ba30cf59815a335c5376a64f92f1fbaa5d5753edbb",
+  "compressed_bytes": 6108286,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
