@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T23:28:42Z",
+  "updated_utc": "2026-10-14T23:38:36Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 343,
+    "passed": 346,
     "pending": 112,
-    "unprocessed": 46
+    "unprocessed": 43
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2189,9 +2189,9 @@
       "position": 253,
       "source_simfile": "Jack The Reaper/Jack The Reaper.sm",
       "simfile_sha256": "04baaf73d0577eff9e4316a41ac80ed5238bd4da0168929ac3591aea8c548723",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-jack-reaper-listener-first-repair.json"
     },
     {
       "position": 254,
@@ -3522,8 +3522,8 @@
       "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
       "simfile_sha256": "1588e4386ca32a812af78557b4748679f28e382476cc90cb30249922380daf8f",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-steve-ssc-loader-multi-return-first-repair.json"
     },
     {
       "position": 421,
@@ -3591,7 +3591,9 @@
       "position": 429,
       "source_simfile": "Tear Jerker/tearjerker.ssc",
       "simfile_sha256": "9e2d58cd69470fd765e59c943ab881980385c13fb6cd3ab44e376bdbc84c42c1",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 430,
@@ -3787,7 +3789,9 @@
       "position": 456,
       "source_simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.ssc",
       "simfile_sha256": "912debac3e2475cdb5de2f6c83150b6ebb21c4a277cb6fc0789f524c23e5f248",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 457,
@@ -3829,7 +3833,9 @@
       "position": 462,
       "source_simfile": "Vtubers Never Die! [Gpop]/Vtubers Never Die!.ssc",
       "simfile_sha256": "087b03ce6f9b7fe18df6061b9f0c2e99435db870e4d18b165cda3e9d6139dcdb",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 463,
