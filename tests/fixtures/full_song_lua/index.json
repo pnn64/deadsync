@@ -3377,17 +3377,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 06",
+      "title": "Episode 06 Leave The Door Open",
       "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.sm",
-      "harness_version": "0.1.0",
-      "archive": "37ae26ff1c99ce324bdd19b484cb82a1bcb8891aa87d2533e80da59d7587c32a.tar.zst",
-      "sha256": "37ae26ff1c99ce324bdd19b484cb82a1bcb8891aa87d2533e80da59d7587c32a",
-      "compressed_bytes": 593275,
-      "uncompressed_sha256": "ce303938c53140beca1d8a8047faeac073e9222d22afcbac74085797096db585",
-      "compression_level": 22,
-      "aliases": [
-        "d3f2cc47bc75478674e0566b7fa083296bd353f05feb9cbe0e6937b14f272227.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "31194578b9a774cdd57f53f7f2d0a53260b0a628f83f23db6a2db4a4ee2a5279.tar.zst",
+      "sha256": "31194578b9a774cdd57f53f7f2d0a53260b0a628f83f23db6a2db4a4ee2a5279",
+      "compressed_bytes": 23334391,
+      "uncompressed_sha256": "98d69cfa880d38ae82657ab3e86000828b7df249a10a89300d30fabc29a92752",
+      "aliases": []
     },
     {
       "title": "Leave The Door Open Episode 06",
