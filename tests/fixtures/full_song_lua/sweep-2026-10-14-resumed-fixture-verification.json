@@ -1,0 +1,109 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Picture in My Mind [nikko X WINK RMX]/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc",
+      "acceptance_commit": "cdf8f10707f76bd141acc20edc58c25fb0598357",
+      "native_frames": 52822,
+      "replayed_frames": 52822,
+      "compared_stage_fields": 1342,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "50ad4efcd3c5b0fc473029154b6a858832640b17f2c9ef9cd6b5036a1fe83c05.tar.zst",
+      "compressed_sha256": "50ad4efcd3c5b0fc473029154b6a858832640b17f2c9ef9cd6b5036a1fe83c05",
+      "uncompressed_sha256": "76cd5b39842c23f31132ff8a3efacbfe71634b881d2095c8d135418cb20f6c9a",
+      "compressed_bytes": 12582514,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    },
+    {
+      "source_simfile": "PO (wrashi Bootleg) [Gpop]/PO (wrashi Bootleg).ssc",
+      "acceptance_commit": "2e0ce59eb51a3b3f1e7973328af9531bb97616ef",
+      "native_frames": 93010,
+      "replayed_frames": 93010,
+      "compared_stage_fields": 1705,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "46ac98a250bbd2ce5cd1f60a8a0e243b865ed82de23a2da8c96e9b158f3c9b24.tar.zst",
+      "compressed_sha256": "46ac98a250bbd2ce5cd1f60a8a0e243b865ed82de23a2da8c96e9b158f3c9b24",
+      "uncompressed_sha256": "acdac772a5e6e3b18d5795a5aadc1c821214bf73835ffb0c824e1040ed6cf4c5",
+      "compressed_bytes": 12116757,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.playcommand, Actor.xy, ActorFrame.SetDrawByZPosition, PlayerOptions.Beat, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Tipsy",
+        "native drawable state/resources: Sprite"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    },
+    {
+      "source_simfile": "Popek feat. Titans Fall Harder - Downfall/Downfall.ssc",
+      "acceptance_commit": "9cdbecbeb0d31e17ff14ee8c3c31ed3cb980c16c",
+      "native_frames": 185759,
+      "replayed_frames": 185759,
+      "compared_stage_fields": 3190,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "40c4d2543f0ade3e283d8100e76615c9b93fd14807ad1bf8a7eb7fbd73450848.tar.zst",
+      "compressed_sha256": "40c4d2543f0ade3e283d8100e76615c9b93fd14807ad1bf8a7eb7fbd73450848",
+      "uncompressed_sha256": "df027af4b7910b4f48da0616bb8abf3119c50c01dedc6d0609d73716da12e5fb",
+      "compressed_bytes": 21199983,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.SetHeight, Actor.SetTextureFiltering, Actor.SetWidth, Actor.bob, Actor.effectoffset, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.SetTextureName, PlayerOptions.Beat",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    },
+    {
+      "source_simfile": "Max 300/MAX 300.ssc",
+      "acceptance_commit": "f5aea7824e01dc6b1a4e5c2748f52fcf0092fa45",
+      "native_frames": 63469,
+      "replayed_frames": 63469,
+      "compared_stage_fields": 1078,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "a76ae37dce83b3d452896ad243d4f49a0a484934af3441ddf7fa271b387a94bf.tar.zst",
+      "compressed_sha256": "a76ae37dce83b3d452896ad243d4f49a0a484934af3441ddf7fa271b387a94bf",
+      "uncompressed_sha256": "e60fed9b7196685be32f0d5446c01230fd29eb4085666c4a5ca2a4dbe7358e92",
+      "compressed_bytes": 6310314,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: ActorSound.load, Screen.AddInputCallback",
+        "native drawable state/resources: Sound"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    },
+    {
+      "source_simfile": "mawaru4/mawaru4.ssc",
+      "acceptance_commit": "06cf6b64c0800247f350b330d3bb2c099b180832",
+      "native_frames": 119826,
+      "replayed_frames": 119826,
+      "compared_stage_fields": 2079,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "3e52794f9d2cea5d684aa6a1da08bf4bb35561f1a37c0f41aa00839bf5510e64.tar.zst",
+      "compressed_sha256": "3e52794f9d2cea5d684aa6a1da08bf4bb35561f1a37c0f41aa00839bf5510e64",
+      "uncompressed_sha256": "c74ddfd683990fbeec17a8693b4914325bb19c0a496f8d0438d5f5dd8201ad96",
+      "compressed_bytes": 10171978,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.addx, Actor.addy, Actor.cropleft, Actor.cropright, Actor.effectcolor1, Actor.effectcolor2, Actor.fadeleft, Actor.faderight, Actor.glowshift, Actor.horizalign, Actor.stretchto, Actor.zoomtowidth, Actor.zoomy",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
