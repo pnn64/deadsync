@@ -1,0 +1,25 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "panopticon/panopticon.ssc",
+      "acceptance_commit": "14b6c9f4a262e0452f241b51a5f94c0d62745f74",
+      "native_frames": 53843,
+      "replayed_frames": 53843,
+      "compared_stage_fields": 1518,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "cfc09a13e974abb9ba0a844955255cb0ffff840d0b8cc5786bc7c28dc52c0a37.tar.zst",
+      "compressed_sha256": "cfc09a13e974abb9ba0a844955255cb0ffff840d0b8cc5786bc7c28dc52c0a37",
+      "uncompressed_sha256": "dabdcea931feb4de5bf387b115f2d999775db72608c7735bc22c19a9eeac5c24",
+      "compressed_bytes": 6303192,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Stealth"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
