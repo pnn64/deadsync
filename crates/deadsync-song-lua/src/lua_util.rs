@@ -1610,6 +1610,13 @@ pub fn create_media_actor(
     Ok(actor)
 }
 
+#[derive(Clone, Copy)]
+struct ActorDefinitionHost {
+    human_player_count: usize,
+    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+    install_methods: fn(&Lua, &Table) -> mlua::Result<()>,
+}
+
 pub fn install_def_globals(
     lua: &Lua,
     human_player_count: usize,
@@ -1617,6 +1624,9 @@ pub fn install_def_globals(
     install_actor_methods: fn(&Lua, &Table) -> mlua::Result<()>,
 ) -> mlua::Result<()> {
     let globals = lua.globals();
+    if lua.app_data_ref::<crate::live::LiveMode>().is_some() {
+        lua.set_app_data(ActorDefinitionHost { human_player_count, create_dummy_actor, install_methods: install_actor_methods });
+    }
     let def = lua.create_table()?;
     for &(name, actor_type) in &[
         ("Actor", "Actor"),
@@ -1812,52 +1822,137 @@ fn make_actor_ctor(
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
     install_actor_methods: fn(&Lua, &Table) -> mlua::Result<()>,
 ) -> mlua::Result<Function> {
+    if lua.app_data_ref::<ActorDefinitionHost>().is_some() {
+        // Native Def.* decorates the declaration; it does not construct an
+        // Actor. Runtime bookkeeping here changes Lua 5.1 sparse-table layout.
+        let mt = lua.create_table()?;
+        mt.set("__concat", lua.create_function(|lua, (left, right): (Table, Table)| {
+            let merged = lua.create_table()?;
+            left.for_each::<Value, Value>(|key, value| merged.raw_set(key, value))?;
+            merge_actor_concat(lua, &merged, &right)?;
+            merged.set_metatable(left.metatable())?;
+            Ok(merged)
+        })?)?;
+        let factory: Function = lua.load(r#"
+return function(class, mt)
+    return function(t)
+        t.Class = class
+        local level = t._Level and t._Level + 1 or 2
+        repeat
+            local info = debug.getinfo(level, 'Sl')
+            if not info then break end
+            t._Source = info.source
+            t._Line = info.currentline
+            local source = info.source:gsub('^@', '')
+            if info.source:sub(1,1) == '@' or source:match('^/') or source:match('^%a:[/\\]') then
+                t._Dir = source:match('^(.*[/\\])')
+            end
+            level = level + 1
+        until t._Dir
+        return setmetatable(t, mt)
+    end
+end
+"#).eval()?;
+        return factory.call((actor_type, mt));
+    }
     lua.create_function(move |lua, value: Value| {
         let table = match value {
             Value::Table(table) => table,
             _ => lua.create_table()?,
         };
-        init_actor_type(lua, &table, actor_type)?;
-        if let Some(script_dir) = lua
-            .globals()
-            .get::<Option<String>>("__songlua_script_dir")?
-        {
-            table.set("__songlua_script_dir", script_dir)?;
-        }
-        if let Some(song_dir) = lua.globals().get::<Option<String>>("__songlua_song_dir")? {
-            table.set("__songlua_song_dir", song_dir)?;
-        }
-        set_actor_decode_movie_for_texture(&table)?;
-        movie_source_size(lua, &table)?;
-        if actor_type.eq_ignore_ascii_case("Sprite") || actor_type.eq_ignore_ascii_case("Banner") {
-            // Actor::Actor starts with animation enabled in ITGmania.  Sprite
-            // sheets rely on that default unless a command explicitly pauses
-            // them.
-            table.set("__songlua_state_sprite_animate", true)?;
-        }
-        install_actor_methods(lua, &table)?;
-        install_actor_metatable(lua, &table, install_actor_methods)?;
-        reset_actor_capture(lua, &table)?;
-        if actor_type.eq_ignore_ascii_case("GraphDisplay") {
-            let [width, height] = graph_display_body_size(human_player_count);
-            let size = lua.create_table()?;
-            size.raw_set(1, width)?;
-            size.raw_set(2, height)?;
-            table.set("__songlua_state_size", size)?;
-            install_graph_display_children(lua, &table, create_dummy_actor)?;
-        }
-        if actor_type.eq_ignore_ascii_case("SongMeterDisplay") {
-            install_song_meter_display_children(lua, &table)?;
-        }
-        if actor_type.eq_ignore_ascii_case("CourseContentsList") {
-            install_course_contents_list_children(&table)?;
-        }
-        if let Some(text) = input_status_actor_text(actor_type) {
-            table.set("Text", text)?;
-        }
+        initialize_actor_instance(lua, &table, actor_type, human_player_count, create_dummy_actor, install_actor_methods)?;
         own_actor_children(lua, &table, install_actor_methods)?;
         Ok(table)
     })
+}
+
+fn initialize_actor_instance(
+    lua: &Lua,
+    table: &Table,
+    actor_type: &'static str,
+    human_player_count: usize,
+    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+    install_actor_methods: fn(&Lua, &Table) -> mlua::Result<()>,
+) -> mlua::Result<()> {
+    init_actor_type(lua, table, actor_type)?;
+    if let Some(script_dir) = table.raw_get::<Option<String>>("__songlua_script_dir")?.or(lua
+        .globals()
+        .get::<Option<String>>("__songlua_script_dir")?)
+    {
+        table.set("__songlua_script_dir", script_dir)?;
+    }
+    if let Some(song_dir) = lua.globals().get::<Option<String>>("__songlua_song_dir")? {
+        table.set("__songlua_song_dir", song_dir)?;
+    }
+    set_actor_decode_movie_for_texture(table)?;
+    movie_source_size(lua, table)?;
+    if actor_type.eq_ignore_ascii_case("Sprite") || actor_type.eq_ignore_ascii_case("Banner") {
+        // Actor::Actor starts with animation enabled in ITGmania.  Sprite
+        // sheets rely on that default unless a command explicitly pauses
+        // them.
+        table.set("__songlua_state_sprite_animate", true)?;
+    }
+    install_actor_methods(lua, table)?;
+    install_actor_metatable(lua, table, install_actor_methods)?;
+    reset_actor_capture(lua, table)?;
+    if actor_type.eq_ignore_ascii_case("GraphDisplay") {
+        let [width, height] = graph_display_body_size(human_player_count);
+        let size = lua.create_table()?;
+        size.raw_set(1, width)?;
+        size.raw_set(2, height)?;
+        table.set("__songlua_state_size", size)?;
+        install_graph_display_children(lua, table, create_dummy_actor)?;
+    }
+    if actor_type.eq_ignore_ascii_case("SongMeterDisplay") {
+        install_song_meter_display_children(lua, table)?;
+    }
+    if actor_type.eq_ignore_ascii_case("CourseContentsList") {
+        install_course_contents_list_children(table)?;
+    }
+    if let Some(text) = input_status_actor_text(actor_type) {
+        table.set("Text", text)?;
+    }
+    Ok(())
+}
+
+fn materialize_actor_declaration(lua: &Lua, declaration: &Table) -> mlua::Result<Table> {
+    let host = *lua.app_data_ref::<ActorDefinitionHost>()
+        .ok_or_else(|| mlua::Error::runtime("actor declaration has no gameplay host"))?;
+    let class: String = declaration.raw_get("Class")?;
+    let kind = match class.as_str() {
+        "Actor" => "Actor", "ActorFrame" => "ActorFrame", "Sprite" => "Sprite",
+        "Banner" => "Banner", "ActorMultiVertex" => "ActorMultiVertex", "Sound" => "Sound",
+        "BitmapText" => "BitmapText", "BPMDisplay" => "BPMDisplay", "RollingNumbers" => "RollingNumbers",
+        "GraphDisplay" => "GraphDisplay", "SongMeterDisplay" => "SongMeterDisplay",
+        "CourseContentsList" => "CourseContentsList", "DeviceList" => "DeviceList", "InputList" => "InputList",
+        "Model" => "Model", "Quad" => "Quad", "ActorProxy" => "ActorProxy", "ActorFrameTexture" => "ActorFrameTexture",
+        _ => return Err(mlua::Error::runtime(format!("unknown actor declaration class {class}"))),
+    };
+    // Resolve the native declaration order before adding any instance fields.
+    let (_, children) = actor_def_children(lua, declaration)?;
+    let actor = lua.create_table()?;
+    declaration.for_each::<Value, Value>(|key, value| {
+        if let Value::String(name) = &key {
+            if name.to_str()? != "children" { actor.raw_set(key, value)?; }
+        }
+        Ok(())
+    })?;
+    if let Some(dir) = declaration.raw_get::<Option<String>>("_Dir")? {
+        actor.raw_set("__songlua_script_dir", dir)?;
+    }
+    initialize_actor_instance(lua, &actor, kind, host.human_player_count,
+        host.create_dummy_actor, host.install_methods)?;
+    let mut index = actor.raw_len() + 1;
+    for (_, child) in children {
+        if matches!(child.raw_get::<Value>("Condition")?, Value::Boolean(false)) { continue; }
+        let child = own_actor_root(lua, Value::Table(child), host.install_methods)?;
+        if let Value::Table(child) = child {
+            actor.raw_set(index, child)?;
+            index += 1;
+        }
+    }
+    actor.raw_set("__songlua_def_owned", true)?;
+    Ok(actor)
 }
 
 fn actor_def_children(
@@ -1916,6 +2011,11 @@ fn own_actor_children(
     let (source, children) = actor_def_children(lua, actor)?;
     for (key, child) in children {
         if child.raw_get::<Option<String>>("__songlua_actor_type")?.is_none() {
+            if child.raw_get::<Option<String>>("Class")?.is_some()
+                && lua.app_data_ref::<ActorDefinitionHost>().is_some()
+            {
+                source.raw_set(key, materialize_actor_declaration(lua, &child)?)?;
+            }
             continue;
         }
         // ActorFrame::LoadChildrenFromNode constructs an Actor per occurrence,
@@ -1940,6 +2040,12 @@ pub(crate) fn own_actor_root(
     install_methods: fn(&Lua, &Table) -> mlua::Result<()>,
 ) -> mlua::Result<Value> {
     let Value::Table(actor) = root else { return Ok(root) };
+    if actor.raw_get::<Option<String>>("__songlua_actor_type")?.is_none()
+        && actor.raw_get::<Option<String>>("Class")?.is_some()
+        && lua.app_data_ref::<ActorDefinitionHost>().is_some()
+    {
+        return materialize_actor_declaration(lua, &actor).map(Value::Table);
+    }
     let actor = if actor.raw_get::<Option<bool>>("__songlua_def_owned")?.unwrap_or(false) {
         clone_actor_def(lua, &actor, install_methods, true)?
     } else {

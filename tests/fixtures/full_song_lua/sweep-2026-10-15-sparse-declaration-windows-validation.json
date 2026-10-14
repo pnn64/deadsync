@@ -1,0 +1,61 @@
+{
+  "status": "Windows complete; Linux red/green and isolated native harness build in progress",
+  "change": "Defer live Def runtime fields until actor loading; preserve native sparse child enumeration before copying declaration attributes into each owned instance. Nonlive constructor behavior retained.",
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 1.8460963000106858,
+      "log_sha256": "d7c865b62ebd348f31510537922680e52568de49e11e820b129997e61a3204b6",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 605 filtered out; finished in 0.27s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 39.63589890000003,
+      "log_sha256": "a7d99238dfdcb58471548b2fbc3944876da69bd36004a236b7e2138f52febf67",
+      "results": [
+        "test result: ok. 69 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 38.21s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 109.59232399999746,
+      "log_sha256": "df6d8339269b40f9ca1736a88dd4519dea19bf7a48d015c39a6a38633eee63ff",
+      "results": [
+        "test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.19s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 1.5258639000094263,
+      "log_sha256": "ea2fba0dcb926f5ffaafc031daef747eea43ccea1d37f8157a6444a11920c551",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 605 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 22.272517700010212,
+      "log_sha256": "9b98708f32a105a04dba14b1faa81e5e623e990b5aaa071289ea6128993bcba8",
+      "results": []
+    }
+  ],
+  "source_pin_count": 1175,
+  "source_sha256_lf_normalized": {
+    "crates/deadsync-song-lua/src/live.rs": "c85de780956f122cf9dc46e48393bb4c7ff63fa4da0c070e7e3096914ee004dd",
+    "crates/deadsync-song-lua/src/lua_util.rs": "1225aef478522dcaad12ff35a539601ba69f0bd8c1da43c3066bec650d0f4a76"
+  },
+  "native_control": "sweep-2026-10-15-native-sparse-declaration-control.json",
+  "target_baseline_red_observed": true,
+  "target_baseline_red_actual_order": "leader,border,badge,left,right,sound,black",
+  "target_baseline_red_expected_order": "leader,border,badge,left,black,sound,right",
+  "pokemon_full_repairs_spent": 0,
+  "passing_charts_reopened": false,
+  "acceptance_comparisons_changed": false
+}

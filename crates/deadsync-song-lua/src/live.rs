@@ -4424,6 +4424,52 @@ end}
     }
 
     #[test]
+    fn live_sparse_declarations_keep_native_child_callback_order() {
+        let mut compiled = compile("sparse-declaration-order", r#"
+local function native_def(class, t)
+    t.Class = class
+    t._Source = '@sparse-declaration-order.lua'
+    t._Line = 1
+    t._Dir = './'
+    return setmetatable(t, {})
+end
+local function root(ctor)
+    local a = ctor('ActorFrame', {OnCommand=function() end,
+        ctor('Actor', {Name='yolo', InitCommand=function(self) self:sleep(420) end}),
+        ctor('Sprite', {Name='leader', OnCommand=function(self) table.insert(ON_ORDER, self:GetName()) end})})
+    for offset, name in ipairs({'border','badge','left','right','black','sound'}) do
+        a[#a + offset] = ctor(offset == 6 and 'Actor' or 'Sprite', {
+            Name=name, OnCommand=function(self) table.insert(ON_ORDER, self:GetName()) end})
+    end
+    return a
+end
+local native = root(native_def)
+local expected, prefix = {}, 0
+for _, child in ipairs(native) do
+    if type(child) == 'table' then
+        if type(child.OnCommand) == 'function' then expected[#expected+1] = child.Name end
+        prefix = prefix + 1
+    end
+end
+for key, child in pairs(native) do
+    if type(child) == 'table' and type(child.OnCommand) == 'function' and type(key) == 'number' and not (key >= 1 and key <= prefix and key % 1 == 0) then
+        expected[#expected+1] = child.Name
+    end
+end
+NATIVE_ORDER = table.concat(expected, ',')
+ON_ORDER = {}
+return root(function(class, t) return Def[class](t) end)
+"#);
+        let scene = compiled.live_scene.as_mut().expect("retained scene");
+        let output = scene.advance(SongLuaLiveFrame { music_seconds: 0.1, beat: 0.1,
+            screen_seconds: 0.1, delta_seconds: 0.1, ..Default::default() }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        let actual = scene.lua.load("return table.concat(ON_ORDER, ',')").eval::<String>().unwrap();
+        let expected = scene.lua.globals().get::<String>("NATIVE_ORDER").unwrap();
+        assert_eq!(actual, expected, "native sparse declarations retain child callback order");
+    }
+
+    #[test]
     fn live_layers() {
         let dir = std::env::temp_dir().join(format!("deadsync-live-layers-{}", std::process::id()));
         fs::create_dir_all(&dir).expect("layer directory");
