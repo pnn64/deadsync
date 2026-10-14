@@ -2810,6 +2810,86 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 462,
+      "source_simfile": "Vtubers Never Die! [Gpop]/Vtubers Never Die!.ssc",
+      "simfile_sha256": "087b03ce6f9b7fe18df6061b9f0c2e99435db870e4d18b165cda3e9d6139dcdb",
+      "retained_original_archive": "1a04009c0d983b115c690a260f8b2a7a627cf2fb0429ae78cd1d30656a434ab1.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 143.98949984501814,
+      "trace_sha256": "c74f5b1b9596eecf5e6dae98d49f19da917fb1fadddc3ce0617cb37afe36766f",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-3/chart-462/candidates/7a71b5730c90ccd2393bb10306b3746320c3eca9ee26c3bb85b3b73cc57809f1.tar",
+      "replay_exit": 2,
+      "replay_seconds": 1500.1167552179832,
+      "candidate_sha256": "7a71b5730c90ccd2393bb10306b3746320c3eca9ee26c3bb85b3b73cc57809f1",
+      "native_frames": 67455,
+      "replayed_frames": 67455,
+      "compared_stage_fields": 1551,
+      "pending_coverage": [
+        "uncompared song operations: Actor.scale_or_crop_background, GameState.GetMasterPlayerNumber",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 3,
+      "concrete_failures": [
+        {
+          "phase": "progress",
+          "seconds": 135.00001525878906,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        },
+        {
+          "field": "command_query_count",
+          "native": 4,
+          "deadsync": 5
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0001",
+            "args": [],
+            "beat": 1.7504605054855347,
+            "command": "OnCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 7,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": -0.7861904501914978,
+            "seq": 16,
+            "source": "song:/bg/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "PrefsManager.GetPreference",
+            "source": "song:/bg/default.lua",
+            "line": 7,
+            "phase": "callback",
+            "beat": 1.7504605054855347,
+            "seconds": -0.7861904501914978,
+            "args": [
+              "BackgroundFitMode"
+            ],
+            "results": [
+              "BackgroundFitMode_CoverPreserve"
+            ]
+          }
+        }
+      ],
+      "report_sha256": "be7b038337b64726abd9bca49ffb10fe6e39dd678a45cf4e43bc20b527f0c30d"
     }
   ],
   "scope": {
@@ -2818,9 +2898,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+  "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 6,
-  "pending_charts": 8,
-  "processed_charts": 14
+  "pending_charts": 9,
+  "processed_charts": 15
 }
