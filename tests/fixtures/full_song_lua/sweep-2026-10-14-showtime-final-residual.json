@@ -15,13 +15,13 @@
   "candidate_sha256": "378bedd6129e825b38ebb4cdf6fbd210820f86f9c366036dab669ca89d079f29",
   "trace_sha256": "2cf3e5689300051262fe0c02682585eb53778822168801ea3b0dac38ef90b74f",
   "simfile_sha256": "73e611898e40fd3b7a07a6257a3b38e4a6a07cf8f39b0f3e4bd8e7cebbbde128",
-  "concrete_remaining_failure": "Actor.hidden has no semantic implementation, aborting Quad and cooking_with_a_killer_robot On callbacks. The full replay reports two callback errors and14855 mismatches.",
+  "concrete_remaining_failure": "Actor.hidden has no semantic implementation, aborting Quad and cooking_with_a_killer_robot On callbacks. The full replay reports two callback errors and 14,855 mismatches.",
   "first_mismatch": {
     "field": "screen_end_navigation_clock",
     "native": 113.77668762207031,
     "deadsync": 113.76746368408203
   },
-  "transition_reload_progress": "Previous repair stopped at native scene2 mismatch43823/56383; completed target fix allows this repair through every145878 frame.",
+  "transition_reload_progress": "Previous repair stopped at frame 56,383 with native scene 2 versus independent scene 1; the target fix allows complete replay of all 145,878 frames.",
   "next_action": "No third repair this sweep; retain original capture and report pending.",
   "passing_charts_reopened": false,
   "existing_acceptance_criteria_unchanged": true
