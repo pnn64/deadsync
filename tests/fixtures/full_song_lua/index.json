@@ -4163,17 +4163,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 09",
+      "title": "Episode 09 Paradise",
       "source_simfile": "Paradise [Cringle Desolation]/Paradise.sm",
-      "harness_version": "0.1.0",
-      "archive": "138ded288189846dd3d58db9dfa37d7422fb59299faf972cdfe238dda5dda2fe.tar.zst",
-      "sha256": "138ded288189846dd3d58db9dfa37d7422fb59299faf972cdfe238dda5dda2fe",
-      "compressed_bytes": 1972815,
-      "uncompressed_sha256": "7310030a88e4077fcb6d7c65b598cf6f2e5557ccaacf96dab19184f38d559d1e",
-      "compression_level": 22,
-      "aliases": [
-        "ce245170e3156749f6f320ad64952d6c5ac76043bd75a767642fab36053a7a68.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "7fe43b2f10ed975a048b0ec8f67146f210b9ac16eccea9bfb21b0d870ad003e6.tar.zst",
+      "sha256": "7fe43b2f10ed975a048b0ec8f67146f210b9ac16eccea9bfb21b0d870ad003e6",
+      "compressed_bytes": 14405538,
+      "uncompressed_sha256": "f3bb2f1de93a110257ecf2328da503d50036f19bea462cda2f80b3bd799995e0",
+      "aliases": []
     },
     {
       "title": "Episode 09",

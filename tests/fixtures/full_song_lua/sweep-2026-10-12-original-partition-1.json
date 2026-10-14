@@ -8627,6 +8627,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 345,
+      "source_simfile": "Paradise [Cringle Desolation]/Paradise.sm",
+      "simfile_sha256": "574c082e56fc722d2414d47ff780788616d38df3c322f47527cc891016fdbc25",
+      "retained_original_archive": "138ded288189846dd3d58db9dfa37d7422fb59299faf972cdfe238dda5dda2fe.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/double-cue-rows-green-v2/proof.json",
+      "capture_seconds": 208.747297185997,
+      "trace_sha256": "6e3b81e9500dcc007040b79cacf73d6e974e456ef74b17e302bd5687c55688f5",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-345/candidates/f3bb2f1de93a110257ecf2328da503d50036f19bea462cda2f80b3bd799995e0.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1746.7688059030042,
+      "candidate_sha256": "f3bb2f1de93a110257ecf2328da503d50036f19bea462cda2f80b3bd799995e0",
+      "native_frames": 64647,
+      "replayed_frames": 64647,
+      "compared_stage_fields": 1892,
+      "pending_coverage": [
+        "uncompared song operations: ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "8abe6aa27dc8ef5469f2e8c2a140b1dfc11c2b5363796fabade1c3ee4958133e",
+      "archive": "7fe43b2f10ed975a048b0ec8f67146f210b9ac16eccea9bfb21b0d870ad003e6.tar.zst",
+      "archive_sha256": "7fe43b2f10ed975a048b0ec8f67146f210b9ac16eccea9bfb21b0d870ad003e6",
+      "compressed_bytes": 14405538,
+      "pack_seconds": 10.469737486011581,
+      "harness_version": "0.1.80",
+      "title": "Episode 09 Paradise",
+      "retained_original_entry": {
+        "title": "Episode 09",
+        "source_simfile": "Paradise [Cringle Desolation]/Paradise.sm",
+        "harness_version": "0.1.0",
+        "archive": "138ded288189846dd3d58db9dfa37d7422fb59299faf972cdfe238dda5dda2fe.tar.zst",
+        "sha256": "138ded288189846dd3d58db9dfa37d7422fb59299faf972cdfe238dda5dda2fe",
+        "compressed_bytes": 1972815,
+        "uncompressed_sha256": "7310030a88e4077fcb6d7c65b598cf6f2e5557ccaacf96dab19184f38d559d1e",
+        "compression_level": 22,
+        "aliases": [
+          "ce245170e3156749f6f320ad64952d6c5ac76043bd75a767642fab36053a7a68.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -8636,9 +8687,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "2cfd421089314db6cb6652d24ff7d3dc1e6f14cfa0b9cd9ea806e23645e2a1e4",
+  "binary_sha256": "74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 27,
+  "passed_fixtures": 28,
   "pending_charts": 32,
-  "processed_charts": 59
+  "processed_charts": 60
 }
