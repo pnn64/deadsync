@@ -8403,6 +8403,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 330,
+      "source_simfile": "no touchy/no touchy.ssc",
+      "simfile_sha256": "278737fba29e5dec31e48cae671e16857b849d9b7044c2d89f9cd3939fc01ced",
+      "retained_original_archive": "16633161a06e7d75e11cd1465c7d5147457e30cc9429138024ebebb7b6cca135.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "11c5e904d10e169bc4a437d05164a00e17d3139ac4603fa64de854d8fd6b6cf0",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/genshin-day-of-year-green-v1/proof.json",
+      "capture_seconds": 131.014041249,
+      "trace_sha256": "2f49dd6dffbc61a2ecfa952b84b557e8dafa752896f3a02653f59f4f05d39c0e",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-330/candidates/f7b55e88e5f24c96685b9e5aa968ca1fcc92bcc262fa2098710041451e01b834.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1145.8786423779966,
+      "candidate_sha256": "f7b55e88e5f24c96685b9e5aa968ca1fcc92bcc262fa2098710041451e01b834",
+      "native_frames": 62348,
+      "replayed_frames": 62348,
+      "compared_stage_fields": 1364,
+      "pending_coverage": [
+        "uncompared song operations: Actor.rotationy, PlayerOptions.Dark, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "9c393ea78380cacf36881daba3e66c3d28460ab9a089885b42307837d451ca4e",
+      "archive": "975215a773e05dce77c684ecfbfcddf0623f64b63a030e5c657970187ffec572.tar.zst",
+      "archive_sha256": "975215a773e05dce77c684ecfbfcddf0623f64b63a030e5c657970187ffec572",
+      "compressed_bytes": 6434026,
+      "pack_seconds": 3.380045373021858,
+      "harness_version": "0.1.80",
+      "title": "no touchy !!1!",
+      "retained_original_entry": {
+        "title": "no touchy !!1!",
+        "source_simfile": "no touchy/no touchy.ssc",
+        "harness_version": "0.1.0",
+        "archive": "16633161a06e7d75e11cd1465c7d5147457e30cc9429138024ebebb7b6cca135.tar.zst",
+        "sha256": "16633161a06e7d75e11cd1465c7d5147457e30cc9429138024ebebb7b6cca135",
+        "compressed_bytes": 59761,
+        "uncompressed_sha256": "36cf832d9e5b0a53a0daf44bd70111742d2770e0ab5639d6ac916c9c6f403d99",
+        "compression_level": 22,
+        "aliases": [
+          "fa53636bb859eab9f4f2070d41af7b8f06c7aea43a100274cdd57aae795c0ff5.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -8412,9 +8462,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "1d1cab219618a1d98d02e54498de7297f6f533cd9347db517e629a49b4b12638",
+  "binary_sha256": "11c5e904d10e169bc4a437d05164a00e17d3139ac4603fa64de854d8fd6b6cf0",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 23,
+  "passed_fixtures": 24,
   "pending_charts": 31,
-  "processed_charts": 54
+  "processed_charts": 55
 }

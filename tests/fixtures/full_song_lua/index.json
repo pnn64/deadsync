@@ -4022,15 +4022,12 @@
     {
       "title": "no touchy !!1!",
       "source_simfile": "no touchy/no touchy.ssc",
-      "harness_version": "0.1.0",
-      "archive": "16633161a06e7d75e11cd1465c7d5147457e30cc9429138024ebebb7b6cca135.tar.zst",
-      "sha256": "16633161a06e7d75e11cd1465c7d5147457e30cc9429138024ebebb7b6cca135",
-      "compressed_bytes": 59761,
-      "uncompressed_sha256": "36cf832d9e5b0a53a0daf44bd70111742d2770e0ab5639d6ac916c9c6f403d99",
-      "compression_level": 22,
-      "aliases": [
-        "fa53636bb859eab9f4f2070d41af7b8f06c7aea43a100274cdd57aae795c0ff5.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "975215a773e05dce77c684ecfbfcddf0623f64b63a030e5c657970187ffec572.tar.zst",
+      "sha256": "975215a773e05dce77c684ecfbfcddf0623f64b63a030e5c657970187ffec572",
+      "compressed_bytes": 6434026,
+      "uncompressed_sha256": "f7b55e88e5f24c96685b9e5aa968ca1fcc92bcc262fa2098710041451e01b834",
+      "aliases": []
     },
     {
       "title": "No.13",
