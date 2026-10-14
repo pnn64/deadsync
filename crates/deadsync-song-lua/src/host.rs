@@ -750,6 +750,16 @@ pub fn install_date_globals(lua: &Lua, date: SongLuaDateGlobals) -> mlua::Result
         "DayOfMonth",
         lua.create_function(move |_, _args: MultiValue| Ok(day_of_month))?,
     )?;
+    // DateTime.cpp exposes tm_yday: January 1 is zero, including leap years.
+    let day_of_year = month_of_year.checked_add(1)
+        .and_then(|month| chrono::NaiveDate::from_ymd_opt(year, month as u32, day_of_month as u32))
+        .map(|date| date.ordinal0() as i32);
+    globals.set(
+        "DayOfYear",
+        lua.create_function(move |_, _args: MultiValue| {
+            day_of_year.ok_or_else(|| mlua::Error::RuntimeError("invalid calendar date for DayOfYear".into()))
+        })?,
+    )?;
     globals.set(
         "Hour",
         lua.create_function(move |_, _args: MultiValue| Ok(hour))?,
@@ -2208,6 +2218,26 @@ fn format_percent_score(lua: &Lua, args: MultiValue) -> mlua::Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn date_globals_expose_native_zero_based_day_of_year() {
+        let lua = Lua::new();
+        for (year, month, day, expected) in [
+            (2026, 0, 1, 0), (2026, 0, 18, 17), (2026, 0, 19, 18),
+            (2024, 1, 29, 59), (2024, 2, 1, 60), (2025, 2, 1, 59),
+            (1900, 2, 1, 59), (2000, 2, 1, 60),
+            (2024, 11, 31, 365), (2025, 11, 31, 364),
+        ] {
+            install_date_globals(&lua, SongLuaDateGlobals {
+                year, month_of_year: month, day_of_month: day,
+                hour: 12, minute: 0, second: 0,
+            }).expect("calendar globals");
+            let getter = lua.globals().get::<Function>("DayOfYear")
+                .expect("native DayOfYear calendar getter");
+            assert_eq!(getter.call::<i32>(()).expect("calendar day"), expected,
+                "native zero-based day for {year}-{month}-{day}");
+        }
+    }
 
     #[test]
     fn arrow_offset_uses_native_music_clock() {
