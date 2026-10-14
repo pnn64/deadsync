@@ -26,5 +26,24 @@
   "full_repair_attempts_spent": 0,
   "archive_accepted": false,
   "source_changes_committed": false,
-  "failing_control_kept_out_of_repository_test_suite": true
+  "failing_control_kept_out_of_repository_test_suite": true,
+  "primary_source_pins": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\extern\\lua-5.1\\src\\luaconf.h",
+      "sha256": "6ff033e78de02d724027cb697ed22a28fb1cb4aa4758c90fcb84a787074e44db"
+    },
+    {
+      "path": "C:\\Users\\PerfectTaste\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\lua-src-551.0.2\\lua-5.1.5\\luaconf.h",
+      "sha256": "87a576e3e9ed29e2983ecabcf4c6d9de05fe685971939cab431b12185f72072d"
+    },
+    {
+      "path": "C:\\Users\\PerfectTaste\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\mlua-0.12.2\\src\\state\\extra.rs",
+      "sha256": "55e4ca2c3ec71fbadf380484dd6212b68a856b56b7b70cf22b879df1ff9c36b4"
+    },
+    {
+      "path": "C:\\Users\\PerfectTaste\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\mlua-0.12.2\\src\\types\\value_ref.rs",
+      "sha256": "7ce817e650db601fc2ad89dd54a11db319aa4f191e9fb458cb55393b054b31ea"
+    }
+  ],
+  "observations": "Both native and vendored Lua 5.1 define LUAI_MAXCSTACK=8000. mlua try_ref_stack_pop returns StackError when its auxiliary reference stack cannot grow; Table clones share an existing index. The exact overflowing ownership scope remains unconfirmed, and no limit or behavior was changed."
 }
