@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "See Tinh/See Tinh.ssc",
+  "native_frames": 42885,
+  "replayed_frames": 42885,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "b5f570b58947f9dee7f130910b1007177b5f35b6394cd782a0e2ccd83d78602a.tar.zst",
+  "compressed_sha256": "b5f570b58947f9dee7f130910b1007177b5f35b6394cd782a0e2ccd83d78602a",
+  "uncompressed_sha256": "fd6d290bc5da6313c089b3000d454ca65023587404fbad506f86235387d18131",
+  "compressed_bytes": 12837823,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Someone Special - hubert/Someone Special.sm",
+  "native_frames": 13988,
+  "replayed_frames": 13988,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "d2139718caf170f1468b2c27496039a621bc201633100421a3114e7b6bd7eb6b.tar.zst",
+  "compressed_sha256": "d2139718caf170f1468b2c27496039a621bc201633100421a3114e7b6bd7eb6b",
+  "uncompressed_sha256": "1f71183e22d7b28fe837d18fa88c35a61e9d05d27169dadc6e939d6bbbcf3058",
+  "compressed_bytes": 18327679,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
