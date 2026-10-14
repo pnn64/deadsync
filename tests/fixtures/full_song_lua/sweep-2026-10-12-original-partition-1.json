@@ -8524,6 +8524,58 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 339,
+      "source_simfile": "Over the Top - [Zaia][FX]/Over the Top.sm",
+      "simfile_sha256": "62736f5663b06fa48c39c43f9408c108a0e0ee366810f767326f0d94dc60b694",
+      "retained_original_archive": "11b5b82104a97131808f449ad56128851c733e4c5c587bc7876900bf3e7a731f.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "d3a3b73e18090558db59ed5d4903a39302a128fa019747f6b3068184a8aea921",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/my-exes-tweens-green-v2/proof.json",
+      "capture_seconds": 270.24353236999013,
+      "trace_sha256": "07cce29e93b029e1d2ae3340c2f04ee4c78a9bbd5e613b903771b7f4dbfe8c26",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-339/candidates/3b9d2b4ed50bbaf623976e544a42d493b8e02e0820af8e74b1625fbdf8c674e4.tar",
+      "replay_exit": 0,
+      "replay_seconds": 3382.4104249359807,
+      "candidate_sha256": "3b9d2b4ed50bbaf623976e544a42d493b8e02e0820af8e74b1625fbdf8c674e4",
+      "native_frames": 170465,
+      "replayed_frames": 170465,
+      "compared_stage_fields": 2937,
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "9726ea8bb2cde22609c6f5228718788c4d3567aae503f4e5f42418f88f10b218",
+      "archive": "a7c136848c444b147dc9fc984ea6c7db228b7dc6c74290ec6bb2f1acb1c12a56.tar.zst",
+      "archive_sha256": "a7c136848c444b147dc9fc984ea6c7db228b7dc6c74290ec6bb2f1acb1c12a56",
+      "compressed_bytes": 11789608,
+      "pack_seconds": 2.650387525005499,
+      "harness_version": "0.1.80",
+      "title": "Over the Top [Visual FX]",
+      "retained_original_entry": {
+        "title": "Over the Top",
+        "source_simfile": "Over the Top - [Zaia][FX]/Over the Top.sm",
+        "harness_version": "0.1.6",
+        "archive": "11b5b82104a97131808f449ad56128851c733e4c5c587bc7876900bf3e7a731f.tar.zst",
+        "sha256": "11b5b82104a97131808f449ad56128851c733e4c5c587bc7876900bf3e7a731f",
+        "compressed_bytes": 83885,
+        "uncompressed_sha256": "d18fec60f8ffd39d64d46e43941ee151822d6f0822f037abe6c92dbe8ffb4b5d",
+        "compression_level": 22,
+        "aliases": [
+          "5c6dcaa297d2b658b8ac100ebc20542ab67aae31598aa1b7f03ea79ccb9d36ed.tar.zst",
+          "b4e2204b439052ee635dbac9f5f8feaa437dec497b95abed413288699754ff28.tar.zst",
+          "d0badb6635fcf9337633ef0319729eff287817b68d250c89dbbcaed948774b49.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -8533,9 +8585,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "11c5e904d10e169bc4a437d05164a00e17d3139ac4603fa64de854d8fd6b6cf0",
+  "binary_sha256": "d3a3b73e18090558db59ed5d4903a39302a128fa019747f6b3068184a8aea921",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 25,
+  "passed_fixtures": 26,
   "pending_charts": 32,
-  "processed_charts": 57
+  "processed_charts": 58
 }

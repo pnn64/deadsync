@@ -4116,19 +4116,14 @@
       "aliases": []
     },
     {
-      "title": "Over the Top",
+      "title": "Over the Top [Visual FX]",
       "source_simfile": "Over the Top - [Zaia][FX]/Over the Top.sm",
-      "harness_version": "0.1.6",
-      "archive": "11b5b82104a97131808f449ad56128851c733e4c5c587bc7876900bf3e7a731f.tar.zst",
-      "sha256": "11b5b82104a97131808f449ad56128851c733e4c5c587bc7876900bf3e7a731f",
-      "compressed_bytes": 83885,
-      "uncompressed_sha256": "d18fec60f8ffd39d64d46e43941ee151822d6f0822f037abe6c92dbe8ffb4b5d",
-      "compression_level": 22,
-      "aliases": [
-        "5c6dcaa297d2b658b8ac100ebc20542ab67aae31598aa1b7f03ea79ccb9d36ed.tar.zst",
-        "b4e2204b439052ee635dbac9f5f8feaa437dec497b95abed413288699754ff28.tar.zst",
-        "d0badb6635fcf9337633ef0319729eff287817b68d250c89dbbcaed948774b49.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "a7c136848c444b147dc9fc984ea6c7db228b7dc6c74290ec6bb2f1acb1c12a56.tar.zst",
+      "sha256": "a7c136848c444b147dc9fc984ea6c7db228b7dc6c74290ec6bb2f1acb1c12a56",
+      "compressed_bytes": 11789608,
+      "uncompressed_sha256": "3b9d2b4ed50bbaf623976e544a42d493b8e02e0820af8e74b1625fbdf8c674e4",
+      "aliases": []
     },
     {
       "title": "Paint the Town Red",
