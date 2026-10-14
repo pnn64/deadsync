@@ -1,0 +1,15 @@
+{
+  "previous_publisher_pid": 33332,
+  "before_sha256": "e8e0d815beb7db8a6b6ddb5e2d73ac62109b893891477aff42cddbd3256bb4ec",
+  "after_sha256": "8f3eb6c5e7b1816b7a7ca70b0b696c4257c43ed7e5caf821811b6cd014192566",
+  "script": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\publish_chart_sweep_v1.py",
+  "rule": "Accepted fixture storage is saved locally. Archives over 100000000 bytes are ignored, while result/index metadata are committed. Acceptance comparisons are unchanged.",
+  "syntax_validated": true,
+  "existing_large_fixtures_ignored_and_untracked": 5,
+  "publisher_pid": 50760,
+  "restart_logs": [
+    "publisher-large-fixture-20261014-stdout.log",
+    "publisher-large-fixture-20261014-stderr.log"
+  ],
+  "script_change": "The changed list contains the result/index and, if newly needed, the exact .gitignore entry. An accepted archive above 100000000 bytes is retained locally and excluded from git add. Smaller archives retain the previous commit behavior."
+}
