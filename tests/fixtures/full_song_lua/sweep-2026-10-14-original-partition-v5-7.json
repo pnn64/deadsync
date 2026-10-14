@@ -2749,6 +2749,37 @@
         }
       ],
       "report_sha256": "c98188cb983db7574b945e604cd3dd7a84da8025d21874fcf4550b457d3029c2"
+    },
+    {
+      "position": 490,
+      "source_simfile": "Dongo Bongo/dongobongo2.ssc",
+      "simfile_sha256": "b0057ebbdf4f8465cc34fda1fe7327d1a4edbf2978ed04b7c98eef0fe43f4dd0",
+      "historical_failure": {
+        "simfile": "Dongo Bongo/dongobongo2.ssc",
+        "status": "partial",
+        "category": "source_error",
+        "reason": "corpus:/Dongo Bongo/despair/default.lua:198: attempt to index global 'SREENMAN' (a nil value)",
+        "diagnostics": "target/song-lua-repair/phase2/2c9db316dfcd9ab2",
+        "dropped_events": 0,
+        "end_position": {
+          "beat": 398.5,
+          "seconds": 200.97715276551943
+        },
+        "target_beat": 398.5
+      },
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e0f16f89374ce78a1b07cafdb6d13c8e5c04de3e",
+      "build_proof": "/home/parity/jobs/game-state-class-linux-green-v1/proof.json",
+      "capture_seconds": 365.88945363101084,
+      "trace_sha256": "5744f814d4cd3748ce1f999ede1b030edec94d85bf239b0a9ea45fab38b097b0",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-7/chart-490/candidates/8cda636ea2055bcbcd7b89d5f3440425ae5cb8689da06b67bcb2195bab2ac93f.tar",
+      "replay_exit": -9,
+      "replay_seconds": 2015.9408871849882,
+      "candidate_sha256": "8cda636ea2055bcbcd7b89d5f3440425ae5cb8689da06b67bcb2195bab2ac93f",
+      "failure": "replaying every native gameplay frame: 0 checks completed, 0 failed\n[1896.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1898.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1900.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1902.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1904.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1906.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1908.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1910.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1912.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1914.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1916.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1918.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1920.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1922.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1924.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1926.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1928.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1930.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1932.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1934.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1936.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1938.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1940.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1942.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1944.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1946.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1948.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1950.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1952.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1954.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1956.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1958.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1960.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1962.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1964.8s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1966.8s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1968.9s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1971.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1973.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1975.3s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1977.3s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1979.5s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1981.6s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1983.8s] replaying every native gameplay frame: 0 checks completed, 0 failed\n"
     }
   ],
   "scope": {
@@ -2760,6 +2791,6 @@
   "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 6,
-  "pending_charts": 11,
-  "processed_charts": 17
+  "pending_charts": 12,
+  "processed_charts": 18
 }
