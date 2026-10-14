@@ -4152,17 +4152,14 @@
       ]
     },
     {
-      "title": "Episode 17",
+      "title": "Episode 17 『 Pale 』",
       "source_simfile": "Pale/Pale.sm",
-      "harness_version": "0.1.0",
-      "archive": "8cd0bdbc2e1666dfddd3ddc80f09f7c8d464946b5438d1ae7643b909d80da50f.tar.zst",
-      "sha256": "8cd0bdbc2e1666dfddd3ddc80f09f7c8d464946b5438d1ae7643b909d80da50f",
-      "compressed_bytes": 27286,
-      "uncompressed_sha256": "4e773ba2bbba96ffa17347bc1bb1cee593d7faf99274b41911f0cec22f2b92d0",
-      "compression_level": 22,
-      "aliases": [
-        "421a4999925ee3ea1dc4293fd536fde6be37cff72db0fd34d40228dc8c9bc2d7.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "7b47c47dd97584509f08f5496fdb74ab2ef3436567e11ef2f731ee8d0cda7541.tar.zst",
+      "sha256": "7b47c47dd97584509f08f5496fdb74ab2ef3436567e11ef2f731ee8d0cda7541",
+      "compressed_bytes": 6854583,
+      "uncompressed_sha256": "aadd0149d9bba2065020d0f659cb52d59e721e26bf39e07a6c54ba642b9ab21e",
+      "aliases": []
     },
     {
       "title": "Episode 17",
