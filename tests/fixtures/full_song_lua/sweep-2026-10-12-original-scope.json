@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T20:42:57Z",
+  "updated_utc": "2026-10-14T20:58:35Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 321,
+    "passed": 324,
     "pending": 99,
-    "unprocessed": 81
+    "unprocessed": 78
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3291,9 +3291,9 @@
       "position": 391,
       "source_simfile": "See Tinh/See Tinh.ssc",
       "simfile_sha256": "38cead7310020cd16c5bf90eb8ca7d0026e562364eb34d7db18a320e43cc5546",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-4.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-see-tinh-ssc-first-repair.json"
     },
     {
       "position": 392,
@@ -3385,13 +3385,17 @@
       "position": 403,
       "source_simfile": "Slamurai/Slamurai.ssc",
       "simfile_sha256": "ad13580d8964e7fc062aea34c7c68c32fe24785b4f8ce00a20beb6a2873cd0c6",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 404,
       "source_simfile": "Someone Special - hubert/Someone Special.sm",
       "simfile_sha256": "cf85ff2306a162cf432b2c9259cd037ad254488673f2a8c8c2fcd6695915f5c1",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 405,
@@ -3567,7 +3571,9 @@
       "position": 430,
       "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
       "simfile_sha256": "24e12ec68bb719cc2aa9b42899c6ae403dba4e9be2190540bb43417186c71433",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 431,

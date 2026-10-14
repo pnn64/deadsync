@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T20:42:57Z",
-  "previous_goal_turn": "Progress: See Tinh SM first GameState repair passes all 42817 frames with zero errors/mismatches; fixture saved, committed and byte verified. GameState fix e0f16f893 is accepted on its failing chart, which is now closed. SharpNel SSC (138581) and Subway Surfers SSC (102224) original replays also pass and are saved, committed and byte verified. Shivers SSC original full 8,392-frame replay has exactly 1,787 mismatches, all Actor.diffusealpha argument -infinity versus 1, and no callback errors. Captured authored source and local native ArrowEffects identify the host GetAlpha constant 1 stub. Native theme defaults use draw distance 1.5*screen height and zero far-edge fade width, producing raw negative infinity beyond the far edge. Existing actor alpha setter already preserves infinity. Fix f2a8bbc08 computes Current appearance visibility, Y without reverse, optional fail fade and native f32 far-edge scaling. Owned alpha control reproduces failure before on Linux and passes after; Windows 66 live/32 replay, Linux 66 live/32 replay/1 identity plus focused control and both helper builds pass. All 1,175 raw and local/Linux normalized source pins verified. Immutable helper f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665 selected from isolated arrow-alpha root. First Shivers repair queued after both See Tinh first repairs in the same bounded slot; original capture reused, one later repair remains after it. Publisher 50760 stopped when a concurrent worker removed chart395 raw report between compactor hash and compression. Verified retained compressed report matches original SHA; compactor reuses only byte-verified replacement and missing-ok unlink. Compactor completes, singleton publisher 56856 resumed 112 streams and See SM publication completes without replay restart. See Tinh SSC first repair, Koi final 2, Mawaru8 first and all eight original queues continue; Rite first remains queued on its pinned listener helper. All 501 original simfile hashes unchanged; RUNWAY separate. Existing full acceptance unchanged, coverage separate and oversized fixtures ignored/local. Sweep active and incomplete.",
+  "updated_utc": "2026-10-14T20:58:35Z",
+  "previous_goal_turn": "Progress: Slamurai SSC original replay passes 38,157 frames; saved, committed and byte verified. Someone Special SM original passes 13,988 frames, saved and byte verified. See Tinh SSC first GameState repair passes all 42,885 frames without errors or mismatches; archive b5f570b5 saved, committed and bytes match original fd6d290b candidate. Both See Tinh variants are now closed as passing, accepting GameState fix e0f16f893. Shivers SSC first repair is now active after successful completion of both See Tinh first repairs; child 422322. Shivers SM original full 8,501-frame replay has exactly 1,731 mismatches, all native Actor.diffusealpha argument -infinity versus 1, no errors. Same captured Lua caller and native GetAlpha equation as SSC; original capture hashes verified. First SM repair queued behind SSC first, supervisor 412232, using immutable tested alpha helper f93db55d and pinned selection even if global selection later changes. Each Shivers variant retains one later repair after attempt 1. Turn A original full 69,833-frame failure diagnosed: LastSeenVideoDriver preference missing in host causes string.lower nil error; a separate nonterminating zero-time queue error also remains. Primary PrefsManager declares a string and native harness null setup uses platform driver value. Captured neutral input stores sync/offset/aspect but no last driver string. Missing input recorded separately, no expected query output used as input and no repair spent. Koi final 2, Mawaru8 first, and all eight original queues continue without restart; Rite first remains queued. Publisher 56856 live with 113 streams and report compaction recovery retained. All 501 original simfile bytes remain unchanged; RUNWAY outside scope. Existing full acceptance and comparison fields/tolerances unchanged; missing coverage separate, oversized fixtures ignored/local. Sweep active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "cfb10fd57c0d663962dbd447cc7526f9bf4e96af",
+      "deadsync": "9697e4d6a73f5d00ef33dac0b59ff2a973b4649b",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -83,8 +83,8 @@
     "native_whole_song_pack_sync": "3d314ba64 controls green both platforms. Save Tears actual first full repair now passes67253 frames/zero errors/mismatches; original bytes verified and fixture closed. Existing acceptance unchanged.",
     "native_music_fade_end": "b97bcedd8: primary SL/native music-fade end alignment, controlled EOF/rate/offset test red before both platforms then green. Windows62/32/815; Linux64/32/815 and both builds zero exit. All1175 source pins/immutable binary verified; Great Divide first repair starts unchanged original archive after Save pass, active sources/local views untouched.",
     "imported_message_identity_coverage": "d69f0a20f: Linux red reproduces callback abort; Windows and Linux 64 live/32 replay/1 identity controls pass, Linux focused control and both helper builds pass. Missing imported identities report coverage and callbacks run. Captured relative order, actual errors and existing full replay acceptance are preserved. All 1,175 normalized source pins and immutable helper 04af4ff5 verified; original Koi final and Rite first repairs launched sequentially without reopening passes.",
-    "native_game_state_class_methods": "e0f16f893: primary LuaBinding class method lookup implemented, with owned class extension/override, modifier side effect, two native calls and single class recorder hook control. Linux red then green; Windows 65/32 and Linux 65/32/1 plus focused control and both helper builds pass. All 1175 raw/normalized source pins verified. Original See Tinh first repairs queued sequentially; existing full acceptance checks remain unchanged. Actual first See Tinh SM full repair now passes 42,817 frames, saved and byte verified; chart closed and fix accepted.",
-    "native_arrow_alpha": "f2a8bbc08: primary ArrowEffects native alpha calculation replaces constant 1; owned fade/visibility/raw-infinity control red before Linux then green, Windows 66/32 and Linux 66/32/1 plus focused control/both helper builds pass. All 1,175 raw/normalized pins verified; immutable f93db55d helper selected, original Shivers first repair queued behind See Tinh chain. Existing full counts, arguments, timing, state and error acceptance unchanged."
+    "native_game_state_class_methods": "e0f16f893: primary LuaBinding class method lookup implemented, with owned class extension/override, modifier side effect, two native calls and single class recorder hook control. Linux red then green; Windows 65/32 and Linux 65/32/1 plus focused control and both helper builds pass. All 1175 raw/normalized source pins verified. Original See Tinh first repairs queued sequentially; existing full acceptance checks remain unchanged. Actual first See Tinh SM full repair now passes 42,817 frames, saved and byte verified; chart closed and fix accepted. Actual first See Tinh SSC full repair passes 42,885 frames, saved, committed and byte verified. Both See Tinh variants closed as passing.",
+    "native_arrow_alpha": "f2a8bbc08: primary ArrowEffects native alpha calculation replaces constant 1; owned fade/visibility/raw-infinity control red before Linux then green, Windows 66/32 and Linux 66/32/1 plus focused control/both helper builds pass. All 1,175 raw/normalized pins verified; immutable f93db55d helper selected, original Shivers first repair queued behind See Tinh chain. Existing full counts, arguments, timing, state and error acceptance unchanged. Original Shivers SM also has 1,731 identical raw alpha argument mismatches; first SM repair queued after active SSC first, original captures reused."
   },
   "corpus_transfer": {
     "tar_sha256": "37febe98e2e47b325b9f9b96f4d29ddf32eedda84514191252d043c5fd4a4d1a",
@@ -138,18 +138,18 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Slamurai/Slamurai.ssc",
-      "position": 403,
+      "current": "spooky (SX 14)/spooky (Tech-Stam cut).ssc",
+      "position": 411,
       "phase": "replay",
-      "pid": 325013,
+      "pid": 380539,
       "process_matches": true,
-      "passed": 35,
+      "passed": 36,
       "pending": 62,
-      "processed": 97,
+      "processed": 98,
       "last_log_lines": [
-        "[782.3s] replaying every native gameplay frame: frame 37106/38157 (97.2%)",
-        "[784.3s] replaying every native gameplay frame: frame 37203/38157 (97.5%)",
-        "[786.3s] replaying every native gameplay frame: frame 37298/38157 (97.7%)"
+        "[626.2s] replaying every native gameplay frame: frame 31429/128284 (24.5%)",
+        "[628.2s] replaying every native gameplay frame: frame 31525/128284 (24.6%)",
+        "[630.2s] replaying every native gameplay frame: frame 31623/128284 (24.7%)"
       ],
       "supervisor_running": true
     },
@@ -1800,6 +1800,13 @@
         "record": "sweep-2026-10-14-shivers-ssc-first-repair.json",
         "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef",
         "finish_status": "first native ArrowEffects alpha repair complete"
+      },
+      {
+        "name": "shivers-sm-arrow-alpha-first-repair",
+        "remote": "/home/parity/jobs/shivers-sm-arrow-alpha-first-repair-v1",
+        "record": "sweep-2026-10-14-shivers-sm-first-repair.json",
+        "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef",
+        "finish_status": "first SM native ArrowEffects alpha repair complete"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -1807,24 +1814,24 @@
     "other_jobs_live_observation": {
       "initial_sweep": {
         "status": "running",
-        "current": "Slamurai/Slamurai.ssc",
-        "position": 403,
+        "current": "spooky (SX 14)/spooky (Tech-Stam cut).ssc",
+        "position": 411,
         "phase": "replay",
-        "pid": 325013,
+        "pid": 380539,
         "process_matches": true,
-        "passed": 35,
+        "passed": 36,
         "pending": 62,
-        "processed": 97,
+        "processed": 98,
         "last_log_lines": [
-          "[782.3s] replaying every native gameplay frame: frame 37106/38157 (97.2%)",
-          "[784.3s] replaying every native gameplay frame: frame 37203/38157 (97.5%)",
-          "[786.3s] replaying every native gameplay frame: frame 37298/38157 (97.7%)"
+          "[626.2s] replaying every native gameplay frame: frame 31429/128284 (24.5%)",
+          "[628.2s] replaying every native gameplay frame: frame 31525/128284 (24.6%)",
+          "[630.2s] replaying every native gameplay frame: frame 31623/128284 (24.7%)"
         ],
         "supervisor_running": true
       },
       "jobs": [
         {
-          "job": "shivers-ssc-arrow-alpha-first-repair-v1",
+          "job": "shivers-sm-arrow-alpha-first-repair-v1",
           "complete": false,
           "supervisor_running": true,
           "passed": 0,
@@ -1832,9 +1839,20 @@
           "processed": 0
         },
         {
+          "job": "shivers-ssc-arrow-alpha-first-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "Shivers/Shivers.ssc",
+          "child_running": true
+        },
+        {
           "job": "see-tinh-sm-game-state-class-first-repair-v1",
           "complete": true,
-          "supervisor_running": true,
+          "supervisor_running": false,
           "passed": 1,
           "pending": 0,
           "processed": 1,
@@ -1844,14 +1862,14 @@
         },
         {
           "job": "see-tinh-ssc-game-state-class-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "See Tinh/See Tinh.ssc",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "koi-ssc-message-coverage-final-repair-v1",
@@ -1987,12 +2005,12 @@
           "complete": false,
           "supervisor_running": true,
           "passed": 5,
-          "pending": 5,
-          "processed": 10,
+          "pending": 6,
+          "processed": 11,
           "last_phase": "replay",
-          "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
+          "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.sm",
           "child_running": true,
-          "position": 430
+          "position": 438
         },
         {
           "job": "chart-sweep-parallel-v5-4",
@@ -2037,7 +2055,7 @@
           "passed": 6,
           "pending": 11,
           "processed": 17,
-          "last_phase": "capture",
+          "last_phase": "replay",
           "source_simfile": "Dongo Bongo/dongobongo2.ssc",
           "child_running": true,
           "position": 490
@@ -2877,13 +2895,13 @@
           "job": "chart-sweep-parallel-v4-1",
           "complete": false,
           "supervisor_running": true,
-          "passed": 35,
+          "passed": 36,
           "pending": 33,
-          "processed": 68,
+          "processed": 69,
           "last_phase": "replay",
-          "source_simfile": "Someone Special - hubert/Someone Special.sm",
+          "source_simfile": "Spooky/1.09 - Spooky.sm",
           "child_running": true,
-          "position": 404
+          "position": 412
         },
         {
           "job": "chart-sweep-parallel-v4-2",
@@ -3021,7 +3039,7 @@
     "selected_replay_binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 112,
+    "publisher_stream_count": 113,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -3133,14 +3151,20 @@
     "publisher_report_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-publisher-report-race-recovery.json",
     "see_tinh_sm_first_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-see-tinh-sm-fixture-verification.json",
     "sharpnel_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-chart-396-fixture-verification.json",
-    "subway_surfers_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-chart-422-fixture-verification.json"
+    "subway_surfers_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-chart-422-fixture-verification.json",
+    "shivers_sm_alpha_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-shivers-sm-alpha-diagnosis.json",
+    "shivers_sm_first_queue": "tests/fixtures/full_song_lua/sweep-2026-10-14-shivers-sm-alpha-first-repair-launch.json",
+    "turn_a_preference_coverage_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-turn-a-preference-coverage-diagnosis.json",
+    "slamurai_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-slamurai-ssc-fixture-verification.json",
+    "see_tinh_ssc_first_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-chart-391-fixture-verification.json",
+    "someone_special_sm_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-chart-404-fixture-verification.json"
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 174,
+    "new_passed_fixtures": 177,
     "new_pending_charts": 98,
-    "new_processed_sources": 272,
+    "new_processed_sources": 275,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 81,
+    "unprocessed_sources": 78,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -4939,14 +4963,6 @@
       ]
     },
     {
-      "source_simfile": "See Tinh/See Tinh.ssc",
-      "repair_attempts": 0,
-      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[13.8s] replaying every native gameplay frame\n[14.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'See Tinh \u300cCukak Remix\u300d': failed to execute '/tmp/.tmp2gH3Yk/song/lua/default.lua': runtime error: [string \"/tmp/.tmp2gH3Yk/song/lua/mods-taro.lua\"]:514: attempt to index global 'GameState' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/mods-taro.lua\"]:514: in main chunk\n\t[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\nstack traceback:\n\t>[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'See Tinh \u300cCukak Remix\u300d' from '/tmp/.tmp2gH3Yk/song/lua/default.lua': failed to execute '/tmp/.tmp2gH3Yk/song/lua/default.lua': runtime error: [string \"/tmp/.tmp2gH3Yk/song/lua/mods-taro.lua\"]:514: attempt to index global 'GameState' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/mods-taro.lua\"]:514: in main chunk\n\t[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\nstack traceback:\n\t>[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmp2gH3Yk/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\n\n[16.0s] replaying every native gameplay frame: frame 0/42885 (0.0%)\n\nthread 'main' (4106265) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[18.0s] replaying every native gameplay frame: frame 0/42885 (0.0%)\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
-    },
-    {
       "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
       "repair_attempts": 0,
       "failure": null,
@@ -5109,6 +5125,22 @@
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
+    },
+    {
+      "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 64,
+      "first_mismatch": [
+        {
+          "phase": "progress",
+          "seconds": 48.00101852416992,
+          "field": "life_latest",
+          "native": 0.515999972820282,
+          "deadsync": 0.5320000052452087
+        }
+      ]
     },
     {
       "source_simfile": "the fresh prince of bel air (razihel remix)/steps.sm",
