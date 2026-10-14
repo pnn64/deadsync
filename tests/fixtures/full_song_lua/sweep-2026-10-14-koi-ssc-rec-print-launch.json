@@ -1,0 +1,23 @@
+{
+  "position": 270,
+  "source_simfile": "Koi [UPS2016]/koi.ssc",
+  "launch": {
+    "supervisor_pid": 1565373,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_koi_ssc_rec_print_repair_v1.py"
+    ]
+  },
+  "attempt_started": 1,
+  "repairs_remaining_after_this_attempt": 1,
+  "native_capture_reused": true,
+  "candidate_sha256": "42f964c593f8f62d2731bb51dccf610fda9e4dd8e5c3c85385db8d9d787e9667",
+  "trace_sha256": "6313db510762c74890eb62402b84caaa99fcde9a9507b1e9eac6fdc4199bdd42",
+  "simfile_sha256": "2efedac6dcecd6354ba67a65cc0f0732260d4f37536fe2522a6ee6402a7be205",
+  "build_evidence": "sweep-2026-10-14-double-cue-rows-build.json",
+  "previous_errors": [
+    "AddFishCommand failed for Actor: runtime error: [string \"/tmp/.tmpFifKup/song/lua/koi.lua\"]:241: attempt to call global 'rec_print_table' (a nil value)\nstack traceback:\n\t[C]: in global 'rec_print_table'\n\t[string \"/tmp/.tmpFifKup/song/lua/koi.lua\"]:241: in function <[string \"/tmp/.tmpFifKup/song/lua/koi.lua\"]:234>"
+  ],
+  "targeted_existing_fix": "primary Simply Love rec_print_table and tested owned actor traversal",
+  "original_capture_comparisons_unchanged": true
+}

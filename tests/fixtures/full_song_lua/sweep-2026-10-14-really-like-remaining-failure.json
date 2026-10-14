@@ -1,0 +1,44 @@
+{
+  "source_simfile": "I Really Like You [dbk2]/I Really Like You.sm",
+  "full_replayed_frames": 100091,
+  "native_frames": 100091,
+  "repair_attempts": 1,
+  "repairs_remaining": 1,
+  "callback_errors": 0,
+  "mismatch_count": 1,
+  "concrete_failure": {
+    "phase": "progress",
+    "seconds": 120.00083923339844,
+    "field": "failed",
+    "native": false,
+    "deadsync": true
+  },
+  "candidate_sha256": "1a3809967db7ab5fd72b5f5093817e698be7803cc66a09a746e2749b879964b7",
+  "capture_reused": true,
+  "native_stage_samples": [
+    {
+      "seconds": 119.00079345703125,
+      "failed": false,
+      "life_latest": 0.5
+    },
+    {
+      "seconds": 120.00083923339844,
+      "failed": false,
+      "life_latest": 0.5
+    },
+    {
+      "seconds": 121.00018310546875,
+      "failed": true,
+      "life_latest": 0.5
+    }
+  ],
+  "primary_source": {
+    "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ScreenGameplay.cpp",
+    "sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+    "observations": "GetMusicEndTiming uses Song::GetLastSecond plus Player::GetMaxStepDistanceSeconds. SM_NotesEnded invokes LeaveGameplay, which dispatches owned Off; prior autoplay Off controls are passing. Remaining progress failed flag changes earlier in deadsync than this capture."
+  },
+  "cause_confirmed": false,
+  "final_repair_launched": false,
+  "archive_accepted": false,
+  "comparison_tolerances_changed": false
+}
