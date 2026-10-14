@@ -4885,15 +4885,12 @@
     {
       "title": "STAGE 0.ac11",
       "source_simfile": "STAGE 0.ac11/STAGE 0.ac11.sm",
-      "harness_version": "0.1.0",
-      "archive": "852cbbb1b4826effd45cf24173c9b134ad944dc3ecfb47f7c48b5f186a598437.tar.zst",
-      "sha256": "852cbbb1b4826effd45cf24173c9b134ad944dc3ecfb47f7c48b5f186a598437",
-      "compressed_bytes": 2801896,
-      "uncompressed_sha256": "b550ec711a98e366825bd7499803708e67bce7754449e41ab5ef94ce75c24b07",
-      "compression_level": 22,
-      "aliases": [
-        "3f936de70d01ce0a61ee1dcd2e9f4c36d06f572a640fa5596e0b067d143c1dcb.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "1e1623f5f44c3e8d6d998b395c8adb587f07cf8b6bb989702a52fe970b3d8a92.tar.zst",
+      "sha256": "1e1623f5f44c3e8d6d998b395c8adb587f07cf8b6bb989702a52fe970b3d8a92",
+      "compressed_bytes": 7188654,
+      "uncompressed_sha256": "dda626957a19d3ec93e1a1df78f4d761b7ebc44329426ad1fc7d8eb213812b7e",
+      "aliases": []
     },
     {
       "title": "Stay Alive",

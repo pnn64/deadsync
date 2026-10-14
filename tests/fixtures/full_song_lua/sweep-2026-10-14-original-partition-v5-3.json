@@ -1982,6 +1982,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 414,
+      "source_simfile": "STAGE 0.ac11/STAGE 0.ac11.sm",
+      "simfile_sha256": "ec87e095ecf33b807ec3a384419c5085b0bd58857f4294faeb489193881e20c5",
+      "retained_original_archive": "852cbbb1b4826effd45cf24173c9b134ad944dc3ecfb47f7c48b5f186a598437.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "b97bcedd8f8d8d88dac55531a7d287cb7bbccd69",
+      "build_proof": "/home/parity/jobs/music-fade-end-linux-green-v1/proof.json",
+      "capture_seconds": 158.021207237005,
+      "trace_sha256": "70c0bc3c7825c5e5e73ec151e86021d3e8016df2707be2b84beae969829186d9",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-3/chart-414/candidates/dda626957a19d3ec93e1a1df78f4d761b7ebc44329426ad1fc7d8eb213812b7e.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1748.5142255119863,
+      "candidate_sha256": "dda626957a19d3ec93e1a1df78f4d761b7ebc44329426ad1fc7d8eb213812b7e",
+      "native_frames": 86961,
+      "replayed_frames": 86961,
+      "compared_stage_fields": 1584,
+      "pending_coverage": [
+        "uncompared song operations: Actor.xy, Actor.zoomy, GameState.Env, Song.MusicLengthSeconds, SongOptions.Haste",
+        "native drawable state/resources: Quad, Sound, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "c108c79c30d7a96213c83048fa19e1a8a619f85db9936bd422543db9aa6c8a9a",
+      "archive": "1e1623f5f44c3e8d6d998b395c8adb587f07cf8b6bb989702a52fe970b3d8a92.tar.zst",
+      "archive_sha256": "1e1623f5f44c3e8d6d998b395c8adb587f07cf8b6bb989702a52fe970b3d8a92",
+      "compressed_bytes": 7188654,
+      "pack_seconds": 5.094533432013122,
+      "harness_version": "0.1.80",
+      "title": "STAGE 0.ac11",
+      "retained_original_entry": {
+        "title": "STAGE 0.ac11",
+        "source_simfile": "STAGE 0.ac11/STAGE 0.ac11.sm",
+        "harness_version": "0.1.0",
+        "archive": "852cbbb1b4826effd45cf24173c9b134ad944dc3ecfb47f7c48b5f186a598437.tar.zst",
+        "sha256": "852cbbb1b4826effd45cf24173c9b134ad944dc3ecfb47f7c48b5f186a598437",
+        "compressed_bytes": 2801896,
+        "uncompressed_sha256": "b550ec711a98e366825bd7499803708e67bce7754449e41ab5ef94ce75c24b07",
+        "compression_level": 22,
+        "aliases": [
+          "3f936de70d01ce0a61ee1dcd2e9f4c36d06f572a640fa5596e0b067d143c1dcb.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -1990,9 +2041,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
+  "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 3,
+  "passed_fixtures": 4,
   "pending_charts": 5,
-  "processed_charts": 8
+  "processed_charts": 9
 }
