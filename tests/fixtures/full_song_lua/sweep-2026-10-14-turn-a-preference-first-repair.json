@@ -1,0 +1,71 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+  "results": [
+    {
+      "position": 449,
+      "source_simfile": "Turn A - [Freya]/turn_a.ssc",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "6d7acf2ad83ffc057210fb0044639c6c0946c149a6676353b146cc8d111d254d",
+      "trace_sha256": "0f830463bdfcb350fab706e997003d71620b78f81b87b63f862f51a5f612a5e7",
+      "simfile_sha256": "7877692800f17f5cb85481cc652be8317830640b81c55b87d7c3c49da5a55990",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+      "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+      "previous_failure": null,
+      "previous_errors": [
+        "OnCommand failed for ActorFrame 'video': runtime error: [string \"/tmp/.tmpbor3YH/song/lua/default.lua\"]:36: bad argument #1 to 'lower' (string expected, got nil)\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'string.lower'\n\t[string \"/tmp/.tmpbor3YH/song/lua/default.lua\"]:36: in function <[string \"/tmp/.tmpbor3YH/song/lua/default.lua\"]:33>",
+        "runtime error: nonterminating zero-time actor command queue"
+      ],
+      "original_candidate_sha256": "2e5573d484d88872ee89580f585e5637745c98e4e9bf5d7ba0c49c2294fe1091",
+      "native_trace_bytes_unchanged": true,
+      "retained_preferences_sha256": "93124b90073f2c5750ff3bcc29c40f88ebb142f181f8d4fd655e38603dc8ee23",
+      "replay_exit": 0,
+      "replay_seconds": 2297.906501149002,
+      "native_frames": 69833,
+      "replayed_frames": 69833,
+      "compared_stage_fields": 1353,
+      "pending_coverage": [
+        "uncompared song operations: Actor.basezoom, Actor.basezoomx, Actor.basezoomy, BitmapText.GetText, PlayerOptions.CMod, PlayerOptions.FromString, PlayerOptions.MMod, PlayerOptions.Tiny, PlayerOptions.XMod, ScreenManager.SystemMessage",
+        "native drawable state/resources: ActorProxy, Quad"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "f8e9a09162794639467140ef61e94e2030e2bec2ac64225a59fcd97f24c10857",
+      "archive": "b27c43a22b46afe29c45fdb7c0327a9c4d4d88a63850ae5670a6695f21dfbd2d.tar.zst",
+      "archive_sha256": "b27c43a22b46afe29c45fdb7c0327a9c4d4d88a63850ae5670a6695f21dfbd2d",
+      "compressed_bytes": 7288715,
+      "harness_version": "0.1.80",
+      "title": "∀",
+      "pack_seconds": 5.219093581981724,
+      "retained_original_entry": {
+        "title": "∀",
+        "source_simfile": "Turn A - [Freya]/turn_a.ssc",
+        "harness_version": "0.1.0",
+        "archive": "88154659902f37929643b5caec609a2700d67c863450df439554e8d35a9effa3.tar.zst",
+        "sha256": "88154659902f37929643b5caec609a2700d67c863450df439554e8d35a9effa3",
+        "compressed_bytes": 83058,
+        "uncompressed_sha256": "352b336b3c35ab4dea7f97ed8bf7c0135dd7518b3ef1f969ae25a01f4f3b303d",
+        "compression_level": 22,
+        "aliases": [
+          "2173b1a87485fc439f732e2d63eb1fb8f3f04b3d92197c48bc7f86717f509581.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first repair: known native video-driver preference with retained neutral machine configuration; original trace and full comparisons unchanged",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}

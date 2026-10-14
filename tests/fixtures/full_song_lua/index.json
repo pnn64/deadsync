@@ -5282,15 +5282,12 @@
     {
       "title": "∀",
       "source_simfile": "Turn A - [Freya]/turn_a.ssc",
-      "harness_version": "0.1.0",
-      "archive": "88154659902f37929643b5caec609a2700d67c863450df439554e8d35a9effa3.tar.zst",
-      "sha256": "88154659902f37929643b5caec609a2700d67c863450df439554e8d35a9effa3",
-      "compressed_bytes": 83058,
-      "uncompressed_sha256": "352b336b3c35ab4dea7f97ed8bf7c0135dd7518b3ef1f969ae25a01f4f3b303d",
-      "compression_level": 22,
-      "aliases": [
-        "2173b1a87485fc439f732e2d63eb1fb8f3f04b3d92197c48bc7f86717f509581.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b27c43a22b46afe29c45fdb7c0327a9c4d4d88a63850ae5670a6695f21dfbd2d.tar.zst",
+      "sha256": "b27c43a22b46afe29c45fdb7c0327a9c4d4d88a63850ae5670a6695f21dfbd2d",
+      "compressed_bytes": 7288715,
+      "uncompressed_sha256": "6d7acf2ad83ffc057210fb0044639c6c0946c149a6676353b146cc8d111d254d",
+      "aliases": []
     },
     {
       "title": "U-0",
