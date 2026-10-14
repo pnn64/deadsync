@@ -3879,17 +3879,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 03",
+      "title": "Episode 03 Molly",
       "source_simfile": "Molly/Molly.sm",
-      "harness_version": "0.1.0",
-      "archive": "42d3b9c006a212d4b204e23a19d6d037318a12063b038c925ddfaaece53b3d5c.tar.zst",
-      "sha256": "42d3b9c006a212d4b204e23a19d6d037318a12063b038c925ddfaaece53b3d5c",
-      "compressed_bytes": 110947,
-      "uncompressed_sha256": "4c98cf123750256291f359663daf2e65fb23469c1e37f44c25f9595142ccabf9",
-      "compression_level": 22,
-      "aliases": [
-        "7a9fe74616effd2a762fb39058f10f4172b3ea36826dc0ec055b2a255ab1cc7e.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "2aece6288ddf864b9057f60c88a7fb5c4ee8cb975a7361b4193023adf012648a.tar.zst",
+      "sha256": "2aece6288ddf864b9057f60c88a7fb5c4ee8cb975a7361b4193023adf012648a",
+      "compressed_bytes": 215367310,
+      "uncompressed_sha256": "34025226756f0fe2ef42d9597a1a54f6b5a8b114fbf71c1dbce46a01dd43951f",
+      "aliases": []
     },
     {
       "title": "Episode 03",
