@@ -1,0 +1,13 @@
+{
+  "pid": 2770806,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_mawaru8_player_stats_identity_first_repair_v1.py"
+  ],
+  "repair_attempt": 1,
+  "repair_attempts_remaining_after_this": 1,
+  "source_simfile": "mawaru8/mawaru8.sm",
+  "position": 307,
+  "original_capture_reused": true,
+  "selection_receipt": "/home/parity/jobs/player-stats-identity-selection-installed-v1.json"
+}
