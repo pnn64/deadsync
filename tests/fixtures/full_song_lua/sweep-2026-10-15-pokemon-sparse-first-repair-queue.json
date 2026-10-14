@@ -1,0 +1,19 @@
+{
+  "pid": 1174568,
+  "command": [
+    "python3",
+    "/home/parity/jobs/start_pokemon_sparse_after_validation_v1.py"
+  ],
+  "waiting_for_complete_linux_helper_and_harness_validation": true,
+  "full_repairs_previously_spent": 0,
+  "one_later_attempt_maximum_after_first": true,
+  "old_capture_preserved": true,
+  "new_capture_reason": "native Lua control proves observer changes sparse child indices",
+  "publisher_stream_count": 121,
+  "deadsync_fix_commit": "cc145ab04",
+  "harness_fix_commit": "3adbf72",
+  "windows_validation": "sweep-2026-10-15-sparse-declaration-windows-validation.json",
+  "native_control": "sweep-2026-10-15-native-sparse-declaration-control.json",
+  "acceptance_comparisons_unchanged": true,
+  "passing_charts_reopened": false
+}

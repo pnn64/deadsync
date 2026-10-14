@@ -1,0 +1,31 @@
+{
+  "new_source_pin_count": 2223,
+  "new_binary_sha256": "ea7314391554e3fc933a5531ba71f6a93a70a35f8e3b8c8706358dc60420e36c",
+  "active_harness_source_and_binary_unchanged": true,
+  "all_check_log_hashes_verified": true,
+  "fix_commit": "3adbf72",
+  "checks": [
+    {
+      "label": "runtime-tests",
+      "exit_code": 0,
+      "seconds": 209.05678649802576,
+      "log_sha256": "0aed90e823d267001c3f2fb4b4aabb3e92c7573b95343a75284b1ac65bba48c7",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 19.882906226994237,
+      "log_sha256": "29cac82d45eb20909877d65c58213b3555e5a8dc1e75cebbe9562408fbf2684a",
+      "results": []
+    }
+  ],
+  "source_root": "/home/parity/workspace/sparse-observer-v1/itgmania-harness",
+  "binary": "/home/parity/jobs/sparse-observer-build-v1/harness",
+  "native_sparse_control": "sweep-2026-10-15-native-sparse-declaration-control.json",
+  "windows_runtime_controls_passed": 12,
+  "acceptance_comparisons_unchanged": true,
+  "first_build_failure": "CMake native JPEG cache referenced old absolute source path; failed output retained; fresh isolated target succeeded"
+}

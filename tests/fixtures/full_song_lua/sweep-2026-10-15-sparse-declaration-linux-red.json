@@ -1,0 +1,21 @@
+{
+  "expected_red_observed": true,
+  "test_failed_count": 1,
+  "marker": "native sparse declarations retain child callback order",
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 343.65895537499455,
+      "log_sha256": "57988fd7dc2aa4f619d5f4d944b1deea5fe50899af8e1602130a47fa42870725",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 603 filtered out; finished in 0.28s"
+      ]
+    }
+  ],
+  "source_root": "/home/parity/workspace/sparse-declaration-v1/deadsync",
+  "source_pin_count": 1175,
+  "actual_test_output_tail": "     Running unittests src/lib.rs (/home/parity/build/deadsync-v1/debug/deps/deadsync_song_lua-fd71db1c24d40168)\n\nrunning 1 test\ntest live::tests::live_sparse_declarations_keep_native_child_callback_order ... FAILED\n\nfailures:\n\n---- live::tests::live_sparse_declarations_keep_native_child_callback_order stdout ----\n\nthread 'live::tests::live_sparse_declarations_keep_native_child_callback_order' (1186542) panicked at crates/deadsync-song-lua/src/live.rs:4469:9:\nassertion `left == right` failed: native sparse declarations retain child callback order\n  left: \"leader,border,badge,left,right,sound,black\"\n right: \"leader,border,badge,left,black,sound,right\"\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    live::tests::live_sparse_declarations_keep_native_child_callback_order\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 603 filtered out; finished in 0.28s\n\nerror: test failed, to rerun pass `-p deadsync-song-lua --lib`\n",
+  "green_validation_started": true,
+  "active_source_root_modified": false
+}
