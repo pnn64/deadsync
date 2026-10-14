@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Shivers/Shivers.ssc",
+  "native_frames": 8392,
+  "replayed_frames": 8392,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "aa23ff3bfb375eede88c4fd0af095da2081ea8100f603316059753b45e0e79e0.tar.zst",
+  "compressed_sha256": "aa23ff3bfb375eede88c4fd0af095da2081ea8100f603316059753b45e0e79e0",
+  "uncompressed_sha256": "b21eb1ce481bb1bae0813c98741fd296cc08c27e4197f4f9c691a51ea2b9c59e",
+  "compressed_bytes": 31682538,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

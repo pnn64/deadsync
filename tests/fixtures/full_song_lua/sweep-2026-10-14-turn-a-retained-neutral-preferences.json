@@ -1,0 +1,17 @@
+{
+  "source_simfile": "Turn A - [Freya]/turn_a.ssc",
+  "retained_native_run": "/tmp/itgmania-harness-rs/song-lua-174729-1792008018809553091-0",
+  "simfile_sha256_verified": true,
+  "simfile_sha256": "7877692800f17f5cb85481cc652be8317830640b81c55b87d7c3c49da5a55990",
+  "preferences_file": "/tmp/itgmania-harness-rs/song-lua-174729-1792008018809553091-0/Save/Preferences.ini",
+  "preferences_sha256": "93124b90073f2c5750ff3bcc29c40f88ebb142f181f8d4fd655e38603dc8ee23",
+  "neutral_machine_values": {
+    "LastSeenVideoDriver": "OpenGL",
+    "VideoRenderers": "null"
+  },
+  "source_initialization": "Harness prepare_install writes this Preferences.ini before staged engine launch; chart source contains no SetPreference calls.",
+  "input_recovered_from_machine_configuration": true,
+  "expected_query_results_used_as_input": false,
+  "original_trace_replayed_again": false,
+  "repair_attempts_spent": 0
+}
