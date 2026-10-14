@@ -4464,15 +4464,12 @@
     {
       "title": "Remind the Souls",
       "source_simfile": "Remind The Souls/remindthesouls-fakemines.ssc",
-      "harness_version": "0.1.0",
-      "archive": "5b6dd2c7346c5fe204cd3334a4b26a6570561158a1727cadc75f3ea8087db73d.tar.zst",
-      "sha256": "5b6dd2c7346c5fe204cd3334a4b26a6570561158a1727cadc75f3ea8087db73d",
-      "compressed_bytes": 73399,
-      "uncompressed_sha256": "6e8f9238a16c5c6b23fd0fc1190272305d97b91bb740699f85785c9ecf832826",
-      "compression_level": 22,
-      "aliases": [
-        "f52d4a14ae917a1ca6a3ba9f7cdb988fa6e4c3e8698362bb28528efa28e2faca.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "182e6b447fbab655a37367d7efac94cb42073accba462a03c335fe3ef38724ea.tar.zst",
+      "sha256": "182e6b447fbab655a37367d7efac94cb42073accba462a03c335fe3ef38724ea",
+      "compressed_bytes": 15101657,
+      "uncompressed_sha256": "6774b5b9a005c627e0a41b8fee3874bfd42c193e3354b9de907696c910933ce0",
+      "aliases": []
     },
     {
       "title": "Retrospective",
