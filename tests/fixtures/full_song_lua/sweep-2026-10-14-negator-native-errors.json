@@ -1,0 +1,28 @@
+{
+  "source_simfile": "negator/NEGATOR.sm",
+  "position": 324,
+  "repair_attempts": 0,
+  "failure_kind": "native Lua callback errors; no accepted native capture",
+  "actual_errors": [
+    "WARNING: Error playing command:/Songs/Harness/Probe/gameplayControl/default.lua:959: attempt to call method 'GetChild' (a nil value)",
+    "WARNING: Error playing command:/Songs/Harness/Probe/gameplayControl/default.lua:971: attempt to call method 'GetChild' (a nil value)"
+  ],
+  "native_log": {
+    "native_log_sha256": "5bc5d88da9ea31c9cbe565a1f7e9244fd395bf2454ef1067e7d616cc574bd56c",
+    "unique_command_errors": [
+      "WARNING: Error playing command:/Songs/Harness/Probe/gameplayControl/default.lua:959: attempt to call method 'GetChild' (a nil value)",
+      "WARNING: Error playing command:/Songs/Harness/Probe/gameplayControl/default.lua:971: attempt to call method 'GetChild' (a nil value)"
+    ],
+    "retained_log": "/tmp/itgmania-harness-rs/song-lua-482689-1791964917444496479-0/Logs/info.txt"
+  },
+  "source_sha256": "18f8544215cf7b88ed29fa010ed622d27c4ea4dd3c3f272697961af9ecd894f1",
+  "source_calls": "BlindOn/BlindOff callbacks at lines 959/971 call comN:GetChild(Number). comN is assigned from PlayerPN:GetChild(Combo).",
+  "theme_source": {
+    "path": "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\Graphics\\Player combo.lua",
+    "sha256": "1ac6bca203c002e302b8e8e201a807168d8682ce49d0f9229c2a4120c0066e3f",
+    "conditional_behavior": "Player combo.lua returns a plain Actor when HideCombo is enabled or no combo font is available; otherwise it returns an ActorFrame."
+  },
+  "unestablished": "The capture-specific Combo type and the selected HideCombo/font condition still need inspection; do not infer that condition from the generic failure alone.",
+  "passing_charts_reopened": false,
+  "original_source_modified": false
+}
