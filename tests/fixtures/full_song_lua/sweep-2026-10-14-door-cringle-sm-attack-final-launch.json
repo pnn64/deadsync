@@ -1,0 +1,19 @@
+{
+  "position": 274,
+  "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
+  "attempt_started": 2,
+  "repairs_remaining_after_this_attempt": 0,
+  "launch": {
+    "supervisor_pid": 1956872,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_door_cringle_sm_attack_final_repair_v1.py"
+    ]
+  },
+  "fix_commit": "254c36811",
+  "build_evidence": "sweep-2026-10-14-attack-boundary-linux-build.json",
+  "candidate_sha256": "0616f94607ea769ac606577ace6ef2a6aa0c9c1e0a9142ae3b31e65d2f18347c",
+  "native_capture_reused": true,
+  "acceptance_rules_unchanged": true,
+  "passing_charts_reopened": false
+}
