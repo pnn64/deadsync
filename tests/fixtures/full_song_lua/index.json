@@ -3666,15 +3666,12 @@
     {
       "title": "MAWARU FINALE",
       "source_simfile": "mawaru5/mawaru5.sm",
-      "harness_version": "0.1.0",
-      "archive": "61530158cf5c08c3c723f68ca9a31611c7ed556baedcde3c363f476d5cedfbac.tar.zst",
-      "sha256": "61530158cf5c08c3c723f68ca9a31611c7ed556baedcde3c363f476d5cedfbac",
-      "compressed_bytes": 3258756,
-      "uncompressed_sha256": "13b120b692419c597b16dc62086a4c4a003c398578914986040dc45e0c04096f",
-      "compression_level": 22,
-      "aliases": [
-        "ac11250908bb4dd8ce98402c5a39308d1d92142de6ec0f9538f0561102f81cf8.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "bf0fd217977f5c42a8d5d8db9c768d179e2152b8f12f6aa9bf64d012707cef8d.tar.zst",
+      "sha256": "bf0fd217977f5c42a8d5d8db9c768d179e2152b8f12f6aa9bf64d012707cef8d",
+      "compressed_bytes": 12428712,
+      "uncompressed_sha256": "7b9ab3bde10c5a0295fe1047d5a3a00fb02a14d44c1497980d49e73dde41b910",
+      "aliases": []
     },
     {
       "title": "MAWARU RIDES AGAIN",
