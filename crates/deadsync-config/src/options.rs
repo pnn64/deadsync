@@ -2432,6 +2432,7 @@ pub const fn srpg_variant_choice_index(variant: SrpgVariant) -> usize {
     match variant {
         SrpgVariant::Srpg9 => 0,
         SrpgVariant::Srpg10 => 1,
+        SrpgVariant::Ecs15 => 2,
     }
 }
 
@@ -2439,6 +2440,7 @@ pub const fn srpg_variant_choice_index(variant: SrpgVariant) -> usize {
 pub const fn srpg_variant_from_choice(idx: usize) -> SrpgVariant {
     match idx {
         1 => SrpgVariant::Srpg10,
+        2 => SrpgVariant::Ecs15,
         _ => SrpgVariant::Srpg9,
     }
 }
@@ -4136,6 +4138,8 @@ mod tests {
 
         assert_eq!(srpg_variant_choice_index(SrpgVariant::Srpg9), 0);
         assert_eq!(srpg_variant_from_choice(1), SrpgVariant::Srpg10);
+        assert_eq!(srpg_variant_choice_index(SrpgVariant::Ecs15), 2);
+        assert_eq!(srpg_variant_from_choice(2), SrpgVariant::Ecs15);
         assert_eq!(srpg_variant_from_choice(99), SrpgVariant::Srpg9);
     }
 

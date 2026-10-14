@@ -34,8 +34,13 @@ pub(super) fn menu_music_path(
     )
 }
 
-pub(super) fn gameover_music_path() -> std::path::PathBuf {
-    deadsync_assets::resolve_asset_path(visual_styles::SRPG10_GAMEOVER_MUSIC)
+pub(super) fn gameover_music_path(
+    style: config::theme::VisualStyle,
+    variant: config::theme::SrpgVariant,
+) -> std::path::PathBuf {
+    visual_styles::gameover_music_asset_path(style, variant)
+        .map(deadsync_assets::resolve_asset_path)
+        .unwrap_or_default()
 }
 
 pub(super) fn overscan_view() -> OverscanAdjustmentView {
@@ -177,9 +182,10 @@ impl App {
             prev,
             target_screen,
             config.menu_music,
-            visual_styles::srpg10_active(config.visual_style, config.srpg_variant),
+            visual_styles::gameover_music_asset_path(config.visual_style, config.srpg_variant)
+                .is_some(),
             menu_music_path(config.visual_style, config.srpg_variant),
-            gameover_music_path(),
+            gameover_music_path(config.visual_style, config.srpg_variant),
         );
         self.run_commands(commands, event_loop);
 

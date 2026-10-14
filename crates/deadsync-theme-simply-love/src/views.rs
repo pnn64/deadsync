@@ -89,6 +89,25 @@ pub enum VisualBackgroundView {
     Tiled,
     Technique,
     Srpg,
+    Ecs15,
+}
+
+impl SimplyLoveVisualPolicyView {
+    /// ECS15 replaces menu backdrops but retains Technique on music selection.
+    #[must_use]
+    pub fn music_selection_background(self) -> Self {
+        if self.background == VisualBackgroundView::Ecs15 {
+            Self {
+                background: VisualBackgroundView::Technique,
+                assets: crate::visual_styles::for_style(
+                    deadsync_config::theme::VisualStyle::Technique,
+                ),
+                ..self
+            }
+        } else {
+            self
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -485,7 +504,9 @@ impl Default for EvaluationPolicyView {
             show_gameplay_timer: config.show_select_music_gameplay_timer,
             translated_titles: config.translated_titles,
             transparent_panels: matches!(
-                config.machine_evaluation_style.resolve(config.visual_style),
+                config
+                    .machine_evaluation_style
+                    .resolve(config.visual_style.presentation_style(config.srpg_variant)),
                 deadsync_config::theme::MachineEvaluationStyle::Transparent
             ),
             srpg10_visuals: config.visual_style.is_srpg()

@@ -1022,6 +1022,7 @@ pub(crate) const fn srpg_logo_texture_key(variant: SrpgVariant) -> &'static str 
     match variant {
         SrpgVariant::Srpg9 => "srpg9_logo_alt.png",
         SrpgVariant::Srpg10 => "srpg10_logo_alt.png",
+        SrpgVariant::Ecs15 => crate::visual_styles::ECS15_TITLE_LOGO,
     }
 }
 

@@ -1,0 +1,26 @@
+East Coast Stamina 15 theme assets
+
+Imported from ../ecs15-theme/ECS15 (ThemeInfo.ini: ECS15, teejusb, 5.9.0).
+The source theme is distributed under GPL-3.0; see the repository LICENSE.
+Simply Love's existing Technique artwork and animations supply Select Color,
+the title exit, gameplay entry, and combo milestones in the ECS15 theme.
+
+Source mapping:
+  Graphics/_ECS/bg (doubleres).png -> shared_background.png
+  Graphics/_ECS/logo (doubleres).png -> title_logo.png
+  Graphics/_VisualStyles/Technique/SelectColor.png -> select_color.png
+  Graphics/_VisualStyles/Technique/TitleMenu fly*.png -> titlemenu_fly*.png
+  Graphics/_VisualStyles/Technique/GameplayIn *.png -> gameplayin_*.png
+  Graphics/_VisualStyles/Technique/Combo *.png -> combo_*.png
+  Sounds/_common menu music/ScreenEvaluation1B music (loop).ogg
+    -> assets/music/ECS15 (loop).ogg
+  Sounds/ScreenEvaluation7 music (loop).ogg
+    -> assets/music/ECS15-GameOver.ogg
+  Sounds/ECS-Passed.ogg -> assets/sounds/ecs15_eval_passed.ogg
+  Sounds/ECS-Failed.ogg -> assets/sounds/ecs15_eval_failed.ogg
+
+Select the muscle visual style and Theme Variant ECS15 in Machine Options.
+The saved preference retains the existing SrpgVariant key for compatibility.
+Menu screens use the curtain artwork; music selection uses Technique.
+The normal cleared/failed evaluation graphics already match the source.
+ECS modes, event scoring, timers, and relic behavior are outside this port.

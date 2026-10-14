@@ -2154,6 +2154,25 @@ mod tests {
             Some("evaluation/failed.png")
         );
     }
+
+    #[test]
+    fn ecs15_evaluation_uses_dedicated_pass_and_fail_cues() {
+        use super::entry_sfx;
+        use crate::visual_styles;
+        use deadsync_config::theme::{SrpgVariant, VisualStyle};
+        assert_eq!(
+            entry_sfx(false, VisualStyle::Srpg9, SrpgVariant::Ecs15),
+            Some(visual_styles::ECS15_EVAL_PASSED_SFX.into())
+        );
+        assert_eq!(
+            entry_sfx(true, VisualStyle::Srpg9, SrpgVariant::Ecs15),
+            Some(visual_styles::ECS15_EVAL_FAILED_SFX.into())
+        );
+        assert_eq!(
+            entry_sfx(false, VisualStyle::Srpg9, SrpgVariant::Srpg10),
+            Some(visual_styles::SRPG10_EVAL_PASSED_SFX.into())
+        );
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -3734,6 +3753,15 @@ pub fn entry_sfx(
                 visual_styles::SRPG10_EVAL_FAILED_SFX
             } else {
                 visual_styles::SRPG10_EVAL_PASSED_SFX
+            }
+            .into(),
+        )
+    } else if visual_styles::ecs15_active(visual_style, srpg_variant) {
+        Some(
+            if failed {
+                visual_styles::ECS15_EVAL_FAILED_SFX
+            } else {
+                visual_styles::ECS15_EVAL_PASSED_SFX
             }
             .into(),
         )

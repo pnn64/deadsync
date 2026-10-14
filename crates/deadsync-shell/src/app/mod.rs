@@ -439,7 +439,9 @@ impl SelectCourseRuntimeKey {
 
 impl MusicWheelDisplayPolicy {
     fn from_config(config: &config::app_config::Config) -> Self {
-        let bar_color = config.machine_bar_color.resolve(config.visual_style);
+        let bar_color = config
+            .machine_bar_color
+            .resolve(config.visual_style.presentation_style(config.srpg_variant));
         Self {
             translated_titles: config.translated_titles,
             song_bg_dimmed: config.visual_style.is_srpg()
@@ -758,15 +760,22 @@ const fn scorebox_pane_filter(
 fn simply_love_visual_policy(config: &config::app_config::Config) -> SimplyLoveVisualPolicyView {
     let srpg10 = config.visual_style.is_srpg()
         && matches!(config.srpg_variant, config::theme::SrpgVariant::Srpg10);
+    let ecs15 = visual_styles::ecs15_active(config.visual_style, config.srpg_variant);
     let background = match config.visual_style {
+        _ if ecs15 => VisualBackgroundView::Ecs15,
         config::theme::VisualStyle::Technique => VisualBackgroundView::Technique,
         config::theme::VisualStyle::Srpg9 => VisualBackgroundView::Srpg,
         _ => VisualBackgroundView::Tiled,
     };
-    let screen_bar = match config.machine_bar_color.resolve(config.visual_style) {
+    let screen_bar = match config
+        .machine_bar_color
+        .resolve(config.visual_style.presentation_style(config.srpg_variant))
+    {
         config::theme::MachineBarColor::Default => ScreenBarBackgroundView::Default,
         config::theme::MachineBarColor::Colored => ScreenBarBackgroundView::Colored(if srpg10 {
             color::srpg10_rgba(config.simply_love_color)
+        } else if ecs15 {
+            color::decorative_rgba(config.simply_love_color)
         } else {
             color::srpg9_rgba(config.simply_love_color)
         }),
@@ -777,7 +786,11 @@ fn simply_love_visual_policy(config: &config::app_config::Config) -> SimplyLoveV
         background,
         assets: visual_styles::for_style_and_variant(config.visual_style, config.srpg_variant),
         machine_font: config.machine_font,
-        title_logo_texture_key: srpg10.then_some(visual_styles::SRPG10_TITLE_LOGO),
+        title_logo_texture_key: if ecs15 {
+            Some(visual_styles::ECS15_TITLE_LOGO)
+        } else {
+            srpg10.then_some(visual_styles::SRPG10_TITLE_LOGO)
+        },
         srpg10_tint: srpg10,
         screen_bar,
     }
@@ -8988,17 +9001,18 @@ impl App {
             previous: prev,
             target,
             menu_music_enabled: config.menu_music,
-            gameover_music_enabled: visual_styles::srpg10_active(
+            gameover_music_enabled: visual_styles::gameover_music_asset_path(
                 config.visual_style,
                 config.srpg_variant,
-            ),
+            )
+            .is_some(),
             music_paths: TransitionMusicPaths {
                 menu: screen_nav::menu_music_path(config.visual_style, config.srpg_variant),
                 course: deadsync_assets::resolve_asset_path(
                     "assets/music/select_course (loop).ogg",
                 ),
                 credits: deadsync_assets::resolve_asset_path("assets/music/credits.ogg"),
-                gameover: screen_nav::gameover_music_path(),
+                gameover: screen_nav::gameover_music_path(config.visual_style, config.srpg_variant),
             },
             player_options,
             select_music_preferred_difficulty: (prev == CurrentScreen::SelectMusic).then_some(
@@ -11415,6 +11429,43 @@ mod tests {
         assert_eq!(
             srpg10.title_logo_texture_key,
             Some(visual_styles::SRPG10_TITLE_LOGO)
+        );
+    }
+
+    #[test]
+    fn ecs15_visual_policy_uses_curtains_logo_and_technique_defaults() {
+        let mut config = config::app_config::Config {
+            visual_style: config::theme::VisualStyle::Srpg9,
+            srpg_variant: config::theme::SrpgVariant::Ecs15,
+            ..Default::default()
+        };
+        let policy = FramePolicy::from_config(&config);
+        assert_eq!(policy.visual.background, VisualBackgroundView::Ecs15);
+        assert_eq!(policy.visual.assets, &visual_styles::ECS15_ASSETS);
+        assert_eq!(
+            policy.visual.title_logo_texture_key,
+            Some(visual_styles::ECS15_TITLE_LOGO)
+        );
+        assert_eq!(
+            policy.visual.screen_bar,
+            ScreenBarBackgroundView::Transparent
+        );
+        assert!(!policy.visual.srpg10_tint);
+        assert!(policy.theme_background_video.is_none());
+        config.machine_bar_color = config::theme::MachineBarColor::Colored;
+        assert_eq!(
+            simply_love_visual_policy(&config).screen_bar,
+            ScreenBarBackgroundView::Colored(color::decorative_rgba(config.simply_love_color))
+        );
+        config.visual_style = config::theme::VisualStyle::Hearts;
+        assert_eq!(
+            simply_love_visual_policy(&config).background,
+            VisualBackgroundView::Tiled
+        );
+        assert!(
+            simply_love_visual_policy(&config)
+                .title_logo_texture_key
+                .is_none()
         );
     }
 
