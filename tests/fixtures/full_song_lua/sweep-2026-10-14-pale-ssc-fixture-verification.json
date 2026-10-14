@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Pale/Pale.ssc",
+  "native_frames": 65181,
+  "replayed_frames": 65181,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "144acc3ebdb0afaa6950b57aca4328044cfb546fdbb81432bfcff84724c06d35.tar.zst",
+  "compressed_sha256": "144acc3ebdb0afaa6950b57aca4328044cfb546fdbb81432bfcff84724c06d35",
+  "uncompressed_sha256": "b060231df6a0c6c0d0c0febfa57f3fc173094f9a44127b18234deaed4fe1f445",
+  "compressed_bytes": 7226933,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
