@@ -4750,15 +4750,12 @@
     {
       "title": "Ｓｏｍｅｏｎｅ Ｓｐｅｃｉａｌ",
       "source_simfile": "Someone Special - hubert/Someone Special.ssc",
-      "harness_version": "0.1.0",
-      "archive": "c41e7b12a9fa27155d4244917c25db042a1e3d84b1a7a9449b71f7986b2182a8.tar.zst",
-      "sha256": "c41e7b12a9fa27155d4244917c25db042a1e3d84b1a7a9449b71f7986b2182a8",
-      "compressed_bytes": 846922,
-      "uncompressed_sha256": "b37750f6f50437abb7dfecd4b6050f5ea6fdb457a5d165b3abb6cc563adde66f",
-      "compression_level": 22,
-      "aliases": [
-        "a12bcfb9e1c247f76b27bdb24a088b1f7c99ffaeab6b57c0ccd174601e28ffe9.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "c39fefdc2202790e09a0b143171f1ff2e61d819d60154faec857a5f89d1e469a.tar.zst",
+      "sha256": "c39fefdc2202790e09a0b143171f1ff2e61d819d60154faec857a5f89d1e469a",
+      "compressed_bytes": 18636651,
+      "uncompressed_sha256": "38e462e6da9413e8e1ccd729d8ed8150f4cfd748ac41f56540934c8905d70e0f",
+      "aliases": []
     },
     {
       "title": "空間創造理論",
