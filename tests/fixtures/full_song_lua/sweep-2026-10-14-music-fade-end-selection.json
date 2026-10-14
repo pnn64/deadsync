@@ -1,0 +1,12 @@
+{
+  "fix_commit": "b97bcedd8f8d8d88dac55531a7d287cb7bbccd69",
+  "build_proof": "/home/parity/jobs/music-fade-end-linux-green-v1/proof.json",
+  "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
+  "validated_source_root": "/home/parity/workspace/music-fade-end-v1/deadsync",
+  "source_pin_count": 1175,
+  "all_tested_source_pins_verified": true,
+  "active_source_files_modified": false,
+  "local_user_views_edited": false,
+  "running_replays_restarted": false,
+  "native_harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4"
+}

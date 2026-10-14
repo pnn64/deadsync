@@ -1,0 +1,15 @@
+{
+  "pid": 4058765,
+  "supervisor_pid": 4058765,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_great_divide_after_save_tears_first_v1.py"
+  ],
+  "fix_commit": "b97bcedd8f8d8d88dac55531a7d287cb7bbccd69",
+  "script_sha256": "421f88d853345e8007b572f4059f80311a4353fedeec005b98c70355f297e94f",
+  "repair_attempt_to_start": 1,
+  "maximum_repairs": 2,
+  "native_capture_to_reuse": true,
+  "queued_after": "save-tears-ssc-whole-song-pack-sync-first-repair-v1",
+  "passing_charts_reopened": false
+}
