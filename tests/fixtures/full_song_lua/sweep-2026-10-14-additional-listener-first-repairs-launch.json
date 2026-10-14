@@ -1,0 +1,28 @@
+{
+  "pid": 512861,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_additional_listener_repairs_after_capture_selection_v1.py"
+  ],
+  "queued_after": "capture-selection-first-repairs-v1",
+  "helper_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+  "build_proof": "/home/parity/jobs/arrow-alpha-linux-green-v1/proof.json",
+  "captures_reused": true,
+  "source_pin_count": 1175,
+  "sequential_jobs": [
+    {
+      "job": "shakunetsu2-sm-listener-first-repair-v1",
+      "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
+      "attempt": 1,
+      "remaining_after_attempt": 1
+    },
+    {
+      "job": "wake-up-ssc-listener-first-repair-v1",
+      "source_simfile": "Wake Up/Wake Up.ssc",
+      "attempt": 1,
+      "remaining_after_attempt": 1
+    }
+  ],
+  "existing_full_replay_acceptance_unchanged": true,
+  "passing_charts_reopened": false
+}

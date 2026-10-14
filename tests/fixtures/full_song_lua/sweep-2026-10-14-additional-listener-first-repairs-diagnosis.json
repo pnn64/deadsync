@@ -1,0 +1,41 @@
+{
+  "actual_failures": [
+    {
+      "position": 394,
+      "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
+      "repair_attempts": 0,
+      "candidate_sha256": "fc6374ff0559eb18cef7f6d068fd68607827c40134a87b939dd10704e9cae095",
+      "trace_sha256": "703601abd9aaa6d037c653ad94984d787f5f25c1846bf35fb67cd4fe0b614d7f",
+      "simfile_sha256": "45d9d5f8655020c9086fbeef5ad48616f82fb351961223046e68d95bed94e0bf",
+      "native_frames": 14728,
+      "replayed_frames": 14728,
+      "errors": [
+        "UpdateCommand failed for Quad: missing captured subscriber identity for 1/7/1/1\nstack traceback:\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"/tmp/.tmp0aEFKe/song/lua/default.lua\"]:1985: in function <[string \"/tmp/.tmp0aEFKe/song/lua/default.lua\"]:1693>\n"
+      ],
+      "mismatch_count": 1026
+    },
+    {
+      "position": 466,
+      "source_simfile": "Wake Up/Wake Up.ssc",
+      "repair_attempts": 0,
+      "candidate_sha256": "d441ccf0f454966757144e0165a0b62e34fb1fcc538964a31204ffe55dc69a58",
+      "trace_sha256": "531e3a2150e78dfe98b4fa8ce61fc74cfb146a4123c2e9c332e8f24488420dfd",
+      "simfile_sha256": "82fd8abc80e5a812b098793e3d82a90b54de42016e68c7ef37db66e0eefbbf8f",
+      "native_frames": 84024,
+      "replayed_frames": 84024,
+      "errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 16.001: missing captured subscriber identity for ScreenGameplay/19/1"
+      ],
+      "mismatch_count": 72260
+    }
+  ],
+  "primary_diagnosis_and_fix": "sweep-2026-10-14-message-coverage-diagnosis.json, fix d69f0a20f",
+  "tested_helper_includes_fix": "/home/parity/jobs/arrow-alpha-linux-green-v1/full-song-lua",
+  "helper_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+  "first_repair_attempt_per_chart": 1,
+  "one_later_attempt_available_after_each": true,
+  "captures_reused": true,
+  "no_missing_native_pointer_inferred": true,
+  "existing_full_replay_acceptance_unchanged": true,
+  "passing_charts_reopened": false
+}
