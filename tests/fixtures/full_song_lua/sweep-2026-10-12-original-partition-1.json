@@ -8735,6 +8735,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 313,
+      "source_simfile": "Megalovania SM5 [TaroNuke]/megalovania.ssc",
+      "simfile_sha256": "7009b23d689889ebb16e9b0f6c87612f19b6530a6e1656c980e48b62bf4affde",
+      "retained_original_archive": "26582b759a98952cda73fe4c3d8542c182eaae3d47be8fdfdf051ddf6f179100.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "d4f40ff1feff82ea80b0cbc85c8665d0a6099a459febd5519f4baa1a1febe218",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "7fae1f026237ee5431a1a2b3e907f4270715556a + 1ed84cd471a8eeb8511474ca8881aa1516acbf96 + 254c36811 + e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/keysound-indices-linux-green-v2/proof.json",
+      "capture_seconds": 294.99157708202256,
+      "trace_sha256": "e90ee6a9332bcfab29c6fbc9f76f9fac6997f66e7087712fab0c2ca06687bc94",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-313/candidates/9e466df94b0d24ab64723f4eba416b653b872ac4ed35ea9f63ab673f39f5aa09.tar",
+      "replay_exit": 1,
+      "replay_seconds": 4762.773005914991,
+      "candidate_sha256": "9e466df94b0d24ab64723f4eba416b653b872ac4ed35ea9f63ab673f39f5aa09",
+      "failure": "ry native gameplay frame: frame 35162/67890 (51.8%)\n[4661.5s] replaying every native gameplay frame: frame 35176/67890 (51.8%)\n[4663.5s] replaying every native gameplay frame: frame 35189/67890 (51.8%)\n[4665.5s] replaying every native gameplay frame: frame 35203/67890 (51.9%)\n[4667.5s] replaying every native gameplay frame: frame 35218/67890 (51.9%)\n[4669.5s] replaying every native gameplay frame: frame 35232/67890 (51.9%)\n[4671.5s] replaying every native gameplay frame: frame 35245/67890 (51.9%)\n[4673.5s] replaying every native gameplay frame: frame 35258/67890 (51.9%)\n[4675.5s] replaying every native gameplay frame: frame 35272/67890 (52.0%)\n[4677.5s] replaying every native gameplay frame: frame 35286/67890 (52.0%)\n[4679.5s] replaying every native gameplay frame: frame 35298/67890 (52.0%)\n[4681.5s] replaying every native gameplay frame: frame 35312/67890 (52.0%)\n[4683.5s] replaying every native gameplay frame: frame 35324/67890 (52.0%)\n[4685.5s] replaying every native gameplay frame: frame 35337/67890 (52.1%)\n[4687.5s] replaying every native gameplay frame: frame 35351/67890 (52.1%)\n[4689.5s] replaying every native gameplay frame: frame 35366/67890 (52.1%)\n[4691.5s] replaying every native gameplay frame: frame 35380/67890 (52.1%)\n[4693.5s] replaying every native gameplay frame: frame 35393/67890 (52.1%)\n[4695.5s] replaying every native gameplay frame: frame 35407/67890 (52.2%)\n[4697.5s] replaying every native gameplay frame: frame 35422/67890 (52.2%)\n[4699.5s] replaying every native gameplay frame: frame 35436/67890 (52.2%)\n[4701.5s] replaying every native gameplay frame: frame 35450/67890 (52.2%)\n[4703.5s] replaying every native gameplay frame: frame 35464/67890 (52.2%)\n[4705.5s] replaying every native gameplay frame: frame 35478/67890 (52.3%)\n[4707.5s] replaying every native gameplay frame: frame 35493/67890 (52.3%)\n[4709.5s] replaying every native gameplay frame: frame 35508/67890 (52.3%)\n[4711.5s] replaying every native gameplay frame: frame 35523/67890 (52.3%)\n[4713.5s] replaying every native gameplay frame: frame 35536/67890 (52.3%)\n[4715.5s] replaying every native gameplay frame: frame 35550/67890 (52.4%)\n[4717.5s] replaying every native gameplay frame: frame 35564/67890 (52.4%)\n[4719.5s] replaying every native gameplay frame: frame 35579/67890 (52.4%)\n[4721.5s] replaying every native gameplay frame: frame 35594/67890 (52.4%)\n[4723.5s] replaying every native gameplay frame: frame 35608/67890 (52.4%)\n[4725.5s] replaying every native gameplay frame: frame 35621/67890 (52.5%)\n[4727.5s] replaying every native gameplay frame: frame 35635/67890 (52.5%)\n[4729.5s] replaying every native gameplay frame: frame 35651/67890 (52.5%)\n[4731.5s] replaying every native gameplay frame: frame 35665/67890 (52.5%)\n[4733.5s] replaying every native gameplay frame: frame 35679/67890 (52.6%)\n[4735.5s] replaying every native gameplay frame: frame 35692/67890 (52.6%)\n[4737.5s] replaying every native gameplay frame: frame 35705/67890 (52.6%)\n\nthread 'main' (2696249) panicked at /home/parity/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mlua-0.12.2/src/state/extra.rs:290:13:\ncannot create a Lua reference, out of auxiliary stack space (used 7996 slots)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[4739.5s] replaying every native gameplay frame: frame 35706/67890 (52.6%)\n[4741.5s] replaying every native gameplay frame: frame 35706/67890 (52.6%)\n[4743.5s] replaying every native gameplay frame: frame 35706/67890 (52.6%)\n"
     }
   ],
   "scope": {
@@ -8744,9 +8763,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234",
+  "binary_sha256": "d4f40ff1feff82ea80b0cbc85c8665d0a6099a459febd5519f4baa1a1febe218",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 29,
-  "pending_charts": 32,
-  "processed_charts": 61
+  "pending_charts": 33,
+  "processed_charts": 62
 }
