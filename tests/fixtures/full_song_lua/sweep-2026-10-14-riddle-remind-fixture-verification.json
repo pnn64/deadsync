@@ -1,0 +1,24 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "acceptance_gate_added": false,
+  "results": [
+    {
+      "source_simfile": "Riddle/Riddle.ssc",
+      "archive": "4b7b80740baf5fb7e9c7deed3a5cdd99d55d7283345b8f45a89f9b4c0457ff41.tar.zst",
+      "compressed_sha256": "4b7b80740baf5fb7e9c7deed3a5cdd99d55d7283345b8f45a89f9b4c0457ff41",
+      "uncompressed_sha256": "fbd12687ae2fb14c23eb59b66a77e1e4622b35ff83c2312873d142f7b216e669",
+      "compressed_bytes": 5803313,
+      "local_decompression_byte_verified": true,
+      "passing_chart_reopened": false
+    },
+    {
+      "source_simfile": "Remind The Souls/remindthesouls-fakemines.sm",
+      "archive": "0438b91c935bbb823116ae28f4cf38518b9c4c3a42fa88dc03b2fc8c8f7c74a0.tar.zst",
+      "compressed_sha256": "0438b91c935bbb823116ae28f4cf38518b9c4c3a42fa88dc03b2fc8c8f7c74a0",
+      "uncompressed_sha256": "9e863d259c96c075ad373b7734f7ffc589ff178ffbb3fa730f2921bf319b7d70",
+      "compressed_bytes": 15384132,
+      "local_decompression_byte_verified": true,
+      "passing_chart_reopened": false
+    }
+  ]
+}
