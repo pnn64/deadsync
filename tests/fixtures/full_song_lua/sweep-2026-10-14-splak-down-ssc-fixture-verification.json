@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "SPLAK IT DOWN - [Zaia +ruunix2]/SPLAK IT DOWN.ssc",
+  "native_frames": 21002,
+  "replayed_frames": 21002,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "cbada3366920c1a87ae28e095511c6f66bfc434cc6d9d46f30837498bcd65501.tar.zst",
+  "compressed_sha256": "cbada3366920c1a87ae28e095511c6f66bfc434cc6d9d46f30837498bcd65501",
+  "uncompressed_sha256": "29f76fc9364618a5ba600deecc28a4560c777fa56f18bfccc72aa86ccbe7d9f8",
+  "compressed_bytes": 6449249,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
