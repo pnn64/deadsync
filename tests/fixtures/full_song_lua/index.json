@@ -3920,15 +3920,12 @@
     {
       "title": "[11] Neon Nights",
       "source_simfile": "Neon Nights - [Zaia]/Neon Nights.ssc",
-      "harness_version": "0.1.0",
-      "archive": "84ce4de19d14b3150d0361b805c7940bb0edfe78946d7ecdde6cedba3649f627.tar.zst",
-      "sha256": "84ce4de19d14b3150d0361b805c7940bb0edfe78946d7ecdde6cedba3649f627",
-      "compressed_bytes": 37632,
-      "uncompressed_sha256": "13907960139490c606155508e1ac4470fd741dc7715fe7061cba7a399f0686ef",
-      "compression_level": 22,
-      "aliases": [
-        "3784ddc3c3b66179347393453c7ea2aedf5e652698c422cdfb7e98de2ccb281c.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "c1032bff0ba2c496f85b99e52d1e41e5dc11eda1f16fcc36a7f5651f6cae4247.tar.zst",
+      "sha256": "c1032bff0ba2c496f85b99e52d1e41e5dc11eda1f16fcc36a7f5651f6cae4247",
+      "compressed_bytes": 6861250,
+      "uncompressed_sha256": "6e5802cc494d2bdaff681868bebaee2bc48661c2052366a11c7ab9d56d1fb5ca",
+      "aliases": []
     },
     {
       "title": "new earth",

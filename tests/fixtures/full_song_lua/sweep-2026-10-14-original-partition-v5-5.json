@@ -1,0 +1,69 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": null,
+  "results": [
+    {
+      "position": 325,
+      "source_simfile": "Neon Nights - [Zaia]/Neon Nights.ssc",
+      "simfile_sha256": "edb425865ce2261b1e659f875a343dc7436b893af2c8188adcca704ff399e531",
+      "retained_original_archive": "84ce4de19d14b3150d0361b805c7940bb0edfe78946d7ecdde6cedba3649f627.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "254c36811 + e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/attack-boundary-linux-green-v2/proof.json",
+      "capture_seconds": 104.78011664998485,
+      "trace_sha256": "a5b7f2670a9a8166e2ccd1d027ec8e4e7643d72ae5cf7a0d5475ed8951981fbf",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-325/candidates/6e5802cc494d2bdaff681868bebaee2bc48661c2052366a11c7ab9d56d1fb5ca.tar",
+      "replay_exit": 0,
+      "replay_seconds": 608.1767924439919,
+      "candidate_sha256": "6e5802cc494d2bdaff681868bebaee2bc48661c2052366a11c7ab9d56d1fb5ca",
+      "native_frames": 27311,
+      "replayed_frames": 27311,
+      "compared_stage_fields": 858,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "f4cc8f86688ff4ae8ebcdb8074c7d00932bc8d4de141b98b19695b76989dc29d",
+      "archive": "c1032bff0ba2c496f85b99e52d1e41e5dc11eda1f16fcc36a7f5651f6cae4247.tar.zst",
+      "archive_sha256": "c1032bff0ba2c496f85b99e52d1e41e5dc11eda1f16fcc36a7f5651f6cae4247",
+      "compressed_bytes": 6861250,
+      "pack_seconds": 9.4839582380082,
+      "harness_version": "0.1.80",
+      "title": "[11] Neon Nights",
+      "retained_original_entry": {
+        "title": "[11] Neon Nights",
+        "source_simfile": "Neon Nights - [Zaia]/Neon Nights.ssc",
+        "harness_version": "0.1.0",
+        "archive": "84ce4de19d14b3150d0361b805c7940bb0edfe78946d7ecdde6cedba3649f627.tar.zst",
+        "sha256": "84ce4de19d14b3150d0361b805c7940bb0edfe78946d7ecdde6cedba3649f627",
+        "compressed_bytes": 37632,
+        "uncompressed_sha256": "13907960139490c606155508e1ac4470fd741dc7715fe7061cba7a399f0686ef",
+        "compression_level": 22,
+        "aliases": [
+          "3784ddc3c3b66179347393453c7ea2aedf5e652698c422cdfb7e98de2ccb281c.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "scope": {
+    "original_simfiles": 501,
+    "indexed_sources": 483,
+    "remaining_indexed_charts": 335,
+    "historical_unindexed_charts": 18
+  },
+  "binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
