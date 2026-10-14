@@ -4578,17 +4578,14 @@
       ]
     },
     {
-      "title": "Episode 01 (expects 2 players)",
+      "title": "Episode 01 Save Your Tears",
       "source_simfile": "Save Your Tears/SaveYourTears.ssc",
-      "harness_version": "0.1.0",
-      "archive": "88aab2806ae8ab0192cc7c7e3435c52f18bbe926357e8b985921772966af14b8.tar.zst",
-      "sha256": "88aab2806ae8ab0192cc7c7e3435c52f18bbe926357e8b985921772966af14b8",
-      "compressed_bytes": 4526322,
-      "uncompressed_sha256": "62343b0a8a4888bc31cf5e1d37fbe69e745c712f596d76da86ffbf9312b4828a",
-      "compression_level": 22,
-      "aliases": [
-        "ac29b5ef264747abd2004f30526405fe3b0506f55fcaf5c160b36e34656127fa.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "bd0195591367ef356e084148cb31ffa386da50e64c2ebdf4272185f22abebf5f.tar.zst",
+      "sha256": "bd0195591367ef356e084148cb31ffa386da50e64c2ebdf4272185f22abebf5f",
+      "compressed_bytes": 22796641,
+      "uncompressed_sha256": "f4ed2576123dc0763d8927bfee21813699f701685e08c9b67c152beb10639494",
+      "aliases": []
     },
     {
       "title": "Scorpion King",
