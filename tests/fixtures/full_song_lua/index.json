@@ -4325,17 +4325,14 @@
       ]
     },
     {
-      "title": "Picture in My Mind",
+      "title": "Picture in My Mind [nikko X WINK RMX]",
       "source_simfile": "Picture in My Mind [nikko X WINK RMX]/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc",
-      "harness_version": "0.1.0",
-      "archive": "4dd90ebb6b4de1bc11b44d2206f8fc3ebe7e46dc74b91984803e3791998b92b0.tar.zst",
-      "sha256": "4dd90ebb6b4de1bc11b44d2206f8fc3ebe7e46dc74b91984803e3791998b92b0",
-      "compressed_bytes": 75582,
-      "uncompressed_sha256": "66c0ab8d68404bc3056fc62f4c29a3fcd20caa3da9dc36ecf58eb35d7604a270",
-      "compression_level": 22,
-      "aliases": [
-        "c5442bb3a3f4dfd00e6fd289851c78b1f5f57b2aaae6d23124c6c3366a4ec27d.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "50ad4efcd3c5b0fc473029154b6a858832640b17f2c9ef9cd6b5036a1fe83c05.tar.zst",
+      "sha256": "50ad4efcd3c5b0fc473029154b6a858832640b17f2c9ef9cd6b5036a1fe83c05",
+      "compressed_bytes": 12582514,
+      "uncompressed_sha256": "76cd5b39842c23f31132ff8a3efacbfe71634b881d2095c8d135418cb20f6c9a",
+      "aliases": []
     },
     {
       "title": "Pizza Boy",

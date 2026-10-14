@@ -10334,6 +10334,56 @@
         }
       ],
       "report_sha256": "89462db85c9598ef1d314bcca737599731f0d7fdd5c4d5e465140bf2412dd912"
+    },
+    {
+      "position": 353,
+      "source_simfile": "Picture in My Mind [nikko X WINK RMX]/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc",
+      "simfile_sha256": "26982b4f0ffe67d49e2906a4a3b38db22638b601d18acd96ecd3554cb5b31ea0",
+      "retained_original_archive": "4dd90ebb6b4de1bc11b44d2206f8fc3ebe7e46dc74b91984803e3791998b92b0.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "62659d350949f3074029c04eefbe46b03ab09c55a49e5abd6593087868cb7d50",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/modulo-cpu-green-v1/proof.json",
+      "capture_seconds": 165.72942761098966,
+      "trace_sha256": "ef57b32b89fa707dfc09298fcae10307d7b40d71cc44c67744a96b1e1b027352",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-353/candidates/76cd5b39842c23f31132ff8a3efacbfe71634b881d2095c8d135418cb20f6c9a.tar",
+      "replay_exit": 0,
+      "replay_seconds": 843.7545809399744,
+      "candidate_sha256": "76cd5b39842c23f31132ff8a3efacbfe71634b881d2095c8d135418cb20f6c9a",
+      "native_frames": 52822,
+      "replayed_frames": 52822,
+      "compared_stage_fields": 1342,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "479c8e616bb2e16186470363cb5788634d846bb53691eef8a1af468efec85b7a",
+      "archive": "50ad4efcd3c5b0fc473029154b6a858832640b17f2c9ef9cd6b5036a1fe83c05.tar.zst",
+      "archive_sha256": "50ad4efcd3c5b0fc473029154b6a858832640b17f2c9ef9cd6b5036a1fe83c05",
+      "compressed_bytes": 12582514,
+      "pack_seconds": 16.93518339600996,
+      "harness_version": "0.1.80",
+      "title": "Picture in My Mind [nikko X WINK RMX]",
+      "retained_original_entry": {
+        "title": "Picture in My Mind",
+        "source_simfile": "Picture in My Mind [nikko X WINK RMX]/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc",
+        "harness_version": "0.1.0",
+        "archive": "4dd90ebb6b4de1bc11b44d2206f8fc3ebe7e46dc74b91984803e3791998b92b0.tar.zst",
+        "sha256": "4dd90ebb6b4de1bc11b44d2206f8fc3ebe7e46dc74b91984803e3791998b92b0",
+        "compressed_bytes": 75582,
+        "uncompressed_sha256": "66c0ab8d68404bc3056fc62f4c29a3fcd20caa3da9dc36ecf58eb35d7604a270",
+        "compression_level": 22,
+        "aliases": [
+          "c5442bb3a3f4dfd00e6fd289851c78b1f5f57b2aaae6d23124c6c3366a4ec27d.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -10359,7 +10409,7 @@
   },
   "binary_sha256": "62659d350949f3074029c04eefbe46b03ab09c55a49e5abd6593087868cb7d50",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 24,
+  "passed_fixtures": 25,
   "pending_charts": 56,
-  "processed_charts": 80
+  "processed_charts": 81
 }
