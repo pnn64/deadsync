@@ -1,0 +1,48 @@
+{
+  "status": "pending original Paint the Town Red replay killed by kernel global out-of-memory before comparison report",
+  "position": 341,
+  "source_simfile": "Paint the Town Red/PaintTheTownRed.ssc",
+  "evidence": {
+    "result": {
+      "position": 341,
+      "source_simfile": "Paint the Town Red/PaintTheTownRed.ssc",
+      "simfile_sha256": "8a10265702779990b74a9f9e49c21f41c8eb645e8677a59c98f6d808b628ad5c",
+      "retained_original_archive": "a90a15ef4259623ae95e0444b800ba3feb3631549e3c0ed2d660821a83f884a4.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "e088cf95a7e244ad9bd09186d0469a62488d3627ae13d9f31cefa49c0e33a7cc",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/option-path-green-v2/proof.json",
+      "capture_seconds": 491.951299339009,
+      "trace_sha256": "cdd22ffe559f722e23d87a63b9b64b9c62099f276b9149780b38e0510935e9e2",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-341/candidates/fd397ea5e76e6002464965cd655180d9cefe6524d6f0e9a5f7bdc8d4b80b973f.tar",
+      "replay_exit": -9,
+      "replay_seconds": 3207.413733458001,
+      "candidate_sha256": "fd397ea5e76e6002464965cd655180d9cefe6524d6f0e9a5f7bdc8d4b80b973f",
+      "failure": "replaying every native gameplay frame: 0 checks completed, 0 failed\n[3073.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3075.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3077.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3079.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3081.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3083.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3085.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3087.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3089.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3091.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3093.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3095.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3097.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3099.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3101.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3103.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3105.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3107.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3109.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3111.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3113.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3115.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3117.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3119.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3121.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3123.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3125.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3127.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3129.3s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3131.3s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3133.4s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3135.5s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3137.6s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3139.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3141.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3143.8s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3145.8s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3147.9s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3149.9s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3152.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3154.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3156.1s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3158.3s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[3160.4s] replaying every native gameplay frame: 0 checks completed, 0 failed\n"
+    },
+    "kernel_evidence": [
+      "2026-10-14T00:14:48+00:00 itgmania-parity kernel: full-song-lua-s invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=0",
+      "2026-10-14T00:14:48+00:00 itgmania-parity kernel: [2866010]  1000 2866010  8194146  8111881  8110121     1760         0 65245184        0             0 full-song-lua-s",
+      "2026-10-14T00:14:48+00:00 itgmania-parity kernel: oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=/,mems_allowed=0-1,global_oom,task_memcg=/user.slice/user-1000.slice/session-5170.scope,task=full-song-lua-s,pid=2866010,uid=1000",
+      "2026-10-14T00:14:48+00:00 itgmania-parity kernel: Out of memory: Killed process 2866010 (full-song-lua-s) total-vm:32776584kB, anon-rss:32440484kB, file-rss:7040kB, shmem-rss:0kB, UID:1000 pgtables:63716kB oom_score_adj:0",
+      "2026-10-14T00:14:51+00:00 itgmania-parity kernel: oom_reaper: reaped process 2866010 (full-song-lua-s), now anon-rss:0kB, file-rss:4920kB, shmem-rss:0kB"
+    ],
+    "replay_log_sha256": "1e19c8dfa7c0a8bb31609883ec5690bdd956df6d401676a82f800591f4823738",
+    "last_frame_progress": [
+      "[3041.2s] replaying every native gameplay frame: frame 5067/5075 (99.8%)",
+      "[3043.2s] replaying every native gameplay frame: frame 5070/5075 (99.9%)",
+      "[3045.2s] replaying every native gameplay frame: frame 5074/5075 (100.0%)"
+    ],
+    "private_capture_bytes": 55851006,
+    "report_exists": false
+  },
+  "concrete_failure": "The kernel killed the matching replay PID 2866010 with signal 9 at 2026-10-14T00:14:48Z. Its anonymous resident memory was 32440484 kB. The original attempt ran 3207.413733458001 seconds and produced no comparison report, so it cannot be accepted. The private native capture and original result/log remain preserved. The original queue advanced to panopticon.",
+  "chart_repair_attempts_spent": 0,
+  "remaining_repairs": 2,
+  "capture_preserved": true,
+  "passing_chart_reopened": false,
+  "comparisons_modified": false,
+  "fixture_accepted": false
+}
