@@ -3909,17 +3909,14 @@
       ]
     },
     {
-      "title": "Episode 13",
+      "title": "Episode 13 My Ex's Bestfriend",
       "source_simfile": "My Exes Bestfriend/ExBestFriend.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a094118f8d72f8bf3c00fb02ce6bacc758dec5ba9d08868065c815354935c7e1.tar.zst",
-      "sha256": "a094118f8d72f8bf3c00fb02ce6bacc758dec5ba9d08868065c815354935c7e1",
-      "compressed_bytes": 83756,
-      "uncompressed_sha256": "671a57f89e68975cc691b12eb465d30cff0ffb2e812cd4afaf791853ce1d15d2",
-      "compression_level": 22,
-      "aliases": [
-        "59808616cf6beb51f797b4e44402106808211ec054362896e85c8afb6923b881.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "75be6841e19dfa243d7f82d22aa356290b3a8540840705a2af7f65adead9b1e7.tar.zst",
+      "sha256": "75be6841e19dfa243d7f82d22aa356290b3a8540840705a2af7f65adead9b1e7",
+      "compressed_bytes": 84512078,
+      "uncompressed_sha256": "f813961ad235573b82a041951b36cbc587888d3c1758f0261bc3f2d0af71f0a7",
+      "aliases": []
     },
     {
       "title": "My Penny",
