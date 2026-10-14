@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Shine!/Shine!.ssc",
+  "native_frames": 114978,
+  "replayed_frames": 114978,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "8fef0882043e27a300d78cf04d1ea6502a7997e040f3b7673875772b5a2c21af.tar.zst",
+  "compressed_sha256": "8fef0882043e27a300d78cf04d1ea6502a7997e040f3b7673875772b5a2c21af",
+  "uncompressed_sha256": "22f72148896b397c7f44997b0e0fd7d1d547ff7612488fe00e376d5d2c698023",
+  "compressed_bytes": 7221375,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

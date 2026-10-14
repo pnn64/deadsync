@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Waiting/Waiting.ssc",
+  "native_frames": 56745,
+  "replayed_frames": 56745,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "beae401af8ed20756a416d9ccf4c12939aecfb38e97b0f42f5aa6b9f488510a3.tar.zst",
+  "compressed_sha256": "beae401af8ed20756a416d9ccf4c12939aecfb38e97b0f42f5aa6b9f488510a3",
+  "uncompressed_sha256": "0c8c5740493e2b4bd247fd8f5831054c09c75d38d0bcd355559fdb5ed5c43b8c",
+  "compressed_bytes": 4137271,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
