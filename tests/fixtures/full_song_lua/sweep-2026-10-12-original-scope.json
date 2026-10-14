@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T22:42:24Z",
+  "updated_utc": "2026-10-14T23:12:30Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 335,
-    "pending": 112,
-    "unprocessed": 54
+    "passed": 339,
+    "pending": 113,
+    "unprocessed": 49
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3467,7 +3467,9 @@
       "position": 413,
       "source_simfile": "Spooky/1.09 - Spooky.ssc",
       "simfile_sha256": "02483562b5e4bb9e92b956e640f8d4e429d3723eb29fdaa5378a0ea15ee608e5",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 414,
@@ -3615,9 +3617,9 @@
       "position": 433,
       "source_simfile": "the fresh prince of bel air (razihel remix)/steps.sm",
       "simfile_sha256": "7fd67a74fb5e8acf49f0cc1b26ad698992eb230dc7c06f2f293acb34d3d71bdc",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-capture-selection-first-repairs.json"
     },
     {
       "position": 434,
@@ -3631,7 +3633,9 @@
       "position": 435,
       "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.ssc",
       "simfile_sha256": "831835da8009cc98965aa71ec3e997cbddd6c810da2470fea8f44f68bc82006c",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 436,
@@ -3695,7 +3699,9 @@
       "position": 444,
       "source_simfile": "Toki o Kizamu Uta (Nhato Remix)/Toki o Kizamu Uta (Nhato Remix).ssc",
       "simfile_sha256": "3a3803a12ee288f83c09e6dabcbdf1589b8e180fd46abe09260769b04f4822b3",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 445,
@@ -3721,7 +3727,9 @@
       "position": 448,
       "source_simfile": "TRIP MACHINE -Resuscitation MIX-/TRIP MACHINE -Resuscitation MIX-.ssc",
       "simfile_sha256": "57c804fc493c1021df3e77b221706646e996c622f2c0e6b82482503bfeda3934",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 449,
@@ -3761,7 +3769,9 @@
       "position": 454,
       "source_simfile": "Ultra B+K/ultrabk.ssc",
       "simfile_sha256": "f48bd0315c0c37bde102b362865ac78a3df5aa982a6d37da4e8d49504e67baf6",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 455,
