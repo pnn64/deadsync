@@ -1,0 +1,12 @@
+{
+  "fix_commit": "3d314ba64cfadf2dbdb8ac761bbaf34890c84127",
+  "build_proof": "/home/parity/jobs/whole-song-pack-sync-linux-green-v1/proof.json",
+  "binary_sha256": "151a68b24584a9730b6cdf893009fb4a59873684ac28bc89b79e85f1a8752e39",
+  "validated_source_root": "/home/parity/workspace/whole-song-pack-sync-v1/deadsync",
+  "source_pin_count": 1175,
+  "all_tested_source_pins_verified": true,
+  "active_source_files_modified": false,
+  "local_user_views_edited": false,
+  "running_replays_restarted": false,
+  "native_harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4"
+}

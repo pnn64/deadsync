@@ -1,0 +1,22 @@
+{
+  "change": "Validate the immutable build proof source_root at worker startup; retain active working directory and existing replay acceptance.",
+  "scripts": [
+    {
+      "script": "run_chart_sweep_v1.py",
+      "before_sha256": "7a22ab7a1c302c2a7cd53c8c93085bdf48f00d27d25facfce1775a9f264a8a10",
+      "after_sha256": "0586da964633867f47a108951c8dd1f5582a03d4d868a51e0e283b84aa08f99b"
+    },
+    {
+      "script": "run_chart_sweep_partition_v5.py",
+      "before_sha256": "edcb9ac3d4a31f38d18ac480611d1cbca8af56d8b37b8963868d181204f2d212",
+      "after_sha256": "f4bdda59df0c90159f0fa8d4ee7552b6517f713dcf369532851b70dba6538d66"
+    },
+    {
+      "script": "run_chart_sweep_partition_v6.py",
+      "before_sha256": "9959710cef3e155730c9d1ee8d1d63540950084bb262e2cea588e2e29f2da48b",
+      "after_sha256": "07eba016665730861bf7457cf90297c776a7cc82936231d8af34e954772003ef"
+    }
+  ],
+  "running_workers_restarted": false,
+  "active_repository_sources_modified": false
+}

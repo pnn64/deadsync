@@ -1,0 +1,15 @@
+{
+  "pid": 3862333,
+  "supervisor_pid": 3862333,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_save_tears_ssc_whole_song_pack_sync_first_repair_v1.py"
+  ],
+  "fix_commit": "3d314ba64cfadf2dbdb8ac761bbaf34890c84127",
+  "script_sha256": "f9e5eee6305f704779286765339ba439fbe701d62f253666715c70af331593d6",
+  "repair_attempt": 1,
+  "maximum_repairs": 2,
+  "native_capture_reused": true,
+  "passing_charts_reopened": false,
+  "immutable_tested_source_root": "/home/parity/workspace/whole-song-pack-sync-v1/deadsync"
+}
