@@ -1,0 +1,44 @@
+{
+  "source_simfile": "Genshin Quiz/Megaquiz.ssc",
+  "position": 209,
+  "actual_failure": "Song Lua construction at lua/default.lua line 15 calls missing global DayOfYear, and no owned Lua scene is retained.",
+  "native_source": {
+    "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\DateTime.cpp",
+    "sha256": "c64f120f9e4ab1ca8463e5f425b6746cc2c91b0bfb88db6ddbfac92375151c1d",
+    "line": 305,
+    "declaration": "LuaFunction(DayOfYear, GetLocalTime().tm_yday);"
+  },
+  "script_sha256": "1d51b918ba1393e4c603aa1c77d5d4bfc6b97692f947dd69e284f57e052b13bb",
+  "script_use": "Year() >= 2025 and DayOfYear() >= 18 controls the bonus question pool.",
+  "repair": "Expose DayOfYear from the existing date globals with zero-based Gregorian ordinal, preserving leap and century rules. No captured getter results are seeded into runtime.",
+  "capture": {
+    "source_simfile": "Genshin Quiz/Megaquiz.ssc",
+    "position": 209,
+    "original_full_repairs_spent": 0,
+    "candidate_sha256": "f9ebe5e4db775dfb2c023f9bd1ef5a5724f871c44e160c34fca64888a6ef6d57",
+    "trace_sha256": "ed7ea7ced9748d3a952db24534001fd5946867b8a48e0d4f479743ad61def20a",
+    "simfile_sha256": "18e2165ebaceeae2ac466a114d84fa784f6f3f55f4c845404fdf3d05864f558d",
+    "all_uncompressed_members_byte_verified": true,
+    "native_frames": 105754,
+    "calendar": null,
+    "candidate_path": "/home/parity/jobs/genshin-day-of-year-diagnosis-v1/f9ebe5e4db775dfb2c023f9bd1ef5a5724f871c44e160c34fca64888a6ef6d57.tar",
+    "trace_errors": null,
+    "scope": null,
+    "dropped_update_frames": 0
+  },
+  "meaningful_red_control": {
+    "exit_code": 101,
+    "meaningful_red": true,
+    "host_source_sha256": "2029c882dd4034e7c249b60ee9a5575a495cb61b42f1674b0d4c972055df882f",
+    "frozen_library_sha256": "e1f48baa05ed721b72f1a1186d7d91abb2267ad484931b8a1be423e8cc32bb41",
+    "mlua_library_sha256": "79930fef4b4f795b5dc203fa367f1ac674582c82989ed26ba16501ca214fc1b9",
+    "control_rust_sha256": "1481e1e65acf66f5ba06c0e87db6cdc765fbfb35c58e811ca01147719b66f45b",
+    "control_binary_sha256": "e16a18e7a1e46ac259498036540dcc3c6bb350bd47740ab10af86ff093347403",
+    "control_log_sha256": "8f42a48914df3804a444dd100801bc3d833e720ea20d41181b5390fb1a08fbce",
+    "excluded_compile_bootstrap": "Initial dependency selection had a different mlua crate identity and never ran the control. Retained build.log. Correct actual dependency used in build-v2.log.",
+    "full_chart_repairs_spent": 0
+  },
+  "full_chart_repairs_spent": 0,
+  "passing_charts_reopened": false,
+  "acceptance_comparisons_modified": false
+}
