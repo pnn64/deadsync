@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "POP MY SHIT (FOXSKY REMIX)/pop my shit.ssc",
+  "native_frames": 39614,
+  "replayed_frames": 39614,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "29fa1d5455aa196a4605c834cc74991f970113b2fcc325fc8398a0bf9e1d2b86.tar.zst",
+  "compressed_sha256": "29fa1d5455aa196a4605c834cc74991f970113b2fcc325fc8398a0bf9e1d2b86",
+  "uncompressed_sha256": "52160093c3b47d359d99290165f3b7f48b87ecccc540f8fa0c93ecc745a70566",
+  "compressed_bytes": 6783733,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

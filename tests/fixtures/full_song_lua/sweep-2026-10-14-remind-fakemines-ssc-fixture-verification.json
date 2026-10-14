@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Remind The Souls/remindthesouls-fakemines.ssc",
+  "native_frames": 37203,
+  "replayed_frames": 37203,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "182e6b447fbab655a37367d7efac94cb42073accba462a03c335fe3ef38724ea.tar.zst",
+  "compressed_sha256": "182e6b447fbab655a37367d7efac94cb42073accba462a03c335fe3ef38724ea",
+  "uncompressed_sha256": "6774b5b9a005c627e0a41b8fee3874bfd42c193e3354b9de907696c910933ce0",
+  "compressed_bytes": 15101657,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

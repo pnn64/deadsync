@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem.ssc",
+  "native_frames": 58720,
+  "replayed_frames": 58720,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "cace9c244aabf2214a771ef33cab536daf86c892d6751b5cfd7d56ef482c3594.tar.zst",
+  "compressed_sha256": "cace9c244aabf2214a771ef33cab536daf86c892d6751b5cfd7d56ef482c3594",
+  "uncompressed_sha256": "bdcd318455a7fe0cc81c821bfe972cd0c04179c14af081dda3015f4cf9cd0603",
+  "compressed_bytes": 5307104,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
