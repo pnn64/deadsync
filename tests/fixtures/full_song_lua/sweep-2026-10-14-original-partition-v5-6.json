@@ -2234,6 +2234,27 @@
       "capture_exit": 1,
       "capture_seconds": 900.2390823260066,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-744563-1792014784884695162-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-744563-1792014784884695162-0\n"
+    },
+    {
+      "position": 489,
+      "source_simfile": "Cursed Metamorph - [Zaia]/saved/Cursed Metamorph.ssc",
+      "simfile_sha256": "08f8865ca23a834cbed37f92c94f5c5439c2cf6eec65fbaff66d9d827e60aa50",
+      "historical_failure": {
+        "simfile": "Cursed Metamorph - [Zaia]/saved/Cursed Metamorph.ssc",
+        "status": "error",
+        "category": "missing_song_lua",
+        "reason": "ITGmania Lua host failed: cannot open corpus:/Cursed Metamorph - [Zaia]/saved/lua/default.lua: No such file or directory",
+        "diagnostics": "target/song-lua-repair/known/cf1c3df5d6e9f28b"
+      },
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "ae3f7aa26bd1d9fc675fd247ef362c068648b145",
+      "build_proof": "/home/parity/jobs/turn-a-preferences-linux-green-v2/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 1.9101519599789754,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania probe script reported: could not find staged song Harness/Probe; retained run directory /tmp/itgmania-harness-rs/song-lua-829171-1792015685793041617-0\n"
     }
   ],
   "scope": {
@@ -2245,6 +2266,6 @@
   "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 9,
-  "pending_charts": 8,
-  "processed_charts": 17
+  "pending_charts": 9,
+  "processed_charts": 18
 }
