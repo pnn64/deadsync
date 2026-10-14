@@ -1,0 +1,38 @@
+{
+  "pid": 470132,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_capture_selection_after_shivers_sm_v1.py"
+  ],
+  "queued_after": "shivers-sm-arrow-alpha-first-repair-v1",
+  "selected_helper_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+  "selected_build_proof": "/home/parity/jobs/arrow-alpha-linux-green-v1/proof.json",
+  "input_plan_sha256": "5cbd104379206cbe595f489a41b4c10eb83016a1ef417c48887b1567cb4835d1",
+  "charts": [
+    {
+      "position": 410,
+      "source_simfile": "spooky (SM 12)/spooky (Tech-Stam cut).ssc",
+      "simfile_sha256": "c511f139ca6b9687612ea5fd120aec3973e1eb2a24a8d9b1920e1bbca49b579d",
+      "retained_original_archive": "32635dde8bf66fd65db720cb954ed59f804ffc79ef6a9f0b2af933b873e9e2e9.tar.zst",
+      "style": "single",
+      "difficulty": "Medium",
+      "previous_failure": "error: ITGmania song Lua semantic trace failed: ITGmania probe script reported: no StepsType_Dance_Single chart matched difficulty Challenge; retained run directory /tmp/itgmania-harness-rs/song-lua-2941014-1791992890221485388-0\n",
+      "no_complete_native_capture_to_reuse": true
+    },
+    {
+      "position": 433,
+      "source_simfile": "the fresh prince of bel air (razihel remix)/steps.sm",
+      "simfile_sha256": "7fd67a74fb5e8acf49f0cc1b26ad698992eb230dc7c06f2f293acb34d3d71bdc",
+      "retained_original_archive": "0e87d1cda1c314a3fc97ce47b81afa0281e3b5f8b182648018ea5646f3ef77a2.tar.zst",
+      "style": "double",
+      "difficulty": "Challenge",
+      "previous_failure": "error: ITGmania song Lua semantic trace failed: ITGmania probe script reported: no StepsType_Dance_Single chart matched difficulty Challenge; retained run directory /tmp/itgmania-harness-rs/song-lua-142376-1792007680870319388-0\n",
+      "no_complete_native_capture_to_reuse": true
+    }
+  ],
+  "first_repair_attempt_per_chart": 1,
+  "one_later_attempt_available_after_each": true,
+  "existing_full_replay_checks_unchanged": true,
+  "passing_charts_reopened": false,
+  "no_complete_failed_capture_replayed": true
+}
