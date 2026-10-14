@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T13:22:47Z",
+  "updated_utc": "2026-10-14T14:07:28Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 271,
+    "passed": 276,
     "pending": 75,
-    "unprocessed": 155
+    "unprocessed": 150
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2597,9 +2597,9 @@
       "position": 304,
       "source_simfile": "mawaru5/mawaru5.sm",
       "simfile_sha256": "6feab5a3a888443ae3e50802a230a7ddf6de95ba1e14b8805880795ef14e56b2",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-14-mawaru5-background-cache-repair.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-14-mawaru5-filename-final-repair.json"
     },
     {
       "position": 305,
@@ -2643,7 +2643,9 @@
       "position": 310,
       "source_simfile": "media offline/media offline.sm",
       "simfile_sha256": "49431b3bf1261ac2bea70d8b65f838b6de30fccb1f3cbe03509d8a614e1c10d0",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 311,
@@ -2801,7 +2803,9 @@
       "position": 331,
       "source_simfile": "No.13/no13.ssc",
       "simfile_sha256": "fd7bbfeee391ed68c8be20fe1784e08d3b3b4fb7ca9839720d3d04dd9d11d94f",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 332,
@@ -2823,7 +2827,9 @@
       "position": 334,
       "source_simfile": "OIIA OIIA - [Zaia]/OIIA OIIA.ssc",
       "simfile_sha256": "f479164368929f9db909538d7bd8311d739d587abafc8edc14cda04b1a772389",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 335,
@@ -2931,7 +2937,9 @@
       "position": 349,
       "source_simfile": "Paradise/Paradise.sm",
       "simfile_sha256": "574c082e56fc722d2414d47ff780788616d38df3c322f47527cc891016fdbc25",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 350,
@@ -2951,7 +2959,9 @@
       "position": 352,
       "source_simfile": "paw, paw!/paw paw.ssc",
       "simfile_sha256": "52b1922e1195cec39c371c15db6041a43fdaa8f0a892256b9febe32e69eceb04",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 353,

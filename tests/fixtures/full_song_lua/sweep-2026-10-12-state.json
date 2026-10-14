@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T13:22:48Z",
-  "previous_goal_turn": "Current turn is progress: eight disjoint original-scope workers replace the three future queues using spare40-core/46GiB capacity. Five new workers begin previously unprocessed SSC sources while retained replay PIDs1834225/1603266/2425243 are unchanged. Assignment covers exactly195 completed plus158 remaining positions of original353-source queue, no duplicate/omitted work. Existing zero-exit acceptance remains mandatory: stopped original parents hold child zombie status; standalone real exit7 control proves field52 status1792. Handoff exit/cmdline race discovered when Ruin SSC finishes: full original102848-frame report and authoritative kernel exit2/status512 recovered without recapture/replay, zero errors and two concrete In transition time mismatches preserved via last-priority recovery stream. Corrected status check rereads exit transition; only two lightweight replacement supervisors renewed, original replay/capture children untouched and verified. Eight workers continue; publisher96 streams. Neon Nights SSC passes27311 frames and final Cringle SM repair2 passes55331 frames/2354 stage fields, zero errors/mismatches; both saved/committed and local compressed/decompressed hashes match original candidates. Cringle passes remain closed; no further repair for it. The attack-boundary fix254c36811 is accepted on its actual failing chart. My Penny SSC initial capture is recorded pending, continuing next assigned chart. Original corpus501 unchanged, oversized files retained/Git ignored, missing coverage separate, acceptance/tolerance rules unchanged and sweep incomplete.",
+  "updated_utc": "2026-10-14T14:07:29Z",
+  "previous_goal_turn": "Current turn is progress: Media Offline SM passes all46871 native frames, OIIA SSC passes41614 paw paw SSC passes44128 and Paradise SM passes78971; all four fixtures saved/committed promptly and local compressed/decompressed hashes match original accepted candidates. Passing charts remain closed. Ruin SSC actual native In tween mismatch equals current frame delta within float32 roundoff. Primary ActorFrame/ScreenGameplay/ScreenWithMenuElements/Transition sources establish foreground before transitions. New control fails before on Windows and Linux. An intermediate Debug move fails its existing control, so final change moves only In/Out/Cancel; Debug stays unchanged. Final Windows60 live and Linux62 live/29 native controls plus both executable builds pass with actual zero exits. Fix1ed84cd47 committed, isolated immutable helper1f0beb2612f19d67900331a90493ac35fe0c66b7bbe36ba0ceab5b7cfa7b4d03 selected after all36 active source pins match; harness unchanged. Ruin first full repair launched on original candidate6133b834 and capture25f558d8, all manifest bytes verified, one further repair remains after this. Original replay/capture children continue without restart. Publisher97 streams. Status poller restored to include eight missing job entries after local file refresh; all actual workers continued unchanged. No13 original full125239-frame replay fails183 fields, no Lua errors, possible DP5960 versus5985. Native oracle/raw source1192 tap rows and no holds/rolls. Pinned Deadsync parser produces one hold/four rolls/18 extra cells from keysound index annotation digits; a private diagnostic removal of only annotations removes these false notes. Original chart unchanged, no No13 full repair spent; source-backed parser fix remains to implement. Original501 corpus unchanged, oversized files retained/Git ignored, coverage separate, acceptance/tolerances unchanged, sweep incomplete. Mawaru5 SM final permitted repair2 completes all162894 native frames, zero errors/mismatches, original candidate7b9ab3bd; 12428712-byte fixture saved/committed and local decompression matches. Mawaru5 passing fixture closed; no further replay/repair. This turn saves/verifies five accepted fixtures including four initial passes and this repaired pending source.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "2e7c5f31f59092fab42d2c57ea714ee8a5ced1a0",
+      "deadsync": "3c0791338957feeae09b63cfb06a90eed207d6c5",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -72,7 +72,8 @@
     "native_transition_column_cues": "dccc3cd0d: unchanged meaningful red/green transition control, two focused controls, 59 live/256 simfile/27 native replay controls and both binaries on Linux; 35 source pins; first My Exes SSC full repair leaves one mismatch, subsequently closed by final row-map repair. Windows disk-full failure retained and not counted as a passing check.",
     "native_lead_in_metrics": "3eac32e9e: primary query-time metric expressions, unchanged red/green production control, five Linux checks, complete Numujika first repair passed; accepted and byte verified.",
     "double_and_minimized_cues": "e56f30a19: 60 live/256 simfile/28 native controls, dedicated eight-column production-session control and both executables built; Windows 60 live controls exit zero. Tacos first full double repair passes 63984 frames/1551 fields; My Exes final full SSC repair 2 passes 62908 frames/1650 fields. Both fixtures saved, committed and locally byte verified; passing fixtures closed.",
-    "native_attack_option_boundaries": "254c36811: identical meaningful production control fails before on Linux, passes after on Windows and Linux; strict endpoint/overlap test, 61 live/65 attack-core/29 native controls and both builds green. Native schedule feeds actual Lua Stage-to-Song rebuilds; final full Cringle SM repair2 runs original capture, no acceptance or tolerance changes. Final Cringle SM repair2 passes all55331 frames/2354 fields, zero errors/mismatches, saved/committed and local bytes verified."
+    "native_attack_option_boundaries": "254c36811: identical meaningful production control fails before on Linux, passes after on Windows and Linux; strict endpoint/overlap test, 61 live/65 attack-core/29 native controls and both builds green. Native schedule feeds actual Lua Stage-to-Song rebuilds; final full Cringle SM repair2 runs original capture, no acceptance or tolerance changes. Final Cringle SM repair2 passes all55331 frames/2354 fields, zero errors/mismatches, saved/committed and local bytes verified.",
+    "native_foreground_transition_order": "1ed84cd47: meaningful owned foreground control fails before on both platforms and passes after; Windows60/Linux62 live and Linux29 native controls, both executable builds all exit zero. Only transition update jobs moved after song roots; getters, owners, native deltas and acceptance unchanged. Ruin first full repair is running original retained capture, with one later attempt available."
   },
   "corpus_transfer": {
     "tar_sha256": "37febe98e2e47b325b9f9b96f4d29ddf32eedda84514191252d043c5fd4a4d1a",
@@ -126,18 +127,18 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "media offline/media offline.sm",
-      "position": 310,
+      "current": "PizzaBoy/PizzaBoy.ssc",
+      "position": 354,
       "phase": "replay",
-      "pid": 2099390,
+      "pid": 2320592,
       "process_matches": true,
-      "passed": 31,
+      "passed": 33,
       "pending": 59,
-      "processed": 90,
+      "processed": 92,
       "last_log_lines": [
-        "[666.2s] replaying every native gameplay frame: frame 31743/46871 (67.7%)",
-        "[668.2s] replaying every native gameplay frame: frame 31835/46871 (67.9%)",
-        "[670.2s] replaying every native gameplay frame: frame 31923/46871 (68.1%)"
+        "[954.3s] replaying every native gameplay frame: frame 3906/85655 (4.6%)",
+        "[956.3s] replaying every native gameplay frame: frame 3915/85655 (4.6%)",
+        "[958.3s] replaying every native gameplay frame: frame 3923/85655 (4.6%)"
       ],
       "supervisor_running": true
     },
@@ -1682,6 +1683,12 @@
         "remote": "/home/parity/jobs/chart-sweep-v5-ruin-report-recovery-v1",
         "record": "sweep-2026-10-14-v5-ruin-report-recovery.json",
         "finish_status": "original retained full replay outcome recovered; no replay repeated"
+      },
+      {
+        "name": "ruin-ssc-transition-order-first-repair",
+        "remote": "/home/parity/jobs/ruin-ssc-transition-order-repair-v1",
+        "record": "sweep-2026-10-14-ruin-transition-first-repair.json",
+        "finish_status": "Ruin SSC first transition-order full repair complete"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -1694,9 +1701,9 @@
         "passed": 0,
         "pending": 0,
         "processed": 0,
-        "last_phase": "replay",
+        "last_phase": "pack",
         "source_simfile": "Molly/Molly.ssc",
-        "child_running": true,
+        "child_running": false,
         "position": 319
       },
       {
@@ -1715,13 +1722,13 @@
         "job": "chart-sweep-parallel-v5-5",
         "complete": false,
         "supervisor_running": true,
-        "passed": 1,
+        "passed": 2,
         "pending": 0,
-        "processed": 1,
+        "processed": 2,
         "last_phase": "replay",
-        "source_simfile": "Paradise/Paradise.sm",
+        "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).ssc",
         "child_running": true,
-        "position": 349
+        "position": 361
       },
       {
         "job": "chart-sweep-parallel-v5-6",
@@ -1739,24 +1746,13 @@
         "job": "chart-sweep-parallel-v5-7",
         "complete": false,
         "supervisor_running": true,
-        "passed": 0,
-        "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
-        "source_simfile": "No.13/no13.ssc",
-        "child_running": true,
-        "position": 331
-      },
-      {
-        "job": "door-cringle-sm-attack-final-repair-v1",
-        "complete": true,
-        "supervisor_running": false,
         "passed": 1,
-        "pending": 0,
-        "processed": 1,
-        "last_phase": "pack",
-        "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
-        "child_running": false
+        "pending": 1,
+        "processed": 2,
+        "last_phase": "replay",
+        "source_simfile": "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc",
+        "child_running": true,
+        "position": 364
       },
       {
         "job": "koi-ssc-rec-print-repair-v1",
@@ -1770,72 +1766,6 @@
         "child_running": true
       },
       {
-        "job": "fortuna-quirks-off-repair-v1",
-        "complete": true,
-        "supervisor_running": false,
-        "passed": 1,
-        "pending": 0,
-        "processed": 1,
-        "last_phase": "pack",
-        "source_simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
-        "child_running": false
-      },
-      {
-        "job": "door-cringle-sm-screen-tree-repair-v1",
-        "complete": true,
-        "supervisor_running": false,
-        "passed": 0,
-        "pending": 1,
-        "processed": 1,
-        "last_phase": "replay",
-        "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
-        "child_running": false
-      },
-      {
-        "job": "door-cringle-ssc-screen-tree-repair-v1",
-        "complete": true,
-        "supervisor_running": false,
-        "passed": 1,
-        "pending": 0,
-        "processed": 1,
-        "last_phase": "pack",
-        "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.ssc",
-        "child_running": false
-      },
-      {
-        "job": "door-rights-sm-screen-tree-repair-v1",
-        "complete": true,
-        "supervisor_running": false,
-        "passed": 1,
-        "pending": 0,
-        "processed": 1,
-        "last_phase": "pack",
-        "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.sm",
-        "child_running": false
-      },
-      {
-        "job": "loyal-divide-quirks-off-repair-v1",
-        "complete": true,
-        "supervisor_running": false,
-        "passed": 1,
-        "pending": 0,
-        "processed": 1,
-        "last_phase": "pack",
-        "source_simfile": "Loyal Divide [TaroNuke]/Loyal Divide.sm",
-        "child_running": false
-      },
-      {
-        "job": "mawaru1-empty-layers-repair-v1",
-        "complete": true,
-        "supervisor_running": false,
-        "passed": 1,
-        "pending": 0,
-        "processed": 1,
-        "last_phase": "pack",
-        "source_simfile": "mawaru1/mawaru.sm",
-        "child_running": false
-      },
-      {
         "job": "mawaru4-sm-background-cache-repair-v1",
         "complete": false,
         "supervisor_running": true,
@@ -1844,6 +1774,28 @@
         "processed": 0,
         "last_phase": "replay",
         "source_simfile": "mawaru4/mawaru4.sm",
+        "child_running": true
+      },
+      {
+        "job": "door-cringle-sm-attack-final-repair-v1",
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
+        "pending": 0,
+        "processed": 1,
+        "last_phase": "pack",
+        "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
+        "child_running": false
+      },
+      {
+        "job": "ruin-ssc-transition-order-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "Ruin Our Friendship/RuinOurFriendship.ssc",
         "child_running": true
       },
       {
@@ -1969,14 +1921,14 @@
       },
       {
         "job": "mawaru5-filename-final-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "mawaru5/mawaru5.sm",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "paradise-children-repair-v1",
@@ -2066,21 +2018,31 @@
     "attack_boundary_completed_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-attack-boundary-linux-build.json",
     "cringle_sm_attack_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-door-cringle-sm-attack-final-launch.json",
     "reason_red_zero_seed": "tests/fixtures/full_song_lua/sweep-2026-10-14-reason-red-zero-seed-diagnosis.json",
-    "selected_replay_binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c",
+    "selected_replay_binary_sha256": "1f0beb2612f19d67900331a90493ac35fe0c66b7bbe36ba0ceab5b7cfa7b4d03",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 96,
+    "publisher_stream_count": 97,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
-    "cringle_sm_final_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-cringle-sm-final-fixture-verification.json"
+    "cringle_sm_final_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-cringle-sm-final-fixture-verification.json",
+    "ruin_transition_source_validation": "tests/fixtures/full_song_lua/sweep-2026-10-14-ruin-transition-source-validation.json",
+    "ruin_transition_completed_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-ruin-transition-linux-build.json",
+    "ruin_transition_selection": "tests/fixtures/full_song_lua/sweep-2026-10-14-ruin-transition-selection.json",
+    "ruin_transition_first_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-ruin-transition-first-launch.json",
+    "no13_keysound_index_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-14-no13-keysound-index-diagnosis.json",
+    "media_offline_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-media-offline-fixture-verification.json",
+    "oiia_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-oiia-ssc-fixture-verification.json",
+    "paw_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-paw-ssc-fixture-verification.json",
+    "paradise_sm_initial_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-paradise-sm-initial-fixture-verification.json",
+    "mawaru5_final_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-mawaru5-final-fixture-verification.json"
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 124,
+    "new_passed_fixtures": 129,
     "new_pending_charts": 74,
-    "new_processed_sources": 198,
+    "new_processed_sources": 203,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 155,
+    "unprocessed_sources": 150,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -3571,91 +3533,28 @@
       ]
     },
     {
-      "source_simfile": "mawaru5/mawaru5.sm",
-      "repair_attempts": 1,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 770,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "args": [
-              "PlayerNumber_P1"
-            ],
-            "beat": 0,
-            "caller": {
-              "line": 0,
-              "source": "song:/foregrounds/fgc/default.lua",
-              "tail_call": false
-            },
-            "detail": {
-              "results": [
-                {
-                  "description": "TaroNuke (converted by MrThatKid4)",
-                  "difficulty": "Difficulty_Challenge",
-                  "index": 5,
-                  "meter": 13,
-                  "song_dir": "song:/",
-                  "steps_type": "StepsType_Dance_Single",
-                  "type": "Steps"
-                }
-              ]
-            },
-            "kind": "query",
-            "line": 0,
-            "operation": "GameState.GetCurrentSteps",
-            "phase": "construction",
-            "scene": 1,
-            "seconds": 0,
-            "seq": 16,
-            "source": "song:/foregrounds/fgc/default.lua",
-            "results": [
-              {
-                "description": "TaroNuke (converted by MrThatKid4)",
-                "difficulty": "Difficulty_Challenge",
-                "index": 5,
-                "meter": 13,
-                "song_dir": "song:/",
-                "steps_type": "StepsType_Dance_Single",
-                "type": "Steps"
-              }
-            ]
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "query",
-            "operation": "GameState.GetCurrentSteps",
-            "source": "song:/Foregrounds/fgc",
-            "line": 0,
-            "phase": "construction",
-            "beat": 0.0,
-            "seconds": 0.0,
-            "args": [
-              "PlayerNumber_P1"
-            ],
-            "results": [
-              {
-                "type": "Steps",
-                "song_dir": "song:/",
-                "index": 5,
-                "steps_type": "StepsType_Dance_Single",
-                "difficulty": "Difficulty_Challenge",
-                "description": "TaroNuke (converted by MrThatKid4)",
-                "meter": 13
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
       "source_simfile": "My Penny/My Penny.ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-2027895-1791982709619865985-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-2027895-1791982709619865985-0\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
+    },
+    {
+      "source_simfile": "No.13/no13.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 183,
+      "first_mismatch": [
+        {
+          "phase": "screen-active",
+          "seconds": -1.9999773502349854,
+          "field": "possible",
+          "native": 5960,
+          "deadsync": 5985
+        }
+      ]
     }
   ],
   "historical_concrete_failures": [
