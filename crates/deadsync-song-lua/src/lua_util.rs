@@ -6457,10 +6457,14 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     && crate::live::active(lua) { duration.clone() } else { None };
                 prepare_capture_scope_actor(lua, &actor)?;
                 flush_actor_capture(&actor)?;
+                // Actor::Sleep retains positive infinite native float durations.
                 let exact_duration = duration
                     .as_ref()
                     .cloned()
-                    .and_then(read_f64)
+                    .and_then(|value| match value {
+                        Value::Number(value) if value == f64::INFINITY => Some(value),
+                        value => read_f64(value),
+                    })
                     .unwrap_or(0.0)
                     .max(0.0);
                 let delay = record_queue_step(lua, &actor, Some(exact_duration))?;
@@ -6469,7 +6473,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                 queue_replay_tween(lua, &actor, exact_duration, Some("linear"));
                 queue_replay_tween(lua, &actor, 0.0, Some("linear"));
                 record_queue_step(lua, &actor, Some(0.0))?;
-                let duration = duration.and_then(read_f32).unwrap_or(0.0).max(0.0);
+                let duration = exact_duration as f32;
                 let cursor = actor
                     .get::<Option<f32>>("__songlua_capture_cursor")?
                     .unwrap_or(0.0);

@@ -59,6 +59,9 @@ pub(crate) fn trace_actor_call(lua: &Lua, actor: &Table, operation: &str, arg: O
         let arg = match arg {
             Some(Value::Integer(value)) => serde_json::json!(value),
             Some(Value::Number(value)) if value.is_finite() => serde_json::json!(value),
+            Some(Value::Number(value)) => serde_json::json!({"type":"number", "value":if value.is_nan() {
+                "nan"
+            } else if value.is_sign_negative() { "-infinity" } else { "infinity" }}),
             Some(Value::String(value)) => serde_json::json!(value.to_string_lossy()),
             _ => serde_json::Value::Null,
         };
@@ -1365,6 +1368,63 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn live_infinite_sleep_keeps_foreground_sibling_reload_queue_active() {
+        let mut compiled = compile_with_context("infinite-foreground-reload", r#"
+local root
+return Def.ActorFrame {
+    InitCommand = function(self) root = self; FOREGROUND = self end,
+    Def.Actor {
+        InitCommand = function(self) PERSISTENT = self end,
+        OnCommand = function(self) self:sleep(math.huge) end,
+    },
+    Def.Actor {
+        OnCommand = function(self) self:queuecommand('WaitToAct') end,
+        WaitToActCommand = function(self)
+            if GAMESTATE:GetSongBeat() > 19 then
+                SCREENMAN:SetNewScreen('ScreenGameplay')
+            else
+                self:sleep(0.01):queuecommand('WaitToAct')
+            end
+        end,
+    },
+}
+"#, |context| {
+            context.song_display_bpms = [120.0; 2];
+            context.song_timing_bpms = vec![(0.0, 120.0)];
+            context.layer_start_beats = vec![0.0];
+            context.foreground_names = vec!["foreground".into()];
+            context.defer_initial_live_update = true;
+        });
+        let mut scene = compiled.live_scene.take().expect("owned infinite foreground");
+        assert!(scene.take_startup_output().errors.is_empty());
+        let output = scene.advance(SongLuaLiveFrame { music_seconds: 0.1, beat: 0.2,
+            screen_seconds: 6.1, delta_seconds: 0.1, ..Default::default() }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        let persistent = scene.lua.globals().get::<Table>("PERSISTENT").unwrap();
+        let foreground = scene.lua.globals().get::<Table>("FOREGROUND").unwrap();
+        assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &persistent).unwrap(), f32::INFINITY,
+            "native infinite sleep retains foreground lifetime");
+        assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &foreground).unwrap(), f32::INFINITY);
+        assert!(output.request.is_none());
+        let mut requested = false;
+        for index in 2..=100 {
+            let music_seconds = index as f64 * 0.1;
+            let output = scene.advance(SongLuaLiveFrame { music_seconds, beat: music_seconds * 2.0,
+                screen_seconds: 6.0 + music_seconds, delta_seconds: 0.1,
+                ..Default::default() }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            assert_eq!(crate::lua_util::actor_tween_time_left(&scene.lua, &persistent).unwrap(), f32::INFINITY);
+            if let Some(request) = output.request {
+                assert!(music_seconds * 2.0 > 19.0);
+                assert!(matches!(request, SongLuaLiveRequest::NewScreen(ref name) if name == "ScreenGameplay"));
+                requested = true;
+                break;
+            }
+        }
+        assert!(requested, "finite sibling queue reaches the authored reload beat beside an infinite sleep");
+    }
+
     #[test]
     fn live_initial_song_bps_uses_native_reset_before_timing_update() {
         for timing_clock in [false, true] {
