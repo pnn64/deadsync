@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "No Role Modelz/No Role Modelz.ssc",
+  "native_frames": 155076,
+  "replayed_frames": 155076,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "f2f8ba22af059394b52fd465a0e0c4bebdd2595448dddc3668a99194ef3c6b6b.tar.zst",
+  "compressed_sha256": "f2f8ba22af059394b52fd465a0e0c4bebdd2595448dddc3668a99194ef3c6b6b",
+  "uncompressed_sha256": "74b47b1cd7e23aa1f04206a836c6a0ac12bce302d3c9a2aa15392c08fc8c0f15",
+  "compressed_bytes": 13747337,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

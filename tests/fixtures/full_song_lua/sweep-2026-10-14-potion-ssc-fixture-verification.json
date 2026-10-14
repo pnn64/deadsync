@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).ssc",
+  "native_frames": 83299,
+  "replayed_frames": 83299,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "78c4ebe2a0dfcba212d4b900bea3807fb7ec9e25b0e36b73c0bfb3e8cebad262.tar.zst",
+  "compressed_sha256": "78c4ebe2a0dfcba212d4b900bea3807fb7ec9e25b0e36b73c0bfb3e8cebad262",
+  "uncompressed_sha256": "440061762cf3789e5993e41ffa0bf7a86d2988a186067106c9c96a4059047596",
+  "compressed_bytes": 6493102,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
