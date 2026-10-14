@@ -1,0 +1,14 @@
+{
+  "pid": 2999930,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_numeric_song_selector_repairs_v1.py"
+  ],
+  "jobs": [
+    "mission-sputnik-numeric-first-repair-v1",
+    "showtime-numeric-first-repair-v1"
+  ],
+  "concurrency": 1,
+  "repair_limit_per_chart": 2,
+  "selection_receipt": "/home/parity/jobs/numeric-song-selectors-selection-installed-v1.json"
+}
