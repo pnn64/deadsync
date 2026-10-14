@@ -2950,17 +2950,12 @@
     {
       "title": "If You Crump Stand Up",
       "source_simfile": "If You Crump Stand Up/crump.sm",
-      "harness_version": "0.1.6",
-      "archive": "282d4c0ada943e0175405a583209a303a2bfc9b0541f5764cf9c5013f3c5a346.tar.zst",
-      "sha256": "282d4c0ada943e0175405a583209a303a2bfc9b0541f5764cf9c5013f3c5a346",
-      "compressed_bytes": 45971,
-      "uncompressed_sha256": "a37f6b6fcfb0d6c7598b47917c6908d82dd7eb6a7ef2964c4248e25e2d95644f",
-      "compression_level": 22,
-      "aliases": [
-        "1d1d3fe4ba6ed093835ba228dfa0c4be7cf09d77fcd06f2185b7c44d9c0edfd9.tar.zst",
-        "bef8b396e7d5e5fbe0de756b2a0adcf6817b9c3c1d2a116f1352c5cb17da2081.tar.zst",
-        "f98af8d957e0b1c118db49aff1cfc1ab587dab4b0d213ec87192d5a93b1094b3.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "51dc07f45646ee7ee65906490783ca6f631f2103890f09a309b18fb2f22495c4.tar.zst",
+      "sha256": "51dc07f45646ee7ee65906490783ca6f631f2103890f09a309b18fb2f22495c4",
+      "compressed_bytes": 6617127,
+      "uncompressed_sha256": "97a083ba096c2ecf217eb4a6ccee7c5bd8c37e2448ea2436d0e209a0f662da97",
+      "aliases": []
     },
     {
       "title": "イガク",
