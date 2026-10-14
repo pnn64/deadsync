@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "second and final selector metadata and authored-request repair complete",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "771646c8d58dc1170f1e2b9f332a701f8bd518b7",
