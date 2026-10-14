@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "paw, paw!/paw paw.ssc",
+  "native_frames": 44128,
+  "replayed_frames": 44128,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "d294e7d6f9f3dd0db6427cdbbc45f6aa75d4390031d36eef5d546d9049feeaa6.tar.zst",
+  "compressed_sha256": "d294e7d6f9f3dd0db6427cdbbc45f6aa75d4390031d36eef5d546d9049feeaa6",
+  "uncompressed_sha256": "885a65bbc44a67bb6ec3198cfd3e1091f5acf3ed5c31198b11345cb5ca4788bd",
+  "compressed_bytes": 7445448,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
