@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.ssc",
+  "native_frames": 63027,
+  "replayed_frames": 63027,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "c7c4264c485b0ce8da780d0d4c44c8f61d187a33e5b23993c6748555ec4b6250.tar.zst",
+  "compressed_sha256": "c7c4264c485b0ce8da780d0d4c44c8f61d187a33e5b23993c6748555ec4b6250",
+  "uncompressed_sha256": "2db5ac9f92542a9ad43cecf09a8e54ebb9ebbc91bf07c1e8456077b57405e8ed",
+  "compressed_bytes": 14330383,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
