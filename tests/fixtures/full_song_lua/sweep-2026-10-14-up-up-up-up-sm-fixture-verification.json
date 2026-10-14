@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Up Up Up Up/Up Up Up Up.sm",
+  "native_frames": 139034,
+  "replayed_frames": 139034,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "25a55b8d611bd76de3821e2eee0ce79869a42cf4897fba43418b9dd01446dfbd.tar.zst",
+  "compressed_sha256": "25a55b8d611bd76de3821e2eee0ce79869a42cf4897fba43418b9dd01446dfbd",
+  "uncompressed_sha256": "75f6521d707b50dc0e459690a436cc40699d042ef6277db4dd699ff9e356ffbf",
+  "compressed_bytes": 6107912,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
