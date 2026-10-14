@@ -8351,6 +8351,58 @@
       "capture_exit": 1,
       "capture_seconds": 154.75950340597774,
       "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-482689-1791964917444496479-0\n"
+    },
+    {
+      "position": 327,
+      "source_simfile": "No Role Modelz/No Role Modelz.sm",
+      "simfile_sha256": "0d71a70a22be46c8d9b372058e91a6266e253620169b1bf72b198f47b275373e",
+      "retained_original_archive": "b2d3d483e492d9961d18ae497fa00e9bf11c93a85a351190a2b1f78ba87c138c.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "1d1cab219618a1d98d02e54498de7297f6f533cd9347db517e629a49b4b12638",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/mawaru5-filename-green-v1/proof.json",
+      "capture_seconds": 265.95733353099786,
+      "trace_sha256": "96ae3ef737e8140910daf91174146ff553c3553ae4f284f4ca88758fac8dc3d3",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-327/candidates/78b1e6de83560ed0f05f9cc92167fb9ff2a6a9c490a4c623879657b195fe4da3.tar",
+      "replay_exit": 0,
+      "replay_seconds": 2405.595218039991,
+      "candidate_sha256": "78b1e6de83560ed0f05f9cc92167fb9ff2a6a9c490a4c623879657b195fe4da3",
+      "native_frames": 165265,
+      "replayed_frames": 165265,
+      "compared_stage_fields": 2882,
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "46224b5dcd824df7310f0d0b5341d291696082a0cb9bbd728d0c87d6d784aeb1",
+      "archive": "475a93191d05901677fac62ecb74ef9889d3dc0c082ced6cace989e2364a1b26.tar.zst",
+      "archive_sha256": "475a93191d05901677fac62ecb74ef9889d3dc0c082ced6cace989e2364a1b26",
+      "compressed_bytes": 12257852,
+      "pack_seconds": 2.681594555004267,
+      "harness_version": "0.1.80",
+      "title": "Episode 18 No Role Modelz",
+      "retained_original_entry": {
+        "title": "Episode 18",
+        "source_simfile": "No Role Modelz/No Role Modelz.sm",
+        "harness_version": "0.1.6",
+        "archive": "b2d3d483e492d9961d18ae497fa00e9bf11c93a85a351190a2b1f78ba87c138c.tar.zst",
+        "sha256": "b2d3d483e492d9961d18ae497fa00e9bf11c93a85a351190a2b1f78ba87c138c",
+        "compressed_bytes": 47849,
+        "uncompressed_sha256": "5bd899bf4c281d50d18c7d3bd57e21a4dc66e7963a0b837f2fb48f66ee1ef7f1",
+        "compression_level": 22,
+        "aliases": [
+          "88e19e04fe1e6a109484172de1be35c6d1bffe1f1fca26e935cf95d92fb1c4e1.tar.zst",
+          "908c5a40377f19aaf519cf454a8969c0eb97e3ff533e07bdabf6f00d78cae9a3.tar.zst",
+          "de1eac44ef926556502087dda583ef057342943dd38e34143152cdc658e5f478.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -8362,7 +8414,7 @@
   },
   "binary_sha256": "1d1cab219618a1d98d02e54498de7297f6f533cd9347db517e629a49b4b12638",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 22,
+  "passed_fixtures": 23,
   "pending_charts": 31,
-  "processed_charts": 53
+  "processed_charts": 54
 }

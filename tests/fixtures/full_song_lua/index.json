@@ -3987,19 +3987,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 18",
+      "title": "Episode 18 No Role Modelz",
       "source_simfile": "No Role Modelz/No Role Modelz.sm",
-      "harness_version": "0.1.6",
-      "archive": "b2d3d483e492d9961d18ae497fa00e9bf11c93a85a351190a2b1f78ba87c138c.tar.zst",
-      "sha256": "b2d3d483e492d9961d18ae497fa00e9bf11c93a85a351190a2b1f78ba87c138c",
-      "compressed_bytes": 47849,
-      "uncompressed_sha256": "5bd899bf4c281d50d18c7d3bd57e21a4dc66e7963a0b837f2fb48f66ee1ef7f1",
-      "compression_level": 22,
-      "aliases": [
-        "88e19e04fe1e6a109484172de1be35c6d1bffe1f1fca26e935cf95d92fb1c4e1.tar.zst",
-        "908c5a40377f19aaf519cf454a8969c0eb97e3ff533e07bdabf6f00d78cae9a3.tar.zst",
-        "de1eac44ef926556502087dda583ef057342943dd38e34143152cdc658e5f478.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "475a93191d05901677fac62ecb74ef9889d3dc0c082ced6cace989e2364a1b26.tar.zst",
+      "sha256": "475a93191d05901677fac62ecb74ef9889d3dc0c082ced6cace989e2364a1b26",
+      "compressed_bytes": 12257852,
+      "uncompressed_sha256": "78b1e6de83560ed0f05f9cc92167fb9ff2a6a9c490a4c623879657b195fe4da3",
+      "aliases": []
     },
     {
       "title": "Episode 18",
