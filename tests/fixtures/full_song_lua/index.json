@@ -3777,15 +3777,12 @@
     {
       "title": "MAX 300",
       "source_simfile": "Max 300/MAX 300.ssc",
-      "harness_version": "0.1.0",
-      "archive": "d5e8a4b97b16946b81bca92d5b2d34a072488cb42f1f0b1faf1c6d472f3b1bb9.tar.zst",
-      "sha256": "d5e8a4b97b16946b81bca92d5b2d34a072488cb42f1f0b1faf1c6d472f3b1bb9",
-      "compressed_bytes": 28296,
-      "uncompressed_sha256": "f16cb5cc950080d9002d2c85b77a44c4729f4d3626ddb727bfbdc17dd1b92a82",
-      "compression_level": 22,
-      "aliases": [
-        "bd739ee3e50933acf2a358e42fe736f9890b360e5350f821379bbab73f8af64c.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "a76ae37dce83b3d452896ad243d4f49a0a484934af3441ddf7fa271b387a94bf.tar.zst",
+      "sha256": "a76ae37dce83b3d452896ad243d4f49a0a484934af3441ddf7fa271b387a94bf",
+      "compressed_bytes": 6310314,
+      "uncompressed_sha256": "e60fed9b7196685be32f0d5446c01230fd29eb4085666c4a5ca2a4dbe7358e92",
+      "aliases": []
     },
     {
       "title": "media offline",
