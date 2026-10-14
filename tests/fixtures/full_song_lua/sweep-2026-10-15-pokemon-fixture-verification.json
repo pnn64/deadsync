@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Pokemon Gym Battle Remix/pokes.ssc",
+  "native_frames": 42446,
+  "replayed_frames": 42446,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "422193f15fe6f4ed277022c9f3e7b08161ef9b53bde898511aa2da91c9620416.tar.zst",
+  "compressed_sha256": "422193f15fe6f4ed277022c9f3e7b08161ef9b53bde898511aa2da91c9620416",
+  "uncompressed_sha256": "5b5058060fd5a5513a96cd9aba5cb96b7aa2f07c0b0c7e3f5c0eb2eb2601e91e",
+  "compressed_bytes": 12474938,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
