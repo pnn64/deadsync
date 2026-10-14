@@ -1,0 +1,505 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": null,
+  "results": [
+    {
+      "position": 316,
+      "source_simfile": "MISSION SPUTNIK/sputnik.ssc",
+      "status": "pending",
+      "repair_attempts": 1,
+      "candidate_sha256": "e6a8401d7558a4e1b8139353c399ba09081d9bcabbcc083e0272a204bb9cd814",
+      "trace_sha256": "820041d226b5f71edaeb97fd96980d9cb205c57dd897d8c5ea59f483a31bf1ce",
+      "simfile_sha256": "1241e37b8933c76c957ed2217eebd3cd53c1e2efd27cc84fba9a24938ba7f688",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "566984bf120e0295cecd8daef0520f1b62ff15be7ca1db013efef8123d96e935",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/numeric-song-selectors-linux-green-v1/proof.json",
+      "fix_commit": "1482e4b757f930b960eb09678730b6d68d331a0c + 94e70049b59e83b86566a9adb5fd18f8835c65cb + 7fae1f026237ee5431a1a2b3e907f4270715556a + 1ed84cd471a8eeb8511474ca8881aa1516acbf96 + 254c36811 + e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "previous_failure": "[0.1s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: frame 90/40632 (0.2%)\n[4.0s] replaying every native gameplay frame: frame 231/40632 (0.6%)\n[6.0s] replaying every native gameplay frame: frame 366/40632 (0.9%)\n[8.0s] replaying every native gameplay frame: frame 507/40632 (1.2%)\n[10.0s] replaying every native gameplay frame: frame 639/40632 (1.6%)\n[12.0s] replaying every native gameplay frame: frame 769/40632 (1.9%)\n[14.0s] replaying every native gameplay frame: frame 897/40632 (2.2%)\n[16.0s] replaying every native gameplay frame: frame 1023/40632 (2.5%)\n[18.0s] replaying every native gameplay frame: frame 1156/40632 (2.8%)\n[20.0s] replaying every native gameplay frame: frame 1282/40632 (3.2%)\n[22.0s] replaying every native gameplay frame: frame 1412/40632 (3.5%)\n[24.0s] replaying every native gameplay frame: frame 1536/40632 (3.8%)\n\nthread 'main' (2506008) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: GAMESTATE has no selected P1 chart\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "previous_errors": [],
+      "replay_exit": 2,
+      "replay_seconds": 863.3804444409907,
+      "native_frames": 40632,
+      "replayed_frames": 40632,
+      "compared_stage_fields": 2035,
+      "pending_coverage": [
+        "uncompared song operations: Song.GetOneSteps"
+      ],
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 13,
+      "concrete_failures": [
+        {
+          "field": "source_request_count",
+          "native": 2,
+          "deadsync": 1
+        },
+        {
+          "field": "command_query_count",
+          "native": 16,
+          "deadsync": 36
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              0,
+              {
+                "description": "",
+                "difficulty": "Difficulty_Medium",
+                "index": 3,
+                "meter": 3,
+                "song_dir": "song:/",
+                "steps_type": "StepsType_Dance_Single",
+                "type": "Steps"
+              }
+            ],
+            "beat": 0.001908163889311254,
+            "caller": {
+              "line": 4,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0001",
+            "kind": "call",
+            "line": 4,
+            "operation": "GameState.SetCurrentSteps",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.013673469424247742,
+            "seq": 7,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": null
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Steps.GetStepsType",
+            "source": "song:/lua/default.lua",
+            "line": 4,
+            "phase": "callback",
+            "beat": 0.0019081651698797941,
+            "seconds": 0.013673469424247742,
+            "args": [],
+            "results": [
+              "StepsType_Dance_Single"
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              1
+            ],
+            "beat": 0.001908163889311254,
+            "caller": {
+              "line": 4,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "results": [
+                {
+                  "description": "",
+                  "difficulty": "Difficulty_Challenge",
+                  "index": 1,
+                  "meter": 5,
+                  "song_dir": "song:/",
+                  "steps_type": "StepsType_Dance_Single",
+                  "type": "Steps"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 4,
+            "operation": "GameState.GetCurrentSteps",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.013673469424247742,
+            "seq": 9,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "description": "",
+                "difficulty": "Difficulty_Challenge",
+                "index": 1,
+                "meter": 5,
+                "song_dir": "song:/",
+                "steps_type": "StepsType_Dance_Single",
+                "type": "Steps"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Steps.GetDifficulty",
+            "source": "song:/lua/default.lua",
+            "line": 4,
+            "phase": "callback",
+            "beat": 0.0019081651698797941,
+            "seconds": 0.013673469424247742,
+            "args": [],
+            "results": [
+              "Difficulty_Challenge"
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 0.001908163889311254,
+            "caller": {
+              "line": 4,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "results": [
+                "Difficulty_Challenge"
+              ]
+            },
+            "kind": "query",
+            "line": 4,
+            "operation": "Steps.GetDifficulty",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.013673469424247742,
+            "seq": 10,
+            "source": "song:/lua/default.lua",
+            "results": [
+              "Difficulty_Challenge"
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Steps.GetStepsType",
+            "source": "song:/lua/default.lua",
+            "line": 4,
+            "phase": "callback",
+            "beat": 0.0019081651698797941,
+            "seconds": 0.013673469424247742,
+            "args": [],
+            "results": [
+              "StepsType_Dance_Single"
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 0.001908163889311254,
+            "caller": {
+              "line": 4,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "results": [
+                {
+                  "song_dir": "song:/",
+                  "type": "Song"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 4,
+            "operation": "GameState.GetCurrentSong",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.013673469424247742,
+            "seq": 11,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "song_dir": "song:/",
+                "type": "Song"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Steps.GetDifficulty",
+            "source": "song:/lua/default.lua",
+            "line": 4,
+            "phase": "callback",
+            "beat": 0.0019081651698797941,
+            "seconds": 0.013673469424247742,
+            "args": [],
+            "results": [
+              "Difficulty_Hard"
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              0,
+              {
+                "description": "",
+                "difficulty": "Difficulty_Medium",
+                "index": 3,
+                "meter": 3,
+                "song_dir": "song:/",
+                "steps_type": "StepsType_Dance_Single",
+                "type": "Steps"
+              }
+            ],
+            "beat": 0.001908163889311254,
+            "caller": {
+              "line": 4,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0001",
+            "kind": "call",
+            "line": 4,
+            "operation": "GameState.SetCurrentSteps",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.013673469424247742,
+            "seq": 13,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": null
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Steps.GetStepsType",
+            "source": "song:/lua/default.lua",
+            "line": 4,
+            "phase": "callback",
+            "beat": 0.0019081651698797941,
+            "seconds": 0.013673469424247742,
+            "args": [],
+            "results": [
+              "StepsType_Dance_Single"
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0001",
+            "args": [
+              6969
+            ],
+            "beat": 0.001908163889311254,
+            "caller": {
+              "line": 4,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "native_tween_time_left": 6969
+            },
+            "kind": "call",
+            "line": 4,
+            "operation": "Actor.sleep",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.013673469424247742,
+            "seq": 15,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 6969
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Steps.GetDifficulty",
+            "source": "song:/lua/default.lua",
+            "line": 4,
+            "phase": "callback",
+            "beat": 0.0019081651698797941,
+            "seconds": 0.013673469424247742,
+            "args": [],
+            "results": [
+              "Difficulty_Medium"
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0001",
+            "args": [],
+            "beat": 0.001908163889311254,
+            "command": "OnCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 4,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 0.013673469424247742,
+            "seq": 16,
+            "source": "song:/lua/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Steps.GetStepsType",
+            "source": "song:/lua/default.lua",
+            "line": 4,
+            "phase": "callback",
+            "beat": 0.0019081651698797941,
+            "seconds": 0.013673469424247742,
+            "args": [],
+            "results": [
+              "StepsType_Dance_Single"
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "PlayerNumber_P1"
+            ],
+            "beat": 0,
+            "caller": {
+              "line": 0,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "results": [
+                true
+              ]
+            },
+            "kind": "query",
+            "line": 0,
+            "operation": "GameState.IsPlayerEnabled",
+            "phase": "construction",
+            "scene": 2,
+            "seconds": 0,
+            "seq": 17,
+            "source": "song:/lua/default.lua",
+            "results": [
+              true
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Steps.GetDifficulty",
+            "source": "song:/lua/default.lua",
+            "line": 4,
+            "phase": "callback",
+            "beat": 0.0019081651698797941,
+            "seconds": 0.013673469424247742,
+            "args": [],
+            "results": [
+              "Difficulty_Easy"
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0002",
+            "args": [],
+            "beat": 0.0007517012418247759,
+            "command": "OnCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 4,
+            "operation": "command.begin",
+            "scene": 2,
+            "seconds": 0.013265306130051613,
+            "seq": 18,
+            "source": "song:/lua/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Steps.GetStepsType",
+            "source": "song:/lua/default.lua",
+            "line": 4,
+            "phase": "callback",
+            "beat": 0.0019081651698797941,
+            "seconds": 0.013673469424247742,
+            "args": [],
+            "results": [
+              "StepsType_Dance_Single"
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0002",
+            "args": [
+              6969
+            ],
+            "beat": 0.0007517012418247759,
+            "caller": {
+              "line": 4,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "native_tween_time_left": 6969
+            },
+            "kind": "call",
+            "line": 4,
+            "operation": "Actor.sleep",
+            "phase": "callback",
+            "scene": 2,
+            "seconds": 0.013265306130051613,
+            "seq": 19,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 6969
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Steps.GetDifficulty",
+            "source": "song:/lua/default.lua",
+            "line": 4,
+            "phase": "callback",
+            "beat": 0.0019081651698797941,
+            "seconds": 0.013673469424247742,
+            "args": [],
+            "results": [
+              "Difficulty_Beginner"
+            ]
+          }
+        }
+      ],
+      "report_sha256": "c82374ee04ee7cd5542c016bfa3edc96ed5ab72189fdf4a1607181389c3215a3"
+    }
+  ],
+  "binary_sha256": "566984bf120e0295cecd8daef0520f1b62ff15be7ca1db013efef8123d96e935",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first numeric song-selector repair: native StepsType and Difficulty numeric enum aliases; original archive and full comparisons unchanged",
+  "passed_fixtures": 0,
+  "pending_charts": 1,
+  "processed_charts": 1
+}
