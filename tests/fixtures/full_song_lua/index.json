@@ -4010,15 +4010,12 @@
     {
       "title": "OIIA OIIA",
       "source_simfile": "OIIA OIIA - [Zaia]/OIIA OIIA.ssc",
-      "harness_version": "0.1.0",
-      "archive": "904abe86b43d76e483f8d17a9f02a2b9ecb39162e6bffe6d54b77e755d5f1cc1.tar.zst",
-      "sha256": "904abe86b43d76e483f8d17a9f02a2b9ecb39162e6bffe6d54b77e755d5f1cc1",
-      "compressed_bytes": 69447,
-      "uncompressed_sha256": "479b77b6f74de5e59a8d6931db473e8e6af9610b01b02604f76a30bded27412e",
-      "compression_level": 22,
-      "aliases": [
-        "82375ba4e7fa33565c741c643b2cc6b82badfc90769cb11978a175dc01bc696b.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "8bf23fdba3be4dc8f5b12cccf4af905ce31a855c265a3bfa3c0ff235e481c51b.tar.zst",
+      "sha256": "8bf23fdba3be4dc8f5b12cccf4af905ce31a855c265a3bfa3c0ff235e481c51b",
+      "compressed_bytes": 10227676,
+      "uncompressed_sha256": "e69146da77da636ef638a7ce6d439ce85d83824e163ebd2c43956c7e32f159dc",
+      "aliases": []
     },
     {
       "title": "Oil Ocean Zone Act 2",
