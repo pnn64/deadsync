@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T14:07:28Z",
+  "updated_utc": "2026-10-14T14:51:02Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 276,
-    "pending": 75,
-    "unprocessed": 150
+    "passed": 282,
+    "pending": 78,
+    "unprocessed": 141
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2581,9 +2581,9 @@
       "position": 302,
       "source_simfile": "mawaru4/mawaru4.sm",
       "simfile_sha256": "598278a7dd8b93988b17fcdcbd3c560428fcca536324dc9654b0d42b23ffd411",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-mawaru4-sm-background-cache-repair.json"
     },
     {
       "position": 303,
@@ -2621,7 +2621,9 @@
       "position": 307,
       "source_simfile": "mawaru8/mawaru8.sm",
       "simfile_sha256": "a0e32b54c2762591bb87110e8661cdc1b9e31b6d5d9a287e8500ced93cc5d492",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 308,
@@ -2689,7 +2691,9 @@
       "position": 316,
       "source_simfile": "MISSION SPUTNIK/sputnik.ssc",
       "simfile_sha256": "1241e37b8933c76c957ed2217eebd3cd53c1e2efd27cc84fba9a24938ba7f688",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 317,
@@ -2711,7 +2715,9 @@
       "position": 319,
       "source_simfile": "Molly/Molly.ssc",
       "simfile_sha256": "0ecb72fad3d2d651a35e2e51c7dcfb0ca7cc90a15718187d2a666ae493e99aa9",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 320,
@@ -2781,7 +2787,9 @@
       "position": 328,
       "source_simfile": "No Role Modelz/No Role Modelz.ssc",
       "simfile_sha256": "62c5d4b588b5d9bb3f7a8f71417bfeb2a0561c6dc17443308fbd90cf700faad3",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 329,
@@ -2895,7 +2903,9 @@
       "position": 343,
       "source_simfile": "Pale/Pale.ssc",
       "simfile_sha256": "99949a78b111661c0c3582f78357d23bb8223bbff1c2a5effd65361314a7fc5d",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 344,
@@ -2953,7 +2963,9 @@
       "position": 351,
       "source_simfile": "PARTY [pArTy eDiTioN]/Party.ssc",
       "simfile_sha256": "0e23885e106ef30c5df46a756d78c4157c0e8d89551978aa36abe1e849123a18",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 352,
@@ -3021,7 +3033,9 @@
       "position": 361,
       "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).ssc",
       "simfile_sha256": "1c769ffa86dce0c11dcfa5c67e20acc2381f20b7cfd11520a3e299d5d1483ff5",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 362,
@@ -3041,7 +3055,9 @@
       "position": 364,
       "source_simfile": "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc",
       "simfile_sha256": "2b25813381440b9e64c321a73c0f6f3b42a6f9ab474e727a379ea692d959d721",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 365,
@@ -3121,7 +3137,9 @@
       "position": 376,
       "source_simfile": "Retrospective/Retrospective.ssc",
       "simfile_sha256": "6b8b605a11579a2bcf5f699c422a28a0aac0ec1178bd7a39d4f99964c4684095",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 377,
@@ -3147,9 +3165,9 @@
       "position": 380,
       "source_simfile": "Ruin Our Friendship/RuinOurFriendship.ssc",
       "simfile_sha256": "f6ca5379055f264bcf41c1c1efe9b022a22789529220240dd6870d34e31ccb8a",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-v5-ruin-report-recovery.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-ruin-transition-first-repair.json"
     },
     {
       "position": 381,
