@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T03:22:34Z",
+  "updated_utc": "2026-10-14T07:02:57Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 238,
-    "pending": 81,
-    "unprocessed": 182
+    "passed": 243,
+    "pending": 84,
+    "unprocessed": 174
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2318,8 +2318,8 @@
       "source_simfile": "Koi [UPS2016]/koi.sm",
       "simfile_sha256": "4d5cbb5b95ac61be0a56f3eec6013904e68a04aefc279d4439a697c628a91bdc",
       "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-13-koi-sm-rec-print-repair.json"
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-13-koi-sm-judgment-final-repair.json"
     },
     {
       "position": 270,
@@ -2589,17 +2589,17 @@
       "position": 303,
       "source_simfile": "mawaru4/mawaru4.ssc",
       "simfile_sha256": "9006c956669afc6740329f508f8159e4df66275a3fc33f192df57b000e4ab93b",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-mawaru4-background-cache-repair.json"
     },
     {
       "position": 304,
       "source_simfile": "mawaru5/mawaru5.sm",
       "simfile_sha256": "6feab5a3a888443ae3e50802a230a7ddf6de95ba1e14b8805880795ef14e56b2",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-mawaru5-background-cache-repair.json"
     },
     {
       "position": 305,
@@ -2613,7 +2613,9 @@
       "position": 306,
       "source_simfile": "mawaru7/mawaru7.sm",
       "simfile_sha256": "16daf42ecde7e00d77cd7bd7b68bda40a6fda0949ea7d16d838ea6d98ce227cd",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 307,
@@ -2633,7 +2635,9 @@
       "position": 309,
       "source_simfile": "Max 300/MAX 300.ssc",
       "simfile_sha256": "c16f7f2cf7d6e41f916deecdd9a2f5a494ae4204277d7ff1d78036d171c48f69",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 310,
@@ -2653,7 +2657,9 @@
       "position": 312,
       "source_simfile": "Megalovania SM5 - [TaroNuke]/megalovania.sm",
       "simfile_sha256": "cc4f9cb19318d83f9ea651ecb790ab5d12bcb02fc60dfff11ea2ae79e8cf31f3",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 313,
@@ -2673,7 +2679,9 @@
       "position": 315,
       "source_simfile": "minefield surfing_1/minefield.ssc",
       "simfile_sha256": "9c659d45bb1c5e5babd62121fa61ad87f8ffa7b7918b6dd1b3488de9d71e6530",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 316,
@@ -2905,7 +2913,9 @@
       "position": 350,
       "source_simfile": "Paradise/Paradise.ssc",
       "simfile_sha256": "1b7370ebc6a69a753e628b6f1d893ba3d58e58cfae3b9ad84c12bfcb24175368",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 351,
@@ -2923,7 +2933,9 @@
       "position": 353,
       "source_simfile": "Picture in My Mind [nikko X WINK RMX]/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc",
       "simfile_sha256": "26982b4f0ffe67d49e2906a4a3b38db22638b601d18acd96ecd3554cb5b31ea0",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 354,
@@ -2941,7 +2953,9 @@
       "position": 356,
       "source_simfile": "PO (wrashi Bootleg) [Gpop]/PO (wrashi Bootleg).ssc",
       "simfile_sha256": "393cbcd85554d8eb4bed3e28fd1bb33685292ec0596eaf6d2d4c00dc23ca18e8",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 357,
@@ -2959,7 +2973,9 @@
       "position": 359,
       "source_simfile": "Popek feat. Titans Fall Harder - Downfall/Downfall.ssc",
       "simfile_sha256": "1073d16f32772c5097a125d5a10c1c92ae6278bc0ea41cfd616ede77488aa41e",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 360,
