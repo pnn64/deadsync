@@ -1,0 +1,19 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "The Scale/The Scale.ssc",
+  "native_frames": 48428,
+  "replayed_frames": 48428,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "d153bc6241e4cf132e47862bf85701360f18fa7e58daa4553873f0c8bf6db2ad.tar.zst",
+  "compressed_sha256": "d153bc6241e4cf132e47862bf85701360f18fa7e58daa4553873f0c8bf6db2ad",
+  "uncompressed_sha256": "521c95c37ccd314c2d187aea542dd5a4e14f6f8258f96a8e3b74e1371088b1b2",
+  "compressed_bytes": 16161753,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false,
+  "original_replay_exit": 1,
+  "full_comparison_report_accepted": true,
+  "post_accept_progress_logger_failure_preserved": true,
+  "full_replay_repeated": false
+}
