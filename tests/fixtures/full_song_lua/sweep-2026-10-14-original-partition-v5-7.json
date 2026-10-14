@@ -266,6 +266,57 @@
       "replay_seconds": 0.5101862619922031,
       "candidate_sha256": "4e0dff450b7809723759f86bffdd9946e73764a949e0578a54d9d00677486015",
       "failure": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (2505340) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 386,
+      "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.ssc",
+      "simfile_sha256": "29d4151e08577c8256f6a5021112d53456525ed900eb8b8b4bae0427b2b2018f",
+      "retained_original_archive": "905f4d5096a547453771c44f961de105265650bb38663f963f2ec0bd68afbfda.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "1f0beb2612f19d67900331a90493ac35fe0c66b7bbe36ba0ceab5b7cfa7b4d03",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "1ed84cd471a8eeb8511474ca8881aa1516acbf96 + 254c36811 + e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/ruin-transition-linux-green-v2/proof.json",
+      "capture_seconds": 234.85512308200123,
+      "trace_sha256": "5170e07f3a71f140338921fecbe66234bf94b79bff807e3be5b31e35757ea38f",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-7/chart-386/candidates/ffec488fc33d7b27a72138492693a209da3b3e323a57f92d000d8765c79f0f8c.tar",
+      "replay_exit": 0,
+      "replay_seconds": 2252.9378563159844,
+      "candidate_sha256": "ffec488fc33d7b27a72138492693a209da3b3e323a57f92d000d8765c79f0f8c",
+      "native_frames": 78820,
+      "replayed_frames": 78820,
+      "compared_stage_fields": 2101,
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate, ActorFrame.GetChildren, ActorSound.play",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "4c232bcaedb985d783e077f60b2e1a59de6f4824d8bab3b2fb272c6d9f1d05c5",
+      "archive": "463dd12bd86d8f69e4ed5e95d4e02ed73c7389308539061728042897980eef5a.tar.zst",
+      "archive_sha256": "463dd12bd86d8f69e4ed5e95d4e02ed73c7389308539061728042897980eef5a",
+      "compressed_bytes": 23136009,
+      "pack_seconds": 15.305451956985053,
+      "harness_version": "0.1.80",
+      "title": "Save Your Tears Episode 01",
+      "retained_original_entry": {
+        "title": "Save Your Tears",
+        "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.ssc",
+        "harness_version": "0.1.0",
+        "archive": "905f4d5096a547453771c44f961de105265650bb38663f963f2ec0bd68afbfda.tar.zst",
+        "sha256": "905f4d5096a547453771c44f961de105265650bb38663f963f2ec0bd68afbfda",
+        "compressed_bytes": 4604601,
+        "uncompressed_sha256": "e0217b23064cd5a2bcdb9f852d4959f3a672a593b24ac658b4c9a69c6f8d5b5f",
+        "compression_level": 22,
+        "aliases": [
+          "2a0c54d9827f9dbab6726dad601d65befeabb1af2a58365368db1f9c867af599.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -276,7 +327,7 @@
   },
   "binary_sha256": "1f0beb2612f19d67900331a90493ac35fe0c66b7bbe36ba0ceab5b7cfa7b4d03",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 1,
+  "passed_fixtures": 2,
   "pending_charts": 3,
-  "processed_charts": 4
+  "processed_charts": 5
 }
