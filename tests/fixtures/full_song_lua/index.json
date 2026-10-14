@@ -4758,15 +4758,12 @@
     {
       "title": "Shooting Love",
       "source_simfile": "Shooting Love/Shooting Love.ssc",
-      "harness_version": "0.1.0",
-      "archive": "8dc1c58dc778b3718b89efbb7b022f53ebfe2ed9d0e95ffff5e243cfba0c6ffc.tar.zst",
-      "sha256": "8dc1c58dc778b3718b89efbb7b022f53ebfe2ed9d0e95ffff5e243cfba0c6ffc",
-      "compressed_bytes": 772929,
-      "uncompressed_sha256": "51ba083ed6af8457dab8617aad3384c8da98282a2fcb5b0850fc8bd3cd4b56c3",
-      "compression_level": 22,
-      "aliases": [
-        "8abc3a955148d1f427fe44f3a63c83606663edb5f9917bb22ab21f129ca390ad.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "04dedb98d93afd4eea6f313562278fecdbed326146fb7a9e4c959cbe33f0a479.tar.zst",
+      "sha256": "04dedb98d93afd4eea6f313562278fecdbed326146fb7a9e4c959cbe33f0a479",
+      "compressed_bytes": 14909658,
+      "uncompressed_sha256": "e8517928428413dacdbc68ca35037915fa0d9a5f07731c9d1cc04bddb6f0076b",
+      "aliases": []
     },
     {
       "title": "粛聖!! ロリ神レクイエム☆",
