@@ -1,0 +1,26 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "Get Into It/GetIntoIt.sm",
+      "acceptance_commit": "6463b04f3",
+      "native_frames": 70013,
+      "replayed_frames": 70013,
+      "compared_stage_fields": 1496,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "0f930b5c92c851793a6a4ddcac966901028639f31d42079fedb8e431a2a27d7c.tar.zst",
+      "compressed_sha256": "0f930b5c92c851793a6a4ddcac966901028639f31d42079fedb8e431a2a27d7c",
+      "uncompressed_sha256": "c8525597f7140851887306420f697065b157204649f38c77434fb24b5fa69c27",
+      "compressed_bytes": 13210404,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.accelerate, Actor.addx, Actor.bob, Actor.rotationy, Actor.setstate, Actor.wag, ActorSound.get, ActorSound.play, ActorSound.stop, Sprite.LinearFrames, Sprite.setstate",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
