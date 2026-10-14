@@ -1,0 +1,67 @@
+{
+  "source_simfile": "Ruin Our Friendship/RuinOurFriendship.ssc",
+  "repair_attempts_before": 0,
+  "native_capture_reused": true,
+  "trace_sha256": "25f558d8e7b80c63b5d1b9579654636d69251fdd1d2e1532533cc84af6c3c7b0",
+  "original_full_replay": {
+    "native_frames": 102848,
+    "replayed_frames": 102848,
+    "errors": [],
+    "mismatch_count": 2,
+    "replay_exit": 2
+  },
+  "affected_actor": "ScreenGameplay/In",
+  "native_event": {
+    "actor": "external-0033",
+    "args": [
+      0
+    ],
+    "beat": -0.8971330523490906,
+    "caller": {
+      "line": 173,
+      "source": "song:/lua/default.lua",
+      "tail_call": false
+    },
+    "command": "OnCommand",
+    "definition_id": "def-0011",
+    "detail": {
+      "native_tween_time_left": 0.28238725662231445
+    },
+    "kind": "call",
+    "line": 173,
+    "operation": "Actor.diffusealpha",
+    "phase": "callback",
+    "scene": 1,
+    "seconds": -0.3826303780078888,
+    "seq": 98,
+    "source": "song:/lua/default.lua"
+  },
+  "native_frame": {
+    "beat": -0.8971330523490906,
+    "delta": 0.0015660000499337912,
+    "scene": 1,
+    "seconds": -0.3826303780078888,
+    "sequence": 1096,
+    "wall_seconds": 4.484687
+  },
+  "deadsync_tween_time_left": 0.2808212637901306,
+  "native_tween_time_left": 0.28238725662231445,
+  "difference_seconds": 0.0015659928321838379,
+  "cause": "The compile update plan advances In/Out/Cancel before the authored foreground. Native ScreenGameplay sets SongForeground to DRAW_ORDER_OVERLAY+1 and transition layers to DRAW_ORDER_TRANSITIONS; ScreenWithMenuElements::BeginScreen performs stable draw sorting, and ActorFrame::UpdateInternal traverses that order. Thus foreground callbacks observe transition queues before this frame advances them. The difference equals this native frame delta within float32 roundoff.",
+  "primary_source_sha256": {
+    "src/ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+    "src/ScreenGameplay.cpp": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+    "src/ScreenWithMenuElements.cpp": "88f95ddf0c66f672f3fa79ab26be6925f1dce019b7544a710e9593c60da7e3ba",
+    "src/Transition.cpp": "b8262c86c0656fa5c9c31ecbc95db81c0232d60cbb55add41d297a4e3d5e41f9"
+  },
+  "primary_source_locations": [
+    "ActorFrame.cpp:449-460,515",
+    "ScreenGameplay.cpp:545-551",
+    "ScreenWithMenuElements.cpp:108-142",
+    "Transition.cpp:24-40,70-76"
+  ],
+  "proposed_fix": "Collect transition layer updates after the authored song roots, retaining the same queues and getters.",
+  "acceptance_and_tolerances_changed": false,
+  "expected_values_injected": false,
+  "passing_charts_reopened": false
+}
