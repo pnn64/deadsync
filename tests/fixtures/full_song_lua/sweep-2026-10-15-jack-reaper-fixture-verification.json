@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Jack The Reaper/Jack The Reaper.sm",
+  "native_frames": 40101,
+  "replayed_frames": 40101,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "668b5d9e3eb1f2d5789b3e194b478936406cae05d570336c110b3d5637aeb2ad.tar.zst",
+  "compressed_sha256": "668b5d9e3eb1f2d5789b3e194b478936406cae05d570336c110b3d5637aeb2ad",
+  "uncompressed_sha256": "5bdf4ac66993479620bb2fea1f099169cfac09b164f249f6d48986cab112709c",
+  "compressed_bytes": 12889200,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

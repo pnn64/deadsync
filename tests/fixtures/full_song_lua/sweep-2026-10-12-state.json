@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T23:38:36Z",
-  "previous_goal_turn": "Progress: Tear Jerker SSC original replay passes all36,060 frames and Ultra B.B.K.K.B.K.K original replay passes all62,094 frames, zero mismatches/errors; both fixtures immediately saved, committed and local decompressed bytes verified, charts closed. Actual U.N. Owen native callback gap fixed in harness ca0b435: late-added command fields are observed through DefMetatable newindex while preserving authored raw insertion and existing setter behavior. Native Lua registration control baseline fails, fixed observes each callback once and preserves sparse slots/order. Both hosts pass12 runtime controls; isolated harness2f2ef99f build, all2,223 source pins and log/binary hashes verified. Complete native baseline/fixed captures prove old zero late On boundaries versus fixed exactly one begin/end with identical actor calls999/17. Control driver optional errors-array KeyError corrected by reusing complete baseline capture; no chart attempt spent on controls. U.N. Owen first full repair is now replaying a corrected native capture on frozen sparse helper375fb5fa, original full capture retained, at most one later repair. STEVE SSC first retained-input repair completes77,402 frames, no errors,179,679 command/query mismatches, stage fields match; remaining native theme child topology differences recorded, final repair held. STEVE SM first repair continues. Shakunetsu first repair completes14,728 frames, one char_ayaze nil error and19,749 mismatches; actual prior background compilation failed because owned cmd parser requires semicolons whereas primary native lparser accepts next command Name after argument expressions. Exact sleep,0 newline pulse fragment succeeds in actual native Lua control. Final repair2 must wait for expression-boundary parsing and controls, original complete capture reused. Pokemon first repair, Talk About first capture repair, queued Entity first, Jack/My Exes first listener chain, Wake first, Koi final2, Mawaru8 first and original queues continue. Global original sweep helper711a5230 and old harness058ed059 remain immutable; new observer stays private to validated paired captures. All501 original simfile bytes unchanged; missing coverage separate, existing comparisons unchanged, oversized fixtures ignored/local, sweep active and incomplete.",
+  "updated_utc": "2026-10-14T23:39:38Z",
+  "previous_goal_turn": "Progress: Jack the Reaper first retained-capture listener repair passes all40,101 frames, zero errors/mismatches, saved and local decompressed bytes verified, chart closed after one repair. My Exes SM first repair now live. Tear Jerker SSC original replay passes all36,060 frames and Ultra B.B.K.K.B.K.K original replay passes all62,094 frames, zero mismatches/errors; both fixtures immediately saved, committed and local decompressed bytes verified, charts closed. Actual U.N. Owen native callback gap fixed in harness ca0b435: late-added command fields are observed through DefMetatable newindex while preserving authored raw insertion and existing setter behavior. Native Lua registration control baseline fails, fixed observes each callback once and preserves sparse slots/order. Both hosts pass12 runtime controls; isolated harness2f2ef99f build, all2,223 source pins and log/binary hashes verified. Complete native baseline/fixed captures prove old zero late On boundaries versus fixed exactly one begin/end with identical actor calls999/17. Control driver optional errors-array KeyError corrected by reusing complete baseline capture; no chart attempt spent on controls. U.N. Owen first full repair is now replaying a corrected native capture on frozen sparse helper375fb5fa, original full capture retained, at most one later repair. STEVE SSC first retained-input repair completes77,402 frames, no errors,179,679 command/query mismatches, stage fields match; remaining native theme child topology differences recorded, final repair held. STEVE SM first repair continues. Shakunetsu first repair completes14,728 frames, one char_ayaze nil error and19,749 mismatches; actual prior background compilation failed because owned cmd parser requires semicolons whereas primary native lparser accepts next command Name after argument expressions. Exact sleep,0 newline pulse fragment succeeds in actual native Lua control. Final repair2 must wait for expression-boundary parsing and controls, original complete capture reused. Pokemon first repair, Talk About first capture repair, queued Entity first, Jack/My Exes first listener chain, Wake first, Koi final2, Mawaru8 first and original queues continue. Global original sweep helper711a5230 and old harness058ed059 remain immutable; new observer stays private to validated paired captures. All501 original simfile bytes unchanged; missing coverage separate, existing comparisons unchanged, oversized fixtures ignored/local, sweep active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "3c0e4f131c6aab646532addaf350c611fce6784b",
+      "deadsync": "a738ec0d16bc38479e7cb08020562aa2bdce59e4",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -151,9 +151,9 @@
       "pending": 64,
       "processed": 102,
       "last_log_lines": [
-        "[1564.6s] replaying every native gameplay frame: frame 30205/107886 (28.0%)",
-        "[1566.6s] replaying every native gameplay frame: frame 30242/107886 (28.0%)",
-        "[1568.6s] replaying every native gameplay frame: frame 30281/107886 (28.1%)"
+        "[1626.6s] replaying every native gameplay frame: frame 31432/107886 (29.1%)",
+        "[1628.6s] replaying every native gameplay frame: frame 31470/107886 (29.2%)",
+        "[1630.6s] replaying every native gameplay frame: frame 31507/107886 (29.2%)"
       ],
       "supervisor_running": true
     },
@@ -1917,9 +1917,9 @@
         "pending": 64,
         "processed": 102,
         "last_log_lines": [
-          "[1564.6s] replaying every native gameplay frame: frame 30205/107886 (28.0%)",
-          "[1566.6s] replaying every native gameplay frame: frame 30242/107886 (28.0%)",
-          "[1568.6s] replaying every native gameplay frame: frame 30281/107886 (28.1%)"
+          "[1626.6s] replaying every native gameplay frame: frame 31432/107886 (29.1%)",
+          "[1628.6s] replaying every native gameplay frame: frame 31470/107886 (29.2%)",
+          "[1630.6s] replaying every native gameplay frame: frame 31507/107886 (29.2%)"
         ],
         "supervisor_running": true
       },
@@ -3531,6 +3531,13 @@
       "full_repairs_spent": 1,
       "final_attempt_not_started": true,
       "next_action": "Implement native argument expression boundaries in cmd parser; avoid newline-only split, preserve source lines and complete nested Lua expressions/functions."
+    },
+    "jack_reaper_closed": {
+      "full_repair_attempts_spent": 1,
+      "passing_chart_closed": true,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-jack-reaper-fixture-verification.json",
+      "native_capture_reused": true,
+      "further_replay_allowed": false
     }
   },
   "counts_at_checkpoint": {
