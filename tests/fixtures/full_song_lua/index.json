@@ -4796,15 +4796,12 @@
     {
       "title": "空間創造理論",
       "source_simfile": "Space Creation Theory/space creation theory.ssc",
-      "harness_version": "0.1.0",
-      "archive": "2ed0e171ebd07a23ebff9e5bbd1a65aeb987545389bd44a213cb08320d149258.tar.zst",
-      "sha256": "2ed0e171ebd07a23ebff9e5bbd1a65aeb987545389bd44a213cb08320d149258",
-      "compressed_bytes": 1103429,
-      "uncompressed_sha256": "c520673cd4ba509d3e5dd439260f98fd51d6858079a4d0038b321e6911413b6a",
-      "compression_level": 22,
-      "aliases": [
-        "ecd4bfffff81954063e8e649e9da3b8b3beef3a8ecad408b9853efdd27e2ef4e.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "db729f9c7c37537c4889dbbf3d15a52056d5d665c5c85b4f199441f8f4754090.tar.zst",
+      "sha256": "db729f9c7c37537c4889dbbf3d15a52056d5d665c5c85b4f199441f8f4754090",
+      "compressed_bytes": 14129544,
+      "uncompressed_sha256": "039bd5a39f307e94c38ca09b1864650a9bd4534c9d32d583ef641bfcceaa1304",
+      "aliases": []
     },
     {
       "title": "Spectrum",
