@@ -11,6 +11,18 @@ const MODS_LEVELS: [&str; 4] = [
     "ModsLevel_Current",
 ];
 
+// GameConstantsAndTypes.h's StepsType enum order; numeric Lua enum keys are
+// zero-based, unlike the one-based public enum-name arrays.
+const NATIVE_STEPS_TYPES: [&str; 38] = [
+    "dance-single", "dance-double", "dance-couple", "dance-solo", "dance-threepanel", "dance-routine",
+    "pump-single", "pump-halfdouble", "pump-double", "pump-couple", "pump-routine", "kb7-single",
+    "ez2-single", "ez2-double", "ez2-real", "para-single", "ds3ddx-single",
+    "beat-single5", "beat-versus5", "beat-double5", "beat-single7", "beat-versus7", "beat-double7",
+    "maniax-single", "maniax-double", "techno-single4", "techno-single5", "techno-single8",
+    "techno-double4", "techno-double5", "techno-double8", "popn-five", "popn-nine", "lights-cabinet",
+    "kickbox-human", "kickbox-quadarm", "kickbox-insect", "kickbox-arachnid",
+];
+
 pub(crate) fn options_level(value: Option<&Value>) -> mlua::Result<usize> {
     option_enum(value, &MODS_LEVELS, "ModsLevel")
 }
@@ -2196,9 +2208,19 @@ pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Re
         "HasStepsTypeAndDifficulty", "HasEdits"] {
         let steps = all_steps.clone();
         table.set(method, lua.create_function(move |lua, args: MultiValue| {
-            let type_name = method_arg(&args, 0).cloned().and_then(read_string);
+            let type_value = method_arg(&args, 0);
+            let type_name = if method == "GetAllSteps" { None }
+                else if matches!(type_value, Some(Value::Integer(_) | Value::Number(_))) {
+                    Some(NATIVE_STEPS_TYPES[option_enum(type_value, &NATIVE_STEPS_TYPES, "StepsType")?].to_owned())
+                } else { type_value.cloned().and_then(read_string) };
             let difficulty = if method == "HasEdits" { Some(SongLuaDifficulty::Edit) }
                 else { method_arg(&args, 1).cloned().and_then(song_lua_difficulty_from_value) };
+            if matches!(method, "GetOneSteps" | "HasStepsTypeAndDifficulty")
+                && matches!(method_arg(&args, 1), Some(Value::Integer(_) | Value::Number(_)))
+                && difficulty.is_none()
+            {
+                return Err(mlua::Error::runtime("Expected Difficulty"));
+            }
             let result = lua.create_table()?;
             for step in steps.sequence_values::<Table>() {
                 let step = step?;

@@ -540,6 +540,15 @@ impl SongLuaDifficulty {
 }
 
 pub fn song_lua_difficulty_from_value(value: mlua::Value) -> Option<SongLuaDifficulty> {
+    if matches!(value, mlua::Value::Integer(_) | mlua::Value::Number(_)) {
+        let index = song_tables::option_enum(Some(&value), &[
+            "Difficulty_Beginner", "Difficulty_Easy", "Difficulty_Medium",
+            "Difficulty_Hard", "Difficulty_Challenge", "Difficulty_Edit",
+        ], "Difficulty").ok()?;
+        return Some([SongLuaDifficulty::Beginner, SongLuaDifficulty::Easy,
+            SongLuaDifficulty::Medium, SongLuaDifficulty::Hard,
+            SongLuaDifficulty::Challenge, SongLuaDifficulty::Edit][index]);
+    }
     let mlua::Value::String(value) = value else {
         return None;
     };

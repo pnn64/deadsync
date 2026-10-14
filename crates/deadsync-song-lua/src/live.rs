@@ -1530,6 +1530,63 @@ return Def.Actor {
     }
 
     #[test]
+    fn live_numeric_song_selectors_retain_chart_across_reload() {
+        let mut compiled = compile_with_context("numeric-song-selector-reload", r#"
+NUMERIC_SCENES = (NUMERIC_SCENES or 0) + 1
+local scene = NUMERIC_SCENES
+local names = {'Beginner','Easy','Medium','Hard','Challenge','Edit'}
+return Def.Actor { OnCommand = function(self)
+    local song = GAMESTATE:GetCurrentSong()
+    for code = 0, 5 do
+        local step = song:GetOneSteps(0, code)
+        assert(step ~= nil, 'numeric GetOneSteps must select a real chart')
+        assert(step:GetDifficulty() == 'Difficulty_' .. names[code + 1])
+    end
+    assert(#song:GetStepsByStepsType(0) == 6 and song:HasStepsType(0))
+    assert(song:HasStepsTypeAndDifficulty(0, 2) and song:HasEdits(0))
+    assert(song:GetOneSteps(6, 2):GetStepsType() == 'StepsType_Pump_Single')
+    if scene == 1 then
+        NUMERIC_CHOSEN = song:GetOneSteps(0.0, 2.0)
+        GAMESTATE:SetCurrentSteps(0, NUMERIC_CHOSEN)
+        assert(GAMESTATE:GetCurrentSteps(0) == NUMERIC_CHOSEN)
+        SCREENMAN:SetNewScreen('ScreenGameplay')
+    else
+        assert(GAMESTATE:GetCurrentSteps(0):GetDifficulty() == 'Difficulty_Medium')
+        assert(GAMESTATE:GetCurrentSteps(1):GetDifficulty() == 'Difficulty_Medium')
+    end
+    self:sleep(9999)
+end }
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.layer_start_beats = vec![0.0];
+            context.players[0].enabled = true;
+            context.players[1].enabled = false;
+            context.song_steps = [SongLuaDifficulty::Beginner, SongLuaDifficulty::Easy,
+                SongLuaDifficulty::Medium, SongLuaDifficulty::Hard, SongLuaDifficulty::Challenge,
+                SongLuaDifficulty::Edit, SongLuaDifficulty::Medium].into_iter().enumerate()
+                .map(|(index, difficulty)| crate::SongLuaStep {
+                    steps_type: if index == 6 { "StepsType_Pump_Single" } else { "StepsType_Dance_Single" }.into(),
+                    difficulty, description: format!("{difficulty:?}"), chart_name: String::new(),
+                    credit: String::new(), meter: 9, music_file: String::new(), possible_grade_points: 0,
+                }).collect();
+            context.player_step_indices = [Some(4), Some(4)];
+        });
+        let mut scene = compiled.live_scene.take().expect("initial numeric selector scene");
+        let output = scene.advance(SongLuaLiveFrame::default()).unwrap();
+        assert!(output.errors.is_empty(), "numeric selector callback: {:?}", output.errors);
+        assert_eq!(output.request, Some(SongLuaLiveRequest::NewScreen("ScreenGameplay".into())));
+        assert_eq!(scene.selected_context().unwrap().player_step_indices, [Some(2), Some(4)]);
+        let mut layers = crate::reload_song_lua_with_default_host(scene,
+            |_, _, _| Ok(Arc::<[()]>::from([])),
+            |_| None::<crate::SongLuaOverlayModelLayer<()>>, |_, _| None).unwrap();
+        let mut replacement = layers[0].live_scene.take().unwrap();
+        assert_eq!(replacement.selected_context().unwrap().player_step_indices, [Some(2), Some(2)]);
+        let output = replacement.advance(SongLuaLiveFrame::default()).unwrap();
+        assert!(output.errors.is_empty(), "replacement callback: {:?}", output.errors);
+        assert_eq!(output.request, None);
+    }
+
+    #[test]
     fn live_gameplay_children_retain_native_owned_inventory() {
         let mut compiled = compile_with_context("native-screen-children", r#"
 return Def.Actor {

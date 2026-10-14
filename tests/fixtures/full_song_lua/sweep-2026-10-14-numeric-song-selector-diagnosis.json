@@ -1,0 +1,79 @@
+{
+  "cause": "Native Song.GetOneSteps checks StepsType and Difficulty enums, whose reverse lookup tables include zero-based numeric keys. Deadsync song filtering read only type strings and difficulty parser read only difficulty strings, returning nil for valid numeric calls; scripts stored nil current Steps before reloading gameplay.",
+  "primary_sources": {
+    "Song.cpp:2237-2240": "Enum::Check<StepsType> and Enum::Check<Difficulty>",
+    "EnumHelper.h:128-164": "numeric reverse-table keys use zero-based enum values",
+    "EnumHelper.cpp:12-47": "enum checks look up the original Lua key; no fractional truncation",
+    "GameConstantsAndTypes.h:76-117": "full38 StepsType order",
+    "Difficulty.h:13-21": "six difficulty enum values"
+  },
+  "full38_steps_type_order_verified_against_primary_header": true,
+  "steps_type_names": [
+    "dance-single",
+    "dance-double",
+    "dance-couple",
+    "dance-solo",
+    "dance-threepanel",
+    "dance-routine",
+    "pump-single",
+    "pump-halfdouble",
+    "pump-double",
+    "pump-couple",
+    "pump-routine",
+    "kb7-single",
+    "ez2-single",
+    "ez2-double",
+    "ez2-real",
+    "para-single",
+    "ds3ddx-single",
+    "beat-single5",
+    "beat-versus5",
+    "beat-double5",
+    "beat-single7",
+    "beat-versus7",
+    "beat-double7",
+    "maniax-single",
+    "maniax-double",
+    "techno-single4",
+    "techno-single5",
+    "techno-single8",
+    "techno-double4",
+    "techno-double5",
+    "techno-double8",
+    "popn-five",
+    "popn-nine",
+    "lights-cabinet",
+    "kickbox-human",
+    "kickbox-quadarm",
+    "kickbox-insect",
+    "kickbox-arachnid"
+  ],
+  "charts": [
+    {
+      "source_simfile": "It's Showtime/mettaton.ssc",
+      "position": 251,
+      "repair_attempts": 0,
+      "candidate_sha256": "378bedd6129e825b38ebb4cdf6fbd210820f86f9c366036dab669ca89d079f29",
+      "trace_sha256": "2cf3e5689300051262fe0c02682585eb53778822168801ea3b0dac38ef90b74f",
+      "simfile_sha256": "73e611898e40fd3b7a07a6257a3b38e4a6a07cf8f39b0f3e4bd8e7cebbbde128",
+      "failure": " 45682/145878 (31.3%)\n[698.1s] replaying every native gameplay frame: frame 45809/145878 (31.4%)\n[700.1s] replaying every native gameplay frame: frame 45944/145878 (31.5%)\n[702.1s] replaying every native gameplay frame: frame 46072/145878 (31.6%)\n[704.1s] replaying every native gameplay frame: frame 46205/145878 (31.7%)\n[706.1s] replaying every native gameplay frame: frame 46337/145878 (31.8%)\n[708.1s] replaying every native gameplay frame: frame 46477/145878 (31.9%)\n[710.1s] replaying every native gameplay frame: frame 46618/145878 (32.0%)\n[712.1s] replaying every native gameplay frame: frame 46756/145878 (32.1%)\n[714.1s] replaying every native gameplay frame: frame 46896/145878 (32.1%)\n[716.1s] replaying every native gameplay frame: frame 47033/145878 (32.2%)\n[718.1s] replaying every native gameplay frame: frame 47162/145878 (32.3%)\n[720.2s] replaying every native gameplay frame: frame 47292/145878 (32.4%)\n[722.2s] replaying every native gameplay frame: frame 47422/145878 (32.5%)\n[724.2s] replaying every native gameplay frame: frame 47554/145878 (32.6%)\n[726.2s] replaying every native gameplay frame: frame 47686/145878 (32.7%)\n[728.2s] replaying every native gameplay frame: frame 47817/145878 (32.8%)\n[730.2s] replaying every native gameplay frame: frame 47927/145878 (32.9%)\n[732.2s] replaying every native gameplay frame: frame 48058/145878 (32.9%)\n[734.2s] replaying every native gameplay frame: frame 48189/145878 (33.0%)\n[736.2s] replaying every native gameplay frame: frame 48323/145878 (33.1%)\n[738.2s] replaying every native gameplay frame: frame 48455/145878 (33.2%)\n[740.2s] replaying every native gameplay frame: frame 48589/145878 (33.3%)\n[742.2s] replaying every native gameplay frame: frame 48717/145878 (33.4%)\n[744.2s] replaying every native gameplay frame: frame 48846/145878 (33.5%)\n[746.2s] replaying every native gameplay frame: frame 48973/145878 (33.6%)\n[748.2s] replaying every native gameplay frame: frame 49099/145878 (33.7%)\n[750.2s] replaying every native gameplay frame: frame 49225/145878 (33.7%)\n[752.2s] replaying every native gameplay frame: frame 49352/145878 (33.8%)\n[754.2s] replaying every native gameplay frame: frame 49477/145878 (33.9%)\n[756.2s] replaying every native gameplay frame: frame 49601/145878 (34.0%)\n[758.2s] replaying every native gameplay frame: frame 49721/145878 (34.1%)\n[760.2s] replaying every native gameplay frame: frame 49840/145878 (34.2%)\n[762.2s] replaying every native gameplay frame: frame 49964/145878 (34.3%)\n[764.2s] replaying every native gameplay frame: frame 50088/145878 (34.3%)\n[766.2s] replaying every native gameplay frame: frame 50213/145878 (34.4%)\n[768.2s] replaying every native gameplay frame: frame 50332/145878 (34.5%)\n[770.2s] replaying every native gameplay frame: frame 50459/145878 (34.6%)\n[772.2s] replaying every native gameplay frame: frame 50586/145878 (34.7%)\n[774.2s] replaying every native gameplay frame: frame 50709/145878 (34.8%)\n[776.2s] replaying every native gameplay frame: frame 50839/145878 (34.9%)\n[778.2s] replaying every native gameplay frame: frame 50971/145878 (34.9%)\n[780.2s] replaying every native gameplay frame: frame 51100/145878 (35.0%)\n[782.2s] replaying every native gameplay frame: frame 51231/145878 (35.1%)\n\nthread 'main' (1572481) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: GAMESTATE has no selected P1 chart\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "source_simfile": "MISSION SPUTNIK/sputnik.ssc",
+      "position": 316,
+      "repair_attempts": 0,
+      "candidate_sha256": "e6a8401d7558a4e1b8139353c399ba09081d9bcabbcc083e0272a204bb9cd814",
+      "trace_sha256": "820041d226b5f71edaeb97fd96980d9cb205c57dd897d8c5ea59f483a31bf1ce",
+      "simfile_sha256": "1241e37b8933c76c957ed2217eebd3cd53c1e2efd27cc84fba9a24938ba7f688",
+      "failure": "[0.1s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: frame 90/40632 (0.2%)\n[4.0s] replaying every native gameplay frame: frame 231/40632 (0.6%)\n[6.0s] replaying every native gameplay frame: frame 366/40632 (0.9%)\n[8.0s] replaying every native gameplay frame: frame 507/40632 (1.2%)\n[10.0s] replaying every native gameplay frame: frame 639/40632 (1.6%)\n[12.0s] replaying every native gameplay frame: frame 769/40632 (1.9%)\n[14.0s] replaying every native gameplay frame: frame 897/40632 (2.2%)\n[16.0s] replaying every native gameplay frame: frame 1023/40632 (2.5%)\n[18.0s] replaying every native gameplay frame: frame 1156/40632 (2.8%)\n[20.0s] replaying every native gameplay frame: frame 1282/40632 (3.2%)\n[22.0s] replaying every native gameplay frame: frame 1412/40632 (3.5%)\n[24.0s] replaying every native gameplay frame: frame 1536/40632 (3.8%)\n\nthread 'main' (2506008) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: GAMESTATE has no selected P1 chart\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    }
+  ],
+  "chart_source_lines": {
+    "MISSION SPUTNIK/lua/default.lua": "9: GetOneSteps(0,selection), then SetCurrentSteps(0), reload",
+    "It's Showtime/cooking_with_a_killer_robot/default.lua": "250-262: numeric type/difficulty selectors assigned to both players"
+  },
+  "full_repair_attempts_spent": 0,
+  "original_chart_and_capture_bytes_unchanged": true,
+  "comparison_fields_and_tolerances_unchanged": true,
+  "passing_charts_reopened": false
+}
