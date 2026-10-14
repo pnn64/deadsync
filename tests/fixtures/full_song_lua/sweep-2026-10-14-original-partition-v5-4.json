@@ -172,6 +172,43 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 383,
+      "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.sm",
+      "simfile_sha256": "6141d6d76f0e80ec9ece060bac5bdee2d7edf282ec675ce795b44224dfa54dfa",
+      "retained_original_archive": "3cb5b82071c5bc856f05ff2fe71a68c6e49038a633edcf3d69f74b77467fa773.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e1d9c9995fcf756f86445761fe965767a848dd24",
+      "build_proof": "/home/parity/jobs/next-screen-target-linux-green-v1/proof.json",
+      "capture_seconds": 228.986532474024,
+      "trace_sha256": "6168f790a3db17f36e1b1a9cfa3fbfedbf9a1be9b6e2db6d64610db780ffe762",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-4/chart-383/candidates/84a19da50aef6811f60a0d57972b7dc2d68b1ae45130e307549d82de14f56a73.tar",
+      "replay_exit": 2,
+      "replay_seconds": 2333.6447243950097,
+      "candidate_sha256": "84a19da50aef6811f60a0d57972b7dc2d68b1ae45130e307549d82de14f56a73",
+      "native_frames": 81952,
+      "replayed_frames": 81952,
+      "compared_stage_fields": 2101,
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate, ActorFrame.GetChildren, ActorSound.play",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 1,
+      "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 279895,
+          "deadsync": 279883
+        }
+      ],
+      "report_sha256": "b236f3165f33e14a587d5e32775bf7df4eb61dc922eda1378eb4738ccfe385ac"
     }
   ],
   "scope": {
@@ -180,9 +217,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "fc937c1ae18f5ffc8bc3716cc10f755ae0c4dd23172c9a055955844fef0c3a28",
+  "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 3,
-  "pending_charts": 1,
-  "processed_charts": 4
+  "pending_charts": 2,
+  "processed_charts": 5
 }
