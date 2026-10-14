@@ -1,0 +1,26 @@
+{
+  "verification": "Storage byte integrity only; accepted by the existing complete replay comparisons.",
+  "fixtures": [
+    {
+      "source_simfile": "new earth/new earth.ssc",
+      "acceptance_commit": "eb136bf75583b0bc437d977205b178762084b499",
+      "native_frames": 89954,
+      "replayed_frames": 89954,
+      "compared_stage_fields": 1408,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "08c46eb2ddf3034aee917a2e4cf6bb56958054996d0e6535241d5c419d1caefc.tar.zst",
+      "compressed_sha256": "08c46eb2ddf3034aee917a2e4cf6bb56958054996d0e6535241d5c419d1caefc",
+      "uncompressed_sha256": "1cf42f912b0caf2c3c0d9ba3f17a640ffd9313f9a353d4c4f4bcb076c5c1b1ab",
+      "compressed_bytes": 8639555,
+      "local_decompression_byte_verified": true,
+      "native_capture_reused": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.blend, Actor.diffuseshift, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetNumVertices, ActorMultiVertex.SetVertices, GameState.GetSongBPS",
+        "native drawable state/resources: ActorMultiVertex, Sprite"
+      ],
+      "acceptance_gate_added": false,
+      "passing_chart_reopened": false
+    }
+  ]
+}
