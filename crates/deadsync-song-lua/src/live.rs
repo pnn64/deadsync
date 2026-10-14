@@ -4389,6 +4389,41 @@ assert(children.invalid.__songlua_actor_type == 'Actor')
     }
 
     #[test]
+    fn live_loadfile_preserves_secondary_ready_function_and_nil_results() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-loader-results-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("song directory");
+        fs::write(dir.join("module.lua"), r#"
+local value = ...
+return function() UPDATES = (UPDATES or 0) + value end,
+    function() READY = (READY or 0) + 1 end, nil, 17, nil
+"#).expect("multiple return module");
+        let entry = dir.join("default.lua");
+        fs::write(&entry, r#"
+local chunk = assert(loadfile('module.lua'))
+local values = {n=select('#',chunk(3)),chunk(3)}
+RESULT_COUNT = values.n
+assert(values.n == 5, 'scoped loadfile must retain all return values')
+assert(type(values[2]) == 'function' and values[3] == nil and values[4] == 17 and values[5] == nil)
+local update, ready = values[1], values[2]
+return Def.ActorFrame{OnCommand=function(self)
+    ready()
+    self:SetUpdateFunction(function(self, delta) if delta > 0 then update() end end)
+end}
+"#).expect("ready callback source");
+        let mut compiled = compile_with_context("loader-results", &fs::read_to_string(&entry).unwrap(), |context| {
+            context.song_dir = dir.clone();
+        });
+        let scene = compiled.live_scene.as_mut().expect("retained live scene");
+        assert_eq!(scene.lua.globals().get::<u32>("RESULT_COUNT").unwrap(), 5,
+            "scoped loadfile must retain all return values");
+        let output = scene.advance(SongLuaLiveFrame { music_seconds: 0.1, beat: 0.1,
+            screen_seconds: 0.1, delta_seconds: 0.1, ..Default::default() }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(scene.lua.globals().get::<u32>("READY").expect("secondary ready function ran"), 1);
+        assert_eq!(scene.lua.globals().get::<u32>("UPDATES").expect("first function retained its argument"), 3);
+    }
+
+    #[test]
     fn live_layers() {
         let dir = std::env::temp_dir().join(format!("deadsync-live-layers-{}", std::process::id()));
         fs::create_dir_all(&dir).expect("layer directory");

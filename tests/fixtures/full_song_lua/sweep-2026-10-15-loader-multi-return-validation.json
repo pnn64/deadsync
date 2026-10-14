@@ -1,0 +1,68 @@
+{
+  "fix": "Scoped Lua file loader forwards all chunk return values, preserving secondary ready functions, nil slots and varargs",
+  "windows": {
+    "all_five_checks_passed": true,
+    "checks": [
+      {
+        "label": "target-control",
+        "exit_code": 0,
+        "seconds": 434.8306389999998,
+        "log_sha256": "ac11afbcb5acbe63562fdae478d3c0fa50efb20c0407895b16318cba80ce17d0",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 604 filtered out; finished in 0.24s"
+        ]
+      },
+      {
+        "label": "live-controls",
+        "exit_code": 0,
+        "seconds": 37.123190300000715,
+        "log_sha256": "6563f4b0bcf6c2783e5c2b13fc4442efeae1bbac56d54cb2d2c6bc079bd15637",
+        "results": [
+          "test result: ok. 68 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 35.68s"
+        ]
+      },
+      {
+        "label": "replay-controls",
+        "exit_code": 0,
+        "seconds": 85.45102819999738,
+        "log_sha256": "6fb61a909ee11ea05b845577fe7e576d556a490d840f918e383adf739c5912eb",
+        "results": [
+          "test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.23s"
+        ]
+      },
+      {
+        "label": "identity-control",
+        "exit_code": 0,
+        "seconds": 1.4828113000039593,
+        "log_sha256": "6c7449eada969d5ed89096df8e799b3f67fed1eed715bfa33bd32eef778836b4",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 604 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "label": "build",
+        "exit_code": 0,
+        "seconds": 19.301546000002418,
+        "log_sha256": "78aa885f4351a61d52005514a5cab6bff013f1c9d037ded29249b70e8edffcee",
+        "results": []
+      }
+    ],
+    "source_pin_count": 1175,
+    "all_normalized_source_pins_and_check_logs_verified": true
+  },
+  "linux": {
+    "status": "waiting for ENOSPC recovery and immutable Pokemon green baseline; expected red then green scheduled",
+    "red_waiter_pid": 898940,
+    "green_waiter_pid": 898941
+  },
+  "affected_actual_failures": [
+    "STEVE VERY HARD/STEVE VERY HARD.ssc",
+    "STEVE VERY HARD/STEVE VERY HARD.sm"
+  ],
+  "full_chart_repairs_spent": 0,
+  "passing_charts_reopened": false,
+  "acceptance_comparisons_changed": false,
+  "native_trace_bytes_changed": false,
+  "expected_query_results_used_as_input": false,
+  "local_user_views_edited": false
+}

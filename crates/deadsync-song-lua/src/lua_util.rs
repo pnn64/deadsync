@@ -1437,7 +1437,9 @@ fn load_script_file_with_source(
         call_with_script_dir(lua, &script_dir, || {
             call_with_script_path(lua, &script_path, || {
                 call_with_chunk_env(lua, &chunk_env_for_call, || {
-                    inner.call::<Value>(args.clone())
+                    // Lua loadfile chunks can return several values, including
+                    // trailing nils and a secondary initialization function.
+                    inner.call::<MultiValue>(args.clone())
                 })
             })
         })
