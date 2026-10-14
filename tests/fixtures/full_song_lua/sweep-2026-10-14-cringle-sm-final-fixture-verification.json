@@ -1,0 +1,21 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
+  "native_frames": 55331,
+  "replayed_frames": 55331,
+  "compared_stage_fields": 2354,
+  "repair_attempts": 2,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "3d335853cef1098318e53cdf9fc8a84d531839c0af9f9a4cd7f744b52a76fa11.tar.zst",
+  "compressed_sha256": "3d335853cef1098318e53cdf9fc8a84d531839c0af9f9a4cd7f744b52a76fa11",
+  "uncompressed_sha256": "0616f94607ea769ac606577ace6ef2a6aa0c9c1e0a9142ae3b31e65d2f18347c",
+  "compressed_bytes": 63178670,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false,
+  "pending_coverage": [
+    "uncompared song operations: Actor.accelerate, Actor.addx, Actor.hibernate, Actor.smooth, ActorFrame.GetChildren",
+    "native drawable state/resources: ActorProxy, Quad, Sprite"
+  ]
+}
