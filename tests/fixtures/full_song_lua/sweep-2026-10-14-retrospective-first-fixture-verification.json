@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Retrospective/Retrospective.ssc",
+  "native_frames": 31593,
+  "replayed_frames": 31593,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "0b9d2ab4d8900d3fc9d7712806b0eda3f087a995b4bbc9bfc6137777972ab77b.tar.zst",
+  "compressed_sha256": "0b9d2ab4d8900d3fc9d7712806b0eda3f087a995b4bbc9bfc6137777972ab77b",
+  "uncompressed_sha256": "4e0dff450b7809723759f86bffdd9946e73764a949e0578a54d9d00677486015",
+  "compressed_bytes": 4938188,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
