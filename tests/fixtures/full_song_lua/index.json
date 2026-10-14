@@ -5094,15 +5094,12 @@
     {
       "title": "玉藻前",
       "source_simfile": "Tamamo no Mae/Tamamo no Mae.ssc",
-      "harness_version": "0.1.0",
-      "archive": "4a9de7cb051bcab2b5da182fa371621239e65568c156b372f66d2b046e5903b7.tar.zst",
-      "sha256": "4a9de7cb051bcab2b5da182fa371621239e65568c156b372f66d2b046e5903b7",
-      "compressed_bytes": 77524,
-      "uncompressed_sha256": "2896e13b0e5e7221044b0cbfbe8fc808662a9b4ba0019c29297b1ff2f9bd3a6d",
-      "compression_level": 22,
-      "aliases": [
-        "6a563f835505b277e4318d162607222073953ee42f5fdf2bbd2d8d832792060a.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "28c78cbb37655d659a1840358b66ea6304390ab3da2b450339ec9f6a74c5be0a.tar.zst",
+      "sha256": "28c78cbb37655d659a1840358b66ea6304390ab3da2b450339ec9f6a74c5be0a",
+      "compressed_bytes": 10207528,
+      "uncompressed_sha256": "82a6fe73f496b372f31b511181d00e02a09c3c98cb6ba2215180cfa099cb2aa4",
+      "aliases": []
     },
     {
       "title": "大輪の魂 feat. AO、司芭扶",
