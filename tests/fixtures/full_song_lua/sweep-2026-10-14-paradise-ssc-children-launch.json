@@ -1,0 +1,47 @@
+{
+  "source_simfile": "Paradise/Paradise.ssc",
+  "position": 350,
+  "attempt_started": 1,
+  "repairs_remaining_after_this_attempt": 1,
+  "original_full_frames": 65346,
+  "original_errors": [],
+  "original_mismatch_count": 5,
+  "concrete_cause": "Same five cyclic startup command-query differences at lua/default.lua line 185 as the now-passing Paradise SM fixture. Identical source bytes visit In before Underlay in the native owned 22-key screen child table. Source fix 7960c8a1e restores the owned inventory and traversal; current validated replay build also includes committed filename fix 1a142e6e7.",
+  "identical_lua_script_sha256": "b068263b11381cfae76b7f4bb89248cfef273f98352c385a1dd74897018495e7",
+  "source_fix_commits": [
+    "7960c8a1e",
+    "1a142e6e7"
+  ],
+  "build_evidence": "sweep-2026-10-14-mawaru5-filename-build.json",
+  "matching_sm_pass": {
+    "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.sm",
+    "acceptance_commit": "439660cbe85fda12f17ba4e6b2c1e41e3e28aba8",
+    "native_frames": 64119,
+    "replayed_frames": 64119,
+    "compared_stage_fields": 1892,
+    "mismatches": 0,
+    "callback_errors": 0,
+    "archive": "eccde06128ee0333571e475bef59d212de6d6bcb607e2c999a01749e58360b74.tar.zst",
+    "compressed_sha256": "eccde06128ee0333571e475bef59d212de6d6bcb607e2c999a01749e58360b74",
+    "uncompressed_sha256": "3fc6f429db3328543e9a62d8223acc6bf2801683e78701d4bf12ec227c7d819a",
+    "local_decompression_byte_verified": true,
+    "separate_coverage": [
+      "uncompared song operations: ActorFrame.GetChildren",
+      "native drawable state/resources: ActorProxy, Quad, Sprite"
+    ],
+    "passing_chart_reopened": false,
+    "acceptance_gate_added": false
+  },
+  "candidate_sha256": "6bd6703168a950201852b158fc3e702d5ffd4e5e566038f788dc1224d6bd9665",
+  "native_trace_sha256": "ed48fbf41f14846b101a9da724d2e45676e806eb5dafe1dbed41f1f96340c597",
+  "simfile_sha256": "1b7370ebc6a69a753e628b6f1d893ba3d58e58cfae3b9ad84c12bfcb24175368",
+  "native_capture_reused": true,
+  "comparisons_modified": false,
+  "launch": {
+    "supervisor_pid": 348817,
+    "command": [
+      "python3",
+      "/home/parity/jobs/run_paradise_ssc_children_repair_v1.py"
+    ]
+  }
+}

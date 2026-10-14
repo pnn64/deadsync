@@ -1,0 +1,42 @@
+{
+  "verification": "Storage byte integrity only; existing full replay comparisons already passed.",
+  "fixtures": [
+    {
+      "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.sm",
+      "acceptance_commit": "439660cbe85fda12f17ba4e6b2c1e41e3e28aba8",
+      "native_frames": 64119,
+      "replayed_frames": 64119,
+      "compared_stage_fields": 1892,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "eccde06128ee0333571e475bef59d212de6d6bcb607e2c999a01749e58360b74.tar.zst",
+      "compressed_sha256": "eccde06128ee0333571e475bef59d212de6d6bcb607e2c999a01749e58360b74",
+      "uncompressed_sha256": "3fc6f429db3328543e9a62d8223acc6bf2801683e78701d4bf12ec227c7d819a",
+      "local_decompression_byte_verified": true,
+      "separate_coverage": [
+        "uncompared song operations: ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "passing_chart_reopened": false,
+      "acceptance_gate_added": false
+    },
+    {
+      "source_simfile": "Rapture/Rapture cut-fakemines.ssc",
+      "acceptance_commit": "20083774dba19548cebbaa657fb43b9a9d18fd99",
+      "native_frames": 37718,
+      "replayed_frames": 37718,
+      "compared_stage_fields": 1309,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "f5e7ed7e18dbbb16c8a117999116c7f52d5e82ea0ded217242f4059ee4ca2e71.tar.zst",
+      "compressed_sha256": "f5e7ed7e18dbbb16c8a117999116c7f52d5e82ea0ded217242f4059ee4ca2e71",
+      "uncompressed_sha256": "be51e78675303f2ec02c628d281ff954dac626b766a5e5a0050876a1f4459107",
+      "local_decompression_byte_verified": true,
+      "separate_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "passing_chart_reopened": false,
+      "acceptance_gate_added": false
+    }
+  ]
+}
