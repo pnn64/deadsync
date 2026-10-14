@@ -1,0 +1,40 @@
+{
+  "source_simfile": "Koi [UPS2016]/koi.ssc",
+  "repair_attempts": 1,
+  "repair_attempts_remaining": 1,
+  "native_frames": 116240,
+  "replayed_frames": 116240,
+  "mismatch_count": 1080,
+  "errors": [
+    "AvoidMine JudgmentMessage: missing captured subscriber identity for ScreenGameplay/19/1",
+    "JudgmentMessage: missing captured subscriber identity for ScreenGameplay/19/1",
+    "Hold JudgmentMessage: missing captured subscriber identity for ScreenGameplay/19/1"
+  ],
+  "native_command_queries": 4909,
+  "actual_command_queries": 2961,
+  "native_stage_failed": true,
+  "actual_stage_failed": false,
+  "original_candidate_sha256": "42f964c593f8f62d2731bb51dccf610fda9e4dd8e5c3c85385db8d9d787e9667",
+  "original_trace_sha256": "6313db510762c74890eb62402b84caaa99fcde9a9507b1e9eac6fdc4199bdd42",
+  "neutral_inventory_counts": {
+    "actor_definitions": 242,
+    "actor_creation_inputs": 242,
+    "actor_identity_inputs": 242,
+    "runtime_actors": 278
+  },
+  "retained_inventory": "/home/parity/jobs/koi-ssc-native-identity-inventory-v1.json",
+  "missing_coverage": [
+    "Neutral native identity of Simply Love overlay FailOnHoldStart listener when mixed with authored Judgment listeners. Authored identities are present; external records contain no overlay listener or pointer."
+  ],
+  "concrete_cause": "lua_util broadcast dispatch requires captured ordering identities before invoking multiple listeners. Koi supplies its authored Judgment listener alongside the owned FailOnHoldStart listener. ScreenGameplay/19/1 has no captured rank, so neither callback runs. This loses authored query/command observations and the autoplay latch that fails the stage during Off.",
+  "primary_sources": [
+    "MessageManager.cpp:96-97,196-208: subscribers stored and dispatched in pointer-ordered set",
+    "Simply Love ScreenGameplay overlay/FailOnHoldStart.lua: Judgment latches autoplay, Off fails the corresponding stage",
+    "deadsync lua_util.rs:3237-3245: multiple listeners require imported identities before any callbacks"
+  ],
+  "next_action": "Supply authentic neutral identities for the mixed theme/song listener set before the final repair. Preserve retained original capture and do not infer missing pointers from expected callback results.",
+  "missing_coverage_recorded_separately": true,
+  "acceptance_criteria_changed": false,
+  "new_chart_replays_started": false,
+  "passing_charts_reopened": false
+}
