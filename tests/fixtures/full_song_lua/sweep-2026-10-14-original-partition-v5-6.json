@@ -2149,6 +2149,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 465,
+      "source_simfile": "Waiting/Waiting.ssc",
+      "simfile_sha256": "41b880df985e8c91a2092c266e1f439e735d9dd82b600b4993cadb7b4a3fea4e",
+      "retained_original_archive": "c8e4b447aad3f46015398ddabcc06fdbfc62394538411d854f6b324fb32dd29f.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef",
+      "build_proof": "/home/parity/jobs/arrow-alpha-linux-green-v1/proof.json",
+      "capture_seconds": 97.6362780490017,
+      "trace_sha256": "f14d0317f0fc9e162da930f7696494861897318658fd51c468dd3f74b8a6043d",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-6/chart-465/candidates/0c8c5740493e2b4bd247fd8f5831054c09c75d38d0bcd355559fdb5ed5c43b8c.tar",
+      "replay_exit": 0,
+      "replay_seconds": 979.2704259459861,
+      "candidate_sha256": "0c8c5740493e2b4bd247fd8f5831054c09c75d38d0bcd355559fdb5ed5c43b8c",
+      "native_frames": 56745,
+      "replayed_frames": 56745,
+      "compared_stage_fields": 1056,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers, GameState.GetSongOptionsString, PlayerOptions.CMod, PlayerOptions.MMod",
+        "native actor definitions are missing"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "515175c0facdefd228c7bd605eb7e742d0bc3aad3dc797adb902e1c62ae9f346",
+      "archive": "beae401af8ed20756a416d9ccf4c12939aecfb38e97b0f42f5aa6b9f488510a3.tar.zst",
+      "archive_sha256": "beae401af8ed20756a416d9ccf4c12939aecfb38e97b0f42f5aa6b9f488510a3",
+      "compressed_bytes": 4137271,
+      "pack_seconds": 2.1619761559995823,
+      "harness_version": "0.1.80",
+      "title": "Waiting -Stepchart of the Year 2022 2nd Place-",
+      "retained_original_entry": {
+        "title": "Waiting",
+        "source_simfile": "Waiting/Waiting.ssc",
+        "harness_version": "0.1.0",
+        "archive": "c8e4b447aad3f46015398ddabcc06fdbfc62394538411d854f6b324fb32dd29f.tar.zst",
+        "sha256": "c8e4b447aad3f46015398ddabcc06fdbfc62394538411d854f6b324fb32dd29f",
+        "compressed_bytes": 20852,
+        "uncompressed_sha256": "2a68243194cd902147b67e2fb5150667875aab662a67f471cc740cae03ea1862",
+        "compression_level": 22,
+        "aliases": [
+          "f777a267ec354d965987cc707da95593bc3639c5fa2c94ffce39ec7e71464956.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -2157,9 +2208,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
+  "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 8,
+  "passed_fixtures": 9,
   "pending_charts": 6,
-  "processed_charts": 14
+  "processed_charts": 15
 }

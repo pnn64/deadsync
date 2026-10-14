@@ -5491,17 +5491,14 @@
       ]
     },
     {
-      "title": "Waiting",
+      "title": "Waiting -Stepchart of the Year 2022 2nd Place-",
       "source_simfile": "Waiting/Waiting.ssc",
-      "harness_version": "0.1.0",
-      "archive": "c8e4b447aad3f46015398ddabcc06fdbfc62394538411d854f6b324fb32dd29f.tar.zst",
-      "sha256": "c8e4b447aad3f46015398ddabcc06fdbfc62394538411d854f6b324fb32dd29f",
-      "compressed_bytes": 20852,
-      "uncompressed_sha256": "2a68243194cd902147b67e2fb5150667875aab662a67f471cc740cae03ea1862",
-      "compression_level": 22,
-      "aliases": [
-        "f777a267ec354d965987cc707da95593bc3639c5fa2c94ffce39ec7e71464956.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "beae401af8ed20756a416d9ccf4c12939aecfb38e97b0f42f5aa6b9f488510a3.tar.zst",
+      "sha256": "beae401af8ed20756a416d9ccf4c12939aecfb38e97b0f42f5aa6b9f488510a3",
+      "compressed_bytes": 4137271,
+      "uncompressed_sha256": "0c8c5740493e2b4bd247fd8f5831054c09c75d38d0bcd355559fdb5ed5c43b8c",
+      "aliases": []
     },
     {
       "title": "Wake Up",
