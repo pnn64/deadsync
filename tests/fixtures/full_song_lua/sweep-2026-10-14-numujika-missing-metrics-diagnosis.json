@@ -1,0 +1,28 @@
+{
+  "position": 333,
+  "source_simfile": "Numujika ac.10/Numujika ac.10.sm",
+  "repair_attempts_spent": 0,
+  "candidate_sha256": "3530fde92e7e3198e9ad503be0aa8b121b46856f166ef098aedd1b4a9892d981",
+  "original_failure": "[2.0s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for '\u30cc\u30e0\u30b8\u30abac.10': failed to execute '/tmp/.tmpnQxxZh/song/lua/default.lua': runtime error: [string \"/tmp/.tmpnQxxZh/song/lua/default.lua\"]:4: bad argument #1 to 'max' (number expected, got nil)\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'math.max'\n\t[string \"/tmp/.tmpnQxxZh/song/lua/default.lua\"]:4: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for '\u30cc\u30e0\u30b8\u30abac.10' from '/tmp/.tmpnQxxZh/song/lua/default.lua': failed to execute '/tmp/.tmpnQxxZh/song/lua/default.lua': runtime error: [string \"/tmp/.tmpnQxxZh/song/lua/default.lua\"]:4: bad argument #1 to 'max' (number expected, got nil)\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'math.max'\n\t[string \"/tmp/.tmpnQxxZh/song/lua/default.lua\"]:4: in main chunk\n\t[C]: in ?\nstack traceback:\n\t[C]: in ?\n\n\nthread 'main' (848205) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+  "concrete_cause": "Chart lines 2/3 query ScreenGameplay MinSecondsToStep/MinSecondsToMusic. The host gameplay numeric metric branch supports PlayerP1/PlayerP2 X positions and returns nil for these two timing metrics, so math.max at line 4 fails. Simply Love metrics.ini defines 6.0 and 2.0 multiplied by SL.Global.ActiveModifiers.MusicRate. A source fix and first full repair remain to be done.",
+  "native_metric_definitions": {
+    "MinSecondsToStep": "6.0 * SL.Global.ActiveModifiers.MusicRate",
+    "MinSecondsToMusic": "2.0 * SL.Global.ActiveModifiers.MusicRate"
+  },
+  "full_replay_attempt_launched": false,
+  "acceptance_comparisons_changed": false,
+  "source_pins": [
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lib.rs",
+      "sha256": "ec00535f50fea51ef4ffe4bd152111da3dc2f6127c687e20d4638cb7a3d362ef"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\metrics.ini",
+      "sha256": "221b449c94e5ed38bbdfb4cee157582f20c85ffa8e234398309768945b370a80"
+    },
+    {
+      "path": "C:\\GitHub\\rework\\lua-songs\\Numujika ac.10\\lua\\default.lua",
+      "sha256": "53e0c35285d63eb23c46fd3e15a4768e98471579096f98c67bed097a5830d929"
+    }
+  ]
+}

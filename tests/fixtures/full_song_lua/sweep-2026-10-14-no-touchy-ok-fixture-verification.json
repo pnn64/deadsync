@@ -1,0 +1,37 @@
+{
+  "verification": "Storage bytes only; full replay acceptance remains closed.",
+  "passing_charts_reopened": false,
+  "acceptance_gate_added": false,
+  "results": [
+    {
+      "source_simfile": "no touchy/no touchy.ssc",
+      "native_frames": 62348,
+      "replayed_frames": 62348,
+      "compared_stage_fields": 1364,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "975215a773e05dce77c684ecfbfcddf0623f64b63a030e5c657970187ffec572.tar.zst",
+      "compressed_sha256": "975215a773e05dce77c684ecfbfcddf0623f64b63a030e5c657970187ffec572",
+      "uncompressed_sha256": "f7b55e88e5f24c96685b9e5aa968ca1fcc92bcc262fa2098710041451e01b834",
+      "local_decompression_byte_verified": true,
+      "separate_coverage": [
+        "uncompared song operations: Actor.rotationy, PlayerOptions.Dark, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy"
+      ]
+    },
+    {
+      "source_simfile": "OK/OK.ssc",
+      "native_frames": 83028,
+      "replayed_frames": 83028,
+      "compared_stage_fields": 1320,
+      "mismatches": 0,
+      "callback_errors": 0,
+      "archive": "dd0c8291ee90c09c836a94202d3f7c00bda20e25fefa1fd5dea3233ed2e810cb.tar.zst",
+      "compressed_sha256": "dd0c8291ee90c09c836a94202d3f7c00bda20e25fefa1fd5dea3233ed2e810cb",
+      "uncompressed_sha256": "22ee3394f357f0ba8182077fa66053b760ee3235859d826ee86ab3c708011ab6",
+      "local_decompression_byte_verified": true,
+      "separate_coverage": [
+        "native actor definitions are missing"
+      ]
+    }
+  ]
+}

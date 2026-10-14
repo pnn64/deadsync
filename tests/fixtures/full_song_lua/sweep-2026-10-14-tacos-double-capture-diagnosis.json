@@ -1,0 +1,95 @@
+{
+  "command": [
+    "/home/parity/jobs/listed-lua-schema-build-v1/harness",
+    "song-lua-trace",
+    "/home/parity/workspace/lua-songs/Doubles-45-HALF-[MASTER] Tacos/Tacos.ssc",
+    "--itgmania-bin",
+    "/home/parity/native/source-v1/ITGmania-harness-trace-creation-v1",
+    "--fallback-theme",
+    "Harness Simply Love",
+    "--style",
+    "double",
+    "--difficulty",
+    "Challenge",
+    "--autoplay",
+    "1",
+    "--headless",
+    "--keep-run-dir",
+    "--timeout",
+    "900",
+    "--max-events",
+    "8000000",
+    "--random-seed",
+    "1",
+    "--out",
+    "/home/parity/jobs/tacos-double-capture-diagnosis-v2/trace.json",
+    "--until-gameplay-end"
+  ],
+  "source_simfile": "Doubles-45-HALF-[MASTER] Tacos/Tacos.ssc",
+  "position": 177,
+  "simfile_sha256": "6541bffd7e03ac02cb8cc92e4f14af7b44843572063f07609813c13bd0ba8b52",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "full_repair_attempts_spent": 0,
+  "purpose": "Capture the actual dance-double Challenge chart after original native selection wrongly requested dance-single. Existing full-frame comparator currently records double style as unsupported; this is capture diagnosis only.",
+  "excluded_bootstrap": "v1 used --steps-type, which belongs to another CLI command. song-lua-trace uses --style double; its probe sets GAMESTATE style and explicitly selects StepsType_Dance_Double Challenge.",
+  "supervisor_pid": 975224,
+  "live_observation": {
+    "child_pid": 975225,
+    "process_matches": false,
+    "capture_log_tail": "",
+    "reason": "Capture completes successfully; terminal result and trace proof supersede earlier live observation."
+  },
+  "source_pins": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\src\\main.rs",
+      "sha256": "cbd3f409fcb01578d619b51d48987dc49514095d6d939db92ae5c55f3c68b1a5"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\src\\song_lua_runtime.rs",
+      "sha256": "2282d197834c8451622a0cff3dbc38e971ae9a764c792244a18a2f33feb95515"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\probe_theme\\ScreenSongLuaHarness overlay.lua",
+      "sha256": "919a9f0848e341aad63b5094217216cebbc1ec9884b4d0d9af17a855f9d5dda8"
+    }
+  ],
+  "existing_full_replay_limitation": "native_gameplay.rs currently rejects trace style other than single and selects dance-single charts. No full repair or acceptance attempted; double runtime adaptation remains required.",
+  "completed_capture_and_existing_replay_failure": {
+    "candidate": "/home/parity/jobs/tacos-double-capture-diagnosis-v2/candidates/9eacd92b49c7b90d2574891d5bcfe3e3f26ef7670e8e3eb17c08335e72e65862.tar",
+    "uncompressed_sha256": "9eacd92b49c7b90d2574891d5bcfe3e3f26ef7670e8e3eb17c08335e72e65862",
+    "all_manifest_members_byte_verified": true,
+    "diagnostic_command": [
+      "/home/parity/jobs/my-exes-tweens-green-v2/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/tacos-double-capture-diagnosis-v2/candidates/9eacd92b49c7b90d2574891d5bcfe3e3f26ef7670e8e3eb17c08335e72e65862.tar",
+      "--report",
+      "/home/parity/jobs/tacos-double-capture-diagnosis-v2/entry-report.json",
+      "--entry"
+    ],
+    "diagnostic_exit": 1,
+    "concrete_failure": "[2.0s] : 0 checks completed, 0 failed\n[2.3s] replaying native entry and reload\n\nthread 'main' (1012385) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: live replay currently supports dance-single; other styles remain pending\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+    "full_repair_attempts_spent": 0,
+    "archive_accepted": false,
+    "complete_native_capture": {
+      "trace_path": "/home/parity/jobs/tacos-double-capture-diagnosis-v2/trace.json",
+      "trace_sha256": "7cacb9ed1417b6bdb06b2f891c90f4bc17a5299c95c885dde725c749769c3848",
+      "style": "double",
+      "steps_type": "StepsType_Dance_Double",
+      "input_style": "double",
+      "completion": {
+        "next_screen": "ScreenEvaluationStage",
+        "reason": "gameplay-exit",
+        "stage_committed": true,
+        "stages_played_after": 1,
+        "stages_played_before": 0
+      },
+      "errors": null,
+      "native_frames": 63984,
+      "dropped_events": 0,
+      "dropped_update_frames": 0,
+      "dropped_stage_samples": 0,
+      "dropped_random_reseeds": 0
+    },
+    "excluded_cli_bootstrap": "entry-replay.log rejected an unsupported argument order before reading the candidate. The diagnostic repeats with report before the cutoff flag; no full repair was spent."
+  }
+}

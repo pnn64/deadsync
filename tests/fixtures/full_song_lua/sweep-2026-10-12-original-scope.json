@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T08:38:08Z",
+  "updated_utc": "2026-10-14T09:46:05Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 246,
+    "passed": 250,
     "pending": 86,
-    "unprocessed": 169
+    "unprocessed": 165
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1837,9 +1837,9 @@
       "position": 209,
       "source_simfile": "Genshin Quiz/Megaquiz.ssc",
       "simfile_sha256": "18e2165ebaceeae2ac466a114d84fa784f6f3f55f4c845404fdf3d05864f558d",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-genshin-day-of-year-repair.json"
     },
     {
       "position": 210,
@@ -2767,7 +2767,9 @@
       "position": 327,
       "source_simfile": "No Role Modelz/No Role Modelz.sm",
       "simfile_sha256": "0d71a70a22be46c8d9b372058e91a6266e253620169b1bf72b198f47b275373e",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 328,
@@ -2787,7 +2789,9 @@
       "position": 330,
       "source_simfile": "no touchy/no touchy.ssc",
       "simfile_sha256": "278737fba29e5dec31e48cae671e16857b849d9b7044c2d89f9cd3939fc01ced",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 331,
@@ -2807,7 +2811,9 @@
       "position": 333,
       "source_simfile": "Numujika ac.10/Numujika ac.10.sm",
       "simfile_sha256": "0748c293677cfcd598e3ccf217be1886bbb0744a82f8eeb6741bc5bc36e5d8ce",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 334,
@@ -2827,7 +2833,9 @@
       "position": 336,
       "source_simfile": "OK/OK.ssc",
       "simfile_sha256": "41a0d3143166f88d9f01234b89f83499193659ecc18ef4a2d69ab4671dec78d3",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 337,
