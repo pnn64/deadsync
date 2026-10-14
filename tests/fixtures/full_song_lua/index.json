@@ -4250,17 +4250,14 @@
       ]
     },
     {
-      "title": "Episode 09",
+      "title": "Episode 09 Paradise",
       "source_simfile": "Paradise/Paradise.ssc",
-      "harness_version": "0.1.0",
-      "archive": "1fe521a5025be442ab69c547ea42a0beef1e3a13c72bc6447f22186117e24fd4.tar.zst",
-      "sha256": "1fe521a5025be442ab69c547ea42a0beef1e3a13c72bc6447f22186117e24fd4",
-      "compressed_bytes": 1992288,
-      "uncompressed_sha256": "7f0cbf47546318e17f1100064e166bc5796d211f16af8f7d8497f4edee7b5cca",
-      "compression_level": 22,
-      "aliases": [
-        "3cb511a50e594bafc96fa109bd2eb6bff56b8b016125dd8cbdac44bdb0d8c56d.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "7b303821702d16bfa6a55c1a2f0846bfc93a14d0c37d5aeebc45cac05d01040d.tar.zst",
+      "sha256": "7b303821702d16bfa6a55c1a2f0846bfc93a14d0c37d5aeebc45cac05d01040d",
+      "compressed_bytes": 14518267,
+      "uncompressed_sha256": "6bd6703168a950201852b158fc3e702d5ffd4e5e566038f788dc1224d6bd9665",
+      "aliases": []
     },
     {
       "title": "PARTY",
