@@ -1,0 +1,15 @@
+{
+  "pid": 1000682,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_pokemon_and_steve_first_repairs_after_turn_a_v1.py"
+  ],
+  "queued_first_repairs": [
+    "STEVE VERY HARD/STEVE VERY HARD.ssc",
+    "STEVE VERY HARD/STEVE VERY HARD.sm"
+  ],
+  "starts_after_turn_a": true,
+  "one_child_at_a_time": true,
+  "pokemon_first_full_held_for_actual_entry_mismatches": true,
+  "full_repair_attempts_spent": 0
+}

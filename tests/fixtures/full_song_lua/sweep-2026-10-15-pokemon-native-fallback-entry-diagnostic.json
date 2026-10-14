@@ -1,0 +1,233 @@
+{
+  "source_simfile": "Pokemon Gym Battle Remix/pokes.ssc",
+  "position": 498,
+  "diagnostic_exit": 2,
+  "binary_sha256": "35fe73189443c9841fe505707fe015c82e5deaada0649e00f9f50460b832640b",
+  "build_proof": "/home/parity/jobs/pokemon-failed-load-linux-green-v1/proof.json",
+  "candidate_sha256": "77ad34ad0fac6104a41cddd042fc60d34d0b0dabcc5a9a775d67ced6cadd64ba",
+  "candidate": "/home/parity/jobs/pokemon-failed-load-entry-diagnostic-v1/77ad34ad0fac6104a41cddd042fc60d34d0b0dabcc5a9a775d67ced6cadd64ba.tar",
+  "all_original_manifest_members_byte_verified": true,
+  "native_trace_bytes_unchanged": true,
+  "diagnostic_only": true,
+  "full_repair_attempts_spent": 0,
+  "expected_query_results_used_as_input": false,
+  "report_sha256": "4584e95d82de06f1c84c67ef5d1da7ccf10e10cc5830929fb0aba2ba686549b8",
+  "native_frames": 46563,
+  "replayed_frames": 5516,
+  "mismatch_count": 21,
+  "first_mismatches": [
+    {
+      "field": "command_query_count",
+      "native": 102,
+      "deadsync": 114
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0008",
+        "args": [],
+        "beat": 0.00037961898487992585,
+        "command": "OnCommand",
+        "definition_id": "def-0008",
+        "detail": {
+          "name": "OnCommand"
+        },
+        "kind": "command",
+        "line": 204,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": -0.2738775610923767,
+        "seq": 81,
+        "source": "song:/pokes/default.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "OnCommand",
+        "source": "song:/pokes/default.lua",
+        "line": 227,
+        "beat": 0.00037961898487992585,
+        "seconds": -0.2738775610923767,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0008",
+        "args": [],
+        "beat": 0.00037961898487992585,
+        "caller": {
+          "line": 204,
+          "source": "song:/pokes/default.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0008",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 204,
+        "operation": "Actor.Center",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": -0.2738775610923767,
+        "seq": 82,
+        "source": "song:/pokes/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.queuecommand",
+        "source": "song:/pokes/default.lua",
+        "line": 227,
+        "phase": "callback",
+        "beat": 0.00037961898487992585,
+        "seconds": -0.2738775610923767,
+        "args": [
+          "SoundThingy"
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0008",
+        "args": [
+          1.5
+        ],
+        "beat": 0.00037961898487992585,
+        "caller": {
+          "line": 204,
+          "source": "song:/pokes/default.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0008",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 204,
+        "operation": "Actor.zoom",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": -0.2738775610923767,
+        "seq": 84,
+        "source": "song:/pokes/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.end",
+        "command": "OnCommand",
+        "source": "song:/pokes/default.lua",
+        "line": 227,
+        "beat": 0.00037961898487992585,
+        "seconds": -0.2738775610923767,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0008",
+        "args": [
+          0
+        ],
+        "beat": 0.00037961898487992585,
+        "caller": {
+          "line": 204,
+          "source": "song:/pokes/default.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0008",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 204,
+        "operation": "Actor.visible",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": -0.2738775610923767,
+        "seq": 85,
+        "source": "song:/pokes/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "OnCommand",
+        "source": "song:/pokes/default.lua",
+        "line": 204,
+        "beat": 0.00037961898487992585,
+        "seconds": -0.2738775610923767,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0008",
+        "args": [
+          "Check"
+        ],
+        "beat": 0.00037961898487992585,
+        "caller": {
+          "line": 204,
+          "source": "song:/pokes/default.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0008",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 204,
+        "operation": "Actor.queuecommand",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": -0.2738775610923767,
+        "seq": 86,
+        "source": "song:/pokes/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.Center",
+        "source": "song:/pokes/default.lua",
+        "line": 204,
+        "phase": "callback",
+        "beat": 0.00037961898487992585,
+        "seconds": -0.2738775610923767,
+        "args": [],
+        "results": [
+          {
+            "actor": "0x639d438048f0",
+            "name": "",
+            "path": "ScreenGameplay/SongForeground/pokes"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    }
+  ],
+  "errors": [],
+  "pending_coverage": [
+    "complete song frame replay",
+    "uncompared song operations: Actor.hibernate, Actor.xy, PlayerState.GetHealthState, ScreenManager.SystemMessage, Sprite.Load",
+    "native drawable state/resources: Quad, Sprite",
+    "native scene 1: no captured factory identity for 1 background entries; foreground ranks retained"
+  ],
+  "archive_accepted": false
+}

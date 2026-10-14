@@ -1,0 +1,28 @@
+{
+  "source_simfile": "Pokemon Gym Battle Remix/pokes.ssc",
+  "position": 498,
+  "full_repair_attempts_spent": 0,
+  "fixed_original_failure": "Native failed background actor load now keeps a plain Actor slot and shared VM; absent factory identity is separate coverage.",
+  "actual_diagnostic": {
+    "native_frames": 46563,
+    "replayed_frames": 5516,
+    "callback_errors": 0,
+    "mismatch_count": 21,
+    "native_command_query_count": 102,
+    "owned_command_query_count": 114,
+    "archive_accepted": false
+  },
+  "first_remaining_divergence": "At the same initial foreground activation, native runs Sprite OnCommand at pokes/default.lua:204 before Actor OnCommand at line 227; owned order is reversed.",
+  "authored_structure": "Script appends children with actor[#actor+5] and actor[#actor+6], producing sparse numeric declaration slots.",
+  "primary_sources": {
+    "XmlFileUtil.cpp:736-778": "Visits consecutive array entries first, then lua_next entries outside the prefix, retaining table construction order.",
+    "02 ActorDef.lua:54-59": "Native Def constructor decorates the provided declaration table.",
+    "lua_util.rs:1863-1908": "Owned actor_def_children follows array-first then remaining iteration; inspect declaration table shape and later child traversal rather than sorting event observations."
+  },
+  "hypothesis_to_check": "Owned declaration bookkeeping or cloning may change sparse table iteration, or runtime child traversal may discard its declaration order; this is an inference, not a diagnosed cause yet.",
+  "next_action": "Reproduce sparse mixed Sprite/Actor OnCommand order with primary native construction order. Repair actual child traversal without inventing pointer ranks or feeding expected command events into gameplay.",
+  "first_full_repair_held": true,
+  "existing_comparisons_unchanged": true,
+  "native_trace_bytes_unchanged": true,
+  "passing_charts_reopened": false
+}
