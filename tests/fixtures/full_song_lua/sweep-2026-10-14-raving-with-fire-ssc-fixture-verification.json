@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Raving With Fire/Raving With Fire.ssc",
+  "native_frames": 6112,
+  "replayed_frames": 6112,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "b8770fd90d6155138b3a6e5b167ed49168a8a4723a1c18e43d99aee92b083979.tar.zst",
+  "compressed_sha256": "b8770fd90d6155138b3a6e5b167ed49168a8a4723a1c18e43d99aee92b083979",
+  "uncompressed_sha256": "5b3d076aa39267ba7e8b3fbcfc00d3d9e714ea598db290bc68a096a275563477",
+  "compressed_bytes": 20114537,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
