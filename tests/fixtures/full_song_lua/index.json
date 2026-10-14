@@ -4366,15 +4366,12 @@
     {
       "title": "Rayc Fire 2",
       "source_simfile": "Rayc Fire 2 (SM5)/Rayc Fire 2.ssc",
-      "harness_version": "0.1.0",
-      "archive": "2f226db770c854c6281d12db7794a809b7851e7eb0978ac4425314b1dc3a29e5.tar.zst",
-      "sha256": "2f226db770c854c6281d12db7794a809b7851e7eb0978ac4425314b1dc3a29e5",
-      "compressed_bytes": 2353342,
-      "uncompressed_sha256": "cda5499b78ea278ab9a2bfc3ae7e0866e98fb41bb989c08a4c04f5a2ad4e15b3",
-      "compression_level": 22,
-      "aliases": [
-        "5041510dc02404f44847e8433a97b95a5abf4babad73cae934c7b5a3da5b38a7.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "bac794e315a1fef88dadd40434e6a6d45aeed3d08df5096922a2a3f35fbd62a5.tar.zst",
+      "sha256": "bac794e315a1fef88dadd40434e6a6d45aeed3d08df5096922a2a3f35fbd62a5",
+      "compressed_bytes": 18140235,
+      "uncompressed_sha256": "a58c525c931d706e2356b913224d7a10b9e7b7698646c3411e48a3a0ae1fe196",
+      "aliases": []
     },
     {
       "title": "Reach The Light Switch, Without Asking you",
