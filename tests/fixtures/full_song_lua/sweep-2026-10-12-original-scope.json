@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T07:40:38Z",
+  "updated_utc": "2026-10-14T08:38:08Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -14,8 +14,8 @@
   ],
   "counts": {
     "passed": 246,
-    "pending": 84,
-    "unprocessed": 171
+    "pending": 86,
+    "unprocessed": 169
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2723,7 +2723,9 @@
       "position": 321,
       "source_simfile": "My Exes Bestfriend/ExBestFriend.ssc",
       "simfile_sha256": "0ce6cbf0793e2bb4c8dae2f6281fbc9bdb8427dca167be28daa77280db804f10",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 322,
@@ -2743,7 +2745,9 @@
       "position": 324,
       "source_simfile": "negator/NEGATOR.sm",
       "simfile_sha256": "bce483f796258fc00bd7d61f415c881cdecb3a56c416e35da508f891cf8c81a1",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 325,
