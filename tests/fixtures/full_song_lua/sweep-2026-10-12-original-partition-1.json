@@ -10541,6 +10541,21 @@
         }
       ],
       "report_sha256": "12f312022d14199dec862b6bd006768ad610814f90210dece4a38a5f65f771b3"
+    },
+    {
+      "position": 460,
+      "source_simfile": "Velvet LEFTS 1/chart.ssc",
+      "simfile_sha256": "a38146c07ea9483591ae94748621822e163c8ad283e60fe1273048a229f94514",
+      "retained_original_archive": "97ca1764984f050694cf634f9083f9d4ebd1a3cc59fee842fe36b17bed7b1e30.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 5.74982591799926,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-1256551-1792020219622826275-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1256551-1792020219622826275-0\n"
     }
   ],
   "scope": {
@@ -10553,6 +10568,6 @@
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 38,
-  "pending_charts": 37,
-  "processed_charts": 75
+  "pending_charts": 38,
+  "processed_charts": 76
 }
