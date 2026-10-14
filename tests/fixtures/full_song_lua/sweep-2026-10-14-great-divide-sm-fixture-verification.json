@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.sm",
+  "native_frames": 85375,
+  "replayed_frames": 85375,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "2290466f7f2cd10f04b79111349e8b52822952497cc312473564f8cf73ac1640.tar.zst",
+  "compressed_sha256": "2290466f7f2cd10f04b79111349e8b52822952497cc312473564f8cf73ac1640",
+  "uncompressed_sha256": "0f995844217de709779d63ea0ae47ef542c3b1810b785057fe287c616e3ae052",
+  "compressed_bytes": 17805352,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
