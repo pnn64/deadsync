@@ -1,0 +1,30 @@
+{
+  "source_simfile": "Mamono/sm.sm",
+  "native_actor_definitions": 2170,
+  "native_actor_classes": {
+    "Sprite": 1171,
+    "BitmapText": 981,
+    "ActorFrame": 13,
+    "Quad": 5
+  },
+  "native_capture_reused": true,
+  "actual_entry_failure": "preparation did not retain a Lua scene; startup reports out of Lua stack",
+  "entry_evidence": "sweep-2026-10-14-retained-known-fixes-diagnoses.json",
+  "production_control": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\mamono-large-grid-red-control.rs",
+  "production_control_sha256": "1d2fdd1b38dc5fe079207f58f4b5d71e460db6823b6c400cf66fe95dd70d407d",
+  "production_control_scene": "two owned grids of 1080 BitmapText actors, real default host, native-style deferred initial update",
+  "production_control_log": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\mamono-grid-windows-red-v1.log",
+  "production_control_log_sha256": "6a41459253370ee4e13250de5cc6bd6b8e2527d319c02c2940478fd554b7dfae",
+  "cargo_exit_code": 101,
+  "tests": {
+    "passed": 0,
+    "failed": 1
+  },
+  "observed_failure": "out of Lua stack during live preparation; callback traceback present",
+  "same_failure_phase_claimed": false,
+  "cause_confirmed": false,
+  "full_repair_attempts_spent": 0,
+  "archive_accepted": false,
+  "source_changes_committed": false,
+  "failing_control_kept_out_of_repository_test_suite": true
+}
