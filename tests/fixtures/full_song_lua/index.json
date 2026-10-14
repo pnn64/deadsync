@@ -4755,15 +4755,12 @@
     {
       "title": "Ｓｏｍｅｏｎｅ Ｓｐｅｃｉａｌ",
       "source_simfile": "Someone Special - hubert/Someone Special.sm",
-      "harness_version": "0.1.0",
-      "archive": "fdd109c28e14b9084b7f980a6ba38a5c77f420ca993d7f8b9b701776667b6e03.tar.zst",
-      "sha256": "fdd109c28e14b9084b7f980a6ba38a5c77f420ca993d7f8b9b701776667b6e03",
-      "compressed_bytes": 797953,
-      "uncompressed_sha256": "a36910f01c456024ddd74725530b922b60a23bd3fcfb97c5378519c570542f6b",
-      "compression_level": 22,
-      "aliases": [
-        "0be454b5d36f1a51c33fd3f73b711ecaa9d69adf559ad41e1a9b5a2bbc82d7f6.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "d2139718caf170f1468b2c27496039a621bc201633100421a3114e7b6bd7eb6b.tar.zst",
+      "sha256": "d2139718caf170f1468b2c27496039a621bc201633100421a3114e7b6bd7eb6b",
+      "compressed_bytes": 18327679,
+      "uncompressed_sha256": "1f71183e22d7b28fe837d18fa88c35a61e9d05d27169dadc6e939d6bbbcf3058",
+      "aliases": []
     },
     {
       "title": "Ｓｏｍｅｏｎｅ Ｓｐｅｃｉａｌ",

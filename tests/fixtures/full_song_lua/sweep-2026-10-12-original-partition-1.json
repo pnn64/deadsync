@@ -9061,6 +9061,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 404,
+      "source_simfile": "Someone Special - hubert/Someone Special.sm",
+      "simfile_sha256": "cf85ff2306a162cf432b2c9259cd037ad254488673f2a8c8c2fcd6695915f5c1",
+      "retained_original_archive": "fdd109c28e14b9084b7f980a6ba38a5c77f420ca993d7f8b9b701776667b6e03.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e0f16f89374ce78a1b07cafdb6d13c8e5c04de3e",
+      "build_proof": "/home/parity/jobs/game-state-class-linux-green-v1/proof.json",
+      "capture_seconds": 261.585630482994,
+      "trace_sha256": "b51f26d3007af34caa3c605898f50dad97f1ac0e68dac4de8319fe5b159eee04",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-404/candidates/1f71183e22d7b28fe837d18fa88c35a61e9d05d27169dadc6e939d6bbbcf3058.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1583.024656872003,
+      "candidate_sha256": "1f71183e22d7b28fe837d18fa88c35a61e9d05d27169dadc6e939d6bbbcf3058",
+      "native_frames": 13988,
+      "replayed_frames": 13988,
+      "compared_stage_fields": 1705,
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.addrotationy, Actor.baserotationz, Actor.bounce, Actor.effectclock, Actor.rotationx, Actor.rotationy, Actor.spring, Actor.stopeffect, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: ActorProxy, BitmapText, Model, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "43b13cfd4500aa7a54a14b9ea0cb119432adcb2d051af462b4c4ee100b3de35e",
+      "archive": "d2139718caf170f1468b2c27496039a621bc201633100421a3114e7b6bd7eb6b.tar.zst",
+      "archive_sha256": "d2139718caf170f1468b2c27496039a621bc201633100421a3114e7b6bd7eb6b",
+      "compressed_bytes": 18327679,
+      "pack_seconds": 21.59979187499266,
+      "harness_version": "0.1.80",
+      "title": "Ｓｏｍｅｏｎｅ Ｓｐｅｃｉａｌ",
+      "retained_original_entry": {
+        "title": "Ｓｏｍｅｏｎｅ Ｓｐｅｃｉａｌ",
+        "source_simfile": "Someone Special - hubert/Someone Special.sm",
+        "harness_version": "0.1.0",
+        "archive": "fdd109c28e14b9084b7f980a6ba38a5c77f420ca993d7f8b9b701776667b6e03.tar.zst",
+        "sha256": "fdd109c28e14b9084b7f980a6ba38a5c77f420ca993d7f8b9b701776667b6e03",
+        "compressed_bytes": 797953,
+        "uncompressed_sha256": "a36910f01c456024ddd74725530b922b60a23bd3fcfb97c5378519c570542f6b",
+        "compression_level": 22,
+        "aliases": [
+          "0be454b5d36f1a51c33fd3f73b711ecaa9d69adf559ad41e1a9b5a2bbc82d7f6.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -9070,9 +9121,9 @@
     "historical_unindexed_charts": 18,
     "assigned_source_count": 112
   },
-  "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
+  "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 35,
+  "passed_fixtures": 36,
   "pending_charts": 33,
-  "processed_charts": 68
+  "processed_charts": 69
 }
