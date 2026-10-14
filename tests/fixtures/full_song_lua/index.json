@@ -3393,17 +3393,14 @@
       ]
     },
     {
-      "title": "Leave The Door Open",
+      "title": "Leave The Door Open Episode 06",
       "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.ssc",
-      "harness_version": "0.1.0",
-      "archive": "fd893cd6fcfcbb4a99b7d2ba04415bb35f2c264b1c4b84f54920c684b0fe6bb0.tar.zst",
-      "sha256": "fd893cd6fcfcbb4a99b7d2ba04415bb35f2c264b1c4b84f54920c684b0fe6bb0",
-      "compressed_bytes": 594152,
-      "uncompressed_sha256": "ad0fe94b9c1f0eb7b730a5d4b078efdfdcd43cd31f12fd0920a07f95506fac65",
-      "compression_level": 22,
-      "aliases": [
-        "506b90c05453488ddae99956197d52dfa46c87b9fcda24c62cee8aff377825a2.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "6806ab1f2e21991df906cfc6199a4ed091446abab465b3a414b2d0c9fec796d4.tar.zst",
+      "sha256": "6806ab1f2e21991df906cfc6199a4ed091446abab465b3a414b2d0c9fec796d4",
+      "compressed_bytes": 23417696,
+      "uncompressed_sha256": "751f57a60ad01a35009a75d5719460fa400d0892445e8fccb98e7bca61f86ece",
+      "aliases": []
     },
     {
       "title": "Lesson by DJ",
