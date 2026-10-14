@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T20:58:35Z",
+  "updated_utc": "2026-10-14T21:08:11Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 324,
+    "passed": 325,
     "pending": 99,
-    "unprocessed": 78
+    "unprocessed": 77
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3277,7 +3277,9 @@
       "position": 389,
       "source_simfile": "Scorpion King [TaroNuke]/scorpion.sm",
       "simfile_sha256": "aa835fb23eb12b0504fb01c60f06f48983ebc193810be30607848a2c2c6128e9",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 390,
