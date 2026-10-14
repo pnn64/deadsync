@@ -4468,15 +4468,12 @@
     {
       "title": "Retrospective",
       "source_simfile": "Retrospective/Retrospective.ssc",
-      "harness_version": "0.1.0",
-      "archive": "bd9d4d8cde193f9127448117fc02f4f17930ace7fdff9fdfbc36bc65de8de56b.tar.zst",
-      "sha256": "bd9d4d8cde193f9127448117fc02f4f17930ace7fdff9fdfbc36bc65de8de56b",
-      "compressed_bytes": 1577976,
-      "uncompressed_sha256": "98b4e908f7d447a505b9175d4b1dee18de5a5f7ec7f471b5f2223a321c2698d9",
-      "compression_level": 22,
-      "aliases": [
-        "2fff5ba3f967fec410a1dbc12a0375091fd1f9dd02a4f0ea19faddb651f72bb6.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "0b9d2ab4d8900d3fc9d7712806b0eda3f087a995b4bbc9bfc6137777972ab77b.tar.zst",
+      "sha256": "0b9d2ab4d8900d3fc9d7712806b0eda3f087a995b4bbc9bfc6137777972ab77b",
+      "compressed_bytes": 4938188,
+      "uncompressed_sha256": "4e0dff450b7809723759f86bffdd9946e73764a949e0578a54d9d00677486015",
+      "aliases": []
     },
     {
       "title": "Riddle",
