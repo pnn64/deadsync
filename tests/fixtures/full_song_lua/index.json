@@ -3627,19 +3627,14 @@
       "aliases": []
     },
     {
-      "title": "MAWARU",
+      "title": "MAWARU Made in StepMania",
       "source_simfile": "mawaru1/mawaru.sm",
-      "harness_version": "0.1.6",
-      "archive": "84bca9032bf72170351c50fc5462a468095e4b9d39c8328f77b7d6eb22d9e5df.tar.zst",
-      "sha256": "84bca9032bf72170351c50fc5462a468095e4b9d39c8328f77b7d6eb22d9e5df",
-      "compressed_bytes": 49210,
-      "uncompressed_sha256": "9286d2ce9eb067c7aa65d68588540e2fe3029b4b01803081185549856d71d86e",
-      "compression_level": 22,
-      "aliases": [
-        "b8698ff1a11a53d5326de26728bd0d6aa8356258d12167d1c13443db9336091d.tar.zst",
-        "bb65819654075bc13deff2695440578b8c313ae945aae2761c820c613720186f.tar.zst",
-        "823383cca32c448076510241bfbd2833f0fc4b11d8a1e3a82793b139834f1306.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "937aa2f11cc7a6f57482c215cd7a4674624da99a23ec1d05cad1e8142e2b5650.tar.zst",
+      "sha256": "937aa2f11cc7a6f57482c215cd7a4674624da99a23ec1d05cad1e8142e2b5650",
+      "compressed_bytes": 5801646,
+      "uncompressed_sha256": "1677900151e89aa5127edd6ce01e0b9dad75098beb5015ccf59e3839a8fca9db",
+      "aliases": []
     },
     {
       "title": "MAWARU 2 THE REVENGE",
