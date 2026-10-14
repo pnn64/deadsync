@@ -1,0 +1,20 @@
+{
+  "source_simfile": "Cursed Metamorph - [Zaia]/saved/Cursed Metamorph.ssc",
+  "position": 489,
+  "full_repair_attempts_spent": 0,
+  "actual_capture_failure": "could not find staged song Harness/Probe",
+  "native_log_evidence": [
+    "Loading /Songs/Harness/Probe",
+    "Song /Songs/Harness/Probe/ has no music file; guessing at 100 seconds",
+    "Song /Songs/Harness/Probe/ has no music; ignored."
+  ],
+  "authored_music": "Sot-C - Cursed Metamorph.ogg",
+  "selected_simfile_directory": "Cursed Metamorph - [Zaia]/saved",
+  "harness_staging": "Stages the selected simfile directory as Songs/Harness/Probe; selected saved-directory chart cannot find its authored music in that directory.",
+  "next_action": "Inspect source package layout and native song-directory rules before any first capture repair. Do not substitute a different chart or change authored simfile bytes.",
+  "native_log": "/tmp/itgmania-harness-rs/song-lua-829171-1792015685793041617-0/Logs/log.txt",
+  "capture_complete": false,
+  "source_modified": false,
+  "acceptance_gates_changed": false,
+  "passing_chart_reopened": false
+}
