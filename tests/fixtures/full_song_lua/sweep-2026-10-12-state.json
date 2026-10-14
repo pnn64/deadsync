@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T17:05:57Z",
-  "previous_goal_turn": "Current turn is progress: Oshama SSC passes18767 frames, Potion SM105281, September SSC81616 and Tamamo SSC42872. Planet Calling SSC6820 and ShockWAVE SSC94923 also pass. All six archives saved and committed by publisher; storage-only verification checks compressed SHA and decompressed bytes against original accepted candidates, receipts committed, passing charts closed. Sputnik actual repair1 has13 residual mismatches: native16 vs actual36 command queries expose20 internal Lua Steps getter callbacks; two authored SetNewScreen calls coalesced into one request observation. Fix771646c8d reads immutable Steps metadata and retains every authored request separately from the final production target. Both controls fail before Windows/Linux and pass after; Windows62 live/30 native and Linux64 live/30 native plus both executable builds exit zero. All36 local/Linux normalized and active raw source pins verified; harness unchanged. Immutable helper745eee7daaa9bd844dd8092d43d02e25b6b5e05a2a8967cca909eba5a2e487b7 selected; Sputnik second/final repair runs original40632-frame candidatee6a8401d/trace820041d2, child3357624, no further repair allowed this sweep. An isolated green setup mkdir error was corrected with baseline restoration before any checks or chart repair; failed setup evidence retained. Showtime first repair exits1 at56383/145878: native scene2 vs independent scene1. Primary Screen/ScreenGameplay and authored beat160 show explicit next ScreenGameplay ignored by production transition completion, which always navigates Evaluation; one final repair remains after target handling fix/controls. Save Your Tears Cringle SSC original full67253-frame failure is exactly16 missing terminal GetSongBeat observations after actual navigation at172.7837677 while native continues to172.7938538; exit sequencing cause unconfirmed, no repair spent. Existing8 sweep queues and Koi/Mawaru8 repairs continue; publisher103 streams. Original501 scope preserved, oversized fixtures retained/Git ignored, missing coverage separate and existing full acceptance comparisons unchanged. Sweep remains active and incomplete.",
+  "updated_utc": "2026-10-14T17:27:30Z",
+  "previous_goal_turn": "Current turn is progress: Sputnik second/final repair passes all40632 native frames, zero errors/mismatches; archive2c6b45c8 saved and committed, local decompression equals originale6a8401d candidate, passing chart closed. Fix771646c8d now accepted on actual failing Sputnik. Shooting Love SSC10303 and Spectrum Sequence SSC62146 also pass, archives saved/committed and local uncompressed bytes verified, passing charts closed. Showtime actual first-repair failure at56383/145878 confirmed from primary Screen/ScreenGameplay: beat160 sets next screen Gameplay but production out completion navigates Evaluation. Fixe1d9c9995 resolves the latest stored override when native out tween completes, emits production ReloadSongLua for Gameplay and corresponding navigation for other known theme screens, preserves default Evaluation. New control changes target after transition starts and asserts no early load, chosen Gameplay/SelectMusic effect, Off then popped End once and single completion. Control fails before Windows/Linux and passes after. Windows62 live/31 native, Linux64 live/31 native and both executables build exit zero; all36 local/Linux normalized and active raw source pins verified. Immutable helperfa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd selected; Showtime second/final repair runs unchanged original378bedd6 candidate/trace2cf3e568, child3477074, using vacated Sputnik repair slot. Its last repair is now consumed; no further attempts this sweep. Native harness unchanged; running worker captures/replays preserved. Great Divide SM initial full85375 replay yields one query-count mismatch325057 vs324696, errors0, no repair spent. Additional Save Tears pending diagnosis confirms last authored command times match but exact terminal update cause still unconfirmed; no repair started. Existing8 sweep queues and Koi/Mawaru8 repairs continue, publisher104 streams. Original501 scope preserved, oversized fixtures retained/Git ignored, missing coverage separate, existing comparisons/tolerances/full zero-exit acceptance unchanged. Sweep remains active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "42ee4d6774309c9201871329dc3d075bab8d5e0c",
+      "deadsync": "268f88671b6a3d796b542b4e5b68d7d158d07d2d",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -78,7 +78,8 @@
     "native_player_stats_identity": "94e70049b: genuine numeric/enum aliases proven by primary native bindings and recorder path construction. Identical control fails before both platforms and passes after, retaining wrong-player/stage/literal/unknown-identity distinctions. Windows30 and Linux62 live/30 native controls plus both builds exit zero. Only typed identity alias spelling corrected; fields, numeric tolerances, raw arguments and full zero-exit/frame/error requirements preserved. Original Mawaru8 first full repair running.",
     "native_numeric_song_selectors": "1482e4b75: native zero-based numeric StepsType/Difficulty lookup implemented; all38 StepsType order checked against primary enum. Meaningful live numeric selector/reload control reproduced before and passes after on both platforms. Windows61 and Linux63 live/30 native controls, both executable builds exit zero. Original MISSION SPUTNIK first full repair running; Its Showtime first repair queued behind it, each one later repair remaining. Existing fields/tolerances/full acceptance and raw chart/capture bytes unchanged.",
     "native_background_effect_family": "3f4ddc793: primary effect sources and original neutral factory tree confirm authored child ownership. Control fails before on both platforms and passes after; Windows30/Linux63 live/30 native plus both builds all exit zero. Actual original31593-frame Retrospective first full repair passes zero errors/mismatches; fixture saved/committed and local original bytes verified, passing chart closed. Pointer/parent/scene/ordinal/provenance/ownership guards, comparison fields and tolerances preserved.",
-    "native_song_selector_observations": "771646c8d: primary SongUtil and ScreenManager establish direct metadata filtering and separate source invocation multiplicity from coalesced loads. Both controls red before Windows/Linux, green after. Windows62 live/30 native; Linux64 live/30 native and both executables build exit zero. All36 source pins and immutable binary verified. Sputnik final repair launched on original candidate and trace; full comparisons/tolerances unchanged, no passing chart reopened."
+    "native_song_selector_observations": "771646c8d: primary metadata and authored-request invocation fix controls green on both platforms. Actual original Sputnik final repair now passes all40632 frames, zero errors/mismatches; original archive saved, committed, decompressed bytes verified, chart closed. Existing full acceptance preserved.",
+    "native_next_screen_target": "e1d9c9995: primary Screen/ScreenGameplay resolve explicit next screen after native out completion. Latest-target production control red before Windows/Linux and green after; Windows62 live/31 native, Linux64 live/31 native and both executable builds zero exit. All36 source pins and immutable helper verified; Showtime final repair launched on original archive, no passing charts reopened."
   },
   "corpus_transfer": {
     "tar_sha256": "37febe98e2e47b325b9f9b96f4d29ddf32eedda84514191252d043c5fd4a4d1a",
@@ -141,9 +142,9 @@
       "pending": 59,
       "processed": 92,
       "last_log_lines": [
-        "[11662.5s] replaying every native gameplay frame: frame 38495/85655 (44.9%)",
-        "[11664.5s] replaying every native gameplay frame: frame 38501/85655 (44.9%)",
-        "[11666.5s] replaying every native gameplay frame: frame 38508/85655 (45.0%)"
+        "[12954.9s] replaying every native gameplay frame: frame 42187/85655 (49.3%)",
+        "[12956.9s] replaying every native gameplay frame: frame 42192/85655 (49.3%)",
+        "[12958.9s] replaying every native gameplay frame: frame 42198/85655 (49.3%)"
       ],
       "supervisor_running": true
     },
@@ -1731,6 +1732,13 @@
         "record": "sweep-2026-10-14-mission-sputnik-final-repair.json",
         "fix_commit": "771646c8d58dc1170f1e2b9f332a701f8bd518b7",
         "finish_status": "second and final selector metadata and authored-request repair complete"
+      },
+      {
+        "name": "showtime-next-screen-final-repair",
+        "remote": "/home/parity/jobs/showtime-next-screen-final-repair-v1",
+        "record": "sweep-2026-10-14-showtime-final-repair.json",
+        "fix_commit": "e1d9c9995fcf756f86445761fe965767a848dd24",
+        "finish_status": "second and final explicit next-screen transition repair complete"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -1749,14 +1757,14 @@
       },
       {
         "job": "mission-sputnik-selector-observations-final-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "MISSION SPUTNIK/sputnik.ssc",
-        "child_running": true
+        "child_running": false
       },
       {
         "job": "mission-sputnik-numeric-first-repair-v1",
@@ -1768,6 +1776,17 @@
         "last_phase": "replay",
         "source_simfile": "MISSION SPUTNIK/sputnik.ssc",
         "child_running": false
+      },
+      {
+        "job": "showtime-next-screen-final-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "It's Showtime/mettaton.ssc",
+        "child_running": true
       },
       {
         "job": "showtime-numeric-first-repair-v1",
@@ -1830,37 +1849,37 @@
         "job": "chart-sweep-parallel-v5-5",
         "complete": false,
         "supervisor_running": true,
-        "passed": 6,
+        "passed": 7,
         "pending": 1,
-        "processed": 7,
+        "processed": 8,
         "last_phase": "replay",
-        "source_simfile": "Spectrum Sequence/spectrumsequence.ssc",
+        "source_simfile": "Stella Glow/Stella Glow.ssc",
         "child_running": true,
-        "position": 408
+        "position": 416
       },
       {
         "job": "chart-sweep-parallel-v5-6",
         "complete": false,
         "supervisor_running": true,
-        "passed": 3,
+        "passed": 4,
         "pending": 3,
-        "processed": 6,
+        "processed": 7,
         "last_phase": "replay",
-        "source_simfile": "Shooting Love/Shooting Love.ssc",
+        "source_simfile": "SPLAK IT DOWN - [Zaia +ruunix2]/SPLAK IT DOWN.ssc",
         "child_running": true,
-        "position": 401
+        "position": 409
       },
       {
         "job": "chart-sweep-parallel-v5-7",
         "complete": false,
         "supervisor_running": true,
         "passed": 5,
-        "pending": 5,
-        "processed": 10,
+        "pending": 6,
+        "processed": 11,
         "last_phase": "replay",
-        "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.sm",
+        "source_simfile": "This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!/This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!.ssc",
         "child_running": true,
-        "position": 434
+        "position": 442
       },
       {
         "job": "koi-ssc-rec-print-repair-v1",
@@ -2056,7 +2075,7 @@
         "passed": 31,
         "pending": 33,
         "processed": 64,
-        "last_phase": "capture",
+        "last_phase": "replay",
         "source_simfile": "Raving With Fire/Raving With Fire.ssc",
         "child_running": true,
         "position": 367
@@ -2126,10 +2145,10 @@
     "attack_boundary_completed_build": "tests/fixtures/full_song_lua/sweep-2026-10-14-attack-boundary-linux-build.json",
     "cringle_sm_attack_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-door-cringle-sm-attack-final-launch.json",
     "reason_red_zero_seed": "tests/fixtures/full_song_lua/sweep-2026-10-14-reason-red-zero-seed-diagnosis.json",
-    "selected_replay_binary_sha256": "745eee7daaa9bd844dd8092d43d02e25b6b5e05a2a8967cca909eba5a2e487b7",
+    "selected_replay_binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 103,
+    "publisher_stream_count": 104,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -2189,14 +2208,20 @@
     "september_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-september-ssc-fixture-verification.json",
     "tamamo_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-tamamo-ssc-fixture-verification.json",
     "planet_calling_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-planet-calling-ssc-fixture-verification.json",
-    "shockwave_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-shockwave-ssc-fixture-verification.json"
+    "shockwave_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-shockwave-ssc-fixture-verification.json",
+    "mission_sputnik_final_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-mission-sputnik-final-fixture-verification.json",
+    "shooting_love_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-shooting-love-ssc-fixture-verification.json",
+    "spectrum_sequence_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-spectrum-sequence-ssc-fixture-verification.json",
+    "next_screen_target_validation": "tests/fixtures/full_song_lua/sweep-2026-10-14-next-screen-target-validation.json",
+    "next_screen_target_selection": "tests/fixtures/full_song_lua/sweep-2026-10-14-next-screen-target-selection.json",
+    "showtime_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-14-showtime-final-repair-launch.json"
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 152,
+    "new_passed_fixtures": 155,
     "new_pending_charts": 84,
-    "new_processed_sources": 236,
+    "new_processed_sources": 239,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 117,
+    "unprocessed_sources": 114,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -3695,20 +3720,6 @@
       ]
     },
     {
-      "source_simfile": "MISSION SPUTNIK/sputnik.ssc",
-      "repair_attempts": 1,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 13,
-      "first_mismatch": [
-        {
-          "field": "source_request_count",
-          "native": 2,
-          "deadsync": 1
-        }
-      ]
-    },
-    {
       "source_simfile": "Paint the Town Red/PaintTheTownRed.sm",
       "repair_attempts": 0,
       "failure": null,
@@ -3925,6 +3936,20 @@
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
+    },
+    {
+      "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 1,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 325057,
+          "deadsync": 324696
+        }
+      ]
     }
   ],
   "historical_concrete_failures": [

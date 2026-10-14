@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T17:05:56Z",
+  "updated_utc": "2026-10-14T17:27:29Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 299,
+    "passed": 302,
     "pending": 85,
-    "unprocessed": 117
+    "unprocessed": 114
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2693,9 +2693,9 @@
       "position": 316,
       "source_simfile": "MISSION SPUTNIK/sputnik.ssc",
       "simfile_sha256": "1241e37b8933c76c957ed2217eebd3cd53c1e2efd27cc84fba9a24938ba7f688",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-14-mission-sputnik-numeric-first-repair.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-14-mission-sputnik-final-repair.json"
     },
     {
       "position": 317,
@@ -3333,7 +3333,9 @@
       "position": 401,
       "source_simfile": "Shooting Love/Shooting Love.ssc",
       "simfile_sha256": "127f73762b1660128aaaf50354cbb9c3f65fc6aadad10140084ac062e23aa652",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 402,
@@ -3377,7 +3379,9 @@
       "position": 408,
       "source_simfile": "Spectrum Sequence/spectrumsequence.ssc",
       "simfile_sha256": "c6cb1fcd9137d0fe2e5e729aee4be12096ab08097333f391e64c9521759a06e9",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 409,
@@ -3539,7 +3543,9 @@
       "position": 434,
       "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.sm",
       "simfile_sha256": "8c1930f235fa5619e2afa477e52a61b2f8bf92062ac73a8cec69fc0bb90733dc",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 435,
