@@ -1,0 +1,19 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "tamashi/tamashi.sm",
+  "native_frames": 41714,
+  "replayed_frames": 41714,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "ee7720ae718b0505a82b5f13b654563edb79c8394e9b48a64d13a9ac8299c9e3.tar.zst",
+  "compressed_sha256": "ee7720ae718b0505a82b5f13b654563edb79c8394e9b48a64d13a9ac8299c9e3",
+  "uncompressed_sha256": "31ef6bbdaf25f8c4fd58df095851c681a7e73853e173fc236d53f6fef623c6ed",
+  "compressed_bytes": 18919484,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false,
+  "original_replay_exit": 1,
+  "full_comparison_report_accepted": true,
+  "post_accept_progress_logger_failure_preserved": true,
+  "full_replay_repeated": false
+}

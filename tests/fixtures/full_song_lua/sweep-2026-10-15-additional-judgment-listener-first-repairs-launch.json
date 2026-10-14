@@ -1,0 +1,39 @@
+{
+  "pid": 1243586,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_additional_judgment_listener_first_repairs_v1.py"
+  ],
+  "native_captures_reused": true,
+  "first_repairs_only": true,
+  "repair_limit": 2,
+  "one_later_attempt_maximum_each": true,
+  "jobs": [
+    {
+      "name": "jack-reaper-listener-first-repair-v1",
+      "position": 253,
+      "source_simfile": "Jack The Reaper/Jack The Reaper.sm",
+      "repair_attempt": 1,
+      "remaining_after_first": 1,
+      "candidate_sha256": "5bdf4ac66993479620bb2fea1f099169cfac09b164f249f6d48986cab112709c",
+      "trace_sha256": "8ff66d74b0e27cc94ab500bb8deb626237df0d57f8dc891aa034a8c5d5a743c5",
+      "simfile_sha256": "04baaf73d0577eff9e4316a41ac80ed5238bd4da0168929ac3591aea8c548723"
+    },
+    {
+      "name": "my-exes-sm-listener-first-repair-v1",
+      "position": 320,
+      "source_simfile": "My Exes Bestfriend/ExBestFriend.sm",
+      "repair_attempt": 1,
+      "remaining_after_first": 1,
+      "candidate_sha256": "5d63dfb239e0b987f5806460a53499a93ffd5d1bf4a3329354664a32e38ce225",
+      "trace_sha256": "cd27453eb6a7a83da1106c422d81ab5be354f74bc43f38e04ce4d92dcc4603d5",
+      "simfile_sha256": "2314771d6ae77815b2ef52e8d5600a8f5183762f694012ba305771a0a83fbe3b"
+    }
+  ],
+  "fix": "d69f0a20f",
+  "tested_build": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+  "acceptance_changed": false,
+  "passing_charts_reopened": false,
+  "primary_diagnosis": "sweep-2026-10-14-message-coverage-diagnosis.json",
+  "publisher_stream_count": 124
+}

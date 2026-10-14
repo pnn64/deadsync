@@ -1,0 +1,19 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Someone Special - hubert/Someone Special.ssc",
+  "native_frames": 14218,
+  "replayed_frames": 14218,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "c39fefdc2202790e09a0b143171f1ff2e61d819d60154faec857a5f89d1e469a.tar.zst",
+  "compressed_sha256": "c39fefdc2202790e09a0b143171f1ff2e61d819d60154faec857a5f89d1e469a",
+  "uncompressed_sha256": "38e462e6da9413e8e1ccd729d8ed8150f4cfd748ac41f56540934c8905d70e0f",
+  "compressed_bytes": 18636651,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false,
+  "original_replay_exit": 1,
+  "full_comparison_report_accepted": true,
+  "post_accept_progress_logger_failure_preserved": true,
+  "full_replay_repeated": false
+}
