@@ -1,0 +1,32 @@
+{
+  "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.ssc",
+  "position": 384,
+  "status": "pending",
+  "repair_attempts": 0,
+  "native_frames": 67253,
+  "replayed_frames": 67253,
+  "errors": [],
+  "mismatches": [
+    { "field": "command_query_count", "native": 228637, "deadsync": 228621 }
+  ],
+  "candidate_sha256": "d6abe31f782a6747dfb98adffe8b2532c8fc5309f6711fe22135f4a4bf0f236e",
+  "trace_sha256": "fb24e5c91afc6d20ff77cb848622277ca5a2f0d99bcae8681f4de7749c98aed9",
+  "simfile_sha256": "8b57aae087794bf0c7f0bb19c297c69c58f2d0d6bac97c4cfde344875e29c3c1",
+  "retained_report": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-384/report.json.zst",
+  "query_operation_difference": {
+    "GameState.GetSongBeat": { "native": 227851, "deadsync": 227835 }
+  },
+  "all_other_query_operation_counts_match": true,
+  "actual_last_query_seconds": 172.7837677001953,
+  "actual_first_domain_navigation_seconds": 172.7837677001953,
+  "native_last_query_seconds": 172.79385375976562,
+  "query_source": "song:/lua/default.lua:222",
+  "query_scene": 2,
+  "concrete_failure": "Sixteen GetSongBeat observations are missing at the end of the otherwise complete replay. Actual Lua observations stop at production navigation; native observations continue approximately 10.1 milliseconds later.",
+  "cause_confirmed": false,
+  "next_action": "Check primary gameplay exit and actor-update sequencing against retained capture before spending a repair attempt.",
+  "native_capture_reused": true,
+  "new_chart_replays_started": false,
+  "comparison_fields_and_tolerances_unchanged": true,
+  "passing_charts_reopened": false
+}
