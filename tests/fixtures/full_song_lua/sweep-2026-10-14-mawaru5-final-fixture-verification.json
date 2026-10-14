@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "mawaru5/mawaru5.sm",
+  "native_frames": 162894,
+  "replayed_frames": 162894,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "bf0fd217977f5c42a8d5d8db9c768d179e2152b8f12f6aa9bf64d012707cef8d.tar.zst",
+  "compressed_sha256": "bf0fd217977f5c42a8d5d8db9c768d179e2152b8f12f6aa9bf64d012707cef8d",
+  "uncompressed_sha256": "7b9ab3bde10c5a0295fe1047d5a3a00fb02a14d44c1497980d49e73dde41b910",
+  "compressed_bytes": 12428712,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
