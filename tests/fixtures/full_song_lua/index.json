@@ -4504,15 +4504,12 @@
     {
       "title": "Remind the Souls",
       "source_simfile": "Remind The Souls/remindthesouls-fakemines.sm",
-      "harness_version": "0.1.0",
-      "archive": "4cea92b3b66446f85e8afcc2eee607b44021d719fa42115ffe070157a5d13ddf.tar.zst",
-      "sha256": "4cea92b3b66446f85e8afcc2eee607b44021d719fa42115ffe070157a5d13ddf",
-      "compressed_bytes": 72379,
-      "uncompressed_sha256": "cb8641bd2e3f9123d57a764c5c8f1e5f244e17614db68549133e4588e38ce06e",
-      "compression_level": 22,
-      "aliases": [
-        "ccd88afcba0351b32f851ed7a4befd67c0fbe6c7c198031e720a3329562c4f3c.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "0438b91c935bbb823116ae28f4cf38518b9c4c3a42fa88dc03b2fc8c8f7c74a0.tar.zst",
+      "sha256": "0438b91c935bbb823116ae28f4cf38518b9c4c3a42fa88dc03b2fc8c8f7c74a0",
+      "compressed_bytes": 15384132,
+      "uncompressed_sha256": "9e863d259c96c075ad373b7734f7ffc589ff178ffbb3fa730f2921bf319b7d70",
+      "aliases": []
     },
     {
       "title": "Remind the Souls",

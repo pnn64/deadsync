@@ -11818,6 +11818,56 @@
         }
       ],
       "report_sha256": "81849d293ca707a69e36d3ac1341d6acd0baf4a2071697e01c1fd0f4af17512d"
+    },
+    {
+      "position": 374,
+      "source_simfile": "Remind The Souls/remindthesouls-fakemines.sm",
+      "simfile_sha256": "b9e46c982fbd3f28c7a8f18557329b410255458ab3cdc8b1cc8c791d12317324",
+      "retained_original_archive": "4cea92b3b66446f85e8afcc2eee607b44021d719fa42115ffe070157a5d13ddf.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e56f30a19e218e261ebbd1ad245ca2a49520f61b + 3eac32e9ed58260e2f65a0c9d0b5edc74c521776 + dccc3cd0d89b657014cbe4a9e42ac44dc8f2537b + 5b3fb64dd6251c8507ffe6da962c47ca3dc0abe8 + 1a142e6e7fcc2ce65d60e48dbd7d584ce1b0a6cf + 7960c8a1eb9f06e1626d636229daede097ab6b5c + 5df3a9623ba31c0be91a020d583b5620cdb4d636 + 4203f038c9354d28a9b9809cb2c7637d3c8442d4 + e57d57322ff3603fa812f27b6c623e6473657553 + c7e86d882dfd86fd3bd84631508113b56f410991 + 76ec2f609c495f809cb012c2759ee6bf937b33f8 + 0734d61e5c63f18ce447e6d1284a42058d8cc218 + 0b637312ab477d59cc8b1aa086c3df92f85f6d4f + ec04bf2e0224c9320d86d84c2a44bec5a38f87f8 + d4c07384681a2a717183a702403b52b53357ef37 + 402a3854bf58c4b4dd460c4098fa0baf8a927885 + 2b28998120d97876715bfe2a81255fb5de156b89 + 9bd984b71e3dd593c07e302839a75be8c6ec3c10 + 06a8c7c6eb87be3d0793e5ec12b63c5f207242e6 + 874f2e535ad5a3ce39394ddb03c49600c20e2044 + da708fe8836e33d3095f23be69d9eb9b56db7de4 + 7c8b4c460131bb1c1674813ca53a210e20ff895d + 4d1ed6dd89316a06b7b7ac9da88c01b700032305 + 21f6e34679ef7262f98619bb432d205d820e11f3 + d82120e47 + 9bcc50649 + 04899487a + 8cb4b7633 + 0505ad8a0 + 469d6157b + be2565b8d + d851d0c3b + 34e1a7ba8 + 7ee5d0090 + 86fba19f6 + 6470fdd9d + 43dae3f20 + 9e0511014 + 8f91878dc + b29bff67c / harness c283a8a",
+      "build_proof": "/home/parity/jobs/double-cue-rows-green-v2/proof.json",
+      "capture_seconds": 183.9685912829882,
+      "trace_sha256": "f840dc5c66b8d544d82d11b49d6cf54489fa55f9889e960f21203df28e9f3ef4",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-374/candidates/9e863d259c96c075ad373b7734f7ffc589ff178ffbb3fa730f2921bf319b7d70.tar",
+      "replay_exit": 0,
+      "replay_seconds": 998.9815589890059,
+      "candidate_sha256": "9e863d259c96c075ad373b7734f7ffc589ff178ffbb3fa730f2921bf319b7d70",
+      "native_frames": 39331,
+      "replayed_frames": 39331,
+      "compared_stage_fields": 1584,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "f2889413652754644bbebac51b71f64f5b5db11e8e5ebe1f86ae5a2987ba2b6e",
+      "archive": "0438b91c935bbb823116ae28f4cf38518b9c4c3a42fa88dc03b2fc8c8f7c74a0.tar.zst",
+      "archive_sha256": "0438b91c935bbb823116ae28f4cf38518b9c4c3a42fa88dc03b2fc8c8f7c74a0",
+      "compressed_bytes": 15384132,
+      "pack_seconds": 15.97853411201504,
+      "harness_version": "0.1.80",
+      "title": "Remind the Souls",
+      "retained_original_entry": {
+        "title": "Remind the Souls",
+        "source_simfile": "Remind The Souls/remindthesouls-fakemines.sm",
+        "harness_version": "0.1.0",
+        "archive": "4cea92b3b66446f85e8afcc2eee607b44021d719fa42115ffe070157a5d13ddf.tar.zst",
+        "sha256": "4cea92b3b66446f85e8afcc2eee607b44021d719fa42115ffe070157a5d13ddf",
+        "compressed_bytes": 72379,
+        "uncompressed_sha256": "cb8641bd2e3f9123d57a764c5c8f1e5f244e17614db68549133e4588e38ce06e",
+        "compression_level": 22,
+        "aliases": [
+          "ccd88afcba0351b32f851ed7a4befd67c0fbe6c7c198031e720a3329562c4f3c.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -11841,9 +11891,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "2cfd421089314db6cb6652d24ff7d3dc1e6f14cfa0b9cd9ea806e23645e2a1e4",
+  "binary_sha256": "74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 29,
+  "passed_fixtures": 30,
   "pending_charts": 58,
-  "processed_charts": 87
+  "processed_charts": 88
 }
