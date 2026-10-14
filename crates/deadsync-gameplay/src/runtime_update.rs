@@ -847,6 +847,26 @@ where
             .set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
     }
 
+    pub fn set_music_end_fade_timing(&mut self, fade_seconds: f32, transition_seconds: f32) {
+        self.clock.end_timing.set_music_fade_timing_ns(
+            song_time_ns_from_seconds(fade_seconds), song_time_ns_from_seconds(transition_seconds));
+        self.recompute_end_times();
+    }
+
+    fn recompute_end_times(&mut self) {
+        let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
+            &self.chart_runtime.notes,
+            &self.chart_runtime.note_time_cache_ns,
+            &self.chart_runtime.hold_end_time_cache_ns,
+            self.music_rate(),
+            self.clock.end_timing.audio_end_time_ns(),
+            self.clock.end_timing.song_last_second_ns(),
+        );
+        let music_end_time_ns = self.clock.end_timing.apply_music_fade_timing(
+            music_end_time_ns, self.source.song.music_length_seconds);
+        self.clock.end_timing.set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
+    }
+
     pub fn set_music_rate_with_player_judgment_timing(
         &mut self,
         rate: f32,
@@ -860,17 +880,7 @@ where
         let normalized = self.music_rate();
         self.timing_runtime.step_resolution_distance_ns =
             max_step_distance_ns(&self.timing_runtime.timing_profile, normalized);
-        let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
-            &self.chart_runtime.notes,
-            &self.chart_runtime.note_time_cache_ns,
-            &self.chart_runtime.hold_end_time_cache_ns,
-            normalized,
-            self.clock.end_timing.audio_end_time_ns(),
-            self.clock.end_timing.song_last_second_ns(),
-        );
-        self.clock
-            .end_timing
-            .set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
+        self.recompute_end_times();
         true
     }
 
@@ -912,17 +922,7 @@ where
                 );
         }
 
-        let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
-            &self.chart_runtime.notes,
-            &self.chart_runtime.note_time_cache_ns,
-            &self.chart_runtime.hold_end_time_cache_ns,
-            self.music_rate(),
-            self.clock.end_timing.audio_end_time_ns(),
-            self.clock.end_timing.song_last_second_ns(),
-        );
-        self.clock
-            .end_timing
-            .set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
+        self.recompute_end_times();
     }
 
     #[inline(always)]

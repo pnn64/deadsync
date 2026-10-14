@@ -946,6 +946,47 @@ end }
     }
 
     #[test]
+    fn gameplay_music_fade_finishes_before_the_native_transition() {
+        use super::{gameplay, paths, GameplayConfig, GameplaySession, GameplayViewport};
+        use std::{fs, sync::Arc};
+        paths::init();
+        let dir = std::env::temp_dir().join(format!("deadsync-music-fade-end-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let simfile = dir.join("end.ssc");
+        fs::write(&simfile, "#VERSION:0.83;#TITLE:Music fade end;#BPMS:0=60;\n\
+#NOTEDATA:;#STEPSTYPE:dance-single;#DESCRIPTION:Selected;#DIFFICULTY:Hard;#METER:1;#NOTES:\n1000\n0000\n0000\n1000\n;\n\
+#NOTEDATA:;#STEPSTYPE:dance-double;#DESCRIPTION:Later;#DIFFICULTY:Hard;#METER:1;#NOTES:\n10000000\n00000000\n00000000\n00000000\n,\n10000000\n00000000\n00000000\n00000000\n;\n").unwrap();
+        for audio_length in [8.0_f32, 9.2, 10.0] {
+            let mut song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap());
+            Arc::make_mut(&mut song).music_length_seconds = audio_length;
+            let chart = Arc::new(song.charts[0].clone());
+            let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
+            let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+            let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
+            let mut state = gameplay::init(song, [chart.clone(), chart], [payload.clone(), payload],
+                GameplayViewport::default(), GameplaySession::default(), GameplayConfig::default(),
+                5, 1.0, scroll, profiles, None, None, None, Arc::from("EVENT"), None, None, None,
+                None, None, [deadsync_gameplay::CourseLifeConfig::Bar; 2], false, None, None,
+                [0; 2], Default::default(), Default::default());
+            for rate in [1.0_f32, 1.5, 0.75] {
+                if rate != 1.0 { assert!(state.set_music_rate(rate)); }
+                // ScreenGameplay::GetMusicEndTiming uses the declared five
+                // seconds and Simply Love's 0.25-second music fade. Its actual
+                // visual out tween still runs separately for 1.5 seconds.
+                let note_end = 4.0_f32 + deadsync_rules::note::TIMING_WINDOW_SECONDS_ROLL * rate;
+                let fade_start = if note_end + 5.0 < audio_length { note_end + 5.0 - 0.25 }
+                    else { audio_length };
+                let expected = note_end.max(fade_start.max(note_end) + 0.25 - 5.0);
+                let actual = (state.music_end_time_ns() as f64 / 1e9) as f32;
+                assert_eq!(actual, expected, "native music fade constraint retains the audio EOF boundary");
+                assert!(state.apply_global_offset_delta(0.125));
+                assert_eq!((state.music_end_time_ns() as f64 / 1e9) as f32, expected,
+                    "player offset edits retain the cached song and music fade boundary");
+            }
+        }
+    }
+
+    #[test]
     fn gameplay_empty_declared_layers_retains_owned_theme_scene() {
         paths::init();
         let dir = std::env::temp_dir().join(format!("deadsync-empty-declared-layers-{}", std::process::id()));

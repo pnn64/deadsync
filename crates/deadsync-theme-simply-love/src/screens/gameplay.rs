@@ -1095,7 +1095,7 @@ impl State {
     }
 
     fn from_gameplay_with_screen_data(
-        gameplay: GameplayCoreState,
+        mut gameplay: GameplayCoreState,
         noteskin_assets: GameplayNoteskinAssets,
         song_lua_sound_paths: Vec<PathBuf>,
         background_changes: Vec<SongBackgroundChange>,
@@ -1111,6 +1111,9 @@ impl State {
         hud_snapshot: profile_data::GameplayHudSnapshot,
         judgment_palettes: [deadsync_theme::color::JudgmentPalette; MAX_PLAYERS],
     ) -> Self {
+        // Simply Love overrides MusicFadeOutSeconds; OutTransitionLength is
+        // inherited from the native fallback metrics.
+        gameplay.set_music_end_fade_timing(0.25, 5.0);
         let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
         let step_stats_profiles =
             std::array::from_fn(|player| gameplay.profiles()[player].0.clone());

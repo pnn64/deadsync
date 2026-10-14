@@ -280,6 +280,7 @@ pub struct GameplayEndTimingState {
     music_end_time_ns: SongTimeNs,
     audio_end_time_ns: SongTimeNs,
     song_last_second_ns: SongTimeNs,
+    music_fade_timing_ns: Option<[SongTimeNs; 2]>,
 }
 
 impl GameplayEndTimingState {
@@ -295,6 +296,7 @@ impl GameplayEndTimingState {
             music_end_time_ns,
             audio_end_time_ns,
             song_last_second_ns: 0,
+            music_fade_timing_ns: None,
         }
     }
 
@@ -326,6 +328,25 @@ impl GameplayEndTimingState {
     #[must_use]
     pub const fn song_last_second_ns(&self) -> SongTimeNs {
         self.song_last_second_ns
+    }
+
+    pub const fn set_music_fade_timing_ns(&mut self, fade: SongTimeNs, transition: SongTimeNs) {
+        self.music_fade_timing_ns = Some([fade, transition]);
+    }
+
+    /// ScreenGameplay::GetMusicEndTiming aligns the music fade with the
+    /// declared transition length; the visual out tween advances separately.
+    pub fn apply_music_fade_timing(&self, note_end_ns: SongTimeNs, music_length: f32) -> SongTimeNs {
+        let Some([fade, transition]) = self.music_fade_timing_ns else { return note_end_ns; };
+        if !music_length.is_finite() || music_length <= 0.0 { return note_end_ns; }
+        let note_end = song_time_ns_to_seconds(note_end_ns) as f32;
+        let fade = song_time_ns_to_seconds(fade) as f32;
+        let transition = song_time_ns_to_seconds(transition) as f32;
+        let fade_start = if note_end + transition < music_length {
+            note_end + transition - fade
+        } else { music_length };
+        let end = note_end.max(fade_start.max(note_end) + fade - transition);
+        song_time_ns_from_seconds(end).max(note_end_ns)
     }
 
     #[inline(always)]
