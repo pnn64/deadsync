@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Tamamo no Mae/Tamamo no Mae.ssc",
+  "native_frames": 42872,
+  "replayed_frames": 42872,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "28c78cbb37655d659a1840358b66ea6304390ab3da2b450339ec9f6a74c5be0a.tar.zst",
+  "compressed_sha256": "28c78cbb37655d659a1840358b66ea6304390ab3da2b450339ec9f6a74c5be0a",
+  "uncompressed_sha256": "82a6fe73f496b372f31b511181d00e02a09c3c98cb6ba2215180cfa099cb2aa4",
+  "compressed_bytes": 10207528,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

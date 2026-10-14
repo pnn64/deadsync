@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "September/september.ssc",
+  "native_frames": 81616,
+  "replayed_frames": 81616,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "4f2783bf3e06a1804fa3d07d5dd5089a150b26af7e99d0e5505d07a546a25a74.tar.zst",
+  "compressed_sha256": "4f2783bf3e06a1804fa3d07d5dd5089a150b26af7e99d0e5505d07a546a25a74",
+  "uncompressed_sha256": "1a3a05b4cae7b504034d1779b2eb70387cfb5e25edd82608893735624e39d237",
+  "compressed_bytes": 5336176,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
