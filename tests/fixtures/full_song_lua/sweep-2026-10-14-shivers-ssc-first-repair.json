@@ -1,0 +1,65 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef",
+  "results": [
+    {
+      "position": 399,
+      "source_simfile": "Shivers/Shivers.ssc",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "b21eb1ce481bb1bae0813c98741fd296cc08c27e4197f4f9c691a51ea2b9c59e",
+      "trace_sha256": "d811e5f30cd5e6bed13a66196a2e9e78b98ddc1d4c805755af42d6ec3ad6f50b",
+      "simfile_sha256": "420c147c6ae52db11935b39d26fbcaabb9c034c21700a7467ebde927abb1aee9",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/arrow-alpha-linux-green-v1/proof.json",
+      "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef",
+      "previous_failure": null,
+      "previous_errors": [],
+      "replay_exit": 0,
+      "replay_seconds": 1495.0597133869887,
+      "native_frames": 8392,
+      "replayed_frames": 8392,
+      "compared_stage_fields": 1892,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.blend, Actor.hibernate, Actor.rotationx, Actor.rotationy, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.SetStateProperties, Sprite.setstate",
+        "native drawable state/resources: Model, Quad, Sprite"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "20c47e2153aef493fb425904495a31c5edf98d002b45678857ad1bea4210036a",
+      "archive": "aa23ff3bfb375eede88c4fd0af095da2081ea8100f603316059753b45e0e79e0.tar.zst",
+      "archive_sha256": "aa23ff3bfb375eede88c4fd0af095da2081ea8100f603316059753b45e0e79e0",
+      "compressed_bytes": 31682538,
+      "harness_version": "0.1.80",
+      "title": "Episode 10 Shivers",
+      "pack_seconds": 28.941989344981266,
+      "retained_original_entry": {
+        "title": "Episode 10",
+        "source_simfile": "Shivers/Shivers.ssc",
+        "harness_version": "0.1.0",
+        "archive": "356225cf1dcc404e12ec3dcc893c9d5095efc379ab9d44a93b7e773d423ac7d2.tar.zst",
+        "sha256": "356225cf1dcc404e12ec3dcc893c9d5095efc379ab9d44a93b7e773d423ac7d2",
+        "compressed_bytes": 2546686,
+        "uncompressed_sha256": "492e9589e01331caf579461fcc7c43d3eeb98f49e92cb209f4204b150db563f9",
+        "compression_level": 22,
+        "aliases": [
+          "e3eb16c5d3064d209ed0f58ea72565a6d64f07f6c561889eb9ba89ed8107f029.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first repair: native ArrowEffects alpha visibility and far-edge fade; original archive and full comparisons unchanged",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}

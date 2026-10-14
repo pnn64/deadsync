@@ -4694,17 +4694,14 @@
       ]
     },
     {
-      "title": "Episode 10",
+      "title": "Episode 10 Shivers",
       "source_simfile": "Shivers/Shivers.ssc",
-      "harness_version": "0.1.0",
-      "archive": "356225cf1dcc404e12ec3dcc893c9d5095efc379ab9d44a93b7e773d423ac7d2.tar.zst",
-      "sha256": "356225cf1dcc404e12ec3dcc893c9d5095efc379ab9d44a93b7e773d423ac7d2",
-      "compressed_bytes": 2546686,
-      "uncompressed_sha256": "492e9589e01331caf579461fcc7c43d3eeb98f49e92cb209f4204b150db563f9",
-      "compression_level": 22,
-      "aliases": [
-        "e3eb16c5d3064d209ed0f58ea72565a6d64f07f6c561889eb9ba89ed8107f029.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "aa23ff3bfb375eede88c4fd0af095da2081ea8100f603316059753b45e0e79e0.tar.zst",
+      "sha256": "aa23ff3bfb375eede88c4fd0af095da2081ea8100f603316059753b45e0e79e0",
+      "compressed_bytes": 31682538,
+      "uncompressed_sha256": "b21eb1ce481bb1bae0813c98741fd296cc08c27e4197f4f9c691a51ea2b9c59e",
+      "aliases": []
     },
     {
       "title": "* Erm, could it be a Spatiotemporal ShockWAVE Syndrome...?",
