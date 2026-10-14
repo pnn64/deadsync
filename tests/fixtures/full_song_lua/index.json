@@ -4336,15 +4336,12 @@
     {
       "title": "Raving With Fire",
       "source_simfile": "Raving With Fire/Raving With Fire.sm",
-      "harness_version": "0.1.0",
-      "archive": "ebd39c7daf61be2905cb5159d78a4c7a9037e1386eedf1c7c082e3f58bb88cb5.tar.zst",
-      "sha256": "ebd39c7daf61be2905cb5159d78a4c7a9037e1386eedf1c7c082e3f58bb88cb5",
-      "compressed_bytes": 1763738,
-      "uncompressed_sha256": "9ea57281f35d33118421c6327afa9479ca42aedc4899614493f6a5a5b6ed3e17",
-      "compression_level": 22,
-      "aliases": [
-        "4cb3c1b53bb7018506e4fdf3f71ac52010c0f3a1d8cd5459bf6ccfd714b15bda.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "0450dd992013c912bb35a8ba49a45708e250299f4882927fead55cb43e3c17e6.tar.zst",
+      "sha256": "0450dd992013c912bb35a8ba49a45708e250299f4882927fead55cb43e3c17e6",
+      "compressed_bytes": 21051469,
+      "uncompressed_sha256": "5bb0fe3e13ff44b9c78a313ff2ed5640c42b801ba70178f01576af401f57b5d6",
+      "aliases": []
     },
     {
       "title": "Raving With Fire",

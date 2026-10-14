@@ -12053,6 +12053,57 @@
       "replay_seconds": 13510.895500550017,
       "candidate_sha256": "f676ad7b99352896ac20acfd205319de36ac480b98ca0e947d2a11671a40f4b5",
       "failure": " frame 43579/85655 (50.9%)\n[13425.1s] replaying every native gameplay frame: frame 43584/85655 (50.9%)\n[13427.1s] replaying every native gameplay frame: frame 43590/85655 (50.9%)\n[13429.1s] replaying every native gameplay frame: frame 43596/85655 (50.9%)\n[13431.1s] replaying every native gameplay frame: frame 43603/85655 (50.9%)\n[13433.1s] replaying every native gameplay frame: frame 43608/85655 (50.9%)\n[13435.1s] replaying every native gameplay frame: frame 43613/85655 (50.9%)\n[13437.1s] replaying every native gameplay frame: frame 43619/85655 (50.9%)\n[13439.1s] replaying every native gameplay frame: frame 43625/85655 (50.9%)\n[13441.1s] replaying every native gameplay frame: frame 43631/85655 (50.9%)\n[13443.1s] replaying every native gameplay frame: frame 43637/85655 (50.9%)\n[13445.1s] replaying every native gameplay frame: frame 43642/85655 (51.0%)\n[13447.1s] replaying every native gameplay frame: frame 43647/85655 (51.0%)\n[13449.1s] replaying every native gameplay frame: frame 43653/85655 (51.0%)\n[13451.1s] replaying every native gameplay frame: frame 43659/85655 (51.0%)\n[13453.1s] replaying every native gameplay frame: frame 43665/85655 (51.0%)\n[13455.1s] replaying every native gameplay frame: frame 43671/85655 (51.0%)\n[13457.1s] replaying every native gameplay frame: frame 43677/85655 (51.0%)\n[13459.1s] replaying every native gameplay frame: frame 43682/85655 (51.0%)\n[13461.1s] replaying every native gameplay frame: frame 43688/85655 (51.0%)\n[13463.1s] replaying every native gameplay frame: frame 43695/85655 (51.0%)\n[13465.1s] replaying every native gameplay frame: frame 43701/85655 (51.0%)\n[13467.1s] replaying every native gameplay frame: frame 43708/85655 (51.0%)\n[13469.1s] replaying every native gameplay frame: frame 43713/85655 (51.0%)\n[13471.1s] replaying every native gameplay frame: frame 43718/85655 (51.0%)\n[13473.1s] replaying every native gameplay frame: frame 43723/85655 (51.0%)\n[13475.1s] replaying every native gameplay frame: frame 43729/85655 (51.1%)\n[13477.1s] replaying every native gameplay frame: frame 43736/85655 (51.1%)\n[13479.1s] replaying every native gameplay frame: frame 43741/85655 (51.1%)\n[13481.1s] replaying every native gameplay frame: frame 43746/85655 (51.1%)\n[13483.1s] replaying every native gameplay frame: frame 43751/85655 (51.1%)\n[13485.1s] replaying every native gameplay frame: frame 43758/85655 (51.1%)\n[13487.1s] replaying every native gameplay frame: frame 43764/85655 (51.1%)\n[13489.1s] replaying every native gameplay frame: frame 43770/85655 (51.1%)\n[13491.1s] replaying every native gameplay frame: frame 43775/85655 (51.1%)\n[13493.1s] replaying every native gameplay frame: frame 43780/85655 (51.1%)\n[13495.1s] replaying every native gameplay frame: frame 43786/85655 (51.1%)\n[13497.1s] replaying every native gameplay frame: frame 43793/85655 (51.1%)\n[13499.1s] replaying every native gameplay frame: frame 43799/85655 (51.1%)\n[13501.1s] replaying every native gameplay frame: frame 43804/85655 (51.1%)\n[13503.1s] replaying every native gameplay frame: frame 43809/85655 (51.1%)\n[13505.1s] replaying every native gameplay frame: frame 43815/85655 (51.2%)\n[13507.1s] replaying every native gameplay frame: frame 43821/85655 (51.2%)\n\nthread 'main' (2320592) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native scene 2 differs from independent scene 1 at frame 43823\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 366,
+      "source_simfile": "Raving With Fire/Raving With Fire.sm",
+      "simfile_sha256": "9f35a23f2bc46c9e562fed767a0f8b006934bc425dcb40df6191b303313273d9",
+      "retained_original_archive": "ebd39c7daf61be2905cb5159d78a4c7a9037e1386eedf1c7c082e3f58bb88cb5.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e1d9c9995fcf756f86445761fe965767a848dd24",
+      "build_proof": "/home/parity/jobs/next-screen-target-linux-green-v1/proof.json",
+      "capture_seconds": 393.1182363299886,
+      "trace_sha256": "200c358285fed76ce417bb83a56b40f186b1f7b92dbeb34c39b7225ee45611db",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-366/candidates/5bb0fe3e13ff44b9c78a313ff2ed5640c42b801ba70178f01576af401f57b5d6.tar",
+      "replay_exit": 0,
+      "replay_seconds": 2465.1073679369874,
+      "candidate_sha256": "5bb0fe3e13ff44b9c78a313ff2ed5640c42b801ba70178f01576af401f57b5d6",
+      "native_frames": 6394,
+      "replayed_frames": 6394,
+      "compared_stage_fields": 2145,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.rotationx, Actor.rotationy, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: BitmapText, Model, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "8ed11ef345c27ed13f55ce709aff925e9065d1465f05ed079e878465c38c0ccc",
+      "archive": "0450dd992013c912bb35a8ba49a45708e250299f4882927fead55cb43e3c17e6.tar.zst",
+      "archive_sha256": "0450dd992013c912bb35a8ba49a45708e250299f4882927fead55cb43e3c17e6",
+      "compressed_bytes": 21051469,
+      "pack_seconds": 37.38380446098745,
+      "harness_version": "0.1.80",
+      "title": "Raving With Fire",
+      "retained_original_entry": {
+        "title": "Raving With Fire",
+        "source_simfile": "Raving With Fire/Raving With Fire.sm",
+        "harness_version": "0.1.0",
+        "archive": "ebd39c7daf61be2905cb5159d78a4c7a9037e1386eedf1c7c082e3f58bb88cb5.tar.zst",
+        "sha256": "ebd39c7daf61be2905cb5159d78a4c7a9037e1386eedf1c7c082e3f58bb88cb5",
+        "compressed_bytes": 1763738,
+        "uncompressed_sha256": "9ea57281f35d33118421c6327afa9479ca42aedc4899614493f6a5a5b6ed3e17",
+        "compression_level": 22,
+        "aliases": [
+          "4cb3c1b53bb7018506e4fdf3f71ac52010c0f3a1d8cd5459bf6ccfd714b15bda.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -12076,9 +12127,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "8435a18de0a5cb732e6b21fbab0e61d6ff29c6fe5b476b022b43bb51cb6a862c",
+  "binary_sha256": "fa819ce835eca6c3ba57f54652867aa333f1d29db9d2f79dfc397c9c82697dbd",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 33,
+  "passed_fixtures": 34,
   "pending_charts": 60,
-  "processed_charts": 93
+  "processed_charts": 94
 }
