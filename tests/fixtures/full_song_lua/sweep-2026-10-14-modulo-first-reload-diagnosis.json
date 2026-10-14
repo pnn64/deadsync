@@ -1,0 +1,411 @@
+{
+  "source_simfile": "MODULO/modulo.ssc",
+  "position": 317,
+  "repair_attempts": 1,
+  "repair_attempts_remaining": 1,
+  "status": "pending",
+  "full_report_written": false,
+  "archive_accepted": false,
+  "all_candidate_manifest_members_byte_verified": true,
+  "candidate_sha256": "1656e72fc18dcd4daf1fc5c2316e242df3ec0703d5a65d54e2cc4cf942c3f006",
+  "native_trace_sha256": "5c2e4ad31164c75384e68e8b68680db692ea18e474285dbe78bef29f07a41164",
+  "simfile_sha256": "b0333bc4289473ed6ba3116ff13f169ebf313c93994d35eece21451ceef6d941",
+  "replay_binary_sha256": "69832cbca5fdc07f6ccb21e0f84bd5f45f6573b11c02acd65a4e090d6d8007f5",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "replay_exit": 1,
+  "replay_seconds": 447.01436377697974,
+  "replay_log_sha256": "0976505eedf1cb244d6deb87293a48f9cfccb10c41cd70e2ac35ea5276d8941f",
+  "last_logged_replayed_frame": 23659,
+  "total_native_frames": 69793,
+  "native_frame_counts_by_scene": {
+    "1": 11255,
+    "2": 58538
+  },
+  "native_reload_requests": [
+    {
+      "args": [
+        "ScreenGameplay"
+      ],
+      "beat": 19.00796890258789,
+      "caller": {
+        "line": 129,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "WaitToActCommand",
+      "definition_id": "def-0005",
+      "kind": "call",
+      "line": 129,
+      "operation": "ScreenManager.SetNewScreen",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 12.491405487060547,
+      "seq": 23841,
+      "source": "song:/lua/default.lua"
+    }
+  ],
+  "native_scene2_selection_queries": [
+    {
+      "args": [
+        0
+      ],
+      "beat": 0,
+      "caller": {
+        "line": 0,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "detail": {
+        "results": [
+          {
+            "description": "y = 0",
+            "difficulty": "Difficulty_Edit",
+            "index": 2,
+            "meter": 9,
+            "song_dir": "song:/",
+            "steps_type": "StepsType_Dance_Single",
+            "type": "Steps"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 0,
+      "operation": "GameState.GetCurrentSteps",
+      "phase": "construction",
+      "scene": 2,
+      "seconds": 0,
+      "seq": 23843,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "args": [],
+      "beat": 0,
+      "caller": {
+        "line": 0,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "detail": {
+        "results": [
+          "Difficulty_Edit"
+        ]
+      },
+      "kind": "query",
+      "line": 0,
+      "operation": "Steps.GetDifficulty",
+      "phase": "construction",
+      "scene": 2,
+      "seconds": 0,
+      "seq": 23844,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "args": [
+        1
+      ],
+      "beat": 0,
+      "caller": {
+        "line": 0,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "detail": {
+        "results": [
+          {
+            "description": "y = 0",
+            "difficulty": "Difficulty_Edit",
+            "index": 2,
+            "meter": 9,
+            "song_dir": "song:/",
+            "steps_type": "StepsType_Dance_Single",
+            "type": "Steps"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 0,
+      "operation": "GameState.GetCurrentSteps",
+      "phase": "construction",
+      "scene": 2,
+      "seconds": 0,
+      "seq": 23845,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "args": [],
+      "beat": 0,
+      "caller": {
+        "line": 0,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "detail": {
+        "results": [
+          "Difficulty_Edit"
+        ]
+      },
+      "kind": "query",
+      "line": 0,
+      "operation": "Steps.GetDifficulty",
+      "phase": "construction",
+      "scene": 2,
+      "seconds": 0,
+      "seq": 23846,
+      "source": "song:/lua/default.lua"
+    }
+  ],
+  "authored_script_sha256": "9619952f9c1d3177b5ddfd507b36f30bbb6a7595c37c7298d8d352a31916c198",
+  "authored_selection_and_scene_branch": [
+    {
+      "line": 125,
+      "text": "\t\t\telse"
+    },
+    {
+      "line": 126,
+      "text": "\t\t\t\tself:sleep(0.01):queuecommand(\"SongWait\")"
+    },
+    {
+      "line": 127,
+      "text": "\t\t\tend"
+    },
+    {
+      "line": 128,
+      "text": "\t\tend,"
+    },
+    {
+      "line": 129,
+      "text": "\t\tWaitToActCommand = function(self)"
+    },
+    {
+      "line": 130,
+      "text": "\t\t\tif GAMESTATE:GetSongBeat() > 19 then"
+    },
+    {
+      "line": 131,
+      "text": "\t\t\t\tMODULO_Pick = MODULO_Pick + 1"
+    },
+    {
+      "line": 132,
+      "text": "\t\t\t\tif MODULO_Pick > 9 then MODULO_Pick = 0 end"
+    },
+    {
+      "line": 133,
+      "text": "\t\t\t\tif GAMESTATE:IsPlayerEnabled(0) then"
+    },
+    {
+      "line": 134,
+      "text": "\t\t\t\t\tGAMESTATE:SetCurrentSteps(0, GAMESTATE:GetCurrentSong():GetAllSteps()[MODULO_Pick + 1 == 1 and 11 or MODULO_Pick + 1])"
+    },
+    {
+      "line": 135,
+      "text": "\t\t\t\t\tlocal speed, unused = GAMESTATE:GetPlayerState(0):GetPlayerOptions('ModsLevel_Song'):MMod()"
+    },
+    {
+      "line": 136,
+      "text": "\t\t\t\t\tif speed then MODULO_Speeds[1] = speed else MODULO_Speeds[1] = nil end"
+    },
+    {
+      "line": 137,
+      "text": "\t\t\t\tend"
+    },
+    {
+      "line": 138,
+      "text": "\t\t\t\tif GAMESTATE:IsPlayerEnabled(1) then"
+    },
+    {
+      "line": 139,
+      "text": "\t\t\t\t\tGAMESTATE:SetCurrentSteps(1, GAMESTATE:GetCurrentSong():GetAllSteps()[MODULO_Pick + 1 == 1 and 11 or MODULO_Pick + 1])"
+    },
+    {
+      "line": 140,
+      "text": "\t\t\t\t\tlocal speed, unused = GAMESTATE:GetPlayerState(1):GetPlayerOptions('ModsLevel_Song'):MMod()"
+    },
+    {
+      "line": 141,
+      "text": "\t\t\t\t\tif speed then MODULO_Speeds[2] = speed else MODULO_Speeds[2] = nil end"
+    },
+    {
+      "line": 142,
+      "text": "\t\t\t\tend"
+    },
+    {
+      "line": 143,
+      "text": "\t\t\t\tSCREENMAN:SetNewScreen(\"ScreenGameplay\")"
+    },
+    {
+      "line": 144,
+      "text": "\t\t\telse"
+    },
+    {
+      "line": 145,
+      "text": "\t\t\t\tself:sleep(0.01):queuecommand(\"WaitToAct\")"
+    },
+    {
+      "line": 146,
+      "text": "\t\t\tend"
+    },
+    {
+      "line": 147,
+      "text": "\t\tend"
+    },
+    {
+      "line": 155,
+      "text": "}"
+    },
+    {
+      "line": 156,
+      "text": ""
+    },
+    {
+      "line": 157,
+      "text": "local u = Def.ActorFrame{"
+    },
+    {
+      "line": 158,
+      "text": "\tDef.Actor{"
+    },
+    {
+      "line": 159,
+      "text": "\t\tOnCommand = function(self)"
+    },
+    {
+      "line": 160,
+      "text": "\t\t\tself:sleep(math.huge)"
+    },
+    {
+      "line": 161,
+      "text": "\t\tend"
+    },
+    {
+      "line": 162,
+      "text": "\t},"
+    },
+    {
+      "line": 163,
+      "text": "\tDef.Actor{"
+    },
+    {
+      "line": 164,
+      "text": "\t\tOnCommand = function(self)"
+    },
+    {
+      "line": 165,
+      "text": "\t\t\tif MODULO_Speeds[1] then"
+    },
+    {
+      "line": 166,
+      "text": "\t\t\t\tGAMESTATE:GetPlayerState(0):GetPlayerOptions('ModsLevel_Song'):XMod(MODULO_Speeds[1] / bpmBase[MODULO_Pick == 0 and 10 or MODULO_Pick], 999)"
+    },
+    {
+      "line": 167,
+      "text": "\t\t\tend"
+    },
+    {
+      "line": 168,
+      "text": "\t\t\tif MODULO_Speeds[2] then"
+    },
+    {
+      "line": 169,
+      "text": "\t\t\t\tGAMESTATE:GetPlayerState(1):GetPlayerOptions('ModsLevel_Song'):XMod(MODULO_Speeds[2] / bpmBase[MODULO_Pick == 0 and 10 or MODULO_Pick], 999)"
+    },
+    {
+      "line": 170,
+      "text": "\t\t\tend"
+    },
+    {
+      "line": 171,
+      "text": "\t\t\tMODULO_Speeds = {nil, nil}"
+    },
+    {
+      "line": 172,
+      "text": "\t\t\tself:queuecommand(\"WaitSong\")"
+    },
+    {
+      "line": 173,
+      "text": "\t\tend,"
+    },
+    {
+      "line": 174,
+      "text": "\t\tWaitSongCommand = function(self)"
+    },
+    {
+      "line": 175,
+      "text": "\t\t\tlocal eBeat = endBase[MODULO_Pick == 0 and 10 or MODULO_Pick]"
+    },
+    {
+      "line": 176,
+      "text": "\t\t\tif GAMESTATE:GetSongBeat() > eBeat then"
+    },
+    {
+      "line": 177,
+      "text": "\t\t\t\tself:sleep(0.5):queuecommand(\"ExitSong\")"
+    },
+    {
+      "line": 178,
+      "text": "\t\t\telse"
+    },
+    {
+      "line": 179,
+      "text": "\t\t\t\tself:sleep(0.1):queuecommand(\"WaitSong\")"
+    },
+    {
+      "line": 180,
+      "text": "\t\t\tend"
+    },
+    {
+      "line": 181,
+      "text": "\t\tend,"
+    },
+    {
+      "line": 182,
+      "text": "\t\tExitSongCommand = function(self)"
+    },
+    {
+      "line": 183,
+      "text": "\t\t\tSCREENMAN:GetTopScreen():StartTransitioningScreen('SM_DoNextScreen')"
+    },
+    {
+      "line": 184,
+      "text": "\t\tend"
+    },
+    {
+      "line": 185,
+      "text": "\t}"
+    },
+    {
+      "line": 186,
+      "text": "}"
+    },
+    {
+      "line": 187,
+      "text": ""
+    },
+    {
+      "line": 188,
+      "text": "if GAMESTATE:GetCurrentSteps(0):GetDifficulty() == 'Difficulty_Challenge' or GAMESTATE:GetCurrentSteps(1):GetDifficulty() == 'Difficulty_Challenge' then"
+    },
+    {
+      "line": 189,
+      "text": "\treturn t"
+    },
+    {
+      "line": 190,
+      "text": "else"
+    },
+    {
+      "line": 191,
+      "text": "\treturn u"
+    },
+    {
+      "line": 192,
+      "text": "end"
+    }
+  ],
+  "concrete_failure": "After the original scene-1 reload boundary at frame 11256, replay reached frame 23659 before another pending reload tried to derive native creation order for scene 3. The retained native capture has scenes 1 and 2 only and exactly one ScreenManager.SetNewScreen request. Its scene-2 construction queries select Difficulty_Edit. No complete comparison report was produced.",
+  "root_cause_status": "Additional independent reload established; selection/scene-2 construction cause still requires diagnosis.",
+  "new_repair_launched": false,
+  "acceptance_comparisons_changed": false,
+  "passing_charts_reopened": false,
+  "pending_commit": "0c214cc22",
+  "completion_commit": "26692720a"
+}
