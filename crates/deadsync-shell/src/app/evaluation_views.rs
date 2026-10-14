@@ -38,7 +38,9 @@ impl EvaluationFramePolicy {
                 show_gameplay_timer: config.show_select_music_gameplay_timer,
                 translated_titles: config.translated_titles,
                 transparent_panels: matches!(
-                    config.machine_evaluation_style.resolve(config.visual_style),
+                    config
+                        .machine_evaluation_style
+                        .resolve(config.visual_style.presentation_style(config.srpg_variant)),
                     config::theme::MachineEvaluationStyle::Transparent
                 ),
                 srpg10_visuals: config.visual_style.is_srpg()

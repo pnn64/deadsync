@@ -124,6 +124,10 @@ impl State {
     }
 
     pub fn push_at_elapsed(&self, out: &mut Vec<Actor>, params: Params, elapsed_s: f64) {
+        if matches!(params.visual_policy.background, VisualBackgroundView::Ecs15) {
+            push_ecs15(out, &params);
+            return;
+        }
         if matches!(
             params.visual_policy.background,
             VisualBackgroundView::Technique
@@ -199,6 +203,28 @@ fn push_srpg(out: &mut Vec<Actor>, params: &Params) {
         zoomto(w, h):
         diffuse(0.0, 0.0, 0.0, 0.5 * params.alpha_mul):
         z(-98)
+    ));
+}
+
+fn push_ecs15(out: &mut Vec<Actor>, params: &Params) {
+    let w = screen_width();
+    let h = screen_height();
+    out.reserve(3);
+    out.push(act!(quad:
+        align(0.0, 0.0): xy(0.0, 0.0): zoomto(w, h):
+        diffuse(0.0, 0.0, 0.0, 1.0): z(-100)
+    ));
+    // Keep the curtain's authored colors and crop to fill every aspect ratio.
+    out.push(
+        act!(sprite_static(params.visual_policy.assets.shared_background):
+            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
+            setsize((h * 16.0 / 9.0).max(w), (w * 9.0 / 16.0).max(h)):
+            diffuse(1.0, 1.0, 1.0, params.alpha_mul): z(-99)
+        ),
+    );
+    out.push(act!(quad:
+        align(0.0, 0.0): xy(0.0, 0.0): zoomto(w, h):
+        diffuse(0.0, 0.0, 0.0, 0.2 * params.alpha_mul): z(-98)
     ));
 }
 
@@ -325,6 +351,56 @@ mod tests {
                 ..crate::views::SimplyLoveVisualPolicyView::default()
             },
         }
+    }
+
+    #[test]
+    fn ecs15_curtain_keeps_authored_colors_and_ignores_stale_srpg_video() {
+        set_srpg_background_key(Some("previous_srpg_video_frame".to_owned()));
+        let state = State::new();
+        for color_index in 0..12 {
+            let mut params = params_for(
+                VisualBackgroundView::Ecs15,
+                VisualStyle::Srpg9,
+                SrpgVariant::Ecs15,
+            );
+            params.active_color_index = color_index;
+            let actors = state.build_at_elapsed(params, 42.0);
+            assert_eq!(actors.len(), 3);
+            let Actor::Sprite { source, tint, .. } = &actors[1] else {
+                panic!("expected ECS15 curtain sprite");
+            };
+            assert_eq!(
+                source.texture_key(),
+                Some(crate::visual_styles::ECS15_ASSETS.shared_background)
+            );
+            assert_eq!(*tint, [1.0, 1.0, 1.0, 0.65]);
+        }
+        set_srpg_background_key(None);
+    }
+
+    #[test]
+    fn ecs15_uses_technique_only_for_music_selection() {
+        let params = params_for(
+            VisualBackgroundView::Ecs15,
+            VisualStyle::Srpg9,
+            SrpgVariant::Ecs15,
+        );
+        let menu = params.visual_policy;
+        let selection = menu.music_selection_background();
+        assert_eq!(selection.background, VisualBackgroundView::Technique);
+        assert_eq!(
+            selection.assets,
+            crate::visual_styles::for_style(VisualStyle::Technique)
+        );
+        assert_eq!(menu.background, VisualBackgroundView::Ecs15);
+        assert_eq!(menu.assets, &crate::visual_styles::ECS15_ASSETS);
+        let srpg = params_for(
+            VisualBackgroundView::Srpg,
+            VisualStyle::Srpg9,
+            SrpgVariant::Srpg10,
+        )
+        .visual_policy;
+        assert_eq!(srpg.music_selection_background(), srpg);
     }
 
     #[test]

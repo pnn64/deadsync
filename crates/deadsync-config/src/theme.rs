@@ -688,6 +688,16 @@ impl VisualStyle {
     pub const fn is_srpg(self) -> bool {
         matches!(self, Self::Srpg9)
     }
+
+    /// ECS15 uses Technique's bar and evaluation panel defaults.
+    #[must_use]
+    pub const fn presentation_style(self, variant: SrpgVariant) -> Self {
+        if self.is_srpg() && matches!(variant, SrpgVariant::Ecs15) {
+            Self::Technique
+        } else {
+            self
+        }
+    }
 }
 
 impl FromStr for VisualStyle {
@@ -708,21 +718,24 @@ impl FromStr for VisualStyle {
             "stars" | "star" => Ok(Self::Stars),
             "thonk" => Ok(Self::Thonk),
             "technique" => Ok(Self::Technique),
-            "srpg9" | "srpg10" | "srpg" => Ok(Self::Srpg9),
+            "srpg9" | "srpg10" | "srpg" | "stamina" | "ecs15" => Ok(Self::Srpg9),
             _ => Err(()),
         }
     }
 }
 
+/// Variants of the Stamina visual family. The historical type and INI key
+/// retain their SRPG names so existing settings continue to load.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SrpgVariant {
     #[default]
     Srpg9,
     Srpg10,
+    Ecs15,
 }
 
 impl SrpgVariant {
-    pub const ALL: [Self; 2] = [Self::Srpg9, Self::Srpg10];
+    pub const ALL: [Self; 3] = [Self::Srpg9, Self::Srpg10, Self::Ecs15];
 
     /// Current SRPG event represented by `GrooveStats`' generic RPG panes.
     pub const CURRENT: Self = Self::Srpg10;
@@ -732,6 +745,7 @@ impl SrpgVariant {
         match self {
             Self::Srpg9 => "SRPG9",
             Self::Srpg10 => "SRPG10",
+            Self::Ecs15 => "ECS15",
         }
     }
 
@@ -740,6 +754,7 @@ impl SrpgVariant {
         match self {
             Self::Srpg9 => "srpg9",
             Self::Srpg10 => "srpg10",
+            Self::Ecs15 => "ecs15",
         }
     }
 
@@ -749,6 +764,7 @@ impl SrpgVariant {
         match key.as_str() {
             "srpg9" | "srpg" => Some(Self::Srpg9),
             "srpg10" => Some(Self::Srpg10),
+            "ecs15" => Some(Self::Ecs15),
             _ => None,
         }
     }
@@ -2690,6 +2706,74 @@ MachineEvaluationStyle=Default\n\
     fn srpg_variant_accepts_import_aliases() {
         assert_eq!(SrpgVariant::from_str("SRPG"), Ok(SrpgVariant::Srpg9));
         assert_eq!(SrpgVariant::from_str("SRPG10"), Ok(SrpgVariant::Srpg10));
+        assert_eq!(SrpgVariant::from_str("ECS 15"), Ok(SrpgVariant::Ecs15));
+    }
+
+    #[test]
+    fn ecs15_theme_import_and_presentation_defaults() {
+        assert_eq!(VisualStyle::from_str("Stamina"), Ok(VisualStyle::Srpg9));
+        assert_eq!(VisualStyle::from_str("ECS15"), Ok(VisualStyle::Srpg9));
+        assert_eq!(
+            parse_srpg_variant(None, None, Some("ECS15"), SrpgVariant::Srpg9),
+            SrpgVariant::Ecs15
+        );
+        assert_eq!(
+            parse_srpg_variant(Some("ECS15"), None, Some("Stamina"), SrpgVariant::Srpg9),
+            SrpgVariant::Ecs15
+        );
+        let style = VisualStyle::Srpg9.presentation_style(SrpgVariant::Ecs15);
+        assert_eq!(
+            MachineBarColor::Default.resolve(style),
+            MachineBarColor::Transparent
+        );
+        assert_eq!(
+            MachineEvaluationStyle::Default.resolve(style),
+            MachineEvaluationStyle::Transparent
+        );
+        assert_eq!(
+            MachineEvaluationStyle::Opaque.resolve(style),
+            MachineEvaluationStyle::Opaque
+        );
+        assert_eq!(
+            VisualStyle::Hearts.presentation_style(SrpgVariant::Ecs15),
+            VisualStyle::Hearts
+        );
+    }
+
+    #[test]
+    fn ecs15_theme_settings_survive_save_and_reload() {
+        for settings in [
+            "[Theme]\nVisualStyle=Stamina\nSrpgVariant=ECS15\n",
+            "[Theme]\nVisualStyle=SRPG9\nThemeVariant=ECS15\n",
+            "[Theme]\nVisualStyle=ECS15\n",
+        ] {
+            let mut conf = SimpleIni::new();
+            conf.load_str(settings);
+            let loaded =
+                load_theme_presentation_options(&conf, ThemePresentationOptions::default());
+            assert_eq!(loaded.visual_style, VisualStyle::Srpg9);
+            assert_eq!(loaded.srpg_variant, SrpgVariant::Ecs15);
+            let mut saved = String::from("[Theme]\n");
+            push_theme_option_lines(
+                &mut saved,
+                loaded,
+                default_machine_flow_options(),
+                ThemeShortcutTokens {
+                    practice: "KeyP",
+                    song_search: "KeyS",
+                    load_songs: "KeyL",
+                    test_input: "KeyT",
+                },
+            );
+            assert!(saved.contains("SrpgVariant=ECS15\n"));
+            let mut reloaded = SimpleIni::new();
+            reloaded.load_str(&saved);
+            assert_eq!(
+                load_theme_presentation_options(&reloaded, ThemePresentationOptions::default())
+                    .srpg_variant,
+                SrpgVariant::Ecs15
+            );
+        }
     }
 
     #[test]

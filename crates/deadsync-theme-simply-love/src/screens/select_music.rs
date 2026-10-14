@@ -12877,7 +12877,7 @@ pub fn push_actors(
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
-            visual_policy,
+            visual_policy: visual_policy.music_selection_background(),
         },
     );
     push_sl_select_music_bg_flash(actors, state.selection_animation_timer);

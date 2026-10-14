@@ -571,6 +571,27 @@ pub const SRPG10_ASSETS: Assets = Assets {
     shared_background_size: [2581, 1452],
 };
 
+pub const ECS15_ASSETS: Assets = Assets {
+    select_color: "visual_styles/ecs15/select_color.png",
+    shared_background: "visual_styles/ecs15/shared_background.png",
+    effects: effect_assets!(
+        "ecs15",
+        " (doubleres)",
+        " (doubleres)",
+        " (doubleres)",
+        " (doubleres)"
+    ),
+    shared_background_video: None,
+    menu_music: "assets/music/ECS15 (loop).ogg",
+    select_color_size: [668, 566],
+    shared_background_size: [1920, 1080],
+};
+
+pub const ECS15_TITLE_LOGO: &str = "visual_styles/ecs15/title_logo.png";
+pub const ECS15_EVAL_FAILED_SFX: &str = "assets/sounds/ecs15_eval_failed.ogg";
+pub const ECS15_EVAL_PASSED_SFX: &str = "assets/sounds/ecs15_eval_passed.ogg";
+pub const ECS15_GAMEOVER_MUSIC: &str = "assets/music/ECS15-GameOver.ogg";
+
 /// Fixed UI cues prepared before the first screen accepts input.
 pub const SFX_PATHS: &[&str] = &[
     "assets/sounds/boom.ogg",
@@ -588,6 +609,8 @@ pub const SFX_PATHS: &[&str] = &[
     "assets/sounds/screenshot.ogg",
     SRPG10_EVAL_FAILED_SFX,
     SRPG10_EVAL_PASSED_SFX,
+    ECS15_EVAL_FAILED_SFX,
+    ECS15_EVAL_PASSED_SFX,
     "assets/sounds/start.ogg",
     "assets/sounds/unjoin.ogg",
 ];
@@ -621,17 +644,41 @@ pub const fn for_style(style: VisualStyle) -> &'static Assets {
 #[inline(always)]
 #[must_use]
 pub fn for_style_and_variant(style: VisualStyle, variant: SrpgVariant) -> &'static Assets {
-    if style.is_srpg() && variant == SrpgVariant::Srpg10 {
-        &SRPG10_ASSETS
-    } else {
-        for_style(style)
+    if style.is_srpg() {
+        match variant {
+            SrpgVariant::Srpg10 => return &SRPG10_ASSETS,
+            SrpgVariant::Ecs15 => return &ECS15_ASSETS,
+            SrpgVariant::Srpg9 => {}
+        }
     }
+    for_style(style)
 }
 
 #[inline(always)]
 #[must_use]
 pub const fn srpg10_active(style: VisualStyle, variant: SrpgVariant) -> bool {
     style.is_srpg() && matches!(variant, SrpgVariant::Srpg10)
+}
+
+#[inline(always)]
+#[must_use]
+pub const fn ecs15_active(style: VisualStyle, variant: SrpgVariant) -> bool {
+    style.is_srpg() && matches!(variant, SrpgVariant::Ecs15)
+}
+
+/// Only the themed variants with a dedicated Game Over track start music there.
+#[must_use]
+pub const fn gameover_music_asset_path(
+    style: VisualStyle,
+    variant: SrpgVariant,
+) -> Option<&'static str> {
+    if ecs15_active(style, variant) {
+        Some(ECS15_GAMEOVER_MUSIC)
+    } else if srpg10_active(style, variant) {
+        Some(SRPG10_GAMEOVER_MUSIC)
+    } else {
+        None
+    }
 }
 
 #[inline(always)]
@@ -667,7 +714,7 @@ pub fn resolve_menu_music_path(
 }
 
 pub fn all_assets() -> impl Iterator<Item = &'static Assets> {
-    ASSETS.iter().chain(std::iter::once(&SRPG10_ASSETS))
+    ASSETS.iter().chain([&SRPG10_ASSETS, &ECS15_ASSETS])
 }
 
 pub fn initial_texture_assets() -> impl Iterator<Item = TextureAssetSpec> {
@@ -690,6 +737,7 @@ pub fn initial_texture_assets() -> impl Iterator<Item = TextureAssetSpec> {
             .into_iter()
         }))
         .chain(SRPG10_EVAL_TEXTURES.into_iter().map(texture_asset))
+        .chain(std::iter::once(texture_asset(ECS15_TITLE_LOGO)))
         .chain(GRADE_TEXTURE_ASSETS.iter().copied())
         .chain(SUBMIT_TEXTURE_ASSETS.iter().copied())
         .chain(CONTENT_BROWSER_TEXTURE_ASSETS.iter().copied())
@@ -739,6 +787,7 @@ pub fn bundled_music_asset_paths() -> impl Iterator<Item = &'static str> {
         "assets/music/select_course (loop).ogg",
         "assets/music/credits.ogg",
         SRPG10_GAMEOVER_MUSIC,
+        ECS15_GAMEOVER_MUSIC,
     ]
     .into_iter()
     .chain(all_assets().map(|assets| assets.menu_music))
@@ -926,6 +975,57 @@ mod tests {
             for_style_and_variant(VisualStyle::Hearts, SrpgVariant::Srpg10).menu_music,
             for_style(VisualStyle::Hearts).menu_music
         );
+    }
+
+    #[test]
+    fn ecs15_variant_selects_only_its_theme_and_bundled_media() {
+        assert_eq!(
+            for_style_and_variant(VisualStyle::Srpg9, SrpgVariant::Ecs15),
+            &ECS15_ASSETS
+        );
+        for style in VisualStyle::ALL {
+            assert_eq!(ecs15_active(style, SrpgVariant::Ecs15), style.is_srpg());
+            if !style.is_srpg() {
+                assert_eq!(
+                    for_style_and_variant(style, SrpgVariant::Ecs15),
+                    for_style(style)
+                );
+                assert_eq!(gameover_music_asset_path(style, SrpgVariant::Ecs15), None);
+            }
+        }
+        assert!(!srpg10_active(VisualStyle::Srpg9, SrpgVariant::Ecs15));
+        assert_eq!(
+            gameover_music_asset_path(VisualStyle::Srpg9, SrpgVariant::Ecs15),
+            Some(ECS15_GAMEOVER_MUSIC)
+        );
+        assert_eq!(
+            menu_music_override_dir(VisualStyle::Srpg9, SrpgVariant::Ecs15),
+            "assets/music/menu/ecs15"
+        );
+        assert!(ECS15_ASSETS.shared_background_video.is_none());
+
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        for asset in
+            initial_texture_assets().filter(|asset| asset.key.starts_with("visual_styles/ecs15/"))
+        {
+            assert!(
+                root.join("assets/graphics").join(asset.key).is_file(),
+                "{}",
+                asset.key
+            );
+        }
+        assert!(initial_texture_assets().any(|asset| asset.key == ECS15_TITLE_LOGO));
+        for path in [
+            ECS15_ASSETS.menu_music,
+            ECS15_GAMEOVER_MUSIC,
+            ECS15_EVAL_PASSED_SFX,
+            ECS15_EVAL_FAILED_SFX,
+        ] {
+            assert!(root.join(path).is_file(), "{path}");
+        }
+        assert!(bundled_music_asset_paths().any(|path| path == ECS15_GAMEOVER_MUSIC));
+        assert!(SFX_PATHS.contains(&ECS15_EVAL_PASSED_SFX));
+        assert!(SFX_PATHS.contains(&ECS15_EVAL_FAILED_SFX));
     }
 
     #[test]

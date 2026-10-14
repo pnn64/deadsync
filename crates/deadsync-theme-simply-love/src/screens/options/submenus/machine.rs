@@ -532,8 +532,11 @@ pub(in crate::screens::options) const VISUAL_STYLE_CHOICES: &[Choice] = &[
     literal_choice("💪"),
 ];
 
-pub(in crate::screens::options) const SRPG_VARIANT_CHOICES: &[Choice] =
-    &[literal_choice("SRPG9"), literal_choice("SRPG10")];
+pub(in crate::screens::options) const SRPG_VARIANT_CHOICES: &[Choice] = &[
+    literal_choice("SRPG9"),
+    literal_choice("SRPG10"),
+    literal_choice("ECS15"),
+];
 
 pub(in crate::screens::options) const COLOR_CHOICES: &[Choice] = &[
     literal_choice("0"),

@@ -312,21 +312,21 @@ fn visual_assets_follow_local_machine_choices() {
         .expect("machine options should contain theme variant");
     state.sub[SubmenuKind::Machine].choice_indices[style_row] =
         visual_style_choice_index(config::theme::VisualStyle::Srpg9);
-    state.sub[SubmenuKind::Machine].choice_indices[variant_row] =
-        srpg_variant_choice_index(config::theme::SrpgVariant::Srpg10);
+    for variant in config::theme::SrpgVariant::ALL {
+        state.sub[SubmenuKind::Machine].choice_indices[variant_row] =
+            srpg_variant_choice_index(variant);
 
-    let selected = selected_visual_assets(&state);
-    let expected = visual_styles::for_style_and_variant(
-        config::theme::VisualStyle::Srpg9,
-        config::theme::SrpgVariant::Srpg10,
-    );
-    assert_eq!(
-        selected.select_color,
-        expected.select_color,
-        "style_choice={} variant_choice={}",
-        state.sub[SubmenuKind::Machine].choice_indices[style_row],
-        state.sub[SubmenuKind::Machine].choice_indices[variant_row]
-    );
+        let selected = selected_visual_assets(&state);
+        let expected =
+            visual_styles::for_style_and_variant(config::theme::VisualStyle::Srpg9, variant);
+        assert_eq!(
+            selected.select_color,
+            expected.select_color,
+            "style_choice={} variant_choice={}",
+            state.sub[SubmenuKind::Machine].choice_indices[style_row],
+            state.sub[SubmenuKind::Machine].choice_indices[variant_row]
+        );
+    }
 }
 
 #[test]

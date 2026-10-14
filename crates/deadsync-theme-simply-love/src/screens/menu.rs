@@ -710,7 +710,13 @@ pub fn push_actors(
 ) {
     sync_i18n_cache(state);
     let chrome_text = state.chrome_text.borrow();
-    let lp = LogoParams::default();
+    let mut lp = LogoParams::default();
+    if visual_policy.title_logo_texture_key == Some(crate::visual_styles::ECS15_TITLE_LOGO) {
+        // Match the source logo's 0.4 doubleres zoom without overflowing 4:3.
+        let logo_w = (3141.0_f32 * 0.2).min(screen_width() - 24.0);
+        lp.target_h = logo_w * 953.0 / 3141.0;
+        lp.top_margin += LogoParams::default().target_h - lp.target_h;
+    }
     actors.reserve(96);
 
     // 1) background component (never fades)
@@ -748,7 +754,8 @@ pub fn push_actors(
     } else {
         0.0
     };
-    let logo_actors = logo::build_logo_default(
+    let logo_actors = logo::build_logo(
+        lp,
         visual_policy.title_logo_texture_key,
         state.runtime_view.game,
     );
@@ -1214,6 +1221,50 @@ mod tests {
         let info = menu_info_text(&state, None);
         let (_, info_shadow) = text_style(info.as_ref());
         assert_eq!(info_shadow, [SRPG10_TEXT_SHADOW, -SRPG10_TEXT_SHADOW]);
+    }
+
+    #[test]
+    fn ecs15_title_logo_fits_wide_and_four_three_screens_without_game_arrows() {
+        use deadlib_present::actors::SizeSpec;
+        use deadlib_present::space::{Metrics, set_current_metrics};
+        let previous = Metrics::centered(screen_width(), screen_height());
+        let texture_key = crate::visual_styles::ECS15_TITLE_LOGO;
+        deadlib_assets::register_texture_dims(texture_key, 3141, 953);
+        let state = init();
+        let policy = crate::views::SimplyLoveVisualPolicyView {
+            background: crate::views::VisualBackgroundView::Ecs15,
+            assets: &crate::visual_styles::ECS15_ASSETS,
+            title_logo_texture_key: Some(texture_key),
+            ..Default::default()
+        };
+        for width in [640.0, 854.0, 1120.0] {
+            set_current_metrics(Metrics::centered(width, 480.0));
+            let mut actors = Vec::new();
+            push_actors(&mut actors, &state, None, 1.0, None, None, policy);
+            let (size, scale) = actors
+                .iter()
+                .find_map(|actor| match actor {
+                    Actor::Sprite {
+                        source,
+                        size,
+                        scale,
+                        ..
+                    } if source.texture_key() == Some(texture_key) => Some((*size, *scale)),
+                    _ => None,
+                })
+                .expect("ECS15 title logo");
+            let [SizeSpec::Px(w), SizeSpec::Px(h)] = size else {
+                panic!("logo should have explicit dimensions");
+            };
+            // A zero size uses native texture dimensions with a separate scale.
+            let w = if w == 0.0 { 3141.0 } else { w } * scale[0];
+            let h = if h == 0.0 { 953.0 } else { h } * scale[1];
+            assert!(w > 0.0 && h > 0.0);
+            assert!(w <= width - 24.0 + 0.001);
+            approx(w / h, 3141.0 / 953.0);
+            assert!(!actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. } if matches!(source.texture_key(), Some("dance.png" | "pump.png")))));
+        }
+        set_current_metrics(previous);
     }
 
     #[test]
