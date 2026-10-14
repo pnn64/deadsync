@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Neon Nights - [Zaia]/Neon Nights.ssc",
+  "native_frames": 27311,
+  "replayed_frames": 27311,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "c1032bff0ba2c496f85b99e52d1e41e5dc11eda1f16fcc36a7f5651f6cae4247.tar.zst",
+  "compressed_sha256": "c1032bff0ba2c496f85b99e52d1e41e5dc11eda1f16fcc36a7f5651f6cae4247",
+  "uncompressed_sha256": "6e5802cc494d2bdaff681868bebaee2bc48661c2052366a11c7ab9d56d1fb5ca",
+  "compressed_bytes": 6861250,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
