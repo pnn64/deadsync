@@ -1,0 +1,241 @@
+{
+  "binary_sha256": "74460bce360b3a5ba349263adb236d5f2f487b3333c8d34927826ad314a2d234",
+  "purpose": "Diagnose already failing charts against retained native captures. Entry reports do not accept archives or spend full repair attempts.",
+  "source_charts_modified": false,
+  "full_acceptance_claimed": false,
+  "results": [
+    {
+      "position": 294,
+      "source_simfile": "Mamono/sm.sm",
+      "previous_folder": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-294",
+      "candidate_sha256": "bde1951c118452ab0725c8b59a2572e0411d31830f20d578ad5376cda3f9b80d",
+      "trace_sha256": "8c1bc20655b833914e45f19bbf9fab227c10738590e8704a9ac526d28e7de469",
+      "simfile_sha256": "dc3e958992a6e5d75f2e28c7e4faccc8e8629a2af158abc72df610b7de893f0e",
+      "retained": "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-294/bde1951c118452ab0725c8b59a2572e0411d31830f20d578ad5376cda3f9b80d.tar",
+      "pid": 1436869,
+      "command": [
+        "/home/parity/jobs/double-cue-rows-green-v2/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-294/bde1951c118452ab0725c8b59a2572e0411d31830f20d578ad5376cda3f9b80d.tar",
+        "--report",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-294/report.json",
+        "--entry"
+      ],
+      "all_manifest_members_byte_verified": true,
+      "native_actor_definitions": 2170,
+      "full_repairs_spent": 0,
+      "archive_accepted": false,
+      "failure": "[0.7s] replaying native entry and reload\n[2.0s] replaying native entry and reload: frame 0/1172 (0.0%)\n[4.0s] replaying native entry and reload: frame 0/1172 (0.0%)\n[6.0s] replaying native entry and reload: frame 0/1172 (0.0%)\n[8.0s] replaying native entry and reload: frame 0/1172 (0.0%)\n[10.0s] replaying native entry and reload: frame 0/1172 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Hustle Beach': failed to run actor startup commands for song lua session '/tmp/.tmp7Sd5MJ/song/lua/mamono.lua': out of Lua stack, too many arguments to a Lua function or too many return values from a callback; retrying layers independently\n[12.0s] replaying native entry and reload: frame 0/1172 (0.0%)\n[14.0s] replaying native entry and reload: frame 0/1172 (0.0%)\n[16.0s] replaying native entry and reload: frame 0/1172 (0.0%)\n[18.0s] replaying native entry and reload: frame 0/1172 (0.0%)\n[20.0s] replaying native entry and reload: frame 0/1172 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Hustle Beach' from '/tmp/.tmp7Sd5MJ/song/lua/mamono.lua': failed to run actor startup commands for song lua session '/tmp/.tmp7Sd5MJ/song/lua/mamono.lua': out of Lua stack, too many arguments to a Lua function or too many return values from a callback\n[22.0s] replaying native entry and reload: frame 0/1172 (0.0%)\n\nthread 'main' (1436869) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 276,
+      "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.sm",
+      "previous_folder": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-276",
+      "candidate_sha256": "98d69cfa880d38ae82657ab3e86000828b7df249a10a89300d30fabc29a92752",
+      "trace_sha256": "7e966623cb744edca3e2a1a357448f753b7260f184435fa840493277d78aece5",
+      "simfile_sha256": "54828cc3cb04d0df7df9f9886a29670cf9e19185c3f5c4758309ce105f6e9145",
+      "retained": "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-276/98d69cfa880d38ae82657ab3e86000828b7df249a10a89300d30fabc29a92752.tar",
+      "pid": 1438152,
+      "command": [
+        "/home/parity/jobs/double-cue-rows-green-v2/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-276/98d69cfa880d38ae82657ab3e86000828b7df249a10a89300d30fabc29a92752.tar",
+        "--report",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-276/report.json",
+        "--entry"
+      ],
+      "all_manifest_members_byte_verified": true,
+      "native_actor_definitions": 14,
+      "full_repairs_spent": 0,
+      "archive_accepted": false,
+      "report": {
+        "native_frames": 79549,
+        "replayed_frames": 2050,
+        "errors": [],
+        "mismatches": [],
+        "archive_accepted": false
+      },
+      "report_sha256": "eed7ede9938db0b854c897130431af917a750f63d1c6fc4804e326e152501205"
+    },
+    {
+      "position": 291,
+      "source_simfile": "Loyal Divide [TaroNuke]/Loyal Divide.sm",
+      "previous_folder": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-291",
+      "candidate_sha256": "3798f249b84078d2e6a80afd3a6e96f8392a99a85523477cc4bbe73412f604c7",
+      "trace_sha256": "ac65b69803dbc4a12b3630f4157ed70688245ab45a8d23431c66867755932ee8",
+      "simfile_sha256": "1f9fcf1a405c0ef368adde7cb67e14f0eb96b6d4885a6748f650596aa528b825",
+      "retained": "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-291/3798f249b84078d2e6a80afd3a6e96f8392a99a85523477cc4bbe73412f604c7.tar",
+      "pid": 1438308,
+      "command": [
+        "/home/parity/jobs/double-cue-rows-green-v2/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-291/3798f249b84078d2e6a80afd3a6e96f8392a99a85523477cc4bbe73412f604c7.tar",
+        "--report",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-291/report.json",
+        "--entry"
+      ],
+      "all_manifest_members_byte_verified": true,
+      "native_actor_definitions": 0,
+      "full_repairs_spent": 0,
+      "archive_accepted": false,
+      "report": {
+        "native_frames": 80691,
+        "replayed_frames": 1555,
+        "errors": [],
+        "mismatches": [],
+        "archive_accepted": false
+      },
+      "report_sha256": "8eea48f689a9a642c5cd902e5f0509d9f748ebd8c05c28d4835fc202ee9b81b8"
+    },
+    {
+      "position": 274,
+      "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
+      "previous_folder": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-274",
+      "candidate_sha256": "0616f94607ea769ac606577ace6ef2a6aa0c9c1e0a9142ae3b31e65d2f18347c",
+      "trace_sha256": "069cbee7142b758f59d950f7b6bf58514b10cbd2aa6ad8201ff79ca73007538f",
+      "simfile_sha256": "ddcc948b1b0fb8f936faf2cc1c8e3556149e9305db7d8eaaf7347724aeb3aeea",
+      "retained": "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-274/0616f94607ea769ac606577ace6ef2a6aa0c9c1e0a9142ae3b31e65d2f18347c.tar",
+      "pid": 1439267,
+      "command": [
+        "/home/parity/jobs/double-cue-rows-green-v2/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-274/0616f94607ea769ac606577ace6ef2a6aa0c9c1e0a9142ae3b31e65d2f18347c.tar",
+        "--report",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-274/report.json",
+        "--entry"
+      ],
+      "all_manifest_members_byte_verified": true,
+      "native_actor_definitions": 14,
+      "full_repairs_spent": 0,
+      "archive_accepted": false,
+      "report": {
+        "native_frames": 55331,
+        "replayed_frames": 1379,
+        "errors": [],
+        "mismatches": [],
+        "archive_accepted": false
+      },
+      "report_sha256": "9608b7879a597a7c85d5e919eea30b15fcbcd7d2b26275c3848ba6c959296664"
+    },
+    {
+      "position": 275,
+      "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.ssc",
+      "previous_folder": "/home/parity/jobs/chart-sweep-20261012-v2/chart-275",
+      "candidate_sha256": "078122148caffc8c5de1b574841c10689cd8448e6fdd774085920c87b396253b",
+      "trace_sha256": "8791e62f6475b8de74d892e0707d8115229d68a0d23358ec2e49efaadb2d47c8",
+      "simfile_sha256": "7ca43e1f96be94fe1fb6fd4a7f06c310516d39c959fb0725b853d29bed1150ac",
+      "retained": "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-275/078122148caffc8c5de1b574841c10689cd8448e6fdd774085920c87b396253b.tar",
+      "pid": 1440306,
+      "command": [
+        "/home/parity/jobs/double-cue-rows-green-v2/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-275/078122148caffc8c5de1b574841c10689cd8448e6fdd774085920c87b396253b.tar",
+        "--report",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-275/report.json",
+        "--entry"
+      ],
+      "all_manifest_members_byte_verified": true,
+      "native_actor_definitions": 14,
+      "full_repairs_spent": 0,
+      "archive_accepted": false,
+      "report": {
+        "native_frames": 59710,
+        "replayed_frames": 1299,
+        "errors": [],
+        "mismatches": [],
+        "archive_accepted": false
+      },
+      "report_sha256": "01aad6843479de94c2ae9e2ac75a2eed8a5a00f6de17cb4ad5cf921e8f6efb76"
+    },
+    {
+      "position": 302,
+      "source_simfile": "mawaru4/mawaru4.sm",
+      "previous_folder": "/home/parity/jobs/chart-sweep-20261012-v2/chart-302",
+      "candidate_sha256": "1607561d59af9e72612fce2e935cf8f45fa67b674646158fd0f02d83df14dfad",
+      "trace_sha256": "de501ee531f806a28f2d6668647b99858b094f9ac7ec5ca2a7c57e99223498ab",
+      "simfile_sha256": "598278a7dd8b93988b17fcdcbd3c560428fcca536324dc9654b0d42b23ffd411",
+      "retained": "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-302/1607561d59af9e72612fce2e935cf8f45fa67b674646158fd0f02d83df14dfad.tar",
+      "pid": 1440595,
+      "command": [
+        "/home/parity/jobs/double-cue-rows-green-v2/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-302/1607561d59af9e72612fce2e935cf8f45fa67b674646158fd0f02d83df14dfad.tar",
+        "--report",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-302/report.json",
+        "--entry"
+      ],
+      "all_manifest_members_byte_verified": true,
+      "native_actor_definitions": 104,
+      "full_repairs_spent": 0,
+      "archive_accepted": false,
+      "report": {
+        "native_frames": 131824,
+        "replayed_frames": 1538,
+        "errors": [],
+        "mismatches": [],
+        "archive_accepted": false
+      },
+      "report_sha256": "14709bf395b12f15a93eb75d7c91ddd149d6ba1bc8770afbbff1259a6c1f5739"
+    },
+    {
+      "position": 299,
+      "source_simfile": "mawaru1/mawaru.sm",
+      "previous_folder": "/home/parity/jobs/chart-sweep-20261012-v2/chart-299",
+      "candidate_sha256": "1677900151e89aa5127edd6ce01e0b9dad75098beb5015ccf59e3839a8fca9db",
+      "trace_sha256": "29aca8ffaacc07fa463eab04f275192af84361ab2fd112cc7999d18150e1e550",
+      "simfile_sha256": "cb10489b3cf018ea822152693fe3d682db32e0319d1169cc826e6ae110c9ae5d",
+      "retained": "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-299/1677900151e89aa5127edd6ce01e0b9dad75098beb5015ccf59e3839a8fca9db.tar",
+      "pid": 1440657,
+      "command": [
+        "/home/parity/jobs/double-cue-rows-green-v2/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-299/1677900151e89aa5127edd6ce01e0b9dad75098beb5015ccf59e3839a8fca9db.tar",
+        "--report",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-299/report.json",
+        "--entry"
+      ],
+      "all_manifest_members_byte_verified": true,
+      "native_actor_definitions": 0,
+      "full_repairs_spent": 0,
+      "archive_accepted": false,
+      "report": {
+        "native_frames": 96943,
+        "replayed_frames": 1485,
+        "errors": [],
+        "mismatches": [],
+        "archive_accepted": false
+      },
+      "report_sha256": "6671da937876115a6eac1773c37465f11607bd0873dca2af1748674052ffef54"
+    },
+    {
+      "position": 197,
+      "source_simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
+      "previous_folder": "/home/parity/jobs/chart-sweep-20261012-v2/chart-197",
+      "candidate_sha256": "b637897cc508ebf3e4149376a02f3445f279d4814d16ddcd22e825a881ca76f0",
+      "trace_sha256": "a5d8f4725fa1823bffc9a909c0ac4b9436d10b91513df6fbeb8eea89ab9e82c1",
+      "simfile_sha256": "535ed73ac6613a9c4a4f565cc8496e3c87f3a4825fd023237d7c34afbd5b6025",
+      "retained": "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-197/b637897cc508ebf3e4149376a02f3445f279d4814d16ddcd22e825a881ca76f0.tar",
+      "pid": 1440843,
+      "command": [
+        "/home/parity/jobs/double-cue-rows-green-v2/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-197/b637897cc508ebf3e4149376a02f3445f279d4814d16ddcd22e825a881ca76f0.tar",
+        "--report",
+        "/home/parity/jobs/retained-known-fixes-diagnosis-v1/chart-197/report.json",
+        "--entry"
+      ],
+      "all_manifest_members_byte_verified": true,
+      "native_actor_definitions": 0,
+      "full_repairs_spent": 0,
+      "archive_accepted": false,
+      "report": {
+        "native_frames": 215375,
+        "replayed_frames": 6354,
+        "errors": [],
+        "mismatches": [],
+        "archive_accepted": false
+      },
+      "report_sha256": "5e9104ae71ffb5a8ecb1246e1e523c91f5c50858ba294dbe1ad988d733d9859e"
+    }
+  ]
+}
