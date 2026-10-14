@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T21:15:05Z",
+  "updated_utc": "2026-10-14T21:40:29Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 326,
-    "pending": 99,
-    "unprocessed": 76
+    "passed": 329,
+    "pending": 100,
+    "unprocessed": 72
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3355,9 +3355,9 @@
       "position": 399,
       "source_simfile": "Shivers/Shivers.ssc",
       "simfile_sha256": "420c147c6ae52db11935b39d26fbcaabb9c034c21700a7467ebde927abb1aee9",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-4.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-shivers-ssc-first-repair.json"
     },
     {
       "position": 400,
@@ -3447,7 +3447,9 @@
       "position": 411,
       "source_simfile": "spooky (SX 14)/spooky (Tech-Stam cut).ssc",
       "simfile_sha256": "f38dfd79e04e6f2caa616d75d3eba60b14bf16cd6bc081ce6651994a27a56bf1",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 412,
@@ -3751,7 +3753,9 @@
       "position": 457,
       "source_simfile": "Up Up Up Up/Up Up Up Up.sm",
       "simfile_sha256": "2f5319394cf6847a86d2be85032b0ab2479452f81f40542adb9634111c91d986",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
     },
     {
       "position": 458,
@@ -3957,7 +3961,9 @@
       "position": 490,
       "source_simfile": "Dongo Bongo/dongobongo2.ssc",
       "simfile_sha256": "b0057ebbdf4f8465cc34fda1fe7327d1a4edbf2978ed04b7c98eef0fe43f4dd0",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 491,
@@ -4005,7 +4011,9 @@
       "position": 498,
       "source_simfile": "Pokemon Gym Battle Remix/pokes.ssc",
       "simfile_sha256": "04a6fbf5926825207a7a520403db97e5bdb24d456bdc54775ca157a7ef9be4c6",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
     },
     {
       "position": 499,
