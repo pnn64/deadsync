@@ -13096,6 +13096,54 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 411,
+      "source_simfile": "spooky (SX 14)/spooky (Tech-Stam cut).ssc",
+      "simfile_sha256": "f38dfd79e04e6f2caa616d75d3eba60b14bf16cd6bc081ce6651994a27a56bf1",
+      "retained_original_archive": "25f515a5eac4b6c349f3cf992859f5d6842c03abf32f2f71bd62ca84008b68a0.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef",
+      "build_proof": "/home/parity/jobs/arrow-alpha-linux-green-v1/proof.json",
+      "capture_seconds": 196.98597079599858,
+      "trace_sha256": "a4c16faa7287d5fab5af3884ba813859e8429bfa33697bbce2fe5062fdf652a1",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-411/candidates/c42dd5ea87c887145431dba248556e1edf051c53e7c59b61a6cf5fc6f08518c1.tar",
+      "replay_exit": 0,
+      "replay_seconds": 2665.085539338994,
+      "candidate_sha256": "c42dd5ea87c887145431dba248556e1edf051c53e7c59b61a6cf5fc6f08518c1",
+      "native_frames": 128284,
+      "replayed_frames": 128284,
+      "compared_stage_fields": 2134,
+      "pending_coverage": [],
+      "whole_song_parity_proven": true,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "3c79c95529e8425586e676d8d77d394b1053bcb4a7cdde7d715014baffe8499d",
+      "archive": "b570c7aedcfb4e741e8cf66f4651766285eb3b716b18959b4686072b1668c5db.tar.zst",
+      "archive_sha256": "b570c7aedcfb4e741e8cf66f4651766285eb3b716b18959b4686072b1668c5db",
+      "compressed_bytes": 19405603,
+      "pack_seconds": 2.750862863002112,
+      "harness_version": "0.1.80",
+      "title": "spooky",
+      "retained_original_entry": {
+        "title": "spooky",
+        "source_simfile": "spooky (SX 14)/spooky (Tech-Stam cut).ssc",
+        "harness_version": "0.1.0",
+        "archive": "25f515a5eac4b6c349f3cf992859f5d6842c03abf32f2f71bd62ca84008b68a0.tar.zst",
+        "sha256": "25f515a5eac4b6c349f3cf992859f5d6842c03abf32f2f71bd62ca84008b68a0",
+        "compressed_bytes": 49765,
+        "uncompressed_sha256": "78801218ef54f1f08f412ea11512c6b4d81d2121ddaa4be8eb057da75b0837d6",
+        "compression_level": 22,
+        "aliases": [
+          "310fbf4f158deb3307abeed4364762dba03e0c8a805628b42c2867516a113c9c.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -13119,9 +13167,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
+  "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 36,
+  "passed_fixtures": 37,
   "pending_charts": 62,
-  "processed_charts": 98
+  "processed_charts": 99
 }
