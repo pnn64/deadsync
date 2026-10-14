@@ -4211,15 +4211,12 @@
     {
       "title": "paw, paw!",
       "source_simfile": "paw, paw!/paw paw.ssc",
-      "harness_version": "0.1.0",
-      "archive": "77eacfb29a6ee00d92c4cdef2b6893a7d6e8110a5cc2739a55a18fe2fc9ae2f2.tar.zst",
-      "sha256": "77eacfb29a6ee00d92c4cdef2b6893a7d6e8110a5cc2739a55a18fe2fc9ae2f2",
-      "compressed_bytes": 155306,
-      "uncompressed_sha256": "49e4f90de6c0d8ea0af6151b96674c7f371455827648ae0bb9ff71abffcca4b9",
-      "compression_level": 22,
-      "aliases": [
-        "e0c431494fd282480c71b67affc3da6b97f92a5f61ebb249b7fe3bc1b8628578.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "d294e7d6f9f3dd0db6427cdbbc45f6aa75d4390031d36eef5d546d9049feeaa6.tar.zst",
+      "sha256": "d294e7d6f9f3dd0db6427cdbbc45f6aa75d4390031d36eef5d546d9049feeaa6",
+      "compressed_bytes": 7445448,
+      "uncompressed_sha256": "885a65bbc44a67bb6ec3198cfd3e1091f5acf3ed5c31198b11345cb5ca4788bd",
+      "aliases": []
     },
     {
       "title": "Picture in My Mind [nikko X WINK RMX]",
