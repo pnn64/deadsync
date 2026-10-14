@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T00:17:06Z",
+  "updated_utc": "2026-10-14T00:38:52Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 233,
+    "passed": 234,
     "pending": 84,
-    "unprocessed": 184
+    "unprocessed": 183
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2865,7 +2865,9 @@
       "position": 344,
       "source_simfile": "panopticon/panopticon.ssc",
       "simfile_sha256": "a0a3b897cb659b3e38e9329fd90be0a30d9d3257e5169d0a890b6943e2b25968",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 345,
