@@ -2099,6 +2099,56 @@
         }
       ],
       "report_sha256": "61afc2ffb3ad7b7878aabda62e65b17a5d3b85883b5a4b8521a1db7c37d42de2"
+    },
+    {
+      "position": 457,
+      "source_simfile": "Up Up Up Up/Up Up Up Up.sm",
+      "simfile_sha256": "2f5319394cf6847a86d2be85032b0ab2479452f81f40542adb9634111c91d986",
+      "retained_original_archive": "7acf4619b2f2bd7f6b37c031437a2dfdd22ad71e69db5c37d2598cf29be4968f.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e0f16f89374ce78a1b07cafdb6d13c8e5c04de3e",
+      "build_proof": "/home/parity/jobs/game-state-class-linux-green-v1/proof.json",
+      "capture_seconds": 208.4894502760144,
+      "trace_sha256": "2fdc551b9024331fc41076d5bfb1c37461ada3ae33bf0f567a4115e2f3319511",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-6/chart-457/candidates/75f6521d707b50dc0e459690a436cc40699d042ef6277db4dd699ff9e356ffbf.tar",
+      "replay_exit": 0,
+      "replay_seconds": 2752.5766576370224,
+      "candidate_sha256": "75f6521d707b50dc0e459690a436cc40699d042ef6277db4dd699ff9e356ffbf",
+      "native_frames": 139034,
+      "replayed_frames": 139034,
+      "compared_stage_fields": 2266,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "c937234f07ac15437739ecb6c78972a089b97820417a6704bdc442dfdaa06288",
+      "archive": "25a55b8d611bd76de3821e2eee0ce79869a42cf4897fba43418b9dd01446dfbd.tar.zst",
+      "archive_sha256": "25a55b8d611bd76de3821e2eee0ce79869a42cf4897fba43418b9dd01446dfbd",
+      "compressed_bytes": 6107912,
+      "pack_seconds": 2.3453924549976364,
+      "harness_version": "0.1.80",
+      "title": "Up Up Up Up",
+      "retained_original_entry": {
+        "title": "Up Up Up Up",
+        "source_simfile": "Up Up Up Up/Up Up Up Up.sm",
+        "harness_version": "0.1.0",
+        "archive": "7acf4619b2f2bd7f6b37c031437a2dfdd22ad71e69db5c37d2598cf29be4968f.tar.zst",
+        "sha256": "7acf4619b2f2bd7f6b37c031437a2dfdd22ad71e69db5c37d2598cf29be4968f",
+        "compressed_bytes": 85531,
+        "uncompressed_sha256": "3959bb4fc138b4a8121d6d28239f410bb8d6017d6b65099d321bae71e97f8a17",
+        "compression_level": 22,
+        "aliases": [
+          "b554ab63bace5b5f7a5707ce912757321e8d4e0db9436ce108ea00748f230627.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -2107,9 +2157,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "04af4ff5dfcbbf4a0290dfe81b5e1b5690fa28289a2e2fdbebb293006a88bce2",
+  "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 7,
+  "passed_fixtures": 8,
   "pending_charts": 6,
-  "processed_charts": 13
+  "processed_charts": 14
 }

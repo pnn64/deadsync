@@ -5401,15 +5401,12 @@
     {
       "title": "Up Up Up Up",
       "source_simfile": "Up Up Up Up/Up Up Up Up.sm",
-      "harness_version": "0.1.0",
-      "archive": "7acf4619b2f2bd7f6b37c031437a2dfdd22ad71e69db5c37d2598cf29be4968f.tar.zst",
-      "sha256": "7acf4619b2f2bd7f6b37c031437a2dfdd22ad71e69db5c37d2598cf29be4968f",
-      "compressed_bytes": 85531,
-      "uncompressed_sha256": "3959bb4fc138b4a8121d6d28239f410bb8d6017d6b65099d321bae71e97f8a17",
-      "compression_level": 22,
-      "aliases": [
-        "b554ab63bace5b5f7a5707ce912757321e8d4e0db9436ce108ea00748f230627.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "25a55b8d611bd76de3821e2eee0ce79869a42cf4897fba43418b9dd01446dfbd.tar.zst",
+      "sha256": "25a55b8d611bd76de3821e2eee0ce79869a42cf4897fba43418b9dd01446dfbd",
+      "compressed_bytes": 6107912,
+      "uncompressed_sha256": "75f6521d707b50dc0e459690a436cc40699d042ef6277db4dd699ff9e356ffbf",
+      "aliases": []
     },
     {
       "title": "Vanishing Point [Visual FX]",
