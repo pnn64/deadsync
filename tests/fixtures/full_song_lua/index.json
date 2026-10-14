@@ -4595,17 +4595,14 @@
       ]
     },
     {
-      "title": "See Tinh",
+      "title": "See Tinh 「Cukak Remix」",
       "source_simfile": "See Tinh/See Tinh.sm",
-      "harness_version": "0.1.0",
-      "archive": "395def068b6e9f1192bdc55380b6f10891e898e5a2efd27e0a234db981e131a3.tar.zst",
-      "sha256": "395def068b6e9f1192bdc55380b6f10891e898e5a2efd27e0a234db981e131a3",
-      "compressed_bytes": 565660,
-      "uncompressed_sha256": "f45dbf3ae560d5813f6cf2cce88a0ad16a2ced6d9c6cc0e5205b7a6b8f87b9ea",
-      "compression_level": 22,
-      "aliases": [
-        "70449b59ad8dd1362309da53c01f1f8543cc82e73b710c5de2cac5fa1e719ff2.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "391975fd164d893c11ca8306904cc5a8f33c924542670e8f3fc85aabb8c37804.tar.zst",
+      "sha256": "391975fd164d893c11ca8306904cc5a8f33c924542670e8f3fc85aabb8c37804",
+      "compressed_bytes": 12641388,
+      "uncompressed_sha256": "3c4a446cab0be9b5682b71c92d4949ab27883c8c891755d25894f4f23db432ac",
+      "aliases": []
     },
     {
       "title": "See Tinh 「Cukak Remix」",

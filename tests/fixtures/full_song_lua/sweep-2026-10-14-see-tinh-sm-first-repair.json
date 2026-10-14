@@ -1,0 +1,65 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "e0f16f89374ce78a1b07cafdb6d13c8e5c04de3e",
+  "results": [
+    {
+      "position": 390,
+      "source_simfile": "See Tinh/See Tinh.sm",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "3c4a446cab0be9b5682b71c92d4949ab27883c8c891755d25894f4f23db432ac",
+      "trace_sha256": "652a0da56e03b4b47007f12168f5620e7a7313e7730cb07a9fc831ba0506b477",
+      "simfile_sha256": "7a1a95ff2bcd51881b7d406aef5e038ad483269827ba9243c46b8d4dc8b794cb",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/game-state-class-linux-green-v1/proof.json",
+      "fix_commit": "e0f16f89374ce78a1b07cafdb6d13c8e5c04de3e",
+      "previous_failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[13.2s] replaying every native gameplay frame\n[14.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'See Tinh': failed to execute '/tmp/.tmpPM0Vbq/song/lua/default.lua': runtime error: [string \"/tmp/.tmpPM0Vbq/song/lua/mods-taro.lua\"]:514: attempt to index global 'GameState' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/mods-taro.lua\"]:514: in main chunk\n\t[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\nstack traceback:\n\t>[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'See Tinh' from '/tmp/.tmpPM0Vbq/song/lua/default.lua': failed to execute '/tmp/.tmpPM0Vbq/song/lua/default.lua': runtime error: [string \"/tmp/.tmpPM0Vbq/song/lua/mods-taro.lua\"]:514: attempt to index global 'GameState' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/mods-taro.lua\"]:514: in main chunk\n\t[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\nstack traceback:\n\t>[C]: in ?\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmpPM0Vbq/song/lua/default.lua\"]:17: in main chunk\n\t[C]: in ?\n\n\nthread 'main' (3584736) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[16.0s] replaying every native gameplay frame: frame 0/42817 (0.0%)\n",
+      "previous_errors": [],
+      "replay_exit": 0,
+      "replay_seconds": 1178.6097059099993,
+      "native_frames": 42817,
+      "replayed_frames": 42817,
+      "compared_stage_fields": 1892,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetSecsIntoEffect, Actor.GetX, Actor.GetY, Actor.effectclock, Actor.playcommand, Actor.xy, BitmapText.GetText, BitmapText.settext, PlayerOptions.Beat, PlayerOptions.Centered, PlayerOptions.Cover, PlayerOptions.DizzyHolds, PlayerOptions.DrunkZ, PlayerOptions.MaxScrollBPM, PlayerOptions.ScrollSpeed, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.TimeSpacing, ScreenManager.SystemMessage",
+        "native drawable state/resources: ActorProxy, BitmapText, Quad, Sprite"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "36c3dc4a2106931f08121b901d31328c1f429859ce4872085e8568c3c4e0b118",
+      "archive": "391975fd164d893c11ca8306904cc5a8f33c924542670e8f3fc85aabb8c37804.tar.zst",
+      "archive_sha256": "391975fd164d893c11ca8306904cc5a8f33c924542670e8f3fc85aabb8c37804",
+      "compressed_bytes": 12641388,
+      "harness_version": "0.1.80",
+      "title": "See Tinh 「Cukak Remix」",
+      "pack_seconds": 19.385474538983544,
+      "retained_original_entry": {
+        "title": "See Tinh",
+        "source_simfile": "See Tinh/See Tinh.sm",
+        "harness_version": "0.1.0",
+        "archive": "395def068b6e9f1192bdc55380b6f10891e898e5a2efd27e0a234db981e131a3.tar.zst",
+        "sha256": "395def068b6e9f1192bdc55380b6f10891e898e5a2efd27e0a234db981e131a3",
+        "compressed_bytes": 565660,
+        "uncompressed_sha256": "f45dbf3ae560d5813f6cf2cce88a0ad16a2ced6d9c6cc0e5205b7a6b8f87b9ea",
+        "compression_level": 22,
+        "aliases": [
+          "70449b59ad8dd1362309da53c01f1f8543cc82e73b710c5de2cac5fa1e719ff2.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "e1e734a9ead6d6e42376b1e3adad2a3af44c47fd695dc650c93dcac03541f144",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first repair: native writable GameState class methods; original archive and full comparisons unchanged",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
