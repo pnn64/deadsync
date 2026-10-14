@@ -1,0 +1,16 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Ruin Our Friendship/RuinOurFriendship.sm",
+  "native_frames": 113993,
+  "replayed_frames": 113993,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "c429881a3b8aef7be07dd93dcec619028599e038ca1266fa8409a62dbc65a959.tar.zst",
+  "compressed_sha256": "c429881a3b8aef7be07dd93dcec619028599e038ca1266fa8409a62dbc65a959",
+  "uncompressed_sha256": "2aa01e6059f0d5d3a64169f2cde9f0edf6ece40654e4b8ec8d460a08b5146b0a",
+  "compressed_bytes": 105403244,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false,
+  "git_ignored_and_retained_locally": true
+}
