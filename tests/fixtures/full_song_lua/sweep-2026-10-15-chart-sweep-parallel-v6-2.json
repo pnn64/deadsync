@@ -155,6 +155,25 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 463,
+      "source_simfile": "wah-leven [telperion (ddrillini remix)]/eleven.ssc",
+      "simfile_sha256": "17e70b53a8af11e65045e4cbb29b3f1841914cbacefcc1b13d5b4335fa8cb4ca",
+      "retained_original_archive": "51f50b97cd8baa7cf1b7dd4d8ecdb2ae342df5b112e50eb45a8804878f3f1db5.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 161.7962610660179,
+      "trace_sha256": "b525f939d306d63e9a9b68d92133874cfb1b9a9b2fdc607dc2956722f0630ae0",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v6-2/chart-463/candidates/599f0736e27c6ea8c1753a90b665cf7ea03dc72c31422f80cc8ba4340fddd340.tar",
+      "replay_exit": 1,
+      "replay_seconds": 6.474512488988694,
+      "candidate_sha256": "599f0736e27c6ea8c1753a90b665cf7ea03dc72c31422f80cc8ba4340fddd340",
+      "failure": "[1.6s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: frame 0/67913 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'WAH-LEVEN (DDRIllini Remix)': model '/tmp/.tmp6eWLyC/song/lua/../assets/waluigi-model/wah-tpose.txt' did not produce any geometry; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile foreground lua layer for 'WAH-LEVEN (DDRIllini Remix)' from '/tmp/.tmp6eWLyC/song/lua/fly.lua': model '/tmp/.tmp6eWLyC/song/lua/../assets/waluigi-model/wah-tpose.txt' did not produce any geometry\n[4.0s] replaying every native gameplay frame: frame 0/67913 (0.0%)\n\nthread 'main' (2929566) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
     }
   ],
   "scope": {
@@ -166,6 +185,6 @@
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 3,
-  "pending_charts": 0,
-  "processed_charts": 3
+  "pending_charts": 1,
+  "processed_charts": 4
 }
