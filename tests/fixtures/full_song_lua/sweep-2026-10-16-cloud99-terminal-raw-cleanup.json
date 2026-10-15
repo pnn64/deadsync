@@ -1,0 +1,15 @@
+{
+  "reason": "Cloud99 passed, complete fixture saved and byte-verified; release all three inactive hardlinks to the raw candidate.",
+  "uncompressed_sha256": "4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e",
+  "preserved_archive": "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/accepted/1bcc1a4ca0385bafaf8cfb255b5e89d8ea2741ec789f893dfc8daeb75cbea4f8.tar.zst",
+  "preserved_compressed_sha256": "1bcc1a4ca0385bafaf8cfb255b5e89d8ea2741ec789f893dfc8daeb75cbea4f8",
+  "removed_raw_hardlinks": [
+    "/home/parity/jobs/cloud99-qualified-underlay-entry-v1/4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e.tar",
+    "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e.tar",
+    "/home/parity/jobs/chart-sweep-canonical-cloud99-v1/candidates/4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e.tar"
+  ],
+  "all_raw_bytes_equal_decoded_preserved_capture": true,
+  "free_delta_bytes": 2546450432,
+  "passing_chart_replayed": false,
+  "mawaru9_remains_deferred": true
+}

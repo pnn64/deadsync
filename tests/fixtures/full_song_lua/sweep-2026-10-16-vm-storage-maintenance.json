@@ -1,12 +1,12 @@
 {
-  "measured_utc": "2026-10-15T22:08:07Z",
+  "measured_utc": "2026-10-15T22:22:44Z",
   "purpose": "Keep the parity VM clean while preserving captures and active work.",
   "initial_free_bytes": 7100891136,
-  "current_free_bytes": 31201136640,
+  "current_free_bytes": 58384531456,
   "total_bytes": 206900281344,
-  "maintenance_first_sweep_still_running": true,
-  "verified_compressed_files": 21,
-  "raw_payload_bytes_removed": 20669796920,
+  "maintenance_first_sweep_still_running": false,
+  "verified_compressed_files": 205,
+  "raw_payload_bytes_removed": 55009149955,
   "receipts": "/home/parity/jobs/vm-storage-maintenance.jsonl",
   "maintenance_source": "scripts/parity_vm_storage.py",
   "procedure": "docs/parity-vm-storage.md",
@@ -23,280 +23,27 @@
   },
   "actual_live_processes": [
     {
-      "pid": 1876495,
-      "argv": [
-        "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
-        "--archive",
-        "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e.tar",
-        "--report",
-        "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/report.json"
-      ]
-    },
-    {
       "pid": 1965361,
       "argv": [
         "python3",
         "/home/parity/jobs/parity_vm_storage.py",
         "--watch"
       ]
+    },
+    {
+      "pid": 2106061,
+      "argv": [
+        "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/waww-qualified-entry-v1/504de67d65ec8b24d48573144b4ea2256546a305d1a3b118ba9ab0e16d029c69.tar.zst",
+        "--report",
+        "/home/parity/jobs/waww-qualified-entry-v1/report.json",
+        "--entry"
+      ]
     }
   ],
   "mawaru9_remains_deferred": true,
   "chart_started_stopped_or_restarted_by_cleanup": false,
-  "raw_removal_receipts": [
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-2930594-1792038773134027232-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 26587746,
-      "compressed_sha256": "85d2f95f49ae99c6d060b8ccd602b913b6d15db53b3ddbd720679ccf7c9752fd",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-2930594-1792038773134027232-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 1572676955,
-      "raw_sha256": "c3fa7b3daf4d1b72a45eabfd7acc6414b89e6fc2866dc6515f152afa8647b85e",
-      "timestamp_utc": "2026-10-15T22:04:11Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/home/parity/jobs/chart-sweep-parallel-v5-6/chart-385/private-candidate.tar.zst",
-      "compressed_bytes": 23274717,
-      "compressed_sha256": "39938ce28b148cbb9c9cb99437a810bfd430237a967804084a6f61a31b00236f",
-      "decoded_bytes_verified": true,
-      "raw": "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182.tar",
-      "raw_bytes": 386946048,
-      "raw_sha256": "ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182",
-      "timestamp_utc": "2026-10-15T22:04:14Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-1079644-1791855536153243279-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 43027338,
-      "compressed_sha256": "e9d83a70b3b8bcdd5a64e797cea507f646557f261872c2050e4b713887ed05bd",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-1079644-1791855536153243279-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 1489043206,
-      "raw_sha256": "a1fc2b82b01391dc5f201575d5e942d52b7a23df87dd34033528b37b77fdc43e",
-      "timestamp_utc": "2026-10-15T22:04:30Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-60535-1791799343800680131-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 24574848,
-      "compressed_sha256": "3bd404245ed2e233b3852e2ae19a1f2e2e99f45138f8feab691d2f7b691626fe",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-60535-1791799343800680131-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 1232820141,
-      "raw_sha256": "2e54fdd50f87d2eea0e1438ef4c77e7ecd345b8e1b94dcd29307ff2b94efc2cf",
-      "timestamp_utc": "2026-10-15T22:04:45Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-66990-1791805811913687752-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 24530295,
-      "compressed_sha256": "0cc42bcf780e620cf5d2824ac21780388d50aa7053c394186583c1515043f68d",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-66990-1791805811913687752-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 1232742872,
-      "raw_sha256": "b20a5bef204c8c61f62cd50bb8d1c4c5bc166e53cef7d1e16faa2b9a865378db",
-      "timestamp_utc": "2026-10-15T22:05:00Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-112860-1791827925778410930-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 23123847,
-      "compressed_sha256": "037c30938e2398c1b9e896882bc8042e4003433cd28827c674bbac211c3892dd",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-112860-1791827925778410930-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 1231659730,
-      "raw_sha256": "e6319d8b75d0121cfe0a8886f8271448d21583f13ac2a508482721788f9f9069",
-      "timestamp_utc": "2026-10-15T22:05:15Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-2509216-1791987986124648311-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 28876245,
-      "compressed_sha256": "972e67a779c655a17d7805ee2d73b7ca683804108b0205ea7bad365cc19c08ea",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-2509216-1791987986124648311-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 1138954509,
-      "raw_sha256": "c205daf0e75dfd33a31776491e50e6bd52014dcc4ece121d1414780629fed60f",
-      "timestamp_utc": "2026-10-15T22:05:29Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-140635-1791837681112428248-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 17288848,
-      "compressed_sha256": "d3a94ed7fdda40d5b8367b690ad617bfac107bd26d797f1c5a9b9c4bac22bd9a",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-140635-1791837681112428248-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 1128885271,
-      "raw_sha256": "922d653f65a853d691a975ce5e01bcbd2f1bf9f049cc63fcb7298ed13b32d3d0",
-      "timestamp_utc": "2026-10-15T22:05:43Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-2812810-1791933010851284846-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 27569287,
-      "compressed_sha256": "da784f14d0a35b5172be20a71b3ba1992de068b67283ab2d8b54dbd4c6fe47e7",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-2812810-1791933010851284846-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 1091274731,
-      "raw_sha256": "337bebdb334b2218eebdb2a49423702902c3e8663d96cd5ac85b846057abace0",
-      "timestamp_utc": "2026-10-15T22:05:56Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-1135989-1791912381607452749-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 24089579,
-      "compressed_sha256": "8c8ac104a9c62d4afedecf0e10a4deb4cbc68bb79bec299f5904a3274441da2b",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-1135989-1791912381607452749-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 1015181585,
-      "raw_sha256": "1581b31db97689eb09523c7154af978d21f1cc1dbdc4f4b662421c35e255abe0",
-      "timestamp_utc": "2026-10-15T22:06:09Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-3543950-1791999403829867601-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 13342454,
-      "compressed_sha256": "0445c06db3d0e2c68f8de133f5308e83d1e0c12bd4e3c8aef53e2427a97a5d65",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-3543950-1791999403829867601-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 990400289,
-      "raw_sha256": "60fe144a51725a478a0f964e9295568ea9cd4f1d9f32771e77744ed2efdb1a5a",
-      "timestamp_utc": "2026-10-15T22:06:21Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-93312-1791958789889673500-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 19246969,
-      "compressed_sha256": "db451241acd2ce5d4aadfc3b46692b599673170d731fb02c4f8815179de952da",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-93312-1791958789889673500-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 965710846,
-      "raw_sha256": "c9cc8125c6b24a76ce4898170cdaa16a4d99eb3972dae959101b26c265deb22e",
-      "timestamp_utc": "2026-10-15T22:06:33Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-3358902-1791997447673738241-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 12448001,
-      "compressed_sha256": "51dbe9a04d9960cb2adc90836db25ec3b8291b32325399cb093091f50b01932f",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-3358902-1791997447673738241-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 918600270,
-      "raw_sha256": "9231f0db6aadc86c0bb24e585e5a6c72a8a58347c9424db44f00b9b617c5d3b6",
-      "timestamp_utc": "2026-10-15T22:06:44Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-688676-1791849831111987560-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 20074586,
-      "compressed_sha256": "8b6a71ed099c8fb28ed5a446708d33c2c04c1ae878d31abd223ed2dfed1a825c",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-688676-1791849831111987560-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 905793461,
-      "raw_sha256": "e1e15bd7faecf6e53760c0d7c10f8c80696b0758b7f77a462cd359a9e5074dc6",
-      "timestamp_utc": "2026-10-15T22:06:56Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-3038934-1791882310428691032-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 21343610,
-      "compressed_sha256": "6a8be31b55849e2350b7da19c9a289a0289fad8e07cdbfb82164bfa29737f0e1",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-3038934-1791882310428691032-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 886804384,
-      "raw_sha256": "05458fcad1e16a5ef46cfe4542548b03c3141bf6b08bd8b159dd8bb33d2410ec",
-      "timestamp_utc": "2026-10-15T22:07:07Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-48706-1791792273951289582-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 15572467,
-      "compressed_sha256": "1c56e806d8883354055fffbdfd1dcc894291dd365c53bc3da68fef6f15c9f243",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-48706-1791792273951289582-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 803526239,
-      "raw_sha256": "9199d7ed62ed63b3c4ca6c301b255dc9d5896581963233c2b636450efb6f30de",
-      "timestamp_utc": "2026-10-15T22:07:17Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-2603600-1791988971919000175-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 15137385,
-      "compressed_sha256": "a29cad6fece256a56a53cc9218e499a5fe069c575a730f6335232e06596a7d24",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-2603600-1791988971919000175-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 753525788,
-      "raw_sha256": "24be50672a0a039a4351468c824805ba53abed0e49c2099cd16bf5db10804641",
-      "timestamp_utc": "2026-10-15T22:07:27Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-699346-1792014335318098731-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 11470404,
-      "compressed_sha256": "7d6f5512ad1c2fcff508613973de705abc09a40677c91fda6caaf1824e156db6",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-699346-1792014335318098731-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 745633252,
-      "raw_sha256": "691456cfe58e0c8444f63442c42be26bd5a902d7ff1323a6bbd6725a20eaf4e7",
-      "timestamp_utc": "2026-10-15T22:07:37Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-3862200-1791893578433024548-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 17811874,
-      "compressed_sha256": "7bc310d84b7704329448be66b0cbc392e0cff8a0286c5712d4d859c22288402a",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-3862200-1791893578433024548-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 732678623,
-      "raw_sha256": "bc96ce53d93a9bfb119830c1aec38126420d8c9b4b4131cbf2947c0a5a609e07",
-      "timestamp_utc": "2026-10-15T22:07:47Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-2723501-1791878021731958396-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 20916899,
-      "compressed_sha256": "a060f8789ad4abb9b02923b21b674116fd9e21f69b5576d6054ead41eb80bf29",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-2723501-1791878021731958396-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 723833362,
-      "raw_sha256": "a86ea7afcdec6166873aacbd94dc6abd012358eac424bd867b098d65a91b9e0d",
-      "timestamp_utc": "2026-10-15T22:07:56Z",
-      "two_process_checks_clear": true
-    },
-    {
-      "action": "raw_removed",
-      "compressed": "/tmp/itgmania-harness-rs/song-lua-2820285-1791879294723548783-0/Save/itgmania-harness/song-lua-trace.json.zst",
-      "compressed_bytes": 20963911,
-      "compressed_sha256": "1cd70d7eec767068e26d697b6c5abd39c6708236dccd234db23ced4cd1f5bd5f",
-      "decoded_bytes_verified": true,
-      "raw": "/tmp/itgmania-harness-rs/song-lua-2820285-1791879294723548783-0/Save/itgmania-harness/song-lua-trace.json",
-      "raw_bytes": 723105358,
-      "raw_sha256": "2fad2bb564e049237d36f75d2330456e1526252a2ed4ab77728dc61e91a709c8",
-      "timestamp_utc": "2026-10-15T22:08:05Z",
-      "two_process_checks_clear": true
-    }
-  ],
   "completed_build_cleanup": {
     "reason": "Reclaim completed Cargo dev artifacts after the validated helper has been copied outside the shared target. Preserve live replay helpers and all captures.",
     "command": [
@@ -362,5 +109,12 @@
       "chart_replay_started_stopped_or_restarted": false,
       "original_capture_and_logs_preserved": true
     }
-  ]
+  ],
+  "receipt_summary": {
+    "raw_removal_records": 205,
+    "all_records_have_verified_decompressed_bytes_and_two_clear_process_checks": true,
+    "complete_receipts_preserved_at": "/home/parity/jobs/vm-storage-maintenance.jsonl",
+    "raw_payload_byte_total_includes_multiple_removed_hardlinks_and_is_not_a_physical_free_space_claim": true
+  },
+  "cloud99_post_pass_cleanup": "sweep-2026-10-16-cloud99-terminal-raw-cleanup.json"
 }
