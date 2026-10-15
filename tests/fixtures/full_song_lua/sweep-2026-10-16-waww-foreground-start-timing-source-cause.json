@@ -1,0 +1,227 @@
+{
+  "source_simfile": "What A Wonderful World/WAWW.sm",
+  "generated_utc": "2026-10-15T23:41:34.699824+00:00",
+  "first_full_repair_report_sha256": "835ddbdaa434e29c5c07469bc80c28b279f1e7e817f17f89fe45ba98f7bbf617",
+  "original_native_trace_sha256": "a68b0341299dde7797f9b55eabd8f7dc50630c93c8d8d0f4d064e69b8eedccf9",
+  "native_frames": 7119,
+  "first_command_failure_native_seq": 89801,
+  "source_cause": "Foreground::Update uses TimingData::GetElapsedTimeFromBeat with float accumulation at each timing event, then song offset and global offset subtraction. Owned advance_foreground uses the nanosecond timing conversion. At authored rose start17.25 the returned start differs by one f32 ULP; the retained sleep(.007) queue reaches a different frame boundary at20.379547119140625.",
+  "original_chart_inputs": {
+    "simfile_sha256": "44d9e8c548a43bfbf4e7b1f35229c66a5063759098784abd70c542409d7f22b5",
+    "simfile_offset": -0.532426,
+    "native_default_sync_offset": "SyncOffset_ITG",
+    "source_defined_ITG_offset_seconds": -0.009,
+    "native_input_global_offset_seconds": -0.00800000037997961,
+    "rose_authored_start_beat": 17.25,
+    "sleep_seconds": 0.007
+  },
+  "primary_source_sha256": {
+    "C:\\GitHub\\itgmania\\src\\Foreground.cpp": "04655fe3db304e08f8d424ac6a928858b74182f74ba14ceb658b709324153847",
+    "C:\\GitHub\\itgmania\\src\\TimingData.cpp": "340a568492dd38f0522cd9979e9154ac98771b8834216f3e9aeb97b0e05829de",
+    "C:\\GitHub\\itgmania\\src\\TimingSegments.h": "63f576d8710236246ddd4b3d99f4c351090102de86312703847eec783f6bd5d9",
+    "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\live.rs": "d22a160bc0b548a451922e4be13d708f9ccf91e4b6c1a1de7802815ec8288563",
+    "C:\\GitHub\\deadsync\\crates\\deadsync-rules\\src\\timing.rs": "fea6baec8d937310d836fa8a608155c99df3b33c18940ec8d3b2c57c14694c02"
+  },
+  "native_source_functions": [
+    "Foreground.cpp:Foreground::Update",
+    "TimingData.cpp:TimingData::GetElapsedTimeInternal",
+    "TimingData.cpp:TimingData::GetElapsedTimeFromBeatNoOffset",
+    "TimingSegments.h:BPMSegment::SetBPM"
+  ],
+  "owned_source_functions": [
+    "live.rs:SongLuaLiveScene::advance_foreground",
+    "timing.rs:TimingData::get_time_for_beat",
+    "timing.rs:TimingData::get_time_for_beat_ns"
+  ],
+  "read_only_queue_model": {
+    "native_source_start": 14.804689407348633,
+    "owned_ns_start": 14.80469036102295,
+    "native": {
+      "around_first_divergence": [
+        {
+          "seconds": 20.36256217956543,
+          "callbacks": 1,
+          "sleep_left": 0.0029843859374523163
+        },
+        {
+          "seconds": 20.37126922607422,
+          "callbacks": 1,
+          "sleep_left": 0.001277339644730091
+        },
+        {
+          "seconds": 20.379547119140625,
+          "callbacks": 2,
+          "sleep_left": 0.006999447010457516
+        },
+        {
+          "seconds": 20.386371612548828,
+          "callbacks": 0,
+          "sleep_left": 0.00017495360225439072
+        },
+        {
+          "seconds": 20.391542434692383,
+          "callbacks": 1,
+          "sleep_left": 0.0020041316747665405
+        },
+        {
+          "seconds": 20.398639678955078,
+          "callbacks": 1,
+          "sleep_left": 0.0019068876281380653
+        },
+        {
+          "seconds": 20.405193328857422,
+          "callbacks": 1,
+          "sleep_left": 0.0023532379418611526
+        },
+        {
+          "seconds": 20.41204071044922,
+          "callbacks": 1,
+          "sleep_left": 0.002505856566131115
+        },
+        {
+          "seconds": 20.418458938598633,
+          "callbacks": 1,
+          "sleep_left": 0.0030876286327838898
+        }
+      ],
+      "model_vs_saved_report_differences": [],
+      "difference_frame_count": 0
+    },
+    "owned": {
+      "around_first_divergence": [
+        {
+          "seconds": 20.36256217956543,
+          "callbacks": 1,
+          "sleep_left": 0.0029853396117687225
+        },
+        {
+          "seconds": 20.37126922607422,
+          "callbacks": 1,
+          "sleep_left": 0.0012782933190464973
+        },
+        {
+          "seconds": 20.379547119140625,
+          "callbacks": 1,
+          "sleep_left": 4.0046870708465576e-07
+        },
+        {
+          "seconds": 20.386371612548828,
+          "callbacks": 1,
+          "sleep_left": 0.00017590727657079697
+        },
+        {
+          "seconds": 20.391542434692383,
+          "callbacks": 1,
+          "sleep_left": 0.0020050853490829468
+        },
+        {
+          "seconds": 20.398639678955078,
+          "callbacks": 1,
+          "sleep_left": 0.0019078413024544716
+        },
+        {
+          "seconds": 20.405193328857422,
+          "callbacks": 1,
+          "sleep_left": 0.002354191616177559
+        },
+        {
+          "seconds": 20.41204071044922,
+          "callbacks": 1,
+          "sleep_left": 0.002506810240447521
+        },
+        {
+          "seconds": 20.418458938598633,
+          "callbacks": 1,
+          "sleep_left": 0.003088582307100296
+        }
+      ],
+      "model_vs_saved_report_differences": [],
+      "difference_frame_count": 0
+    }
+  },
+  "model_scope": "All recorded frames from the fourth rose activation to20.42 seconds. Native float arithmetic reproduces every saved native move count; nanosecond arithmetic reproduces every saved owned move count. Each path has zero differing frames against its saved output in that range. Captured output counts are used only to verify this diagnostic, never as runtime inputs.",
+  "captured_frame_context": [
+    {
+      "beat": 23.955968856811523,
+      "delta": 0.00797600019723177,
+      "scene": 1,
+      "seconds": 20.36256217956543,
+      "sequence": 5371,
+      "wall_seconds": 28.983041
+    },
+    {
+      "beat": 23.966432571411133,
+      "delta": 0.008918000385165215,
+      "scene": 1,
+      "seconds": 20.37126922607422,
+      "sequence": 5372,
+      "wall_seconds": 28.991567
+    },
+    {
+      "beat": 23.97637939453125,
+      "delta": 0.008259999565780163,
+      "scene": 1,
+      "seconds": 20.379547119140625,
+      "sequence": 5373,
+      "wall_seconds": 28.99989
+    },
+    {
+      "beat": 23.984580993652344,
+      "delta": 0.006763000041246414,
+      "scene": 1,
+      "seconds": 20.386371612548828,
+      "sequence": 5374,
+      "wall_seconds": 29.006292
+    },
+    {
+      "beat": 23.990795135498047,
+      "delta": 0.005338000133633614,
+      "scene": 1,
+      "seconds": 20.391542434692383,
+      "sequence": 5375,
+      "wall_seconds": 29.011413
+    },
+    {
+      "beat": 23.99932289123535,
+      "delta": 0.007098000030964613,
+      "scene": 1,
+      "seconds": 20.398639678955078,
+      "sequence": 5376,
+      "wall_seconds": 29.018663
+    },
+    {
+      "beat": 24.007234573364258,
+      "delta": 0.006548999808728695,
+      "scene": 1,
+      "seconds": 20.405193328857422,
+      "sequence": 5377,
+      "wall_seconds": 29.025591
+    },
+    {
+      "beat": 24.0155029296875,
+      "delta": 0.006794000044465065,
+      "scene": 1,
+      "seconds": 20.41204071044922,
+      "sequence": 5378,
+      "wall_seconds": 29.032284
+    },
+    {
+      "beat": 24.02325439453125,
+      "delta": 0.006471999920904636,
+      "scene": 1,
+      "seconds": 20.418458938598633,
+      "sequence": 5379,
+      "wall_seconds": 29.038747
+    }
+  ],
+  "all_64_initial_rose_positions_match_native": true,
+  "random_seed_cause_claimed": false,
+  "qualified_pre_song_broadcast_fix_also_required": "bf010199f6acec3e06f2d429c471fbe846491b48",
+  "next_action": "Implement the native float elapsed-time conversion for foreground activation without changing integer judgment timing or comparison tolerances, add a source-based boundary regression, qualify both hosts and use a retained prefix before considering the second full repair.",
+  "full_repairs_spent": 1,
+  "final_repair_started": false,
+  "production_fix_applied": false,
+  "native_capture_reused": true,
+  "acceptance_criteria_unchanged": true,
+  "mawaru9_remains_deferred": true
+}
