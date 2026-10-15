@@ -1,0 +1,46 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "entry_evidence": "sweep-2026-10-15-hope-lyric-display-construction-entry-diagnostic.json",
+  "native_actor_identity_evidence": "sweep-2026-10-15-hope-player-inventory-entry-evidence.json",
+  "entry_frames": 1688,
+  "entry_errors": 0,
+  "entry_mismatches": 20472,
+  "first_remaining_actor": "ScreenGameplay/PlayerP1",
+  "first_remaining_operation": "ActorFrame.GetNumChildren",
+  "native_seq": 347,
+  "native_result": 8,
+  "owned_result": 7,
+  "native_unnamed_children": 5,
+  "local_primary_sources": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Player.cpp",
+      "sha256": "fb9fbc6ead8073b26cc8ff9097068ed2c33b8d8c2bea58b43eb61e0384ae1935"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\AttackDisplay.cpp",
+      "sha256": "d1a6013a1ccc7d3245f4a2e5b79563103b6357834f0d3efd9adfc5e21194173e"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\AttackDisplay.h",
+      "sha256": "67c526fd2ca370811c77ccb179687534df65a5b862db401fbf42b669c334cb5a"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs",
+      "sha256": "ab6a7780e5d3798b45191db2731e4f6adb9bcaaa0373f31e4169bdfbae7f0589"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\live.rs",
+      "sha256": "7ad7f3f2c9db2a3f7a241c6a50ada0c133c9cd483c1b8e398882f5c9987c9541"
+    }
+  ],
+  "source_cause": "Visible native Player construction always adds an unnamed AttackDisplay ActorFrame before Player::Init adds Combo, Judgment, one unnamed HoldJudgment per column, and NoteField. AttackDisplay has zero children in regular mode, but remains a real Player child. Owned creates the three named actors and four hold frames and omits AttackDisplay. The retained native GetChildren query confirms five unnamed children plus Combo/Judgment/NoteField; the first unnamed frame has zero children, matching AttackDisplay.",
+  "existing_unit_fixture_assumption_to_reconcile": "live_player_hold_judgment_tree currently assumes total childcount7 and exactly four unnamed children, reflecting the omitted actor. A faithful repair must preserve its four actual hold frames and feedback-index checks while strictly representing the additional native AttackDisplay and full unnamed-child group. Full-song comparison keys, tolerances and acceptance must remain unchanged.",
+  "production_fix_added": false,
+  "full_repairs_spent": 0,
+  "original_native_capture_reused": true,
+  "expected_query_results_used_as_engine_inputs": false,
+  "acceptance_comparisons_changed": false,
+  "lyric_fix_first_remaining_mismatch_moved_from_native_seq315_to347": true,
+  "mismatch_count_is_positional_and_not_a_monotonic_progress_measure": true,
+  "next_action": "Add the actual regular-mode unnamed AttackDisplay to visible Player construction and preserve separate hold-frame indexing, full native child group and authored child order; validate against source-backed native inventory and existing behavior checks before another retained entry."
+}

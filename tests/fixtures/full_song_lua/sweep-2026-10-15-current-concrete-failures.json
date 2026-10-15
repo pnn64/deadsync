@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T11:18:30Z",
+  "updated_utc": "2026-10-15T11:21:42Z",
   "counts": {
     "passed": 398,
     "pending": 103,
@@ -8170,8 +8170,8 @@
       "original_terminal_full_result_preserved": true,
       "new_full_repair_started": false,
       "cancel_child_missing_failure_fixed_by": "c71cc5f319cd5b950b6ce107ec23f65772062260",
-      "remaining_source_cause": null,
-      "current_diagnostic_failure": "actual remaining entry comparisons recorded in followup; source cause not yet claimed",
+      "remaining_source_cause": "sweep-2026-10-15-hope-player-inventory-source-cause.json",
+      "current_diagnostic_failure": "visible Player missing unnamed regular-mode AttackDisplay: native8 children and5 unnamed versus owned7 and4 unnamed",
       "diagnostic_only_not_full_acceptance": true,
       "quad_default_texture_fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
       "quad_texture_all_sixteen_groups_both_hosts_passed": true,
