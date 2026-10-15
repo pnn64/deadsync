@@ -1,0 +1,12 @@
+{
+  "fix_commit": "c86a7a030c775514aa4ad1ccc51efc0727463b56",
+  "source_root": "/home/parity/workspace/score-display-frame-green-v1/deadsync",
+  "binary_sha256": "59262da08e15da68844c9c37b3a4e04999a8022911f87576e07b777532b3f285",
+  "build_proof": "/home/parity/jobs/score-display-frame-linux-green-v1/proof.json",
+  "all_four_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "construct unnamed score-display Sprite before PercentageDisplay and load the actual inherited blank bitmap",
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
