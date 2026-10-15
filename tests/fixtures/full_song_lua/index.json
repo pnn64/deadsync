@@ -5669,6 +5669,16 @@
       "compressed_bytes": 12474938,
       "uncompressed_sha256": "5b5058060fd5a5513a96cd9aba5cb96b7aa2f07c0b0c7e3f5c0eb2eb2601e91e",
       "aliases": []
+    },
+    {
+      "title": "Rayc Fire 2",
+      "source_simfile": "Rayc Fire 2/Rayc Fire 2.ssc",
+      "harness_version": "0.1.80",
+      "archive": "425142dcee67508e15a0544eb930951f1f42c8957c6b46a81be64952f72fa508.tar.zst",
+      "sha256": "425142dcee67508e15a0544eb930951f1f42c8957c6b46a81be64952f72fa508",
+      "compressed_bytes": 4850245,
+      "uncompressed_sha256": "480b33f71e075d7e59942f2c966ec386b75c5fe153ec82573f7deb8c5b84ef2e",
+      "aliases": []
     }
   ],
   "compression_level": 22

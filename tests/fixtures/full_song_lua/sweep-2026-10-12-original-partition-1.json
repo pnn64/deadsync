@@ -10667,6 +10667,49 @@
       "capture_exit": 1,
       "capture_seconds": 902.6671685950132,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1468866-1792022466740688095-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1468866-1792022466740688095-0\n"
+    },
+    {
+      "position": 500,
+      "source_simfile": "Rayc Fire 2/Rayc Fire 2.ssc",
+      "simfile_sha256": "7163714252068f63b817c7eed2127d3d312941bed6f9969b6d317e6f998930e0",
+      "historical_failure": {
+        "simfile": "Rayc Fire 2/Rayc Fire 2.ssc",
+        "status": "error",
+        "category": "missing_song_lua",
+        "reason": "ITGmania Lua host failed: cannot open corpus:/Rayc Fire 2/lua/LUA.lua: No such file or directory",
+        "diagnostics": "target/song-lua-repair/known/53da0d7a82127af7"
+      },
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 151.2504047990078,
+      "trace_sha256": "506308d7049f68fa3d62658dd8d8063ca6392b7f0fcbb2c1f9a68639cce1b725",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-500/candidates/480b33f71e075d7e59942f2c966ec386b75c5fe153ec82573f7deb8c5b84ef2e.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1696.770217326004,
+      "candidate_sha256": "480b33f71e075d7e59942f2c966ec386b75c5fe153ec82573f7deb8c5b84ef2e",
+      "native_frames": 103991,
+      "replayed_frames": 103991,
+      "compared_stage_fields": 1639,
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "477e8193619269fd990b9efe9a37b60c069b920d27b9dfe977f7f28411469c24",
+      "archive": "425142dcee67508e15a0544eb930951f1f42c8957c6b46a81be64952f72fa508.tar.zst",
+      "archive_sha256": "425142dcee67508e15a0544eb930951f1f42c8957c6b46a81be64952f72fa508",
+      "compressed_bytes": 4850245,
+      "pack_seconds": 2.167233439977281,
+      "harness_version": "0.1.80",
+      "title": "Rayc Fire 2",
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -10678,7 +10721,7 @@
   },
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 39,
+  "passed_fixtures": 40,
   "pending_charts": 41,
-  "processed_charts": 80
+  "processed_charts": 81
 }
