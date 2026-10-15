@@ -1,0 +1,12 @@
+{
+  "fix_commit": "aa22e9e7029b7d57fbe5aaa9804ab362cd8c6872",
+  "source_root": "/home/parity/workspace/lyric-display-construction-green-v3/deadsync",
+  "binary_sha256": "353df6a92631462689b37f04430f86d3287328870384a92627843b5854920d8b",
+  "build_proof": "/home/parity/jobs/lyric-display-construction-linux-green-v3/proof.json",
+  "all_four_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "construct ordered LyricBack/LyricFront BitmapText children with the inherited Miso font, native LyricCommand helper, Changed handlers and screen position commands",
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
