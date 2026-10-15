@@ -82,6 +82,11 @@
   "original_capture_and_payloads_reused_unchanged": true,
   "expected_trace_queries_used_as_inputs": false,
   "full_repairs_spent": 0,
-  "fix_added": false,
-  "next_action": "Forward real player timing-window inputs through production context into SL.ActiveModifiers.TimingWindows and add a meaningful regression for actual original TapNoteJudgments label construction. Qualify both hosts before retained entry; no full HOPE repair while this known entry failure remains. Mawaru9 remains deferred."
+  "fix_added": true,
+  "next_action": "Inspect actual first retained entry failure, or begin first full replay if clean. Mawaru9 remains deferred.",
+  "fix_commit": "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd",
+  "qualified_six_groups_both_hosts": true,
+  "followup_entry": "sweep-2026-10-15-hope-timing-window-labels-entry-diagnostic.json",
+  "seq773_resolved": true,
+  "first_remaining_native_seq_after_fix": 965
 }

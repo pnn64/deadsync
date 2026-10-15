@@ -1,10 +1,10 @@
 {
   "source_simfile": "HOPE/HOPE.ssc",
-  "entry_evidence": "sweep-2026-10-15-hope-declared-banner-entry-diagnostic.json",
+  "entry_evidence": "sweep-2026-10-15-hope-timing-window-labels-entry-diagnostic.json",
   "entry_frames": 1688,
   "entry_errors": 0,
-  "entry_mismatches": 20499,
-  "first_remaining_native_seq": 773,
+  "entry_mismatches": 20490,
+  "first_remaining_native_seq": 965,
   "native_underlay_child_count": 10,
   "owned_underlay_child_count": 10,
   "native_direct_children": [
@@ -317,5 +317,57 @@
   "underlay_header_fix_commit": "0b3b12b7b6fb83b93b1661c4395b8d2151253cba",
   "step_statistics_fix_commit": "135dcdfd107e0b2cf527c010b827593139433102",
   "amv_texture_fix_commit": "22e67e7f2a9085661a52bfd8edbdd7762ee966fd",
-  "latest_source_cause": "sweep-2026-10-15-hope-timing-window-label-source-cause.json"
+  "latest_source_cause": null,
+  "latest_observed_failure": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "external-0113",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          {
+            "type": "RageTexture"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 3,
+      "operation": "Sprite.GetTexture",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 965,
+      "source": "song:/sm5/modules/grabactors.lua",
+      "results": [
+        {
+          "type": "RageTexture"
+        }
+      ]
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "query",
+      "operation": "Sprite.GetTexture",
+      "source": "song:/sm5/modules/grabactors.lua",
+      "line": 3,
+      "phase": "callback",
+      "beat": -15.99990177154541,
+      "seconds": -4.08297061920166,
+      "args": [],
+      "results": [
+        {
+          "type": "nil"
+        }
+      ]
+    }
+  }
 }
