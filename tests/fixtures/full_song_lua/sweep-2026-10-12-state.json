@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T05:21:01Z",
-  "previous_goal_turn": "Progress: Closed Goomba original 32,845-frame pass with a committed compressed fixture and local decompressed-byte receipt. Trinity first cropto repair passed all46,907 frames with zero errors and mismatches; its compressed fixture and local decompressed-byte receipt are committed. Passing charts remain closed. Fixed wah-leven actual model preparation failure by matching RageModelGeometry parsing of optional exporter comments while preserving real mesh, normal, UV, bounds, material and bone data. Both hosts reproduced the meaningful header regression and passed all twelve validation groups; all1,175 raw Linux and normalized cross-platform red/green source pins, logs and frozen helper were verified. A complete2,443-frame native control loaded three header variants. The source fix and selection are committed. The unchanged67,913-frame wah-leven capture passed a2,588-frame startup diagnostic with no errors or mismatches and its first full repair is running, with one later full repair maximum. Watermelon completed35,146 frames with no callback errors and exactly one command-count mismatch,61,217 native versus61,213 owned. The missing four records belong to delayed HidePlayersCommand on ScreenGameplay; primary source and a complete6,160-frame native control prove that Screen commands propagate through nested song actors. A meaningful owned regression reproduced missing immediate dispatch, and isolated red/green validation is running for the narrow TopScreen command propagation fix. Watermelon has spent no full repair; a first repair is queued only after proven behavior, full cross-platform validation and a committed selection. What A Wonderful World original exited1 with an empty log and no report, despite a complete7,119-frame native capture with no dropped observations. Its retained-capture1,016-frame entry diagnostic passes with no errors or mismatches; the original full failure remains unexplained and no full repair was spent. Lossless closed-pass report/candidate cleanup recovered about5GB, preserving uncompressed hashes. The original workers and other bounded scoped repairs continue without restart. Global original helper711a5230 and all501 original simfile hashes are unchanged; coverage remains separate, oversized archives stay ignored and local, and the sweep is active and incomplete.",
+  "updated_utc": "2026-10-15T05:50:00Z",
+  "previous_goal_turn": "Progress: Fixed both missing Screen command propagation and absent Screen queue scheduling, identified from Watermelon actual four missing command records. The first proposal passed immediate dispatch but correctly failed delayed dispatch on both hosts before any chart repair. Reused the existing actor entry/wrapper/queue/recurring update scheduling for Screen before existing child jobs, retained each child traversal once, and scheduled its callback afterward. A complete6160-frame native control proves direct and delayed nested child delivery with sleeping descendants. Both hosts reproduced the original regression and passed all twelve corrected validation groups, including79 live controls and34 replay controls; all1175 raw Linux and normalized cross-platform red/green source pins, logs and frozen helper were verified. Committed fix80e6fbaf7 and its private9ea0ce46 helper selection, then launched Watermelon first full repair from its unchanged complete35146-frame capture. One later full repair maximum remains. Ascendanz original passed98852 frames with zero errors and mismatches; its compressed fixture and local decompressed-byte receipt are committed, and its coverage annotation remains separate. The original worker immediately continued to mawaru9. I Really Like You SSC first repair completed all209028 frames with zero callback errors but5080 broadcast mismatches; native5375 SystemMessages versus owned10834, first countdown text2 minutes versus3. Its first result and input-clock inspection are preserved, it remains pending with one full repair left, and no second was launched. Rite domain-only diagnostics reused all104414 native clock frames against its exact frozen source revision, producing191 tap callbacks and478 mine callbacks while479 mines become avoided. Exact state-change instrumentation proves natural-completion finalization marks the last mine Avoided at146.647705078125 without queuing a callback, before the native final listener calls at146.65133666992188. A separate private counterfactual is testing deferred forced finalization; no production Rite patch, accepted Lua fixture or second full repair has been made. Audited six live replay process identities and all their recorded frozen source, test-log and binary pins without restart; the older Mawaru8 proof records36 pins, while the other frozen builds record1175. Current concrete pending failures and coverage observations have separate ledgers. Global original helper711a5230 remains unchanged, all501 original simfile hashes are unchanged, passing charts remain closed, oversized archives remain ignored and local, and the sweep stays active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "eb4cbc2872bc0d47533df12a63f8fe8d0fef7916",
+      "deadsync": "fd4472a5923775db569fb03df9085f23d0a823f6",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -2066,6 +2066,13 @@
         "record": "sweep-2026-10-15-wah-model-header-first-repair-v1.json",
         "fix_commit": "6676e8417d43558d94e2dc6666c18286453c7831",
         "finish_status": "first bounded optional model comment header repair complete; original full capture reused; one later full repair maximum"
+      },
+      {
+        "name": "watermelon-screen-command-first-repair-v1",
+        "remote": "/home/parity/jobs/watermelon-screen-command-first-repair-v1",
+        "record": "sweep-2026-10-15-watermelon-screen-command-first-repair-v1.json",
+        "fix_commit": "80e6fbaf79be4163ea08dc1ba2f9f31d5dc827ca",
+        "finish_status": "first bounded Screen command propagation repair complete; original full capture reused; one later full repair maximum"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -2087,6 +2094,17 @@
         "supervisor_running": false
       },
       "jobs": [
+        {
+          "job": "watermelon-screen-command-first-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "Watermelon/Watermelon.ssc",
+          "child_running": true
+        },
         {
           "job": "wah-model-header-first-repair-v1",
           "complete": false,
@@ -2111,14 +2129,14 @@
         },
         {
           "job": "i-really-like-you-ssc-sm-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
+          "complete": true,
+          "supervisor_running": false,
           "passed": 0,
-          "pending": 0,
-          "processed": 0,
+          "pending": 1,
+          "processed": 1,
           "last_phase": "replay",
           "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "mawaru6-message-coverage-final-repair-v1",
@@ -2158,13 +2176,13 @@
           "job": "chart-sweep-parallel-v6-2",
           "complete": false,
           "supervisor_running": true,
-          "passed": 4,
+          "passed": 5,
           "pending": 2,
-          "processed": 6,
-          "last_phase": "replay",
-          "source_simfile": "Ascendanz/Ascendanz.ssc",
-          "child_running": true,
-          "position": 487
+          "processed": 7,
+          "last_phase": "capture",
+          "source_simfile": "mawaru9/mawaru9.sm",
+          "child_running": false,
+          "position": 495
         },
         {
           "job": "gone-source-path-first-repair-v1",
@@ -3482,7 +3500,7 @@
     "selected_replay_binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 150,
+    "publisher_stream_count": 151,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -4197,13 +4215,13 @@
           "job": "chart-sweep-parallel-v6-2",
           "complete": false,
           "supervisor_running": true,
-          "passed": 4,
+          "passed": 5,
           "pending": 2,
-          "processed": 6,
-          "last_phase": "replay",
-          "source_simfile": "Ascendanz/Ascendanz.ssc",
-          "child_running": true,
-          "position": 487
+          "processed": 7,
+          "last_phase": "capture",
+          "source_simfile": "mawaru9/mawaru9.sm",
+          "child_running": false,
+          "position": 495
         }
       ],
       "remaining_originals_uniquely_owned_by_two_workers": true,
@@ -4384,7 +4402,14 @@
       "one_later_full_repair_maximum": true,
       "original_complete_native_capture_reused": true,
       "global_original_helper_unchanged": true,
-      "acceptance_keys_tolerances_predicate_unchanged": true
+      "acceptance_keys_tolerances_predicate_unchanged": true,
+      "i_really_like_you_ssc_status": "pending",
+      "i_really_like_you_ssc_first_full_repair_running": false,
+      "i_really_like_you_ssc_remaining_full_repairs_maximum": 1,
+      "first_complete_repair_followup": "tests/fixtures/full_song_lua/sweep-2026-10-15-i-really-like-you-ssc-sm-first-repair-followup.json",
+      "remaining_mismatches": 5080,
+      "remaining_callback_errors": 0,
+      "clock_input_inspection": "tests/fixtures/full_song_lua/sweep-2026-10-15-i-really-like-you-clock-input-inspection.json"
     },
     "minefield_closed": {
       "status": "passed",
@@ -4414,17 +4439,16 @@
       "owned_command_count": 17472,
       "followup": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-ssc-first-repair-followup.json",
       "remaining_judgment_counts": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-ssc-remaining-judgment-counts.json",
-      "second_full_repair_started": false
-    },
-    "trinity_field_original_pending": {
-      "full_repairs_spent": 0,
-      "native_frames": 46907,
-      "replayed_frames": 46907,
-      "command_trace_mismatches": 48,
-      "callback_error": "native actor method Sprite.cropto has no semantic implementation",
-      "source": "background/default.lua:231",
-      "original_worker_continued": true,
-      "native_capture_complete_and_retained": true
+      "second_full_repair_started": false,
+      "domain_diagnostic": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-domain-last-mine-diagnostic.json",
+      "final_mine_state_changes": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-final-mine-state-changes.json",
+      "domain_native_frames": 104414,
+      "domain_tap_callbacks": 191,
+      "domain_mine_callbacks": 478,
+      "domain_final_avoided_mines": 479,
+      "premature_forced_finalization_seconds": 146.647705078125,
+      "finalization_queues_no_callback": true,
+      "production_patch_started": false
     },
     "sprite_cropto_alias": {
       "fix_commit": "9fa7f7732f6ecf1f1a17ff407281fba21c579556",
@@ -4554,8 +4578,8 @@
       "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-goomba-fixture-verification.json"
     },
     "watermelon_screen_command_propagation": {
-      "status": "meaningful regression and native control complete; both-platform validation running",
-      "full_repairs_spent": 0,
+      "status": "first full repair running",
+      "full_repairs_spent": 1,
       "native_frames": 35146,
       "native_callback_errors": 0,
       "original_mismatch_count": 1,
@@ -4567,7 +4591,20 @@
       "native_direct_and_queued_nested_callbacks": 6,
       "native_capture_reused": true,
       "global_original_helper_unchanged": true,
-      "acceptance_keys_tolerances_predicate_unchanged": true
+      "acceptance_keys_tolerances_predicate_unchanged": true,
+      "binary_sha256": "9ea0ce465da2fca0a9ee3928e6968b4fda9843b792a278c15f5d510a44ad069b",
+      "all_twelve_groups_both_hosts_passed": true,
+      "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+      "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-screen-command-propagation-linux-validation.json",
+      "fix_commit": "80e6fbaf79be4163ea08dc1ba2f9f31d5dc827ca",
+      "selection": "tests/fixtures/full_song_lua/sweep-2026-10-15-screen-command-propagation-selection.json",
+      "first_full_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-watermelon-screen-command-first-repair-launch.json",
+      "one_later_full_repair_maximum": true,
+      "first_replay_pid": 3315514,
+      "first_full_repair_running": true,
+      "scheduling_followup": "tests/fixtures/full_song_lua/sweep-2026-10-15-watermelon-screen-scheduling-followup.json",
+      "first_proposal_delayed_dispatch_failed_before_any_chart_repair": true,
+      "screen_self_queue_and_post_children_callback_scheduled": true
     },
     "waww_blank_full_replay": {
       "status": "pending",
@@ -4584,14 +4621,36 @@
       "native_capture_reused": true,
       "evidence": "tests/fixtures/full_song_lua/sweep-2026-10-15-waww-no-report-entry-diagnostic.json",
       "original_full_failure_cause_unproven": true
-    }
+    },
+    "ascendanz_closed": {
+      "status": "passed",
+      "native_frames": 98852,
+      "full_repairs_spent": 0,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-ascendanz-fixture-verification.json"
+    },
+    "trinity_field_original_failure_resolved": {
+      "full_repairs_spent": 1,
+      "native_frames": 46907,
+      "replayed_frames": 46907,
+      "command_trace_mismatches": 48,
+      "callback_error": "native actor method Sprite.cropto has no semantic implementation",
+      "source": "background/default.lua:231",
+      "original_worker_continued": true,
+      "native_capture_complete_and_retained": true,
+      "status": "resolved by complete first repair",
+      "passing_chart_closed": true,
+      "further_replay_allowed": false
+    },
+    "live_frozen_source_audit": "tests/fixtures/full_song_lua/sweep-2026-10-15-live-frozen-sources-v2.json"
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 242,
+    "new_passed_fixtures": 243,
     "new_pending_charts": 105,
-    "new_processed_sources": 347,
+    "new_processed_sources": 348,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 6,
+    "unprocessed_sources": 5,
     "historical_pending_sources": 0,
     "historical_passed_sources": 148
   },
@@ -5209,15 +5268,15 @@
     },
     {
       "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
-      "repair_attempts": 0,
+      "repair_attempts": 1,
       "failure": null,
       "errors": [],
-      "mismatch_count": 1,
+      "mismatch_count": 5080,
       "first_mismatch": [
         {
           "field": "source_broadcast_count",
           "native": 5375,
-          "deadsync": 0
+          "deadsync": 10834
         }
       ]
     },
@@ -6704,8 +6763,10 @@
     "Collect the remaining originals from the live v6 workers; compress, save and locally verify uncompressed bytes for each complete pass, commit promptly and continue.",
     "Collect wah-leven retained-capture startup diagnostic and bounded first repair if clean; preserve actual failures and enforce at most two full repairs.",
     "Keep diagnosed command/query mismatches pending, record missing coverage separately, and preserve all existing acceptance comparisons.",
-    "Collect I Really Like You first repair, Mawaru6 final repair and Mawaru8 first repair without restarting live jobs.",
-    "Finish isolated Screen command propagation validation and commit the proven fix, then run Watermelon first full repair from its unchanged complete native capture; one later full repair maximum."
+    "Collect Watermelon first full repair from its unchanged complete capture; save and byte-verify a full pass, or retain concrete failures with one later full repair maximum.",
+    "Continue Mawaru6 final and Mawaru8 first full repairs without restarting live processes.",
+    "Use the exact Rite final-mine state transition and private experiment to choose a faithful notification/finalization fix before its final second full repair.",
+    "Keep I Really Like You SSC pending on its observed countdown broadcast mismatches; identify the source and initialization-clock cause before its one remaining full repair."
   ],
   "previous_goal_turn_classification": "progress",
   "resolved_historical_concrete_failures": [
@@ -6719,5 +6780,7 @@
       "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-historical-circles-sm-fixture-verification.json",
       "passing_chart_closed": true
     }
-  ]
+  ],
+  "current_concrete_failures": "tests/fixtures/full_song_lua/sweep-2026-10-15-current-concrete-failures.json",
+  "current_coverage_observations": "tests/fixtures/full_song_lua/sweep-2026-10-15-current-coverage-observations.json"
 }

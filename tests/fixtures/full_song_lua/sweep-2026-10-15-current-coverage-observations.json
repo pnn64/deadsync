@@ -1,6 +1,6 @@
 {
   "scope": "latest recorded coverage observations for original source simfiles",
-  "updated_utc": "2026-10-15T05:34:54Z",
+  "updated_utc": "2026-10-15T05:50:03Z",
   "coverage_is_separate_from_existing_full_replay_acceptance": true,
   "passing_charts_replayed_or_investigated": false,
   "rows": [
@@ -676,9 +676,10 @@
       "fixture_status": "pending",
       "pending_coverage": [
         "uncompared song operations: Actor.playcommand, Screen.AddInputCallback, ScreenGameplay.PauseGame",
-        "native drawable state/resources: BitmapText, Quad"
+        "native drawable state/resources: BitmapText, Quad",
+        "owned gameplay overlay observation phase is unavailable"
       ],
-      "evidence": "sweep-2026-10-12-results.json"
+      "evidence": "sweep-2026-10-15-i-really-like-you-ssc-sm-first-repair-v1.json"
     },
     {
       "position": 234,
@@ -2893,6 +2894,15 @@
         "native actor definitions are missing"
       ],
       "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 487,
+      "source_simfile": "Ascendanz/Ascendanz.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json"
     },
     {
       "position": 488,

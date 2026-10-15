@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T05:21:01Z",
+  "updated_utc": "2026-10-15T05:50:00Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 390,
+    "passed": 391,
     "pending": 105,
-    "unprocessed": 6
+    "unprocessed": 5
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2030,10 +2030,9 @@
       "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
       "simfile_sha256": "6438069708d9f60a9df6ba4e35b63b2717a0981e50d35963b773b1cc32d35b4e",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json",
-      "running_full_repair_attempt": 1,
-      "completed_repair_attempts_at_checkpoint": 0
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-i-really-like-you-ssc-sm-first-repair-v1.json",
+      "completed_repair_attempts_at_checkpoint": 1
     },
     {
       "position": 234,
@@ -3927,7 +3926,8 @@
       "status": "pending",
       "repair_attempts": 0,
       "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-1.json",
-      "completed_repair_attempts_at_checkpoint": 0
+      "completed_repair_attempts_at_checkpoint": 0,
+      "running_full_repair_attempt": 1
     },
     {
       "position": 470,
@@ -4065,7 +4065,9 @@
       "position": 487,
       "source_simfile": "Ascendanz/Ascendanz.ssc",
       "simfile_sha256": "c116a4fc612d43be52cf043e44995e15ba71c2b0fa3eac1e0f72af7143664ef9",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json"
     },
     {
       "position": 488,
