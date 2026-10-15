@@ -3769,15 +3769,12 @@
     {
       "title": "minefield surfing",
       "source_simfile": "minefield surfing_1/minefield.ssc",
-      "harness_version": "0.1.0",
-      "archive": "98e0c365aa985ead8fd12d3618f18cb3b4b573ec209cf456058dfbd967bb5dba.tar.zst",
-      "sha256": "98e0c365aa985ead8fd12d3618f18cb3b4b573ec209cf456058dfbd967bb5dba",
-      "compressed_bytes": 47167,
-      "uncompressed_sha256": "37a3f8ad100ca5af02ff82be9c58477a8c99c8b01604fe008de46f847022ab14",
-      "compression_level": 22,
-      "aliases": [
-        "defc8a9c59acbbdaad8a9aa3384fa7b747b95bb5bfd3be8b8a2e121a0d005ee1.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "11a1ea8b6d992ce379ce7ad59cd28d0e670c37ab02e4de7f7b98a2a75744bce3.tar.zst",
+      "sha256": "11a1ea8b6d992ce379ce7ad59cd28d0e670c37ab02e4de7f7b98a2a75744bce3",
+      "compressed_bytes": 7141723,
+      "uncompressed_sha256": "18a897c673dd1a149bebb3b5550fa4e0b566dcfb056d31d57b0204baf640b44b",
+      "aliases": []
     },
     {
       "title": "MISSION SPUTNIK",
