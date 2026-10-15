@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Wobbpotato [Blue Shift Phase 1]/wobbpotato.ssc",
+  "native_frames": 74561,
+  "replayed_frames": 74561,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "55cf71fcd51c4548413dd8cbe9f62d47be38b8c6d85d691d45f6191b4732fbe2.tar.zst",
+  "compressed_sha256": "55cf71fcd51c4548413dd8cbe9f62d47be38b8c6d85d691d45f6191b4732fbe2",
+  "uncompressed_sha256": "de708ddff7e43c0c9c1c7cddb57bb58184ce5eef2b3ba6907380bc2aa0d0eb4a",
+  "compressed_bytes": 4249668,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Circles/Circles.sm",
+  "native_frames": 117065,
+  "replayed_frames": 117065,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "a596574fe1fd7aece912b0375d81db0d8b6caeb574ba1a0d5fa896abf72581f8.tar.zst",
+  "compressed_sha256": "a596574fe1fd7aece912b0375d81db0d8b6caeb574ba1a0d5fa896abf72581f8",
+  "uncompressed_sha256": "52534be29cddb9bdc64bc67463dc101b70246622885d630a527c927e2dc9eff8",
+  "compressed_bytes": 44254155,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

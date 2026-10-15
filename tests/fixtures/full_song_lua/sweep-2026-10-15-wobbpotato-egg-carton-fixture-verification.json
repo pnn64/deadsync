@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
+  "native_frames": 78636,
+  "replayed_frames": 78636,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "07341d3d29285f3066284d00fcf4956eec0ae486ab01bf0b317be91edbda7c1b.tar.zst",
+  "compressed_sha256": "07341d3d29285f3066284d00fcf4956eec0ae486ab01bf0b317be91edbda7c1b",
+  "uncompressed_sha256": "8988758df161a64fe92831476b38d15d6208ed2ca080032f20cb8b538cfb8c69",
+  "compressed_bytes": 4334607,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
