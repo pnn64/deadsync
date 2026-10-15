@@ -1,0 +1,15 @@
+{
+  "regression": "live_underlay_difficulty_meter_owns_native_quad_and_text",
+  "correction": {
+    "before": "if unnamed and unnamed.GetNumChildren then unnamed = {unnamed} end",
+    "after": "if unnamed and rawget(unnamed, 1) == nil then unnamed = {unnamed} end"
+  },
+  "source_evidence": "lua_util.rs create_actor_child_group __index forwards named methods to the last child. GetNumChildren cannot distinguish a group from its ActorFrame member; a numeric raw first element can.",
+  "scope": "only test inventory normalization; the missing-meter assertion and all geometry, color, selected Steps, font, parent and message checks remain unchanged",
+  "native_difficulty_meter_lua_sha256": "a7447a230176c6f5478b0c233165a519a723042106f9abb3ae3f126af510a0a9",
+  "physical_native_source_matches_local_vendor": true,
+  "source_capture_changed": false,
+  "acceptance_comparisons_changed": false,
+  "red_and_green_regression_source_claimed_identical": false,
+  "green_regression_lf_sha256": "6c98223e360d65c39991c47b62bf79b658baa016d793e6cbb3f3be273be8f5a1"
+}

@@ -1,0 +1,30 @@
+{
+  "regression": "live_underlay_difficulty_meter_owns_native_quad_and_text",
+  "meaningful_missing_difficulty_meter_red_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 344.59721019999415,
+      "log_sha256": "89d1c4c1d37079c3adf5d7f7975479c586666ff060c9e71b9ac3547e67e8fe46",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 631 filtered out; finished in 0.23s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 240.19759618496755,
+      "log_sha256": "1c05aed6dd3a96410521969cc777dad1c5a8b01cc50deb34e413270a0b3173af",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 629 filtered out; finished in 0.19s"
+      ]
+    }
+  ],
+  "source_cause": "sweep-2026-10-15-hope-underlay-inventory-source-cause.json",
+  "changed_source_mtimes_refreshed_before_compilation_both_hosts": true,
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
