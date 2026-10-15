@@ -1912,17 +1912,14 @@
       ]
     },
     {
-      "title": "Episode 15",
+      "title": "Episode 15 Circles",
       "source_simfile": "Circles/Circles.sm",
-      "harness_version": "0.1.0",
-      "archive": "9a02dc0e8edc064173c8d8011348bb34b722cb7f63ff85db8453b318493686b6.tar.zst",
-      "sha256": "9a02dc0e8edc064173c8d8011348bb34b722cb7f63ff85db8453b318493686b6",
-      "compressed_bytes": 992533,
-      "uncompressed_sha256": "9d467ff502552265db3fa9451da65c9834b1326bfcd31b72e2b3a241f9424c55",
-      "compression_level": 22,
-      "aliases": [
-        "6fb81c27ba2996b79f76533fd370721d62443403def39dc8f90aeb85c996fae6.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "a596574fe1fd7aece912b0375d81db0d8b6caeb574ba1a0d5fa896abf72581f8.tar.zst",
+      "sha256": "a596574fe1fd7aece912b0375d81db0d8b6caeb574ba1a0d5fa896abf72581f8",
+      "compressed_bytes": 44254155,
+      "uncompressed_sha256": "52534be29cddb9bdc64bc67463dc101b70246622885d630a527c927e2dc9eff8",
+      "aliases": []
     },
     {
       "title": "Episode 15 Circles",
