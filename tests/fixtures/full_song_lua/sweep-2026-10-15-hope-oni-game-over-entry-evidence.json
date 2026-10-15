@@ -1,0 +1,345 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "entry_frames": 1688,
+  "entry_errors": 0,
+  "entry_mismatches": 20478,
+  "previous_entry_mismatches": 20510,
+  "native_command_queries": 21008,
+  "owned_command_queries": 20601,
+  "remaining_first_actor": "external-0032",
+  "native_trace_sha256": "88b20e678a79afd20607bb861bde142f73c817749b04504b84ae23314ceb89d6",
+  "compressed_candidate_report_and_log_hashes_verified": true,
+  "remaining_actor_metadata": [],
+  "remaining_actor_early_native_events": [
+    {
+      "actor": "external-0032",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          0,
+          0,
+          0
+        ]
+      },
+      "kind": "query",
+      "line": 46,
+      "operation": "Actor.getrotation",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 277,
+      "source": "song:/.//default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          0
+        ]
+      },
+      "kind": "query",
+      "line": 46,
+      "operation": "Actor.GetNumWrapperStates",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 278,
+      "source": "song:/.//default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0
+      },
+      "kind": "call",
+      "line": 46,
+      "operation": "Actor.AddWrapperState",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 279,
+      "source": "song:/.//default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          {
+            "actor": "external-0020",
+            "name": "ScreenGameplay",
+            "path": "ScreenGameplay"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 46,
+      "operation": "Actor.GetParent",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 280,
+      "source": "song:/.//default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          0
+        ]
+      },
+      "kind": "query",
+      "line": 46,
+      "operation": "Actor.GetX",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 281,
+      "source": "song:/.//default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          0
+        ]
+      },
+      "kind": "query",
+      "line": 46,
+      "operation": "Actor.GetY",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 282,
+      "source": "song:/.//default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          1
+        ]
+      },
+      "kind": "query",
+      "line": 46,
+      "operation": "Actor.GetZoom",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 283,
+      "source": "song:/.//default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          "OniGameOverP1"
+        ]
+      },
+      "kind": "query",
+      "line": 46,
+      "operation": "Actor.GetName",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 284,
+      "source": "song:/.//default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          {
+            "type": "RageTexture"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 46,
+      "operation": "Sprite.GetTexture",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 285,
+      "source": "song:/.//default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          {
+            "type": "RageTexture"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 46,
+      "operation": "Sprite.GetTexture",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 286,
+      "source": "song:/.//default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          {
+            "type": "RageTexture"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 46,
+      "operation": "Sprite.GetTexture",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 287,
+      "source": "song:/.//default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "args": [
+        1
+      ],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          {
+            "actor": "external-0067",
+            "name": "",
+            "path": ""
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 46,
+      "operation": "Actor.GetWrapperState",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 288,
+      "source": "song:/.//default.lua"
+    }
+  ],
+  "full_repairs_spent_before_and_after": 0,
+  "no_fixture_acceptance": true,
+  "source_cause_not_yet_claimed": true
+}
