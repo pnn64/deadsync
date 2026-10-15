@@ -1932,17 +1932,14 @@
       "aliases": []
     },
     {
-      "title": "Cloud99",
+      "title": "Cloud99 (As Above Mix)",
       "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a1c144e3e344655e5b72c60889e209e5803c5d8be3dbc61183084c928295b35a.tar.zst",
-      "sha256": "a1c144e3e344655e5b72c60889e209e5803c5d8be3dbc61183084c928295b35a",
-      "compressed_bytes": 25381936,
-      "uncompressed_sha256": "a6c22fd4efc37e8817388c9ae93406c8581fc61f600f1080072b0604f4a6dd4f",
-      "compression_level": 22,
-      "aliases": [
-        "ca5b3026e8ea5600acfaebd0d71279adada8c7d860add2b68d5f2a24496fa042.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "1bcc1a4ca0385bafaf8cfb255b5e89d8ea2741ec789f893dfc8daeb75cbea4f8.tar.zst",
+      "sha256": "1bcc1a4ca0385bafaf8cfb255b5e89d8ea2741ec789f893dfc8daeb75cbea4f8",
+      "compressed_bytes": 31939914,
+      "uncompressed_sha256": "4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e",
+      "aliases": []
     },
     {
       "title": "Cold",
