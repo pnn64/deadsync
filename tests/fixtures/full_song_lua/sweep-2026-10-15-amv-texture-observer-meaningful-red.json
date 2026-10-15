@@ -1,0 +1,30 @@
+{
+  "meaningful_red_observed_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 38.13333399998373,
+      "log_sha256": "5b6edd3f563e64794f831c7922e834c260a72ae458e490d9c102acba5dbc64f6",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 342 filtered out; finished in 0.32s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 55.164921321033034,
+      "log_sha256": "f1d9f0732e490c9dd8b3401a5405ae38010704f8486f5a6c3eb496425f0cb075",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 342 filtered out; finished in 0.27s"
+      ]
+    }
+  ],
+  "all_1175_cross_platform_normalized_source_pins_match": true,
+  "all_34_native_resources_unchanged": true,
+  "all_original_40_replay_controls_and_acceptance_source_byte_identical": true,
+  "new_regression": "Execute original live Quad/Sprite/AFT getters and native AMV default1x1 texture and valid image/default-handle rebinding; assert AMV calls do not masquerade as compared Sprite queries. Runtime assertions execute before the observational failure.",
+  "full_chart_repairs_spent": 0
+}

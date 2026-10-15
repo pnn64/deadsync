@@ -1818,6 +1818,71 @@ return Def.Actor {
     }
 
     #[test]
+    fn native_multivertex_texture_getter_preserves_runtime_and_observation_scope() {
+        use deadsync_song_lua::{
+            SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host,
+        };
+        use std::{fs, sync::Arc};
+        super::start_call_log(250_000).expect("install observational logger");
+        let dir = std::env::temp_dir()
+            .join(format!("deadsync-multivertex-texture-trace-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("texture trace test directory");
+        let entry = dir.join("texture-classes.lua");
+        fs::write(&entry, r#"
+local quad, sprite, graph, target, loaded
+return Def.ActorFrame {
+    OnCommand=function()
+        local texture = assert(quad:GetTexture())
+        assert(texture:GetTextureWidth() == 1 and texture:GetTextureHeight() == 1)
+        assert(sprite:GetTexture() == nil)
+        assert(target:GetTexture() == nil)
+        local initial = assert(graph:GetTexture(), 'AMV must load its native default texture')
+        assert(initial:GetPath() == '' and initial:GetNumFrames() == 1)
+        assert(initial:GetTextureWidth() == 1 and initial:GetTextureHeight() == 1)
+        local image = assert(loaded:GetTexture())
+        graph:SetTexture(image)
+        local graph_texture = assert(graph:GetTexture(), 'AMV texture getter must still execute')
+        assert(graph_texture:GetPath() == image:GetPath())
+        assert(graph_texture:GetTextureWidth() == image:GetTextureWidth())
+        assert(graph_texture:GetTextureHeight() == image:GetTextureHeight())
+        graph:SetTexture(texture)
+        local restored = assert(graph:GetTexture())
+        assert(restored:GetPath() == '' and restored:GetNumFrames() == 1)
+        assert(restored:GetTextureWidth() == 1 and restored:GetTextureHeight() == 1)
+    end,
+    Def.Quad {InitCommand=function(self) quad=self end},
+    Def.Sprite {InitCommand=function(self) sprite=self end},
+    Def.ActorMultiVertex {InitCommand=function(self) graph=self end},
+    Def.ActorFrameTexture {InitCommand=function(self) target=self end},
+    Def.Sprite {Texture='__songlua_theme_path/G/_Judgments/Love 2x6.png',
+        InitCommand=function(self) loaded=self end},
+}
+"#).expect("write texture trace control");
+        let mut context = SongLuaCompileContext::new(&dir, "native texture class observations");
+        context.live = true;
+        let compiled = compile_song_lua_with_default_host::<(), (), _>(
+            &entry, &context, SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None,
+        ).expect("compile real texture getter control");
+        assert!(compiled.live_scene.is_some());
+        let textures = super::CALL_EVENTS.with_borrow(|capture| capture.events.iter()
+            .filter(|event| event["operation"].as_str().is_some_and(|name| name.ends_with(".GetTexture")))
+            .cloned().collect::<Vec<_>>());
+        assert_eq!(textures.iter().map(|event| event["operation"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+            ["Sprite.GetTexture", "Sprite.GetTexture", "ActorFrameTexture.GetTexture", "Sprite.GetTexture"],
+            "AMV GetTexture must not impersonate the compared Sprite getter: {textures:?}");
+        assert_eq!(textures[0]["results"], serde_json::json!([{"type":"RageTexture"}]));
+        assert_eq!(textures[1]["results"], serde_json::json!([{"type":"nil"}]));
+        assert_eq!(textures[2]["results"], serde_json::json!([{"type":"nil"}]));
+        assert_eq!(textures[3]["results"], serde_json::json!([{"type":"RageTexture"}]));
+        for event in textures {
+            assert_eq!(event["phase"], "callback");
+            assert!(event["source"].as_str().unwrap().ends_with("texture-classes.lua"));
+        }
+    }
+
+    #[test]
     fn actor_and_query_trace_keep_lua_callers() {
         use super::start_call_log;
         use deadsync_song_lua::{
