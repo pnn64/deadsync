@@ -1,0 +1,41 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "native_retained_trace_sha256": "88b20e678a79afd20607bb861bde142f73c817749b04504b84ae23314ceb89d6",
+  "evidence": "sweep-2026-10-15-hope-complete-lua-namespace-diagnostic.json",
+  "first_actual_mismatch": {
+    "operation": "ActorFrame.GetNumChildren",
+    "native_actor": "ScreenGameplay/Cancel",
+    "native": 1,
+    "owned": 0
+  },
+  "local_primary_sources": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Transition.cpp",
+      "sha256": "b8262c86c0656fa5c9c31ecbc95db81c0232d60cbb55add41d297a4e3d5e41f9"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ScreenWithMenuElements.cpp",
+      "sha256": "88f95ddf0c66f672f3fa79ab26be6925f1dce019b7544a710e9593c60da7e3ba"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\BGAnimations\\ScreenGameplay cancel.redir",
+      "sha256": "18c876861ac8085703ce5a307c2505e49b95039961d6613635baef8614306711"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\BGAnimations\\_fade out normal.lua",
+      "sha256": "1822981216bcdd32e503faf6a3585f4351e8d98de138f06e78737e850d2420cd"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs",
+      "sha256": "82564c250beb06a6a35cb8482e10bf21410c16682273b995cda6c80cc9542dfd"
+    }
+  ],
+  "source_cause": "Transition::Load always loads and adds its transition actor. Simply Love ScreenGameplay cancel redirects to _fade out normal, a Quad initialized fullscreen with transparent black. The owned host creates the Cancel wrapper but only creates transition children for In and Out.",
+  "native_cancel_start_transition": "Quad sleep(0.1), linear(0.4), diffusealpha(1)",
+  "implementation_next_action": "Build the actual Cancel Quad child with native initialization and StartTransitioning command, then compare the retained HOPE entry again. Further observed command/query mismatches may remain.",
+  "production_cancel_fix_applied": false,
+  "full_repairs_spent": 0,
+  "expected_values_used_as_engine_inputs": false,
+  "acceptance_comparisons_changed": false,
+  "native_capture_repeated": false
+}
