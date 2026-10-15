@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Freaky Deaky/Freaky Deaky.sm",
+  "native_frames": 126098,
+  "replayed_frames": 126098,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "4d8e1ddbd0222c253d30f53f9cdebf114d5540be446b8a86e7ff6add42d6e895.tar.zst",
+  "compressed_sha256": "4d8e1ddbd0222c253d30f53f9cdebf114d5540be446b8a86e7ff6add42d6e895",
+  "uncompressed_sha256": "fb8496a61b29e92fba6a1de962fcd61a5e7bd2ff00aa587b946e79b84fb3e46b",
+  "compressed_bytes": 11401800,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
