@@ -1,0 +1,81 @@
+{
+  "existing_control_failure_reproduced_both_hosts": true,
+  "failing_test": "native_gameplay::tests::option_trace_keeps_native_returns_and_strings",
+  "original_green_v2_checks": [
+    {
+      "host": "windows",
+      "checks": [
+        {
+          "label": "target-control",
+          "exit_code": 0,
+          "seconds": 330.18034009999246,
+          "log_sha256": "faf6c59821a7026383c9a4e2a922d0756dd86139d9f22410943e7eb0ab9a9cc6",
+          "results": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 624 filtered out; finished in 0.23s"
+          ]
+        },
+        {
+          "label": "live-controls",
+          "exit_code": 0,
+          "seconds": 61.01594399999885,
+          "log_sha256": "76426f65868972a3b6f7f1c4ec184306789a064ec5706a89048325d5886a7f18",
+          "results": [
+            "test result: ok. 86 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 59.26s"
+          ]
+        },
+        {
+          "label": "replay-controls",
+          "exit_code": 101,
+          "seconds": 191.48194440000225,
+          "log_sha256": "4b1932efa8faad630b58715b1f56c301cfc50d00caece8be9beac16776337eec",
+          "results": [
+            "test result: FAILED. 34 passed; 1 failed; 0 ignored; 0 measured; 302 filtered out; finished in 23.26s"
+          ]
+        }
+      ]
+    },
+    {
+      "host": "linux",
+      "checks": [
+        {
+          "label": "target-control",
+          "exit_code": 0,
+          "seconds": 245.22226067900192,
+          "log_sha256": "c8d5624a47e9d265eb91c33f44c0a6568cd43ce903f6796ae9b08c16a83bfe9e",
+          "results": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 622 filtered out; finished in 0.19s"
+          ]
+        },
+        {
+          "label": "live-controls",
+          "exit_code": 0,
+          "seconds": 32.971991770958994,
+          "log_sha256": "928aecb2a743fad41638effedd434a638be6f865a8101cca5e197bbac48eb453",
+          "results": [
+            "test result: ok. 86 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 32.25s"
+          ]
+        },
+        {
+          "label": "replay-controls",
+          "exit_code": 101,
+          "seconds": 220.67771175899543,
+          "log_sha256": "820d51cd046584fb0b7cdb69208b225587e512452e160e3b2a5ef5bbe7c76827",
+          "results": [
+            "test result: FAILED. 34 passed; 1 failed; 0 ignored; 0 measured; 302 filtered out; finished in 20.36s"
+          ]
+        }
+      ]
+    }
+  ],
+  "failure": "LyricDisplay constructor called the public command dispatcher to select its initial position, emitting extra command.begin/command.end events before authored song calls. Existing expected operation sequence rejects these extra events.",
+  "production_correction": "Invoke the selected position handler directly during constructor initialization. Preserve public authored command handlers and dispatcher behavior.",
+  "existing_tests_or_acceptance_comparisons_changed": false,
+  "entire_new_regression_unchanged": true,
+  "font_and_native_lyric_helper_unchanged": true,
+  "frozen_green_v2_roots_and_logs_preserved": true,
+  "new_isolated_green_v3_roots": true,
+  "superseded_waiting_collector_pid": 56428,
+  "source_fix_or_helper_selection_not_claimed_for_failed_v2": true,
+  "chart_replay_stopped_or_restarted": false,
+  "full_chart_repairs_added": 0
+}
