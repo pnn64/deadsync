@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T07:17:32Z",
+  "updated_utc": "2026-10-15T07:41:15Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 395,
+    "passed": 396,
     "pending": 105,
-    "unprocessed": 1
+    "unprocessed": 0
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -4180,7 +4180,9 @@
       "position": 501,
       "source_simfile": "Sequential Dreambox - [Zaia]/Sequential Dreambox.ssc",
       "simfile_sha256": "698cb06f326aa77f4e016a462c3eb368b22365d1e28f8d44f870ec933e8813dc",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v7-1.json"
     }
   ]
 }

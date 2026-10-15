@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T07:17:32Z",
-  "previous_goal_turn": "Progress: Rite final second repair passed all104414 native frames with zero callback errors and mismatches. Its5,692,564-byte compressed fixture a4a49ad8 is saved, locally decompressed to the exact original fa30207b candidate bytes, and closure receipt8c9aad1cd is committed. Rite is closed with two repairs spent and no further replay, while coverage observations remain separate. The child-registry Rust handle fix is committed as c60b35d44 after the meaningful2800-actor child-query/Begin regression reproduced StackError on both hosts and all14 validation groups passed on both hosts. All1175 raw Linux and normalized cross-platform red/green source pins, logs and private helper e0d91485 were verified. A Windows disk-full build and Linux stale-red shared-target execution were preserved; Cargo package-scoped cleanup freed10.9GiB plus6.0GiB, and fresh green-v3 validation resolved both infrastructure failures without changing engine source or checks. No running original or full repair was restarted. Mawaru9 private source instrumentation now places its remaining failure in prepare_live_updates during live-scene construction. Reusing registry handles alone did not clear it; a further private canonical actor-handle experiment for registry/update-plan sharing is running against unchanged capture bytes, with no full chart repair spent. HOPE startup was cleared by the already tested archive namespace fix, but its1688-frame diagnostic retains20514 command/query mismatches. Primary Transition::Load and Simply Love cancel sources prove the first native Cancel child is absent from the owned host; no Cancel production fix or HOPE full repair has started. Its repaired pending archive is losslessly compressed and preserved. Mawaru8 same live PID was profiled for49 CPU samples without stopping/signaling/restarting it: sampled paths include normal owned update, draw and state extraction. Its current frame is unknown; stale log57103 is not proof of a Lua infinite loop. The original capture clock window and uncompressed trace hash are preserved as read-only evidence. Sequential Dreambox original, Mawaru6 final2 and Mawaru8 first1 remain live; passing charts stay closed, missing coverage remains separate, all501 original simfile hashes stay unchanged, and the sweep remains active and incomplete.",
+  "updated_utc": "2026-10-15T07:41:15Z",
+  "previous_goal_turn": "Progress: Every one of the501 original simfiles now has a recorded initial outcome. Sequential Dreambox, the last original, passed all235675 frames with zero callback errors and mismatches; its38,272,734-byte archive5077e6ae is saved and locally decompressed to the exact394dc6c9 uncompressed candidate bytes, with closurec735df745 committed. Its missing native actor-definition coverage remains separate and the passing chart is closed without replay. The remaining original-tail worker completed normally. The current ledger is396 passed,105 pending, zero unprocessed, while Mawaru6 final2 and Mawaru8 first1 remain verified live and are not restarted. Rite remains closed after its104414-frame final pass. A private canonical actor-handle cache across registry and update plan now lets Mawaru9 retain and advance its live scene, after two separately proven auxiliary-handle startup failures. Its bounded1628-frame entry diagnostic is running; only preparation and observed partial progress are established, no terminal comparison result or full chart repair is claimed. The production registry-handle fixc60b35d44 remains validated on both hosts. For HOPE actual Cancel child-count mismatch, primary native Transition::Load and Simply Love sources justify a loaded fullscreen transparent Quad with0.1-second sleep and0.4-second fade. A meaningful regression failed with0 versus1 children on both hosts before the patch, then passed geometry, parent identity, opacity, timing and completion checks on both hosts after the patch. All15 Windows validation groups passed; Linux remaining groups are running from a separate frozen root after verified Cargo serialization and timestamp invalidation. The fix remains uncommitted until validation finishes; a collector will verify all1175 source pins, logs and helper before committing, then a queued entry diagnostic will reuse the unchanged HOPE capture and losslessly stored repaired namespace candidate. No HOPE full repair has started. Twenty-three closed-passing raw reports were losslessly compressed, every decompressed report hash matched its stored result hash before raw removal, and7,222,155,700 bytes were reclaimed with receiptdf6d9157a committed. No passing chart was replayed or investigated for coverage gaps. Every original simfile hash remains unchanged, oversized local fixtures remain ignored, all acceptance comparisons and the two-full-repair cap remain unchanged, and the goal stays active for remaining repair work and live jobs.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "44c57db28aef850d49c81661924a19552d5f8d2c",
+      "deadsync": "46c458c1b6567ff46cea5329a8bb52eae257d3d9",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -2121,14 +2121,14 @@
         },
         {
           "job": "chart-sweep-parallel-v7-1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
           "pending": 2,
-          "processed": 2,
-          "last_phase": "replay",
+          "processed": 3,
+          "last_phase": "pack",
           "source_simfile": "Sequential Dreambox - [Zaia]/Sequential Dreambox.ssc",
-          "child_running": true,
+          "child_running": false,
           "position": 501
         },
         {
@@ -4801,7 +4801,12 @@
       "binary_sha256": "e0d91485e524beb2d5a8020c1e9e759409531415e26216b526a7d3da709fa497",
       "remaining_source_failure": "prepare_live_updates in SongLuaLiveScene::new",
       "private_registry_reuse_alone_cleared_failure": false,
-      "next_private_experiment": "/home/parity/jobs/mawaru9-canonical-actor-handles-v6"
+      "next_private_experiment": "/home/parity/jobs/mawaru9-canonical-actor-handles-v6",
+      "private_canonical_preparation_observation": "tests/fixtures/full_song_lua/sweep-2026-10-15-mawaru9-canonical-preparation-observation.json",
+      "private_canonical_preparation_retained_live_scene": true,
+      "private_entry_diagnostic_complete": false,
+      "private_entry_comparison_result_not_yet_claimed": true,
+      "remaining_production_scene_preparation_failure": true
     },
     "hope_namespace_followup": {
       "full_repairs_spent": 0,
@@ -4821,7 +4826,9 @@
       "status": "pending: startup cleared but actual command/query mismatches remain",
       "cancel_source_cause": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-cancel-source-cause.json",
       "pending_candidate_storage": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-pending-candidate-storage.json",
-      "production_cancel_fix_applied": false
+      "production_cancel_fix_applied": false,
+      "production_cancel_patch_added": true,
+      "production_cancel_fix_validation_complete": false
     },
     "rite_closed": {
       "status": "passed",
@@ -4855,14 +4862,46 @@
       "stale_log_not_proof_of_infinite_lua_loop": true,
       "live_process_stopped_signaled_or_restarted": false,
       "full_repairs_spent": 1
+    },
+    "sequential_dreambox_closed": {
+      "status": "passed",
+      "native_frames": 235675,
+      "full_repairs_spent": 0,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-sequential-dreambox-fixture-verification.json",
+      "missing_native_actor_definition_coverage_separate": true
+    },
+    "all_original_sources_initial_outcomes": {
+      "sources": 501,
+      "all_have_recorded_terminal_initial_outcome": true,
+      "initial_original_workers_complete": true,
+      "bounded_repairs_still_live": true,
+      "goal_complete": false
+    },
+    "closed_pass_report_storage_v5": "tests/fixtures/full_song_lua/sweep-2026-10-15-closed-pass-report-storage-v5.json",
+    "cancel_transition_child": {
+      "source_cause": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-cancel-source-cause.json",
+      "regression": "live_cancel_transition_loads_quad_and_native_fade",
+      "missing_child_red_reproduced_both_hosts": true,
+      "target_geometry_identity_fade_and_lifecycle_green_both_hosts": true,
+      "production_patch_added": true,
+      "source_patch_committed": false,
+      "all_fifteen_windows_groups_passed": true,
+      "all_fifteen_linux_groups_complete": false,
+      "native_cancel_fade_seconds": 0.5,
+      "all_comparison_keys_tolerances_and_acceptance_predicate_unchanged": true,
+      "hope_full_repairs_spent": 0,
+      "hope_retained_capture_entry_diagnostic_queued": true,
+      "global_original_helper_unchanged": true
     }
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 247,
+    "new_passed_fixtures": 248,
     "new_pending_charts": 105,
-    "new_processed_sources": 352,
+    "new_processed_sources": 353,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 1,
+    "unprocessed_sources": 0,
     "historical_pending_sources": 0,
     "historical_passed_sources": 148
   },
@@ -6960,11 +6999,11 @@
     "note": "Earlier sweep checkpoints incorrectly carried the superseded one-mismatch replay forward as pending. The complete corrected replay and saved fixture already passed."
   },
   "next_actions": [
-    "Collect Sequential Dreambox original235675-frame replay without restarting it; save and byte-verify a complete pass or preserve its actual failures.",
-    "Continue Mawaru6 final2 and Mawaru8 first1 full repairs without restarting live processes.",
-    "Collect the private Mawaru9 canonical update-plan handle experiment; keep native limits and all comparisons unchanged and do not start a full repair while preparation fails.",
-    "Implement the source-proven native Cancel transition child for HOPE, then inspect remaining retained-capture entry mismatches before any full repair.",
-    "Keep I Really Like You SSC pending on its observed countdown broadcasts; use initialization-clock evidence before its one remaining full repair."
+    "Collect Mawaru6 final2 and Mawaru8 first1 full repairs without restarting live processes; immediately save and byte-verify complete passes or preserve concrete terminal failures.",
+    "Finish Linux Cancel child validation, verify both-host15 groups and1175 source pins, commit the completed fix, then inspect the queued retained-capture HOPE entry diagnostic before any full repair.",
+    "Collect the running private Mawaru9 canonical actor-handle entry diagnostic before selecting a faithful production update-plan fix; no full chart repair while preparation or entry comparisons remain unresolved.",
+    "Keep I Really Like You SSC pending on observed countdown broadcast mismatches and missing initialization-clock inputs before its one remaining full repair.",
+    "Preserve the396 passing originals as closed and keep coverage observations separate from concrete pending failures."
   ],
   "previous_goal_turn_classification": "progress",
   "resolved_historical_concrete_failures": [

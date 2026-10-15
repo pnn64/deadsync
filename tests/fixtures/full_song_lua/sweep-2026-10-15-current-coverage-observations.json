@@ -1,6 +1,6 @@
 {
   "scope": "latest recorded coverage observations for original source simfiles",
-  "updated_utc": "2026-10-15T07:17:35Z",
+  "updated_utc": "2026-10-15T07:41:18Z",
   "coverage_is_separate_from_existing_full_replay_acceptance": true,
   "passing_charts_replayed_or_investigated": false,
   "rows": [
@@ -2971,6 +2971,15 @@
         "native actor definitions are missing"
       ],
       "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 501,
+      "source_simfile": "Sequential Dreambox - [Zaia]/Sequential Dreambox.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v7-1.json"
     }
   ]
 }

@@ -1,11 +1,11 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T07:17:35Z",
+  "updated_utc": "2026-10-15T07:41:18Z",
   "counts": {
-    "passed": 395,
+    "passed": 396,
     "pending": 105,
-    "unprocessed": 1
+    "unprocessed": 0
   },
   "report_kind": "current concrete failures; sweep still active",
   "missing_coverage_recorded_separately": "sweep-2026-10-15-current-coverage-observations.json",
