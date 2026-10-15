@@ -1,9 +1,9 @@
 {
-  "status": "first full repair queued behind validated common helper selection",
+  "status": "first full repair launched after complete validation on both hosts",
   "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
   "fix_commit": "e8daaa0862dfde8af1096b62e92246b175d30f10",
   "queue_pid": 2288567,
-  "full_repairs_spent": 0,
+  "full_repairs_spent": 1,
   "full_attempt_on_launch": 1,
   "one_later_full_repair_maximum": true,
   "complete_original_native_capture_reused": true,
@@ -15,5 +15,10 @@
   "requires_both_hosts_eight_checks_and_all_1175_source_pins": true,
   "acceptance_comparators_unchanged": true,
   "passing_chart_reopened": false,
-  "publisher_stream_count": 139
+  "publisher_stream_count": 139,
+  "all_eight_checks_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_source_pins_verified": true,
+  "binary_sha256": "60a12cf2dec73902df89171b680e24ffbc9301bccc2147dae35a7fb0aab1ecbb",
+  "launch": "sweep-2026-10-15-wobbpotato-egg-carton-first-repair-launch.json",
+  "supervisor_pid": 2299526
 }

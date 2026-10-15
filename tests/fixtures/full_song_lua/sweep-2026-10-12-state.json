@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T02:01:09Z",
-  "previous_goal_turn": "Progress: Vector Field original full replay passes68,688 frames, Watching SM original passes39,501, and U.N. Owen SM first corrected-observer repair passes67,636; zero callback errors/mismatches, saved fixtures locally decompressed and SHA-verified, passing charts closed and committed. Historical Circles SM complete117,065-frame native capture source binding repaired in manifest only, every trace/source member unchanged; first diagnostic failed before replay, corrected2,807-frame diagnostic has0errors/0mismatches, first full repair running with one later maximum. Dynamic command observation profile reproduced actual What If failure on both hosts: legacy test passes, enabled-profile test lacks2dispatch boundaries; compile typo first logs preserved and excluded from semantic red. Fix6a2fcdd49 traces actual owned dynamic command dispatch only when explicit source-backed capture observer profile is enabled; legacy captures retain prior observation behavior, actual actor dispatch/query values unchanged. Target controls pass both hosts; all eight checks pass on both hosts (target2/hurry1/easing1/parser10/live72/replay34/identity1/both builds), all1175raw Linux and normalized cross-platform pins and binary/log hashes verified. Harness79005e1 preserves optional observer provenance in archive runtime; both hosts runtime12/archive12/build pass, all2223raw/normalized source pins and log/binary hashes verified. What If corrected complete47,002-frame capture reused byte-for-byte; only runtime.command_observer metadata added, all nonmanifest members and original candidate retained/verified. Final second repair launched after all8checks on both hosts and all1175raw/normalized source pins; native capture reused, no third repair. Tower first generic-tween repair, historical SM first repair, original queues and other existing repairs remain active without restart. Global original helper711a5230 unchanged. All501 original simfile bytes unchanged; missing coverage separate, oversized archives ignored/local, sweep active/incomplete.",
+  "updated_utc": "2026-10-15T02:24:54Z",
+  "previous_goal_turn": "Progress: Tower Power Pokey Battle first generic-tween repair passes105,094 complete native frames with0callback errors/0mismatches. Fixture compressed, saved, decompressed SHA verified and committed; passing chart closed. Ztar Trek original full replay passes69,378 frames with0errors/0mismatches, saved/decompressed SHA verified/committed and closed; original queue continues to james. What If final second observation-profile repair passes47,002 frames with0errors/0mismatches on byte-identical retained capture; compressed saved fixture and verified local decompressed bytes, chart closed with2attempts and no further replay; Circles SM first repair and original queues remain live without restart. Wobbpotato Blue Shift original fails preparation after complete74,561-frame capture: Challenge difficulty bypasses Edit-only mods and returns an untyped table. Owned root had no visible method; local ActorUtil::LoadFromNode returns new Actor without loading properties, commands or children. Independently captured native control completes7,069 frames, proves dummy foreground/child fallback, discarded fields/commands/children, preserved construction side effects;0Lua errors and final assertion marker observed. Two meaningful red regressions reproduce missing visible and erroneously executed child on both hosts; all1175raw Linux and normalized cross-platform red source pins verified. Fixe8daaa0862dfde8af1096b62e92246b175d30f10 materializes native dummy Actor for classless live declarations; targeted tests pass2 on both hosts, all eight checks pass on both hosts; source/log/binary hashes verified. Egg Carton Wobbpotato has the same actual failure, byte-identical default.lua and native Challenge branch; complete78,636-frame capture verified and separate first repair queued. Both Wobbpotato first full repairs launched after all8checks on both hosts, all1175raw/normalized pins and immutable binary/log verification; original candidate/trace/simfile bytes verified and reused,1full repair spent each, one later maximum each. No comparison key/tolerance/acceptance changed. Global original helper711a5230 unchanged. All501 original simfile bytes unchanged, coverage separate, oversized fixtures ignored/local, sweep active/incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "114df0b7a694896d86b7651babd0aab9b32809a3",
+      "deadsync": "8968fe0305a8f7054f0bd331057f77c428243b25",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -142,19 +142,15 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Ztar Trek/steps.sm",
-      "position": 483,
-      "phase": "replay",
-      "pid": 2184828,
+      "current": "james/james.sm",
+      "position": 491,
+      "phase": "capture",
+      "pid": 2322339,
       "process_matches": true,
-      "passed": 41,
+      "passed": 42,
       "pending": 66,
-      "processed": 107,
-      "last_log_lines": [
-        "[14.0s] replaying every native gameplay frame: frame 896/69378 (1.3%)",
-        "[16.0s] replaying every native gameplay frame: frame 1027/69378 (1.5%)",
-        "[18.0s] replaying every native gameplay frame: frame 1159/69378 (1.7%)"
-      ],
+      "processed": 108,
+      "last_log_lines": [],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -1977,6 +1973,20 @@
         "record": "sweep-2026-10-15-what-if-command-observer-final-repair-v1.json",
         "fix_commit": "6a2fcdd49 / harness 79005e1",
         "finish_status": "bounded final second command observer profile repair complete; complete corrected native capture reused; no third attempt"
+      },
+      {
+        "name": "wobbpotato-untyped-actor-first-repair-v1",
+        "remote": "/home/parity/jobs/wobbpotato-untyped-actor-first-repair-v1",
+        "record": "sweep-2026-10-15-wobbpotato-untyped-actor-first-repair-v1.json",
+        "fix_commit": "native dummy Actor fallback; commit is pinned in result",
+        "finish_status": "bounded first native dummy Actor fallback repair complete; original capture reused; one later full repair maximum"
+      },
+      {
+        "name": "wobbpotato-egg-carton-untyped-actor-first-repair-v1",
+        "remote": "/home/parity/jobs/wobbpotato-egg-carton-untyped-actor-first-repair-v1",
+        "record": "sweep-2026-10-15-wobbpotato-egg-carton-untyped-actor-first-repair-v1.json",
+        "fix_commit": "e8daaa0862dfde8af1096b62e92246b175d30f10",
+        "finish_status": "bounded first native dummy Actor fallback repair complete; original Egg Carton capture reused; one later full repair maximum"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -1984,32 +1994,50 @@
     "other_jobs_live_observation": {
       "initial_sweep": {
         "status": "running",
-        "current": "Ztar Trek/steps.sm",
-        "position": 483,
-        "phase": "replay",
-        "pid": 2184828,
+        "current": "james/james.sm",
+        "position": 491,
+        "phase": "capture",
+        "pid": 2322339,
         "process_matches": true,
-        "passed": 41,
+        "passed": 42,
         "pending": 66,
-        "processed": 107,
-        "last_log_lines": [
-          "[14.0s] replaying every native gameplay frame: frame 896/69378 (1.3%)",
-          "[16.0s] replaying every native gameplay frame: frame 1027/69378 (1.5%)",
-          "[18.0s] replaying every native gameplay frame: frame 1159/69378 (1.7%)"
-        ],
+        "processed": 108,
+        "last_log_lines": [],
         "supervisor_running": true
       },
       "jobs": [
         {
-          "job": "what-if-command-observer-final-repair-v1",
+          "job": "wobbpotato-egg-carton-untyped-actor-first-repair-v1",
           "complete": false,
           "supervisor_running": true,
           "passed": 0,
           "pending": 0,
           "processed": 0,
           "last_phase": "replay",
-          "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+          "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
           "child_running": true
+        },
+        {
+          "job": "wobbpotato-untyped-actor-first-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "Wobbpotato [Blue Shift Phase 1]/wobbpotato.ssc",
+          "child_running": true
+        },
+        {
+          "job": "what-if-command-observer-final-repair-v1",
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
+          "pending": 0,
+          "processed": 1,
+          "last_phase": "pack",
+          "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+          "child_running": false
         },
         {
           "job": "historical-circles-sm-entry-clock-first-repair-v1",
@@ -2036,14 +2064,14 @@
         },
         {
           "job": "tower-generic-tween-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "what-if-dynamic-command-first-repair-v1",
@@ -3258,7 +3286,7 @@
     "selected_replay_binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 137,
+    "publisher_stream_count": 139,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -3719,7 +3747,11 @@
       "what_if_final_attempt_not_started": false,
       "what_if_followup": "tests/fixtures/full_song_lua/sweep-2026-10-15-what-if-first-repair-followup.json",
       "what_if_no_third_full_repair": true,
-      "what_if_final_attempt_running": true
+      "what_if_final_attempt_running": false,
+      "what_if_status": "passed",
+      "what_if_passing_chart_closed": true,
+      "what_if_further_replay_allowed": false,
+      "what_if_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-what-if-fixture-verification.json"
     },
     "tower_generic_tween_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-tower-pokey-generic-tween-diagnosis.json",
     "additional_original_passes_closed": {
@@ -3745,7 +3777,12 @@
       "tower_full_repairs_spent": 1,
       "tower_one_later_full_repair_maximum": true,
       "native_capture_reused": true,
-      "global_original_sweep_selection_unchanged": true
+      "global_original_sweep_selection_unchanged": true,
+      "tower_status": "passed",
+      "tower_passing_chart_closed": true,
+      "tower_further_replay_allowed": false,
+      "tower_native_frames": 105094,
+      "tower_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-tower-pokey-fixture-verification.json"
     },
     "closed_fixture_storage_v2": {
       "receipt": "tests/fixtures/full_song_lua/sweep-2026-10-15-closed-fixture-storage-v2.json",
@@ -3796,7 +3833,7 @@
       "final_repair_queue": "tests/fixtures/full_song_lua/sweep-2026-10-15-what-if-command-observer-final-repair-queue.json",
       "what_if_full_repairs_spent": 2,
       "what_if_final_attempt_queued": false,
-      "what_if_final_attempt_running": true,
+      "what_if_final_attempt_running": false,
       "what_if_no_third_full_repair": true,
       "native_capture_reused": true,
       "all_nonmanifest_member_bytes_unchanged": true,
@@ -3809,7 +3846,12 @@
       "windows_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-dynamic-observer-profile-windows-validation.json",
       "selection": "tests/fixtures/full_song_lua/sweep-2026-10-15-dynamic-observer-profile-selection.json",
       "final_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-what-if-command-observer-final-repair-launch.json",
-      "what_if_final_attempt_supervisor_pid": 2181912
+      "what_if_final_attempt_supervisor_pid": 2181912,
+      "what_if_status": "passed",
+      "what_if_passing_chart_closed": true,
+      "what_if_further_replay_allowed": false,
+      "what_if_native_frames": 47002,
+      "what_if_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-what-if-fixture-verification.json"
     },
     "watching_sm_closed": {
       "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-watching-sm-fixture-verification.json",
@@ -3817,14 +3859,63 @@
       "passing_chart_closed": true,
       "further_replay_allowed": false,
       "full_repairs_spent": 0
+    },
+    "untyped_actor_fallback": {
+      "fix_commit": "e8daaa0862dfde8af1096b62e92246b175d30f10",
+      "both_platform_meaningful_red_verified": true,
+      "both_platform_target_controls_passed": 2,
+      "native_complete_control_frames": 7069,
+      "native_control": "tests/fixtures/full_song_lua/sweep-2026-10-15-untyped-actor-native-control.json",
+      "red_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-untyped-actor-red-validation.json",
+      "diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-wobbpotato-untyped-actor-diagnosis.json",
+      "first_repair_queue": "tests/fixtures/full_song_lua/sweep-2026-10-15-wobbpotato-untyped-actor-first-repair-queue.json",
+      "all_1175_raw_and_normalized_source_pins_required": true,
+      "all_eight_checks_both_hosts_required": true,
+      "remaining_validation_running": false,
+      "wobbpotato_first_full_repair_queued": false,
+      "wobbpotato_first_full_repair_running": true,
+      "wobbpotato_full_repairs_spent": 1,
+      "one_later_full_repair_maximum": true,
+      "native_capture_reused": true,
+      "native_frames": 74561,
+      "windows_validator_pid": 53976,
+      "windows_proof_uploader_pid": 51204,
+      "linux_green_validator_pid": 2236961,
+      "queue_pid": 2238826,
+      "global_original_selection_unchanged": true,
+      "full_acceptance_unchanged": true,
+      "windows_eight_checks_passed": true,
+      "windows_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-untyped-actor-windows-validation.json",
+      "egg_carton_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-wobbpotato-egg-carton-untyped-actor-diagnosis.json",
+      "egg_carton_first_repair_queue": "tests/fixtures/full_song_lua/sweep-2026-10-15-wobbpotato-egg-carton-first-repair-queue.json",
+      "egg_carton_full_repairs_spent": 1,
+      "egg_carton_first_full_repair_queued": false,
+      "egg_carton_queue_pid": 2288567,
+      "egg_carton_native_frames": 78636,
+      "egg_carton_same_authored_default_lua_bytes": true,
+      "all_eight_checks_both_hosts_passed": true,
+      "all_1175_raw_and_normalized_source_pins_verified": true,
+      "binary_sha256": "60a12cf2dec73902df89171b680e24ffbc9301bccc2147dae35a7fb0aab1ecbb",
+      "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-untyped-actor-linux-validation.json",
+      "selection": "tests/fixtures/full_song_lua/sweep-2026-10-15-untyped-actor-selection.json",
+      "wobbpotato_first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-wobbpotato-untyped-actor-first-repair-launch.json",
+      "egg_carton_first_full_repair_running": true,
+      "egg_carton_first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-wobbpotato-egg-carton-first-repair-launch.json"
+    },
+    "ztar_trek_closed": {
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-ztar-trek-fixture-verification.json",
+      "native_frames": 69378,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "full_repairs_spent": 0
     }
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 223,
-    "new_pending_charts": 108,
-    "new_processed_sources": 331,
+    "new_passed_fixtures": 226,
+    "new_pending_charts": 106,
+    "new_processed_sources": 332,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 22,
+    "unprocessed_sources": 21,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -5815,22 +5906,6 @@
       ]
     },
     {
-      "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [
-        "OnCommand failed for Sprite 'EYES': runtime error: native actor method tween has no semantic implementation\nstack traceback:\n\t[C]: in function 'Actor.tween'\n\t[string \"/tmp/.tmpavgaKS/song/lua/EYES.lua\"]:14: in function <[string \"/tmp/.tmpavgaKS/song/lua/EYES.lua\"]:12>\n"
-      ],
-      "mismatch_count": 2,
-      "first_mismatch": [
-        {
-          "field": "command_query_count",
-          "native": 14,
-          "deadsync": 10
-        }
-      ]
-    },
-    {
       "source_simfile": "Trancing Pulse (Random)/Trancing Pulse (Random).ssc",
       "repair_attempts": 0,
       "failure": null,
@@ -5926,20 +6001,6 @@
           "field": "failed",
           "native": true,
           "deadsync": false
-        }
-      ]
-    },
-    {
-      "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
-      "repair_attempts": 1,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 216192,
-      "first_mismatch": [
-        {
-          "field": "command_query_count",
-          "native": 216209,
-          "deadsync": 216205
         }
       ]
     },
