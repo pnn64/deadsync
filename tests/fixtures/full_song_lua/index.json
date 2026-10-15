@@ -4235,15 +4235,12 @@
     {
       "title": "Pop",
       "source_simfile": "Pop/Pop.ssc",
-      "harness_version": "0.1.0",
-      "archive": "25ee2408eb43f41e8e7377de1fa9c88695965704de94184c48a711a9d085d6fd.tar.zst",
-      "sha256": "25ee2408eb43f41e8e7377de1fa9c88695965704de94184c48a711a9d085d6fd",
-      "compressed_bytes": 230281,
-      "uncompressed_sha256": "1c6120029875e4909b1805db565b9dc91aabff981d0d02cf214727b11bfd0e1d",
-      "compression_level": 22,
-      "aliases": [
-        "d3def4d1a84d046c8fe1a99a562c2eccc4e24064d999388a6635230e7769ffd1.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "16176f9da63a65b34832d8f9304891ab213389841fa02bb0181769bfc641de84.tar.zst",
+      "sha256": "16176f9da63a65b34832d8f9304891ab213389841fa02bb0181769bfc641de84",
+      "compressed_bytes": 4474916,
+      "uncompressed_sha256": "ef67277eb0633abbfa52a9846caefdb397834de258bbe99ffd5888cae7544dd1",
+      "aliases": []
     },
     {
       "title": "Downfall",

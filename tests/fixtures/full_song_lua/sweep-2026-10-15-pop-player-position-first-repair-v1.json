@@ -1,0 +1,64 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "4b07d505988e43dabb14441f0a3c6696d0e06009",
+  "results": [
+    {
+      "position": 358,
+      "source_simfile": "Pop/Pop.ssc",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "ef67277eb0633abbfa52a9846caefdb397834de258bbe99ffd5888cae7544dd1",
+      "trace_sha256": "a885e65a98c13afc93683e6c489cd74316c00e7ad065f9fa799c46d24ff38b60",
+      "simfile_sha256": "1d74d7d3fea33b0ac6eb7c4e19b3035f1aa65b7feefb86c16fb5229a3b728ff7",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "c25c88cc0b02b3e8fe7466d39632080821972ee363cbfc66aa9b8e139063e4d1",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/player-song-position-linux-green-v1/proof.json",
+      "fix_commit": "4b07d505988e43dabb14441f0a3c6696d0e06009",
+      "previous_failure": null,
+      "previous_errors": [],
+      "replay_exit": 0,
+      "replay_seconds": 1598.412562582991,
+      "native_frames": 81313,
+      "replayed_frames": 81313,
+      "compared_stage_fields": 1397,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers, PlayerState.GetSongPosition, ScreenGameplay.GetLifeMeter"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "c79e7d6e22950e6060beef26e4e05c08205c19a4531ed07b1d43871ede9bbc5f",
+      "archive": "16176f9da63a65b34832d8f9304891ab213389841fa02bb0181769bfc641de84.tar.zst",
+      "archive_sha256": "16176f9da63a65b34832d8f9304891ab213389841fa02bb0181769bfc641de84",
+      "compressed_bytes": 4474916,
+      "harness_version": "0.1.80",
+      "title": "Pop",
+      "pack_seconds": 2.0165757250215393,
+      "retained_original_entry": {
+        "title": "Pop",
+        "source_simfile": "Pop/Pop.ssc",
+        "harness_version": "0.1.0",
+        "archive": "25ee2408eb43f41e8e7377de1fa9c88695965704de94184c48a711a9d085d6fd.tar.zst",
+        "sha256": "25ee2408eb43f41e8e7377de1fa9c88695965704de94184c48a711a9d085d6fd",
+        "compressed_bytes": 230281,
+        "uncompressed_sha256": "1c6120029875e4909b1805db565b9dc91aabff981d0d02cf214727b11bfd0e1d",
+        "compression_level": 22,
+        "aliases": [
+          "d3def4d1a84d046c8fe1a99a562c2eccc4e24064d999388a6635230e7769ffd1.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "c25c88cc0b02b3e8fe7466d39632080821972ee363cbfc66aa9b8e139063e4d1",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first repair: PlayerState SongPosition uses selected Steps timing independently of global Song timing; original complete capture reused, full comparisons unchanged",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
