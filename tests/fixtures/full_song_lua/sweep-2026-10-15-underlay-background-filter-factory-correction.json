@@ -1,0 +1,27 @@
+{
+  "green_v1_compile_failure_both_hosts": true,
+  "rust_error": "E0308",
+  "cause": "The existing Underlay installer accepted only the named-child callback; its new Quad construction also requires the two-argument dummy-actor factory.",
+  "correction": "Pass the existing factory through the installer caller and signature.",
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 15.157228899988695,
+      "log_sha256": "dce0cfdf26e7990ea088754d98880fc0f42f6c285a88b2ea67d57c64c2310f31",
+      "results": []
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 30.26731851499062,
+      "log_sha256": "d2357457d2b0e436cf88fca71183d1f4dda8a82348353a6a6a69aa29974d2d9d",
+      "results": []
+    }
+  ],
+  "no_green_tests_or_chart_replays_ran_from_failed_compile": true,
+  "regression_and_initial_input_plumbing_unchanged_green_v1_v2": true,
+  "full_chart_repairs_spent": 0
+}
