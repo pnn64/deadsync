@@ -1,0 +1,13 @@
+{
+  "fix_commit": "c71cc5f319cd5b950b6ce107ec23f65772062260",
+  "binary_sha256": "1313245b739aebc4b50d2def7d3f973403616543b4870a60b113dc2fe8f65a3e",
+  "source_root": "/home/parity/workspace/cancel-transition-child-green-v1/deadsync",
+  "build_proof": "/home/parity/jobs/cancel-transition-child-linux-green-v1/proof.json",
+  "all_fifteen_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "native Transition::Load and Simply Love Cancel fullscreen transparent Quad with 0.1-second sleep and 0.4-second linear fade; actual HOPE missing-child mismatch",
+  "native_capture_reused": true,
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
