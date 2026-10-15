@@ -899,6 +899,7 @@ pub fn create_steps_table(
         "GetMeter",
         lua.create_function(move |_, _args: MultiValue| Ok(meter))?,
     )?;
+    let timing_model = timing;
     let timing = create_timing_table(lua, display_bpms, timing)?;
     let display_bpms = create_display_bpms_table(lua, display_bpms)?;
     table.set(
@@ -915,6 +916,7 @@ pub fn create_steps_table(
         lua.create_function(move |_, _args: MultiValue| Ok(radar.clone()))?,
     )?;
     set_string_method(lua, &table, "GetDisplayBPMType", "DISPLAY_BPM_ACTUAL")?;
+    install_step_measure_density(lua, &table, None, &[], steps_type, timing_model)?;
     install_step_column_cues(lua, &table, std::sync::Arc::from([]), std::sync::Arc::from([]), steps_type)?;
     Ok(table)
 }
@@ -2787,6 +2789,7 @@ fn create_song_steps(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result
         )?;
         if let Some(notes) = context.song_step_notes.get(index) {
             let row_beats = context.song_step_row_beats.get(index).cloned().unwrap_or_default();
+            install_step_measure_density(lua, &value, Some(notes), &row_beats, &step.steps_type, timing)?;
             install_step_column_cues(lua, &value, notes.clone(), row_beats, &step.steps_type)?;
         }
         set_string_method(lua, &value, "GetDescription", &step.description)?;
@@ -2798,6 +2801,73 @@ fn create_song_steps(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result
         table.raw_set(index + 1, value)?;
     }
     Ok(table)
+}
+
+fn density_player(args: &MultiValue) -> mlua::Result<usize> {
+    match method_arg(args, 0) {
+        None | Some(Value::Nil) => Ok(0),
+        Some(value) => player_index_from_value(value)
+            .ok_or_else(|| mlua::Error::runtime("invalid PlayerNumber for Steps density")),
+    }
+}
+
+fn install_step_measure_density(
+    lua: &Lua, steps: &Table, notes: Option<&std::sync::Arc<[u8]>>, row_beats: &[f32],
+    steps_type: &str, timing_model: Option<&deadsync_rules::timing::TimingData>,
+) -> mlua::Result<()> {
+    let mut counts = Vec::new();
+    let mut densities = Vec::new();
+    if let Some(notes) = notes {
+        use deadsync_core::note::NoteType;
+        let lanes = notes.split(|&ch| ch == b'\n').map(|line| line.strip_suffix(b"\r").unwrap_or(line))
+            .find(|line| !line.is_empty() && *line != b",")
+            .map_or_else(|| deadsync_chart::notes::step_type_lanes(steps_type), <[u8]>::len);
+        let parsed = deadsync_chart::notes::parse_chart_notes(notes, lanes);
+        let beat = |index: usize| -> mlua::Result<f32> { row_beats.get(index).copied()
+            .ok_or_else(|| mlua::Error::runtime("missing chart row beat for cached measure density")) };
+        let measure = |beat: f32| timing_model.map_or((beat / 4.0).floor().max(0.0) as usize,
+            |timing| timing.measure_index_at_beat(beat));
+        let last = parsed.iter().map(|note| note.tail_row_index.unwrap_or(note.row_index))
+            .max().map(&beat).transpose()?.unwrap_or(0.0);
+        let measure_count = measure(last) + 1;
+        let mut rows = std::collections::BTreeMap::<usize, bool>::new();
+        for note in &parsed {
+            let active = matches!(note.note_type, NoteType::Tap | NoteType::Hold | NoteType::Roll);
+            rows.entry(note.row_index).and_modify(|row| *row |= active).or_insert(active);
+        }
+        let final_row = rows.last_key_value().map(|(&row, _)| row);
+        let mut per_measure = vec![0_u32; measure_count];
+        for (&row, &active) in &rows {
+            if !active { continue; }
+            let beat = beat(row)?;
+            // MeasureInfo flushes the final row without its fake/warp check.
+            if Some(row) != final_row && timing_model.is_some_and(|timing|
+                timing.is_fake_at_beat(beat) || timing.is_warp_at_beat(beat)) { continue; }
+            per_measure[measure(beat)] += 1;
+        }
+        let timing = steps.get::<Function>("GetTimingData")?.call::<Table>(steps.clone())?;
+        let elapsed = timing.get::<Function>("GetElapsedTimeFromBeat")?;
+        let mut nps = Vec::with_capacity(measure_count);
+        for (index, &count) in per_measure.iter().enumerate() {
+            let duration = elapsed.call::<f32>((timing.clone(), (4 * (index + 1)) as f32))?
+                - elapsed.call::<f32>((timing.clone(), (4 * index) as f32))?;
+            nps.push(if count == 0 || duration < 0.12 { 0.0 } else { count as f32 / duration });
+        }
+        counts = per_measure; densities = nps;
+    }
+    let counts: std::sync::Arc<[u32]> = counts.into();
+    let densities: std::sync::Arc<[f32]> = densities.into();
+    let peak = densities.iter().copied().fold(0.0_f32, f32::max);
+    steps.set("GetNotesPerMeasure", lua.create_function(move |lua, args: MultiValue| {
+        density_player(&args)?; lua.create_sequence_from(counts.iter().copied())
+    })?)?;
+    steps.set("GetNpsPerMeasure", lua.create_function(move |lua, args: MultiValue| {
+        density_player(&args)?; lua.create_sequence_from(densities.iter().copied())
+    })?)?;
+    steps.set("GetPeakNps", lua.create_function(move |_, args: MultiValue| {
+        density_player(&args)?; Ok(peak)
+    })?)?;
+    Ok(())
 }
 
 fn install_step_column_cues(

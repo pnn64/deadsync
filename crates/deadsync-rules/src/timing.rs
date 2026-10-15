@@ -392,6 +392,7 @@ pub struct TimingData {
     speeds: Arc<[SpeedSegment]>,
     scrolls: Arc<[ScrollSegment]>,
     fakes: Arc<[FakeSegment]>,
+    time_signatures: Arc<[TimeSignatureSegment]>,
     speed_runtime: Arc<[SpeedRuntime]>,
     scroll_prefix: Arc<[ScrollPrefix]>,
     pause_rows_sorted: [bool; 2],
@@ -739,6 +740,7 @@ impl TimingData {
             speeds,
             scrolls,
             fakes,
+            time_signatures: sorted_timing_table(&segments.time_signatures, |segment| segment.beat),
             speed_runtime: Arc::default(),
             scroll_prefix: Arc::default(),
             pause_rows_sorted,
@@ -779,6 +781,27 @@ impl TimingData {
         debug!("TimingData processed {} note rows.", row_to_beat.len());
 
         timing_with_stops
+    }
+
+    /// Native NoteRowToMeasureAndBeat rounds completed signature segments up
+    /// and the current segment down, even when a signature starts mid-measure.
+    #[must_use]
+    pub fn measure_index_at_beat(&self, beat: f32) -> usize {
+        let row = beat_to_note_row(beat);
+        if self.time_signatures.is_empty() { return (row.max(0) / 192) as usize; }
+        let mut measure = 0_i64;
+        for (index, signature) in self.time_signatures.iter().enumerate() {
+            let start = i64::from(beat_to_note_row(signature.beat));
+            let end = self.time_signatures.get(index + 1)
+                .map_or(i64::MAX, |next| i64::from(beat_to_note_row(next.beat)));
+            let rows_per_measure = (192 * i64::from(signature.numerator)
+                / i64::from(signature.denominator.max(1))).max(1);
+            if i64::from(row) < end {
+                return (measure + (i64::from(row) - start) / rows_per_measure).max(0) as usize;
+            }
+            measure += (end - start + rows_per_measure - 1) / rows_per_measure;
+        }
+        measure.max(0) as usize
     }
 
     #[inline(always)]
@@ -2811,6 +2834,23 @@ pub fn compute_window_counts_blue_ms(notes: &[Note], blue_window_ms: f32) -> Win
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn measure_index_rounds_native_signature_boundaries() {
+        let timing = TimingData::from_segments(0.0, 0.0, &TimingSegments {
+            bpms: vec![(0.0, 120.0)],
+            time_signatures: vec![TimeSignatureSegment { beat: 0.0, numerator: 4, denominator: 4 },
+                TimeSignatureSegment { beat: 6.0, numerator: 3, denominator: 4 },
+                TimeSignatureSegment { beat: 12.0, numerator: 5, denominator: 8 }],
+            ..Default::default()
+        }, &[]);
+        for (beat, expected) in [(0.0,0), (3.0,0), (4.0,1), (5.0,1), (6.0,2),
+            (8.0,2), (9.0,3), (12.0,4), (14.0,4), (14.5,5), (17.0,6)] {
+            assert_eq!(timing.measure_index_at_beat(beat), expected, "beat {beat}");
+        }
+        assert_eq!(timing.clone().measure_index_at_beat(14.5), 5);
+    }
+
+
     use super::*;
 
     #[test]

@@ -106,6 +106,15 @@ pub fn parse_chart_info(lua: &Lua, args: &MultiValue) -> mlua::Result<Table> {
         }
     };
     init_sl_streams(lua, &streams)?;
+    if let Some(Value::Table(steps)) = args.front() {
+        let player_number = if player == "P1" { "PlayerNumber_P1" } else { "PlayerNumber_P2" };
+        for (field, method) in [("NotesPerMeasure", "GetNotesPerMeasure"),
+            ("NPSperMeasure", "GetNpsPerMeasure"), ("PeakNPS", "GetPeakNps")] {
+            let value = steps.get::<mlua::Function>(method)?
+                .call::<Value>((steps.clone(), player_number))?;
+            streams.raw_set(field, value)?;
+        }
+    }
     note_song_lua_side_effect(lua)?;
     Ok(streams)
 }

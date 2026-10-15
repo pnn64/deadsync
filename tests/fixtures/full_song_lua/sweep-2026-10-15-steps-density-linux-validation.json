@@ -1,0 +1,57 @@
+{
+  "source_root": "/home/parity/workspace/steps-density-green-v2/deadsync",
+  "binary_sha256": "3c01ccd5dc5bc50617cdd0a1a9a952de6548c329aec9f00602abb71d24908415",
+  "all_five_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "entire_live_regression_source_identical_red_green": true,
+  "all_97_prior_live_regressions_byte_identical": true,
+  "native_bitmap_asset_log_and_binary_hashes_verified": true,
+  "meaningful_missing_steps_density_red_both_hosts": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 272.4504351299838,
+      "log_sha256": "404035304ad3d347e6fdb4caf75af38e9324591de98b3f5bb506cca098e50e0d",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 634 filtered out; finished in 0.29s"
+      ]
+    },
+    {
+      "label": "timing-signature-control",
+      "exit_code": 0,
+      "seconds": 3.0399109040154144,
+      "log_sha256": "0f2d213fe67dbdff2ab2f24a224bb07f274e79ab72159bd276b8f3e8e5a09a3f",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 41.25285451003583,
+      "log_sha256": "7935075a289ab2a41e134c4e525d136a4c9a6b38a57239d3ade436a747a90a3a",
+      "results": [
+        "test result: ok. 98 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 40.52s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 229.77838152099866,
+      "log_sha256": "97898a7341f81323fb11b9a979f48557d2bd4fdeb117126f35e34e024b2b19dc",
+      "results": [
+        "test result: ok. 39 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 21.63s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 37.48074461601209,
+      "log_sha256": "8f727bc1a86f12727be984b8801f7c93025801bdfd43104c3d2985d9d4268978",
+      "results": []
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
