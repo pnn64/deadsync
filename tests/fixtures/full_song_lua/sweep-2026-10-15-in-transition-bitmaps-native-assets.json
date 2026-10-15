@@ -1,0 +1,149 @@
+{
+  "all_23_bitmap_bytes_match_frozen_native_installation": true,
+  "assets": [
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Arrows/GameplayIn minisplode (doubleres).png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Arrows/GameplayIn minisplode (doubleres).png",
+      "bytes": 29375,
+      "sha256": "b21be96427fe6dcdb749222e08618313a223d2a41d41fcb86edc842804725567"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Arrows/GameplayIn splode (doubleres).png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Arrows/GameplayIn splode (doubleres).png",
+      "bytes": 33945,
+      "sha256": "2b4086e52d15aefc1c4815430a9a57341b68efeae9dff3c15c72a4bf1d7d12e3"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Bears/GameplayIn minisplode.png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Bears/GameplayIn minisplode.png",
+      "bytes": 9432,
+      "sha256": "24b2d938dcc7b1ac21b1edf5bc5775225cd0613f309689e6d474c31315d1b369"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Bears/GameplayIn splode.png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Bears/GameplayIn splode.png",
+      "bytes": 11658,
+      "sha256": "aaf0bb5a07bb00362c2e97d79f18dacf12d31cf3fe24e8085a39760b0e3a2c82"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Cats/GameplayIn minisplode.png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Cats/GameplayIn minisplode.png",
+      "bytes": 11171,
+      "sha256": "b6691c13a6349f1a1ba4c50e0dd6e843c4ccfcb201a92f349398674b3657c3b3"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Cats/GameplayIn splode.png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Cats/GameplayIn splode.png",
+      "bytes": 14653,
+      "sha256": "d0d6509acb2a53f4931c81d596118fcf4d03704cce7ec35b5f5ec86f7bce692e"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Ducks/GameplayIn minisplode (doubleres).png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Ducks/GameplayIn minisplode (doubleres).png",
+      "bytes": 20437,
+      "sha256": "cc847085dcf5b7214cbaf8ed8629d5adecbac3ea26bb3fd203007ad810ec65e7"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Ducks/GameplayIn splode (doubleres).png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Ducks/GameplayIn splode (doubleres).png",
+      "bytes": 31804,
+      "sha256": "a0a09f0c07f5b2e28993e20b45f6c415a8980483bf34f393cb6c150524021837"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Gay/GameplayIn minisplode.png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Gay/GameplayIn minisplode.png",
+      "bytes": 3711,
+      "sha256": "2ca79af93d13a0f9513e99494f555b14020e3ab5c453870bd02b7d2a6a868a02"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Gay/GameplayIn splode.png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Gay/GameplayIn splode.png",
+      "bytes": 5547,
+      "sha256": "913cfea17db6418c8266d245709e50d883f3bbf1fc006fadafb919b052851135"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Hearts/GameplayIn minisplode.png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Hearts/GameplayIn minisplode.png",
+      "bytes": 3711,
+      "sha256": "2ca79af93d13a0f9513e99494f555b14020e3ab5c453870bd02b7d2a6a868a02"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Hearts/GameplayIn splode.png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Hearts/GameplayIn splode.png",
+      "bytes": 5547,
+      "sha256": "913cfea17db6418c8266d245709e50d883f3bbf1fc006fadafb919b052851135"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Spooky/ExtraSpooky/Bats (doubleres) 2x1.png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Spooky/ExtraSpooky/Bats (doubleres) 2x1.png",
+      "bytes": 32840,
+      "sha256": "68397e36eae5da19a59ba8eda1dcc2e702e003b99c0320d67edfcbf87a6197e3"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Spooky/GameplayIn minisplode (doubleres).png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Spooky/GameplayIn minisplode (doubleres).png",
+      "bytes": 29755,
+      "sha256": "3c674cd9384652c6ee722eedae5b8a9d7de347da4197c6ec628fd1cfae1ffc4c"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Spooky/GameplayIn splode (doubleres).png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Spooky/GameplayIn splode (doubleres).png",
+      "bytes": 45508,
+      "sha256": "29579e797221e33250404654cfbb92c04abbce8a0396839c88ffab01e3623e78"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/SRPG10/GameplayIn minisplode.png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/SRPG10/GameplayIn minisplode.png",
+      "bytes": 3711,
+      "sha256": "2ca79af93d13a0f9513e99494f555b14020e3ab5c453870bd02b7d2a6a868a02"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/SRPG10/GameplayIn splode.png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/SRPG10/GameplayIn splode.png",
+      "bytes": 5547,
+      "sha256": "913cfea17db6418c8266d245709e50d883f3bbf1fc006fadafb919b052851135"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Stars/GameplayIn minisplode (doubleres).png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Stars/GameplayIn minisplode (doubleres).png",
+      "bytes": 32706,
+      "sha256": "2dfda6f226f5d8ff2086f6011f9456f1d0f144905936b95b8ad972cdf658fdf3"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Stars/GameplayIn splode (doubleres).png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Stars/GameplayIn splode (doubleres).png",
+      "bytes": 48982,
+      "sha256": "97351229709311955681a280bf9d086cb10662f88087b33430cccedfb238a3e2"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Technique/GameplayIn minisplode (doubleres).png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/GameplayIn minisplode (doubleres).png",
+      "bytes": 29375,
+      "sha256": "b21be96427fe6dcdb749222e08618313a223d2a41d41fcb86edc842804725567"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Technique/GameplayIn splode (doubleres).png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/GameplayIn splode (doubleres).png",
+      "bytes": 33945,
+      "sha256": "2b4086e52d15aefc1c4815430a9a57341b68efeae9dff3c15c72a4bf1d7d12e3"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Thonk/GameplayIn minisplode (doubleres).png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Thonk/GameplayIn minisplode (doubleres).png",
+      "bytes": 30516,
+      "sha256": "6902d858f0b8a48598230dfd3d4ebfbebb36f6b75e09c3bdaf2041b1959250f4"
+    },
+    {
+      "asset": "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Thonk/GameplayIn splode (doubleres).png",
+      "native_path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Graphics/_VisualStyles/Thonk/GameplayIn splode (doubleres).png",
+      "bytes": 45091,
+      "sha256": "2a10117ecec084162718f217efecd8c33d0f65e783ab6f3fb1cf737f4b4e6da3"
+    }
+  ],
+  "native_theme_pref_script_sha256": "45f36bf71a79a06f5b10d5554f4cb5fa6f7ae3c6b21393fae38341a6a888e7e3",
+  "native_theme_default_visual_style": "Technique",
+  "installed_saved_theme_prefs_exists": false,
+  "capture_staging_does_not_copy_saved_theme_prefs": true,
+  "capture_style_conclusion_is_inference_from_independent_staging_and_primary_sources": true,
+  "native_query_results_used_as_engine_inputs": false
+}
