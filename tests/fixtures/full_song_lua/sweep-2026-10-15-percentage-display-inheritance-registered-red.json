@@ -1,0 +1,29 @@
+{
+  "regression": "live_percentage_display_inherits_actor_frame_class_methods",
+  "meaningful_native_frame_inheritance_red_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 319.77971820000676,
+      "log_sha256": "c9a543e39284e735aa257d90ac3931c97009cc3c57a262a3a39e79c56ea410c6",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 623 filtered out; finished in 0.22s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 289.10545408696635,
+      "log_sha256": "15acded710cbc694c2a4e557253a80838756c86b786dfd5b0718f698b37ac8fa",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 621 filtered out; finished in 0.20s"
+      ]
+    }
+  ],
+  "source_cause": "sweep-2026-10-15-hope-percentage-display-source-cause.json",
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
