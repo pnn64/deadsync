@@ -1,12 +1,12 @@
 {
   "source_simfile": "HOPE/HOPE.ssc",
-  "entry_evidence": "sweep-2026-10-15-hope-underlay-background-filter-entry-diagnostic.json",
+  "entry_evidence": "sweep-2026-10-15-hope-underlay-difficulty-meter-entry-diagnostic.json",
   "entry_frames": 1688,
   "entry_errors": 0,
-  "entry_mismatches": 20432,
+  "entry_mismatches": 20437,
   "first_remaining_native_seq": 529,
   "native_underlay_child_count": 10,
-  "owned_underlay_child_count": 8,
+  "owned_underlay_child_count": 9,
   "native_direct_children": [
     {
       "id": "external-0107",
@@ -69,12 +69,12 @@
     "P1Score",
     "SongMeter"
   ],
-  "source_cause": "The validated BackgroundFilter fix adds the actual selected unnamed Quad, bringing owned Underlay direct children to eight. The retained native P1 scene still exposes ten: four unnamed direct actors plus six named actors. Primary theme scripts identify the other three unnamed owners as DifficultyMeter, Standard LifeMeter and shared BPM outer frame. Owned still exposes BPMDisplay directly rather than under the actual shared BPM owner. These three absent owners and one extra direct named BPM explain the count difference; construct their actual source-selected contents and lifecycle rather than padding the child count.",
-  "owned_direct_unnamed_children": 1,
+  "source_cause": "The qualified BackgroundFilter and DifficultyMeter fixes construct two real unnamed owners; owned Underlay now has nine direct children. The retained native scene still has ten with four unnamed owners. Primary native/theme sources identify the remaining owners as Standard LifeMeter (four children, observed at external-0109 sequence567) and the shared BPM outer frame. Owned still exposes BPMDisplay directly rather than beneath the actual shared BPM hierarchy. Construct the selected LifeMeter contents and lifecycle, then the actual BPM hierarchy; do not pad the child count.",
+  "owned_direct_unnamed_children": 2,
   "background_filter_fix_commit": "b0a9976b938ef94c390b1f9db8e0cca479eb599d",
   "background_filter_qualified_and_loaded": true,
-  "previous_owned_child_count": 7,
-  "previous_entry_mismatches": 20427,
+  "previous_owned_child_count": 8,
+  "previous_entry_mismatches": 20432,
   "positional_mismatch_totals_are_not_monotonic": true,
   "native_direct_bpm_display_not_present": true,
   "physical_native_theme_source_matches_local_vendor": true,
@@ -294,12 +294,29 @@
   "source_pins": {
     "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\BGAnimations\\ScreenGameplay underlay\\default.lua": "e14778bee5358671b510fb15b9c1d4ea1642a799766a231cc8e4a5a764346bc5",
     "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\top_screen.rs": "cdf8e199c05c21355f6708efc1a289c54488f5a6ce516bf3f2bac73883616c74",
-    "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs": "92991f904acd8f2d6845e352b768da20def1b8f64f7dbcb0b0a0eddbc09f9b2d"
+    "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs": "3d7f66282253cda4eb5d7832f7549fbb3c7b838a20ea7161552aa969a1d7bc57"
   },
   "production_fix_added": false,
   "full_repairs_spent": 0,
   "original_capture_reused": true,
   "expected_query_results_used_as_engine_inputs": false,
   "acceptance_comparisons_changed": false,
-  "next_action": "Build the actual selected Underlay LoadActor inventory from local per-player/shared theme sources and captured initial options, preserving unnamed owners, child ordering, parents and exact named lookup levels. Validate a nonempty runtime inventory regression and existing controls before another retained HOPE entry or any full repair."
+  "next_action": "Construct the selected Standard LifeMeter frame, native Quad/Sprite children, actual bitmap, update function and real LifeChanged lifecycle from primary sources and initial inputs. Keep the shared BPM owner/hierarchy pending until built from its source. Validate runtime behavior and existing controls on both hosts before another retained entry; no full repair while known entry failures remain.",
+  "difficulty_meter_fix_commit": "194a47d0bce78275d98fd954f38fbb09004ec366",
+  "difficulty_meter_qualified_and_loaded": true,
+  "remaining_native_theme_source_hashes_verified_against_local_vendor": {
+    "PerPlayer/LifeMeter/default.lua": "55cb4cb8962c7dd0a15fd08323b45301b3923dfde20836e4640536b50bcc3114",
+    "PerPlayer/LifeMeter/Standard.lua": "1114443765ad89d2ac5f0e2ec79bb13fa90cc834ce58c174aaa00623f2120e2e",
+    "Shared/BPMDisplay.lua": "899be31df0896bbcef8d8888e3bc70780ec692e375c1bf5239805e01a0859ee1"
+  },
+  "next_remaining_event": {
+    "native_seq": 567,
+    "native_actor": "external-0109",
+    "native_operation": "ActorFrame.GetNumChildren",
+    "native_results": [
+      4
+    ],
+    "owned_operation": "Actor.GetParent",
+    "native_source": "PerPlayer/LifeMeter/Standard.lua"
+  }
 }
