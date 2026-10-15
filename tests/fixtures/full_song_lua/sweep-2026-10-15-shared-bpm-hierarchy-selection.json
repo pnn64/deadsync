@@ -1,0 +1,12 @@
+{
+  "fix_commit": "2e561959d28baded6219078922c8fd38012aaaf5",
+  "source_root": "/home/parity/workspace/shared-bpm-hierarchy-green-v2/deadsync",
+  "binary_sha256": "25121f5cced60319229071d5ccac5e55e27ab4f3a2704106822946f0b7805d7c",
+  "build_proof": "/home/parity/jobs/shared-bpm-hierarchy-linux-green-v2/proof.json",
+  "all_nine_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "construct actual shared BPM outer/rate/inner frames with native Lua selection, current player BPS/rate updates and original font/geometry; carry real NPS layout input and preserve native observer scope",
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
