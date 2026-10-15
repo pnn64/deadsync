@@ -174,6 +174,25 @@
       "replay_seconds": 6.474512488988694,
       "candidate_sha256": "599f0736e27c6ea8c1753a90b665cf7ea03dc72c31422f80cc8ba4340fddd340",
       "failure": "[1.6s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: frame 0/67913 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'WAH-LEVEN (DDRIllini Remix)': model '/tmp/.tmp6eWLyC/song/lua/../assets/waluigi-model/wah-tpose.txt' did not produce any geometry; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile foreground lua layer for 'WAH-LEVEN (DDRIllini Remix)' from '/tmp/.tmp6eWLyC/song/lua/fly.lua': model '/tmp/.tmp6eWLyC/song/lua/../assets/waluigi-model/wah-tpose.txt' did not produce any geometry\n[4.0s] replaying every native gameplay frame: frame 0/67913 (0.0%)\n\nthread 'main' (2929566) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 471,
+      "source_simfile": "What A Wonderful World/WAWW.sm",
+      "simfile_sha256": "44d9e8c548a43bfbf4e7b1f35229c66a5063759098784abd70c542409d7f22b5",
+      "retained_original_archive": "8ff418d0678800ce2842370a2a5ee572a07454cbf086523567e52aa026169c85.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 1034.341207614023,
+      "trace_sha256": "a68b0341299dde7797f9b55eabd8f7dc50630c93c8d8d0f4d064e69b8eedccf9",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v6-2/chart-471/candidates/8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c.tar",
+      "replay_exit": 1,
+      "replay_seconds": 47.26706161000766,
+      "candidate_sha256": "8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c",
+      "failure": ""
     }
   ],
   "scope": {
@@ -185,6 +204,6 @@
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 3,
-  "pending_charts": 1,
-  "processed_charts": 4
+  "pending_charts": 2,
+  "processed_charts": 5
 }
