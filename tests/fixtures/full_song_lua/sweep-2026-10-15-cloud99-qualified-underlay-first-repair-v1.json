@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "Cloud99 first bounded full repair complete after clean2496-frame entry; original capture and existing full comparisons unchanged; no automatic second repair",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd",
