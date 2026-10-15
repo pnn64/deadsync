@@ -1,0 +1,102 @@
+{
+  "source_simfile": "rite of spring/rite.ssc",
+  "repair_attempts": 1,
+  "native_frames": 104414,
+  "replayed_frames": 104414,
+  "candidate_sha256": "fa30207b35448ca133d0e13bf2377c07ba2037f042e00f19a5d9fb4bf03287c3",
+  "trace_sha256": "f25daa8bbea570fec79713a278558b8336e3ee879d935c3e6ba006ee30241567",
+  "simfile_sha256": "7ce2cf7cfa441b16842c6577e922df25f8c49258da2b1cd49358f0f1a428c0fc",
+  "binary_sha256": "04af4ff5dfcbbf4a0290dfe81b5e1b5690fa28289a2e2fdbebb293006a88bce2",
+  "report_sha256": "a63a7d98891dd52804eeaea0d0c004c9619ff4885d5a191e290330646b49efd3",
+  "errors": [],
+  "mismatch_count": 121,
+  "pending_coverage": [
+    "uncompared song operations: Actor.addy, Actor.blend, Actor.shadowlength, Actor.stoptweening, Actor.xy, Actor.zoomtoheight, Actor.zoomtowidth, BitmapText.settext, GameState.GetCurMusicSeconds, Player.SetLife",
+    "native drawable state/resources: BitmapText, Quad, Sprite",
+    "missing captured subscriber identity for ScreenGameplay/19/1"
+  ],
+  "status": "pending after first full repair",
+  "remaining_full_repairs_maximum": 1,
+  "second_full_repair_started": false,
+  "concrete_failures": [
+    {
+      "field": "command_query_count",
+      "native": 17476,
+      "deadsync": 17472
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0010",
+        "args": [],
+        "beat": 496.8111572265625,
+        "command": "JudgmentMessageCommand",
+        "definition_id": "def-0010",
+        "detail": {
+          "name": "JudgmentMessageCommand"
+        },
+        "kind": "command",
+        "line": 342,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": 146.65133666992188,
+        "seq": 32640,
+        "source": "song:/rite.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "LockLifeCommand",
+        "source": "song:/rite.lua",
+        "line": 302,
+        "beat": 496.9778747558594,
+        "seconds": 146.70135498046875,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0010",
+        "args": [],
+        "beat": 496.8111572265625,
+        "command": "JudgmentMessageCommand",
+        "definition_id": "def-0010",
+        "detail": {
+          "name": "JudgmentMessageCommand"
+        },
+        "kind": "command",
+        "line": 342,
+        "operation": "command.end",
+        "scene": 1,
+        "seconds": 146.65133666992188,
+        "seq": 32642,
+        "source": "song:/rite.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "ScreenManager.GetTopScreen",
+        "source": "song:/rite.lua",
+        "line": 302,
+        "phase": "callback",
+        "beat": 496.9778747558594,
+        "seconds": 146.70135498046875,
+        "args": [],
+        "results": [
+          {
+            "actor": 1,
+            "name": "ScreenGameplay",
+            "path": "ScreenGameplay"
+          }
+        ]
+      }
+    }
+  ],
+  "callback_errors_resolved": true,
+  "remaining_cause": "Native command trace contains four additional JudgmentMessageCommand boundary events near 146.65133666992188 seconds. The owned trace has 17472 versus native17476 events. Underlying event emission difference is not yet resolved.",
+  "source_to_inspect": "rite of spring/rite.lua:342",
+  "native_capture_reused": true,
+  "acceptance_keys_tolerances_predicate_unchanged": true
+}

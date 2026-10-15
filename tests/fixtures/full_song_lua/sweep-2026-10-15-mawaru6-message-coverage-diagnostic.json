@@ -1,0 +1,19 @@
+{
+  "position": 305,
+  "source_simfile": "mawaru6/mawaru6.sm",
+  "candidate_sha256": "2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb",
+  "trace_sha256": "4d205ed710879e4011d75fc735b3ae9fa7e9e9b6c53eb81873b64fff35771b7f",
+  "simfile_sha256": "394d4b03ce745a22d46dfef9bf581301840ee654ebd382d2c76412260694c37c",
+  "binary_sha256": "86439e2494912eec80c902e6f1ae1bdd576a96f4f919107996b300d981701d8d",
+  "diagnostic_exit": 2,
+  "seconds": 1450.6114189610234,
+  "full_repair_attempts_spent": 0,
+  "native_capture_reused": true,
+  "native_frames": 121856,
+  "replayed_frames": 6073,
+  "errors": [],
+  "mismatch_count": 0,
+  "first_mismatches": [],
+  "report_sha256": "b436ed1ad563185c8d54d1ea2721362c67a5f474cb25bd735c40d0db0012110b",
+  "archive_accepted": false
+}
