@@ -2132,7 +2132,8 @@ pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Re
         &song_group_name(&context.song_dir),
     )?;
     let music_path = song_music_path(&context.song_dir);
-    let banner_path = song_named_image_path(&context.song_dir, &["banner", "bn"]);
+    let banner_path = context.song_banner_path.clone()
+        .or_else(|| song_named_image_path(&context.song_dir, &["banner", "bn"]));
     let background_path = song_named_image_path(&context.song_dir, &["background", "bg"]);
     let jacket_path = song_named_image_path(&context.song_dir, &["jacket", "cover"]);
     let cd_image_path = song_named_image_path(&context.song_dir, &["cdtitle", "cdimage", "disc"]);
@@ -2150,6 +2151,10 @@ pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Re
         "HasBanner",
         banner_path.as_deref(),
     )?;
+    // Song::HasBanner checks the resolved file, including explicit metadata.
+    table.set("HasBanner", lua.create_function(move |_, _args: MultiValue| {
+        Ok(banner_path.as_ref().is_some_and(|path| path.is_file()))
+    })?)?;
     set_path_methods(
         lua,
         &table,

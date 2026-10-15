@@ -7186,8 +7186,26 @@ pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Res
             }
         })?,
     )?;
+    actor.set("LoadFromSong", lua.create_function({
+        let actor = actor.clone();
+        move |lua, args: MultiValue| {
+            let path = if let Some(Value::Table(song)) = method_arg(&args, 0)
+                && truthy(&call_table_method(song, "HasBanner")?)
+            {
+                call_table_method(song, "GetBannerPath")?.as_string()
+                    .map(|path| path.to_string_lossy())
+            } else { None };
+            let path = match path.filter(|path| !path.is_empty()) {
+                Some(path) => path,
+                None => load_native_blank_texture()?.to_owned(),
+            };
+            load_actor_texture(lua, &actor, Some(&Value::String(lua.create_string(&path)?)), false)?;
+            actor.set("__songlua_state_banner_scrolling", false)?;
+            actor.set("__songlua_state_banner_scroll_percent", 0.0_f32)?;
+            Ok(actor.clone())
+        }
+    })?)?;
     for (name, path_methods) in [
-        ("LoadFromSong", &["GetBannerPath"][..]),
         (
             "LoadFromCourse",
             &["GetBannerPath", "GetBackgroundPath"][..],

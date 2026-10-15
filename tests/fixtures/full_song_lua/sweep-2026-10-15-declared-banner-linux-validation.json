@@ -1,0 +1,58 @@
+{
+  "source_root": "/home/parity/workspace/declared-banner-green-v2/deadsync",
+  "binary_sha256": "8bdb73c3f841410dd63ed139d32b3f8d025df9a7a5b658356bd60d3b4496dd21",
+  "all_five_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "entire_new_runtime_regression_identical_red_green": true,
+  "all_99_prior_live_and_41_replay_controls_unchanged": true,
+  "full_acceptance_source_byte_identical": true,
+  "all_34_native_assets_logs_and_helper_hashes_verified": true,
+  "meaningful_ignored_declared_banner_red_both_hosts": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 250.5298168369918,
+      "log_sha256": "fa1da74cfa0dc2d9543f61559d09dc84ab5297877256f16ead17f53ac69aed00",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 636 filtered out; finished in 0.79s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 213.05534990300657,
+      "log_sha256": "2ea66afe689f608068c9e877435e3107a56b05473788c86f7b8a1db6fff208f3",
+      "results": [
+        "test result: ok. 41 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 21.74s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 35.85548360599205,
+      "log_sha256": "86787147d674c217626fa5a12d6fb91e577fdf3fd7414ec772aef36d75c908cd",
+      "results": [
+        "test result: ok. 100 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 35.12s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 72.2541722820024,
+      "log_sha256": "346f03baf1ac22127874954f8b21dccaf3b92777314b46ff8cd144e479268f22",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 37.51187765004579,
+      "log_sha256": "9e0d802e80d5f63f31024791f3764103ee5a05ac51d14bdb635b58438c70dc1c",
+      "results": []
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
