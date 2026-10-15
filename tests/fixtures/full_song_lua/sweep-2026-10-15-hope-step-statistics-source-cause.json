@@ -54,10 +54,10 @@
       ]
     }
   },
-  "source_cause": "PerPlayer/StepStatistics/default.lua constructs three actual direct children: DarkBackground, named BannerAndData and DensityGraph. BannerAndData owns Banner, TapNoteJudgments, HoldsMinesRolls, Time and Scorebox source actors. Owned create_underlay_theme_actor currently constructs only one unnamed density sleep-queue frame, with no real graph descendants, dark background or BannerAndData hierarchy. Its direct child count is1 instead of3. Native geometry, selected style/centering behavior, fonts, textures, statistics, messages and live graph updates belong to these actual source actors; padding the count with empty owners would preserve the wrong runtime hierarchy.",
+  "source_cause": "PerPlayer/StepStatistics/default.lua constructs three actual direct children: DarkBackground, named BannerAndData and DensityGraph. BannerAndData loads Banner, TapNoteJudgments, HoldsMinesRolls and Time, plus Scorebox when its native eligibility conditions return an actor. Owned create_underlay_theme_actor currently constructs only one unnamed density sleep-queue frame, with no real graph descendants, dark background or BannerAndData hierarchy. Its direct child count is1 instead of3. Native geometry, selected style/centering behavior, fonts, textures, statistics, messages and live graph updates belong to these actual source actors; padding the count with empty owners would preserve the wrong runtime hierarchy.",
   "native_direct_children": [
     "DarkBackground.lua (Quad for non-double; two-Quad ActorFrame for double)",
-    "ActorFrame named BannerAndData, owning five loaded source actors",
+    "ActorFrame named BannerAndData, owning Banner/TapNoteJudgments/HoldsMinesRolls/Time and conditionally eligible Scorebox",
     "DensityGraph.lua ActorFrame, owning actual background/histogram/life graph children"
   ],
   "current_owned_direct_children": [
@@ -108,5 +108,8 @@
   "expected_query_results_used_as_engine_inputs": false,
   "comparison_logic_changed": false,
   "production_step_statistics_fix_added": false,
-  "next_action": "Build the actual StepStatistics source-selected hierarchy and runtime behavior from its eight primary Lua files, including real child types, geometry, resources, statistics/message updates and graph ownership. Use real initial gameplay/profile inputs. Preserve the previously qualified quantized recurring density timing and all existing controls. Qualify meaningful runtime assertions on both hosts before retained entry; no full HOPE repair while known entry failures remain."
+  "next_action": "Build the actual StepStatistics source-selected hierarchy and runtime behavior from its eight primary Lua files, including real child types, geometry, resources, statistics/message updates and graph ownership. Use real initial gameplay/profile inputs. Preserve the previously qualified quantized recurring density timing and all existing controls. Qualify meaningful runtime assertions on both hosts before retained entry; no full HOPE repair while known entry failures remain.",
+  "steps_density_prerequisite_fix_commit": "b43bcea765536e63a9f12ce220c1226023bfe19c",
+  "steps_density_prerequisite_qualified_both_hosts": true,
+  "steps_density_source_scope": "sweep-2026-10-15-steps-density-comparison-and-source-scope.json"
 }

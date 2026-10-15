@@ -1,0 +1,92 @@
+{
+  "baseline_fix_commit": "0b3b12b7b6fb83b93b1661c4395b8d2151253cba",
+  "density_prerequisite_fix_commit": "b43bcea765536e63a9f12ce220c1226023bfe19c",
+  "full_acceptance_and_native_replay_comparison_source_byte_identical": true,
+  "all_39_prior_replay_controls_and_all_97_prior_live_tests_byte_identical": true,
+  "entire_new_live_regression_identical_red_green": true,
+  "all_legacy_lib_tests_and_actual_underlay_actor_factory_byte_identical": true,
+  "native_primary_sources": {
+    "MeasureInfo.cpp": {
+      "path": "/home/parity/native/source-v1/src/MeasureInfo.cpp",
+      "sha256_lf_normalized": "0639d0ec9ce01f8b374d09cd025415ab0f78bfe416025dcb61d8f72a37d5cb17"
+    },
+    "Steps.cpp": {
+      "path": "/home/parity/native/source-v1/src/Steps.cpp",
+      "sha256_lf_normalized": "eb1685023c27de6f4095d53439b318edca85301c11db053189e5b1eca8d43c2c"
+    },
+    "SL-Histogram.lua": {
+      "path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Scripts/SL-Histogram.lua",
+      "sha256_lf_normalized": "65facaf03c71edd46644d7e8021c430483f8df09aa7038ca703cd082b2c4f326"
+    },
+    "SL-ChartParser.lua": {
+      "path": "/home/parity/native/source-v1/Themes/Harness Simply Love/Scripts/SL-ChartParser.lua",
+      "sha256_lf_normalized": "6ca623b3676a72ed95e67aab8a2fd62ec954b962ae906f2106c1d7ff28bab4ab"
+    },
+    "TimingData.cpp": {
+      "path": "/home/parity/native/source-v1/src/TimingData.cpp",
+      "sha256_lf_normalized": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1"
+    }
+  },
+  "physical_native_sources_match_local_vendor": true,
+  "extra_unchanged_helper_and_all_rules_controls": {
+    "windows-existing-theme-support-control": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\debug\\deps\\deadsync_song_lua-31f55611de4bc928.exe",
+        "tests::compile_song_lua_exposes_theme_support_bpm_profile_helpers",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "binary_sha256": "6b6842c9cbfb7415872ad6690d8848ec7c1f3f2a16e2293ca9e8d5d079aed5b0",
+      "log_sha256": "1ae137e88d888296a60fdac9259aa999d5fe62bc5c71c101ef6639518c8a0d71",
+      "existing_test_and_all_assertions_unchanged": true,
+      "used_same_compiled_library_test_binary_as_registered_density_target": true,
+      "full_chart_repairs_spent": 0
+    },
+    "windows-all-rules-controls-v2": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\debug\\deps\\deadsync_rules-54008c84562df81c.exe",
+        "--test-threads=8"
+      ],
+      "exit_code": 0,
+      "binary_sha256": "a296d0a16dd7ba802ef4acc65e4c47e58ed63796d719a34d03a11f0096c97f08",
+      "log_sha256": "b001562ca9f2e305e14c2cd9bb1b4cd0c49da3d12215886748c0b271358b1a11",
+      "rules_unit_tests_passed": 120,
+      "preexisting_ignored_tests": 2,
+      "used_same_compiled_rules_test_binary_as_signature_control": true,
+      "full_chart_repairs_spent": 0
+    },
+    "linux-existing-theme-support-control": {
+      "command": [
+        "/home/parity/build/deadsync-v1/debug/deps/deadsync_song_lua-fd71db1c24d40168",
+        "tests::compile_song_lua_exposes_theme_support_bpm_profile_helpers",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "binary_sha256": "a49fe7c9f45bbcbe2bd2e2c7b266c748f040a9a3f2bfb095567d1c570e631dc6",
+      "log_sha256": "11376e2960c5a79dde20732a54a316825cb05b00a30f4b3fdac8330d81b63779",
+      "existing_test_and_all_assertions_unchanged": true,
+      "used_same_compiled_library_test_binary_as_registered_density_target": true,
+      "full_chart_repairs_spent": 0
+    },
+    "linux-all-rules-controls-v2": {
+      "command": [
+        "/home/parity/build/deadsync-v1/debug/deps/deadsync_rules-79229be4a97a621a",
+        "--test-threads=8"
+      ],
+      "exit_code": 0,
+      "binary_sha256": "edae6162d2f32eac843de632b7b51e2488e2fdb773f360262017a90c2d839719",
+      "log_sha256": "598f9175854370781bc239ad1aaa001396033a922a160dfb54d3fbe7e47901a2",
+      "rules_unit_tests_passed": 120,
+      "preexisting_ignored_tests": 2,
+      "used_same_compiled_rules_test_binary_as_signature_control": true,
+      "full_chart_repairs_spent": 0
+    }
+  },
+  "initial_new_test_compile_error": "Frozen v1 logs preserve E0560 for newly authored StopSegment.seconds and FakeSegment.length_beats fields. Corrected v2 uses existing duration/length fields; all new assertions are unchanged and v2 reproduces the meaningful missing-density failure on both hosts.",
+  "auxiliary_rules_runner_correction": "The first auxiliary controller expected122 passing tests; its logs actually show120 passed and2 pre-existing ignored with0 failures. The corrected runner records exit0 and120 passed/2 ignored on both hosts using the same compiled source.",
+  "native_measure_behavior": "one counted tap/hold-head row regardless of jumps, 48-row signature boundaries with completed partial measures rounded up, fake/warp filtering except the native final-row flush, native four-beat float duration and0.12-second cutoff, immutable cached values independent of playback rate, fresh query tables",
+  "scope_limit": "This supplies the real density prerequisite. The actual StepStatistics actor hierarchy is still pending, and no new HOPE entry/full replay was run for an unchanged known hierarchy failure.",
+  "expected_query_results_imported_as_engine_inputs": false,
+  "full_chart_repairs_spent": 0,
+  "no_passing_chart_reopened": true
+}
