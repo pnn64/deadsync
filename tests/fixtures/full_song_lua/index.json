@@ -3838,17 +3838,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 13",
+      "title": "Episode 13 My Ex's Bestfriend",
       "source_simfile": "My Exes Bestfriend/ExBestFriend.sm",
-      "harness_version": "0.1.0",
-      "archive": "f644b073b29d02167b03544bf2e482e2f4440eb0d7f9b70bbd71aefc13f2aee2.tar.zst",
-      "sha256": "f644b073b29d02167b03544bf2e482e2f4440eb0d7f9b70bbd71aefc13f2aee2",
-      "compressed_bytes": 83472,
-      "uncompressed_sha256": "fd195fa7e014bd914819b73df1f0fae78fb7140bc76ee1aa70d97dbe8c1cdbbc",
-      "compression_level": 22,
-      "aliases": [
-        "e047c54600586440a53d50531ec460af3296e894bced399ab2ea5cf9a8d192da.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "02b258ba4d45574ab51f7c8cd3eb6df4fa942bd18218dbd4b44a9e7473b88b09.tar.zst",
+      "sha256": "02b258ba4d45574ab51f7c8cd3eb6df4fa942bd18218dbd4b44a9e7473b88b09",
+      "compressed_bytes": 84720928,
+      "uncompressed_sha256": "5d63dfb239e0b987f5806460a53499a93ffd5d1bf4a3329354664a32e38ce225",
+      "aliases": []
     },
     {
       "title": "Episode 13 My Ex's Bestfriend",

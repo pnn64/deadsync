@@ -1,0 +1,71 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+  "results": [
+    {
+      "position": 320,
+      "source_simfile": "My Exes Bestfriend/ExBestFriend.sm",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "5d63dfb239e0b987f5806460a53499a93ffd5d1bf4a3329354664a32e38ce225",
+      "trace_sha256": "cd27453eb6a7a83da1106c422d81ab5be354f74bc43f38e04ce4d92dcc4603d5",
+      "simfile_sha256": "2314771d6ae77815b2ef52e8d5600a8f5183762f694012ba305771a0a83fbe3b",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "previous_failure": null,
+      "previous_errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 3.001: missing captured subscriber identity for ScreenGameplay/6/1",
+        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 3.496: missing captured subscriber identity for ScreenGameplay/6/1",
+        "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 67.504: missing captured subscriber identity for ScreenGameplay/6/1"
+      ],
+      "applied_listener_fix": "d69f0a20f",
+      "one_later_attempt_maximum": true,
+      "replay_exit": 0,
+      "replay_seconds": 1733.4923088570067,
+      "native_frames": 66182,
+      "replayed_frames": 66182,
+      "compared_stage_fields": 1639,
+      "pending_coverage": [
+        "uncompared song operations: Actor.blend, Actor.smooth, ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "9c6ded086fad6016ba73db197c0ac39a4b7573fa53ede4a3a8a1edf7b0d4c147",
+      "archive": "02b258ba4d45574ab51f7c8cd3eb6df4fa942bd18218dbd4b44a9e7473b88b09.tar.zst",
+      "archive_sha256": "02b258ba4d45574ab51f7c8cd3eb6df4fa942bd18218dbd4b44a9e7473b88b09",
+      "compressed_bytes": 84720928,
+      "harness_version": "0.1.80",
+      "title": "Episode 13 My Ex's Bestfriend",
+      "pack_seconds": 9.444083500013221,
+      "retained_original_entry": {
+        "title": "Episode 13",
+        "source_simfile": "My Exes Bestfriend/ExBestFriend.sm",
+        "harness_version": "0.1.0",
+        "archive": "f644b073b29d02167b03544bf2e482e2f4440eb0d7f9b70bbd71aefc13f2aee2.tar.zst",
+        "sha256": "f644b073b29d02167b03544bf2e482e2f4440eb0d7f9b70bbd71aefc13f2aee2",
+        "compressed_bytes": 83472,
+        "uncompressed_sha256": "fd195fa7e014bd914819b73df1f0fae78fb7140bc76ee1aa70d97dbe8c1cdbbc",
+        "compression_level": 22,
+        "aliases": [
+          "e047c54600586440a53d50531ec460af3296e894bced399ab2ea5cf9a8d192da.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first repair: native delivery continues for subscribers absent from capture identity map; original capture and comparisons unchanged",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
