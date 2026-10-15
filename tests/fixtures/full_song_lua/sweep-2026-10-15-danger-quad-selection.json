@@ -1,0 +1,16 @@
+{
+  "fix_commit": "8bfa5e62fbd842efd8d7136f9137759e96c80a43",
+  "source_root": "/home/parity/workspace/danger-quad-green-v3/deadsync",
+  "binary_sha256": "a36f5fb04e8cf38cb7cfe36a3ac1ef354768ddaae31329a5a6a61d4f47147b95",
+  "build_proof": "/home/parity/jobs/danger-quad-linux-green-v3/proof.json",
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "live_controls": 102,
+  "replay_controls": 43,
+  "profile_controls": 1,
+  "legacy_namespace_controls": 1,
+  "asset_count": 35,
+  "scope": "actual original native Danger Quad, lifecycle, eligibility, screen reconstruction and profile HideDanger inputs",
+  "hope_full_repairs_spent": 0,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
