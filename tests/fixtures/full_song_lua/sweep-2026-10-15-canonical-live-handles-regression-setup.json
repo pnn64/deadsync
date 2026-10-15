@@ -1,0 +1,40 @@
+{
+  "source_simfile": "mawaru9/mawaru9.sm",
+  "private_native_entry_evidence": "sweep-2026-10-15-mawaru9-canonical-entry-diagnostic.json",
+  "private_native_entry_frames": 1628,
+  "private_native_entry_mismatches": 0,
+  "private_native_entry_errors": 0,
+  "production_canonical_handle_fix_applied": false,
+  "new_regression": "live_large_scene_preserves_actor_identity_and_update_order",
+  "regression_actor_count": 2800,
+  "required_assertions": [
+    "same Lua actor identity after live retention",
+    "authored child identity and order",
+    "parent Update observes every child advanced exactly once"
+  ],
+  "initial_regression_setup_failure": "v1 exhausted the Lua stack during initialization before the intended live-retention phase; not accepted as a canonical handle regression control",
+  "linux_v2_launcher_failure": "copied preserved v1 proposal rather than revised v2; source mismatch discovered and original run preserved; not accepted as a revised control",
+  "revised_v2_setup_failure": "After compile, Def.* is still an ActorDefinitionHost declaration decorator. The test invokes Def.* with no current script path: create_debug_table getinfo returns =[songlua] at every level, and make_actor_ctor repeat loop cannot obtain _Dir or a nil info. CPU sampling confirms execution in this exact getinfo loop. This is a deterministic invalid test setup, not slow chart replay.",
+  "invalid_windows_test_pid_terminated": 38956,
+  "invalid_linux_test_pid_terminated": 308602,
+  "cpu_sample": {
+    "pid": 308602,
+    "actual_command": [
+      "/home/parity/build/deadsync-v1/debug/deps/deadsync_song_lua-fd71db1c24d40168",
+      "live_large_scene_preserves_actor_identity_and_update_order"
+    ],
+    "sampling_seconds": 1,
+    "frequency_hz": 49,
+    "process_signalled_or_restarted": false,
+    "report_sha256": "9b5c26cc9018e9edc82f5ae7f817d5211b2efcd56addd633b4428850ca29179e"
+  },
+  "replays_stopped_signalled_or_restarted": false,
+  "new_v4_setup": "materialize plain Class declarations through the actual ActorDefinitionHost; retain existing actor handles before SongLuaLiveScene::new; install tween and update assertions only after retention succeeds",
+  "windows_stage": "../itgmania-harness/target/server-parity/canonical-live-actor-handles-windows-red-v4",
+  "linux_stage": "/home/parity/jobs/canonical-live-actor-handles-linux-red-v4",
+  "v4_terminal_red_result_not_yet_claimed": true,
+  "v4_green_not_started": true,
+  "full_repairs_spent": 0,
+  "resource_limits_increased": false,
+  "acceptance_comparisons_changed": false
+}

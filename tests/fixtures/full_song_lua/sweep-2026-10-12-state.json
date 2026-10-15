@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T08:19:09Z",
-  "previous_goal_turn": "All501 original simfiles have terminal initial outcomes:396 passed,105 pending,0 unprocessed. Passing fixtures remain closed. The native Quad default texture fix b54321aa6c7eee2671a4da8c6a999da4eaa1a670 passed meaningful red and all16 green validation groups on Windows and Linux, including81 live controls and35 replay controls. All1175 raw Linux and normalized cross-platform red/green source pins, logs and private helper were verified. It models the native empty-filename1x1 default RageTexture, ignores Quad node Texture loading, and supports explicit unload and retained-handle rebinding. The original HOPE capture is reused for an entry diagnostic before any full repair; the completed1688-frame entry after the Quad fix has20478 mismatches and zero callback errors. The first remaining actor is ScreenGameplay/OniGameOverP1: native loads the actual inherited _blank.png bitmap, while owned only creates an unloaded Sprite. This concrete next source cause is recorded; no full HOPE repair was started. Mawaru9 private canonical actor-handle sharing completed1628 entry frames with zero mismatches and zero callback errors; source, helper, logs and report were verified and evidence committed392d10ae1. This is a private counterfactual, not full acceptance or a production handle-sharing fix. A meaningful large-scene production regression is prepared. Mawaru6 final2 and Mawaru8 first1 remain live without restart. Original captures, the existing acceptance predicate, separate missing-coverage records and the two-full-repair cap remain unchanged. The goal remains active.",
+  "updated_utc": "2026-10-15T08:36:44Z",
+  "previous_goal_turn": "All501 original simfiles have terminal initial outcomes:396 passed,105 pending,0 unprocessed. Passing fixtures remain closed. The native Quad default texture fix b54321aa6c7eee2671a4da8c6a999da4eaa1a670 passed meaningful red and all16 green validation groups on Windows and Linux, including81 live controls and35 replay controls. All1175 raw Linux and normalized cross-platform red/green source pins, logs and private helper were verified. It models the native empty-filename1x1 default RageTexture, ignores Quad node Texture loading, and supports explicit unload and retained-handle rebinding. The original HOPE capture is reused for an entry diagnostic before any full repair; the completed1688-frame entry after the Quad fix has20478 mismatches and zero callback errors. The first remaining actor is ScreenGameplay/OniGameOverP1: native loads the actual inherited _blank.png bitmap, while owned only creates an unloaded Sprite. This concrete next source cause is recorded; no full HOPE repair was started. Mawaru9 private canonical actor-handle sharing completed1628 entry frames with zero mismatches and zero callback errors; source, helper, logs and report were verified and evidence committed392d10ae1. This is a private counterfactual, not full acceptance or a production handle-sharing fix. The revised v4 large-scene regression uses actual host materialization and is building on both hosts. Earlier initialization overload and invalid post-load Def decorator setups are preserved, including a CPU/source-proven endless test setup loop; only those invalid test processes were stopped, and no chart replay was stopped or restarted. Production canonical handle sharing has not been applied. Mawaru6 final2 and Mawaru8 first1 remain live without restart. Original captures, the existing acceptance predicate, separate missing-coverage records and the two-full-repair cap remain unchanged. The goal remains active.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "9143576a30c55390a09febb63223c6e8f657e60d",
+      "deadsync": "2777b327609d3426aba41b66098efc2433c151ec",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -4812,7 +4812,12 @@
       "private_entry_errors": 0,
       "private_entry_mismatches": 0,
       "private_canonical_preparation_stack_failure_resolved": true,
-      "production_canonical_handle_fix_added": false
+      "production_canonical_handle_fix_added": false,
+      "canonical_large_scene_regression_setup": "tests/fixtures/full_song_lua/sweep-2026-10-15-canonical-live-handles-regression-setup.json",
+      "canonical_red_windows_stage": "../itgmania-harness/target/server-parity/canonical-live-actor-handles-windows-red-v4",
+      "canonical_red_linux_stage": "/home/parity/jobs/canonical-live-actor-handles-linux-red-v4",
+      "canonical_v4_terminal_red_result_not_yet_claimed": true,
+      "canonical_green_started": false
     },
     "hope_namespace_followup": {
       "full_repairs_spent": 0,
@@ -7038,7 +7043,7 @@
   "next_actions": [
     "Collect Mawaru6 final2 and Mawaru8 first1 full repairs without restarting live processes; save and byte-verify complete passes or preserve concrete terminal failures.",
     "Collect retained-capture HOPE entry after the validated native Quad default texture fix and resolve actual remaining entry failures before any full repair.",
-    "Use the zero-mismatch private Mawaru9 canonical handle entry result to develop a production fix with meaningful large-scene identity and update-order controls; validate before a bounded full repair.",
+    "Collect the revised v4 large-scene red control on Windows and Linux; preserve source pins and require the actual live-retention StackError before applying and validating the canonical actor-handle production fix. The private Mawaru9 native entry already completed1628 frames with zero mismatches/errors. No full chart repair has been spent.",
     "Keep I Really Like You SSC pending on countdown broadcasts and missing initialization-clock inputs before its one remaining full repair.",
     "Preserve396 passing originals as closed and keep missing coverage separate from concrete pending failures."
   ],
