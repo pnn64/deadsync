@@ -1,0 +1,70 @@
+{
+  "status": "retained-capture diagnostics running; actual remaining chart results unmodified",
+  "fix_commit": "3eb9c8bf3cff63a110acf0ca8e39f95548696b73",
+  "binary_sha256": "2f634c0b6929141c5f3848da71d984d34c1ed26b9df24bd8bbd57a87fed39906",
+  "native_captures_reused_byte_identically": true,
+  "chart_full_repair_attempts_spent": 0,
+  "acceptance_keys_tolerances_predicate_unchanged": true,
+  "passing_charts_reopened": false,
+  "results": [
+    {
+      "position": 407,
+      "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+      "status": "running",
+      "candidate_sha256": "3acf5805c3838749c446ffc8277eef7b74c76f5715c43c35e5ba0a1ab4f082e9",
+      "trace_sha256": "0cd45eb83d74d4075152e6b67b24cdd67c7a01932309512f20cc51390c08963c",
+      "simfile_sha256": "029596d9d093479e06f71010fdda42b381856414c3bc8678f62ddf4aa70025ee",
+      "original_complete_native_frames": 112654,
+      "original_complete_replayed_frames": 112654,
+      "original_report_sha256": "42cd141ec6b1579727169f3eaa3c67b3af01ee196d317c2202684654fc3a162e",
+      "original_full_mismatch_counts": {
+        "source_broadcast_params_unsupported": 19,
+        "source_broadcast": 19,
+        "command_query_count": 1,
+        "command_query_event": 99175
+      },
+      "original_errors": [],
+      "full_repair_attempts_total": 0,
+      "full_repair_attempts_spent_by_diagnostic": 0,
+      "native_capture_reused": true,
+      "diagnostic_through_second": 5,
+      "live": {
+        "pid": 2726640,
+        "command": [
+          "/home/parity/jobs/function-broadcast-metadata-linux-green-v1/full-song-lua",
+          "--archive",
+          "/home/parity/jobs/spectrum-function-metadata-diagnostic-v1/chart-407/3acf5805c3838749c446ffc8277eef7b74c76f5715c43c35e5ba0a1ab4f082e9.tar",
+          "--report",
+          "/home/parity/jobs/spectrum-function-metadata-diagnostic-v1/chart-407/report.json",
+          "--through-second",
+          "5"
+        ],
+        "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc"
+      },
+      "whole_chart_pass_not_claimed": true
+    },
+    {
+      "position": 240,
+      "source_simfile": "Igaku/Igaku.ssc",
+      "status": "queued after Spectrum diagnostic",
+      "candidate_sha256": "8eba2affaa1472a742af43ab4208b802c12f31f6402e4c1ef6103fad0ba16183",
+      "trace_sha256": "cbef59377be83fab2841cd2188e16a54580fa84997d30c57efbe9b3beb2b5cf5",
+      "simfile_sha256": "5fa5cb72a841765d6e53ba7fd60e1c753653c64d1748543f4e4bc67f72a3a0d2",
+      "original_complete_native_frames": 8615,
+      "original_complete_replayed_frames": 8615,
+      "original_report_sha256": "6787e265d77b932195eeb2f878da9e7119bed10303452033bf31ac6b92aae2aa",
+      "original_full_mismatch_counts": {
+        "source_broadcast_params_unsupported": 5,
+        "source_broadcast": 5,
+        "command_query_event": 3915
+      },
+      "original_errors": [],
+      "full_repair_attempts_total": 0,
+      "full_repair_attempts_spent_by_diagnostic": 0,
+      "native_capture_reused": true,
+      "diagnostic_through_second": 36,
+      "live": null,
+      "whole_chart_pass_not_claimed": true
+    }
+  ]
+}

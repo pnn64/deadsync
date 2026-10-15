@@ -1,0 +1,31 @@
+{
+  "pid": 2706879,
+  "command": [
+    "python3",
+    "-u",
+    "/home/parity/jobs/wait_mawaru6_diagnostic_then_final_repair_v1.py"
+  ],
+  "source_simfile": "mawaru6/mawaru6.sm",
+  "full_repair_started": false,
+  "full_repairs_spent": 1,
+  "conditional_final_repair_only_after_clean_diagnostic": true,
+  "queue_status": "waiting for retained-capture diagnostic",
+  "diagnostic_build": "/home/parity/jobs/overlay-stage-observer-linux-green-v1/proof.json",
+  "helper_sha256": "86439e2494912eec80c902e6f1ae1bdd576a96f4f919107996b300d981701d8d",
+  "source_fix_commit": "d69f0a20fd7a8b9a00fef1680365364522a51706",
+  "diagnostic_through_second": 10,
+  "native_capture_reused": true,
+  "original_candidate_sha256": "2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb",
+  "previous_complete_frames": 121856,
+  "previous_callback_errors": 3,
+  "previous_mismatches": 3,
+  "missing_ordering_becomes_coverage_original_subscribers_still_dispatched": true,
+  "existing_validation": "sweep-2026-10-14-message-coverage-validation.json",
+  "all_eight_checks_both_hosts_and_all_1175_source_pins_already_verified": true,
+  "comparison_keys_tolerances_acceptance_predicate_unchanged": true,
+  "publisher_stream_count": 147,
+  "initial_diagnostic_missing_candidate_subdirectory_preserved": "/home/parity/jobs/mawaru6-message-coverage-diagnostic-v1",
+  "initial_diagnostic_started_no_replay": true,
+  "full_repair_maximum_after_clean_diagnostic": 2,
+  "no_third_full_repair": true
+}

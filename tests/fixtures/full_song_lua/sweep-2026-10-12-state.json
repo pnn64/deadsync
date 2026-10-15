@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T03:25:48Z",
-  "previous_goal_turn": "Progress: Both Wobbpotato first repairs pass74,561/78,636frames, historical Circles SM first repair passes117,065, Tacos original passes63,571, Rayc Fire2SM original passes76,482, Stay Alive original passes85,478; all0errors/0mismatches, compressed fixtures saved, local decompressed SHA verified/committed, charts closed. Historical148source group now all passed; original SM source-binding history preserved and active historical failure resolved. Koi final2 completes116,240frames with0errors/0mismatches and accepted full report, then old progress reporter Drop panics. Exact original complete report/hash, all candidate member bytes, original simfile bytes and frozen source/binary verified; pack recovered pass without replay or new repair, original exit1 and total2attempts preserved; local archive decompressed SHA verified/committed. Rite first repair follows existing chain. Spectrum112,654frames and Ultimate taste95,127frames original runs finish under v6 collectors; native replay PIDs/argv/cwd retained, kernel exit status recorded and stopped old parents cleaned after completion. Both pending on concrete command/query mismatches,0full repairs spent. Spectrum additionally has function-valued GradientChange broadcast metadata pending; Ultimate firstshift is missing native root On boundary at bg/default.lua1036. All17transferred future originals uniquely owned by2live workers; initial original queue complete, remaining original charts continue without restart. Minefield actual1difficulty mismatch reproduced in3,018-frame retained-capture diagnostic. Native independent3,093-frame control proves Overlay stage probe precedes foreground selection at same clock; initial reader wrongly assumed dance points2 while native active metrics yield5, failed reader/capture preserved and complete capture reused for v2verification. Fix4c9ae9ef093b2cc8d35f6266920ab6763b4385d9 adds read-only owned Overlay observation of all11compared stage fields, without native expected values entering gameplay. Both hosts meaningful red verified; all8green checks target1/hurry1/easing1/parser10/live75/replay34/identity1/both builds pass, all1175raw Linux/normalized crossplatform pins plus log/helper hashes verified. Helper86439e24 private to diagnosed repair. Same retained Minefield capture after diagnostic3,018/100,704frames now0errors/0mismatches; first full repair launched,1attempt spent, one later maximum. Comparison keys/tolerances/full acceptance predicate unchanged; absent observer phase recorded as coverage, no added acceptance gate. Global original helper711a5230 unchanged. All501 original simfile bytes unchanged, coverage separate, oversized fixtures ignored/local, sweep active/incomplete.",
+  "updated_utc": "2026-10-15T03:53:00Z",
+  "previous_goal_turn": "Progress: Closed three full passes: Freaky Deaky SSC, 109,088 frames; Freaky Deaky SM, 126,098 frames; and The Entity SM, 25,109 frames. Each has zero errors and mismatches, a committed compressed fixture, and a locally verified decompressed SHA. Passing charts remain closed. The original worker advanced to Trinity Field while THE WORLD REVOLVING SSC continues; all remaining originals are uniquely assigned to two workers. Added read-only function metadata serialization for original Lua and C closures in broadcast parameters. Both hosts reproduced the original failure and passed all eight validation groups, including 76 live controls and 34 replay controls. All 1,175 raw Linux and normalized cross-platform red/green source pins, logs, and the frozen helper were verified. An independent complete 3,779-frame ITGmania control verifies metadata, original function identity, and call results. Retained-capture diagnostics check Spectrum and Igaku SSC after the function fix. Their original full reports also contain separate command/query mismatches; no full repair attempt or native recapture was spent on this fix, and comparison keys, tolerances, and acceptance criteria remain unchanged. Mawaru 6 has a short retained-capture diagnostic using the existing validated subscriber dispatch fix. Its second and final full repair is queued only after a clean diagnostic; the full count remains one until that replay starts. A failed initial diagnostic path lookup ran no replay and is preserved. Existing Minefield, Gone, Rite SSC, and Mawaru 8 repairs continue without restart. The original helper remains 711a5230. All 501 original simfiles retain their hashes; coverage remains separate, oversized archives remain ignored and local, and the sweep is active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "349f4f96e459e9f8c496121684213ba566ed124d",
+      "deadsync": "3eb9c8bf3cff63a110acf0ca8e39f95548696b73",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -2038,6 +2038,13 @@
         "record": "sweep-2026-10-15-koi-post-accept-reporter-recovery-v1.json",
         "fix_commit": "d69f0a20fd7a8b9a00fef1680365364522a51706; completed comparison recovered without replay",
         "finish_status": "accepted complete comparison packed after reporter shutdown panic; original exit1 and repair count2 preserved; no chart replay repeated"
+      },
+      {
+        "name": "mawaru6-message-coverage-final-repair-v1",
+        "remote": "/home/parity/jobs/mawaru6-message-coverage-final-repair-v1",
+        "record": "sweep-2026-10-15-mawaru6-message-coverage-final-repair-v1.json",
+        "fix_commit": "4c9ae9ef093b2cc8d35f6266920ab6763b4385d9; subscriber dispatch fix d69f0a20fd7a8b9a00fef1680365364522a51706",
+        "finish_status": "final bounded message subscriber coverage repair complete; original full capture reused; no third full repair"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -2060,6 +2067,14 @@
       },
       "jobs": [
         {
+          "job": "mawaru6-message-coverage-final-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0
+        },
+        {
           "job": "minefield-overlay-stage-first-repair-v1",
           "complete": false,
           "supervisor_running": true,
@@ -2074,13 +2089,13 @@
           "job": "chart-sweep-parallel-v6-1",
           "complete": false,
           "supervisor_running": true,
-          "passed": 1,
+          "passed": 2,
           "pending": 0,
-          "processed": 1,
+          "processed": 2,
           "last_phase": "replay",
-          "source_simfile": "The Entity/The Entity.sm",
+          "source_simfile": "Trinity Field/Trinity Field.ssc",
           "child_running": true,
-          "position": 431
+          "position": 447
         },
         {
           "job": "chart-sweep-parallel-v6-2",
@@ -2107,25 +2122,25 @@
         },
         {
           "job": "freaky-deaky-sm-screen-children-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "Freaky Deaky/Freaky Deaky.sm",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "freaky-deaky-ssc-screen-children-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "Freaky Deaky/Freaky Deaky.ssc",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "wobbpotato-egg-carton-untyped-actor-first-repair-v1",
@@ -3410,7 +3425,7 @@
     "selected_replay_binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 146,
+    "publisher_stream_count": 147,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -4107,7 +4122,35 @@
       "spectrum_native_frames": 112654,
       "ultimate_taste_native_frames": 95127,
       "spectrum_full_repairs_spent": 0,
-      "ultimate_taste_full_repairs_spent": 0
+      "ultimate_taste_full_repairs_spent": 0,
+      "current_original_workers": [
+        {
+          "job": "chart-sweep-parallel-v6-1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 2,
+          "pending": 0,
+          "processed": 2,
+          "last_phase": "replay",
+          "source_simfile": "Trinity Field/Trinity Field.ssc",
+          "child_running": true,
+          "position": 447
+        },
+        {
+          "job": "chart-sweep-parallel-v6-2",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 1,
+          "pending": 0,
+          "processed": 1,
+          "last_phase": "replay",
+          "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.ssc",
+          "child_running": true,
+          "position": 439
+        }
+      ],
+      "remaining_originals_uniquely_owned_by_two_workers": true,
+      "passing_charts_not_reopened": true
     },
     "koi_ssc_closed": {
       "full_repairs_spent": 2,
@@ -4156,14 +4199,72 @@
       "native_expected_values_enter_gameplay": false,
       "comparison_keys_tolerances_acceptance_predicate_unchanged": true,
       "global_original_selection_unchanged": true
+    },
+    "function_broadcast_metadata": {
+      "fix_commit": "3eb9c8bf3cff63a110acf0ca8e39f95548696b73",
+      "both_platform_expected_red_verified": true,
+      "both_platform_all_eight_checks_passed": true,
+      "all_1175_raw_linux_and_normalized_cross_platform_source_pins_verified": true,
+      "binary_sha256": "2f634c0b6929141c5f3848da71d984d34c1ed26b9df24bd8bbd57a87fed39906",
+      "source_root": "/home/parity/workspace/function-broadcast-metadata-v1/deadsync",
+      "native_control_frames": 3779,
+      "original_closure_identity_and_execution_preserved": true,
+      "native_control": "tests/fixtures/full_song_lua/sweep-2026-10-15-function-broadcast-metadata-native-control.json",
+      "windows_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-function-broadcast-metadata-windows-validation.json",
+      "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-function-broadcast-metadata-linux-validation.json",
+      "retained_capture_diagnostics": "tests/fixtures/full_song_lua/sweep-2026-10-15-function-broadcast-retained-capture-diagnostics.json",
+      "spectrum_full_repairs_spent": 0,
+      "igaku_ssc_full_repairs_spent": 0,
+      "comparison_keys_tolerances_acceptance_predicate_unchanged": true,
+      "global_original_helper_unchanged": true
+    },
+    "freaky_deaky_sm_closed": {
+      "status": "passed",
+      "native_frames": 126098,
+      "full_repairs_spent": 1,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-freaky-deaky-sm-fixture-verification.json"
+    },
+    "freaky_deaky_ssc_closed": {
+      "status": "passed",
+      "native_frames": 109088,
+      "full_repairs_spent": 1,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-freaky-deaky-ssc-fixture-verification.json"
+    },
+    "the_entity_sm_closed": {
+      "status": "passed",
+      "native_frames": 25109,
+      "full_repairs_spent": 0,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-the-entity-sm-fixture-verification.json"
+    },
+    "mawaru6_message_coverage_final_queue": {
+      "queue_observation": {
+        "status": "waiting for retained-capture diagnostic",
+        "pid": 2706879,
+        "source_simfile": "mawaru6/mawaru6.sm",
+        "full_repairs_spent": 1,
+        "remaining_full_repairs_maximum": 1,
+        "native_capture_reused": true,
+        "diagnostic_only_spends_no_full_repair": true
+      },
+      "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-mawaru6-message-coverage-final-queue-launch.json",
+      "full_repair_limit": 2,
+      "full_repair_not_spent_by_diagnostic": true,
+      "native_capture_reused": true,
+      "global_original_helper_unchanged": true
     }
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 232,
-    "new_pending_charts": 106,
-    "new_processed_sources": 338,
+    "new_passed_fixtures": 235,
+    "new_pending_charts": 104,
+    "new_processed_sources": 339,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 15,
+    "unprocessed_sources": 14,
     "historical_pending_sources": 0,
     "historical_passed_sources": 148
   },
@@ -4537,122 +4638,6 @@
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
-    },
-    {
-      "source_simfile": "Freaky Deaky/Freaky Deaky.sm",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 5,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "external-0031",
-            "args": [
-              false
-            ],
-            "beat": 0.0010966340778395534,
-            "caller": {
-              "line": 173,
-              "source": "song:/lua/default.lua",
-              "tail_call": false
-            },
-            "command": "OnCommand",
-            "definition_id": "def-0007",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 173,
-            "operation": "Actor.visible",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 0.3116326630115509,
-            "seq": 36,
-            "source": "song:/lua/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "query",
-            "operation": "ActorFrame.GetChild",
-            "source": "song:/lua/default.lua",
-            "line": 173,
-            "phase": "callback",
-            "beat": 0.0010966340778395534,
-            "seconds": 0.3116326630115509,
-            "args": [
-              "P1Score"
-            ],
-            "results": [
-              {
-                "actor": 4,
-                "name": "P1Score",
-                "path": "ScreenGameplay/Underlay/P1Score"
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "source_simfile": "Freaky Deaky/Freaky Deaky.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 5,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "external-0031",
-            "args": [
-              false
-            ],
-            "beat": 0.0026688259094953537,
-            "caller": {
-              "line": 173,
-              "source": "song:/lua/default.lua",
-              "tail_call": false
-            },
-            "command": "OnCommand",
-            "definition_id": "def-0007",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 173,
-            "operation": "Actor.visible",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 0.3125396966934204,
-            "seq": 36,
-            "source": "song:/lua/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "query",
-            "operation": "ActorFrame.GetChild",
-            "source": "song:/lua/default.lua",
-            "line": 173,
-            "phase": "callback",
-            "beat": 0.0026688259094953537,
-            "seconds": 0.3125396966934204,
-            "args": [
-              "P1Score"
-            ],
-            "results": [
-              {
-                "actor": 4,
-                "name": "P1Score",
-                "path": "ScreenGameplay/Underlay/P1Score"
-              }
-            ]
-          }
-        }
-      ]
     },
     {
       "source_simfile": "freg/freg.sm",
@@ -6420,10 +6405,10 @@
     "note": "Earlier sweep checkpoints incorrectly carried the superseded one-mismatch replay forward as pending. The complete corrected replay and saved fixture already passed."
   },
   "next_actions": [
-    "Publish and commit each complete passing fixture immediately",
-    "Continue the queued charts after actual failures",
-    "Repair observed failures using pinned local sources, reusing captures, with at most two attempts per chart",
-    "Finish with verified passed/pending counts and concrete failure details"
+    "Collect complete results from both original v6 workers; promptly save, locally decompress-byte-verify and commit each passing fixture, then continue their original queues.",
+    "Keep existing scoped full repairs running without restart; close complete passes, retain concrete mismatches and enforce at most two full repairs per chart.",
+    "Keep Spectrum and Igaku SSC pending on remaining concrete command/query mismatches after function metadata diagnostics; neither has spent a full repair on this fix.",
+    "Mawaru6 final repair starts only after its retained-capture diagnostic is clean; full count remains1 until launch and must never exceed2."
   ],
   "previous_goal_turn_classification": "progress",
   "resolved_historical_concrete_failures": [

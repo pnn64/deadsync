@@ -1,0 +1,16 @@
+{
+  "fix_commit": "3eb9c8bf3cff63a110acf0ca8e39f95548696b73",
+  "build_proof": "/home/parity/jobs/function-broadcast-metadata-linux-green-v1/proof.json",
+  "binary_sha256": "2f634c0b6929141c5f3848da71d984d34c1ed26b9df24bd8bbd57a87fed39906",
+  "tested_source_root": "/home/parity/workspace/function-broadcast-metadata-v1/deadsync",
+  "all_eight_checks_both_platforms_passed": true,
+  "all_1175_raw_linux_and_cross_platform_normalized_source_pins_verified": true,
+  "scope": "diagnostics for actual unsupported function broadcast parameters in Spectrum and Igaku SSC",
+  "full_chart_repairs_spent": 0,
+  "original_captures_reused_byte_identically": true,
+  "native_function_identity_and_call_results_verified": true,
+  "native_control_frames": 3779,
+  "global_original_helper_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_acceptance_predicate_unchanged": true
+}
