@@ -3293,15 +3293,12 @@
     {
       "title": "Koi",
       "source_simfile": "Koi [UPS2016]/koi.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a6d6cdfb7b7256f722f5671ce623642e239fb27e59f5be8c9dd4b74483078a67.tar.zst",
-      "sha256": "a6d6cdfb7b7256f722f5671ce623642e239fb27e59f5be8c9dd4b74483078a67",
-      "compressed_bytes": 3641641,
-      "uncompressed_sha256": "36a17ed7cce6e85c4414acca7fccaeb5a3acd0a18b4c0745c50f81c70adbf5f4",
-      "compression_level": 22,
-      "aliases": [
-        "db933a3510416cabb10780790564228b565c69509ae9bf5c57319ba3e3241e69.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "c5bc3368c5d9c73e313c179de8d30485a6e207d5c11a3a3d96194d790c2de0e4.tar.zst",
+      "sha256": "c5bc3368c5d9c73e313c179de8d30485a6e207d5c11a3a3d96194d790c2de0e4",
+      "compressed_bytes": 13283200,
+      "uncompressed_sha256": "42f964c593f8f62d2731bb51dccf610fda9e4dd8e5c3c85385db8d9d787e9667",
+      "aliases": []
     },
     {
       "title": "Kuru Kuru kururin [MODS]",
