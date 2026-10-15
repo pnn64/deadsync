@@ -1,0 +1,48 @@
+{
+  "failed_windows_stage": "step-statistics-windows-green-v1",
+  "failed_linux_stage": "step-statistics-linux-green-v1",
+  "checks": {
+    "windows": [
+      {
+        "label": "target-control",
+        "exit_code": 4294967295,
+        "seconds": 664.8799465000047,
+        "log_sha256": "e6ef48c0d5699131221fb7c713b5e1a44f6a2321e6010699b231b04fb0d32021",
+        "results": []
+      }
+    ],
+    "linux": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 665.4522425920004,
+        "log_sha256": "a548c7128ea4e28745ba306959adc385bf1f03b3f29369f9b651601fa0e15ea2",
+        "results": []
+      }
+    ]
+  },
+  "linux_actual_target_termination": {
+    "pid": 434333,
+    "actual_args": [
+      "/home/parity/build/deadsync-v1/debug/deps/deadsync_song_lua-fd71db1c24d40168",
+      "live_step_statistics_owns_native_resources_and_updates_real_data"
+    ],
+    "stalled_unit_target_terminated": true,
+    "cause": "Native ActorDef source-search loop called placeholder debug.getinfo, which always returns a fabricated table and cannot terminate without an authored path. Perf dwarf stack locates100 percent in load_native_step_statistics and constructor/debug.getinfo.",
+    "source_sha256": "e3af0b1af90d14c6ebd341d50de9d6d3aaff9ec6c56aa098382a7f3ffefedcba",
+    "no_full_chart_replay_terminated_or_restarted": true,
+    "full_chart_repairs_spent": 0
+  },
+  "windows_verified_target_pid_terminated": 23392,
+  "windows_target_exit_recorded": 4294967295,
+  "native_ctor_source_loop": "make_actor_ctor walks debug.getinfo until it finds a directory or reaches a missing frame. The compatibility getinfo always returns a table from __songlua_current_script_path, which is unset during theme loading. No returned frame has a usable directory and no missing frame is ever reported.",
+  "profile_report_sha256": "726955c723b552307f5aa5169ed139e0979e7ca91798d6a0323f5909290ed4d5",
+  "profile_evidence": "DWARF samples locate100 percent of CPU in load_native_step_statistics / Lua declaration execution, with80 percent reaching create_debug_table/getinfo.",
+  "recovery": "Declaration construction now uses mlua inspect_stack, which reads native lua_getstack/lua_getinfo frames and returns nil at the real stack end. The public compatibility debug table is unchanged.",
+  "all_new_runtime_regression_assertions_identical_v1_v2": true,
+  "all_1175_windows_source_pins_rechecked_against_retained_v1_proposal": true,
+  "native_lua_sources_unchanged": true,
+  "acceptance_comparisons_or_limits_changed": false,
+  "full_chart_repairs_spent": 0,
+  "mawaru9_replay_stopped_or_restarted": false
+}
