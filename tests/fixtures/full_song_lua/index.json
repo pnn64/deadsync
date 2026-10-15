@@ -5640,6 +5640,16 @@
       "compressed_bytes": 9462800,
       "uncompressed_sha256": "20bb680d05140c95752f3d34ab749710ddd41b0e6d6e2fd33ec6d2535acd9b5c",
       "aliases": []
+    },
+    {
+      "title": "Sequential Dreambox",
+      "source_simfile": "Sequential Dreambox - [Zaia]/Sequential Dreambox.ssc",
+      "harness_version": "0.1.80",
+      "archive": "5077e6aea0055072fbe8769109d4e9ff540f404f1db36d0f14c40d65518d380d.tar.zst",
+      "sha256": "5077e6aea0055072fbe8769109d4e9ff540f404f1db36d0f14c40d65518d380d",
+      "compressed_bytes": 38272734,
+      "uncompressed_sha256": "394dc6c9625c3726430c4cea8636dba824a76b78f3ec61b719860148cc4ebdc2",
+      "aliases": []
     }
   ],
   "compression_level": 22
