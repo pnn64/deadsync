@@ -1,0 +1,12 @@
+{
+  "primary_native_evidence": "sweep-2026-10-15-hope-player-inventory-entry-evidence.json",
+  "source_cause": "sweep-2026-10-15-hope-player-inventory-source-cause.json",
+  "existing_fixture_correction": "The hold tree now strictly expects8 total children and5 unnamed, matching native captured inventory. It verifies the empty AttackDisplay parent and extracts exactly four actual hold frames.",
+  "all_existing_rust_hold_feedback_timing_and_player_isolation_assertions_byte_identical": true,
+  "existing_feedback_assertion_body_sha256": "42aa5c7657de11761d9abb8764005c377c87d17751af8fb45f6ea8c78af3b4d7",
+  "new_regression": "live_player_attack_display_preserves_native_inventory_and_hold_indices",
+  "new_regression_scope": "single and double; all enabled players; strict child counts, unnamed identity groups, empty regular-mode AttackDisplay class/parent/position/time, native child order, and unchanged per-column hold feedback indices",
+  "full_song_comparison_keys_tolerances_and_acceptance_unchanged": true,
+  "production_fix_added": false,
+  "full_chart_repairs_spent": 0
+}
