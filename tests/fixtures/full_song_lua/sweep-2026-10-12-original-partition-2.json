@@ -8148,6 +8148,637 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 437,
+      "source_simfile": "The Video Boaboaboaboab/The Video Boab Oyedivuth.sm",
+      "simfile_sha256": "588089cc7c71bc6f92934e15e6bc28d9dd914254b0cceb0b68b4c0f47fc29136",
+      "retained_original_archive": "89e15e6decb405ab0d2bdf05f0e87d143ae6cdcfb9dc9493e7a0fd5e813de36e.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 234.02881231400534,
+      "trace_sha256": "96312baeff49ef9ba2452f757d12e1a75b7a8ed58e86d731030942b5054432c6",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-437/candidates/7eb4f265748c3003a24f0a9eea81fdc5e99e62ce4a3233ec12ce4c4c33210ae3.tar",
+      "replay_exit": 2,
+      "replay_seconds": 2047.708577530022,
+      "candidate_sha256": "7eb4f265748c3003a24f0a9eea81fdc5e99e62ce4a3233ec12ce4c4c33210ae3",
+      "native_frames": 99701,
+      "replayed_frames": 99701,
+      "compared_stage_fields": 2233,
+      "pending_coverage": [
+        "uncompared song operations: GameState.ApplyGameCommand, GameState.GetMasterPlayerNumber"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 179162,
+      "concrete_failures": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "beat": 12.031805992126465,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "SetUpdateCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                {
+                  "type": "SongOptions"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 2,
+            "operation": "GameState.GetSongOptionsObject",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 4.689093112945557,
+            "seq": 9371,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "type": "SongOptions"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongOptionsObject",
+            "source": "song:/lua/default.lua",
+            "line": 2,
+            "phase": "callback",
+            "beat": 12.031599044799805,
+            "seconds": 4.689093112945557,
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "results": [
+              {
+                "type": "SongOptions"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 12.031805992126465,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "SetUpdateCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                12.031805992126465
+              ]
+            },
+            "kind": "query",
+            "line": 2,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 4.689093112945557,
+            "seq": 9373,
+            "source": "song:/lua/default.lua",
+            "results": [
+              12.031805992126465
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/lua/default.lua",
+            "line": 2,
+            "phase": "callback",
+            "beat": 12.031599044799805,
+            "seconds": 4.689093112945557,
+            "args": [],
+            "results": [
+              12.031599044799805
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "beat": 12.074629783630371,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "SetUpdateCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                {
+                  "type": "SongOptions"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 2,
+            "operation": "GameState.GetSongOptionsObject",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 4.705668926239014,
+            "seq": 9375,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "type": "SongOptions"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongOptionsObject",
+            "source": "song:/lua/default.lua",
+            "line": 2,
+            "phase": "callback",
+            "beat": 12.074422836303711,
+            "seconds": 4.705668926239014,
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "results": [
+              {
+                "type": "SongOptions"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 12.074629783630371,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "SetUpdateCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                12.074629783630371
+              ]
+            },
+            "kind": "query",
+            "line": 2,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 4.705668926239014,
+            "seq": 9377,
+            "source": "song:/lua/default.lua",
+            "results": [
+              12.074629783630371
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/lua/default.lua",
+            "line": 2,
+            "phase": "callback",
+            "beat": 12.074422836303711,
+            "seconds": 4.705668926239014,
+            "args": [],
+            "results": [
+              12.074422836303711
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "beat": 12.094138145446777,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "SetUpdateCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                {
+                  "type": "SongOptions"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 2,
+            "operation": "GameState.GetSongOptionsObject",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 4.713220119476318,
+            "seq": 9379,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "type": "SongOptions"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongOptionsObject",
+            "source": "song:/lua/default.lua",
+            "line": 2,
+            "phase": "callback",
+            "beat": 12.093931198120117,
+            "seconds": 4.713220119476318,
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "results": [
+              {
+                "type": "SongOptions"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 12.094138145446777,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "SetUpdateCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                12.094138145446777
+              ]
+            },
+            "kind": "query",
+            "line": 2,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 4.713220119476318,
+            "seq": 9381,
+            "source": "song:/lua/default.lua",
+            "results": [
+              12.094138145446777
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/lua/default.lua",
+            "line": 2,
+            "phase": "callback",
+            "beat": 12.093931198120117,
+            "seconds": 4.713220119476318,
+            "args": [],
+            "results": [
+              12.093931198120117
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "beat": 12.10866641998291,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "SetUpdateCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                {
+                  "type": "SongOptions"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 2,
+            "operation": "GameState.GetSongOptionsObject",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 4.718843460083008,
+            "seq": 9383,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "type": "SongOptions"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongOptionsObject",
+            "source": "song:/lua/default.lua",
+            "line": 2,
+            "phase": "callback",
+            "beat": 12.10845947265625,
+            "seconds": 4.718843460083008,
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "results": [
+              {
+                "type": "SongOptions"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 12.10866641998291,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "SetUpdateCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                12.10866641998291
+              ]
+            },
+            "kind": "query",
+            "line": 2,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 4.718843460083008,
+            "seq": 9385,
+            "source": "song:/lua/default.lua",
+            "results": [
+              12.10866641998291
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/lua/default.lua",
+            "line": 2,
+            "phase": "callback",
+            "beat": 12.10845947265625,
+            "seconds": 4.718843460083008,
+            "args": [],
+            "results": [
+              12.10845947265625
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "beat": 12.125831604003906,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "SetUpdateCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                {
+                  "type": "SongOptions"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 2,
+            "operation": "GameState.GetSongOptionsObject",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 4.72548770904541,
+            "seq": 9387,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "type": "SongOptions"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongOptionsObject",
+            "source": "song:/lua/default.lua",
+            "line": 2,
+            "phase": "callback",
+            "beat": 12.125624656677246,
+            "seconds": 4.72548770904541,
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "results": [
+              {
+                "type": "SongOptions"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 12.125831604003906,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "SetUpdateCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                12.125831604003906
+              ]
+            },
+            "kind": "query",
+            "line": 2,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 4.72548770904541,
+            "seq": 9389,
+            "source": "song:/lua/default.lua",
+            "results": [
+              12.125831604003906
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/lua/default.lua",
+            "line": 2,
+            "phase": "callback",
+            "beat": 12.125624656677246,
+            "seconds": 4.72548770904541,
+            "args": [],
+            "results": [
+              12.125624656677246
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "beat": 12.142995834350586,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "SetUpdateCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                {
+                  "type": "SongOptions"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 2,
+            "operation": "GameState.GetSongOptionsObject",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 4.732131481170654,
+            "seq": 9391,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "type": "SongOptions"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongOptionsObject",
+            "source": "song:/lua/default.lua",
+            "line": 2,
+            "phase": "callback",
+            "beat": 12.142788887023926,
+            "seconds": 4.732131481170654,
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "results": [
+              {
+                "type": "SongOptions"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 12.142995834350586,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "SetUpdateCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                12.142995834350586
+              ]
+            },
+            "kind": "query",
+            "line": 2,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 4.732131481170654,
+            "seq": 9393,
+            "source": "song:/lua/default.lua",
+            "results": [
+              12.142995834350586
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/lua/default.lua",
+            "line": 2,
+            "phase": "callback",
+            "beat": 12.142788887023926,
+            "seconds": 4.732131481170654,
+            "args": [],
+            "results": [
+              12.142788887023926
+            ]
+          }
+        }
+      ],
+      "report_sha256": "838fcb63bd1b1644a39d4b0221450cf6d79be772441db3a6cb005836eee16d17"
     }
   ],
   "scope": {
@@ -8160,6 +8791,6 @@
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 27,
-  "pending_charts": 31,
-  "processed_charts": 58
+  "pending_charts": 32,
+  "processed_charts": 59
 }
