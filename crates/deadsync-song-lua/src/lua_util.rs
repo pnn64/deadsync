@@ -3786,7 +3786,10 @@ fn run_actor_message_with_params(
         }
     }
     run_actor_named_command_with_drain_and_params(lua, actor, name, true, params.clone())?;
-    if actor_type_is(actor, "ActorFrame")? || actor_type_is(actor, "ActorFrameTexture")? {
+    // Screen derives from ActorFrame and forwards direct commands to children.
+    if actor_type_is(actor, "ActorFrame")? || actor_type_is(actor, "ActorFrameTexture")?
+        || actor_type_is(actor, "TopScreen")?
+    {
         for child in actor_direct_children(lua, actor)? {
             run_actor_message_with_params(lua, &child, name, params.clone())?;
         }
@@ -12350,6 +12353,47 @@ fn collect_compile_update_jobs(
     jobs: &mut Vec<SongLuaCompileUpdateJob>,
     order: &mut usize,
 ) -> mlua::Result<()> {
+    collect_compile_update_self_jobs(lua, actor, parent, delta_source, jobs, order)?;
+    for child in actor.sequence_values::<Value>() {
+        let Value::Table(child) = child? else {
+            continue;
+        };
+        adopt_actor_child(actor, &child)?;
+        collect_compile_update_jobs(lua, &child, Some(actor), SongLuaCompileParentDelta::Children, jobs, order)?;
+    }
+    if let Some(stream) = song_meter_stream_child(lua, actor)? {
+        collect_compile_update_jobs(lua, &stream, Some(actor), SongLuaCompileParentDelta::Children, jobs, order)?;
+    }
+    if crate::model_texture::contains(lua, actor) {
+        jobs.push(SongLuaCompileUpdateJob::Texture { actor: actor.clone() });
+    }
+    // ActorFrame checks its current update function after its children. On
+    // (or an earlier actor) can install one after this frame's plan is built.
+    // Retain that slot even when the function is initially absent.
+    jobs.push(SongLuaCompileUpdateJob::Callback {
+        actor: actor.clone(),
+        order: *order,
+    });
+    // NoteField::Update runs its column vector after ActorFrame::Update.
+    // These Actor owners receive the original field delta, outside that
+    // ActorFrame's update rate and hibernation gate, and are not its children.
+    if let Some(columns) = actor.raw_get::<Option<Table>>("__songlua_note_columns")? {
+        for column in columns.sequence_values::<Table>() {
+            collect_compile_update_jobs(lua, &column?, Some(actor),
+                SongLuaCompileParentDelta::NoteColumns, jobs, order)?;
+        }
+    }
+    Ok(())
+}
+
+fn collect_compile_update_self_jobs(
+    lua: &Lua,
+    actor: &Table,
+    parent: Option<&Table>,
+    delta_source: SongLuaCompileParentDelta,
+    jobs: &mut Vec<SongLuaCompileUpdateJob>,
+    order: &mut usize,
+) -> mlua::Result<()> {
     // Actor::Update checks hibernation before its wrappers. Retain that entry
     // phase separately from UpdateInternal so paused owners block the tree.
     jobs.push(SongLuaCompileUpdateJob::Enter {
@@ -12389,35 +12433,6 @@ fn collect_compile_update_jobs(
     if actor.raw_get::<Option<u8>>("__songlua_transition_state")?.is_some() {
         jobs.push(SongLuaCompileUpdateJob::Transition { actor: actor.clone() });
     }
-    for child in actor.sequence_values::<Value>() {
-        let Value::Table(child) = child? else {
-            continue;
-        };
-        adopt_actor_child(actor, &child)?;
-        collect_compile_update_jobs(lua, &child, Some(actor), SongLuaCompileParentDelta::Children, jobs, order)?;
-    }
-    if let Some(stream) = song_meter_stream_child(lua, actor)? {
-        collect_compile_update_jobs(lua, &stream, Some(actor), SongLuaCompileParentDelta::Children, jobs, order)?;
-    }
-    if crate::model_texture::contains(lua, actor) {
-        jobs.push(SongLuaCompileUpdateJob::Texture { actor: actor.clone() });
-    }
-    // ActorFrame checks its current update function after its children. On
-    // (or an earlier actor) can install one after this frame's plan is built.
-    // Retain that slot even when the function is initially absent.
-    jobs.push(SongLuaCompileUpdateJob::Callback {
-        actor: actor.clone(),
-        order: *order,
-    });
-    // NoteField::Update runs its column vector after ActorFrame::Update.
-    // These Actor owners receive the original field delta, outside that
-    // ActorFrame's update rate and hibernation gate, and are not its children.
-    if let Some(columns) = actor.raw_get::<Option<Table>>("__songlua_note_columns")? {
-        for column in columns.sequence_values::<Table>() {
-            collect_compile_update_jobs(lua, &column?, Some(actor),
-                SongLuaCompileParentDelta::NoteColumns, jobs, order)?;
-        }
-    }
     Ok(())
 }
 
@@ -12431,6 +12446,10 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
         // GetChild returns this same owner; adding a later tween must not keep
         // an earlier completed tween in its queue.
         if let Some(screen) = lua.globals().raw_get::<Option<Table>>("__songlua_top_screen")? {
+            // Screen's own Actor queue precedes its children. The song and
+            // theme owners are visited separately below, each exactly once.
+            collect_compile_update_self_jobs(lua, &screen, None,
+                SongLuaCompileParentDelta::Children, &mut jobs, &mut order)?;
             let children = actor_children(lua, &screen)?;
             // SongBackground's entries are already visited through the song
             // root below; traversing its child aliases would update them twice.
@@ -12468,6 +12487,9 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
         collect_compile_update_jobs(lua, root, None, SongLuaCompileParentDelta::Children, &mut jobs, &mut order)?;
         for actor in after_song {
             collect_compile_update_jobs(lua, &actor, None, SongLuaCompileParentDelta::Children, &mut jobs, &mut order)?;
+        }
+        if let Some(screen) = lua.globals().raw_get::<Option<Table>>("__songlua_top_screen")? {
+            jobs.push(SongLuaCompileUpdateJob::Callback { actor: screen, order });
         }
         lua.set_app_data(SongLuaCompileUpdatePlan { jobs: jobs.into() });
     }

@@ -1,0 +1,127 @@
+{
+  "source_sha256_lf_normalized_count": 1175,
+  "all_local_source_and_log_hashes_verified": true,
+  "all_twelve_checks_passed": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 277.4324508999998,
+      "log_sha256": "d7a6fbd31c9ddf64ec2a3a22c6b8f85d13c7a4925a0a40bd5c50a1d89b33b54f",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.27s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 1.712217000007513,
+      "log_sha256": "e5e36fcf1de606d3eaae1a11a04ac2e5d886230b1e29d7146da9c6204ac7aec3",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.21s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 0.8158739000064088,
+      "log_sha256": "40eb5624e0a0bd79f8ce601894fed65ecf7beb97ae56393fffcf21ba85dc97a6",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.3888026000058744,
+      "log_sha256": "5abfa1c8bbad9408694884a68b8052967de80898051187e0eddbc6baff25213b",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 607 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 35.507505999994464,
+      "log_sha256": "626f777c525dda3235d257f692bf4ab650d42b9cecea68504b106361719360a0",
+      "results": [
+        "test result: ok. 79 passed; 0 failed; 0 ignored; 0 measured; 538 filtered out; finished in 34.12s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 82.8945098999975,
+      "log_sha256": "c7bff7bbe4fb3e6b5ba48a458a8f19ca0c9f91ed823a076099b35a671ba386d5",
+      "results": [
+        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.19s"
+      ]
+    },
+    {
+      "label": "sm-compatibility-control",
+      "exit_code": 0,
+      "seconds": 1.567314300002181,
+      "log_sha256": "dcf49c125cd8a4a73bd564cc25eacc6f2f82964c2d158cab27ccaa3a0d01eabe",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.16s"
+      ]
+    },
+    {
+      "label": "crop-compatibility-control",
+      "exit_code": 0,
+      "seconds": 1.5171163999912096,
+      "log_sha256": "4e63f9c98aa38d5f841cd9c065b57f1a032d9ed91bea6d3317b9c5bed212531c",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.20s"
+      ]
+    },
+    {
+      "label": "model-controls",
+      "exit_code": 0,
+      "seconds": 1.0212535999889951,
+      "log_sha256": "e7c789cd3588294996cd169c4b1bcc54344ad3013fc71e2b9d48b9b6c052f214",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 276 filtered out; finished in 0.05s"
+      ]
+    },
+    {
+      "label": "model-differential-control",
+      "exit_code": 0,
+      "seconds": 1.0803420000011101,
+      "log_sha256": "02eb864d9e258d175abe8a2385a5985d1e74bc1eaa237969554354d73dcd9e97",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 287 filtered out; finished in 0.17s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 1.385470900000655,
+      "log_sha256": "3f2b21547e7889cd9b8dc40a033ff6079cd6092e5f986a54f8f6077186ed7422",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 16.417487400001846,
+      "log_sha256": "cfb44da774003859763aa9ec62921e83657251606045710ddbd9d8c46de9256b",
+      "results": []
+    }
+  ],
+  "expected_red_reproduced": true,
+  "red_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 125.12726079999993,
+      "log_sha256": "89631b584169414224a5763d2ca46841b24d7965f90400cd3843eeb617bf48ba",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.20s"
+      ]
+    }
+  ],
+  "native_helper_behavior_control": "sweep-2026-10-15-screen-command-native-control.json",
+  "chart_full_repair_attempts_spent": 0
+}

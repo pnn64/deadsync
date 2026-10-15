@@ -1,0 +1,122 @@
+{
+  "source_root": "/home/parity/workspace/screen-command-propagation-v2/deadsync",
+  "binary_sha256": "9ea0ce465da2fca0a9ee3928e6968b4fda9843b792a278c15f5d510a44ad069b",
+  "all_twelve_checks_both_platforms_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_and_green_source_pins_verified": true,
+  "all_linux_log_and_binary_hashes_verified": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 316.32257438401575,
+      "log_sha256": "540faff9a0f82e0749c484a47978469a28c9b0b4d9209e99dcdde2d8a7efc90f",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 614 filtered out; finished in 0.29s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 1.179879172006622,
+      "log_sha256": "b6eb975cd305de5b74cf174999bc085e9d01da432f617cc81ebc1cd577a5329b",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 614 filtered out; finished in 0.21s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 0.6063114980061073,
+      "log_sha256": "f8a77392cfe74dbeb5dd65128e83870e1ffb5f7a79eed31e5d7d71b0526b9143",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 0.8586637469998095,
+      "log_sha256": "50575fcb657d7d37589b5b114ea7a83b2a7a5b798666f7f209c526e9fc051e60",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 605 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 38.44055856601335,
+      "log_sha256": "b5713c1a931fccc05e5e0dad6480274acd169a256a9923637830d4bf3fbff0b2",
+      "results": [
+        "test result: ok. 79 passed; 0 failed; 0 ignored; 0 measured; 536 filtered out; finished in 37.59s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 263.8340901689953,
+      "log_sha256": "584fc5d9dc621ece5815c7896815bc4926c82b70c7feddf6c8863809a1400514",
+      "results": [
+        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.83s"
+      ]
+    },
+    {
+      "label": "sm-compatibility-control",
+      "exit_code": 0,
+      "seconds": 1.202563051978359,
+      "log_sha256": "9df3255447290c801a687723bcc90ae687baad5997fa6264e065226ab14d21dc",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 614 filtered out; finished in 0.19s"
+      ]
+    },
+    {
+      "label": "crop-compatibility-control",
+      "exit_code": 0,
+      "seconds": 1.1518094170023687,
+      "log_sha256": "3c60e09789404e65292e0643e8feefa83064e735f71fa420e6cb8a426940d6af",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 614 filtered out; finished in 0.20s"
+      ]
+    },
+    {
+      "label": "model-controls",
+      "exit_code": 0,
+      "seconds": 0.621719065005891,
+      "log_sha256": "c57d215b72596a64f312cd3a4c69b18a2dc278858fac4a5d5afe224d6d5d3b6f",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 276 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "model-differential-control",
+      "exit_code": 0,
+      "seconds": 0.7665135510032997,
+      "log_sha256": "56a53a4e931b59282ccbe28b0039a55d3ab5e4eaceee8e8aadd15aeb11a09b3a",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 287 filtered out; finished in 0.12s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 0.9507341779826675,
+      "log_sha256": "8f8ff74c3096b1a888fb35478e8b915bbe2af632a594eeb4b35c26b1cfd56caa",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 614 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 52.85588065200136,
+      "log_sha256": "9f096636aafb8191da099f5ab6ae7f555d922ea356912f111f5fd60a8803ddf6",
+      "results": []
+    }
+  ],
+  "windows_validation": "sweep-2026-10-15-screen-command-propagation-windows-validation.json",
+  "red_expected_failure_both_platforms": true,
+  "native_control_frames": 6160,
+  "native_control": "sweep-2026-10-15-screen-command-native-control.json",
+  "native_screen_commands_propagate_to_nested_song_children": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true,
+  "global_original_helper_unchanged": true
+}

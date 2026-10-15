@@ -4491,6 +4491,55 @@ end }
     }
 
     #[test]
+    fn live_screen_direct_and_queued_commands_reach_song_children() {
+        let mut compiled = compile("screen-command-children", r#"
+CALLS={}; PHASE='immediate'; MARKER={value=17}
+local function probe(tag)
+    return function(self, params)
+        if PHASE=='immediate' then assert(params==MARKER) else assert(params==nil) end
+        CALLS[#CALLS+1]=tag..':'..PHASE
+    end
+end
+return Def.ActorFrame {
+    ScreenCommandProbeCommand=probe('root'),
+    OnCommand=function(self)
+        self:sleep(1000)
+        local screen=SCREENMAN:GetTopScreen()
+        screen:playcommand('ScreenCommandProbe', MARKER)
+        PHASE='queued'
+        screen:sleep(0.25):queuecommand('ScreenCommandProbe')
+    end,
+    Def.ActorFrame { ScreenCommandProbeCommand=probe('nested'),
+        Def.Actor { ScreenCommandProbeCommand=probe('leaf') },
+    },
+}
+"#);
+        let scene = compiled.live_scene.as_mut().expect("owned scene");
+        let startup = scene.take_startup_output();
+        assert!(startup.errors.is_empty(), "{:?}", startup.errors);
+        let calls = || scene.lua.globals().get::<Table>("CALLS").unwrap()
+            .sequence_values::<String>().collect::<mlua::Result<Vec<_>>>().unwrap();
+        assert_eq!(calls(), ["root:immediate", "nested:immediate", "leaf:immediate"],
+            "native Screen commands must reach nested song actors");
+        let early = scene.advance(SongLuaLiveFrame { screen_seconds: 0.125,
+            delta_seconds: 0.125, ..Default::default() }).expect("before queued command");
+        assert!(early.errors.is_empty(), "{:?}", early.errors);
+        assert_eq!(scene.lua.globals().get::<Table>("CALLS").unwrap().raw_len(), 3);
+        let due = scene.advance(SongLuaLiveFrame { screen_seconds: 0.375,
+            delta_seconds: 0.25, ..Default::default() }).expect("queued screen command");
+        assert!(due.errors.is_empty(), "{:?}", due.errors);
+        let calls = scene.lua.globals().get::<Table>("CALLS").unwrap()
+            .sequence_values::<String>().collect::<mlua::Result<Vec<_>>>().unwrap();
+        assert_eq!(calls, ["root:immediate", "nested:immediate", "leaf:immediate",
+            "root:queued", "nested:queued", "leaf:queued"],
+            "the screen queue advances independently of its sleeping descendants");
+        scene.advance(SongLuaLiveFrame { screen_seconds: 0.5,
+            delta_seconds: 0.125, ..Default::default() }).expect("later update");
+        assert_eq!(scene.lua.globals().get::<Table>("CALLS").unwrap().raw_len(), 6,
+            "each descendant receives each direct command once");
+    }
+
+    #[test]
     fn live_source_broadcasts() {
         let mut compiled = compile("broadcast-origin", r#"
             return Def.ActorFrame {
