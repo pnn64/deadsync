@@ -1,0 +1,30 @@
+{
+  "regression": "live_note_field_loads_inherited_board_sprite_outside_column_vector",
+  "meaningful_missing_board_red_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 325.53644239999994,
+      "log_sha256": "5fb2770e97e9d2118b1ead48c57e406a0bc4247940769bc04e6286bffa727071",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 626 filtered out; finished in 0.23s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 256.6669952799566,
+      "log_sha256": "2ad89bb065b351d73a5b4e74595b571f237605782dda7ca3310fad27b990473a",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 624 filtered out; finished in 0.18s"
+      ]
+    }
+  ],
+  "source_cause": "sweep-2026-10-15-hope-note-field-board-source-cause.json",
+  "changed_source_mtimes_refreshed_before_compilation_both_hosts": true,
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
