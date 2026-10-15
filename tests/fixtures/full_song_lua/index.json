@@ -5165,17 +5165,14 @@
       ]
     },
     {
-      "title": "Trinity Field",
+      "title": "Trinity Field (RANDOM)",
       "source_simfile": "Trinity Field/Trinity Field.ssc",
-      "harness_version": "0.1.0",
-      "archive": "f93d59b626603cf2728bf43cfaa8b8365ef0f83efa088e968a409fe0380d9357.tar.zst",
-      "sha256": "f93d59b626603cf2728bf43cfaa8b8365ef0f83efa088e968a409fe0380d9357",
-      "compressed_bytes": 540421,
-      "uncompressed_sha256": "18b1ffca7975e1f266f486b3c74cdf9ee180eedd2fd6fec235c7b34d9c042064",
-      "compression_level": 22,
-      "aliases": [
-        "d466c8cebea59388fbbcb4f4f3082b7c1532d8e954b6609520d7a11c6e585fdb.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "5f62106f51929b4ae3362f065d71df6b7e2f0114ec42125cd4c0669201dbd8bd.tar.zst",
+      "sha256": "5f62106f51929b4ae3362f065d71df6b7e2f0114ec42125cd4c0669201dbd8bd",
+      "compressed_bytes": 9848272,
+      "uncompressed_sha256": "fbf84818890ab578f9be4bea370d4ccb5e515c911630965ddd9375233567abc8",
+      "aliases": []
     },
     {
       "title": "TRIP MACHINE -Resuscitation MIX-",
