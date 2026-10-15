@@ -1,0 +1,13 @@
+{
+  "native_source": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\Scripts\\02 Sprite.lua",
+  "native_source_sha256_lf": "e7de67ee7ff1b289dba7d1fb7d480eb5aa1fe6ec4da85dc7022d6973d10fe823",
+  "native_line": 75,
+  "implemented_function": "function Sprite:cropto(w,h) self:CropTo(w,h) return self end",
+  "delegates_current_public_method_without_argument_coercion": true,
+  "returns_receiver_independently_of_delegate_result": true,
+  "native_function_line_preserved": true,
+  "primary_local_source": "itgmania-harness/vendor/itgmania/Themes/_fallback/Scripts/02 Sprite.lua:75",
+  "implemented_function_source_verified": true,
+  "original_capture_reused_for_chart_diagnostic": true,
+  "comparison_keys_tolerances_acceptance_predicate_unchanged": true
+}

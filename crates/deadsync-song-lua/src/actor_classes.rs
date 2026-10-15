@@ -380,10 +380,14 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         "position",
         "loop",
         "rate",
-        "cropto",
     ] {
         forward(lua, &class, method)?;
     }
+    // _fallback/Scripts/02 Sprite.lua:75 delegates through the current public
+    // method and returns its receiver, independently of CropTo's return value.
+    lua.load(format!("{}function Sprite:cropto(w,h) self:CropTo(w,h) return self end", "\n".repeat(74)))
+        .set_name("_fallback/Scripts/02 Sprite.lua")
+        .exec()?;
     // _fallback/Scripts/02 Actor.lua defines these in native actor primitives.
     lua.load(
         r#"

@@ -4628,6 +4628,50 @@ return Def.Actor {
     }
 
     #[test]
+    fn live_sprite_cropto_alias() {
+        let mut compiled = compile_with_context("sprite-cropto-alias", r#"
+return Def.ActorFrame {
+    Def.Sprite {
+        Texture='wide.png',
+        OnCommand=function(self)
+            self:xy(17,29)
+            assert(self:cropto(100,100)==self, 'cropto returns its receiver')
+            assert(self:GetWidth()==100 and self:GetHeight()==100 and self:GetZoomedWidth()==100)
+            assert(self:GetX()==17 and self:GetY()==29)
+            local original=Sprite.CropTo
+            local marker={}; local calls=0
+            Sprite.CropTo=function(receiver,w,h)
+                assert(receiver==self and w==marker and h==false, 'cropto forwards original arguments')
+                calls=calls+1
+            end
+            assert(self:cropto(marker,false)==self and calls==1, 'cropto uses current CropTo method')
+            Sprite.CropTo=original
+            MESSAGEMAN:Broadcast('CropAliasVerified', {kind='wide', width=self:GetWidth(), height=self:GetHeight()})
+        end,
+    },
+    Def.Sprite {
+        Texture='tall.png',
+        OnCommand=function(self)
+            assert(self:cropto(100,100)==self)
+            assert(self:GetWidth()==100 and self:GetHeight()==100 and self:GetZoomedHeight()==100)
+            MESSAGEMAN:Broadcast('CropAliasVerified', {kind='tall', width=self:GetWidth(), height=self:GetHeight()})
+        end,
+    },
+}
+"#, |context| {
+            image::RgbaImage::new(200,100).save(context.song_dir.join("wide.png")).unwrap();
+            image::RgbaImage::new(100,200).save(context.song_dir.join("tall.png")).unwrap();
+        });
+        let output = compiled.live_scene.as_mut().expect("owned scene").take_startup_output();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(output.source_broadcasts.len(), 2);
+        for (event, kind) in output.source_broadcasts.iter().zip(["wide", "tall"]) {
+            assert_eq!(event.name, "CropAliasVerified");
+            assert_eq!(event.params.as_ref().unwrap(), &Some(serde_json::json!({"kind":kind,"width":100,"height":100})));
+        }
+    }
+
+    #[test]
     fn live_source_params() {
         let mut compiled = compile("broadcast-params", r#"
             return Def.ActorFrame {

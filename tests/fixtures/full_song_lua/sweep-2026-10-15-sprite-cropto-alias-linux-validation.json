@@ -1,0 +1,104 @@
+{
+  "source_root": "/home/parity/workspace/sprite-cropto-alias-v1/deadsync",
+  "binary_sha256": "ec9b6f57486530ed7bb200fefeb5f21bf56e632e37660b57225df985303b89df",
+  "all_ten_checks_both_platforms_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_and_green_source_pins_verified": true,
+  "all_linux_log_and_binary_hashes_verified": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 414.84012585898745,
+      "log_sha256": "12f287b2cd41438176d8a7afed4344033c52389c35079c9c4822dd8a159e300b",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 613 filtered out; finished in 0.53s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 2.1876302559976466,
+      "log_sha256": "df2918e12616c6ca7d93a850a2bac18f2cb0b9a8290721d75a0b5818c0c3340a",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 613 filtered out; finished in 0.38s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 1.1841865709866397,
+      "log_sha256": "df43e7918a7cf4cf67a59daac9a8af9160beb546d350762c6c6546d127e3756b",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.7435928610211704,
+      "log_sha256": "2836efb5453673729068b1cf9328a284fe83c647024ba050b4314518f2236915",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 604 filtered out; finished in 0.02s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 46.483703432022594,
+      "log_sha256": "4330713253610666f2c667fb95018fee06db62bb319bc86409685f7548507c10",
+      "results": [
+        "test result: ok. 78 passed; 0 failed; 0 ignored; 0 measured; 536 filtered out; finished in 44.97s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 304.2815003370051,
+      "log_sha256": "0c74e3c732118c7760b8ccd3482bf205c8fdc96e2c922f271aebaf39b81481c1",
+      "results": [
+        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 3.75s"
+      ]
+    },
+    {
+      "label": "sm-compatibility-control",
+      "exit_code": 0,
+      "seconds": 1.5975043800135609,
+      "log_sha256": "62fb03db00eff627c0dd124ababd9a14a9d2c5cd85528aefa7e51663fc72ef09",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 613 filtered out; finished in 0.28s"
+      ]
+    },
+    {
+      "label": "crop-compatibility-control",
+      "exit_code": 0,
+      "seconds": 1.4833853559975978,
+      "log_sha256": "029135dbeedf814b984e83a091438345715c2b25a436ec763930b8af483452ec",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 613 filtered out; finished in 0.45s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 1.320520123001188,
+      "log_sha256": "d0c741f13cf4de15d93188f8e7e05300e815ba806a2234f9a3ea1508c6955169",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 613 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 63.65438187800464,
+      "log_sha256": "c4d8d98c6caee68884fd0435db6387d380caea67fccccc3856fa504f43a52a6c",
+      "results": []
+    }
+  ],
+  "windows_validation": "sweep-2026-10-15-sprite-cropto-alias-windows-validation.json",
+  "red_expected_failure_both_platforms": true,
+  "native_control_frames": 4616,
+  "native_control": "sweep-2026-10-15-sprite-cropto-alias-native-control.json",
+  "fallback_sprite_cropto_alias_semantics": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true,
+  "global_original_helper_unchanged": true
+}

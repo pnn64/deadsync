@@ -1,0 +1,109 @@
+{
+  "source_sha256_lf_normalized_count": 1175,
+  "all_local_source_and_log_hashes_verified": true,
+  "all_ten_checks_passed": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 228.30487229999562,
+      "log_sha256": "ca7728df996c3261e4d83cc6387ae7dc65818a10d38d189a5e375ee9ef9b51f5",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 615 filtered out; finished in 0.24s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 1.6137747000029776,
+      "log_sha256": "9a07c10c35d53a4a327a9370a2c611de9517a3a02864e411e259b640a5ba85a2",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 615 filtered out; finished in 0.20s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 1.6622975000063889,
+      "log_sha256": "63207efb364d48bdc9415f17c51030d5cddabc2d49fe3a5d27f1322d6bb110eb",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.3648030000040308,
+      "log_sha256": "f12011784f9e71dc7cf9c420ae127c5807db6d987ec444fa4897dff8a8390a67",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 606 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 35.75145799999882,
+      "log_sha256": "4c89f1ffb3f23b934be7247e0bb3c1173cef1bb16c3d4a52d3844956b89f8d35",
+      "results": [
+        "test result: ok. 78 passed; 0 failed; 0 ignored; 0 measured; 538 filtered out; finished in 34.42s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 77.91995640000096,
+      "log_sha256": "4d353314bf5b4e00558903f92a1bd32ba8181322df0b10ab340142788f07da38",
+      "results": [
+        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.82s"
+      ]
+    },
+    {
+      "label": "sm-compatibility-control",
+      "exit_code": 0,
+      "seconds": 1.7003185000066878,
+      "log_sha256": "7c9a700117ae53c9d4d64a22d2a2a23edba64d0cabde76c2b8a0b6a560b13e54",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 615 filtered out; finished in 0.16s"
+      ]
+    },
+    {
+      "label": "crop-compatibility-control",
+      "exit_code": 0,
+      "seconds": 1.496608200002811,
+      "log_sha256": "05ff858874487543820606d51703f5e26528b8128c2cd2422986eed51545ceef",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 615 filtered out; finished in 0.17s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 1.3180047000059858,
+      "log_sha256": "8ca465b9b481be252caefdbb9fa3b8a9963be1e4b3c76d989df787b0074fe3c0",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 615 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 16.43334770000365,
+      "log_sha256": "2e7ab8dc638e47876f6624bc3c8f8af8abf08e189cb4647d0d5f236bad8f69ad",
+      "results": []
+    }
+  ],
+  "expected_red_reproduced": true,
+  "red_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 289.50090590000036,
+      "log_sha256": "4d2c2eac2b87a5feeba7c3b01736ebaf33c766ccc479f048a0aec5c7a7b9e032",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 615 filtered out; finished in 0.20s"
+      ]
+    }
+  ],
+  "native_helper_behavior_control": "sweep-2026-10-15-sprite-cropto-alias-native-control.json",
+  "chart_full_repair_attempts_spent": 0
+}

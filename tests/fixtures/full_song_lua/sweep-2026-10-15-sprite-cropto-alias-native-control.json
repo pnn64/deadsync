@@ -1,0 +1,82 @@
+{
+  "input_sha256": {
+    "control.wav": "71d93ef76e5ff6087d522277e83309f1d8d790e9b756324dec73d216ea57cc75",
+    "wide.png": "30888c1b4bee3a4bf4c067f117578a0cf60f43a17416ba269b5738caaaca3ca6",
+    "control.ssc": "416528f76bd77961fae31a62f604583b0e51d8cf8f6ad28d4f204d4ebee15db4",
+    "tall.png": "f1bcbbacc9a3c47d4f4033cd6ccb50907d4a71071ba70b251af52fea73f7d67e",
+    "control.lua": "798b4933db684dee834ba3b72344a26fb76d82347988c24d62b6536869c97743"
+  },
+  "harness_sha256": "e067360d8120ee0a174b0848832856325ef62b709287fb48976441a277b26563",
+  "native_sha256": "a9d70b63dc11601634e67cb59fe1a7e7d12c57788bd525dba014f51a99d110fe",
+  "trace_sha256": "78982eb916403eb18ae233e9a7e8ad6f420a5f3547f1e7912b552de0dc2a9a5b",
+  "capture_exit": 0,
+  "seconds": 10.960831206000876,
+  "native_frames": 4616,
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "events": [
+    {
+      "args": [
+        "CropAliasVerified",
+        {
+          "height": 100,
+          "kind": "wide",
+          "width": 100
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 5,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 5,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 16,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "CropAliasVerified",
+        {
+          "height": 100,
+          "kind": "tall",
+          "width": 100
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 19,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "kind": "message",
+      "line": 19,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 26,
+      "source": "song:/control.lua"
+    }
+  ],
+  "wide_and_tall_crop_dimensions_verified": true,
+  "current_public_method_override_and_original_arguments_verified": true,
+  "alias_returns_receiver_independently_of_delegate_result": true,
+  "crop_preserves_original_position": true,
+  "chart_full_repairs_spent": 0,
+  "acceptance_changed": false
+}
