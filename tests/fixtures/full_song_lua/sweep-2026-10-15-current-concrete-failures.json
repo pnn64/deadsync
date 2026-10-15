@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T22:52:02Z",
+  "updated_utc": "2026-10-15T22:52:30Z",
   "counts": {
     "passed": 399,
     "pending": 102,
@@ -18015,7 +18015,7 @@
         "phase": "replay",
         "result_exists": false,
         "terminal_result": null,
-        "checked_utc": "2026-10-15T22:52:03.887369+00:00"
+        "checked_utc": "2026-10-15T22:52:31.685687+00:00"
       },
       "full_replay_completed": true,
       "remaining_source_cause": "sweep-2026-10-16-save-tears-pre-song-broadcast-cause.json",
@@ -23535,7 +23535,7 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-16-waww-first-repair-launch.json",
+      "followup": "sweep-2026-10-16-waww-qualified-first-repair-v1.json",
       "entry_diagnostic_frames": 1016,
       "entry_diagnostic_errors": 0,
       "entry_diagnostic_mismatches": 0,
@@ -24013,9 +24013,10 @@
           ],
           "report_sha256": "835ddbdaa434e29c5c07469bc80c28b279f1e7e817f17f89fe45ba98f7bbf617"
         },
-        "checked_utc": "2026-10-15T22:52:04.308772+00:00"
+        "checked_utc": "2026-10-15T22:52:32.111056+00:00"
       },
-      "current_diagnostic_failure": "Historical blank/no-report infrastructure result; current retained-capture entry is clean, awaiting first bounded full repair on all7119 native frames"
+      "current_diagnostic_failure": "first bounded full result remains pending; inspect exact saved callback errors/mismatches",
+      "full_replay_completed": true
     },
     {
       "position": 474,
