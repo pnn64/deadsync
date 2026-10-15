@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "wah-leven [telperion (ddrillini remix)]/eleven.ssc",
+  "native_frames": 67913,
+  "replayed_frames": 67913,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "7bc0c6066e856a164fb608fe44b41959d0f51d6d1b767f38ba27d6b3bb5f91bf.tar.zst",
+  "compressed_sha256": "7bc0c6066e856a164fb608fe44b41959d0f51d6d1b767f38ba27d6b3bb5f91bf",
+  "uncompressed_sha256": "599f0736e27c6ea8c1753a90b665cf7ea03dc72c31422f80cc8ba4340fddd340",
+  "compressed_bytes": 8924893,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
