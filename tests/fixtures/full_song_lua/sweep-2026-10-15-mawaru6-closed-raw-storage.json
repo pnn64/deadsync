@@ -1,0 +1,57 @@
+{
+  "source_simfile": "mawaru6/mawaru6.sm",
+  "closed_full_pass_frames": 121856,
+  "repair_attempts": 2,
+  "no_third_replay": true,
+  "compressed_fixture_and_report_preserved": true,
+  "all_uncompressed_hashes_verified_before_unlink": true,
+  "local_saved_fixture_decompression_receipt_verified": true,
+  "active_process_arguments_checked_twice": true,
+  "passing_chart_reopened_or_replayed": false,
+  "pending_captures_and_frozen_source_roots_changed": false,
+  "unique_raw_inodes_freed_bytes": 1108094592,
+  "free_before_unlink": 2634129408,
+  "free_after_unlink": 3742236672,
+  "raw_paths_removed": [
+    {
+      "raw": "/home/parity/jobs/mawaru6-foreground-row-repair-v1/chart-305/2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb.tar",
+      "raw_sha256": "2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb",
+      "bytes": 579062784,
+      "compressed": "/home/parity/jobs/mawaru6-message-coverage-final-repair-v1/chart-305/accepted/8785659616da1ad8cdd92907893ba11fe35833f1f9f5188c6a6e51f7ded35fee.tar.zst",
+      "compressed_sha256": "8785659616da1ad8cdd92907893ba11fe35833f1f9f5188c6a6e51f7ded35fee",
+      "decompressed_sha256_verified": true
+    },
+    {
+      "raw": "/home/parity/jobs/mawaru6-message-coverage-diagnostic-v2/chart-305/2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb.tar",
+      "raw_sha256": "2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb",
+      "bytes": 579062784,
+      "compressed": "/home/parity/jobs/mawaru6-message-coverage-final-repair-v1/chart-305/accepted/8785659616da1ad8cdd92907893ba11fe35833f1f9f5188c6a6e51f7ded35fee.tar.zst",
+      "compressed_sha256": "8785659616da1ad8cdd92907893ba11fe35833f1f9f5188c6a6e51f7ded35fee",
+      "decompressed_sha256_verified": true
+    },
+    {
+      "raw": "/home/parity/jobs/mawaru6-message-coverage-final-repair-v1/chart-305/2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb.tar",
+      "raw_sha256": "2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb",
+      "bytes": 579062784,
+      "compressed": "/home/parity/jobs/mawaru6-message-coverage-final-repair-v1/chart-305/accepted/8785659616da1ad8cdd92907893ba11fe35833f1f9f5188c6a6e51f7ded35fee.tar.zst",
+      "compressed_sha256": "8785659616da1ad8cdd92907893ba11fe35833f1f9f5188c6a6e51f7ded35fee",
+      "decompressed_sha256_verified": true
+    },
+    {
+      "raw": "/home/parity/jobs/mawaru6-message-coverage-final-repair-v1/chart-305/report.json",
+      "raw_sha256": "89ba0df5c8a61157a86746be22b1d6ccbbe5ceebca7a53e91175689816083623",
+      "bytes": 529031808,
+      "compressed": "/home/parity/jobs/mawaru6-message-coverage-final-repair-v1/chart-305/report.json.zst",
+      "compressed_sha256": "4ea66098e23998d115f2e344c2e6a3533ad1543085a77cbbbade17fbbe6dcdaa",
+      "decompressed_sha256_verified": true
+    }
+  ],
+  "distinct_diagnostic_artifacts_preserved": [
+    {
+      "path": "/home/parity/jobs/mawaru6-message-coverage-diagnostic-v1/chart-305/2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb.tar",
+      "actual_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "reason": "diagnostic bytes do not match accepted fixture; preserve this distinct artifact"
+    }
+  ],
+  "original_replay_exit_preserved": 0
+}
