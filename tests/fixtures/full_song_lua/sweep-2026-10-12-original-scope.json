@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T21:53:46Z",
+  "updated_utc": "2026-10-15T21:57:19Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -3249,8 +3249,8 @@
       "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
       "simfile_sha256": "8fe26f5a104dc99f0cea900b336f5404b18f0048a758829f1f4c09c00f99d5c4",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-save-tears-rights-sm-first-repair-v1.json"
     },
     {
       "position": 386,

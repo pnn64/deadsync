@@ -1,44 +1,20 @@
 {
-  "generated_utc": "2026-10-15T21:53:51.548735+00:00",
-  "concrete_ledger_sha256": "6290a8a1a2045dbf478e1af41685ab9f2e3a423cf1f2436130da456cb5507934",
+  "generated_utc": "2026-10-15T21:57:24.037058+00:00",
+  "concrete_ledger_sha256": "b327fc92a05c4c9c4216f888f11a8c4e7100210e230e46fc3b27aeb255ed795c",
   "counts": {
     "passed": 398,
     "pending": 103,
     "unprocessed": 0
   },
   "maximum_published_terminal_attempt_histogram": {
-    "0": 81,
-    "1": 11,
+    "0": 80,
+    "1": 12,
     "2": 11
   },
   "pending_sources": 103,
   "terminal_attempts_exceed_two": [],
   "differences": [],
-  "running_repair_not_counted_as_terminal": {
-    "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
-    "attempt_started": 1,
-    "pid": 1621878,
-    "actual_command": [
-      "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
-      "--archive",
-      "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182.tar",
-      "--report",
-      "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/report.json"
-    ],
-    "recorded_command": [
-      "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
-      "--archive",
-      "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182.tar",
-      "--report",
-      "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/report.json"
-    ],
-    "actual_command_matches_record": true,
-    "running": true,
-    "phase": "replay",
-    "result_exists": false,
-    "terminal_result": null,
-    "checked_utc": "2026-10-15T21:53:53.285869+00:00"
-  },
+  "running_repair_not_counted_as_terminal": null,
   "mawaru9_deferred_at_user_request": {
     "started_attempt": 1,
     "completed_full_replay": false,
@@ -69,7 +45,7 @@
       "phase": "replay",
       "result_exists": false,
       "terminal_result": null,
-      "checked_utc": "2026-10-15T21:53:53.691537+00:00"
+      "checked_utc": "2026-10-15T21:57:26.150554+00:00"
     }
   ]
 }

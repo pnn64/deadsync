@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T21:53:51Z",
+  "updated_utc": "2026-10-15T21:57:23Z",
   "counts": {
     "passed": 398,
     "pending": 103,
@@ -657,7 +657,7 @@
         "phase": "replay",
         "result_exists": false,
         "terminal_result": null,
-        "checked_utc": "2026-10-15T21:53:52.092158+00:00"
+        "checked_utc": "2026-10-15T21:57:24.578526+00:00"
       },
       "current_diagnostic_failure": "original first Underlay.visible tween-time mismatch is resolved in clean unchanged-capture entry; awaiting first bounded full repair on all6623 native frames"
     },
@@ -18398,16 +18398,236 @@
     {
       "position": 385,
       "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
-      "completed_full_repairs": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-6.json",
+      "completed_full_repairs": 1,
+      "evidence": "sweep-2026-10-15-save-tears-rights-sm-first-repair-v1.json",
       "failure_text": null,
       "callback_errors": [],
-      "mismatch_count": 1,
+      "mismatch_count": 18,
       "first_concrete_mismatches": [
         {
-          "field": "command_query_count",
-          "native": 281594,
-          "deadsync": 281586
+          "field": "source_broadcast_count",
+          "native": 17,
+          "deadsync": 19
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 5.177709579467773,
+            "beat": 10.003862380981445,
+            "name": "LightsOn",
+            "args": [
+              "LightsOn"
+            ]
+          },
+          "deadsync": {
+            "seconds": 0.0,
+            "beat": 0.0,
+            "name": "PeakNPSUpdated",
+            "args": [
+              "PeakNPSUpdated"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 15.356077194213867,
+            "beat": 30.021318435668945,
+            "name": "LightsOn",
+            "args": [
+              "LightsOn"
+            ]
+          },
+          "deadsync": {
+            "seconds": 0.0,
+            "beat": 0.0,
+            "name": "PeakNPSUpdated",
+            "args": [
+              "PeakNPSUpdated"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 27.04083824157715,
+            "beat": 53.00135040283203,
+            "name": "LightsOn",
+            "args": [
+              "LightsOn"
+            ]
+          },
+          "deadsync": {
+            "seconds": 5.177709579467773,
+            "beat": 10.003862380981445,
+            "name": "LightsOn",
+            "args": [
+              "LightsOn"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 39.24893569946289,
+            "beat": 77.01061248779297,
+            "name": "Flash",
+            "args": [
+              "Flash"
+            ]
+          },
+          "deadsync": {
+            "seconds": 15.356077194213867,
+            "beat": 30.021318435668945,
+            "name": "LightsOn",
+            "args": [
+              "LightsOn"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 41.0240364074707,
+            "beat": 80.50164031982422,
+            "name": "LightsOn",
+            "args": [
+              "LightsOn"
+            ]
+          },
+          "deadsync": {
+            "seconds": 27.04083824157715,
+            "beat": 53.00135040283203,
+            "name": "LightsOn",
+            "args": [
+              "LightsOn"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 61.61759567260742,
+            "beat": 121.00230407714844,
+            "name": "LightsOn",
+            "args": [
+              "LightsOn"
+            ]
+          },
+          "deadsync": {
+            "seconds": 39.24893569946289,
+            "beat": 77.01061248779297,
+            "name": "Flash",
+            "args": [
+              "Flash"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 64.66920471191406,
+            "beat": 127.00379943847656,
+            "name": "Flash",
+            "args": [
+              "Flash"
+            ]
+          },
+          "deadsync": {
+            "seconds": 41.0240364074707,
+            "beat": 80.50164031982422,
+            "name": "LightsOn",
+            "args": [
+              "LightsOn"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 72.04231262207031,
+            "beat": 141.50424194335938,
+            "name": "Flash",
+            "args": [
+              "Flash"
+            ]
+          },
+          "deadsync": {
+            "seconds": 61.61759567260742,
+            "beat": 121.00230407714844,
+            "name": "LightsOn",
+            "args": [
+              "LightsOn"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 81.95818328857422,
+            "beat": 161.00546264648438,
+            "name": "Flash2",
+            "args": [
+              "Flash2"
+            ]
+          },
+          "deadsync": {
+            "seconds": 64.66920471191406,
+            "beat": 127.00379943847656,
+            "name": "Flash",
+            "args": [
+              "Flash"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 85.51677703857422,
+            "beat": 168.0040283203125,
+            "name": "LightsOn",
+            "args": [
+              "LightsOn"
+            ]
+          },
+          "deadsync": {
+            "seconds": 72.04231262207031,
+            "beat": 141.50424194335938,
+            "name": "Flash",
+            "args": [
+              "Flash"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 89.5827407836914,
+            "beat": 176.00042724609375,
+            "name": "Flash2",
+            "args": [
+              "Flash2"
+            ]
+          },
+          "deadsync": {
+            "seconds": 81.95818328857422,
+            "beat": 161.00546264648438,
+            "name": "Flash2",
+            "args": [
+              "Flash2"
+            ],
+            "params_error": null
+          }
         }
       ],
       "capture_exit": null,
@@ -18417,21 +18637,15 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-15-save-tears-rights-sm-first-repair-launch.json",
-      "current_diagnostic_failure": "prior complete replay lacks final eight GetSongBeat queries; first bounded full repair now uses already qualified pack-sync/music-fade/Out lifecycle fixes absent from original helper; awaiting full acceptance",
-      "new_full_repair_started": true,
+      "followup": "sweep-2026-10-15-save-tears-rights-sm-first-repair-v1.json",
+      "current_diagnostic_failure": "first bounded full result remains pending; inspect exact saved callback errors/mismatches",
+      "new_full_repair_started": false,
       "started_full_repairs": 1,
       "actual_running_observation": {
         "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
         "attempt_started": 1,
         "pid": 1621878,
-        "actual_command": [
-          "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
-          "--archive",
-          "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182.tar",
-          "--report",
-          "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/report.json"
-        ],
+        "actual_command": [],
         "recorded_command": [
           "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
           "--archive",
@@ -18439,13 +18653,301 @@
           "--report",
           "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/report.json"
         ],
-        "actual_command_matches_record": true,
-        "running": true,
+        "actual_command_matches_record": false,
+        "running": false,
         "phase": "replay",
-        "result_exists": false,
-        "terminal_result": null,
-        "checked_utc": "2026-10-15T21:53:52.565367+00:00"
-      }
+        "result_exists": true,
+        "terminal_result": {
+          "position": 385,
+          "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
+          "status": "pending",
+          "repair_attempts": 1,
+          "candidate_sha256": "ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182",
+          "trace_sha256": "6f8c03926c8d6f630eb9204f132507574943a4a61cb1f30d83ab40fad493bf0b",
+          "simfile_sha256": "8fe26f5a104dc99f0cea900b336f5404b18f0048a758829f1f4c09c00f99d5c4",
+          "native_capture_reused": true,
+          "all_candidate_manifest_members_byte_verified": true,
+          "binary_sha256": "6a2dfe1c2e802c83bf102deac4f4476c86ab3ba93652f9a8817f99420b844162",
+          "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+          "build_proof": "/home/parity/jobs/timing-window-labels-linux-green-v1/proof.json",
+          "fix_commit": "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd",
+          "previous_failure": null,
+          "previous_errors": [],
+          "qualified_existing_song_end_fixes": [
+            "3d314ba64cfadf2dbdb8ac761bbaf34890c84127",
+            "b97bcedd8f8d8d88dac55531a7d287cb7bbccd69",
+            "461434bacf9449ddba8a8e3a9dc980f8e05ef3c1"
+          ],
+          "no_query_outputs_used_as_inputs": true,
+          "original_full_failure": "only command_query_count: final eight GetSongBeat queries absent",
+          "full_acceptance_criteria_unchanged": true,
+          "capture_repeated": false,
+          "mawaru9_remains_deferred": true,
+          "replay_exit": 2,
+          "replay_seconds": 2408.539482298016,
+          "native_frames": 80179,
+          "replayed_frames": 80179,
+          "compared_stage_fields": 2101,
+          "pending_coverage": [
+            "uncompared song operations: Actor.hibernate, ActorFrame.GetChildren, ActorSound.play",
+            "native drawable state/resources: ActorProxy, Quad, Sound, Sprite",
+            "missing captured subscriber identity for ScreenGameplay/19/1",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/1",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/4",
+            "missing captured subscriber identity for ScreenGameplay/2/2/3/1",
+            "missing captured subscriber identity for ScreenGameplay/2/2/3/3",
+            "missing captured subscriber identity for ScreenGameplay/2/2/3/3/1",
+            "missing captured subscriber identity for ScreenGameplay/2/2/3/3/2",
+            "missing captured subscriber identity for ScreenGameplay/2/4/3",
+            "missing captured subscriber identity for ScreenGameplay/2/4/4",
+            "missing captured subscriber identity for ScreenGameplay/2/7/1",
+            "missing captured subscriber identity for ScreenGameplay/2/7/2",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1"
+          ],
+          "archive_accepted": false,
+          "errors": [],
+          "mismatch_count": 18,
+          "concrete_failures": [
+            {
+              "field": "source_broadcast_count",
+              "native": 17,
+              "deadsync": 19
+            },
+            {
+              "field": "source_broadcast",
+              "native": {
+                "seconds": 5.177709579467773,
+                "beat": 10.003862380981445,
+                "name": "LightsOn",
+                "args": [
+                  "LightsOn"
+                ]
+              },
+              "deadsync": {
+                "seconds": 0.0,
+                "beat": 0.0,
+                "name": "PeakNPSUpdated",
+                "args": [
+                  "PeakNPSUpdated"
+                ],
+                "params_error": null
+              }
+            },
+            {
+              "field": "source_broadcast",
+              "native": {
+                "seconds": 15.356077194213867,
+                "beat": 30.021318435668945,
+                "name": "LightsOn",
+                "args": [
+                  "LightsOn"
+                ]
+              },
+              "deadsync": {
+                "seconds": 0.0,
+                "beat": 0.0,
+                "name": "PeakNPSUpdated",
+                "args": [
+                  "PeakNPSUpdated"
+                ],
+                "params_error": null
+              }
+            },
+            {
+              "field": "source_broadcast",
+              "native": {
+                "seconds": 27.04083824157715,
+                "beat": 53.00135040283203,
+                "name": "LightsOn",
+                "args": [
+                  "LightsOn"
+                ]
+              },
+              "deadsync": {
+                "seconds": 5.177709579467773,
+                "beat": 10.003862380981445,
+                "name": "LightsOn",
+                "args": [
+                  "LightsOn"
+                ],
+                "params_error": null
+              }
+            },
+            {
+              "field": "source_broadcast",
+              "native": {
+                "seconds": 39.24893569946289,
+                "beat": 77.01061248779297,
+                "name": "Flash",
+                "args": [
+                  "Flash"
+                ]
+              },
+              "deadsync": {
+                "seconds": 15.356077194213867,
+                "beat": 30.021318435668945,
+                "name": "LightsOn",
+                "args": [
+                  "LightsOn"
+                ],
+                "params_error": null
+              }
+            },
+            {
+              "field": "source_broadcast",
+              "native": {
+                "seconds": 41.0240364074707,
+                "beat": 80.50164031982422,
+                "name": "LightsOn",
+                "args": [
+                  "LightsOn"
+                ]
+              },
+              "deadsync": {
+                "seconds": 27.04083824157715,
+                "beat": 53.00135040283203,
+                "name": "LightsOn",
+                "args": [
+                  "LightsOn"
+                ],
+                "params_error": null
+              }
+            },
+            {
+              "field": "source_broadcast",
+              "native": {
+                "seconds": 61.61759567260742,
+                "beat": 121.00230407714844,
+                "name": "LightsOn",
+                "args": [
+                  "LightsOn"
+                ]
+              },
+              "deadsync": {
+                "seconds": 39.24893569946289,
+                "beat": 77.01061248779297,
+                "name": "Flash",
+                "args": [
+                  "Flash"
+                ],
+                "params_error": null
+              }
+            },
+            {
+              "field": "source_broadcast",
+              "native": {
+                "seconds": 64.66920471191406,
+                "beat": 127.00379943847656,
+                "name": "Flash",
+                "args": [
+                  "Flash"
+                ]
+              },
+              "deadsync": {
+                "seconds": 41.0240364074707,
+                "beat": 80.50164031982422,
+                "name": "LightsOn",
+                "args": [
+                  "LightsOn"
+                ],
+                "params_error": null
+              }
+            },
+            {
+              "field": "source_broadcast",
+              "native": {
+                "seconds": 72.04231262207031,
+                "beat": 141.50424194335938,
+                "name": "Flash",
+                "args": [
+                  "Flash"
+                ]
+              },
+              "deadsync": {
+                "seconds": 61.61759567260742,
+                "beat": 121.00230407714844,
+                "name": "LightsOn",
+                "args": [
+                  "LightsOn"
+                ],
+                "params_error": null
+              }
+            },
+            {
+              "field": "source_broadcast",
+              "native": {
+                "seconds": 81.95818328857422,
+                "beat": 161.00546264648438,
+                "name": "Flash2",
+                "args": [
+                  "Flash2"
+                ]
+              },
+              "deadsync": {
+                "seconds": 64.66920471191406,
+                "beat": 127.00379943847656,
+                "name": "Flash",
+                "args": [
+                  "Flash"
+                ],
+                "params_error": null
+              }
+            },
+            {
+              "field": "source_broadcast",
+              "native": {
+                "seconds": 85.51677703857422,
+                "beat": 168.0040283203125,
+                "name": "LightsOn",
+                "args": [
+                  "LightsOn"
+                ]
+              },
+              "deadsync": {
+                "seconds": 72.04231262207031,
+                "beat": 141.50424194335938,
+                "name": "Flash",
+                "args": [
+                  "Flash"
+                ],
+                "params_error": null
+              }
+            },
+            {
+              "field": "source_broadcast",
+              "native": {
+                "seconds": 89.5827407836914,
+                "beat": 176.00042724609375,
+                "name": "Flash2",
+                "args": [
+                  "Flash2"
+                ]
+              },
+              "deadsync": {
+                "seconds": 81.95818328857422,
+                "beat": 161.00546264648438,
+                "name": "Flash2",
+                "args": [
+                  "Flash2"
+                ],
+                "params_error": null
+              }
+            }
+          ],
+          "report_sha256": "e81ce27d074e87b2d91553bc7ef98f8837779a34405209b0c58362777aafdf5b"
+        },
+        "checked_utc": "2026-10-15T21:57:24.986583+00:00"
+      },
+      "full_replay_completed": true
     },
     {
       "position": 395,
