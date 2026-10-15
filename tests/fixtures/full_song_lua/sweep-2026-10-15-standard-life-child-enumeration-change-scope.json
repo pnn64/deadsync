@@ -1,0 +1,23 @@
+{
+  "baseline_fix_commit": "1d24d8cc2001d05f2350d3b2b88d161d818ea3fb",
+  "entire_runtime_source_diff": "meter.raw_set(\"__songlua_owned_child_lookup\", true)?;",
+  "only_production_change_is_enabling_existing_native_subactor_lookup_path_for_real_standard_meter": true,
+  "actor_sequence_life_callbacks_pixel_assets_and_initialization_unchanged": true,
+  "full_acceptance_and_all_37_native_replay_controls_byte_identical": {
+    "tests/full_song_lua.rs": "75b4cda87f78de7961ad090b827125bf6a1aab3daa58421ef7520b687c93baa2",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "d983031697ac30e99882412dc1c25ec559be38b0dfff5f21a7bc8b827973f54f"
+  },
+  "entire_red_green_regression_source_byte_identical": true,
+  "regression_oracle": "Primary ActorFrame::PushChildrenTable insertion algorithm plus Standard.lua child sequence; no captured GetName result is inserted into the engine.",
+  "regression_scope": [
+    "both enabled player meters",
+    "native pairs traversal from independent child table insertion",
+    "four real actor identities",
+    "duplicate empty-name grouping",
+    "parents",
+    "GetChild aliases",
+    "fresh snapshots independent of caller mutation"
+  ],
+  "full_repairs_spent": 0,
+  "no_passing_chart_reopened": true
+}
