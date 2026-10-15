@@ -1,0 +1,139 @@
+{
+  "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
+  "trace_sha256": "4fc0012244c7a02bc1d7060c6339ec6f1a1aaa21ddfd3dae0eac00f62811699d",
+  "original_report_sha256": "c2c946e1c2f53418aeaa0616e3643e95a093cbdb7e999e7aed4182760cd42bdb",
+  "native_frames": 209028,
+  "broadcasts": 5375,
+  "broadcast_counts": {
+    "SystemMessage": 5375
+  },
+  "first_broadcasts": [
+    {
+      "args": [
+        "SystemMessage",
+        {
+          "Message": "3 minutes until crunch time."
+        }
+      ],
+      "beat": 0.1952783763408661,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 71,
+        "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+        "tail_call": false
+      },
+      "command": "SetUpdateCommand",
+      "definition_id": "def-0004",
+      "kind": "message",
+      "line": 142,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 0.1130385473370552,
+      "seq": 30,
+      "source": "song:/animation/default.lua"
+    },
+    {
+      "args": [
+        "SystemMessage",
+        {
+          "Message": "3 minutes until crunch time."
+        }
+      ],
+      "beat": 0.1952783763408661,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 71,
+        "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+        "tail_call": false
+      },
+      "command": "SetUpdateCommand",
+      "definition_id": "def-0004",
+      "kind": "message",
+      "line": 142,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 0.1130385473370552,
+      "seq": 46,
+      "source": "song:/animation/default.lua"
+    },
+    {
+      "args": [
+        "SystemMessage",
+        {
+          "Message": "3 minutes until crunch time."
+        }
+      ],
+      "beat": 0.1952783763408661,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 71,
+        "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+        "tail_call": false
+      },
+      "command": "SetUpdateCommand",
+      "definition_id": "def-0004",
+      "kind": "message",
+      "line": 142,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 0.1130385473370552,
+      "seq": 62,
+      "source": "song:/animation/default.lua"
+    },
+    {
+      "args": [
+        "SystemMessage",
+        {
+          "Message": "3 minutes until crunch time."
+        }
+      ],
+      "beat": 0.1952783763408661,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 71,
+        "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+        "tail_call": false
+      },
+      "command": "SetUpdateCommand",
+      "definition_id": "def-0004",
+      "kind": "message",
+      "line": 142,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 0.1130385473370552,
+      "seq": 78,
+      "source": "song:/animation/default.lua"
+    }
+  ],
+  "last_broadcast": [
+    {
+      "args": [
+        "SystemMessage",
+        {
+          "Message": "Gotta Go Fast."
+        }
+      ],
+      "beat": 0.1952783763408661,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 71,
+        "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+        "tail_call": false
+      },
+      "command": "SetUpdateCommand",
+      "definition_id": "def-0004",
+      "kind": "message",
+      "line": 142,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 0.1130385473370552,
+      "seq": 86014,
+      "source": "song:/animation/default.lua"
+    }
+  ]
+}

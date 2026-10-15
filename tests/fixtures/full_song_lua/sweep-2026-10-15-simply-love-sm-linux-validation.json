@@ -1,0 +1,95 @@
+{
+  "source_root": "/home/parity/workspace/simply-love-sm-v1/deadsync",
+  "binary_sha256": "50a1cb7dca074bdabaab43a80242af57c2dd0bb192058b3d1b85b149f25696a3",
+  "all_nine_checks_both_platforms_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_and_green_source_pins_verified": true,
+  "all_linux_log_and_binary_hashes_verified": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 401.3786455740046,
+      "log_sha256": "17730fa499267a424d81dce1afd909b1269dc3ed05da4aed0ab6275ea8c74e76",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 612 filtered out; finished in 0.23s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 1.1986129349970724,
+      "log_sha256": "789cf72b34646a2e40edc6ea054f6bb34afea3396285af76cb04325f5e8a256a",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 612 filtered out; finished in 0.22s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 1.0264812410168815,
+      "log_sha256": "856243a62531efba83d49fe78454d9387070a1ae80a06a096181c808cfbca1c3",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.7273338270024396,
+      "log_sha256": "13ec3f72833fc82719176bfe0b5e5b036896132b7b1a01d57cebfc5f6b118bb4",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 59.207886591000715,
+      "log_sha256": "c2f542dc6d8557e7b998d29ad760165b2e8da526900154284af9aa9fd27cf34f",
+      "results": [
+        "test result: ok. 77 passed; 0 failed; 0 ignored; 0 measured; 536 filtered out; finished in 57.64s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 348.5819752170064,
+      "log_sha256": "ae83a0cf93b3025e1eb4916e95cb7084550afb54068e7b425495e6777c001550",
+      "results": [
+        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 4.43s"
+      ]
+    },
+    {
+      "label": "sm-compatibility-control",
+      "exit_code": 0,
+      "seconds": 2.2477411110012326,
+      "log_sha256": "2947c991254a28e9f2aaa4baee1fca2d0f49c5c18d4b662635647dcec9e604b3",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 612 filtered out; finished in 0.36s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 1.7182220780232456,
+      "log_sha256": "723921be1272b4fce5e8754cccd49edeea456752d985fe462956b0eaf4110641",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 612 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 59.4107897199865,
+      "log_sha256": "d5a996371c6a464ddce8af98dc72249da498f38bb84617bd889ea7b0f9fd3880",
+      "results": []
+    }
+  ],
+  "windows_validation": "sweep-2026-10-15-simply-love-sm-windows-validation.json",
+  "red_expected_failure_both_platforms": true,
+  "native_control_frames": 5935,
+  "native_control": "sweep-2026-10-15-simply-love-sm-native-control.json",
+  "native_simply_love_sm_and_table_formatter_semantics": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true,
+  "global_original_helper_unchanged": true
+}

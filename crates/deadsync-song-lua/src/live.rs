@@ -4571,6 +4571,63 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn live_simply_love_sm_broadcasts() {
+        let mut compiled = compile("simply-love-sm-broadcasts", r#"
+return Def.Actor {
+    OnCommand=function(self)
+        RECEIVED={}; TRACED={}
+        Trace=function(msg)
+            assert(#RECEIVED==#TRACED+1, 'SM broadcasts before tracing')
+            TRACED[#TRACED+1]=msg
+        end
+        SM('hello')
+        SM(17, 0, false)
+        SM(false, 2.5, true)
+        SM(nil)
+        local cycle={}; cycle[1]=cycle; SM(cycle)
+        SM({'nested'})
+    end,
+    SystemMessageMessageCommand=function(self, params)
+        RECEIVED[#RECEIVED+1]=params
+        params.Message='listener-mutated'
+    end,
+}
+"#);
+        let scene = compiled.live_scene.as_mut().expect("owned scene");
+        let output = scene.take_startup_output();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(output.source_broadcasts.len(), 6, "SM must dispatch Simply Love SystemMessage broadcasts");
+        let expected = [
+            serde_json::json!({"Message":"hello"}),
+            serde_json::json!({"Message":"17", "Duration":0, "Stack":false}),
+            serde_json::json!({"Message":"false", "Duration":2.5, "Stack":true}),
+            serde_json::json!({"Message":"nil"}),
+            serde_json::json!({"Message":"Value = {\n|    [1] = {} -- Value (self reference)\n}"}),
+            serde_json::json!({"Message":"Value = {\n|    [1] = \"nested\"\n}"}),
+        ];
+        let received: Table = scene.lua.globals().get("RECEIVED").expect("listeners ran");
+        let traced: Table = scene.lua.globals().get("TRACED").expect("trace calls");
+        assert_eq!(received.raw_len(), 6);
+        assert_eq!(traced.raw_len(), 6);
+        for (index, (event, expected)) in output.source_broadcasts.iter().zip(expected).enumerate() {
+            assert_eq!(event.name, "SystemMessage");
+            assert_eq!(event.params.as_ref().expect("trace params"), &Some(expected.clone()));
+            assert_eq!(traced.raw_get::<String>(index + 1).expect("original Trace value"),
+                expected["Message"].as_str().unwrap());
+            assert_eq!(received.raw_get::<Table>(index + 1).unwrap().raw_get::<String>("Message").unwrap(),
+                "listener-mutated");
+        }
+        scene.lua.load(r#"
+            assert(TableToString({}, 'Root', '>')=='>Root = {}')
+            local original=TableToString
+            TableToString=function(value) assert(value.flag); return 'custom formatter' end
+            SM({flag=true}, 4, false)
+            assert(TRACED[7]=='custom formatter')
+            TableToString=original
+        "#).exec().expect("SM uses the current public formatter");
+    }
+
+    #[test]
     fn live_source_params() {
         let mut compiled = compile("broadcast-params", r#"
             return Def.ActorFrame {

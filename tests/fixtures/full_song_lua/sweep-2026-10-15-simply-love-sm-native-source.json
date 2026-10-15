@@ -1,0 +1,14 @@
+{
+  "native_source": "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\Scripts\\06 SL-Utilities.lua",
+  "native_source_sha256_lf": "100e34276db5f3d0727da38035a95086209b42afeed365e4362eae60b5f9829b",
+  "implemented_excerpt_sha256_lf": "14ebfd35990b59ef82711973e0c2a7fc8ca130abd9d68b8e3e13697e139512f4",
+  "native_helper_source_lines_preserved": true,
+  "public_helper_semantics_preserved": true,
+  "primary_local_source": "itgmania-harness/vendor/simply-love/Scripts/06 SL-Utilities.lua",
+  "implemented_excerpt_byte_verified_after_lf_normalization": true,
+  "original_table_formatter_copyright_attribution_preserved": true,
+  "launcher_filename_error": "initial Windows green waiter referenced validate_simply_love_sm_metadata_windows_v1.py; actual validator was started directly and running Linux waiter received a matching alias; no tests or chart replay had started from the failed launcher",
+  "native_control_reader_correction": "first reader counted subsequent theme Trace calls; complete original capture reused to verify the seven helper calls within their root OnCommand scope",
+  "chart_full_repairs_spent_by_validation": 0,
+  "acceptance_keys_tolerances_predicate_unchanged": true
+}

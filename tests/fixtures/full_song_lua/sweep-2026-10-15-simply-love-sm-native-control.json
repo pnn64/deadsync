@@ -1,0 +1,414 @@
+{
+  "input_sha256": {
+    "control.wav": "71d93ef76e5ff6087d522277e83309f1d8d790e9b756324dec73d216ea57cc75",
+    "control.ssc": "64b48f5bf349ffa2e8bb3fdfec16ee5bca6b45be63ca9cdbdbab288d1ef2df38",
+    "control.lua": "1965ac6d566d76c852be3f13d7919678c92d72192ca807ba9fbb2ae0f5cd82b8"
+  },
+  "harness_sha256": "e067360d8120ee0a174b0848832856325ef62b709287fb48976441a277b26563",
+  "native_sha256": "a9d70b63dc11601634e67cb59fe1a7e7d12c57788bd525dba014f51a99d110fe",
+  "trace_sha256": "064240ec4f88865a4b33d9f3027046e1b8f62fd50c453cc79c1b7a600657068e",
+  "capture_exit": 0,
+  "native_frames": 5935,
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "expected_system_message_params": [
+    {
+      "Message": "hello"
+    },
+    {
+      "Message": "17",
+      "Duration": 0,
+      "Stack": false
+    },
+    {
+      "Message": "false",
+      "Duration": 2.5,
+      "Stack": true
+    },
+    {
+      "Message": "nil"
+    },
+    {
+      "Message": "Value = {\n|    [1] = {} -- Value (self reference)\n}"
+    },
+    {
+      "Message": "Value = {\n|    [1] = \"nested\"\n}"
+    },
+    {
+      "Message": "custom formatter",
+      "Duration": 4,
+      "Stack": false
+    }
+  ],
+  "broadcasts_and_original_trace_messages_verified": 7,
+  "nil_optional_fields_omitted_zero_and_false_preserved": true,
+  "table_cycles_and_custom_formatter_verified": true,
+  "actual_listener_delivery_before_trace_verified": true,
+  "trace_uses_original_message_after_listener_mutation": true,
+  "events": [
+    {
+      "args": [
+        "SystemMessage",
+        {
+          "Message": "hello"
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 71,
+        "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 3,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 5,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "SMTrace",
+        {
+          "Delivered": 1,
+          "Message": "hello"
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 5,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 3,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 23,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "SystemMessage",
+        {
+          "Duration": 0,
+          "Message": "17",
+          "Stack": false
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 71,
+        "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 3,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 24,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "SMTrace",
+        {
+          "Delivered": 2,
+          "Message": "17"
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 5,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 3,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 42,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "SystemMessage",
+        {
+          "Duration": 2.5,
+          "Message": "false",
+          "Stack": true
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 71,
+        "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 3,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 43,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "SMTrace",
+        {
+          "Delivered": 3,
+          "Message": "false"
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 5,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 3,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 56,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "SystemMessage",
+        {
+          "Message": "nil"
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 71,
+        "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 3,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 57,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "SMTrace",
+        {
+          "Delivered": 4,
+          "Message": "nil"
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 5,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 3,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 75,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "SystemMessage",
+        {
+          "Message": "Value = {\n|    [1] = {} -- Value (self reference)\n}"
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 71,
+        "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 3,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 76,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "SMTrace",
+        {
+          "Delivered": 5,
+          "Message": "Value = {\n|    [1] = {} -- Value (self reference)\n}"
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 5,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 3,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 94,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "SystemMessage",
+        {
+          "Message": "Value = {\n|    [1] = \"nested\"\n}"
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 71,
+        "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 3,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 95,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "SMTrace",
+        {
+          "Delivered": 6,
+          "Message": "Value = {\n|    [1] = \"nested\"\n}"
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 5,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 3,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 113,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "SystemMessage",
+        {
+          "Duration": 4,
+          "Message": "custom formatter",
+          "Stack": false
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 71,
+        "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 3,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 114,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "SMTrace",
+        {
+          "Delivered": 7,
+          "Message": "custom formatter"
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 5,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 3,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 132,
+      "source": "song:/control.lua"
+    }
+  ],
+  "all_authored_scope_message_counts": {
+    "SystemMessage": 7,
+    "SMTrace": 151
+  },
+  "control_scope": "seven explicit helper calls within root OnCommand; the same complete native capture is reused",
+  "initial_reader_failure": "reader counted later native theme Trace calls through the intentionally overridden global Trace; full capture completed and is preserved",
+  "initial_orchestration_exit": 1,
+  "additional_native_capture_runs": 0,
+  "chart_full_repairs_spent": 0,
+  "acceptance_changed": false
+}
