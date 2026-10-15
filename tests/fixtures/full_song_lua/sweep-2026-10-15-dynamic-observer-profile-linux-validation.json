@@ -1,0 +1,85 @@
+{
+  "fix_commit": "6a2fcdd49",
+  "source_root": "/home/parity/workspace/dynamic-observer-profile-v1/deadsync",
+  "binary_sha256": "fa324206ba7f62042b59f44613115cdc2e8dc928223a505f746f3a952672f650",
+  "all_eight_checks_both_platforms_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_source_pins_verified": true,
+  "all_linux_log_and_binary_hashes_verified": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 248.34391866400256,
+      "log_sha256": "685583e00fb63a275764ec6425df4168a9553e40583f0c17c3d133708e891ff6",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 334 filtered out; finished in 0.25s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 301.55736042998615,
+      "log_sha256": "5c4ee41969feca21cb5bffabe7f838fc1df02d6375d005d6160e41623b999dbd",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 607 filtered out; finished in 0.21s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 0.63822773101856,
+      "log_sha256": "9a4b4670176790884971564fa66392a3fc777830da304505fcf1ae4096d23992",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 0.9137129639857449,
+      "log_sha256": "fcfe9cea07e7d3f941fb12e7a7984e1e79fe963e0d9fe02399bca28c44e3417c",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 598 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 38.22203196500777,
+      "log_sha256": "6c2b6d8f0572528bc1ddd26f38579a91ba525eb81a4e6924e6370c57d86d75b5",
+      "results": [
+        "test result: ok. 72 passed; 0 failed; 0 ignored; 0 measured; 536 filtered out; finished in 37.32s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 2.214865240006475,
+      "log_sha256": "f84125a73e757799de9bd7ae74cebb9d2134233ad876bd99595553fd093bb80f",
+      "results": [
+        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.12s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 0.8716283990070224,
+      "log_sha256": "3afd217c5ff9fa118c6a53a106b9f17fe3be2c18fa50ed8c674f494fa5c62603",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 607 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 49.22129712300375,
+      "log_sha256": "43fdcf816fa921fef36577bfa26208bfd4fde3f2d8e3388893c01a468c71d7fd",
+      "results": []
+    }
+  ],
+  "windows_validation": "sweep-2026-10-15-dynamic-observer-profile-windows-validation.json",
+  "legacy_capture_observer_compatibility_preserved": true,
+  "actual_dynamic_dispatch_profile_enabled_only_from_archive_provenance": true,
+  "full_acceptance_comparators_unchanged": true,
+  "global_original_helper_unchanged": true
+}

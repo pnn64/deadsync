@@ -1,0 +1,13 @@
+{
+  "fix_commit": "6a2fcdd49",
+  "harness_fix_commit": "79005e1",
+  "build_proof": "/home/parity/jobs/dynamic-observer-profile-linux-green-v1/proof.json",
+  "binary_sha256": "fa324206ba7f62042b59f44613115cdc2e8dc928223a505f746f3a952672f650",
+  "both_hosts_eight_checks_passed": true,
+  "all_1175_raw_linux_and_cross_platform_normalized_source_pins_verified": true,
+  "full_repair_limit_per_chart": 2,
+  "final_attempt": 2,
+  "native_capture_reused": true,
+  "comparison_keys_and_acceptance_unchanged": true,
+  "global_original_selection_unchanged": true
+}

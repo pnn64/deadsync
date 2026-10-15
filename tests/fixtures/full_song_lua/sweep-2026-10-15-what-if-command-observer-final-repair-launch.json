@@ -1,0 +1,10 @@
+{
+  "pid": 2181912,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_what_if_command_observer_final_repair_v1.py"
+  ],
+  "final_full_attempt_started": true,
+  "full_repairs_spent_on_start": 2,
+  "no_third_full_repair": true
+}
