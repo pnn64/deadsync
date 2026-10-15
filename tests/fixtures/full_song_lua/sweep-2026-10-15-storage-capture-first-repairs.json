@@ -60,6 +60,64 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 432,
+      "source_simfile": "The Entity/The Entity.ssc",
+      "simfile_sha256": "c4808c70ab4505fe4cd87d3e39a55be8629cb03628ca4e19aef9568d20b77eff",
+      "style": "single",
+      "difficulty": "Challenge",
+      "previous_result": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-432/result.json",
+      "complete_native_capture_available": false,
+      "previous_failure": "native staging mkdir failed with ENOSPC before capture",
+      "status": "passed",
+      "repair_attempts": 1,
+      "binary_sha256": "375fb5facffc717409b9b22e354eb2bddfd03358b9d9126ec5d00ceb3318b195",
+      "harness_sha256": "ea7314391554e3fc933a5531ba71f6a93a70a35f8e3b8c8706358dc60420e36c",
+      "build_proof": "/home/parity/jobs/sparse-declaration-linux-green-v1/proof.json",
+      "fix_commit": "cc145ab04",
+      "harness_fix_commit": "3adbf72",
+      "native_capture_reused": false,
+      "recapture_reason": "previous native capture incomplete or absent during verified ENOSPC; original files and failure logs retained",
+      "capture_seconds": 169.96748142599245,
+      "trace_sha256": "0186b2710125c8addb937ef50842f20c2aa5e72ecdf453a2f4bb619d7598f3c2",
+      "candidate": "/home/parity/jobs/storage-capture-first-repairs-v1/chart-432/candidates/7c5afc8a421064968465606b58b7ac9af32a07ada0cf46b6704ba667e8a71ae5.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1151.5315535960253,
+      "candidate_sha256": "7c5afc8a421064968465606b58b7ac9af32a07ada0cf46b6704ba667e8a71ae5",
+      "native_frames": 35590,
+      "replayed_frames": 35590,
+      "compared_stage_fields": 1364,
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, Actor.spring, ActorFrame.SetDrawByZPosition, GameState.GetCurMusicSeconds, PlayerOptions.FromString",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "ccfeff22fb524d2ca67ffa3f7c44646cc35672c5662af589b3721e7510580ddc",
+      "archive": "443e2f2bc19e85342e68a9ee620c05106dd5a7391123a5d35b03953567b78998.tar.zst",
+      "archive_sha256": "443e2f2bc19e85342e68a9ee620c05106dd5a7391123a5d35b03953567b78998",
+      "compressed_bytes": 14314621,
+      "pack_seconds": 17.505658641021,
+      "harness_version": "0.1.80",
+      "title": "The Entity",
+      "retained_original_entry": {
+        "title": "The Entity",
+        "source_simfile": "The Entity/The Entity.ssc",
+        "harness_version": "0.1.0",
+        "archive": "2903b6b8ced3d1703649aa31554a6d63ee9e378b18638d9599b9a7d2705653dc.tar.zst",
+        "sha256": "2903b6b8ced3d1703649aa31554a6d63ee9e378b18638d9599b9a7d2705653dc",
+        "compressed_bytes": 816050,
+        "uncompressed_sha256": "62d0b10aed052e813d8f3530a2f4ddd694e8a55c41eb616a4d40ab54796223ee",
+        "compression_level": 22,
+        "aliases": [
+          "f7e05cfb4e00972128604bff184111790a50139da1438471c718b308f15f0483.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -70,7 +128,7 @@
   "binary_sha256": "375fb5facffc717409b9b22e354eb2bddfd03358b9d9126ec5d00ceb3318b195",
   "harness_sha256": "ea7314391554e3fc933a5531ba71f6a93a70a35f8e3b8c8706358dc60420e36c",
   "repair": "first full repair after verified storage recovery: old native capture incomplete or never created; corrected native observer and matching validated replay helper",
-  "passed_fixtures": 1,
+  "passed_fixtures": 2,
   "pending_charts": 0,
-  "processed_charts": 1
+  "processed_charts": 2
 }

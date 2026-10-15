@@ -5035,15 +5035,12 @@
     {
       "title": "The Entity",
       "source_simfile": "The Entity/The Entity.ssc",
-      "harness_version": "0.1.0",
-      "archive": "2903b6b8ced3d1703649aa31554a6d63ee9e378b18638d9599b9a7d2705653dc.tar.zst",
-      "sha256": "2903b6b8ced3d1703649aa31554a6d63ee9e378b18638d9599b9a7d2705653dc",
-      "compressed_bytes": 816050,
-      "uncompressed_sha256": "62d0b10aed052e813d8f3530a2f4ddd694e8a55c41eb616a4d40ab54796223ee",
-      "compression_level": 22,
-      "aliases": [
-        "f7e05cfb4e00972128604bff184111790a50139da1438471c718b308f15f0483.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "443e2f2bc19e85342e68a9ee620c05106dd5a7391123a5d35b03953567b78998.tar.zst",
+      "sha256": "443e2f2bc19e85342e68a9ee620c05106dd5a7391123a5d35b03953567b78998",
+      "compressed_bytes": 14314621,
+      "uncompressed_sha256": "7c5afc8a421064968465606b58b7ac9af32a07ada0cf46b6704ba667e8a71ae5",
+      "aliases": []
     },
     {
       "title": "The Fresh Prince Of Bel Air (Razihel Remix)",
