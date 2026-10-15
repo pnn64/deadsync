@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T01:29:09Z",
-  "previous_goal_turn": "Progress: Pop first selected-player-clock repair passes81,313 frames; Circles first entry-clock repair passes112,467; Lots of Spices original passes72,251; Collaboration with Paul J Kim original passes35,222. Full errors/mismatches zero, compressed fixtures saved and local decompressed bytes verified/committed, charts closed. Actor.tween actual Tower failure reproduced by two meaningful regressions on Windows/Linux; native compiled Actor/ITween argument controls and6 curve probes independently verified, including scalar4 and2D8 Bezier controls with nonstandard endpoints/overshoot. First implementation passed curve regression but hurry contract failed both hosts, exposing legacy reciprocal scale and missing live queue update. Native Actor::HurryTweening and Lua assertions prove duration/remaining multiply by factor, zero collapses, negative errors, hibernation unchanged; ActorFrame source propagates to children. Fixdb721070909353b343cdf3a2b85ba90da700a99f implements general native tween and correct hurry over owned live/compile/spin queues/children; wrong legacy capture-unit expected values corrected to native multiplication. Both hosts now pass all8 checks target2/hurry-capture1/gameplay-easing1/parser10/live72/replay33/identity1/both builds. All1,175 raw/crossplatform source pins and8 log hashes verified; private helper3e7c6a5e selected and Tower first full repair launched on retained original complete capture; one later maximum. No full acceptance comparator changed. Losslessly reclaimed2,540,158,976 allocated bytes from6 closed passing candidate/report duplicates only, accepted archive/report decompressed SHA verified, no chart replayed. What If first dynamic observer repair completes47,002 frames errors0,216,192 query mismatches; native216209 versus owned216205 events. Actual source run_guarded_actor_command deliberately suppresses dynamic On/Ready trace boundaries for older observer compatibility; corrected native observer now emits4 spans and owned initial queries still phaseconstruction. Exact source/first failures recorded, final2 not started; reuse completed corrected capture and fix observation profile without injecting expected events or changing comparison keys. Original U.N. Owen SM has13 missing late-assigned root On mismatches, same authored Lua/source and proven late-assignment defect as closed SSC; first SM corrected-observer capture launched on validated c25 helper/ca0 harness, old complete capture retained. Original workers continue, global original helper711a5230 unchanged. All501 original simfile bytes unchanged; missing coverage separate, oversized archives ignored/local, sweep active/incomplete.",
+  "updated_utc": "2026-10-15T01:56:11Z",
+  "previous_goal_turn": "Progress: Vector Field original full replay passes68,688 frames and U.N. Owen SM first corrected-observer repair passes67,636; zero callback errors/mismatches, saved fixtures locally decompressed and SHA-verified, passing charts closed and committed. Historical Circles SM complete117,065-frame native capture source binding repaired in manifest only, every trace/source member unchanged; first diagnostic failed before replay, corrected2,807-frame diagnostic has0errors/0mismatches, first full repair running with one later maximum. Dynamic command observation profile reproduced actual What If failure on both hosts: legacy test passes, enabled-profile test lacks2dispatch boundaries; compile typo first logs preserved and excluded from semantic red. Fix6a2fcdd49 traces actual owned dynamic command dispatch only when explicit source-backed capture observer profile is enabled; legacy captures retain prior observation behavior, actual actor dispatch/query values unchanged. Target controls pass both hosts; remaining eight-check matrices running. Harness79005e1 preserves optional observer provenance in archive runtime; both hosts runtime12/archive12/build pass, all2223raw/normalized source pins and log/binary hashes verified. What If corrected complete47,002-frame capture reused byte-for-byte; only runtime.command_observer metadata added, all nonmanifest members and original candidate retained/verified. Final second repair queued behind all8checks on both hosts and all1175raw/normalized source pins; no third repair. Tower first generic-tween repair, historical SM first repair, original queues and other existing repairs remain active without restart. Global original helper711a5230 unchanged. All501 original simfile bytes unchanged; missing coverage separate, oversized archives ignored/local, sweep active/incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "3c68a33eb5cf068a04389266ee0f94843e6fc612",
+      "deadsync": "6a2fcdd4949e1fb2d7c7989842c91951c2d6fba6",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -142,18 +142,18 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Vector Field/Vector Field.ssc",
-      "position": 459,
+      "current": "Watching/watching-fakemines.sm",
+      "position": 467,
       "phase": "replay",
-      "pid": 1898852,
+      "pid": 2056079,
       "process_matches": true,
-      "passed": 39,
+      "passed": 40,
       "pending": 65,
-      "processed": 104,
+      "processed": 105,
       "last_log_lines": [
-        "[890.3s] replaying every native gameplay frame: frame 46235/68688 (67.3%)",
-        "[892.3s] replaying every native gameplay frame: frame 46337/68688 (67.5%)",
-        "[894.3s] replaying every native gameplay frame: frame 46439/68688 (67.6%)"
+        "[946.3s] replaying every native gameplay frame: 1485 checks completed, 0 failed",
+        "[948.3s] replaying every native gameplay frame: 1485 checks completed, 0 failed",
+        "[950.3s] replaying every native gameplay frame: 1485 checks completed, 0 failed"
       ],
       "supervisor_running": true
     },
@@ -1963,6 +1963,20 @@
         "record": "sweep-2026-10-15-un-owen-sm-late-command-first-repair-v1.json",
         "fix_commit": "4b07d505988e43dabb14441f0a3c6696d0e06009 / harness ca0b435",
         "finish_status": "bounded first late-assigned native command observer repair complete; original complete capture retained"
+      },
+      {
+        "name": "historical-circles-sm-entry-clock-first-repair-v1",
+        "remote": "/home/parity/jobs/historical-circles-sm-entry-clock-first-repair-v1",
+        "record": "sweep-2026-10-15-historical-circles-sm-entry-clock-first-repair-v1.json",
+        "fix_commit": "5e44aa8e7",
+        "finish_status": "bounded first historical SM repair complete; original capture reused with original source binding"
+      },
+      {
+        "name": "what-if-command-observer-final-repair-v1",
+        "remote": "/home/parity/jobs/what-if-command-observer-final-repair-v1",
+        "record": "sweep-2026-10-15-what-if-command-observer-final-repair-v1.json",
+        "fix_commit": "6a2fcdd49 / harness 79005e1",
+        "finish_status": "bounded final second command observer profile repair complete; complete corrected native capture reused; no third attempt"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -1970,32 +1984,43 @@
     "other_jobs_live_observation": {
       "initial_sweep": {
         "status": "running",
-        "current": "Vector Field/Vector Field.ssc",
-        "position": 459,
+        "current": "Watching/watching-fakemines.sm",
+        "position": 467,
         "phase": "replay",
-        "pid": 1898852,
+        "pid": 2056079,
         "process_matches": true,
-        "passed": 39,
+        "passed": 40,
         "pending": 65,
-        "processed": 104,
+        "processed": 105,
         "last_log_lines": [
-          "[890.3s] replaying every native gameplay frame: frame 46235/68688 (67.3%)",
-          "[892.3s] replaying every native gameplay frame: frame 46337/68688 (67.5%)",
-          "[894.3s] replaying every native gameplay frame: frame 46439/68688 (67.6%)"
+          "[946.3s] replaying every native gameplay frame: 1485 checks completed, 0 failed",
+          "[948.3s] replaying every native gameplay frame: 1485 checks completed, 0 failed",
+          "[950.3s] replaying every native gameplay frame: 1485 checks completed, 0 failed"
         ],
         "supervisor_running": true
       },
       "jobs": [
         {
-          "job": "un-owen-sm-late-command-first-repair-v1",
+          "job": "historical-circles-sm-entry-clock-first-repair-v1",
           "complete": false,
           "supervisor_running": true,
           "passed": 0,
           "pending": 0,
           "processed": 0,
           "last_phase": "replay",
+          "source_simfile": "Circles/Circles.sm",
+          "child_running": true
+        },
+        {
+          "job": "un-owen-sm-late-command-first-repair-v1",
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
+          "pending": 0,
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
-          "child_running": true,
+          "child_running": false,
           "position": 451
         },
         {
@@ -3222,7 +3247,7 @@
     "selected_replay_binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 135,
+    "publisher_stream_count": 137,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -3721,15 +3746,57 @@
       "full_repairs_spent": 1,
       "one_later_full_repair_maximum": true,
       "old_complete_capture_retained": true,
-      "new_capture_required_by_proven_observer_gap": true
+      "new_capture_required_by_proven_observer_gap": true,
+      "status": "passed",
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "native_frames": 67636,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-un-owen-sm-fixture-verification.json"
+    },
+    "vector_field_closed": {
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-vector-field-fixture-verification.json",
+      "native_frames": 68688,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "full_repairs_spent": 0
+    },
+    "historical_circles_sm_first_repair": {
+      "source_binding": "tests/fixtures/full_song_lua/sweep-2026-10-15-historical-circles-sm-source-binding.json",
+      "diagnostic": "tests/fixtures/full_song_lua/sweep-2026-10-15-historical-circles-sm-diagnostic.json",
+      "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-historical-circles-sm-first-repair-launch.json",
+      "full_repairs_spent": 1,
+      "one_later_full_repair_maximum": true,
+      "first_diagnostic_failed_before_replay": true,
+      "native_capture_reused": true,
+      "first_full_repair_running": true
+    },
+    "dynamic_command_observer_profile": {
+      "fix_commit": "6a2fcdd49",
+      "harness_fix_commit": "79005e1",
+      "both_host_semantic_red_verified": true,
+      "both_host_target_control_passed": true,
+      "remaining_validation_running": true,
+      "all_eight_checks_required_before_selection": true,
+      "all_1175_raw_and_normalized_source_pins_required": true,
+      "archive_metadata_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-command-observer-metadata-validation.json",
+      "candidate_member_integrity": "tests/fixtures/full_song_lua/sweep-2026-10-15-what-if-command-observer-candidate.json",
+      "final_repair_queue": "tests/fixtures/full_song_lua/sweep-2026-10-15-what-if-command-observer-final-repair-queue.json",
+      "what_if_full_repairs_spent": 1,
+      "what_if_final_attempt_queued": true,
+      "what_if_final_attempt_running": false,
+      "what_if_no_third_full_repair": true,
+      "native_capture_reused": true,
+      "all_nonmanifest_member_bytes_unchanged": true,
+      "full_acceptance_unchanged": true,
+      "global_original_selection_unchanged": true
     }
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 220,
-    "new_pending_charts": 108,
-    "new_processed_sources": 328,
+    "new_passed_fixtures": 222,
+    "new_pending_charts": 107,
+    "new_processed_sources": 329,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 25,
+    "unprocessed_sources": 24,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -5807,20 +5874,6 @@
           "field": "stage_sample_clock",
           "native": 166.36764526367188,
           "deadsync": 166.4296112060547
-        }
-      ]
-    },
-    {
-      "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 13,
-      "first_mismatch": [
-        {
-          "field": "command_query_count",
-          "native": 12,
-          "deadsync": 14
         }
       ]
     },

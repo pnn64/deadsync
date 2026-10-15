@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T01:29:09Z",
+  "updated_utc": "2026-10-15T01:56:11Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 367,
-    "pending": 109,
-    "unprocessed": 25
+    "passed": 369,
+    "pending": 108,
+    "unprocessed": 24
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3761,9 +3761,9 @@
       "position": 451,
       "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
       "simfile_sha256": "67cfeadc69cdbd54c042acf83a94c9d6ecc0b973c66d4658f3ead831395b2901",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-un-owen-sm-late-command-first-repair-v1.json"
     },
     {
       "position": 452,
@@ -3821,7 +3821,9 @@
       "position": 459,
       "source_simfile": "Vector Field/Vector Field.ssc",
       "simfile_sha256": "940c17077877f0de5b20f0976892b372b1a95313ad772062d3d2607a8fcc0537",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 460,

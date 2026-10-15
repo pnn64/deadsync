@@ -1,0 +1,17 @@
+{
+  "status": "queued behind complete eight-check validation on both hosts",
+  "queue_pid": 2145936,
+  "windows_proof_uploader_pid": 48708,
+  "fix_commit": "6a2fcdd49",
+  "harness_fix_commit": "79005e1",
+  "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+  "full_repairs_previously_spent": 1,
+  "full_replay_started": false,
+  "final_full_attempt_on_launch": 2,
+  "no_third_full_repair": true,
+  "requires_all_1175_raw_linux_and_normalized_cross_platform_source_pins": true,
+  "native_capture_reused": true,
+  "all_nonmanifest_member_bytes_unchanged": true,
+  "full_comparison_keys_tolerances_and_acceptance_unchanged": true,
+  "publisher_stream_count": 137
+}
