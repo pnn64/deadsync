@@ -1,0 +1,30 @@
+{
+  "regression": "live_out_transition_loads_quad_directly_with_native_commands",
+  "meaningful_extra_out_frame_red_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 325.9304173000128,
+      "log_sha256": "e579f0ae0e03130b10b5f50e117785e790ec7ae63edf02d0b67938b8c731f254",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 628 filtered out; finished in 0.23s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 238.7533234350267,
+      "log_sha256": "7df97d774fc96c731ca34b848ea128d8e78110d60798aee3f39dccdde462e8a4",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 626 filtered out; finished in 0.20s"
+      ]
+    }
+  ],
+  "source_cause": "sweep-2026-10-15-hope-out-transition-quad-source-cause.json",
+  "changed_source_mtimes_refreshed_before_compilation_both_hosts": true,
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

@@ -3756,6 +3756,54 @@ return Def.Actor { OnCommand = function(self) self:sleep(9999) end }
     }
 
     #[test]
+    fn live_out_transition_loads_quad_directly_with_native_commands() {
+        let mut compiled = compile("out-transition-direct-quad", r#"
+return Def.Actor { OnCommand = function()
+    OUT = SCREENMAN:GetTopScreen():GetChild('Out')
+    assert(OUT:GetNumChildren() == 1)
+    OUT_QUAD = OUT:GetChildren()['']
+    assert(tostring(OUT_QUAD):find('Quad', 1, true),
+        'Out must load its native Quad directly without an extra ActorFrame')
+    assert(OUT_QUAD:GetParent() == OUT and OUT_QUAD:GetName() == '')
+    assert(OUT_QUAD.GetNumChildren == nil)
+    assert(OUT_QUAD:GetZoomedWidth() == SCREEN_WIDTH)
+    assert(OUT_QUAD:GetZoomedHeight() == SCREEN_HEIGHT)
+    assert(type(OUT_QUAD.OffCommand) == 'function')
+end }
+"#);
+        let mut scene = compiled.live_scene.take().expect("native Out loaded child");
+        let out = scene.lua.globals().get::<Table>("OUT").unwrap();
+        let quad = scene.lua.globals().get::<Table>("OUT_QUAD").unwrap();
+        let children = crate::lua_util::actor_direct_children(&scene.lua, &out).unwrap();
+        assert_eq!(children.len(), 1, "inspect the actual transition owner");
+        assert_eq!(children[0].to_pointer(), quad.to_pointer());
+        assert_eq!(out.raw_get::<Table>("__songlua_transition_child").unwrap(), quad);
+        assert_eq!(read_state(&scene.lua, &quad).unwrap().diffuse, [0.0; 4]);
+        assert_eq!(crate::actor_tween_time_left(&scene.lua, &quad).unwrap(), 1.5);
+        scene.lua.load("OUT_QUAD:playcommand('Off')").exec()
+            .expect("native Off handler with fresh human profiles");
+        scene.advance(SongLuaLiveFrame { screen_seconds: 0.25, delta_seconds: 0.25,
+            ..Default::default() }).unwrap();
+        assert_eq!(crate::actor_tween_time_left(&scene.lua, &quad).unwrap(), 1.5,
+            "waiting transition freezes its loaded Quad");
+        assert_eq!(read_state(&scene.lua, &quad).unwrap().diffuse[3], 0.0);
+        crate::lua_util::start_actor_transition(&scene.lua, &out).unwrap();
+        for (seconds, delta, left, alpha) in [
+            (0.5, 0.25, 1.25, 0.0), (0.75, 0.25, 1.0, 0.0),
+            (1.25, 0.5, 0.5, 0.5), (1.75, 0.5, 0.0, 1.0),
+        ] {
+            let output = scene.advance(SongLuaLiveFrame { screen_seconds: seconds,
+                delta_seconds: delta, ..Default::default() }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            assert!((crate::actor_tween_time_left(&scene.lua, &out).unwrap() - left).abs() < 1e-6);
+            assert!((read_state(&scene.lua, &quad).unwrap().diffuse[3] - alpha).abs() < 1e-6);
+        }
+        scene.advance(SongLuaLiveFrame { screen_seconds: 1.76, delta_seconds: 0.01,
+            ..Default::default() }).unwrap();
+        assert_eq!(out.raw_get::<u8>("__songlua_transition_state").unwrap(), 2);
+    }
+
+    #[test]
     fn live_transition_getter_uses_loaded_child_and_native_lifecycle() {
         let mut compiled = compile("transition-virtual-getter", r#"
 OUT = SCREENMAN:GetTopScreen():GetChild('Out')
