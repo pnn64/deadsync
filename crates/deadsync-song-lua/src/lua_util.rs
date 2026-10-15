@@ -14206,21 +14206,6 @@ pub fn create_underlay_theme_actor(
             create_dummy_actor,
         )?));
     }
-    if name.eq_ignore_ascii_case("SongMeter") {
-        let actor = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
-        let title = create_named_text_actor(
-            lua,
-            "BitmapText",
-            "SongTitle",
-            parent
-                .get::<Option<String>>("__songlua_main_title")?
-                .unwrap_or_default(),
-            create_dummy_actor,
-        )?;
-        title.set("__songlua_parent", actor.clone())?;
-        actor_children(lua, &actor)?.set("SongTitle", title)?;
-        return Ok(Some(actor));
-    }
     if name.eq_ignore_ascii_case("Header") {
         let actor = create_named_actor(lua, "Quad", "Header", create_dummy_actor)?;
         actor.raw_set("__songlua_parent", parent.clone())?;
@@ -14810,7 +14795,7 @@ local meter = {
 
 		-- life-changing
 		-- adjective
-		--  /Ã‹Ë†laÃ‰ÂªfÃ‹Å’tÃŠÆ’eÃ‰Âªn.dÃŠâ€™Ã‰ÂªÃ…â€¹/
+		--  /ˈlaɪfˌtʃeɪn.dʒɪŋ/
 		-- having an effect that is strong enough to change someone's life
 		-- synonyms: compelling, life-altering, puissant, blazing
 		LifeChangedMessageCommand=function(self,params)
@@ -15105,6 +15090,7 @@ pub fn install_underlay_theme_children(
         }
         // Danger.lua needs GAMESTATE and Def, installed later with StepStatistics.
         if top_screen_danger_index(name).is_some() { continue; }
+        if name.eq_ignore_ascii_case("SongMeter") { continue; } // Load the original shared actor after host services exist.
         let child = create_named_child_actor(lua, underlay, name)?;
         if name.starts_with("NoteFieldContainerP") {
             // Named lookup and screen Update share the same pane owner.
@@ -19817,10 +19803,18 @@ pub fn install_song_meter_display_children(lua: &Lua, actor: &Table) -> mlua::Re
         .unwrap_or(0.0);
     actor.set("__songlua_stream_width", width)?;
     if let Some(stream) = actor.get::<Option<Table>>("Stream")? {
-        if stream.get::<Option<String>>("Name")?.is_none() {
-            stream.set("Name", "Stream")?;
-        }
+        // MeterDisplay::LoadFromNode loads the Stream declaration as an actor
+        // before its Init commands and then assigns its engine-owned name.
+        let host = lua.app_data_ref::<ActorDefinitionHost>().map(|host| *host);
+        let stream = if let Some(host) = host {
+            let Value::Table(stream) = own_actor_root(lua, Value::Table(stream), host.install_methods)? else {
+                return Err(mlua::Error::runtime("SongMeterDisplay Stream must load an actor"));
+            };
+            stream
+        } else { stream };
+        stream.set("Name", "Stream")?;
         stream.set("__songlua_parent", actor.clone())?;
+        actor.raw_set("Stream", stream.clone())?;
         actor_children(lua, actor)?.set("Stream", stream)?;
     }
     Ok(())
@@ -22268,6 +22262,18 @@ pub(crate) fn install_native_gameplay_underlay(
             push_sequence_child_once(&underlay, pane.clone())?;
             panes.push(pane);
         }
+        let definition = lua.load(include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/Shared/SongInfoBar.lua"))
+            .set_name("@theme:/BGAnimations/ScreenGameplay underlay/Shared/SongInfoBar.lua")
+            .eval::<Value>()?;
+        let Value::Table(song_meter) = own_actor_root(lua, definition, install_methods)? else {
+            return Err(mlua::Error::runtime("native SongInfoBar must load an actor"));
+        };
+        song_meter.raw_set("__songlua_parent", underlay.clone())?;
+        run_actor_init_commands_for_table(lua, &song_meter)?;
+        native_step_statistics_lookup(lua, &song_meter)?;
+        actor_children(lua, &underlay)?.raw_set("SongMeter", song_meter.clone())?;
+        push_sequence_child_once(&underlay, song_meter.clone())?;
+        panes.push(song_meter);
         // Reproduce default.lua's adoption order so duplicate-name groups are
         // fresh tables constructed from the actual native sequence.
         let mut children = actor_direct_children(lua, &underlay)?;

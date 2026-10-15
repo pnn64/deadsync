@@ -1,0 +1,72 @@
+{
+  "source_root": "/home/parity/workspace/song-meter-green-v2/deadsync",
+  "binary_sha256": "ba75e5790ef124738a7e872bc6687d011294e40de885746f5347371e676b0c4c",
+  "all_six_groups_both_hosts_passed": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 264.32383166300133,
+      "log_sha256": "69ae56ee07efdbd5571ab4c10b4b52e21a06a69af47100d0dfe70ec51e324065",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 640 filtered out; finished in 0.62s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 210.29156400600914,
+      "log_sha256": "78dad058d64840a45e07ec529d08d53c5ccc70b6c2a7ee1f131962b9deb7f532",
+      "results": [
+        "test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 19.02s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 35.64453519700328,
+      "log_sha256": "25795dfa841a819946bbccc0dba174c5c3d73c168ebb47afe24f048af1f11ce3",
+      "results": [
+        "test result: ok. 104 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 34.95s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 73.32469420600682,
+      "log_sha256": "2e6e617928dd002d16b38eef49d6985e5f766f180dd9476eb28c1d03e04915a0",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 1.0483105200110003,
+      "log_sha256": "d1589cdaa393fac90ffafdc93101446b371a2188c7edab8a930666bd24dc851b",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 640 filtered out; finished in 0.37s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 36.41019005002454,
+      "log_sha256": "0ab6697b7dbd43d625ec92c5b617deefaad995feb115fab2de0d0431bedca176",
+      "results": []
+    }
+  ],
+  "all_1175_raw_linux_and_normalized_cross_platform_source_pins_verified": true,
+  "all_36_exact_native_assets_and_log_helper_hashes_verified": true,
+  "all_prior_103_live_and_43_replay_test_sources_unchanged": true,
+  "new_child_count_and_title_lifecycle_regression_identical_red_green": true,
+  "meaningful_four_versus_one_native_child_count_red_both_hosts": true,
+  "exact_original_SongInfoBar_Lua_matches_physical_native_source": true,
+  "incidental_Lua_pronunciation_comment_restored_to_exact_physical_native_source": true,
+  "native_MeterDisplay_cpp_sha256": "7b63510b8a63e638cecf2a7c953eb2198610680d36ef9aa9e876ea5f78148e39",
+  "actual_Stream_declaration_materialized_as_actor_before_Init_with_native_Stream_name": true,
+  "production_diff": "--- \n+++ \n@@ -14206,21 +14206,6 @@\n             create_dummy_actor,\n         )?));\n     }\n-    if name.eq_ignore_ascii_case(\"SongMeter\") {\n-        let actor = create_named_actor(lua, \"ActorFrame\", name, create_dummy_actor)?;\n-        let title = create_named_text_actor(\n-            lua,\n-            \"BitmapText\",\n-            \"SongTitle\",\n-            parent\n-                .get::<Option<String>>(\"__songlua_main_title\")?\n-                .unwrap_or_default(),\n-            create_dummy_actor,\n-        )?;\n-        title.set(\"__songlua_parent\", actor.clone())?;\n-        actor_children(lua, &actor)?.set(\"SongTitle\", title)?;\n-        return Ok(Some(actor));\n-    }\n     if name.eq_ignore_ascii_case(\"Header\") {\n         let actor = create_named_actor(lua, \"Quad\", \"Header\", create_dummy_actor)?;\n         actor.raw_set(\"__songlua_parent\", parent.clone())?;\n@@ -14810,7 +14795,7 @@\n \n \t\t-- life-changing\n \t\t-- adjective\n-\t\t--  /\u00c3\u2039\u00cb\u2020la\u00c3\u2030\u00c2\u00aaf\u00c3\u2039\u00c5\u2019t\u00c3\u0160\u00c6\u2019e\u00c3\u2030\u00c2\u00aan.d\u00c3\u0160\u00e2\u20ac\u2122\u00c3\u2030\u00c2\u00aa\u00c3\u2026\u00e2\u20ac\u00b9/\n+\t\t--  /\u02c8la\u026af\u02cct\u0283e\u026an.d\u0292\u026a\u014b/\n \t\t-- having an effect that is strong enough to change someone's life\n \t\t-- synonyms: compelling, life-altering, puissant, blazing\n \t\tLifeChangedMessageCommand=function(self,params)\n@@ -15105,6 +15090,7 @@\n         }\n         // Danger.lua needs GAMESTATE and Def, installed later with StepStatistics.\n         if top_screen_danger_index(name).is_some() { continue; }\n+        if name.eq_ignore_ascii_case(\"SongMeter\") { continue; } // Load the original shared actor after host services exist.\n         let child = create_named_child_actor(lua, underlay, name)?;\n         if name.starts_with(\"NoteFieldContainerP\") {\n             // Named lookup and screen Update share the same pane owner.\n@@ -19817,10 +19803,18 @@\n         .unwrap_or(0.0);\n     actor.set(\"__songlua_stream_width\", width)?;\n     if let Some(stream) = actor.get::<Option<Table>>(\"Stream\")? {\n-        if stream.get::<Option<String>>(\"Name\")?.is_none() {\n-            stream.set(\"Name\", \"Stream\")?;\n-        }\n+        // MeterDisplay::LoadFromNode loads the Stream declaration as an actor\n+        // before its Init commands and then assigns its engine-owned name.\n+        let host = lua.app_data_ref::<ActorDefinitionHost>().map(|host| *host);\n+        let stream = if let Some(host) = host {\n+            let Value::Table(stream) = own_actor_root(lua, Value::Table(stream), host.install_methods)? else {\n+                return Err(mlua::Error::runtime(\"SongMeterDisplay Stream must load an actor\"));\n+            };\n+            stream\n+        } else { stream };\n+        stream.set(\"Name\", \"Stream\")?;\n         stream.set(\"__songlua_parent\", actor.clone())?;\n+        actor.raw_set(\"Stream\", stream.clone())?;\n         actor_children(lua, actor)?.set(\"Stream\", stream)?;\n     }\n     Ok(())\n@@ -22268,6 +22262,18 @@\n             push_sequence_child_once(&underlay, pane.clone())?;\n             panes.push(pane);\n         }\n+        let definition = lua.load(include_str!(\"../assets/simply-love/BGAnimations/ScreenGameplay underlay/Shared/SongInfoBar.lua\"))\n+            .set_name(\"@theme:/BGAnimations/ScreenGameplay underlay/Shared/SongInfoBar.lua\")\n+            .eval::<Value>()?;\n+        let Value::Table(song_meter) = own_actor_root(lua, definition, install_methods)? else {\n+            return Err(mlua::Error::runtime(\"native SongInfoBar must load an actor\"));\n+        };\n+        song_meter.raw_set(\"__songlua_parent\", underlay.clone())?;\n+        run_actor_init_commands_for_table(lua, &song_meter)?;\n+        native_step_statistics_lookup(lua, &song_meter)?;\n+        actor_children(lua, &underlay)?.raw_set(\"SongMeter\", song_meter.clone())?;\n+        push_sequence_child_once(&underlay, song_meter.clone())?;\n+        panes.push(song_meter);\n         // Reproduce default.lua's adoption order so duplicate-name groups are\n         // fresh tables constructed from the actual native sequence.\n         let mut children = actor_direct_children(lua, &underlay)?;",
+  "full_acceptance_and_capture_input_reader_sources_unchanged": true,
+  "query_outputs_used_as_inputs": false,
+  "full_HOPE_repairs_spent": 0
+}

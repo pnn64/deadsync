@@ -1,0 +1,19 @@
+{
+  "actual_source_cause": "sweep-2026-10-16-hope-song-meter-source-cause.json",
+  "actual_first_native_seq": 979,
+  "original_native_asset": "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay underlay/Shared/SongInfoBar.lua",
+  "asset_sha256": "a6974b5520feb5a0655ac152fec9224598ac695d87378cdf51c62359051b11ee",
+  "asset_bytes_match_local_and_physical_native_source": true,
+  "production_repair": "Load and adopt the real original SongInfoBar after Def/host services exist; use ordinary Init, parent ownership, duplicate-name groups, native four-child order and CurrentSongChanged title handling. Remove the title-only placeholder and preserve normal shared-underlay ordering.",
+  "Stream_LoadFromNode_repair": "Actual native MeterDisplay::LoadFromNode materializes the Stream as an actor and sets its engine name before adoption; materialize the declared Stream with normal host methods before Init. Initial green1 exposed missing zoomy on a raw declaration on both hosts; green2 changes production only and preserves the exact same regression.",
+  "native_MeterDisplay_cpp_sha256": "7b63510b8a63e638cecf2a7c953eb2198610680d36ef9aa9e876ea5f78148e39",
+  "new_regression": "Four direct children, two actual default-texture border Quads, SongMeterDisplay owner and named SongTitle; correct parent ownership and real CurrentSongChanged title update at854 and640 widths.",
+  "meaningful_red_both_hosts": true,
+  "new_regression_identical_red_green": true,
+  "all_prior_103_live_and_43_replay_test_sources_unchanged": true,
+  "incidental_pronunciation_comment_corrected_to_physical_native_Standard_Lua": true,
+  "native_capture_reused": true,
+  "full_acceptance_criteria_inputs_keys_and_tolerances_unchanged": true,
+  "query_outputs_used_as_inputs": false,
+  "full_HOPE_repairs_spent": 0
+}

@@ -3848,6 +3848,39 @@ return Def.Banner {
 
 
     #[test]
+    fn live_song_meter_owns_native_song_info_children_and_lifecycle() {
+        for (name,width,height) in [("wide",854.0,480.0),("standard",640.0,480.0)] {
+            let mut compiled=compile_with_context(&format!("song-meter-{name}"),
+                "return Def.ActorFrame {}", |context| {
+                    context.main_title="Native Song Info".into();
+                    context.screen_width=width;
+                    context.screen_height=height;
+                    context.defer_initial_live_update=true;
+                });
+            let scene=compiled.live_scene.as_mut().expect("retained SongMeter scene");
+            scene.lua.load(r#"
+local underlay=SCREENMAN:GetTopScreen():GetChild('Underlay')
+local meter=underlay:GetChild('SongMeter')
+assert(meter and meter:GetNumChildren()==4, 'native SongInfoBar must own four direct children')
+assert(meter:GetParent()==underlay)
+local anonymous=meter:GetChild('')
+assert(#anonymous==3)
+for i=1,2 do
+    assert(anonymous[i]:GetParent()==meter and anonymous[i]:GetTexture(), 'border Quad owns native default texture')
+    assert(anonymous[i]:GetTexture():GetSourceWidth()==1 and anonymous[i]:GetTexture():GetSourceHeight()==1)
+end
+assert(tostring(anonymous[3]):find('SongMeterDisplay',1,true))
+assert(anonymous[3]:GetParent()==meter)
+local title=meter:GetChild('SongTitle')
+assert(title and title:GetParent()==meter and title:GetText()=='Native Song Info')
+title:settext('stale')
+MESSAGEMAN:Broadcast('CurrentSongChanged')
+assert(title:GetText()=='Native Song Info', 'normal song change updates the real native title actor')
+"#).exec().unwrap();
+        }
+    }
+
+    #[test]
     fn live_theme_setup_broadcasts_respect_song_construction_boundary() {
         use deadsync_rules::timing::{TimingData, TimingSegments};
         for reload in [false, true] {
