@@ -1,0 +1,29 @@
+{
+  "regression": "live_score_display_loads_unnamed_blank_frame_before_percent",
+  "meaningful_missing_score_frame_red_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 316.65964469999017,
+      "log_sha256": "2a12da43182b16a2e1f82ddf30a255fc9daa8dbc89950464e1f5cec6930de04a",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 622 filtered out; finished in 0.21s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 280.0952168459771,
+      "log_sha256": "e63a9887772e32e432a106f281bbba4bb60da54c1b9d0c3a4f143a1b50d21201",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 620 filtered out; finished in 0.16s"
+      ]
+    }
+  ],
+  "source_cause": "sweep-2026-10-15-hope-score-frame-source-cause.json",
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
