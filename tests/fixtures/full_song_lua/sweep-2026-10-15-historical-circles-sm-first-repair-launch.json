@@ -1,0 +1,13 @@
+{
+  "pid": 2053746,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_historical_circles_sm_first_repair_v1.py"
+  ],
+  "repair_attempt": 1,
+  "maximum_full_repairs": 2,
+  "original_position": 148,
+  "native_capture_reused": true,
+  "diagnostic_mismatches": 0,
+  "diagnostic_frames": 2807
+}

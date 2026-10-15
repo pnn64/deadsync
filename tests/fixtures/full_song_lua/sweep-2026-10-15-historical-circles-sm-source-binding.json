@@ -1,0 +1,14 @@
+{
+  "original_position": 148,
+  "source_simfile": "Circles/Circles.sm",
+  "old_candidate": "/home/parity/jobs/native-creation-capture-v1/circles-sm/candidates/74cbc0fce98e830a215022cf4aa8eaf23a5e31ed9323ccf4820e04046032c541.tar",
+  "old_candidate_sha256": "74cbc0fce98e830a215022cf4aa8eaf23a5e31ed9323ccf4820e04046032c541",
+  "candidate": "/home/parity/jobs/historical-circles-sm-canonical-v1/52534be29cddb9bdc64bc67463dc101b70246622885d630a527c927e2dc9eff8.tar",
+  "candidate_sha256": "52534be29cddb9bdc64bc67463dc101b70246622885d630a527c927e2dc9eff8",
+  "simfile_sha256": "c56c02f2f589f4ee8cd855477469e68ce7bbed4e8d37f844954b9eebb0ad95d5",
+  "trace_sha256": "c14fee426173540be42e1d21257697e074066cc7aafcf5d990bd53e1e4725741",
+  "manifest_change_only": "chart.source_path: Circles.sm -> Circles/Circles.sm",
+  "all_captured_member_bytes_unchanged": true,
+  "complete_native_capture_reused": true,
+  "full_repair_attempts_spent": 0
+}
