@@ -1,0 +1,19 @@
+{
+  "baseline_fix_commit": "2e561959d28baded6219078922c8fd38012aaaf5",
+  "full_song_lua_acceptance_native_comparisons_and_all_39_replay_controls_byte_identical": true,
+  "all_96_prior_live_regressions_byte_identical": true,
+  "entire_live_regression_source_identical_red_green_v2": true,
+  "lib_and_top_screen_contract_tests_byte_identical": true,
+  "native_header_entire_init_function_preserved_with_original_line_positions": true,
+  "native_header_source_sha256_lf_normalized": "6a099c048202000aadbdbf5de28c247c6c6051a5b82bbaa3ebdb2cc49936dec9",
+  "new_regression_source_sha256_lf_normalized": "3d811eb9e2ccfc43d667e0ad444efd3b7d7516e5f6767227b5eae9dd570b4671",
+  "new_test_getter_correction": {
+    "v1": "GetVertAlign",
+    "v2": "GetVAlign",
+    "primary_source": "vendor/itgmania/src/Actor.cpp, LunaActor::GetVAlign wraps Actor::GetVertAlign",
+    "scope": "Only the newly authored test getter spelling changed. Frozen v1 failure evidence is preserved; v2 repeats the meaningful failing target on both hosts before the fix, using the exact same test in green."
+  },
+  "full_chart_repairs_spent": 0,
+  "expected_query_outputs_used_as_engine_inputs": false,
+  "no_passing_chart_reopened": true
+}
