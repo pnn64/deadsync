@@ -3450,6 +3450,47 @@ assert(FLASH:GetParent():GetParent() == CUES and CUES:GetParent() == CONTAINER)
     }
 
     #[test]
+    fn live_quad_default_texture_survives_geometry_and_explicit_rebinding() {
+        compile("quad-default-texture", r#"
+local quad, sprite
+local function check(texture)
+    assert(texture, 'Quad must load its native default texture')
+    assert(texture:GetPath() == '', 'default texture resource has an empty filename')
+    for _, method in ipairs{'GetSourceWidth', 'GetSourceHeight', 'GetTextureWidth',
+        'GetTextureHeight', 'GetImageWidth', 'GetImageHeight', 'GetNumFrames'} do
+        assert(texture[method](texture) == 1, method .. ' must describe the native 1x1 default')
+    end
+end
+return Def.ActorFrame {
+    OnCommand = function()
+        quad:zoomto(320, 180)
+        local original = quad:GetTexture()
+        check(original)
+        assert(sprite:GetTexture() == nil, 'an unloaded Sprite has no texture')
+        sprite:SetTexture(original)
+        check(sprite:GetTexture())
+        quad:Load(nil)
+        assert(quad:GetTexture() == nil, 'Load(nil) unloads the current Quad texture')
+        quad:SetTexture(original)
+        check(quad:GetTexture())
+    end,
+    Def.Quad { InitCommand = function(self) quad = self end },
+    Def.Sprite { InitCommand = function(self) sprite = self end },
+}
+"#);
+        compile("quad-ignores-node-texture", r#"
+return Def.Quad {
+    Texture = 'ignored 4x2.png',
+    OnCommand = function(self)
+        local texture = assert(self:GetTexture(), 'Quad default exists despite a Texture node attribute')
+        assert(texture:GetPath() == '' and texture:GetNumFrames() == 1)
+        assert(texture:GetSourceWidth() == 1 and texture:GetSourceHeight() == 1)
+    end,
+}
+"#);
+    }
+
+    #[test]
     fn live_cancel_transition_loads_quad_and_native_fade() {
         let mut compiled = compile("cancel-transition-child", r#"
 return Def.Actor { OnCommand = function(self) self:sleep(9999) end }

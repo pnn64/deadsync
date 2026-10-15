@@ -3129,6 +3129,11 @@ pub fn create_dummy_actor(
 
 fn init_actor_type(lua: &Lua, actor: &Table, actor_type: &'static str) -> mlua::Result<()> {
     actor.set("__songlua_actor_type", actor_type)?;
+    // Quad's constructor loads RageTexture_Default. Its manager lookup key is
+    // __blank__, but the resource itself has an empty filename and 1x1 size.
+    if actor_type.eq_ignore_ascii_case("Quad") {
+        actor.raw_set("__songlua_default_texture", true)?;
+    }
     if actor_type.eq_ignore_ascii_case("ActorFrameTexture")
         && actor_aft_capture_name(actor)?.is_none()
     {
@@ -5318,6 +5323,7 @@ pub fn set_actor_texture_from_path(actor: &Table, path: &str) -> mlua::Result<bo
         return Ok(false);
     }
     actor.set("Texture", path.to_string())?;
+    actor.raw_set("__songlua_default_texture", false)?;
     actor.set("__songlua_aft_capture_name", Value::Nil)?;
     set_actor_decode_movie_for_texture(actor)?;
     Ok(true)
@@ -5361,13 +5367,20 @@ pub fn set_actor_texture_from_value(
     match value {
         Some(Value::String(texture)) => {
             actor.set("Texture", texture.to_str()?.to_string())?;
+            actor.raw_set("__songlua_default_texture", false)?;
             actor.set("__songlua_aft_capture_name", Value::Nil)?;
             set_actor_decode_movie_for_texture(actor)?;
         }
         Some(Value::Table(texture)) => {
-            if let Some(capture_name) =
+            if texture.raw_get::<bool>("__songlua_default_texture")? {
+                actor.raw_set("__songlua_default_texture", true)?;
+                actor.set("Texture", Value::Nil)?;
+                actor.set("__songlua_aft_capture_name", Value::Nil)?;
+                actor.set("__songlua_state_decode_movie", false)?;
+            } else if let Some(capture_name) =
                 texture.get::<Option<String>>("__songlua_aft_capture_name")?
             {
+                actor.raw_set("__songlua_default_texture", false)?;
                 actor.set("__songlua_aft_capture_name", capture_name)?;
                 actor.set("Texture", Value::Nil)?;
                 set_actor_decode_movie_for_texture(actor)?;
@@ -5376,11 +5389,13 @@ pub fn set_actor_texture_from_value(
                 .filter(|path| !path.is_empty())
             {
                 actor.set("Texture", texture_path)?;
+                actor.raw_set("__songlua_default_texture", false)?;
                 actor.set("__songlua_aft_capture_name", Value::Nil)?;
                 set_actor_decode_movie_for_texture(actor)?;
             }
         }
         Some(Value::Nil) | None if clear_on_nil => {
+            actor.raw_set("__songlua_default_texture", false)?;
             actor.set("Texture", Value::Nil)?;
             actor.set("__songlua_aft_capture_name", Value::Nil)?;
             actor.set("__songlua_state_decode_movie", false)?;
@@ -5391,6 +5406,9 @@ pub fn set_actor_texture_from_value(
 }
 
 pub fn actor_sprite_sheet_dims(actor: &Table) -> mlua::Result<Option<(u32, u32)>> {
+    if actor.raw_get::<bool>("__songlua_default_texture")? {
+        return Ok(Some((1, 1)));
+    }
     if let Some(path) = actor_texture_path(actor)? {
         return Ok(Some(parse_sprite_sheet_dims(
             path.to_string_lossy().as_ref(),
@@ -5924,6 +5942,13 @@ pub fn actor_sprite_frame_count(actor: &Table) -> mlua::Result<u32> {
 pub fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     let texture = lua.create_table()?;
     texture.raw_set("__songlua_native_type", "RageTexture")?;
+    if actor.raw_get::<bool>("__songlua_default_texture")? {
+        texture.raw_set("__songlua_default_texture", true)?;
+        install_texture_proxy_methods(
+            lua, &texture, actor, String::new(), 1.0, 1.0, 1.0, 1.0, (1.0, 1.0), 1,
+        )?;
+        return Ok(texture);
+    }
     let frame_count = actor_sprite_frame_count(actor)?;
     if actor
         .get::<Option<String>>("__songlua_actor_type")?
@@ -6055,7 +6080,8 @@ pub fn install_actor_texture_proxy_getter_methods(lua: &Lua, actor: &Table) -> m
                         .raw_get::<Option<Table>>("__songlua_aft_allocation")?
                         .is_some()
                 } else {
-                    !matches!(actor.get::<Value>("Texture")?, Value::Nil)
+                    actor.raw_get::<bool>("__songlua_default_texture")?
+                        || !matches!(actor.get::<Value>("Texture")?, Value::Nil)
                 };
                 if created {
                     Ok(Value::Table(create_texture_proxy(lua, &actor)?))
@@ -7023,7 +7049,8 @@ pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Res
                 if let Some((width, height)) = size {
                     capture_immediate_vec2(lua, &actor, "size", [width, height])?;
                 }
-                let bound = actor_aft_capture_name(&actor)?.is_some()
+                let bound = actor.raw_get::<bool>("__songlua_default_texture")?
+                    || actor_aft_capture_name(&actor)?.is_some()
                     || actor_texture_path(&actor)?.is_some();
                 capture_immediate_bool(lua, &actor, "sprite_texture", bound)?;
                 capture_sprite_texture(lua, &actor, previous)?;
@@ -7055,7 +7082,7 @@ pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Res
                         return Ok(Value::Table(actor.clone()));
                     }
                     if method_name == "Load" {
-                        load_actor_texture(lua, &actor, method_arg(&args, 0), false)?;
+                        load_actor_texture(lua, &actor, method_arg(&args, 0), true)?;
                         return Ok(Value::Table(actor.clone()));
                     }
                     let value = method_arg(&args, 0).cloned().unwrap_or(Value::Nil);
@@ -20084,6 +20111,10 @@ pub fn actor_zoom_axis(actor: &Table, zoom_key: &str, basezoom_key: &str) -> mlu
 }
 
 pub fn actor_texture_path(actor: &Table) -> mlua::Result<Option<PathBuf>> {
+    // Quad::LoadFromNode bypasses Sprite's Texture attribute loading.
+    if actor.raw_get::<bool>("__songlua_default_texture")? {
+        return Ok(None);
+    }
     let Some(texture) = actor.get::<Option<String>>("Texture")? else {
         return Ok(None);
     };

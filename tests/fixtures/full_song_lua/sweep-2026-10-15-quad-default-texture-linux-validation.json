@@ -1,0 +1,162 @@
+{
+  "source_root": "/home/parity/workspace/quad-default-texture-green-v1/deadsync",
+  "binary_sha256": "8e605364e123b4ed0bd7214368066ed4c09c2b7ff0ffe8da01c50175e3637515",
+  "all_sixteen_checks_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "all_linux_log_and_binary_hashes_verified": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 300.2613692480081,
+      "log_sha256": "6ae4b80610a02d4e6b2f62a16972ba47b0fcd705dc2a053245a9a2a1108f1dd9",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 617 filtered out; finished in 0.34s"
+      ]
+    },
+    {
+      "label": "cancel-child-control",
+      "exit_code": 0,
+      "seconds": 1.0151896350143943,
+      "log_sha256": "b636f0054e83a2a6f3c06d3a12f5dc23c19c9842efcddcfb69da48fc6d7120ea",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 617 filtered out; finished in 0.23s"
+      ]
+    },
+    {
+      "label": "registry-handles-control",
+      "exit_code": 0,
+      "seconds": 0.7730919379973784,
+      "log_sha256": "d81f5553913f8f64eff88bc0cd62f1cae059149ba6759d08f248fa83a7bce6c0",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 617 filtered out; finished in 0.06s"
+      ]
+    },
+    {
+      "label": "mine-boundary-control",
+      "exit_code": 0,
+      "seconds": 235.41260366200004,
+      "log_sha256": "db161fb06ef775b728f58ea62257446c3c0d6361104d03b9994189874fdb5e88",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 336 filtered out; finished in 18.52s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 0.9273020490072668,
+      "log_sha256": "7795ec92415d52540fbbbf13405c84e5f38339fe9758be20b19c3efd131f5063",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 617 filtered out; finished in 0.19s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 45.143019351991825,
+      "log_sha256": "4e40a291df159675b40ab6f0b65ab331ae65b4e2665cdaa67f69aeafd7829e6a",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 0.7790745150123257,
+      "log_sha256": "256d44d4fd3b40a4a9f941320d9a8df0f328c87b6edba781932bb7d6d6474427",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 608 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 27.985071262985002,
+      "log_sha256": "496f40fa4487a5d64fafcb36470504db495c054e7d2f24157da8f576cb4c9642",
+      "results": [
+        "test result: ok. 81 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 27.31s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 20.271880697022425,
+      "log_sha256": "ecefd277ff72535fb309b41ff595bb5b44029aadb9c9eb3c95b47f9e9beb648b",
+      "results": [
+        "test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 19.41s"
+      ]
+    },
+    {
+      "label": "sm-compatibility-control",
+      "exit_code": 0,
+      "seconds": 0.8343614680052269,
+      "log_sha256": "07543e6a648fc7243abac01e03899b9d8a50a05643b693262aa1f5a63ab96a3d",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 617 filtered out; finished in 0.15s"
+      ]
+    },
+    {
+      "label": "crop-compatibility-control",
+      "exit_code": 0,
+      "seconds": 0.8871432160085533,
+      "log_sha256": "4f2bb0d0a91073352134db855b9e2e12d1df5fb3445c26411edb223517544dec",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 617 filtered out; finished in 0.18s"
+      ]
+    },
+    {
+      "label": "model-controls",
+      "exit_code": 0,
+      "seconds": 12.639211472007446,
+      "log_sha256": "023010e1d83e98008dd6a2ed4216c9056746a9bb07f310a59eb0d4e94064880b",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 276 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "model-differential-control",
+      "exit_code": 0,
+      "seconds": 0.9063589889847208,
+      "log_sha256": "5dd9715127427bda403abb876762df5cb4fc7d6974beec4afe6a3cc1fe4d90d5",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 287 filtered out; finished in 0.13s"
+      ]
+    },
+    {
+      "label": "completion-controls",
+      "exit_code": 0,
+      "seconds": 0.7956838009995408,
+      "log_sha256": "b332be67fb8378c637875da42a4079a0644793935f7a8e787f5bbe187475205c",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 815 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 1.3131479659932666,
+      "log_sha256": "8781e664a7dd959e77d1c95af7dcbdf9f21d9eee95ae88c36c3f8c446c653a5d",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 617 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 43.04587488400284,
+      "log_sha256": "b15047d6890b9c752f9cb9b3fd1feaa5f744c3ef4c8d19b8f37a3743074edc51",
+      "results": []
+    }
+  ],
+  "red_missing_quad_texture_reproduced_both_hosts": true,
+  "regression": "live_quad_default_texture_survives_geometry_and_explicit_rebinding",
+  "source_cause": "sweep-2026-10-15-hope-quad-default-texture-source-cause.json",
+  "native_default_texture_filename": "",
+  "native_default_texture_dimensions": [
+    1,
+    1
+  ],
+  "full_chart_repairs_spent": 0,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true,
+  "global_original_helper_unchanged": true
+}
