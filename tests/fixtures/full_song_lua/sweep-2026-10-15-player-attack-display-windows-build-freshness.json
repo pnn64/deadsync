@@ -21,5 +21,14 @@
   "regression_changed": false,
   "old_failed_log_preserved": true,
   "full_chart_repairs_added": 0,
-  "acceptance_changed": false
+  "acceptance_changed": false,
+  "corrected_windows_green_completed": true,
+  "all_four_validation_groups_passed": true,
+  "all_1175_initial_and_final_source_pins_identical": true,
+  "source_and_regression_bytes_changed_to_pass": false,
+  "fresh_compilation_observed_in_target_log": true,
+  "fresh_target_log_sha256": "54ca9e1a7b295f62807ecaccdd132e42dc285bf7875ab017c6be90243665c90b",
+  "fresh_compiled_unit_test_binary_sha256": "a2da4ffcf6f42c5238409cf061b64911eb8b6c8fa124070d92133a9035ee91c5",
+  "fresh_compiled_binary_differs_from_stale_red_binary": true,
+  "qualified_fix_commit": "7efd988fdcc73bb3601b9b60981e5e89bbe0d21c"
 }
