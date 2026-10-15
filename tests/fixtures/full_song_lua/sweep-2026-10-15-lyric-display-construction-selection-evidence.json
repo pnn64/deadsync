@@ -1,0 +1,28 @@
+{
+  "source_cause": "sweep-2026-10-15-hope-lyric-display-source-cause.json",
+  "additional_primary_sources": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\Scripts\\02 Actor.lua",
+      "sha256": "499e7ee20f5c14a6a67ce8da6840bf271829659fe4e03df1e18e5159e1de339a"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ActorUtil.cpp",
+      "sha256": "282b2acd5b45b27ff6c55a4ca1b0189f9405818205fd747316f9f82800c56475"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ScreenGameplay.cpp",
+      "sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\Fonts\\Common Normal.redir",
+      "sha256": "935110506f2b225f1770b279afbb4270c3e1a1ec59c0b0953ae105fd53c51ad7"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\actor_classes.rs",
+      "sha256": "2c86509fdabdc7e50e2ad7f374d753b5774cb2a7bcd581999980c234a9af41b8"
+    }
+  ],
+  "source_details": "Native Changed commands dispatch Actor:LyricCommand from fallback 02 Actor.lua. Owned Actor class only forwards this name to a missing semantic adapter. Implement the actual native Lua helper, not a no-op. Simply Love Common Normal redirects to Miso/_miso light, supported by the existing built-in font resolver. ScreenGameplay loads inherited SetNoReverse/SetReverse/SetOneReverse position commands and chooses the initial state from enabled players current Reverse values. Preserve ordered text children and initialize real font/commands.",
+  "full_repairs_spent": 0,
+  "acceptance_changed": false
+}
