@@ -458,7 +458,53 @@ pub fn song_lua_ease_factor(
     opt1: Option<f32>,
     opt2: Option<f32>,
 ) -> f32 {
+    if let Some(name) = easing {
+        if name == "spring" {
+            let t = t.clamp(0.0, 1.0);
+            return 1.0 - (t * std::f32::consts::PI * 2.5).cos() / (1.0 + t * 3.0);
+        }
+        if let Some(factor) = native_bezier_factor(name, t.clamp(0.0, 1.0)) {
+            return factor;
+        }
+    }
     SongLuaEase::from_name(easing).factor(t, opt1, opt2)
+}
+
+fn native_bezier_factor(name: &str, t: f32) -> Option<f32> {
+    // Actor tween blocks already retain named curves as strings. Preserve the
+    // native float controls in that representation, across load and playback.
+    let controls = name.strip_prefix("bezier(")?.strip_suffix(')')?;
+    let mut points = [0.0_f32; 8];
+    let mut count = 0;
+    for value in controls.split(',') {
+        *points.get_mut(count)? = value.parse().ok()?;
+        count += 1;
+    }
+    let coefficients = |[a, b, c, d]: [f32; 4]| {
+        let first = 3.0 * (b - a);
+        let second = 3.0 * (c - b) - first;
+        [d - a - first - second, second, first, a]
+    };
+    let evaluate = |[a, b, c, d]: [f32; 4], p: f32| ((a * p + b) * p + c) * p + d;
+    match count {
+        4 => Some(evaluate(coefficients([points[0], points[1], points[2], points[3]]), t)),
+        8 => {
+            let x = coefficients([points[0], points[2], points[4], points[6]]);
+            let y = coefficients([points[1], points[3], points[5], points[7]]);
+            // RageBezier2D starts with the curve's actual X endpoints, then
+            // applies at most 100 float Newton steps with its native tolerance.
+            let end = x[0] + x[1] + x[2] + x[3];
+            let mut p = (t - x[3]) / (end - x[3]);
+            for _ in 0..100 {
+                let error = t - evaluate(x, p);
+                if error.abs() < 0.0001 { break; }
+                let slope = 3.0 * x[0] * p * p + 2.0 * x[1] * p + x[2];
+                p += error / slope;
+            }
+            Some(evaluate(y, p))
+        }
+        _ => None,
+    }
 }
 
 #[inline(always)]

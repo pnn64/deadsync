@@ -1,0 +1,83 @@
+{
+  "status": "all eight Windows checks passed; Linux remaining checks running",
+  "source_pin_count": 1175,
+  "all_1175_normalized_source_pins_verified": true,
+  "all_eight_log_hashes_verified": true,
+  "native_curve_and_hurry_contracts_passed": 2,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 263.85062320000725,
+      "log_sha256": "514e26936019aac0b31e704203f99dffcc6ebaafb0ef0a293666d8a76bc358a0",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 608 filtered out; finished in 0.31s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 1.6455650999996578,
+      "log_sha256": "7199eb723d415196dcdc68df4fafe04334f3d60730b96e509cc1ac28a2e68ceb",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 609 filtered out; finished in 0.19s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 11.327585899998667,
+      "log_sha256": "98fbb0f74d5036dedd0ee507d178289724d8ad92147c38175b00e6632ebbedfb",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.4049538999970537,
+      "log_sha256": "232eb3774102b4149d4afebd06fe83cb028a650a8c9b01a819bc2e7a84eb05a0",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 600 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 34.62303590000374,
+      "log_sha256": "1554c6fd7610b36279ca510bb3315d639d1cffb343d7c819ceb6f16706690a09",
+      "results": [
+        "test result: ok. 72 passed; 0 failed; 0 ignored; 0 measured; 538 filtered out; finished in 33.30s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 94.01807779999217,
+      "log_sha256": "231702b7b6432bc698071bd5582944ab8bdd2095f953c820cd386314df5211e4",
+      "results": [
+        "test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.14s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 1.3922006999928271,
+      "log_sha256": "e2588cb64814ca7b77eaf1d8dbe37076f0d40c522cac7f6a597fca146ae1d73b",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 609 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 23.492428900004597,
+      "log_sha256": "8a35d6ca53f57aeb2afbaf49251f76f6319ad59ac96a33c90443bc0fbb4b2fd4",
+      "results": []
+    }
+  ],
+  "source_change": "Actor.tween dispatches all five native TweenTypes including4/8-point Bezier, using owned queues and native float interpolation. Hurry multiplies duration and remaining time, preserves hibernation and propagates through ActorFrame children. Native argument validation, zero/negative hurry and partial tween progress are covered.",
+  "legacy_unit_correction": "Existing hurrytweening(2) capture expectations used reciprocal scaling; changed to native duration*2, proven by compiled ITGmania Actor::HurryTweening and independent native Lua assertions.",
+  "full_acceptance_comparisons_changed": false,
+  "active_original_replay_roots_modified": false
+}

@@ -3463,6 +3463,9 @@ fn actor_bounce_factor(t: f32, end: bool) -> f32 {
 
 fn overlay_command_ease_factor(easing: Option<&str>, t: f32, opt1: Option<f32>) -> f32 {
     let t = t.clamp(0.0, 1.0);
+    if easing.is_some_and(|name| name.starts_with("bezier(")) {
+        return deadsync_gameplay::song_lua_ease_factor(easing, t, opt1, None);
+    }
     match easing.unwrap_or("linear") {
         "instant" => 1.0,
         "inQuad" => t * t,
@@ -11859,11 +11862,11 @@ return Def.ActorFrame{
         let command = &compiled.overlays[0].message_commands[0];
         assert_eq!(command.message, "Hurry");
         assert_eq!(command.blocks.len(), 2);
-        assert_eq!(command.blocks[0].start, 0.5);
-        assert_eq!(command.blocks[0].duration, 0.5);
+        assert_eq!(command.blocks[0].start, 2.0);
+        assert_eq!(command.blocks[0].duration, 2.0);
         assert_eq!(command.blocks[0].delta.x, Some(20.0));
-        assert_eq!(command.blocks[1].start, 1.0);
-        assert_eq!(command.blocks[1].duration, 1.0);
+        assert_eq!(command.blocks[1].start, 4.0);
+        assert_eq!(command.blocks[1].duration, 4.0);
         assert_eq!(command.blocks[1].delta.y, Some(40.0));
     }
 

@@ -6427,11 +6427,6 @@ pub fn make_actor_tween_method(
 ) -> mlua::Result<Function> {
     let actor = actor.clone();
     lua.create_function(move |lua, args: MultiValue| {
-        prepare_capture_scope_actor(lua, &actor)?;
-        flush_actor_capture(&actor)?;
-        let mut cursor = actor
-            .get::<Option<f32>>("__songlua_capture_cursor")?
-            .unwrap_or(0.0);
         let duration = args
             .get(1)
             .cloned()
@@ -6444,22 +6439,68 @@ pub fn make_actor_tween_method(
             .and_then(read_f64)
             .unwrap_or(0.0)
             .max(0.0);
-        queue_spin_tween(lua, &actor, exact_duration, easing)?;
-        queue_replay_tween(lua, &actor, exact_duration, easing);
-        if let Some(delay) = record_queue_step(lua, &actor, Some(exact_duration))? {
-            cursor = delay;
-            actor.set("__songlua_capture_cursor", cursor)?;
+        begin_actor_tween(lua, &actor, duration, exact_duration, easing)
+    })
+}
+
+fn begin_actor_tween(lua: &Lua, actor: &Table, duration: f32, exact_duration: f64,
+    easing: Option<&str>) -> mlua::Result<Table> {
+    prepare_capture_scope_actor(lua, actor)?;
+    flush_actor_capture(actor)?;
+    let mut cursor = actor.get::<Option<f32>>("__songlua_capture_cursor")?.unwrap_or(0.0);
+    queue_spin_tween(lua, actor, exact_duration, easing)?;
+    queue_replay_tween(lua, actor, exact_duration, easing);
+    if let Some(delay) = record_queue_step(lua, actor, Some(exact_duration))? {
+        cursor = delay;
+        actor.set("__songlua_capture_cursor", cursor)?;
+    }
+    actor.set("__songlua_capture_duration", duration)?;
+    actor.set("__songlua_capture_tween_time_left", cursor + duration)?;
+    actor.set("__songlua_capture_easing", easing)?;
+    actor.set("__songlua_capture_opt1", Value::Nil)?;
+    actor.set("__songlua_capture_opt2", Value::Nil)?;
+    // BeginTweening immediately owns an empty destination state as well.
+    actor_current_capture_block(lua, actor)?;
+    Ok(actor.clone())
+}
+
+fn make_native_actor_tween_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
+    let actor = actor.clone();
+    lua.create_function(move |lua, args: MultiValue| {
+        let duration = lua.coerce_number(args.get(1).cloned().unwrap_or(Value::Nil))?
+            .ok_or_else(|| mlua::Error::runtime("tween duration must be a number"))? as f32;
+        if duration < 0.0 {
+            log::warn!("Lua: tween({duration}): tween time must not be negative");
+            return Ok(actor.clone());
         }
-        actor.set("__songlua_capture_duration", duration)?;
-        actor.set("__songlua_capture_tween_time_left", cursor + duration)?;
-        actor.set("__songlua_capture_easing", easing)?;
-        actor.set("__songlua_capture_opt1", Value::Nil)?;
-        actor.set("__songlua_capture_opt2", Value::Nil)?;
-        // BeginTweening queues a state immediately.  Materialize even an empty
-        // capture block so the following tween/sleep advances past this state
-        // when update-function writes are diverted into the runtime sampler.
-        actor_current_capture_block(lua, &actor)?;
-        Ok(actor.clone())
+        if duration.is_nan() { return Err(mlua::Error::runtime("invalid tween duration")); }
+        let kind = crate::song_tables::option_enum(args.get(2),
+            &["TweenType_Linear", "TweenType_Accelerate", "TweenType_Decelerate",
+                "TweenType_Spring", "TweenType_Bezier"], "TweenType")?;
+        let bezier;
+        let easing = match kind {
+            0 => "linear", 1 => "inQuad", 2 => "outQuad", 3 => "spring",
+            _ => {
+                let Some(Value::Table(controls)) = args.get(3) else {
+                    return Err(mlua::Error::runtime("Bezier tween requires a table"));
+                };
+                let count = controls.raw_len();
+                if count != 4 && count != 8 {
+                    log::warn!("Tween::CreateFromStack: table argument must have 4 or 8 entries");
+                    return Ok(actor.clone());
+                }
+                let mut points = Vec::with_capacity(count);
+                for index in 1..=count {
+                    // ITween uses lua_tonumber: nonnumeric entries become 0.
+                    let value = lua.coerce_number(controls.raw_get::<Value>(index)?)?
+                        .unwrap_or(0.0) as f32;
+                    points.push(value.to_string());
+                }
+                bezier = format!("bezier({})", points.join(","));
+                &bezier
+            }
+        };
+        begin_actor_tween(lua, &actor, duration, f64::from(duration), Some(easing))
     })
 }
 
@@ -6691,6 +6732,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
         "spring",
         make_actor_tween_method(lua, actor, Some("spring"))?,
     )?;
+    actor.set("tween", make_native_actor_tween_method(lua, actor)?)?;
     actor.set(
         "bouncebegin",
         make_actor_tween_method(lua, actor, Some("bouncebegin"))?,
@@ -9159,10 +9201,11 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
-                if let Some(factor) = method_arg(&args, 0).cloned().and_then(read_f32) {
-                    prepare_capture_scope_actor(lua, &actor)?;
-                    hurry_actor_tweening(&actor, factor)?;
-                }
+                let factor = lua.coerce_number(method_arg(&args, 0).cloned().unwrap_or(Value::Nil))?
+                    .ok_or_else(|| mlua::Error::runtime("hurrytweening factor must be a number"))? as f32;
+                if factor < 0.0 { return Err(mlua::Error::runtime("Tweening hurry factor cannot be negative")); }
+                prepare_capture_scope_actor(lua, &actor)?;
+                hurry_actor_tweening(lua, &actor, factor)?;
                 Ok(actor.clone())
             }
         })?,
@@ -17492,12 +17535,34 @@ fn scale_actor_capture_f32(actor: &Table, key: &str, scale: f32) -> mlua::Result
     actor.set(key, value * scale)
 }
 
-pub fn hurry_actor_tweening(actor: &Table, factor: f32) -> mlua::Result<()> {
-    if !factor.is_finite() || factor <= f32::EPSILON {
-        return Ok(());
-    }
+pub fn hurry_actor_tweening(lua: &Lua, actor: &Table, factor: f32) -> mlua::Result<()> {
     flush_actor_capture(actor)?;
-    let scale = factor.recip();
+    // Actor::HurryTweening multiplies duration and remaining time together,
+    // preserving the current interpolation fraction. Hibernation is separate.
+    let scale = factor;
+    if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>()
+        && let Some(replay) = replays.0.get_mut(&(actor.to_pointer() as usize)) {
+        for step in &mut replay.queue {
+            step.duration *= scale;
+            step.left *= scale;
+        }
+    }
+    if let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>()
+        && let Some(clock) = frames.clocks.get_mut(&(actor.to_pointer() as usize)) {
+        for seconds in clock.steps.iter_mut().flatten() {
+            *seconds = f64::from(*seconds as f32 * scale);
+        }
+        clock.progress = None;
+    }
+    if let Some(pose) = actor.raw_get::<Option<Table>>("__songlua_state_spin")? {
+        let queue: Table = pose.get("queue")?;
+        for index in pose.get::<usize>("head")?..=pose.get::<usize>("tail")? {
+            if let Some(tween) = queue.raw_get::<Option<Table>>(index)? {
+                scale_actor_capture_f32(&tween, "duration", scale)?;
+                scale_actor_capture_f32(&tween, "left", scale)?;
+            }
+        }
+    }
     if let Some(steps) = actor.get::<Option<Table>>("__songlua_command_queue_steps")? {
         for index in 1..=steps.raw_len() {
             if let Some(duration) = read_f32(steps.raw_get::<Value>(index)?) {
@@ -17522,7 +17587,17 @@ pub fn hurry_actor_tweening(actor: &Table, factor: f32) -> mlua::Result<()> {
     }
     scale_actor_capture_f32(actor, "__songlua_capture_cursor", scale)?;
     scale_actor_capture_f32(actor, "__songlua_capture_duration", scale)?;
-    scale_actor_capture_f32(actor, "__songlua_capture_tween_time_left", scale)
+    scale_actor_capture_f32(actor, "__songlua_capture_tween_time_left", scale)?;
+    for key in ["__songlua_recurring_update_exact_interval", "__songlua_recurring_update_time_left"] {
+        if let Some(value) = actor.raw_get::<Option<f64>>(key)? {
+            actor.raw_set(key, value * f64::from(scale))?;
+        }
+    }
+    // ActorFrame propagates HurryTweening to its owned children.
+    for child in actor.sequence_values::<Table>() {
+        hurry_actor_tweening(lua, &child?, factor)?;
+    }
+    Ok(())
 }
 
 fn is_capture_block_meta_key(key: &str) -> bool {
