@@ -1,0 +1,49 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "entry_evidence": "sweep-2026-10-15-hope-quad-default-texture-entry-diagnostic.json",
+  "native_actor_identity_evidence": "sweep-2026-10-15-hope-oni-game-over-entry-evidence.json",
+  "entry_frames": 1688,
+  "entry_errors": 0,
+  "entry_mismatches": 20478,
+  "first_remaining_actor": "ScreenGameplay/OniGameOverP1",
+  "first_remaining_operation": "Sprite.GetTexture",
+  "native_result": [
+    {
+      "type": "RageTexture"
+    }
+  ],
+  "owned_result": [
+    {
+      "type": "nil"
+    }
+  ],
+  "local_primary_sources": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ScreenGameplay.cpp",
+      "sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\Graphics\\ScreenGameplay oni gameover.redir",
+      "sha256": "130ce35772ded9394bc9f89ffee75b07eff713361d0326100aa4f4157ee7480b"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\Graphics\\_blank.png",
+      "sha256": "1bc6840fdf516b59b9439951834326ca1643f014ed0767d6bb3da3ae39768868"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs",
+      "sha256": "c1450862b9dffe72651ae8fab61c48480c27867d0cf35a8e2af22f10883e8c8f"
+    }
+  ],
+  "source_cause": "ScreenGameplay::Init loads each visible player OniGameOver actor through THEME->GetPathG(m_sName, \"oni gameover\"). The fallback redirection resolves to the actual Graphics/_blank.png bitmap. The owned create_top_screen_theme_actor creates a named Sprite but never binds that bitmap, despite its existing comment naming the resource. Native GetTexture is therefore nonnil while the owned placeholder returns nil.",
+  "native_blank_png_dimensions": [
+    4,
+    2
+  ],
+  "production_fix_added": false,
+  "full_repairs_spent": 0,
+  "original_native_capture_reused": true,
+  "expected_query_results_used_as_engine_inputs": false,
+  "acceptance_comparisons_changed": false,
+  "next_action": "Load the actual inherited theme blank bitmap into the OniGameOver Sprite, validate resource metadata and unloaded Sprite behavior, then inspect retained-capture HOPE entry comparisons before any full repair."
+}

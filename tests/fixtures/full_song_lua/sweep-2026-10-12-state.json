@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T08:14:53Z",
-  "previous_goal_turn": "All501 original simfiles have terminal initial outcomes:396 passed,105 pending,0 unprocessed. Passing fixtures remain closed. The native Quad default texture fix b54321aa6c7eee2671a4da8c6a999da4eaa1a670 passed meaningful red and all16 green validation groups on Windows and Linux, including81 live controls and35 replay controls. All1175 raw Linux and normalized cross-platform red/green source pins, logs and private helper were verified. It models the native empty-filename1x1 default RageTexture, ignores Quad node Texture loading, and supports explicit unload and retained-handle rebinding. The original HOPE capture is reused for an entry diagnostic before any full repair; the last completed entry still has20510 mismatches after the earlier Cancel child fix. Mawaru9 private canonical actor-handle sharing completed1628 entry frames with zero mismatches and zero callback errors; source, helper, logs and report were verified and evidence committed392d10ae1. This is a private counterfactual, not full acceptance or a production handle-sharing fix. A meaningful large-scene production regression is prepared. Mawaru6 final2 and Mawaru8 first1 remain live without restart. Original captures, the existing acceptance predicate, separate missing-coverage records and the two-full-repair cap remain unchanged. The goal remains active.",
+  "updated_utc": "2026-10-15T08:19:09Z",
+  "previous_goal_turn": "All501 original simfiles have terminal initial outcomes:396 passed,105 pending,0 unprocessed. Passing fixtures remain closed. The native Quad default texture fix b54321aa6c7eee2671a4da8c6a999da4eaa1a670 passed meaningful red and all16 green validation groups on Windows and Linux, including81 live controls and35 replay controls. All1175 raw Linux and normalized cross-platform red/green source pins, logs and private helper were verified. It models the native empty-filename1x1 default RageTexture, ignores Quad node Texture loading, and supports explicit unload and retained-handle rebinding. The original HOPE capture is reused for an entry diagnostic before any full repair; the completed1688-frame entry after the Quad fix has20478 mismatches and zero callback errors. The first remaining actor is ScreenGameplay/OniGameOverP1: native loads the actual inherited _blank.png bitmap, while owned only creates an unloaded Sprite. This concrete next source cause is recorded; no full HOPE repair was started. Mawaru9 private canonical actor-handle sharing completed1628 entry frames with zero mismatches and zero callback errors; source, helper, logs and report were verified and evidence committed392d10ae1. This is a private counterfactual, not full acceptance or a production handle-sharing fix. A meaningful large-scene production regression is prepared. Mawaru6 final2 and Mawaru8 first1 remain live without restart. Original captures, the existing acceptance predicate, separate missing-coverage records and the two-full-repair cap remain unchanged. The goal remains active.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "0907a5838989fc000ee4c669acc5190749440bc6",
+      "deadsync": "9143576a30c55390a09febb63223c6e8f657e60d",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -4820,7 +4820,7 @@
       "native_frames": 20574,
       "diagnostic_frames": 1688,
       "callback_errors": 0,
-      "command_query_mismatches": 20510,
+      "command_query_mismatches": 20478,
       "native_first_cancel_children": 1,
       "owned_first_cancel_children": 0,
       "native_capture_bytes_unchanged": true,
@@ -4829,19 +4829,19 @@
       "evidence": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-complete-lua-namespace-diagnostic.json",
       "storage": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-preflight-storage.json",
       "source_archive_fix": "79bb77d",
-      "status": "pending: native Quad default texture fix committed; retained-capture entry comparisons queued/running before any full repair",
+      "status": "pending: OniGameOverP1 actual inherited blank bitmap is not loaded by owned theme actor; known entry mismatches remain",
       "cancel_source_cause": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-cancel-source-cause.json",
       "pending_candidate_storage": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-pending-candidate-storage.json",
       "production_cancel_fix_applied": true,
       "production_cancel_patch_added": true,
       "production_cancel_fix_validation_complete": true,
       "production_cancel_fix_commit": "c71cc5f319cd5b950b6ce107ec23f65772062260",
-      "latest_diagnostic": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-cancel-child-entry-diagnostic.json",
-      "remaining_source_cause": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-quad-default-texture-source-cause.json",
+      "latest_diagnostic": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-quad-default-texture-entry-diagnostic.json",
+      "remaining_source_cause": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-oni-game-over-source-cause.json",
       "production_quad_default_texture_fix_applied": true,
       "production_quad_default_texture_fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
       "quad_texture_entry_diagnostic_job": "/home/parity/jobs/hope-quad-default-texture-entry-diagnostic-v1",
-      "quad_texture_entry_diagnostic_terminal_result_not_yet_claimed": true
+      "quad_texture_entry_diagnostic_terminal_result_not_yet_claimed": false
     },
     "rite_closed": {
       "status": "passed",

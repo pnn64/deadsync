@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T08:14:56Z",
+  "updated_utc": "2026-10-15T08:19:12Z",
   "counts": {
     "passed": 396,
     "pending": 105,
@@ -8160,22 +8160,22 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-15-hope-cancel-child-entry-diagnostic.json",
+      "followup": "sweep-2026-10-15-hope-quad-default-texture-entry-diagnostic.json",
       "source_cause": "sweep-2026-10-15-hope-cancel-source-cause.json",
       "entry_diagnostic_frames": 1688,
       "entry_diagnostic_errors": 0,
-      "entry_diagnostic_mismatches": 20510,
+      "entry_diagnostic_mismatches": 20478,
       "archive_namespace_startup_error_cleared_in_diagnostic": true,
       "native_trace_and_all_original_member_bytes_unchanged": true,
       "original_terminal_full_result_preserved": true,
       "new_full_repair_started": false,
       "cancel_child_missing_failure_fixed_by": "c71cc5f319cd5b950b6ce107ec23f65772062260",
-      "remaining_source_cause": "sweep-2026-10-15-hope-quad-default-texture-source-cause.json",
-      "current_diagnostic_failure": "native Quad Sprite.GetTexture returns RageTexture; owned returns nil; full entry has20510 command/query mismatches",
+      "remaining_source_cause": "sweep-2026-10-15-hope-oni-game-over-source-cause.json",
+      "current_diagnostic_failure": "native ScreenGameplay/OniGameOverP1 loads inherited _blank.png and GetTexture returns RageTexture; owned placeholder Sprite has no texture;20478 command/query mismatches remain",
       "diagnostic_only_not_full_acceptance": true,
       "quad_default_texture_fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
       "quad_texture_all_sixteen_groups_both_hosts_passed": true,
-      "quad_texture_entry_diagnostic_terminal_result_not_yet_claimed": true
+      "quad_texture_entry_diagnostic_terminal_result_not_yet_claimed": false
     },
     {
       "position": 230,
