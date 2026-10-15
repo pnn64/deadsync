@@ -3450,6 +3450,44 @@ assert(FLASH:GetParent():GetParent() == CUES and CUES:GetParent() == CONTAINER)
     }
 
     #[test]
+    fn live_cancel_transition_loads_quad_and_native_fade() {
+        let mut compiled = compile("cancel-transition-child", r#"
+return Def.Actor { OnCommand = function(self) self:sleep(9999) end }
+"#);
+        let mut scene = compiled.live_scene.take().expect("cancel transition scene");
+        let screen: Table = scene.lua.globals().get("__songlua_top_screen").unwrap();
+        let cancel = crate::actor_children(&scene.lua, &screen).unwrap()
+            .raw_get::<Table>("Cancel").unwrap();
+        assert_eq!(cancel.get::<Function>("GetNumChildren").unwrap()
+            .call::<usize>(cancel.clone()).unwrap(), 1,
+            "Cancel must retain its native loaded transition child");
+        let children = cancel.get::<Function>("GetChildren").unwrap()
+            .call::<Table>(cancel.clone()).unwrap();
+        let quad = children.raw_get::<Table>("").expect("unnamed cancel Quad");
+        assert_eq!(quad.get::<Function>("GetParent").unwrap()
+            .call::<Table>(quad.clone()).unwrap(), cancel);
+        assert_eq!(quad.get::<Function>("GetZoomedWidth").unwrap()
+            .call::<f32>(quad.clone()).unwrap(), scene.context.screen_width);
+        assert_eq!(quad.get::<Function>("GetZoomedHeight").unwrap()
+            .call::<f32>(quad.clone()).unwrap(), scene.context.screen_height);
+        assert_eq!(read_state(&scene.lua, &quad).unwrap().diffuse[3], 0.0);
+        scene.advance(SongLuaLiveFrame { screen_seconds: 0.25, delta_seconds: 0.25,
+            ..Default::default() }).unwrap();
+        assert_eq!(crate::actor_tween_time_left(&scene.lua, &cancel).unwrap(), 0.0);
+        crate::lua_util::start_actor_transition(&scene.lua, &cancel).unwrap();
+        assert!((crate::actor_tween_time_left(&scene.lua, &cancel).unwrap() - 0.5).abs() < 1e-6);
+        for (seconds, delta, alpha) in [(0.35, 0.1, 0.0), (0.55, 0.2, 0.5), (0.75, 0.2, 1.0)] {
+            let output = scene.advance(SongLuaLiveFrame { screen_seconds: seconds,
+                delta_seconds: delta, ..Default::default() }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            assert!((read_state(&scene.lua, &quad).unwrap().diffuse[3] - alpha).abs() < 1e-5);
+        }
+        scene.advance(SongLuaLiveFrame { screen_seconds: 0.76, delta_seconds: 0.01,
+            ..Default::default() }).unwrap();
+        assert_eq!(cancel.raw_get::<u8>("__songlua_transition_state").unwrap(), 2);
+    }
+
+    #[test]
     fn live_transition_getter_uses_loaded_child_and_native_lifecycle() {
         let mut compiled = compile("transition-virtual-getter", r#"
 OUT = SCREENMAN:GetTopScreen():GetChild('Out')

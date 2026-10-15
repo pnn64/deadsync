@@ -1,0 +1,154 @@
+{
+  "all_fifteen_checks_passed": true,
+  "all_1175_normalized_source_pins_and_all_log_hashes_verified": true,
+  "red_missing_native_cancel_child_reproduced": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 318.57143769999675,
+      "log_sha256": "da508d4db6a00dbb915430ffb91185933ddba06ee392af62f9dcedede1481b72",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 618 filtered out; finished in 0.30s"
+      ]
+    },
+    {
+      "label": "registry-handles-control",
+      "exit_code": 0,
+      "seconds": 1.6434183000092162,
+      "log_sha256": "d529d66704e6c0d5d60107ff181a7b1e3971395561797633aee625af640d9d94",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 618 filtered out; finished in 0.07s"
+      ]
+    },
+    {
+      "label": "mine-boundary-control",
+      "exit_code": 0,
+      "seconds": 144.2782628999994,
+      "log_sha256": "e4d0c7632e244ee69e3ef94c69544ef7d3601bc267fb807627c1bd62894911fd",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 336 filtered out; finished in 19.70s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 1.6890615000011167,
+      "log_sha256": "12b147f018ecea078f77463c4188653e72e246f08968f99d17f66fc9a894015a",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 618 filtered out; finished in 0.22s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 20.16129629999341,
+      "log_sha256": "ed5c4944bffca909e377fa451357f53e6fbad16cbb2c51c18e38a360f180fab8",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.454910700005712,
+      "log_sha256": "a23be2152dd896ee276fba183e9e925760c078af8d65eed0fcaaada3c0639d1a",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 609 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 37.50005840000813,
+      "log_sha256": "1aad1524491b0c54e60a0bf851bed47919c6dd26d057d78949a81aff63cd4feb",
+      "results": [
+        "test result: ok. 80 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 36.11s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 22.95534190000035,
+      "log_sha256": "be5c1feeb31cbc7c645463479aa03f812b4b8e7aede7e1786f206d6ce4089974",
+      "results": [
+        "test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 21.19s"
+      ]
+    },
+    {
+      "label": "sm-compatibility-control",
+      "exit_code": 0,
+      "seconds": 1.551944500009995,
+      "log_sha256": "e440636581a94e530a48a890763b9aa303ffcb863e7be30d4142cc43f50c8a04",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 618 filtered out; finished in 0.17s"
+      ]
+    },
+    {
+      "label": "crop-compatibility-control",
+      "exit_code": 0,
+      "seconds": 1.54723529999319,
+      "log_sha256": "93ce1b35c4f41ad12f87cfc2ad1253a15d1d3b8085232963b924b548ac354674",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 618 filtered out; finished in 0.19s"
+      ]
+    },
+    {
+      "label": "model-controls",
+      "exit_code": 0,
+      "seconds": 18.35176269999647,
+      "log_sha256": "63a8a734450ad56f007bc153e88c9bdce04de30a40dd1a4d845cb61af3e4477a",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 276 filtered out; finished in 0.06s"
+      ]
+    },
+    {
+      "label": "model-differential-control",
+      "exit_code": 0,
+      "seconds": 1.1257794999983162,
+      "log_sha256": "4ece1014028803236e26fafdd449e70bd618e90e34499e818793745175ddfb6c",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 287 filtered out; finished in 0.21s"
+      ]
+    },
+    {
+      "label": "completion-controls",
+      "exit_code": 0,
+      "seconds": 0.834910999998101,
+      "log_sha256": "1e77530f00534c64ce660fa03d3173bc224d58c093ddfc38947d8bcc8772cda0",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 815 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 1.442421400002786,
+      "log_sha256": "6423776e3527a333140bb531a284bab2c1d23c5c5bfb48fc7fd88bef3298d953",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 618 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 25.626212999995914,
+      "log_sha256": "b936358b9d5d33efdaa9b07e24d5672867a5c8042c969f150aa04d1f49ec2c95",
+      "results": []
+    }
+  ],
+  "red_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 310.20762800000375,
+      "log_sha256": "fc703d8185d63e5a5f805de5a20d8f296f2ee68750446983bc21a60e26fe92d9",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 618 filtered out; finished in 0.20s"
+      ]
+    }
+  ],
+  "native_source_cause": "sweep-2026-10-15-hope-cancel-source-cause.json",
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

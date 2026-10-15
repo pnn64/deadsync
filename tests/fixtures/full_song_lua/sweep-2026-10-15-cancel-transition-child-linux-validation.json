@@ -1,0 +1,150 @@
+{
+  "source_root": "/home/parity/workspace/cancel-transition-child-green-v1/deadsync",
+  "binary_sha256": "1313245b739aebc4b50d2def7d3f973403616543b4870a60b113dc2fe8f65a3e",
+  "all_fifteen_checks_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "all_linux_log_and_binary_hashes_verified": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 311.88472304400057,
+      "log_sha256": "88d9e7c4c722ad966e1f96dc2ce9b853eeda79344945f4fb52c33bc9a2f90e5e",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.24s"
+      ]
+    },
+    {
+      "label": "registry-handles-control",
+      "exit_code": 0,
+      "seconds": 0.774200526997447,
+      "log_sha256": "4be3bf21eefda4e9909f44b30ff51ef4e5235e35899e3a7c6f8b407eaaf51205",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.06s"
+      ]
+    },
+    {
+      "label": "mine-boundary-control",
+      "exit_code": 0,
+      "seconds": 291.50775768299354,
+      "log_sha256": "50d3a3790fae1dad80fc5a95167f85d7232b9dd5ccfefa0ebc1db476b7d60971",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 336 filtered out; finished in 32.75s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 1.5538332619762514,
+      "log_sha256": "2c3d126355ae571cca57e6f6cfc79026aa2693dd680749cfda96cf7b6b5b902d",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.26s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 71.58266250201268,
+      "log_sha256": "d66a530c659fd699d43da47227069bb0088cf56fa201bee7b4785ec1d0c99416",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.3345430819899775,
+      "log_sha256": "2eee2751c9e37f809cd6c4404f534989a5df0d86e4a281ba5ed5e4a512edd4cb",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 607 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 42.50773583701812,
+      "log_sha256": "3b9eae46437e8c0225924d53590c38946210cdbc00d5ee2994e9a13bb676611b",
+      "results": [
+        "test result: ok. 80 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 41.33s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 21.90853072598111,
+      "log_sha256": "c40181bd5e734bdba235d573bc76762a0052a34613c4f40f1e53ca4d628c242f",
+      "results": [
+        "test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 21.03s"
+      ]
+    },
+    {
+      "label": "sm-compatibility-control",
+      "exit_code": 0,
+      "seconds": 0.8519837130152155,
+      "log_sha256": "82b0648be0788e5ef8581324fe1e8258bcee9c6291dce16271e6dd020ed95957",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.15s"
+      ]
+    },
+    {
+      "label": "crop-compatibility-control",
+      "exit_code": 0,
+      "seconds": 0.8575222929939628,
+      "log_sha256": "eb20b3e97a12466b8d4446a126efbb1691aa77e9d19c28d10e6d5172a72419a0",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.16s"
+      ]
+    },
+    {
+      "label": "model-controls",
+      "exit_code": 0,
+      "seconds": 12.643417014012812,
+      "log_sha256": "1e66e38acfacf0d986d038ef128ba7b1f578c8181f6a7c0d217a5817a6ecf022",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 276 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "model-differential-control",
+      "exit_code": 0,
+      "seconds": 0.5564998910122085,
+      "log_sha256": "817e0694e10c053d4903f36c4661f873461ae0f388a4759683b588f7ea8b6ed6",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 287 filtered out; finished in 0.10s"
+      ]
+    },
+    {
+      "label": "completion-controls",
+      "exit_code": 0,
+      "seconds": 0.46533276099944487,
+      "log_sha256": "c0d289b50092ff937100d255e4362b2c38d412e4f74627b745e6f4e34ac7b477",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 815 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 0.6867082999960985,
+      "log_sha256": "f610dd62a3761e6bcfd4a6cd83cb6d43f30799768a041ec47aa998e638635440",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 40.579146057978505,
+      "log_sha256": "ddc44e5a3ad4fdebca61e2c0769e8cc77203b731f3790a4ec22efeff98fa2163",
+      "results": []
+    }
+  ],
+  "red_missing_cancel_child_reproduced_both_hosts": true,
+  "regression": "live_cancel_transition_loads_quad_and_native_fade",
+  "source_cause": "sweep-2026-10-15-hope-cancel-source-cause.json",
+  "native_cancel_child_count": 1,
+  "native_cancel_fade_seconds": 0.5,
+  "full_chart_repairs_spent": 0,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true,
+  "global_original_helper_unchanged": true
+}

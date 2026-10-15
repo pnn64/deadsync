@@ -13694,6 +13694,20 @@ pub fn create_top_screen_theme_actor(
                 quad.get::<Function>("diffusealpha")?.call::<()>((quad.clone(), 1.0))?;
                 push_sequence_child_once(&child, quad)?;
             }
+        } else {
+            // Transition::Load keeps the loaded actor as its child. Simply
+            // Love's gameplay-cancel redirects to _fade out normal.lua.
+            let quad = create_named_actor(lua, "Quad", "", create_dummy_actor)?;
+            quad.raw_set("__songlua_parent", actor.clone())?;
+            quad.get::<Function>("FullScreen")?.call::<()>(quad.clone())?;
+            quad.get::<Function>("diffuse")?.call::<()>((quad.clone(), 0.0, 0.0, 0.0, 0.0))?;
+            quad.raw_set("StartTransitioningCommand", lua.create_function(|_, quad: Table| {
+                quad.get::<Function>("sleep")?.call::<()>((quad.clone(), 0.1))?;
+                quad.get::<Function>("linear")?.call::<()>((quad.clone(), 0.4))?;
+                quad.get::<Function>("diffusealpha")?.call::<()>((quad.clone(), 1.0))
+            })?)?;
+            actor.raw_set("__songlua_transition_child", quad.clone())?;
+            push_sequence_child_once(&actor, quad)?;
         }
         return Ok(Some(actor));
     }
