@@ -1,0 +1,30 @@
+{
+  "regression": "live_standard_life_children_follow_native_subactor_table_construction",
+  "meaningful_child_enumeration_red_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 325.24600690000807,
+      "log_sha256": "83b00d59cb8b6c92f7f9a5adca61350a31ec767adff12c7f77e158b7c535eeaf",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 633 filtered out; finished in 0.27s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 265.207345850009,
+      "log_sha256": "9253c9340f1001489f049bbf51795010521fcec94712c1ed52da0d6840f0c122",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 631 filtered out; finished in 0.27s"
+      ]
+    }
+  ],
+  "source_cause": "sweep-2026-10-15-hope-standard-life-child-enumeration-source-cause.json",
+  "changed_source_mtimes_refreshed_before_compilation_both_hosts": true,
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
