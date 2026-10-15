@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T00:32:31Z",
-  "previous_goal_turn": "Progress: Wake Up first repair closed84,024 frames, Goomba SM original pass closed37,874 frames, Shakunetsu final repair2 closed14,728 frames. Full comparisons report zero mismatches/callback errors; fixtures saved, decompressed bytes verified and committed. Shakunetsu has no third repair and is closed. Circles startup diagnostic2800 frames and iLLness LiLin startup diagnostic3268 frames have zero errors/mismatches on validated helper56714f6f, proving original entry mismatches resolved; each first full repair started on unchanged native capture. Diagnostic acceptance remains false; full acceptance unchanged. STEVE SM first repair completes68,814 frames with no callback errors but156,463 command/query mismatches; recursive owned theme topology remains incomplete, final attempt not started. Pop actual Off failure traced to PlayerState SongPosition aliasing global Song clock despite selected SSC chart warp20 beats. Focused two-player regression now building on Windows/Linux; no Pop full repair spent and no production change selected yet. Edgar first replay and original queues remain live. Global original-sweep selection711a5230 unchanged. All501 original simfile bytes unchanged; missing coverage remains separate; files over100MB ignored and retained locally. Sweep active and incomplete.",
+  "updated_utc": "2026-10-15T00:40:55Z",
+  "previous_goal_turn": "Progress: Wake Up first repair closed84,024 frames, Goomba SM original pass closed37,874 frames, Shakunetsu final repair2 closed14,728 frames, Edgar first repair closed8,238 frames. All have zero mismatches/callback errors under unchanged full acceptance; compressed fixtures saved, decompressed bytes verified and committed. Passing charts closed. Circles startup diagnostic2800 frames and iLLness LiLin startup diagnostic3268 frames have zero errors/mismatches on validated56714f6f; first full repairs running on unchanged complete native captures. Diagnostics remain unaccepted; full acceptance unchanged. STEVE SM first repair completes68,814 frames errors0 with156,463 command/query mismatches; recursive native theme ownership incomplete, final attempt not started. Pop actual Off failure traced to global SongPosition incorrectly shared with PlayerState despite selected SSC20-beat warp. Regression reproduces beat1.5 versus3.0 on both hosts. Fix4b07d505988e43dabb14441f0a3c6696d0e06009 owns live per-player position clocks and advances selected Steps TimingData at shared music timestamp; target1/parser10/live70 pass on Windows/Linux. Remaining replay33/identity/build checks running. Pop first full repair queued behind both complete six-check proofs, frozen helper/log hashes and all1,175 raw/crossplatform source pins; zero Pop full attempts spent until launch. Global original-sweep helper711a5230 unchanged. What If Whole World original replay now pending; original supervisors continue. All501 original simfile bytes unchanged; missing coverage separate; eight files over100MB ignored and retained locally. Sweep active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "5aa943b84883e490ad19201cd2afb270665a7a03",
+      "deadsync": "4b07d505988e43dabb14441f0a3c6696d0e06009",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -151,9 +151,9 @@
       "pending": 64,
       "processed": 102,
       "last_log_lines": [
-        "[4797.8s] replaying every native gameplay frame: frame 89377/107886 (82.8%)",
-        "[4799.8s] replaying every native gameplay frame: frame 89416/107886 (82.9%)",
-        "[4801.8s] replaying every native gameplay frame: frame 89456/107886 (82.9%)"
+        "[5303.9s] replaying every native gameplay frame: frame 98710/107886 (91.5%)",
+        "[5305.9s] replaying every native gameplay frame: frame 98748/107886 (91.5%)",
+        "[5307.9s] replaying every native gameplay frame: frame 98787/107886 (91.6%)"
       ],
       "supervisor_running": true
     },
@@ -1935,6 +1935,13 @@
         "record": "sweep-2026-10-15-illness-lilin-entry-clock-first-repair-v1.json",
         "fix_commit": "5e44aa8e7",
         "finish_status": "bounded first full replay complete; diagnostic verified previous startup ordering mismatches resolved; native capture reused"
+      },
+      {
+        "name": "pop-player-position-first-repair-v1",
+        "remote": "/home/parity/jobs/pop-player-position-first-repair-v1",
+        "record": "sweep-2026-10-15-pop-player-position-first-repair-v1.json",
+        "fix_commit": "4b07d505988e43dabb14441f0a3c6696d0e06009",
+        "finish_status": "bounded first selected-player-position repair complete; original complete native capture reused"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -1951,9 +1958,9 @@
         "pending": 64,
         "processed": 102,
         "last_log_lines": [
-          "[4797.8s] replaying every native gameplay frame: frame 89377/107886 (82.8%)",
-          "[4799.8s] replaying every native gameplay frame: frame 89416/107886 (82.9%)",
-          "[4801.8s] replaying every native gameplay frame: frame 89456/107886 (82.9%)"
+          "[5303.9s] replaying every native gameplay frame: frame 98710/107886 (91.5%)",
+          "[5305.9s] replaying every native gameplay frame: frame 98748/107886 (91.5%)",
+          "[5307.9s] replaying every native gameplay frame: frame 98787/107886 (91.6%)"
         ],
         "supervisor_running": true
       },
@@ -2119,12 +2126,12 @@
           "complete": false,
           "supervisor_running": true,
           "passed": 9,
-          "pending": 6,
-          "processed": 15,
-          "last_phase": "replay",
-          "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
-          "child_running": false,
-          "position": 472
+          "pending": 7,
+          "processed": 16,
+          "last_phase": "capture",
+          "source_simfile": "Young Dumb And Broke/YDB.sm",
+          "child_running": true,
+          "position": 480
         },
         {
           "job": "chart-sweep-parallel-v5-6",
@@ -3129,7 +3136,7 @@
     "selected_replay_binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 131,
+    "publisher_stream_count": 132,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -3515,15 +3522,37 @@
       "diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-pop-player-position-diagnosis.json",
       "full_repairs_spent": 0,
       "regression_builds_running": true,
-      "production_helper_selected": false
+      "production_helper_selected": false,
+      "fix_commit": "4b07d505988e43dabb14441f0a3c6696d0e06009",
+      "both_platform_red_verified": true,
+      "both_platform_target_control_passed": true,
+      "both_platform_parser_controls_passed": 10,
+      "both_platform_live_controls_passed": 70,
+      "remaining_validation_running": true,
+      "first_full_repair_queued": true,
+      "requires_both_platform_complete_six_checks": true,
+      "requires_all_1175_raw_and_normalized_source_pins": true,
+      "queue_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-player-song-position-pop-queue-launch.json",
+      "windows_validator_pid": 29504,
+      "windows_proof_uploader_pid": 48796,
+      "linux_validation_waiter_pid": 1651648,
+      "pop_validation_waiter_pid": 1693905
+    },
+    "who_edgar_closed": {
+      "status": "passed",
+      "full_repair_attempts_spent": 1,
+      "native_frames": 8238,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-who-edgar-fixture-verification.json"
     }
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 211,
+    "new_passed_fixtures": 212,
     "new_pending_charts": 107,
-    "new_processed_sources": 318,
+    "new_processed_sources": 319,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 35,
+    "unprocessed_sources": 34,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -5737,12 +5766,61 @@
       ]
     },
     {
-      "source_simfile": "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc",
+      "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
       "repair_attempts": 0,
-      "failure": "",
+      "failure": null,
       "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
+      "mismatch_count": 208244,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0001",
+            "args": [
+              false
+            ],
+            "beat": -4.430908203125,
+            "caller": {
+              "line": 1126,
+              "source": "song:/template/template.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 1126,
+            "operation": "Actor.visible",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": -1.9012925624847412,
+            "seq": 57,
+            "source": "song:/template/template.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/template/template.lua",
+            "line": 1126,
+            "phase": "callback",
+            "beat": -4.430908203125,
+            "seconds": -1.9012925624847412,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x6213d5ac70a0",
+                "name": "",
+                "path": "ScreenGameplay/SongForeground/template/main.lua"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        }
+      ]
     },
     {
       "source_simfile": "wndrwll/wndrwll.ssc",

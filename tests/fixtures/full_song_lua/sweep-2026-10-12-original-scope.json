@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T00:32:31Z",
+  "updated_utc": "2026-10-15T00:40:55Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 358,
+    "passed": 359,
     "pending": 108,
-    "unprocessed": 35
+    "unprocessed": 34
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3907,15 +3907,17 @@
       "position": 472,
       "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
       "simfile_sha256": "3d4d8467ebbbd92076d67f661822eead8387f4c7e05fd5fb4bdf5ec3b3d5db4e",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 473,
       "source_simfile": "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc",
       "simfile_sha256": "66dba9f19596561f280a582920a90e18425191544e0051909d81b7bbb239abd9",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-who-edgar-storage-first-repair.json"
     },
     {
       "position": 474,
