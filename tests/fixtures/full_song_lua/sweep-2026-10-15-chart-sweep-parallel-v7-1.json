@@ -24,6 +24,27 @@
       "capture_exit": 1,
       "capture_seconds": 901.0892329390044,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-3440489-1792043829552198378-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-3440489-1792043829552198378-0\n"
+    },
+    {
+      "position": 493,
+      "source_simfile": "Lesson by DJ/Lesson by DJ.sm",
+      "simfile_sha256": "c5300bc691048803db427d58d9e76b7dbd159cfba2c9bffee3bf8b632964b840",
+      "historical_failure": {
+        "simfile": "Lesson by DJ/Lesson by DJ.sm",
+        "status": "error",
+        "category": "source_error",
+        "reason": "ITGmania oracle failed: ITGmania loaded no charts; source #NOTES header lacks its colon",
+        "diagnostics": "target/song-lua-repair/known/c5080f1c121d14e5"
+      },
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 1.651377805013908,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania probe script reported: no StepsType_Dance_Single chart matched difficulty Challenge; retained run directory /tmp/itgmania-harness-rs/song-lua-3535357-1792044731269888507-0\n"
     }
   ],
   "scope": {
@@ -35,6 +56,6 @@
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 0,
-  "pending_charts": 1,
-  "processed_charts": 1
+  "pending_charts": 2,
+  "processed_charts": 2
 }
