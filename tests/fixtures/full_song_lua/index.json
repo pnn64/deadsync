@@ -1925,17 +1925,14 @@
       ]
     },
     {
-      "title": "Episode 15",
+      "title": "Episode 15 Circles",
       "source_simfile": "Circles/Circles.ssc",
-      "harness_version": "0.1.0",
-      "archive": "21f955a0c00d8175ba1ab2948455ed7bc60846fcfd26f5aeb27bcdafa53fe880.tar.zst",
-      "sha256": "21f955a0c00d8175ba1ab2948455ed7bc60846fcfd26f5aeb27bcdafa53fe880",
-      "compressed_bytes": 989643,
-      "uncompressed_sha256": "ee1ded120f357da2188a57d2038e8e0cf0e2ab6792177c14b4371cb374b1a8f3",
-      "compression_level": 22,
-      "aliases": [
-        "cfa5425e22419b5e6a38a1feaa93a6c52437563032410ef83eebd2430e2df59e.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "760498c66a49c2d97874fbbaddff5458f5e914bb4df498b150199ea1fecf2569.tar.zst",
+      "sha256": "760498c66a49c2d97874fbbaddff5458f5e914bb4df498b150199ea1fecf2569",
+      "compressed_bytes": 43969709,
+      "uncompressed_sha256": "03dbad4e9494f54a43329880faf94ee7965302711a62250a3c0b995ae11b571d",
+      "aliases": []
     },
     {
       "title": "Cloud99",

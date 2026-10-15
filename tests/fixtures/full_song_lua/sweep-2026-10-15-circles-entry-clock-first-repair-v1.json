@@ -1,0 +1,64 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "5e44aa8e7",
+  "results": [
+    {
+      "position": 149,
+      "source_simfile": "Circles/Circles.ssc",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "03dbad4e9494f54a43329880faf94ee7965302711a62250a3c0b995ae11b571d",
+      "trace_sha256": "b3dcc3c6c0a64c826f3bcff76c2d9d721670ecd8a81c12d09bdc40df552bbb8d",
+      "simfile_sha256": "ebc1974ab7c0c83af9e0255566396f6c5a3c73f4c10590f990acb1035f30b15d",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "56714f6f0061d2bee125fc7b36a0889bedcc9e7f018e66bdd36be9ff9d12cda5",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/native-cmd-arguments-linux-green-v1/proof.json",
+      "fix_commit": "5e44aa8e7a036c7ddd8e38167d836f4e71f7d83b",
+      "entry_clock_diagnostic_proof": "/home/parity/jobs/entry-clock-failure-diagnostics-v1/chart-149/proof.json",
+      "previous_errors": [],
+      "replay_exit": 0,
+      "replay_seconds": 3554.883829764003,
+      "native_frames": 112467,
+      "replayed_frames": 112467,
+      "compared_stage_fields": 2376,
+      "pending_coverage": [
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "af96e3030bc4368c2eeb7f6a29d30db65c4ca76876d6e0e4bedb3d570dfd1f9e",
+      "archive": "760498c66a49c2d97874fbbaddff5458f5e914bb4df498b150199ea1fecf2569.tar.zst",
+      "archive_sha256": "760498c66a49c2d97874fbbaddff5458f5e914bb4df498b150199ea1fecf2569",
+      "compressed_bytes": 43969709,
+      "harness_version": "0.1.80",
+      "title": "Episode 15 Circles",
+      "pack_seconds": 18.309469058993272,
+      "retained_original_entry": {
+        "title": "Episode 15",
+        "source_simfile": "Circles/Circles.ssc",
+        "harness_version": "0.1.0",
+        "archive": "21f955a0c00d8175ba1ab2948455ed7bc60846fcfd26f5aeb27bcdafa53fe880.tar.zst",
+        "sha256": "21f955a0c00d8175ba1ab2948455ed7bc60846fcfd26f5aeb27bcdafa53fe880",
+        "compressed_bytes": 989643,
+        "uncompressed_sha256": "ee1ded120f357da2188a57d2038e8e0cf0e2ab6792177c14b4371cb374b1a8f3",
+        "compression_level": 22,
+        "aliases": [
+          "cfa5425e22419b5e6a38a1feaa93a6c52437563032410ef83eebd2430e2df59e.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "56714f6f0061d2bee125fc7b36a0889bedcc9e7f018e66bdd36be9ff9d12cda5",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first full entry-clock repair: previous actual entry mismatches absent in retained-capture diagnostic; same fully validated helper and unchanged native capture",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
