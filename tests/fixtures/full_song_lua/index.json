@@ -4860,15 +4860,12 @@
     {
       "title": "Stella Glow",
       "source_simfile": "Stella Glow/Stella Glow.ssc",
-      "harness_version": "0.1.0",
-      "archive": "75c5ddbce3060d5e4f31bc12e6e2a7995808ec22192344d4c323abbebdcee9a2.tar.zst",
-      "sha256": "75c5ddbce3060d5e4f31bc12e6e2a7995808ec22192344d4c323abbebdcee9a2",
-      "compressed_bytes": 4821196,
-      "uncompressed_sha256": "9429fce278e5a38d069bf1f880429cca19cee6d4399f6d64849da120f890c35d",
-      "compression_level": 22,
-      "aliases": [
-        "0007763d21fef5cd83da344ecd26ca892a911dba793fd4bf8f40201e92635553.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "8732befea87703379dae60c0cd744c7a722eae462775d30442fdcdcd2a3981df.tar.zst",
+      "sha256": "8732befea87703379dae60c0cd744c7a722eae462775d30442fdcdcd2a3981df",
+      "compressed_bytes": 15767550,
+      "uncompressed_sha256": "3915e33e35d9673760c8cc9dfc88495631aaa4cf5e0886cdd03309b6f4ba762b",
+      "aliases": []
     },
     {
       "title": "Step Your Game Up (Director's Cut) [Tier 5]",
