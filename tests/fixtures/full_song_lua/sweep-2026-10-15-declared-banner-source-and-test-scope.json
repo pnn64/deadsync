@@ -1,0 +1,42 @@
+{
+  "baseline_fix_commit": "22e67e7f2a9085661a52bfd8edbdd7762ee966fd",
+  "all_original_99_live_controls_byte_identical_outside_one_new_function": true,
+  "all_41_replay_controls_and_entire_full_acceptance_source_byte_identical": true,
+  "initial_new_test_checks_preserved": {
+    "windows": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 350.1480007999926,
+        "log_sha256": "1f68802d5bd1a6cdec8ca8ba21e53fd5162ff7cf4a3e05e036ea05ffaeef23ab",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 638 filtered out; finished in 1.04s"
+        ]
+      }
+    ],
+    "linux": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 257.2359122959897,
+        "log_sha256": "8d89f25693fe5cb42d95334352489aa7173428648052c5c7b90f4d427a4b8ef1",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 636 filtered out; finished in 0.78s"
+        ]
+      }
+    ]
+  },
+  "new_test_scope_correction": "Version1 put the declared-path assertion in the returned chunk body. Compilation can preserve an unretained failed declaration, so the new test later failed its real fallback check instead. Version2 moves the same path/API assertions into OnCommand and adds an explicit retained-live-scene assertion; no original assertion was removed. The exact strengthened version2 function is used unchanged in meaningful red and green.",
+  "production_metadata_input": "real SongData.banner_path cloned by the production context bridge; no native query outputs supply this path",
+  "runtime_selection": "prefer parsed banner path over conventional-name discovery; HasBanner checks the actual file as native Song does",
+  "runtime_banner_loading": "Banner.LoadFromSong loads the selected image or the exact already-bundled native fallback blank bitmap, performs the ordinary texture-load lifecycle, and resets scrolling as native Banner.cpp does",
+  "new_native_asset_files_added_to_code": 0,
+  "harness_archive_fix_commit": "5d70aea08c300bd78c64a1da011c97574449366c",
+  "harness_test_setup_correction": "Canonicalize only the new temporary test root, matching portable_relative expectations. The original archive comparison and pack acceptance code remains unchanged.",
+  "private_HOPE_candidate_evidence": "sweep-2026-10-15-hope-declared-banner-candidate.json",
+  "all_29_prior_payloads_and_native_trace_preserved": true,
+  "new_candidate_asset_exact_original_bytes": true,
+  "expected_query_results_used_as_runtime_inputs": false,
+  "chart_repairs_spent": 0,
+  "passing_charts_reopened": false
+}
