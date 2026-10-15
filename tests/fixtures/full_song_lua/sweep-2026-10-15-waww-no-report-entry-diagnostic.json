@@ -1,0 +1,29 @@
+{
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "errors": [],
+  "dropped_events": 0,
+  "dropped_stage_samples": 0,
+  "dropped_update_frames": 0,
+  "dropped_random_reseeds": 0,
+  "native_frames": 7119,
+  "source_simfile": "What A Wonderful World/WAWW.sm",
+  "diagnostic_exit": 2,
+  "seconds": 292.69632978597656,
+  "full_repairs_spent": 0,
+  "native_capture_reused": true,
+  "candidate_sha256": "8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c",
+  "trace_sha256": "a68b0341299dde7797f9b55eabd8f7dc50630c93c8d8d0f4d064e69b8eedccf9",
+  "simfile_sha256": "44d9e8c548a43bfbf4e7b1f35229c66a5063759098784abd70c542409d7f22b5",
+  "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+  "replayed_frames": 1016,
+  "archive_accepted": false,
+  "mismatch_count": 0,
+  "first_mismatches": [],
+  "report_sha256": "1f3a37969bc0932cbadadf94979782aab646ea895934bed519e45ad6cfcc745d"
+}

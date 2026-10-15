@@ -1,0 +1,44 @@
+{
+  "position": 469,
+  "source_simfile": "Watermelon/Watermelon.ssc",
+  "native_frames": 35146,
+  "replayed_frames": 35146,
+  "callback_errors": 0,
+  "mismatches": [
+    {
+      "field": "command_query_count",
+      "native": 61217,
+      "deadsync": 61213
+    }
+  ],
+  "full_repairs_spent": 0,
+  "missing_native_command": "HidePlayersCommand",
+  "missing_records": 4,
+  "missing_command_seconds": 87.93510437011719,
+  "queue_seconds": 86.4334945678711,
+  "first_owned_domain_navigation_seconds": 93.39671325683594,
+  "early_navigation_explanation_falsified": true,
+  "owned_source": "crates/deadsync-song-lua/src/lua_util.rs:3773",
+  "owned_source_sha256_lf": "ba18023621422ce2a88c8455ad2cbf0ae6244cd845b2c0ad794374991339fb5b",
+  "owned_cause": "run_actor_message_with_params only descends through ActorFrame and ActorFrameTexture; the synthetic TopScreen type is excluded, so screen playcommand and queued commands do not reach song children.",
+  "song_source": "Watermelon/code/fgchanges.lua:36",
+  "song_source_sha256_lf": "c7272771333db84cf09d904efa1d13c1508ac62f7eeced3a0dc031865dd18b23",
+  "native_sources": {
+    "ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+    "Screen.h": "f4bf1f827dbd7c967e6a5d71c75dc2c24456477a6f4a81abdad14f21af496fc2",
+    "ScreenWithMenuElements.h": "a0b823474bf2e1cb510ee426a56917065fa261149f591ed73ff8375a5cb25330",
+    "ScreenGameplay.h": "571f25f3048f038843642349aaf58d0a2a3f2469648ec46d89e7758c1c185337"
+  },
+  "native_cause": "ScreenGameplay derives through ScreenWithMenuElements and Screen from ActorFrame. ActorFrame::HandleMessage forwards every non-broadcast command to each child. Actor::QueueCommand invokes virtual command dispatch from the parent tween queue.",
+  "native_control": "sweep-2026-10-15-screen-command-native-control.json",
+  "native_control_frames": 6160,
+  "native_control_direct_and_queued_callback_counts": [
+    3,
+    3
+  ],
+  "native_control_parent_queue_progresses_with_sleeping_song_descendants": true,
+  "next_action": "Reproduce with a meaningful live nested-song command regression, include TopScreen in direct command propagation, validate without changing acceptance, and reuse this complete capture for at most two full repairs.",
+  "native_capture_to_reuse": "/home/parity/jobs/chart-sweep-parallel-v6-1/chart-469",
+  "acceptance_unchanged": true,
+  "no_full_repair_started": true
+}
