@@ -1,0 +1,62 @@
+{
+  "baseline_fix_commit": "b43bcea765536e63a9f12ce220c1226023bfe19c",
+  "prior_39_replay_controls_and_all_comparison_logic_byte_identical_outside_initial_profile_reader_and_one_new_control": true,
+  "full_song_lua_acceptance_source_byte_identical": true,
+  "failed_checks_preserved": {
+    "linux-v2": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 254.23278593400028,
+        "log_sha256": "e666828d80ece6733d791462125583a36227e5b81b0e76e1a8a04822de9ba036",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 635 filtered out; finished in 0.27s"
+        ]
+      }
+    ],
+    "windows-v2": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 335.0251322000113,
+        "log_sha256": "825eb5bcdfbe165dc56fcf21862f89c83dee00fe7ade943fb27e8c72394719d9",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 637 filtered out; finished in 0.29s"
+        ]
+      }
+    ],
+    "linux-v3": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 242.16414712899132,
+        "log_sha256": "999b07b4afc34d873090a2019b44f6f28adcbf6323ba4bf23cfd949ca9f18d92",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 635 filtered out; finished in 0.32s"
+        ]
+      }
+    ],
+    "windows-v3": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 328.25133339999593,
+        "log_sha256": "50cd28e0ce8c7368d985c2d17532dee95fe17b55900f6507b0b8c9aea778739d",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 637 filtered out; finished in 0.35s"
+        ]
+      }
+    ]
+  },
+  "native_brightness_failure": "Version2 reaches original TapNoteJudgments.Init at115 and fails because Brightness is absent. Version3 adds the full original ColorToHSV and Brightness functions from fallback02 Colors.lua with original function line numbers.",
+  "native_fallback_color_source_sha256": "3396661905e5cd2c6715d903d59a433ead2eca78709724358c3545c320a17294",
+  "entire_original_color_function_bodies_preserved": true,
+  "new_test_pre_update_correction": "Version3 incorrectly required remaining-time text before a real update. Native Time.lua initializes only the total-time number; remaining text is assigned by Update. Version4 explicitly defers the first update and expects empty remaining text /1:00 total, then retains all countdown, health, judgment, vertex, resource and hierarchy assertions.",
+  "new_runtime_regression_changes_limited_to_corrected_pre_update_setup_and_expectation": true,
+  "prior_98_live_tests_unchanged": true,
+  "initial_profile_selection_source": "real production step_statistics profile selection and actual initial DataVisualizations trace input; no query outputs are used as inputs",
+  "native_resource_files_unchanged": 9,
+  "acceptance_predicate_or_tolerances_changed": false,
+  "full_chart_repairs_spent": 0,
+  "no_passing_chart_reopened": true
+}
