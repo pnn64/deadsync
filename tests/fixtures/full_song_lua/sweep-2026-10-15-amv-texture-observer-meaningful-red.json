@@ -25,6 +25,6 @@
   "all_1175_cross_platform_normalized_source_pins_match": true,
   "all_34_native_resources_unchanged": true,
   "all_original_40_replay_controls_and_acceptance_source_byte_identical": true,
-  "new_regression": "Execute original live Quad/Sprite/AFT getters and native AMV default1x1 texture and valid image/default-handle rebinding; assert AMV calls do not masquerade as compared Sprite queries. Runtime assertions execute before the observational failure.",
+  "new_regression": "Native AMV default1x1 texture, valid image/default-handle rebinding and exact metadata; all runtime assertions precede unchanged observer-scope assertions. Both hosts fail specifically at missing native default texture before the fix.",
   "full_chart_repairs_spent": 0
 }
