@@ -1,0 +1,86 @@
+{
+  "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
+  "candidate_sha256": "2e04426bca00ee39ac689d8666fef76efc5f2c5be93908151c26328282b59491",
+  "trace_sha256": "4fc0012244c7a02bc1d7060c6339ec6f1a1aaa21ddfd3dae0eac00f62811699d",
+  "native_frames": 209028,
+  "creation_count": 4,
+  "first_creation_inputs": [
+    {
+      "actor": "def-0004",
+      "before_seq": 2,
+      "definition_id": "def-0004",
+      "ordinal": 1,
+      "parent": "external-0005",
+      "pointer_hex": "60abe6c0de10",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0003",
+      "before_seq": 2,
+      "definition_id": "def-0003",
+      "ordinal": 2,
+      "parent": "def-0004",
+      "pointer_hex": "60abe6c10940",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    },
+    {
+      "actor": "def-0001",
+      "before_seq": 2,
+      "definition_id": "def-0001",
+      "ordinal": 3,
+      "parent": "def-0003",
+      "pointer_hex": "60abe6c16140",
+      "provenance": "native-ActorUtil-before-LoadFromNode",
+      "scene": 1
+    }
+  ],
+  "clock_fields_in_initialization_and_actor_inputs": [],
+  "input_keys": [
+    "autoplay",
+    "gameplay_preferences",
+    "injected_inputs",
+    "preferences",
+    "requested_difficulty",
+    "style"
+  ],
+  "manifest_keys": [
+    "archive_schema_version",
+    "fixture_schema_version",
+    "oracle_schema_version",
+    "harness_version",
+    "itgmania",
+    "chart",
+    "runtime",
+    "lua_closure",
+    "textures",
+    "required_assets",
+    "files"
+  ],
+  "native_source_script": {
+    "member": "song/animation/default.lua",
+    "sha256": "f5b01af53f53f6ded150e55418e31679ae9219b67caaa00aef9816f9cc244ceb",
+    "clock_related_lines": [
+      {
+        "line": 9,
+        "text": "local TimeAtInit"
+      },
+      {
+        "line": 26,
+        "text": "-- set to true if seconds_remaining becomes less than (crunch_time_cutoff - (TimeSinceStart - TimeAtInit))"
+      },
+      {
+        "line": 46,
+        "text": "\tlocal seconds_remaining = round(crunch_time_cutoff - (GetTimeSinceStart() - TimeAtInit))"
+      },
+      {
+        "line": 138,
+        "text": "\t\tTimeAtInit = GetTimeSinceStart()"
+      }
+    ]
+  },
+  "full_repairs_spent": 1,
+  "new_full_repair_started": false,
+  "expected_values_used_as_engine_inputs": false
+}
