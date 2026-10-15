@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "bounded first native dummy Actor fallback repair complete; original capture reused; one later full repair maximum",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "native dummy Actor fallback; commit is pinned in result",
