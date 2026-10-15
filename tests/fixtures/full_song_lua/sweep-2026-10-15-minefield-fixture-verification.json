@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "minefield surfing_1/minefield.ssc",
+  "native_frames": 100704,
+  "replayed_frames": 100704,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "11a1ea8b6d992ce379ce7ad59cd28d0e670c37ab02e4de7f7b98a2a75744bce3.tar.zst",
+  "compressed_sha256": "11a1ea8b6d992ce379ce7ad59cd28d0e670c37ab02e4de7f7b98a2a75744bce3",
+  "uncompressed_sha256": "18a897c673dd1a149bebb3b5550fa4e0b566dcfb056d31d57b0204baf640b44b",
+  "compressed_bytes": 7141723,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
