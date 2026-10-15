@@ -193,6 +193,57 @@
       "replay_seconds": 47.26706161000766,
       "candidate_sha256": "8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c",
       "failure": ""
+    },
+    {
+      "position": 479,
+      "source_simfile": "You are Goomba Play ITG/You are Gooma Play ITG.ssc",
+      "simfile_sha256": "7fa3912f27384cb3666bde4809ed12fd393d1064c282e019ac22ff7612d346d8",
+      "retained_original_archive": "44bd4c5f7b30e0fcd578e04ac0d98ea09516062f11ff19a405d721ae2a01daec.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 96.50532182998722,
+      "trace_sha256": "b3e9b1790e24f965173dd9910c08782cec2675d0453cdbbfdce4845ddbe7159e",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v6-2/chart-479/candidates/ec8b6bf1ea8b8235a2d7d921dc3967a2167ff592b763090d64c19727f5f9360c.tar",
+      "replay_exit": 0,
+      "replay_seconds": 817.6083662819874,
+      "candidate_sha256": "ec8b6bf1ea8b8235a2d7d921dc3967a2167ff592b763090d64c19727f5f9360c",
+      "native_frames": 32845,
+      "replayed_frames": 32845,
+      "compared_stage_fields": 902,
+      "pending_coverage": [
+        "uncompared song operations: Actor.smooth, ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "2cb7e9b51608c79f4401c836c9104a0707dbb8a5a365ff13978fa6f3a4de7ba2",
+      "archive": "9e0bccfcf823e9a38b0a06e9263821c2c5042e4d2477174c724d99476e5ce2f4.tar.zst",
+      "archive_sha256": "9e0bccfcf823e9a38b0a06e9263821c2c5042e4d2477174c724d99476e5ce2f4",
+      "compressed_bytes": 6578819,
+      "pack_seconds": 3.301445893011987,
+      "harness_version": "0.1.80",
+      "title": "You are Goomba Play ITG",
+      "retained_original_entry": {
+        "title": "You are Goomba Play ITG",
+        "source_simfile": "You are Goomba Play ITG/You are Gooma Play ITG.ssc",
+        "harness_version": "0.1.0",
+        "archive": "44bd4c5f7b30e0fcd578e04ac0d98ea09516062f11ff19a405d721ae2a01daec.tar.zst",
+        "sha256": "44bd4c5f7b30e0fcd578e04ac0d98ea09516062f11ff19a405d721ae2a01daec",
+        "compressed_bytes": 31040,
+        "uncompressed_sha256": "78be0844a147cf674d99137ce795716acf82b4b0644b86efffbcb90649454907",
+        "compression_level": 22,
+        "aliases": [
+          "1e0e817a299aaf048b8f02bfc652bef9adb42ba6c425934bf8838236b5098742.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -203,7 +254,7 @@
   },
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 3,
+  "passed_fixtures": 4,
   "pending_charts": 2,
-  "processed_charts": 5
+  "processed_charts": 6
 }
