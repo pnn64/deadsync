@@ -1,0 +1,12 @@
+{
+  "fix_commit": "206677f0f46938082a7605b76db4dd787e79733e",
+  "source_root": "/home/parity/workspace/standard-life-child-enumeration-green-v1/deadsync",
+  "binary_sha256": "4aa0bd57918142249eed4f910815a083c3a5df62311192380a58610cc39cf8d2",
+  "build_proof": "/home/parity/jobs/standard-life-child-enumeration-linux-green-v1/proof.json",
+  "all_four_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "construct Standard meter GetChildren snapshots directly from its real subactor sequence, preserving native insertion history, identity, groups, lookup and fresh table ownership",
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
