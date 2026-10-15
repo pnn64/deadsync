@@ -1,0 +1,28 @@
+{
+  "reason": "Recover from ENOSPC during Header qualification by removing three unused, rebuildable Cargo unit-test executable artifacts. No source, log, fixture, archive, report, qualified helper or running process is removed.",
+  "removed": [
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/deadsync-027ab6ba90d15f13",
+      "bytes": 199953144,
+      "sha256": "6ae3bc80b6d38a037fb0060d5bb21352d4b73dc39c61577c38b1c9865d809185",
+      "two_actual_argv_executable_and_open_file_reference_checks_clear": true
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/deadsync_shell-b633305eb23ed33a",
+      "bytes": 119971032,
+      "sha256": "f48868731cbc24c4811bb2266f14a0ca0d58829d53aa2bbd70bffad61e209d27",
+      "two_actual_argv_executable_and_open_file_reference_checks_clear": true
+    },
+    {
+      "path": "/home/parity/build/deadsync-v1/debug/deps/deadsync_shell-aec1f8397a9cc591",
+      "bytes": 114233064,
+      "sha256": "7899dc9c53217ab64d04a2c25f54cc62731b8a4be4e5db268cab4fe217e7a5c1",
+      "two_actual_argv_executable_and_open_file_reference_checks_clear": true
+    }
+  ],
+  "removed_bytes": 434157240,
+  "free_before": 322695168,
+  "free_after": 554860544,
+  "mawaru9_running_helper_hash_unchanged": true,
+  "chart_replay_or_compiler_stopped": false
+}

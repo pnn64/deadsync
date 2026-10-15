@@ -1,0 +1,89 @@
+{
+  "reason": "Free duplicate raw reports already preserved losslessly as compressed terminal diagnostics; no captures, fixture archives, source files or live inputs are removed.",
+  "reports": [
+    {
+      "raw_path": "/home/parity/jobs/no-tears-option-path-repair-v1/chart-329/report.json",
+      "raw_bytes": 83604587,
+      "raw_sha256": "63ea7e8ca9f4739fd8e6a72546666c81d2d8157bd31c5a081e859ffa5fd538ec",
+      "compressed_path": "/home/parity/jobs/no-tears-option-path-repair-v1/chart-329/report.json.zst",
+      "compressed_bytes": 1312407,
+      "compressed_sha256": "1344edf8ffa9c01ce1a8c51b96e46bb97ab3c0ebeb5e8f7cf5c9a640571f727b",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "c5834ced4311d47ea635164a03389b803828e93d76043fb6420d3db8ee8fd9ab",
+      "result_replay_exit": 0,
+      "result_accepted": true
+    },
+    {
+      "raw_path": "/home/parity/jobs/numujika-metrics-repair-v1/chart-333/report.json",
+      "raw_bytes": 76656008,
+      "raw_sha256": "99085ec605a6773ac3461f44f6217e26d487a1de33bdfea89045630de1ec26c8",
+      "compressed_path": "/home/parity/jobs/numujika-metrics-repair-v1/chart-333/report.json.zst",
+      "compressed_bytes": 1931239,
+      "compressed_sha256": "57c4f47453f506c7e3c52428e4dd6cd2616dd63aac588a7717434ab0dd51a152",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "56e1c053634b226653a83c09f682709b7f2bfd3e44cd7ac2601d6ecf0e97b985",
+      "result_replay_exit": 0,
+      "result_accepted": true
+    },
+    {
+      "raw_path": "/home/parity/jobs/tacos-double-repair-v1/chart-177/report.json",
+      "raw_bytes": 70662215,
+      "raw_sha256": "d5eef540bbefd79508286608754e1f7bf520b303b9c6fcf14148aff8c3cc7317",
+      "compressed_path": "/home/parity/jobs/tacos-double-repair-v1/chart-177/report.json.zst",
+      "compressed_bytes": 2726716,
+      "compressed_sha256": "9403ef8f86b3ea4e37d37a031bd3c035afd633d238c4a22a4361e3a08ad36e8f",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "07b3e783a981f8a169ae11649ff5e3f3607a8e99daef807494c44ac17f6264e2",
+      "result_replay_exit": 0,
+      "result_accepted": true
+    },
+    {
+      "raw_path": "/home/parity/jobs/turn-a-preferences-first-repair-v1/chart-449/report.json",
+      "raw_bytes": 66142438,
+      "raw_sha256": "f8e9a09162794639467140ef61e94e2030e2bec2ac64225a59fcd97f24c10857",
+      "compressed_path": "/home/parity/jobs/turn-a-preferences-first-repair-v1/chart-449/report.json.zst",
+      "compressed_bytes": 1284002,
+      "compressed_sha256": "20a58ad1433bed019fe8c2762f5569e9ad177acd7edeec2272e968b95a7e2d48",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "25dd0960ae52627ad6fbdceef70c4f265b42e8d11a9becdbf2779f46f75a910e",
+      "result_replay_exit": 0,
+      "result_accepted": true
+    },
+    {
+      "raw_path": "/home/parity/jobs/modulo-cpu-steps-final-repair-v1/chart-317/report.json",
+      "raw_bytes": 21705535,
+      "raw_sha256": "c5a1eef26222279672403c557862ed527b90792b34108c320d677487cedd7923",
+      "compressed_path": "/home/parity/jobs/modulo-cpu-steps-final-repair-v1/chart-317/report.json.zst",
+      "compressed_bytes": 451412,
+      "compressed_sha256": "b0bfe07d733937f0a2f00ad7e8fcda933af1ce498ea63380c7a364d119802c9b",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "afce5fcfa7a097e55c165c0293557414cb0693b14772b9447aa9d74d8792bbee",
+      "result_replay_exit": 0,
+      "result_accepted": true
+    },
+    {
+      "raw_path": "/home/parity/jobs/rite-ssc-message-coverage-first-repair-v1/chart-378/report.json",
+      "raw_bytes": 18624009,
+      "raw_sha256": "a63a7d98891dd52804eeaea0d0c004c9619ff4885d5a191e290330646b49efd3",
+      "compressed_path": "/home/parity/jobs/rite-ssc-message-coverage-first-repair-v1/chart-378/report.json.zst",
+      "compressed_bytes": 355792,
+      "compressed_sha256": "30a1f4a97e26a6589ef14fc197e4ce68b7d8ee9f972fc2c2ab854ed6827f7f3b",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "f98d52a7eb9e85f400b3ddc06328d2d1da98896228738a01690b104f896c0f4f",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    }
+  ],
+  "raw_report_bytes_removed": 337394792,
+  "free_before": 2371584,
+  "free_after": 322953216,
+  "mawaru9_helper_hash_unchanged": true,
+  "chart_replays_or_compilers_stopped": false,
+  "acceptance_or_attempt_counts_changed": false
+}
