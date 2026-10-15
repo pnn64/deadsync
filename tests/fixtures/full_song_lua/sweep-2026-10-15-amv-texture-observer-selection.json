@@ -1,0 +1,11 @@
+{
+  "fix_commit": "22e67e7f2a9085661a52bfd8edbdd7762ee966fd",
+  "source_root": "/home/parity/workspace/amv-texture-observer-green-v3/deadsync",
+  "binary_sha256": "33aaaa1ff3476da9528f20d648ea7537a4faa99b03f4031c508c5e03914f8d3c",
+  "build_proof": "/home/parity/jobs/amv-texture-observer-linux-green-v3/proof.json",
+  "all_four_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "Native AMV default1x1 texture and real handle rebinding; retain existing getter observation scope without falsely labeling AMV calls as Sprite",
+  "hope_full_repairs_spent": 0,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
