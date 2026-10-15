@@ -1,0 +1,58 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "entry_evidence": "sweep-2026-10-15-hope-note-field-board-entry-diagnostic.json",
+  "captured_initial_input_and_native_actor_evidence": "sweep-2026-10-15-hope-combo-input-and-entry-evidence.json",
+  "entry_frames": 1688,
+  "entry_errors": 0,
+  "entry_mismatches": 20462,
+  "first_remaining_actor": "ScreenGameplay/PlayerP1/Combo",
+  "native_seq": 416,
+  "native_behavior": "HOPE traversal treats Combo as a leaf and next records Actor.GetParent on Combo.",
+  "owned_behavior": "Owned exposes an ActorFrame with a Number child and records an extra ActorFrame.GetNumChildren before traversing that child.",
+  "captured_hide_combo": false,
+  "captured_combo_font": "Wendy",
+  "trace_theme_metadata": "Harness Simply Love",
+  "trace_theme_is_fallback_configuration_not_current_directory": true,
+  "local_primary_sources": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\Graphics\\Player combo.lua",
+      "sha256": "1ac6bca203c002e302b8e8e201a807168d8682ce49d0f9229c2a4120c0066e3f"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\Scripts\\SL-Helpers.lua",
+      "sha256": "3896aa23cbb8dfe07372566053adc7eb961f3b1bb1d076ddbd8757b13d0c45cf"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\src\\song_lua_runtime.rs",
+      "sha256": "2282d197834c8451622a0cff3dbc38e971ae9a764c792244a18a2f33feb95515"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\probe_theme\\SongLuaTrace.lua",
+      "sha256": "92d2501297692df3ad643c94f9e6aa7824c2e4ef17edfbddeeac6759a2806590"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs",
+      "sha256": "213f3416e1c9bc64bab91d6eec15b1a0d58da1bfbb76621ab590ce902f6c6c67"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\compat.rs",
+      "sha256": "e9707358f16231a3b42d16403da3364d461a4838afd03e71e79db27987cd4813"
+    },
+    {
+      "path": "C:\\GitHub\\rework\\lua-songs\\HOPE\\sm5\\core\\players.lua",
+      "sha256": "f1cd74d8e92080094172ed37bd263f541e460d615e8e6e5ff37d53e1733f67f1"
+    }
+  ],
+  "source_cause": "Player combo.lua selects a generic invisible Actor when HideCombo is true OR no combo font is available. Captured HideCombo is false. GetComboFonts scans THEME:GetCurrentThemeDirectory() plus Fonts/_Combo Fonts, rather than using the fallback directory. The capture staging recipe copies fallback Scripts into the itgmania-harness wrapper theme and creates no wrapper font directory; the installed native root also has no itgmania-harness combo-font directory. The physical fallback Player combo.lua bytes match the local primary source. Owned always constructs ActorFrame/Number, and its GetComboFonts returns a synthetic [\"None\"] list instead of applying the native resource-selection algorithm.",
+  "font_availability_conclusion_is_inference_from_staging_and_theme_sources": true,
+  "native_get_combo_fonts_result_not_captured_as_an_explicit_input": true,
+  "must_not_infer_or_force_hide_combo_from_expected_query_results": true,
+  "authored_large_combo_tween_source": "HOPE sm5/core/players.lua sleeps Judgment and Combo for9e9 seconds; this authored queue does not determine the actor class.",
+  "production_fix_added": false,
+  "full_repairs_spent": 0,
+  "original_native_capture_reused": true,
+  "expected_query_results_used_as_engine_inputs": false,
+  "acceptance_comparisons_changed": false,
+  "board_fix_first_remaining_mismatch_moved_from_native_seq386_to416": true,
+  "next_action": "Reproduce the actual current-theme font availability from independent resource inputs and honor the source Player combo.lua selection, including the empty-font leaf branch. Preserve normal font-backed behavior and existing comparison acceptance; do not flip HideCombo to match expected queries."
+}
