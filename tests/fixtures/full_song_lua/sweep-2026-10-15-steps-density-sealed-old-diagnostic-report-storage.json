@@ -1,0 +1,39 @@
+{
+  "reason": "Preserve old sealed diagnostic reports losslessly while recovering compiler space. No archive inputs, fixture assets, source files or running replay are changed.",
+  "reports": [
+    {
+      "raw_path": "/home/parity/jobs/native-creation-replay-v1/circles-sm/report.json",
+      "raw_bytes": 416467811,
+      "raw_sha256": "5c65e068ffa58a366735f0abc72a1a8f2bebd1606c80c7194257112f64855b67",
+      "compressed_path": "/home/parity/jobs/native-creation-replay-v1/circles-sm/report.json.zst",
+      "compressed_bytes": 11464246,
+      "compressed_sha256": "e4c62e105ca8371b605bcd2a0934238a5efc73ed8cfa5b862103a552e6156635",
+      "full_report_json_parsed_and_archive_accepted_false": true,
+      "replayed_frames": 117065,
+      "mismatch_count": 0,
+      "preexisting_proof_sha256": null,
+      "decompressed_bytes_equal_raw_report": true,
+      "two_actual_stage_argv_and_report_open_file_checks_clear": true
+    },
+    {
+      "raw_path": "/home/parity/jobs/cloud99-current-full-v1/report.json",
+      "raw_bytes": 134967414,
+      "raw_sha256": "f479f184eef4612a7cd9b669e912d9745397f44b53f799275601f2af7ee10726",
+      "compressed_path": "/home/parity/jobs/cloud99-current-full-v1/report.json.zst",
+      "compressed_bytes": 3142216,
+      "compressed_sha256": "b8fcba7ba44ef800b3c83d10db0d47283d8c9aa0a51413062c4c6884a5a94b0a",
+      "full_report_json_parsed_and_archive_accepted_false": true,
+      "replayed_frames": 14828,
+      "mismatch_count": 10,
+      "preexisting_proof_sha256": "b20b955eed3121ae200afb7fbf47c2800b5e947ed5c05a1f7e994a4ecdcfcf0a",
+      "decompressed_bytes_equal_raw_report": true,
+      "two_actual_stage_argv_and_report_open_file_checks_clear": true
+    }
+  ],
+  "raw_report_bytes_removed": 551435225,
+  "free_before": 125071360,
+  "free_after": 661831680,
+  "mawaru9_helper_hash_unchanged": true,
+  "chart_replays_or_compilers_stopped": false,
+  "acceptance_or_attempt_counts_changed": false
+}
