@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T07:50:02Z",
-  "previous_goal_turn": "Progress: The initial sweep has recorded outcomes for all501 original simfiles:396 passed,105 pending, zero unprocessed. The last original Sequential Dreambox passed all235675 frames with zero errors and mismatches; its38,272,734-byte archive5077e6ae and local decompressed-byte closurec735df745 are committed, and its coverage annotation remains separate. No passing chart is reopened. Native Cancel transition child fixc71cc5f31 is committed after meaningful red on both hosts and all15 green validation groups on both hosts, including80 live controls and35 replay controls. All1175 raw Linux and normalized cross-platform red/green source pins, logs and private helper1313245b were verified before selectiond103ae410. The original HOPE capture and every old member byte were reused; its1688-frame entry diagnostic has zero callback errors but20510 command/query mismatches, so no full repair was started. The missing Cancel child is fixed; the next actual mismatch is native Sprite.GetTexture returning RageTexture while owned returns nil. Primary Quad.cpp proves native Quad derives from Sprite and loads its default texture during construction. RageTextureManager provides a1x1 RageTexture_Default initialized with an empty filename, while the owned gate only recognizes authored Texture or an allocated AFT. That exact next source cause is committed without importing expected values. A separate private canonical actor-handle cache across registry/update plan now retains and advances Mawaru9 scene preparation; its1628-frame entry diagnostic remains live and no complete comparison or full repair is claimed. Mawaru6 final2 and Mawaru8 first1 remain verified live and are not restarted; Mawaru8 CPU profiling sampled ordinary update/draw/state work despite its stale progress log. Twenty-three closed-pass reports were losslessly compressed and decompressed-hash verified before redundant raw removal, reclaiming7,222,155,700 bytes and leaving the original captures and accepted fixtures intact. All501 original simfile hashes remain unchanged, oversized local fixtures remain ignored, acceptance comparisons and two-full-repair cap remain unchanged, and the goal stays active for remaining repair work and live jobs.",
+  "updated_utc": "2026-10-15T08:14:53Z",
+  "previous_goal_turn": "All501 original simfiles have terminal initial outcomes:396 passed,105 pending,0 unprocessed. Passing fixtures remain closed. The native Quad default texture fix b54321aa6c7eee2671a4da8c6a999da4eaa1a670 passed meaningful red and all16 green validation groups on Windows and Linux, including81 live controls and35 replay controls. All1175 raw Linux and normalized cross-platform red/green source pins, logs and private helper were verified. It models the native empty-filename1x1 default RageTexture, ignores Quad node Texture loading, and supports explicit unload and retained-handle rebinding. The original HOPE capture is reused for an entry diagnostic before any full repair; the last completed entry still has20510 mismatches after the earlier Cancel child fix. Mawaru9 private canonical actor-handle sharing completed1628 entry frames with zero mismatches and zero callback errors; source, helper, logs and report were verified and evidence committed392d10ae1. This is a private counterfactual, not full acceptance or a production handle-sharing fix. A meaningful large-scene production regression is prepared. Mawaru6 final2 and Mawaru8 first1 remain live without restart. Original captures, the existing acceptance predicate, separate missing-coverage records and the two-full-repair cap remain unchanged. The goal remains active.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "1dab0e630b6da11d0eaff6fb2b1ba7cf888deb81",
+      "deadsync": "0907a5838989fc000ee4c669acc5190749440bc6",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -4804,9 +4804,15 @@
       "next_private_experiment": "/home/parity/jobs/mawaru9-canonical-actor-handles-v6",
       "private_canonical_preparation_observation": "tests/fixtures/full_song_lua/sweep-2026-10-15-mawaru9-canonical-preparation-observation.json",
       "private_canonical_preparation_retained_live_scene": true,
-      "private_entry_diagnostic_complete": false,
-      "private_entry_comparison_result_not_yet_claimed": true,
-      "remaining_production_scene_preparation_failure": true
+      "private_entry_diagnostic_complete": true,
+      "private_entry_comparison_result_not_yet_claimed": false,
+      "remaining_production_scene_preparation_failure": true,
+      "private_canonical_entry_evidence": "tests/fixtures/full_song_lua/sweep-2026-10-15-mawaru9-canonical-entry-diagnostic.json",
+      "private_entry_frames": 1628,
+      "private_entry_errors": 0,
+      "private_entry_mismatches": 0,
+      "private_canonical_preparation_stack_failure_resolved": true,
+      "production_canonical_handle_fix_added": false
     },
     "hope_namespace_followup": {
       "full_repairs_spent": 0,
@@ -4823,7 +4829,7 @@
       "evidence": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-complete-lua-namespace-diagnostic.json",
       "storage": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-preflight-storage.json",
       "source_archive_fix": "79bb77d",
-      "status": "pending: native default Quad texture returns RageTexture; owned returns nil",
+      "status": "pending: native Quad default texture fix committed; retained-capture entry comparisons queued/running before any full repair",
       "cancel_source_cause": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-cancel-source-cause.json",
       "pending_candidate_storage": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-pending-candidate-storage.json",
       "production_cancel_fix_applied": true,
@@ -4831,7 +4837,11 @@
       "production_cancel_fix_validation_complete": true,
       "production_cancel_fix_commit": "c71cc5f319cd5b950b6ce107ec23f65772062260",
       "latest_diagnostic": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-cancel-child-entry-diagnostic.json",
-      "remaining_source_cause": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-quad-default-texture-source-cause.json"
+      "remaining_source_cause": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-quad-default-texture-source-cause.json",
+      "production_quad_default_texture_fix_applied": true,
+      "production_quad_default_texture_fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
+      "quad_texture_entry_diagnostic_job": "/home/parity/jobs/hope-quad-default-texture-entry-diagnostic-v1",
+      "quad_texture_entry_diagnostic_terminal_result_not_yet_claimed": true
     },
     "rite_closed": {
       "status": "passed",
@@ -4906,6 +4916,21 @@
       "hope_entry_callback_errors": 0,
       "hope_entry_mismatches": 20510,
       "hope_full_repair_started": false
+    },
+    "quad_default_texture": {
+      "fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
+      "selection": "tests/fixtures/full_song_lua/sweep-2026-10-15-quad-default-texture-selection.json",
+      "all_sixteen_groups_both_hosts_passed": true,
+      "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+      "binary_sha256": "8e605364e123b4ed0bd7214368066ed4c09c2b7ff0ffe8da01c50175e3637515",
+      "native_default_texture_filename": "",
+      "native_default_texture_dimensions": [
+        1,
+        1
+      ],
+      "explicit_unload_and_retained_rebinding_tested": true,
+      "hope_full_repairs_spent": 0,
+      "acceptance_comparisons_changed": false
     }
   },
   "counts_at_checkpoint": {
@@ -7012,10 +7037,10 @@
   },
   "next_actions": [
     "Collect Mawaru6 final2 and Mawaru8 first1 full repairs without restarting live processes; save and byte-verify complete passes or preserve concrete terminal failures.",
-    "Implement the source-proven native default Quad texture for HOPE, then inspect remaining retained-capture entry mismatches before any full repair.",
-    "Collect the private Mawaru9 canonical actor-handle entry diagnostic before choosing a faithful production update-plan fix; no full chart repair while entry comparisons remain unresolved.",
+    "Collect retained-capture HOPE entry after the validated native Quad default texture fix and resolve actual remaining entry failures before any full repair.",
+    "Use the zero-mismatch private Mawaru9 canonical handle entry result to develop a production fix with meaningful large-scene identity and update-order controls; validate before a bounded full repair.",
     "Keep I Really Like You SSC pending on countdown broadcasts and missing initialization-clock inputs before its one remaining full repair.",
-    "Preserve all396 passing original sources as closed and keep missing coverage separate from concrete pending failures."
+    "Preserve396 passing originals as closed and keep missing coverage separate from concrete pending failures."
   ],
   "previous_goal_turn_classification": "progress",
   "resolved_historical_concrete_failures": [

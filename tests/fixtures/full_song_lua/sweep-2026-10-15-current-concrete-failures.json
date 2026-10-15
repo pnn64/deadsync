@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T07:50:04Z",
+  "updated_utc": "2026-10-15T08:14:56Z",
   "counts": {
     "passed": 396,
     "pending": 105,
@@ -8172,7 +8172,10 @@
       "cancel_child_missing_failure_fixed_by": "c71cc5f319cd5b950b6ce107ec23f65772062260",
       "remaining_source_cause": "sweep-2026-10-15-hope-quad-default-texture-source-cause.json",
       "current_diagnostic_failure": "native Quad Sprite.GetTexture returns RageTexture; owned returns nil; full entry has20510 command/query mismatches",
-      "diagnostic_only_not_full_acceptance": true
+      "diagnostic_only_not_full_acceptance": true,
+      "quad_default_texture_fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
+      "quad_texture_all_sixteen_groups_both_hosts_passed": true,
+      "quad_texture_entry_diagnostic_terminal_result_not_yet_claimed": true
     },
     {
       "position": 230,
@@ -24519,10 +24522,16 @@
       "registry_reuse_experiment": "sweep-2026-10-15-mawaru9-shared-registry-experiment.json",
       "initial_actor_states": 2453,
       "private_counterfactual_begin_on_initial_update_completed": true,
-      "remaining_private_preparation_failure": "prepare_live_updates in SongLuaLiveScene::new",
+      "remaining_private_preparation_failure": null,
       "native_limits_increased": false,
       "original_terminal_full_result_preserved": true,
-      "new_full_repair_started": false
+      "new_full_repair_started": false,
+      "private_canonical_entry": "sweep-2026-10-15-mawaru9-canonical-entry-diagnostic.json",
+      "private_canonical_entry_frames": 1628,
+      "private_canonical_entry_errors": 0,
+      "private_canonical_entry_mismatches": 0,
+      "production_canonical_handle_fix_added": false,
+      "remaining_production_scene_preparation_failure": true
     },
     {
       "position": 496,
