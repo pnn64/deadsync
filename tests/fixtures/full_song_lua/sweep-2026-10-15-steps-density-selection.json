@@ -1,0 +1,14 @@
+{
+  "fix_commit": "b43bcea765536e63a9f12ce220c1226023bfe19c",
+  "source_root": "/home/parity/workspace/steps-density-green-v2/deadsync",
+  "binary_sha256": "3c01ccd5dc5bc50617cdd0a1a9a952de6548c329aec9f00602abb71d24908415",
+  "build_proof": "/home/parity/jobs/steps-density-linux-green-v2/proof.json",
+  "all_five_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "populate real cached Steps notes/NPS/peak density and SL stream cache from loaded note rows and selected chart timing, retaining native measure/signature and float-duration behavior",
+  "hope_full_repairs_spent": 0,
+  "hope_step_statistics_hierarchy_still_pending": true,
+  "known_failing_entry_not_repeated_for_density_prerequisite": true,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
