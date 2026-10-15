@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Stay Alive/Stay Alive.ssc",
+  "native_frames": 85478,
+  "replayed_frames": 85478,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "64f69cd0aa552aaecd049ff06af907f8973590288d1920c93070804b9557b19e.tar.zst",
+  "compressed_sha256": "64f69cd0aa552aaecd049ff06af907f8973590288d1920c93070804b9557b19e",
+  "uncompressed_sha256": "4cf3f434754cfc7338bc7e63bf0e7702063b8779e7cce4630bead9d11a913084",
+  "compressed_bytes": 7326275,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
