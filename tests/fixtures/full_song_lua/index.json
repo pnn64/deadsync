@@ -5517,15 +5517,12 @@
     {
       "title": "Who the Hell Is Edgar?",
       "source_simfile": "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc",
-      "harness_version": "0.1.0",
-      "archive": "b22f74de2e8fbe69396870627e62559db93553c4dab1372bfad3ee0c5832765c.tar.zst",
-      "sha256": "b22f74de2e8fbe69396870627e62559db93553c4dab1372bfad3ee0c5832765c",
-      "compressed_bytes": 1498952,
-      "uncompressed_sha256": "44cb57be28d897a7ee566d25bd0c31e96b89be23c68c9fdf5cc30af492094b05",
-      "compression_level": 22,
-      "aliases": [
-        "294040c930dfeb05752ff0b89660c1eff5e908efffc063b920f3451e3abb0ae7.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "9a539969dba52899892fbfd70243f57352ea0fe8fc3330814acac77a26b8ccd9.tar.zst",
+      "sha256": "9a539969dba52899892fbfd70243f57352ea0fe8fc3330814acac77a26b8ccd9",
+      "compressed_bytes": 17271799,
+      "uncompressed_sha256": "f15ee0cddf02932b656262f9a5878f32f12a844ddd1e2d7ec5baff30df231a93",
+      "aliases": []
     },
     {
       "title": "Wndrwll",
