@@ -244,6 +244,49 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 487,
+      "source_simfile": "Ascendanz/Ascendanz.ssc",
+      "simfile_sha256": "c116a4fc612d43be52cf043e44995e15ba71c2b0fa3eac1e0f72af7143664ef9",
+      "historical_failure": {
+        "simfile": "Ascendanz/Ascendanz.ssc",
+        "status": "error",
+        "category": "missing_song_lua",
+        "reason": "ITGmania Lua host failed: cannot open corpus:/Ascendanz/lua/default.lua: No such file or directory",
+        "diagnostics": "target/song-lua-repair/known/11205e6997187207"
+      },
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 127.5860809389851,
+      "trace_sha256": "a4739731e14689f578e4f5b69ff822dbcd1c4065ab09649f7079834f9205f2cf",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v6-2/chart-487/candidates/20bb680d05140c95752f3d34ab749710ddd41b0e6d6e2fd33ec6d2535acd9b5c.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1592.0233258729859,
+      "candidate_sha256": "20bb680d05140c95752f3d34ab749710ddd41b0e6d6e2fd33ec6d2535acd9b5c",
+      "native_frames": 98852,
+      "replayed_frames": 98852,
+      "compared_stage_fields": 1386,
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "a9a4eb6e728a02d59f380c78a8d843d378efd26aa5448b8c3f75b422ae92926f",
+      "archive": "26999f98362096a4d11ed3972278c33a1a9188ca9f907804493a1e6e1412f43e.tar.zst",
+      "archive_sha256": "26999f98362096a4d11ed3972278c33a1a9188ca9f907804493a1e6e1412f43e",
+      "compressed_bytes": 9462800,
+      "pack_seconds": 1.6233059449878056,
+      "harness_version": "0.1.80",
+      "title": "Ascendanz",
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -254,7 +297,7 @@
   },
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 4,
+  "passed_fixtures": 5,
   "pending_charts": 2,
-  "processed_charts": 6
+  "processed_charts": 7
 }
