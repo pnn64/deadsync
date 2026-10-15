@@ -1,0 +1,15 @@
+{
+  "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
+  "kind": "Compiler startup reload source-history validation gap, recorded separately from full fixture acceptance",
+  "observation": "The newly added test requested a compiler startup reload. compile.rs explicitly preserves prior legacy broadcasts but begin_live_runtime resets source capture for the retained scene. SongLuaLiveScene.take_startup_output therefore contains the retained scene source output; aggregate prior-scene source history is not proven by this new test.",
+  "production_source": "crates/deadsync-song-lua/src/compile.rs startup reload loop and crates/deadsync-song-lua/src/live.rs SongLuaLiveScene::new",
+  "observed_green_v3_target": "Final scene contains PeakNPSUpdated/AuthoredPeakReaction once; the new test incorrectly expected both scenes there. The first-scene boundary and authored runtime nested-message assertions had passed.",
+  "new_green_v4_test_scope": "Assert retained source output, both legacy startup messages and reconstructed scene count separately. Keep ordinary same-name authored and nested runtime broadcasts.",
+  "meaningful_red_first_case_unchanged": true,
+  "all_prior_102_live_and_43_replay_test_sources_unchanged": true,
+  "aggregate_startup_source_history_fixed": false,
+  "new_native_capture_for_this_history_case_created": false,
+  "actual_failing_full_fixture_attributed_to_this_history_gap": false,
+  "full_acceptance_criteria_unchanged": true,
+  "passing_charts_reopened": false
+}

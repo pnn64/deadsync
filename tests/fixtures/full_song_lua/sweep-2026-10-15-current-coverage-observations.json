@@ -1,6 +1,6 @@
 {
   "scope": "latest recorded coverage observations for original source simfiles",
-  "updated_utc": "2026-10-15T22:29:31Z",
+  "updated_utc": "2026-10-15T22:31:20Z",
   "coverage_is_separate_from_existing_full_replay_acceptance": true,
   "passing_charts_replayed_or_investigated": false,
   "rows": [
@@ -3010,6 +3010,15 @@
         "Native StretchTo intrinsic-size/zoom getters differ from owned cached rectangle sizing; GetWidth/GetHeight are outside current comparison operations. Known gap recorded separately; no fixture acceptance gate added."
       ],
       "evidence": "sweep-2026-10-15-stretch-intrinsic-size-coverage.json"
+    },
+    {
+      "position": 385,
+      "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "Aggregate source-broadcast history across compiler startup reloads is unvalidated; retained scene and legacy output streams have different history contracts. No fixture acceptance changes or passing chart investigation."
+      ],
+      "evidence": "sweep-2026-10-16-compiler-startup-source-history-coverage.json"
     }
   ]
 }

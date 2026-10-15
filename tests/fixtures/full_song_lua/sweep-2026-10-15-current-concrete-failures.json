@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T22:29:31Z",
+  "updated_utc": "2026-10-15T22:31:20Z",
   "counts": {
     "passed": 399,
     "pending": 102,
@@ -7552,8 +7552,8 @@
       "original_terminal_full_result_preserved": true,
       "new_full_repair_started": false,
       "cancel_child_missing_failure_fixed_by": "c71cc5f319cd5b950b6ce107ec23f65772062260",
-      "remaining_source_cause": null,
-      "current_diagnostic_failure": "actual retained-entry result after original native Danger Quad source repair; inspect first remaining error or mismatch before claiming its cause",
+      "remaining_source_cause": "sweep-2026-10-16-hope-song-meter-source-cause.json",
+      "current_diagnostic_failure": "actual next retained-entry failure at native seq979: SongMeter GetNumChildren native4/owned1; original SongInfoBar source has two borders, SongMeterDisplay with Stream, and SongTitle; Danger texture seq965 is fixed",
       "diagnostic_only_not_full_acceptance": true,
       "quad_default_texture_fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
       "quad_texture_all_sixteen_groups_both_hosts_passed": true,
@@ -17989,7 +17989,7 @@
       "completion": null,
       "no_third_full_repair": false,
       "followup": "sweep-2026-10-15-save-tears-rights-sm-first-repair-v1.json",
-      "current_diagnostic_failure": "first bounded full result remains pending; inspect exact saved callback errors/mismatches",
+      "current_diagnostic_failure": "first1 complete with0errors/18broadcast mismatches: two pre-song PeakNPSUpdated events; all17 remaining broadcasts match unchanged comparisons. Boundary candidate qualification in progress; no final2 attempt yet",
       "new_full_repair_started": false,
       "started_full_repairs": 1,
       "actual_running_observation": {
@@ -18296,9 +18296,10 @@
           ],
           "report_sha256": "e81ce27d074e87b2d91553bc7ef98f8837779a34405209b0c58362777aafdf5b"
         },
-        "checked_utc": "2026-10-15T22:29:32.127747+00:00"
+        "checked_utc": "2026-10-15T22:31:21.471704+00:00"
       },
-      "full_replay_completed": true
+      "full_replay_completed": true,
+      "remaining_source_cause": "sweep-2026-10-16-save-tears-pre-song-broadcast-cause.json"
     },
     {
       "position": 395,
@@ -23439,7 +23440,7 @@
         "phase": "replay",
         "result_exists": false,
         "terminal_result": null,
-        "checked_utc": "2026-10-15T22:29:32.524653+00:00"
+        "checked_utc": "2026-10-15T22:31:21.861786+00:00"
       },
       "current_diagnostic_failure": "Historical blank/no-report infrastructure result; current retained-capture entry is clean, awaiting first bounded full repair on all7119 native frames"
     },
