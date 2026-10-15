@@ -24,5 +24,14 @@
   },
   "preserved_failed_stages": true,
   "recovery": "fresh green-v3 validation on both hosts; Linux waits for all actual shared-target Cargo processes to finish, then invalidates timestamps on every copied Rust source before building; all existing checks remain required",
-  "acceptance_comparisons_unchanged": true
+  "acceptance_comparisons_unchanged": true,
+  "recovery_complete": true,
+  "all_fourteen_checks_both_hosts_passed": true,
+  "linux_stale_executable_confirmed_by_source_identical_fresh_pass": true,
+  "windows_additional_package_cleanup": {
+    "command": "cargo clean -p deadsync --profile dev",
+    "removed_files": 2752,
+    "removed_gib": 6.0
+  },
+  "fix_commit": "c60b35d44ee7f0fc39d8dae8a074fd8d8289e635"
 }

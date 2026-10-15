@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T06:48:17Z",
-  "previous_goal_turn": "Progress: All four retained full replay children remain verified live: Rite final2, Sequential Dreambox original501, Mawaru6 final2, and Mawaru8 first1. No live job was restarted. Three recent closed passes retained their lossless archives while four redundant raw/report files were removed only after uncompressed hash verification, with storage receipt committed. A single local result closer now watches these four live results and will byte-verify and commit each complete passing fixture after the publisher stores it. An exact-source private Mawaru9 entry diagnostic reproduced its startup stack failure during recursive Begin traversal with2453 initialized actors. A single private counterfactual stopped each child registry from retaining a Rust auxiliary Lua handle and completed Begin, On and initial Update with unchanged limits and dispatch order; it then reached a second stack failure after actor startup. The evidence is committed, no chart full repair was spent, and error-only instrumentation is locating the later failure. A meaningful2800-actor regression initially passed without preexisting child lookups; its corrected setup now queries child names before Begin to model authored scanners, while preserving all once-only order expectations. Both-host red checks are running before any production resource fix. HOPE actual startup named missing eases.lua. The already tested complete-Lua archive fix79bb77d rebuilt its candidate using the unchanged complete20574-frame trace and simfile; all old member bytes match and exactly two added Lua modules match the original physical sources. Entry diagnostic1688 frames cleared startup with zero callback errors but20514 command/query mismatches, first native Cancel child count1 versus owned0. HOPE remains pending with zero full repairs spent and no full repair launched. Its original compressed capture is preserved; two temporary raw copies were removed only after byte verification. Current acceptance comparisons, separate coverage ledger, two-repair cap and original501 simfile bytes remain unchanged. Sweep remains active and incomplete.",
+  "updated_utc": "2026-10-15T07:17:32Z",
+  "previous_goal_turn": "Progress: Rite final second repair passed all104414 native frames with zero callback errors and mismatches. Its5,692,564-byte compressed fixture a4a49ad8 is saved, locally decompressed to the exact original fa30207b candidate bytes, and closure receipt8c9aad1cd is committed. Rite is closed with two repairs spent and no further replay, while coverage observations remain separate. The child-registry Rust handle fix is committed as c60b35d44 after the meaningful2800-actor child-query/Begin regression reproduced StackError on both hosts and all14 validation groups passed on both hosts. All1175 raw Linux and normalized cross-platform red/green source pins, logs and private helper e0d91485 were verified. A Windows disk-full build and Linux stale-red shared-target execution were preserved; Cargo package-scoped cleanup freed10.9GiB plus6.0GiB, and fresh green-v3 validation resolved both infrastructure failures without changing engine source or checks. No running original or full repair was restarted. Mawaru9 private source instrumentation now places its remaining failure in prepare_live_updates during live-scene construction. Reusing registry handles alone did not clear it; a further private canonical actor-handle experiment for registry/update-plan sharing is running against unchanged capture bytes, with no full chart repair spent. HOPE startup was cleared by the already tested archive namespace fix, but its1688-frame diagnostic retains20514 command/query mismatches. Primary Transition::Load and Simply Love cancel sources prove the first native Cancel child is absent from the owned host; no Cancel production fix or HOPE full repair has started. Its repaired pending archive is losslessly compressed and preserved. Mawaru8 same live PID was profiled for49 CPU samples without stopping/signaling/restarting it: sampled paths include normal owned update, draw and state extraction. Its current frame is unknown; stale log57103 is not proof of a Lua infinite loop. The original capture clock window and uncompressed trace hash are preserved as read-only evidence. Sequential Dreambox original, Mawaru6 final2 and Mawaru8 first1 remain live; passing charts stay closed, missing coverage remains separate, all501 original simfile hashes stay unchanged, and the sweep remains active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "3536879b96db7886e37717cd98382b6287cd9bb6",
+      "deadsync": "44c57db28aef850d49c81661924a19552d5f8d2c",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -2110,14 +2110,14 @@
       "jobs": [
         {
           "job": "rite-mine-finalization-final-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "rite of spring/rite.ssc",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "chart-sweep-parallel-v7-1",
@@ -4465,7 +4465,7 @@
       "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-world-revolving-ssc-fixture-verification.json"
     },
     "rite_ssc_first_followup": {
-      "status": "pending",
+      "status": "passed",
       "full_repairs_spent": 2,
       "remaining_full_repairs_maximum": 1,
       "callback_errors": 0,
@@ -4506,8 +4506,11 @@
       "binary_sha256": "8bc6998ad067729087f992a1158d922ac0c0a24a2694fcaffc9b45bde59503a7",
       "selection": "tests/fixtures/full_song_lua/sweep-2026-10-15-mine-finalization-boundary-selection.json",
       "fix_commit": "40afbf0b9633de3c9efeb89339d6166dad3b28c3",
-      "second_full_repair_running": true,
-      "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-mine-finalization-final-repair-launch.json"
+      "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-mine-finalization-final-repair-launch.json",
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "second_full_repair_running": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-mine-finalization-fixture-verification.json"
     },
     "sprite_cropto_alias": {
       "fix_commit": "9fa7f7732f6ecf1f1a17ff407281fba21c579556",
@@ -4761,8 +4764,13 @@
       "binary_sha256": "8bc6998ad067729087f992a1158d922ac0c0a24a2694fcaffc9b45bde59503a7",
       "selection": "tests/fixtures/full_song_lua/sweep-2026-10-15-mine-finalization-boundary-selection.json",
       "fix_commit": "40afbf0b9633de3c9efeb89339d6166dad3b28c3",
-      "second_full_repair_running": true,
-      "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-mine-finalization-final-repair-launch.json"
+      "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-mine-finalization-final-repair-launch.json",
+      "status": "passed",
+      "native_frames": 104414,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "second_full_repair_running": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-mine-finalization-fixture-verification.json"
     },
     "closed_pass_storage_recovery_v4": "tests/fixtures/full_song_lua/sweep-2026-10-15-closed-pass-storage-v4.json",
     "four_live_result_closer": {
@@ -4773,7 +4781,7 @@
     },
     "mawaru9_startup_resource_diagnosis": {
       "full_repairs_spent": 0,
-      "production_resource_fix_applied": false,
+      "production_resource_fix_applied": true,
       "meaningful_regression_added": true,
       "first_regression_setup_passed_without_preexisting_child_queries": true,
       "revised_regression_models_child_name_queries_before_begin": true,
@@ -4785,8 +4793,15 @@
       "resource_limits_increased": false,
       "command_dispatch_order_changed": false,
       "frozen_original_source_changed": false,
-      "both_host_revised_red_checks_pending": true,
-      "next_private_error_context_job": "/home/parity/jobs/mawaru9-post-startup-context-v3"
+      "both_host_revised_red_checks_pending": false,
+      "next_private_error_context_job": "/home/parity/jobs/mawaru9-post-startup-context-v3",
+      "fix_commit": "c60b35d44ee7f0fc39d8dae8a074fd8d8289e635",
+      "all_fourteen_validation_groups_both_hosts_passed": true,
+      "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+      "binary_sha256": "e0d91485e524beb2d5a8020c1e9e759409531415e26216b526a7d3da709fa497",
+      "remaining_source_failure": "prepare_live_updates in SongLuaLiveScene::new",
+      "private_registry_reuse_alone_cleared_failure": false,
+      "next_private_experiment": "/home/parity/jobs/mawaru9-canonical-actor-handles-v6"
     },
     "hope_namespace_followup": {
       "full_repairs_spent": 0,
@@ -4803,12 +4818,48 @@
       "evidence": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-complete-lua-namespace-diagnostic.json",
       "storage": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-preflight-storage.json",
       "source_archive_fix": "79bb77d",
-      "status": "pending: startup cleared but actual command/query mismatches remain"
+      "status": "pending: startup cleared but actual command/query mismatches remain",
+      "cancel_source_cause": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-cancel-source-cause.json",
+      "pending_candidate_storage": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-pending-candidate-storage.json",
+      "production_cancel_fix_applied": false
+    },
+    "rite_closed": {
+      "status": "passed",
+      "full_repairs_spent": 2,
+      "no_third_full_repair": true,
+      "native_frames": 104414,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "second_full_repair_started": true,
+      "second_full_repair_running": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-mine-finalization-fixture-verification.json"
+    },
+    "child_registry_handles": {
+      "selection": "tests/fixtures/full_song_lua/sweep-2026-10-15-child-registry-handles-selection.json",
+      "fix_commit": "c60b35d44ee7f0fc39d8dae8a074fd8d8289e635",
+      "all_fourteen_groups_both_hosts_passed": true,
+      "source_pin_count": 1175,
+      "resource_limits_increased": false,
+      "command_dispatch_order_changed": false,
+      "acceptance_comparisons_changed": false,
+      "global_original_helper_unchanged": true,
+      "validation_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-15-child-registry-validation-recovery.json"
+    },
+    "mawaru8_live_profile": {
+      "evidence": "tests/fixtures/full_song_lua/sweep-2026-10-15-mawaru8-live-cpu-profile.json",
+      "clock_inputs": "tests/fixtures/full_song_lua/sweep-2026-10-15-mawaru8-live-clock-window.json",
+      "live_pid": 2772022,
+      "cpu_samples": 49,
+      "sampled_normal_update_draw_and_state_extraction": true,
+      "current_frame_unknown": true,
+      "stale_log_not_proof_of_infinite_lua_loop": true,
+      "live_process_stopped_signaled_or_restarted": false,
+      "full_repairs_spent": 1
     }
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 246,
-    "new_pending_charts": 106,
+    "new_passed_fixtures": 247,
+    "new_pending_charts": 105,
     "new_processed_sources": 352,
     "charts_in_remaining_queue": 353,
     "unprocessed_sources": 1,
@@ -6142,20 +6193,6 @@
       ]
     },
     {
-      "source_simfile": "rite of spring/rite.ssc",
-      "repair_attempts": 1,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 121,
-      "first_mismatch": [
-        {
-          "field": "command_query_count",
-          "native": 17476,
-          "deadsync": 17472
-        }
-      ]
-    },
-    {
       "source_simfile": "saitama2000/Saitama2000.sm",
       "repair_attempts": 0,
       "failure": null,
@@ -6924,13 +6961,10 @@
   },
   "next_actions": [
     "Collect Sequential Dreambox original235675-frame replay without restarting it; save and byte-verify a complete pass or preserve its actual failures.",
-    "Finish both-host thirteen-group mine-finalization validation and committed source selection, then collect Rite second and final repair using its unchanged104414-frame capture.",
-    "Continue Mawaru6 final and Mawaru8 first full repairs without restarting live processes.",
-    "Keep I Really Like You SSC pending on observed countdown broadcast mismatches; inspect initialization-clock inputs before its one remaining full repair.",
-    "Record concrete pending failures separately from missing coverage and preserve every existing comparison and the two-full-repair cap.",
-    "Locate Mawaru9 second stack failure after its proven registry-handle Begin issue; keep native limits unchanged and spend no full chart repair while preparation still fails.",
-    "Collect both-host revised child-name-query/Begin regression checks; only apply and commit a faithful production resource fix after meaningful controls.",
-    "Keep HOPE pending on actual Cancel child-tree command/query mismatches after archive namespace repair; no full repair while known entry mismatches remain."
+    "Continue Mawaru6 final2 and Mawaru8 first1 full repairs without restarting live processes.",
+    "Collect the private Mawaru9 canonical update-plan handle experiment; keep native limits and all comparisons unchanged and do not start a full repair while preparation fails.",
+    "Implement the source-proven native Cancel transition child for HOPE, then inspect remaining retained-capture entry mismatches before any full repair.",
+    "Keep I Really Like You SSC pending on its observed countdown broadcasts; use initialization-clock evidence before its one remaining full repair."
   ],
   "previous_goal_turn_classification": "progress",
   "resolved_historical_concrete_failures": [

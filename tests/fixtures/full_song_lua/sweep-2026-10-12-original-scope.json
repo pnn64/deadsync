@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T06:48:17Z",
+  "updated_utc": "2026-10-15T07:17:32Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,8 +13,8 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 394,
-    "pending": 106,
+    "passed": 395,
+    "pending": 105,
     "unprocessed": 1
   },
   "complete": false,
@@ -3192,11 +3192,10 @@
       "position": 378,
       "source_simfile": "rite of spring/rite.ssc",
       "simfile_sha256": "7ce2cf7cfa441b16842c6577e922df25f8c49258da2b1cd49358f0f1a428c0fc",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-14-rite-ssc-first-repair.json",
-      "completed_repair_attempts_at_checkpoint": 1,
-      "running_full_repair_attempt": 2
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-15-rite-mine-finalization-final-repair-v1.json",
+      "completed_repair_attempts_at_checkpoint": 2
     },
     {
       "position": 379,
