@@ -1,0 +1,2 @@
+# Preserve original native Lua resource bytes on every host.
+crates/deadsync-song-lua/assets/simply-love/**/*.lua text eol=lf
