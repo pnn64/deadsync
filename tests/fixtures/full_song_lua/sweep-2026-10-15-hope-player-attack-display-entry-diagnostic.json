@@ -1,0 +1,229 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "native_frames": 20574,
+  "candidate_uncompressed_sha256": "3e6bb65b474d86cd14f4354e2cbb8e65a3f4896b527137fa82e2325a3691e6b0",
+  "candidate_compressed_sha256": "dba998ce762304a6994791cb4693f427de56aaf38a493736787f3e5f5c55683c",
+  "trace_sha256": "88b20e678a79afd20607bb861bde142f73c817749b04504b84ae23314ceb89d6",
+  "simfile_sha256": "40320b6ae63e366213e7fbb060fc36beadd09fa2bb33be032bc9177e8a7b023d",
+  "all_native_capture_and_original_member_bytes_unchanged": true,
+  "binary_sha256": "b4903ea2d0a7be4107dae95752351bfc6b1a70d50fe0f3b58423e229bda31a88",
+  "fix_commit": "7efd988fdcc73bb3601b9b60981e5e89bbe0d21c",
+  "all_four_checks_both_hosts_and_1175_source_pins_verified": true,
+  "diagnostic_exit": 2,
+  "diagnostic_seconds": 87.1687956659589,
+  "full_repairs_spent_before_and_after": 0,
+  "no_fixture_acceptance": true,
+  "previous_entry_mismatch_count": 20472,
+  "log_sha256": "fdd102ce0944e2e4aab6630a3b1a50675d2a34b90095163c4e7d9a55d0b58749",
+  "replayed_frames": 1688,
+  "errors": [],
+  "mismatch_count": 20461,
+  "first_mismatches": [
+    {
+      "field": "command_query_count",
+      "native": 21008,
+      "deadsync": 20620
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "external-0023",
+        "args": [],
+        "beat": -15.99990177154541,
+        "caller": {
+          "line": 36,
+          "source": "song:/sm5/modules/grabactors.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0002",
+        "detail": {
+          "native_tween_time_left": 0,
+          "results": [
+            1
+          ]
+        },
+        "kind": "query",
+        "line": 36,
+        "operation": "ActorFrame.GetNumChildren",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": -4.08297061920166,
+        "seq": 386,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "results": [
+          1
+        ]
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "ActorFrame.GetNumChildren",
+        "source": "song:/sm5/modules/grabactors.lua",
+        "line": 36,
+        "phase": "callback",
+        "beat": -15.99990177154541,
+        "seconds": -4.08297061920166,
+        "args": [],
+        "results": [
+          0
+        ]
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "external-0087",
+        "args": [],
+        "beat": -15.99990177154541,
+        "caller": {
+          "line": 3,
+          "source": "song:/sm5/modules/grabactors.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0002",
+        "detail": {
+          "native_tween_time_left": 0,
+          "results": [
+            {
+              "actor": "external-0023",
+              "name": "NoteField",
+              "path": "ScreenGameplay/PlayerP1/NoteField"
+            }
+          ]
+        },
+        "kind": "query",
+        "line": 3,
+        "operation": "Actor.GetParent",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": -4.08297061920166,
+        "seq": 391,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "results": [
+          {
+            "actor": 3,
+            "name": "NoteField",
+            "path": "ScreenGameplay/PlayerP1/NoteField"
+          }
+        ]
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "ActorFrame.GetNumChildren",
+        "source": "song:/sm5/modules/grabactors.lua",
+        "line": 36,
+        "phase": "callback",
+        "beat": -15.99990177154541,
+        "seconds": -4.08297061920166,
+        "args": [],
+        "results": [
+          1
+        ]
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "external-0087",
+        "args": [],
+        "beat": -15.99990177154541,
+        "caller": {
+          "line": 3,
+          "source": "song:/sm5/modules/grabactors.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0002",
+        "detail": {
+          "native_tween_time_left": 0,
+          "results": [
+            "Board"
+          ]
+        },
+        "kind": "query",
+        "line": 3,
+        "operation": "Actor.GetName",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": -4.08297061920166,
+        "seq": 395,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "results": [
+          "Board"
+        ]
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "Actor.GetParent",
+        "source": "song:/sm5/modules/grabactors.lua",
+        "line": 3,
+        "phase": "callback",
+        "beat": -15.99990177154541,
+        "seconds": -4.08297061920166,
+        "args": [],
+        "results": [
+          {
+            "actor": 5,
+            "name": "Judgment",
+            "path": "ScreenGameplay/PlayerP1/Judgment"
+          }
+        ]
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "external-0087",
+        "args": [],
+        "beat": -15.99990177154541,
+        "caller": {
+          "line": 3,
+          "source": "song:/sm5/modules/grabactors.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0002",
+        "detail": {
+          "native_tween_time_left": 0,
+          "results": [
+            {
+              "type": "RageTexture"
+            }
+          ]
+        },
+        "kind": "query",
+        "line": 3,
+        "operation": "Sprite.GetTexture",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": -4.08297061920166,
+        "seq": 396,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "results": [
+          {
+            "type": "RageTexture"
+          }
+        ]
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "Actor.GetName",
+        "source": "song:/sm5/modules/grabactors.lua",
+        "line": 3,
+        "phase": "callback",
+        "beat": -15.99990177154541,
+        "seconds": -4.08297061920166,
+        "args": [],
+        "results": [
+          "JudgmentWithOffsets"
+        ]
+      }
+    }
+  ],
+  "report_sha256": "ebae2435d94a96cef5268266cfcdc10c3d0902e4fd35328663c49a4d85026041"
+}
