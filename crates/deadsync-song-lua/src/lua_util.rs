@@ -14623,6 +14623,91 @@ return {
     Ok(Some(actor))
 }
 
+fn create_underlay_difficulty_meter(
+    lua: &Lua, underlay: &Table, player: usize,
+    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+) -> mlua::Result<Table> {
+    let commands = lua.load(r#"
+local player = ...
+local pn = ToEnumShortString(player)
+
+local _x = _screen.cx + (player==PLAYER_1 and -1 or 1) * SL_WideScale(292.5, 342.5)
+
+return {
+	InitCommand=function(self)
+		local adjusted_offset_x = SL[pn].ActiveModifiers.NoteFieldOffsetX * (player == PLAYER_1 and -1 or 1)
+		self:xy(_x + adjusted_offset_x, 56)
+	end,
+
+
+	-- colored background for player's chart's difficulty meter
+	{
+		InitCommand=function(self)
+			self:zoomto(30, 30)
+		end,
+		CurrentSongChangedMessageCommand=function(self) self:queuecommand("Begin") end,
+		BeginCommand=function(self)
+			local currentSteps = GAMESTATE:GetCurrentSteps(player)
+			if currentSteps then
+				local currentDifficulty = currentSteps:GetDifficulty()
+				self:diffuse(DifficultyColor(currentDifficulty))
+			end
+		end
+	},
+
+	-- player's chart's difficulty meter
+	{
+		InitCommand=function(self)
+			self:diffuse( Color.Black )
+			self:zoom( 0.4 )
+		end,
+		CurrentSongChangedMessageCommand=function(self) self:queuecommand("Begin") end,
+		BeginCommand=function(self)
+			local steps = GAMESTATE:GetCurrentSteps(player)
+			local meter = steps:GetMeter()
+
+			if meter then
+				self:settext(meter)
+			end
+		end
+	}
+}"#).set_name("@theme:/BGAnimations/ScreenGameplay underlay/PerPlayer/DifficultyMeter.lua")
+        .call::<Table>(player_number_name(player))?;
+    let frame = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
+    frame.raw_set("__songlua_parent", underlay.clone())?;
+    frame.raw_set("InitCommand", commands.raw_get::<Function>("InitCommand")?)?;
+    // Native LoadActor runs Init before Screen::BeginScreen propagates Begin.
+    commands.raw_get::<Function>("InitCommand")?.call::<()>(frame.clone())?;
+    let quad = create_named_actor(lua, "Quad", "", create_dummy_actor)?;
+    let text = create_named_text_actor(lua, "BitmapText", "", String::new(), create_dummy_actor)?;
+    text.raw_set("Font", "Common Bold")?;
+    let unnamed = create_actor_child_group(lua)?;
+    for (index, actor) in [(1, quad.clone()), (2, text.clone())] {
+        let part = commands.raw_get::<Table>(index)?;
+        for command in ["InitCommand", "BeginCommand", "CurrentSongChangedMessageCommand"] {
+            actor.raw_set(command, part.raw_get::<Function>(command)?)?;
+        }
+        actor.raw_set("__songlua_parent", frame.clone())?;
+        part.raw_get::<Function>("InitCommand")?.call::<()>(actor.clone())?;
+        push_sequence_child_once(&frame, actor.clone())?;
+        unnamed.raw_set(index, actor)?;
+    }
+    actor_children(lua, &frame)?.raw_set("", unnamed)?;
+    // Initialize from actual selected Steps, before authored query observation.
+    // Calling the public command dispatcher here would record extra song events.
+    let game = lua.globals().get::<Table>("GAMESTATE")?;
+    if let Some(steps) = game.get::<Function>("GetCurrentSteps")?
+        .call::<Option<Table>>((game, player_number_name(player)))?
+    {
+        let difficulty = steps.get::<Function>("GetDifficulty")?.call::<String>(steps.clone())?;
+        let color = lua.globals().get::<Function>("DifficultyColor")?.call::<Table>(difficulty)?;
+        quad.get::<Function>("diffuse")?.call::<()>((quad.clone(), color))?;
+        let meter = steps.get::<Function>("GetMeter")?.call::<u32>(steps)?;
+        text.get::<Function>("settext")?.call::<()>((text.clone(), meter))?;
+    }
+    Ok(frame)
+}
+
 pub fn install_underlay_theme_children(
     lua: &Lua,
     underlay: &Table,
@@ -14630,7 +14715,7 @@ pub fn install_underlay_theme_children(
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
 ) -> mlua::Result<()> {
     let children = actor_children(lua, underlay)?;
-    let filters = create_actor_child_group(lua)?;
+    let unnamed = create_actor_child_group(lua)?;
     for &name in UNDERLAY_THEME_CHILD_NAMES {
         // Simply Love builds its PerPlayer underlay actors by iterating
         // GAMESTATE:GetHumanPlayers; an inactive side has no score or pane.
@@ -14655,13 +14740,18 @@ pub fn install_underlay_theme_children(
             && let Some(filter) = create_underlay_background_filter(lua, underlay, player, create_dummy_actor)?
         {
             push_sequence_child_once(underlay, filter.clone())?;
-            filters.raw_set(filters.raw_len() + 1, filter)?;
+            unnamed.raw_set(unnamed.raw_len() + 1, filter)?;
+        }
+        if let Some(player) = underlay_score_index(name) {
+            let meter = create_underlay_difficulty_meter(lua, underlay, player, create_dummy_actor)?;
+            push_sequence_child_once(underlay, meter.clone())?;
+            unnamed.raw_set(unnamed.raw_len() + 1, meter)?;
         }
     }
-    match filters.raw_len() {
+    match unnamed.raw_len() {
         0 => (),
-        1 => children.raw_set("", filters.raw_get::<Table>(1)?)?,
-        _ => children.raw_set("", filters)?,
+        1 => children.raw_set("", unnamed.raw_get::<Table>(1)?)?,
+        _ => children.raw_set("", unnamed)?,
     }
     Ok(())
 }

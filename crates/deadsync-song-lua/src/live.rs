@@ -3756,6 +3756,90 @@ return Def.Actor { OnCommand = function(self) self:sleep(9999) end }
     }
 
     #[test]
+    fn live_underlay_difficulty_meter_owns_native_quad_and_text() {
+        for (width, enabled_p1, enabled_p2) in [(640.0, true, false), (854.0, true, true), (854.0, false, true)] {
+            let source = r#"
+DIFFICULTY_METERS = {}
+return Def.Actor { OnCommand = function()
+    local underlay = SCREENMAN:GetTopScreen():GetChild('Underlay')
+    local unnamed = underlay:GetChildren()['']
+    if unnamed and tostring(unnamed):find('ActorFrame', 1, true) then unnamed = {unnamed} end
+    for _, owner in ipairs(unnamed or {}) do
+        if owner.GetNumChildren and owner:GetNumChildren() == 2 then
+            local parts = owner:GetChildren()['']
+            if parts and #parts == 2 and tostring(parts[1]):find('Sprite', 1, true)
+                and tostring(parts[2]):find('BitmapText', 1, true) then
+                assert(owner:GetParent() == underlay and owner:GetName() == '')
+                assert(parts[1]:GetParent() == owner and parts[2]:GetParent() == owner)
+                assert(parts[1]:GetName() == '' and parts[2]:GetName() == '')
+                assert(parts[1]:GetZoomedWidth() == 30 and parts[1]:GetZoomedHeight() == 30)
+                assert(parts[1]:GetTexture():GetPath() == '')
+                assert(math.abs(parts[2]:GetZoom() - 0.4) < 0.000001)
+                DIFFICULTY_METERS[#DIFFICULTY_METERS + 1] = owner
+            end
+        end
+    end
+    assert(#DIFFICULTY_METERS == #GAMESTATE:GetHumanPlayers(),
+        'Underlay must load each human player native DifficultyMeter frame')
+end }
+"#;
+            let mut compiled = compile_with_context(&format!("underlay-difficulty-{width}-{enabled_p1}-{enabled_p2}"), source, |context| {
+                context.screen_width = width;
+                context.players[0].enabled = enabled_p1;
+                context.players[1].enabled = enabled_p2;
+                context.players[0].difficulty = SongLuaDifficulty::Hard;
+                context.players[1].difficulty = SongLuaDifficulty::Easy;
+                context.player_step_indices = [Some(0), Some(1)];
+                context.song_steps = vec![
+                    crate::SongLuaStep { steps_type: "StepsType_Dance_Single".into(), difficulty: SongLuaDifficulty::Hard,
+                        description: String::new(), chart_name: String::new(), credit: String::new(), meter: 12,
+                        music_file: String::new(), possible_grade_points: 100 },
+                    crate::SongLuaStep { steps_type: "StepsType_Dance_Single".into(), difficulty: SongLuaDifficulty::Easy,
+                        description: String::new(), chart_name: String::new(), credit: String::new(), meter: 4,
+                        music_file: String::new(), possible_grade_points: 100 },
+                ];
+            });
+            let mut scene = compiled.live_scene.take().expect("actual DifficultyMeter actors");
+            let owners = scene.lua.globals().get::<Table>("DIFFICULTY_METERS").unwrap()
+                .sequence_values::<Table>().map(Result::unwrap).collect::<Vec<_>>();
+            let players = [enabled_p1, enabled_p2].iter().enumerate()
+                .filter_map(|(player, enabled)| enabled.then_some(player)).collect::<Vec<_>>();
+            for (owner, player) in owners.iter().zip(players) {
+                let state = read_state(&scene.lua, owner).unwrap();
+                let sign = if player == 0 { -1.0 } else { 1.0 };
+                let offset = if width == 640.0 { 292.5 } else { 342.5 };
+                assert_eq!(state.x, width * 0.5 + sign * offset);
+                assert_eq!(state.y, 56.0);
+                let parts = crate::lua_util::actor_direct_children(&scene.lua, owner).unwrap();
+                let text = &parts[1];
+                assert_eq!(text.raw_get::<String>("Font").unwrap(), "Common Bold");
+                assert_eq!(text.get::<Function>("GetText").unwrap().call::<String>(text.clone()).unwrap(), if player == 0 { "12" } else { "4" });
+                assert_eq!(read_state(&scene.lua, text).unwrap().diffuse, [0.0, 0.0, 0.0, 1.0]);
+                let color = scene.lua.globals().get::<Function>("DifficultyColor").unwrap()
+                    .call::<Table>(if player == 0 { "Difficulty_Hard" } else { "Difficulty_Easy" }).unwrap();
+                assert_eq!(read_state(&scene.lua, &parts[0]).unwrap().diffuse,
+                    std::array::from_fn(|index| color.raw_get::<f32>(index + 1).unwrap()));
+                for part in &parts {
+                    assert!(part.raw_get::<Option<Function>>("BeginCommand").unwrap().is_some());
+                    assert!(part.raw_get::<Option<Function>>("CurrentSongChangedMessageCommand").unwrap().is_some());
+                }
+            }
+            scene.lua.load(r#"
+local steps = GAMESTATE:GetCurrentSong():GetAllSteps()
+for _, player in ipairs(GAMESTATE:GetHumanPlayers()) do GAMESTATE:SetCurrentSteps(player, steps[2]) end
+MESSAGEMAN:Broadcast('CurrentSongChanged')
+"#).exec().unwrap();
+            let output = scene.advance(SongLuaLiveFrame { delta_seconds: 0.01, screen_seconds: 0.01,
+                ..Default::default() }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            for owner in owners {
+                let parts = crate::lua_util::actor_direct_children(&scene.lua, &owner).unwrap();
+                assert_eq!(parts[1].get::<Function>("GetText").unwrap().call::<String>(parts[1].clone()).unwrap(), "4");
+            }
+        }
+    }
+
+    #[test]
     fn live_underlay_background_filter_uses_initial_profile_inputs() {
         for (style, p1, p2, enabled, expected_width, expected_count) in [
             ("single", 75, 0, false, 256, 1),
@@ -3769,7 +3853,7 @@ FILTERS = {}
 return Def.Actor { OnCommand = function()
     local underlay = SCREENMAN:GetTopScreen():GetChild('Underlay')
     local unnamed = underlay:GetChildren()['']
-    if unnamed and tostring(unnamed):find('Sprite', 1, true) then unnamed = {unnamed} end
+    if unnamed and (tostring(unnamed):find('Sprite', 1, true) or tostring(unnamed):find('ActorFrame', 1, true)) then unnamed = {unnamed} end
     for _, child in ipairs(unnamed or {}) do
         if tostring(child):find('Sprite', 1, true) then
             assert(child:GetParent() == underlay and child:GetName() == '')
