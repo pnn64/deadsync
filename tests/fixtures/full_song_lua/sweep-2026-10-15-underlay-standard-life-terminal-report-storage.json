@@ -1,0 +1,37 @@
+{
+  "reason": "Free duplicate raw reports already preserved losslessly as compressed terminal diagnostics; no captures, fixture archives, source files or live inputs are removed.",
+  "reports": [
+    {
+      "raw_path": "/home/parity/jobs/steve-sm-loader-multi-return-first-repair-v1/chart-419/report.json",
+      "raw_bytes": 422166549,
+      "raw_sha256": "df484d635122a8aa685309cf38d72d0d7072478bdaadce714c7a921a145f41d6",
+      "compressed_path": "/home/parity/jobs/steve-sm-loader-multi-return-first-repair-v1/chart-419/report.json.zst",
+      "compressed_bytes": 9629147,
+      "compressed_sha256": "13de30535a7ecaebd44142b422976e95029522799ae2bac99c81da7334d7c449",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "f4bbe952c3984d84e77841ed02aa059b2b5604f0c4241e88855f0ce9c77faf1a",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/lonely-table-find-repair-v1/chart-284/report.json",
+      "raw_bytes": 332284805,
+      "raw_sha256": "402362731d9d7cc294f970c3ea12e51132911a5f673d61d3e59acc39e995c186",
+      "compressed_path": "/home/parity/jobs/lonely-table-find-repair-v1/chart-284/report.json.zst",
+      "compressed_bytes": 4795967,
+      "compressed_sha256": "d9f971deb8a9c9427042921ff33c354a114daa22f249eefc508d17161e96a0c5",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "8014034686ea9459c6c6e5746103eb446aae14c502368e23974d9b392d2d4ad4",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    }
+  ],
+  "raw_report_bytes_removed": 754451354,
+  "free_before": 588681216,
+  "free_after": 1343111168,
+  "mawaru9_helper_hash_unchanged": true,
+  "chart_replays_or_compilers_stopped": false,
+  "acceptance_or_attempt_counts_changed": false
+}
