@@ -966,6 +966,13 @@ impl State {
     fn end_song_lua(&mut self) -> Result<(), String> {
         if self.song_lua_ended { return Ok(()); }
         let Some(scene) = &mut self.song_lua else { return Ok(()); };
+        // ScreenGameplay saves final accounting when leaving the screen,
+        // after normal Player updates have finished the out transition.
+        if self.gameplay.progress.stage.song_completed_naturally
+            && self.gameplay.current_music_time_ns() >= self.gameplay.music_end_time_ns()
+        {
+            self.gameplay.finalize_completed_mines();
+        }
         let output = scene.end().map_err(|error| error.to_string())?;
         scene.apply_output_player_writes(&output, &mut self.gameplay);
         self.song_lua_output.append(output);
@@ -2701,6 +2708,10 @@ pub fn update(
     let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);
     if state.song_lua.is_none() && matches!(action, GameplayAction::Navigate(GameplayExit::Complete)
         | GameplayAction::NavigateNoFade(GameplayExit::Complete)) {
+        // A screen without an owned Lua outro hands off immediately.
+        if state.gameplay.progress.stage.song_completed_naturally {
+            state.gameplay.finalize_completed_mines();
+        }
         let count = state.gameplay.num_players().min(MAX_PLAYERS);
         fail_autoplay_players(&mut state.gameplay.players_runtime.players[..count]);
     }

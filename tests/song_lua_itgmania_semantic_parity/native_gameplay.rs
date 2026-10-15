@@ -1071,9 +1071,13 @@ end }
             profile
         });
         let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
-        let prepared = deadsync_song_lua::playback::prepare_song_lua(
-            &song, &context, deadsync_assets::song_lua::compile_song_lua,
-            deadsync_assets::song_lua::compile_song_lua_layers);
+        let prepared = if script.is_empty() {
+            Default::default()
+        } else {
+            deadsync_song_lua::playback::prepare_song_lua(
+                &song, &context, deadsync_assets::song_lua::compile_song_lua,
+                deadsync_assets::song_lua::compile_song_lua_layers)
+        };
         let mut state = gameplay::init(song, [chart.clone(), chart], [payload.clone(), payload],
             GameplayViewport::default(), GameplaySession::default(), GameplayConfig {
                 global_offset_seconds: -0.008,
@@ -1276,6 +1280,72 @@ return Def.ActorFrame {
         assert_eq!(state.gameplay.players()[0].life, 0.125, "synchronous Lua player writes reach gameplay");
         let later = update_judgment_control(&mut state, avoided + 4_000_000, 2_004_000_000);
         assert!(!later.source_broadcasts.iter().any(|event| event.name == "AvoidMineJudgment"), "each mine dispatches once");
+    }
+
+    #[test]
+    fn gameplay_last_mine_judgment_survives_natural_outro() {
+        let notes = "1000\n0000\n0000\nM000\n";
+        let mut state = owned_judgment_control("last-mine-outro", notes, r#"
+local count=0
+return Def.Actor {
+    OnCommand=function(self) self:sleep(9999) end,
+    JudgmentMessageCommand=function(self, params)
+        if params.TapNoteScore=='TapNoteScore_AvoidMine' then
+            count=count+1
+            MESSAGEMAN:Broadcast('FinalMineJudgment', {count=count})
+        end
+    end,
+}
+"#, 0.0);
+        update_judgment_control(&mut state, -250_000_000, 1_000_000_000);
+        let end = state.gameplay.music_end_time_ns();
+        let mut judgments = Vec::new();
+        let mut effects = Vec::new();
+        let mut navigated = false;
+        for step in -25_i64..=1700 {
+            let now = end + step * 1_000_000;
+            effects.clear();
+            gameplay::update(&mut state, 0.001, GameplayAudioSnapshot {
+                stream_clock: GameplayStreamClockSnapshot { music_nanos:now,
+                    has_music_mapping:true, valid_at_host_nanos:(now+5_000_000_000) as u64,
+                    ..Default::default() }, ..Default::default()
+            }, || (now+5_000_000_000) as u64, &mut effects);
+            let output=state.take_song_lua_output();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            judgments.extend(output.source_broadcasts.into_iter().filter(|event| event.name=="FinalMineJudgment"));
+            if effects.iter().any(|effect| matches!(effect,
+                deadsync_theme_simply_love::SimplyLoveEffect::NavigateNoFade(_))) {
+                navigated=true;
+                break;
+            }
+        }
+        assert_eq!(judgments.len(), 1,
+            "natural outro must keep the final mine's owned Judgment delivery");
+        assert!(navigated, "the owned out transition must finish");
+        assert_eq!(state.gameplay.players()[0].mines_avoided, 1);
+
+        let mut ordinary = owned_judgment_control("last-mine-no-scene", notes, "", 0.0);
+        assert!(ordinary.song_lua.is_none());
+        update_judgment_control(&mut ordinary, -250_000_000, 1_000_000_000);
+        let end=ordinary.gameplay.music_end_time_ns();
+        let mut handed_off = false;
+        for step in -25_i64..=25 {
+            let now=end+step*1_000_000;
+            effects.clear();
+            gameplay::update(&mut ordinary, 0.001, GameplayAudioSnapshot {
+                stream_clock: GameplayStreamClockSnapshot { music_nanos:now,
+                    has_music_mapping:true, valid_at_host_nanos:(now+5_000_000_000) as u64,
+                    ..Default::default() }, ..Default::default()
+            }, || (now+5_000_000_000) as u64, &mut effects);
+            if effects.iter().any(|effect| matches!(effect,
+                deadsync_theme_simply_love::SimplyLoveEffect::Navigate(_))) {
+                handed_off=true;
+                break;
+            }
+        }
+        assert!(handed_off, "ordinary gameplay must request its evaluation handoff");
+        assert_eq!(ordinary.gameplay.players()[0].mines_avoided, 1,
+            "ordinary gameplay must finalize counters before immediate evaluation handoff");
     }
 
     #[test]

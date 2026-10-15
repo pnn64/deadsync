@@ -157,7 +157,8 @@ where
                 }
             }
             self.begin_outro_attack_clear();
-            self.finalize_completed_mines();
+            // The screen still judges notes during its out transition. Final
+            // mine accounting belongs to the actual evaluation handoff.
             return Some(GameplayAction::Navigate(GameplayExit::Complete));
         }
 
