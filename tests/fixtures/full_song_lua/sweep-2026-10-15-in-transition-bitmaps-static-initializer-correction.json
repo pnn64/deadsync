@@ -1,0 +1,29 @@
+{
+  "green_v1_compile_failure_both_hosts": true,
+  "rust_error": "E0492",
+  "cause": "A promoted reference to an array containing OnceLock cannot be used in this static initializer.",
+  "correction": "Store the array directly in the static; keep all 23 bitmap records and lazy preparation behavior unchanged.",
+  "only_production_change_v1_v2": "static slice reference becomes a static array of length23",
+  "regression_source_identical_green_v1_v2": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 15.346995700005209,
+      "log_sha256": "8b20d4d0565a1501766f8fb8fa0650a41f61d89dd078777f6720651882460388",
+      "results": []
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 37.162707356968895,
+      "log_sha256": "f4f6636eee6e823f213f31f3bff6a736d6de5619807c5cd5afc1aaf6e48a3fa5",
+      "results": []
+    }
+  ],
+  "no_green_tests_or_chart_replays_ran_from_failed_compile": true,
+  "full_chart_repairs_spent": 0,
+  "native_capture_changed": false
+}
