@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "WOP/WOP.ssc",
+  "native_frames": 97282,
+  "replayed_frames": 97282,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "41f228078a2190b770ff47b500c187161787d123a7e917d7b7773dac7d6acd66.tar.zst",
+  "compressed_sha256": "41f228078a2190b770ff47b500c187161787d123a7e917d7b7773dac7d6acd66",
+  "uncompressed_sha256": "68421b4dc0af898026ab0717d9d0200391a4293f6aa6c59fd58bffebb71b6bee",
+  "compressed_bytes": 25389205,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
