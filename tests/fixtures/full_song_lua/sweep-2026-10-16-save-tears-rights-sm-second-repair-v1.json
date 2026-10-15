@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "Rights2 SM final2 bounded repair complete; retained original capture and full comparisons unchanged; no further full repair if pending",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "bf010199f6acec3e06f2d429c471fbe846491b48",
