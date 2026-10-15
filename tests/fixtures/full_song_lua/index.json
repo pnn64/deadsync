@@ -3675,15 +3675,12 @@
     {
       "title": "MAWARU! SETSUGETSUKA!",
       "source_simfile": "mawaru8/mawaru8.sm",
-      "harness_version": "0.1.0",
-      "archive": "563f40565c419e299a0e956ba002854bd02cb498a809dfaa0130244f3b4026f8.tar.zst",
-      "sha256": "563f40565c419e299a0e956ba002854bd02cb498a809dfaa0130244f3b4026f8",
-      "compressed_bytes": 8407611,
-      "uncompressed_sha256": "c6c8118b1c8d446a33145fd146ea8416d65773cfd08f85a331c1e356c9f7e296",
-      "compression_level": 22,
-      "aliases": [
-        "bdc55380af73940d7fc3beb77b60494e6507b330de36d3496fa7591baddc6700.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "ee1cd83a8822f6809cdfedef10871a04a83814aad1f667e03794539dff600942.tar.zst",
+      "sha256": "ee1cd83a8822f6809cdfedef10871a04a83814aad1f667e03794539dff600942",
+      "compressed_bytes": 27120445,
+      "uncompressed_sha256": "6371f5c7299efa1afae969b3dc7b0f033aa78702ed72161af14fe0a068a7f91f",
+      "aliases": []
     },
     {
       "title": "MAX 300 (BlaZe MIX)",
