@@ -1,0 +1,70 @@
+{
+  "source_simfile": "What A Wonderful World/WAWW.sm",
+  "position": 471,
+  "status": "running",
+  "repair_attempt": 1,
+  "previous_full_repairs": 0,
+  "maximum_full_repairs_per_sweep": 2,
+  "entry_evidence": "sweep-2026-10-16-waww-qualified-entry-diagnostic.json",
+  "entry_frames": 1016,
+  "entry_errors": 0,
+  "entry_mismatches": 0,
+  "native_frames": 7119,
+  "attempt_start": {
+    "position": 471,
+    "source_simfile": "What A Wonderful World/WAWW.sm",
+    "status": "pending",
+    "repair_attempts": 1,
+    "candidate_sha256": "8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c",
+    "trace_sha256": "a68b0341299dde7797f9b55eabd8f7dc50630c93c8d8d0f4d064e69b8eedccf9",
+    "simfile_sha256": "44d9e8c548a43bfbf4e7b1f35229c66a5063759098784abd70c542409d7f22b5",
+    "native_capture_reused": true,
+    "all_candidate_manifest_members_byte_verified": true,
+    "binary_sha256": "6a2dfe1c2e802c83bf102deac4f4476c86ab3ba93652f9a8817f99420b844162",
+    "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "build_proof": "/home/parity/jobs/timing-window-labels-linux-green-v1/proof.json",
+    "fix_commit": "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd",
+    "previous_failure": "",
+    "previous_errors": [],
+    "qualified_existing_underlay_fixes": [
+      "135dcdfd107e0b2cf527c010b827593139433102",
+      "2e561959d28baded6219078922c8fd38012aaaf5",
+      "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd"
+    ],
+    "no_query_outputs_used_as_inputs": true,
+    "original_full_failure": "Original full replay produced no report or log; retained original capture has complete gameplay and no dropped data. Qualified helper entry passes1016 frames with0errors/0mismatches; full acceptance remains unproven.",
+    "full_acceptance_criteria_unchanged": true,
+    "capture_repeated": false,
+    "mawaru9_remains_deferred": true
+  },
+  "actual_running_observation": {
+    "source_simfile": "What A Wonderful World/WAWW.sm",
+    "attempt_started": 1,
+    "pid": 2155531,
+    "actual_command": [
+      "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c.tar",
+      "--report",
+      "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/report.json"
+    ],
+    "recorded_command": [
+      "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c.tar",
+      "--report",
+      "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/report.json"
+    ],
+    "actual_command_matches_record": true,
+    "running": true,
+    "phase": "replay",
+    "result_exists": false,
+    "terminal_result": null,
+    "checked_utc": "2026-10-15T22:29:26.534867+00:00"
+  },
+  "original_candidate_uncompressed_hash": "8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c",
+  "native_capture_reused": true,
+  "existing_full_comparisons_unchanged": true,
+  "no_fixture_acceptance_claimed": true,
+  "mawaru9_remains_deferred": true
+}

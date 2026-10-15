@@ -1,6 +1,6 @@
 {
-  "generated_utc": "2026-10-15T22:23:23.312884+00:00",
-  "concrete_ledger_sha256": "574649b9641b14614754e12dd58c151c4f2031bf0f558d8b8838a8bf7f377043",
+  "generated_utc": "2026-10-15T22:29:31.472913+00:00",
+  "concrete_ledger_sha256": "061a663bbe2453968699745bd9ab6d4e30fa109bc9cdb69bd398f369bc9bdc4b",
   "counts": {
     "passed": 399,
     "pending": 102,
@@ -20,5 +20,32 @@
     "completed_full_replay": false,
     "restart_requires_user_resuming_chart": true
   },
-  "no_chart_replays_or_source_mutations": true
+  "no_chart_replays_or_source_mutations": true,
+  "additional_running_repairs_not_counted_as_terminal": [
+    {
+      "source_simfile": "What A Wonderful World/WAWW.sm",
+      "attempt_started": 1,
+      "pid": 2155531,
+      "actual_command": [
+        "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c.tar",
+        "--report",
+        "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/report.json"
+      ],
+      "recorded_command": [
+        "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c.tar",
+        "--report",
+        "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/report.json"
+      ],
+      "actual_command_matches_record": true,
+      "running": true,
+      "phase": "replay",
+      "result_exists": false,
+      "terminal_result": null,
+      "checked_utc": "2026-10-15T22:29:34.115171+00:00"
+    }
+  ]
 }

@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T22:23:23Z",
+  "updated_utc": "2026-10-15T22:29:31Z",
   "counts": {
     "passed": 399,
     "pending": 102,
@@ -18296,7 +18296,7 @@
           ],
           "report_sha256": "e81ce27d074e87b2d91553bc7ef98f8837779a34405209b0c58362777aafdf5b"
         },
-        "checked_utc": "2026-10-15T22:23:24.379982+00:00"
+        "checked_utc": "2026-10-15T22:29:32.127747+00:00"
       },
       "full_replay_completed": true
     },
@@ -23408,11 +23408,40 @@
       "completion": null,
       "no_third_full_repair": false,
       "concrete_terminal_outcome": "full replay exit 1; no replay report or error text retained",
-      "followup": "sweep-2026-10-15-waww-no-report-entry-diagnostic.json",
+      "followup": "sweep-2026-10-16-waww-first-repair-launch.json",
       "entry_diagnostic_frames": 1016,
       "entry_diagnostic_errors": 0,
       "entry_diagnostic_mismatches": 0,
-      "original_full_exit1_cause_unproven": true
+      "original_full_exit1_cause_unproven": true,
+      "entry_evidence": "sweep-2026-10-16-waww-qualified-entry-diagnostic.json",
+      "started_full_repairs": 1,
+      "new_full_repair_started": true,
+      "actual_running_observation": {
+        "source_simfile": "What A Wonderful World/WAWW.sm",
+        "attempt_started": 1,
+        "pid": 2155531,
+        "actual_command": [
+          "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+          "--archive",
+          "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c.tar",
+          "--report",
+          "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/report.json"
+        ],
+        "recorded_command": [
+          "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+          "--archive",
+          "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c.tar",
+          "--report",
+          "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/report.json"
+        ],
+        "actual_command_matches_record": true,
+        "running": true,
+        "phase": "replay",
+        "result_exists": false,
+        "terminal_result": null,
+        "checked_utc": "2026-10-15T22:29:32.524653+00:00"
+      },
+      "current_diagnostic_failure": "Historical blank/no-report infrastructure result; current retained-capture entry is clean, awaiting first bounded full repair on all7119 native frames"
     },
     {
       "position": 474,
