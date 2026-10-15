@@ -1,0 +1,12 @@
+{
+  "fix_commit": "7efd988fdcc73bb3601b9b60981e5e89bbe0d21c",
+  "source_root": "/home/parity/workspace/player-attack-display-green-v1/deadsync",
+  "binary_sha256": "b4903ea2d0a7be4107dae95752351bfc6b1a70d50fe0f3b58423e229bda31a88",
+  "build_proof": "/home/parity/jobs/player-attack-display-linux-green-v1/proof.json",
+  "all_four_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "construct the regular-mode unnamed Player AttackDisplay, native ordered child inventory and full unnamed identity group while retaining separate per-column hold feedback indices",
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
