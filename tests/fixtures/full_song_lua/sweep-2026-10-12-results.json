@@ -13813,6 +13813,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 443,
+      "source_simfile": "Toho Mathematics (LADIES CHECK THIS OUT)/thischartsucks.ssc",
+      "simfile_sha256": "5effc07169fdd5a5246331d3b08fe26cfbaf83ff59db11aed2401e076c18b5de",
+      "retained_original_archive": "39bd9326b5af6b1516595b7227dc571abb107bc5e10287f32dbd902e275788d8.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 190.6471106550016,
+      "trace_sha256": "6c324e4fb77784cf74ea45372b624375827754799b8e73827cf7754bd6f9ae8f",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-443/candidates/9590969e0e87bf5d84b9938dbae40a6da9e9ead94b2f632890b1a01aebce2676.tar",
+      "replay_exit": 0,
+      "replay_seconds": 5812.288655827026,
+      "candidate_sha256": "9590969e0e87bf5d84b9938dbae40a6da9e9ead94b2f632890b1a01aebce2676",
+      "native_frames": 107886,
+      "replayed_frames": 107886,
+      "compared_stage_fields": 1914,
+      "pending_coverage": [
+        "uncompared song operations: Actor.addy, Actor.horizalign, Actor.vertalign, Actor.xy, Actor.zoomy, BitmapText.settext, Screen.AddInputCallback",
+        "native drawable state/resources: BitmapText, Quad, Sound, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "3c25a603bd01806e1d5a34ae3a6a3a5a4168335feb2aad81386ea91a759c8ea9",
+      "archive": "0c936b75ff4e34510b739ac580295491c73633fe247edea1e5898c4f9825e5c5.tar.zst",
+      "archive_sha256": "0c936b75ff4e34510b739ac580295491c73633fe247edea1e5898c4f9825e5c5",
+      "compressed_bytes": 6670962,
+      "pack_seconds": 5.345304276997922,
+      "harness_version": "0.1.80",
+      "title": "Toho Mathematics FOR LOOSERS",
+      "retained_original_entry": {
+        "title": "Toho Mathematics",
+        "source_simfile": "Toho Mathematics (LADIES CHECK THIS OUT)/thischartsucks.ssc",
+        "harness_version": "0.1.0",
+        "archive": "39bd9326b5af6b1516595b7227dc571abb107bc5e10287f32dbd902e275788d8.tar.zst",
+        "sha256": "39bd9326b5af6b1516595b7227dc571abb107bc5e10287f32dbd902e275788d8",
+        "compressed_bytes": 365074,
+        "uncompressed_sha256": "a2ece650c83843e617e6b5f53597b50ee472c52a8f478d5366dd256743edd645",
+        "compression_level": 22,
+        "aliases": [
+          "7a50caf8b8768a4567159f1f88864f329709632025f8eade484ff697b8040186.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -13836,9 +13887,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "3798f99ea5c422be954723988f690d004859bb0b0843b131ca938ae0b0d688f9",
+  "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 38,
+  "passed_fixtures": 39,
   "pending_charts": 64,
-  "processed_charts": 102
+  "processed_charts": 103
 }
