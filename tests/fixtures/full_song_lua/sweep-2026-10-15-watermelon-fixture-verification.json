@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Watermelon/Watermelon.ssc",
+  "native_frames": 35146,
+  "replayed_frames": 35146,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "97f3faf740806904d89d02cbcd7fef19f8b318ae6789dfa2b0ad8393dc634a02.tar.zst",
+  "compressed_sha256": "97f3faf740806904d89d02cbcd7fef19f8b318ae6789dfa2b0ad8393dc634a02",
+  "uncompressed_sha256": "64c79042b9532976cb37879a1be59d7e441e96351930ef2729793a15d11970b7",
+  "compressed_bytes": 15404851,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
