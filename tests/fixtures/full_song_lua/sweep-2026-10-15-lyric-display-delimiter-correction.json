@@ -1,0 +1,37 @@
+{
+  "meaningful_red_regression_unchanged": true,
+  "initial_green_checks": [
+    {
+      "host": "windows",
+      "original_failed_check": {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 14.604361699995934,
+        "log_sha256": "8add604bcf7aff6572985d9d6d54a22e57e554377e081a9180ef5899e82dbd09",
+        "results": []
+      },
+      "reason": "compile error before test execution: native Lua color string contains the initial Rust raw-string closing delimiter"
+    },
+    {
+      "host": "linux",
+      "original_failed_check": {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 29.58179744199151,
+        "log_sha256": "cea893b5f6d88c70ad5e0d4052fdf91196fe41e65d633339d3fa31dcccb3f4b8",
+        "results": []
+      },
+      "reason": "compile error before test execution: native Lua color string contains the initial Rust raw-string closing delimiter"
+    }
+  ],
+  "only_production_correction": "Increase the enclosing Rust raw-string delimiter from r# to r##; the embedded native Lua helper body and all other production code remain byte-identical.",
+  "native_lua_function_body_identical_to_primary_source": true,
+  "entire_regression_source_identical_red_green_v1_green_v2": true,
+  "frozen_failed_v1_roots_and_logs_preserved": true,
+  "new_green_v2_roots_used": true,
+  "superseded_waiting_collector_pid": 49856,
+  "old_collector_stopped_before_fix_commit_selection_or_entry_launch": true,
+  "chart_replay_stopped_or_restarted": false,
+  "full_chart_repairs_added": 0,
+  "acceptance_comparisons_changed": false
+}
