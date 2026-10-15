@@ -1,0 +1,37 @@
+{
+  "reason": "Free duplicate raw reports already preserved losslessly as compressed terminal diagnostics; no captures, fixture archives, source files or live inputs are removed.",
+  "reports": [
+    {
+      "raw_path": "/home/parity/jobs/hope-step-statistics-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62396023,
+      "raw_sha256": "daa8ab22b807b9f11ec59ddb2cda6a602f1ee244fd07c07a0a76f43616fafe22",
+      "compressed_path": "/home/parity/jobs/hope-step-statistics-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 966210,
+      "compressed_sha256": "e879213be381331ead3e109dc40a66c5d1fd9a949a5953cd4b83463feedc80c2",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "0e9ece47e4f8e761b03c0dd4190091abc3553cad0ac7c06c0be2262d68f1b1b7",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-amv-texture-observer-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62393307,
+      "raw_sha256": "5f323747c2e5f2e32e3e2bb522ea76cc7da6b234f0c47fae00444a78655c2341",
+      "compressed_path": "/home/parity/jobs/hope-amv-texture-observer-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 876156,
+      "compressed_sha256": "6ea49aec6870c90fc41425cd71d88ee46cc874e2d424d2bc19a110594cf54a86",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "6f0fe2454424c853df93d4ddd26b8051b7a4746f6d2d9c6474b99f87c8cdb535",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    }
+  ],
+  "raw_report_bytes_removed": 124789330,
+  "free_before": 198500352,
+  "free_after": 321470464,
+  "mawaru9_helper_hash_unchanged": true,
+  "chart_replays_or_compilers_stopped": false,
+  "acceptance_or_attempt_counts_changed": false
+}
