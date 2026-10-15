@@ -1,0 +1,16 @@
+{
+  "fix_commit": "fa9b72f49badac89ba2bda525cae90e28bffd636",
+  "binary_sha256": "7f19b47e05d7c20f911a83920ed84b1b950d03c307a19ea8024d1d702ef0ab4b",
+  "source_root": "/home/parity/workspace/oni-game-over-bitmap-green-v2/deadsync",
+  "build_proof": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v2/proof.json",
+  "all_twenty_three_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "asset_sha256": {
+    "crates/deadsync-song-lua/assets/itgmania/_blank.png": "1bc6840fdf516b59b9439951834326ca1643f014ed0767d6bb3da3ae39768868"
+  },
+  "scope": "load the actual104-byte native fallback blank PNG into OniGameOver Sprite resources; retain original4x2 size and prepared8x8 pixels through immediate and queued renderer upload; preserve native resource filename, unload and retained binding",
+  "native_capture_reused": true,
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
