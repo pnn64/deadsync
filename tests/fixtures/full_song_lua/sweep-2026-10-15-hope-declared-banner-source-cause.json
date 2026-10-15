@@ -97,7 +97,11 @@
   "previous_AMV_observer_and_default_texture_failures_resolved": true,
   "original_native_capture_and_members_reused_unchanged": true,
   "full_repairs_spent": 0,
-  "production_declared_banner_fix_added": false,
+  "production_declared_banner_fix_added": true,
   "expected_trace_query_values_used_as_inputs": false,
-  "next_action": "Complete a private candidate with the exact original declared bannrt.png bytes while preserving every original member and native trace byte. Use real parsed song banner metadata in production context and Song.HasBanner/GetBannerPath; implement source-correct Banner.LoadFromSong selection and fallback. Qualify meaningful declared-file/resource assertions on both hosts before another retained entry. Do not run a full HOPE repair while this known entry failure remains."
+  "next_action": "Declared-banner source/input/runtime failure resolved. Continue from sweep-2026-10-15-hope-timing-window-label-source-cause.json.",
+  "resolved_by_commit": "520e261907a0e57d075e2fe932834620f91d7a7c",
+  "resolved_entry_evidence": "sweep-2026-10-15-hope-declared-banner-entry-diagnostic.json",
+  "first_remaining_native_seq_after_fix": 773,
+  "declared_banner_seq727_no_longer_first_failure": true
 }

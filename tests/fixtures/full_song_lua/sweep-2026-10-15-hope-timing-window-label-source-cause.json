@@ -1,0 +1,87 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "entry_evidence": "sweep-2026-10-15-hope-declared-banner-entry-diagnostic.json",
+  "entry_frames": 1688,
+  "entry_errors": 0,
+  "entry_mismatches": 20499,
+  "first_remaining_native_seq": 773,
+  "first_remaining_mismatch": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "external-0151",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 36,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          12
+        ]
+      },
+      "kind": "query",
+      "line": 36,
+      "operation": "ActorFrame.GetNumChildren",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 773,
+      "source": "song:/sm5/modules/grabactors.lua",
+      "results": [
+        12
+      ]
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "query",
+      "operation": "ActorFrame.GetNumChildren",
+      "source": "song:/sm5/modules/grabactors.lua",
+      "line": 36,
+      "phase": "callback",
+      "beat": -15.99990177154541,
+      "seconds": -4.08297061920166,
+      "args": [],
+      "results": [
+        10
+      ]
+    }
+  },
+  "native_actor": "external-0151",
+  "native_actor_path": "ScreenGameplay/Underlay/StepStatsPaneP1/BannerAndData/TapNoteJudgments",
+  "source_cause": "Captured original initial TimingWindows are all five true and ShowFaPlusWindow is false. Original TapNoteJudgments.lua creates six value actors and one label for each enabled timing window plus Miss, giving twelve children. Owned create_sl_player_mods hardcodes true,true,true,false,false, so the same original Lua omits the W4/W5 label actors, giving ten. Native SL_Init defaults all five true; SetGameModePreferences only substitutes false,false in Casual mode. The real initial timing-window inputs must reach owned SL modifiers rather than using the Casual pattern for every mode.",
+  "captured_initial_timing_windows": [
+    true,
+    true,
+    true,
+    true,
+    true
+  ],
+  "captured_initial_show_fa_plus_window": false,
+  "captured_initial_input_evidence": "sweep-2026-10-15-hope-combo-input-and-entry-evidence.json",
+  "owned_hardcoded_timing_windows": [
+    true,
+    true,
+    true,
+    false,
+    false
+  ],
+  "owned_source": "crates/deadsync-song-lua/src/sl.rs:create_sl_player_mods",
+  "native_primary_sources": {
+    "Scripts/SL_Init.lua": "a85b52a9100e0eed3ddc3a2c873b8b1b211d6a9d99108c306ea8ae9b536089a9",
+    "Scripts/SL-Helpers.lua": "3896aa23cbb8dfe07372566053adc7eb961f3b1bb1d076ddbd8757b13d0c45cf",
+    "BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/TapNoteJudgments.lua": "e52bc6d4e78d4bf1c0a8122a8b33e9185a2f7bc4a189a46976cd72b221c6f8bd"
+  },
+  "native_physical_source_hashes_verified_equal_local": true,
+  "declared_banner_failure_at_seq727_resolved": true,
+  "declared_banner_fix_commit": "520e261907a0e57d075e2fe932834620f91d7a7c",
+  "original_capture_and_payloads_reused_unchanged": true,
+  "expected_trace_queries_used_as_inputs": false,
+  "full_repairs_spent": 0,
+  "fix_added": false,
+  "next_action": "Forward real player timing-window inputs through production context into SL.ActiveModifiers.TimingWindows and add a meaningful regression for actual original TapNoteJudgments label construction. Qualify both hosts before retained entry; no full HOPE repair while this known entry failure remains. Mawaru9 remains deferred."
+}
