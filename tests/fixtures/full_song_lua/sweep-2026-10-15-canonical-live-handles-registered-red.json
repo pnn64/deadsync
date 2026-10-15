@@ -1,0 +1,38 @@
+{
+  "both_hosts_registered_actor_red_reproduced": true,
+  "all_1175_raw_linux_and_cross_platform_normalized_source_pins_verified": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 241.73950097401394,
+      "log_sha256": "17f3f04de970ed72032c2ffe552724a8fe77b2a950c8824c7fa7dcd7b735fba3",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 618 filtered out; finished in 5.25s"
+      ]
+    }
+  ],
+  "linux_proof_sha256": "c4002685b416324e011287ed2ad63d0d5e569fb524ec7469b255c3b9b49a2b50",
+  "expected_failure": "construct large live scene: StackError",
+  "regression": "live_large_scene_preserves_actor_identity_and_update_order",
+  "actor_count": 2800,
+  "runtime_actor_registration_matches_compiler": true,
+  "full_chart_repairs_spent": 0,
+  "resource_limits_increased": false,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 316.4777377999999,
+      "log_sha256": "19bee62c17926b920da8f73a6f762bf21743902d16557e8726dc1b9964996779",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 620 filtered out; finished in 6.58s"
+      ]
+    }
+  ],
+  "windows_all_1175_preserved_source_pins_and_log_hashes_verified": true,
+  "entire_regression_function_identical_between_red_and_green": true,
+  "production_patch_added": true,
+  "production_patch_committed": false,
+  "all_seventeen_green_groups_not_yet_terminal": true
+}
