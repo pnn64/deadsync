@@ -5585,15 +5585,12 @@
     {
       "title": "You are Goomba Play ITG",
       "source_simfile": "You are Goomba Play ITG/You are Gooma Play ITG.sm",
-      "harness_version": "0.1.0",
-      "archive": "966162336e990bbdb3fab673bfea8e02192993e8b5791b62f8c3d65738ebc45c.tar.zst",
-      "sha256": "966162336e990bbdb3fab673bfea8e02192993e8b5791b62f8c3d65738ebc45c",
-      "compressed_bytes": 30741,
-      "uncompressed_sha256": "e25119d1993cc3f329ffcb292fd911731c1f90bccb5d2b78d230be37d8035ef7",
-      "compression_level": 22,
-      "aliases": [
-        "7fa713c9083ab6d451f9829b02fc92ee51178acf2fed7f3daa7016c23ee102a5.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "40e22dbac58c4db515f88f16a60581a8528d3618deafc0d99c72738b6f2bf41c.tar.zst",
+      "sha256": "40e22dbac58c4db515f88f16a60581a8528d3618deafc0d99c72738b6f2bf41c",
+      "compressed_bytes": 6882789,
+      "uncompressed_sha256": "b1660dbd403996addd00f926908a1fae82de9058f12d170fd63c11a2851aeeef",
+      "aliases": []
     },
     {
       "title": "You are Goomba Play ITG",
