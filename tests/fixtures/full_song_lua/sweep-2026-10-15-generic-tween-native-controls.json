@@ -1,0 +1,82 @@
+{
+  "native_harness_sha256": "e067360d8120ee0a174b0848832856325ef62b709287fb48976441a277b26563",
+  "checks": [
+    {
+      "name": "arguments",
+      "exit_code": 0,
+      "input_sha256": "9bb72bdb7e45708b707d723eddfb9b789869632155a5cb29ae364bdf9daffe0d",
+      "output_sha256": "9ce62ebe3e3a101218127df83f12e2b25578446cfccb025dbc17239af42eb4b1",
+      "script_errors": [
+        "Lua: tween(-1.000000): tween time must not be negative",
+        "Tween::CreateFromStack: table argument must have 4 or 8 entries"
+      ],
+      "diagnostics": [
+        "Lua: tween(-1.000000): tween time must not be negative",
+        "Tween::CreateFromStack: table argument must have 4 or 8 entries"
+      ]
+    },
+    {
+      "name": "curves",
+      "exit_code": 0,
+      "input_sha256": "8aa54dcc3f8be881df5b988f61a684acbd6259d1cbe1b0cfc741c93849c40bed",
+      "output_sha256": "6591f114b80e6054ac210ced6103f261c3dd5df53ca79411973c8ebfbf16755f",
+      "script_errors": null,
+      "diagnostics": null
+    }
+  ],
+  "chart_full_repair_attempts_spent": 0,
+  "native_nonfatal_duration_and_length_diagnostics_verified": true,
+  "native_argument_control_preserves_queue_and_identity": true,
+  "curve_probes": {
+    "linear": [
+      0.0,
+      0.25,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "accelerate": [
+      0.0,
+      0.0625,
+      0.25,
+      0.5625,
+      1.0
+    ],
+    "decelerate": [
+      0.0,
+      0.4375,
+      0.75,
+      0.9375,
+      1.0
+    ],
+    "spring": [
+      0.0,
+      1.2186763286590576,
+      1.2828426361083984,
+      0.7157293558120728,
+      1.0000001192092896
+    ],
+    "bezier4": [
+      0.20000000298023224,
+      0.17500002682209015,
+      0.6000000834465027,
+      1.0999999046325684,
+      1.2999999523162842
+    ],
+    "bezier8": [
+      0.026412196457386017,
+      0.22954142093658447,
+      0.5226672291755676,
+      0.8055100440979004,
+      0.9809136390686035
+    ]
+  },
+  "primary_source_sha256": {
+    "..\\itgmania-harness\\vendor\\itgmania\\src\\Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "..\\itgmania-harness\\vendor\\itgmania\\src\\Tween.cpp": "ae2bcbe0c6e69eaea571467508f8379dd2b8b53b076a9310d300a0c5d9f6d429",
+    "..\\itgmania-harness\\vendor\\itgmania\\src\\RageMath.cpp": "928349632d1e72ea5d1e59e53d5f71f4f2ae845e85e5d5cb8e95ac7b675bac89"
+  },
+  "native_values_used_only_as_regression_expectations": true,
+  "live_gameplay_inputs_derived_from_authored_tween_arguments": true,
+  "acceptance_comparisons_changed": false
+}

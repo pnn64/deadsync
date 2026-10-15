@@ -1,0 +1,82 @@
+{
+  "storage_only": true,
+  "passing_charts_replayed": false,
+  "reclaimed_allocated_bytes": 2540158976,
+  "records": [
+    {
+      "source_simfile": "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc",
+      "closed_full_pass": true,
+      "archive_decompressed_bytes_verified": true,
+      "raw_duplicates_removed": [
+        {
+          "path": "/home/parity/jobs/who-edgar-storage-first-repair-v1/chart-473/f15ee0cddf02932b656262f9a5878f32f12a844ddd1e2d7ec5baff30df231a93.tar",
+          "sha256": "f15ee0cddf02932b656262f9a5878f32f12a844ddd1e2d7ec5baff30df231a93",
+          "lossless_copy": "/home/parity/jobs/who-edgar-storage-first-repair-v1/chart-473/accepted/9a539969dba52899892fbfd70243f57352ea0fe8fc3330814acac77a26b8ccd9.tar.zst",
+          "reclaimed_allocated_bytes": 1241210880
+        },
+        {
+          "path": "/home/parity/jobs/who-edgar-storage-first-repair-v1/chart-473/report.json",
+          "sha256": "dfb4d09c6443ba06f241898d9d8a0841b17cdf1bef8d067f05cec3787133ec7f",
+          "lossless_copy": "/home/parity/jobs/who-edgar-storage-first-repair-v1/chart-473/report.json.zst",
+          "reclaimed_allocated_bytes": 574169088
+        }
+      ]
+    },
+    {
+      "source_simfile": "iLLness LiLin/iLLness LiLin.ssc",
+      "closed_full_pass": true,
+      "archive_decompressed_bytes_verified": true,
+      "raw_duplicates_removed": [
+        {
+          "path": "/home/parity/jobs/illness-lilin-entry-clock-first-repair-v1/chart-241/a431032570bbe464640d8e9a248df755d90222ce9a06efb4df1a7e19f72eb8cc.tar",
+          "sha256": "a431032570bbe464640d8e9a248df755d90222ce9a06efb4df1a7e19f72eb8cc",
+          "lossless_copy": "/home/parity/jobs/illness-lilin-entry-clock-first-repair-v1/chart-241/accepted/1b00bc9e88f70761ada1c12dfd37581ab79bc146b0ee774a8683a9d1de9b2669.tar.zst",
+          "reclaimed_allocated_bytes": 0
+        },
+        {
+          "path": "/home/parity/jobs/illness-lilin-entry-clock-first-repair-v1/chart-241/report.json",
+          "sha256": "8eb18237a6feca99e3baaa8621bf9031c3dfbadc090c9d9acc4e5a249ed7756f",
+          "lossless_copy": "/home/parity/jobs/illness-lilin-entry-clock-first-repair-v1/chart-241/report.json.zst",
+          "reclaimed_allocated_bytes": 510500864
+        }
+      ]
+    },
+    {
+      "source_simfile": "Wake Up/Wake Up.ssc",
+      "closed_full_pass": true,
+      "archive_decompressed_bytes_verified": true,
+      "raw_duplicates_removed": [
+        {
+          "path": "/home/parity/jobs/wake-up-ssc-listener-first-repair-v1/chart-466/d441ccf0f454966757144e0165a0b62e34fb1fcc538964a31204ffe55dc69a58.tar",
+          "sha256": "d441ccf0f454966757144e0165a0b62e34fb1fcc538964a31204ffe55dc69a58",
+          "lossless_copy": "/home/parity/jobs/wake-up-ssc-listener-first-repair-v1/chart-466/accepted/84dc20777ca1534dfe694b61d3a53fa41161e78d2638ac50d75ab99998472029.tar.zst",
+          "reclaimed_allocated_bytes": 125206528
+        },
+        {
+          "path": "/home/parity/jobs/wake-up-ssc-listener-first-repair-v1/chart-466/report.json",
+          "sha256": "422be4d288bfebadb3600e6bb7c5ce1a7f9e0fea303cf7b7f72ed8a12f6021a5",
+          "lossless_copy": "/home/parity/jobs/wake-up-ssc-listener-first-repair-v1/chart-466/report.json.zst",
+          "reclaimed_allocated_bytes": 89071616
+        }
+      ]
+    },
+    {
+      "source_simfile": "[12] Ascendanz/Ascendanz.ssc",
+      "closed_full_pass": true,
+      "archive_decompressed_bytes_verified": true,
+      "raw_duplicates_removed": []
+    },
+    {
+      "source_simfile": "Rayc Fire 2/Rayc Fire 2.ssc",
+      "closed_full_pass": true,
+      "archive_decompressed_bytes_verified": true,
+      "raw_duplicates_removed": []
+    },
+    {
+      "source_simfile": "Toho Mathematics (LADIES CHECK THIS OUT)/thischartsucks.ssc",
+      "closed_full_pass": true,
+      "archive_decompressed_bytes_verified": true,
+      "raw_duplicates_removed": []
+    }
+  ]
+}
