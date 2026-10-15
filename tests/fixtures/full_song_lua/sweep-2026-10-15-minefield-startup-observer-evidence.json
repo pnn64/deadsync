@@ -1,0 +1,261 @@
+{
+  "samples": [
+    {
+      "phase": "overlay-init",
+      "scene": 1,
+      "seconds": 1.3663380146026611,
+      "wall_seconds": null,
+      "difficulty": "Difficulty_Challenge",
+      "keys": [
+        "beat",
+        "gameplay_seconds",
+        "phase",
+        "players",
+        "scene",
+        "seconds"
+      ]
+    },
+    {
+      "phase": "screen-active",
+      "scene": 1,
+      "seconds": -1.9999773502349854,
+      "wall_seconds": null,
+      "difficulty": "Difficulty_Challenge",
+      "keys": [
+        "beat",
+        "gameplay_seconds",
+        "phase",
+        "players",
+        "scene",
+        "seconds"
+      ]
+    },
+    {
+      "phase": "progress",
+      "scene": 1,
+      "seconds": -1.9999773502349854,
+      "wall_seconds": null,
+      "difficulty": "Difficulty_Challenge",
+      "keys": [
+        "beat",
+        "gameplay_seconds",
+        "phase",
+        "players",
+        "scene",
+        "seconds"
+      ]
+    },
+    {
+      "phase": "screen-end",
+      "scene": 1,
+      "seconds": -1.9999773502349854,
+      "wall_seconds": null,
+      "difficulty": "Difficulty_Edit",
+      "keys": [
+        "beat",
+        "gameplay_seconds",
+        "phase",
+        "players",
+        "scene",
+        "seconds"
+      ]
+    },
+    {
+      "phase": "overlay-init",
+      "scene": 2,
+      "seconds": -1.9999773502349854,
+      "wall_seconds": null,
+      "difficulty": "Difficulty_Edit",
+      "keys": [
+        "beat",
+        "gameplay_seconds",
+        "phase",
+        "players",
+        "scene",
+        "seconds"
+      ]
+    },
+    {
+      "phase": "screen-active",
+      "scene": 2,
+      "seconds": -1.9999773502349854,
+      "wall_seconds": null,
+      "difficulty": "Difficulty_Edit",
+      "keys": [
+        "beat",
+        "gameplay_seconds",
+        "phase",
+        "players",
+        "scene",
+        "seconds"
+      ]
+    },
+    {
+      "phase": "progress",
+      "scene": 2,
+      "seconds": -1.9999773502349854,
+      "wall_seconds": null,
+      "difficulty": "Difficulty_Edit",
+      "keys": [
+        "beat",
+        "gameplay_seconds",
+        "phase",
+        "players",
+        "scene",
+        "seconds"
+      ]
+    },
+    {
+      "phase": "progress",
+      "scene": 2,
+      "seconds": -0.9999773502349854,
+      "wall_seconds": null,
+      "difficulty": "Difficulty_Edit",
+      "keys": [
+        "beat",
+        "gameplay_seconds",
+        "phase",
+        "players",
+        "scene",
+        "seconds"
+      ]
+    },
+    {
+      "phase": "progress",
+      "scene": 2,
+      "seconds": 0.00045351474545896053,
+      "wall_seconds": null,
+      "difficulty": "Difficulty_Edit",
+      "keys": [
+        "beat",
+        "gameplay_seconds",
+        "phase",
+        "players",
+        "scene",
+        "seconds"
+      ]
+    },
+    {
+      "phase": "progress",
+      "scene": 2,
+      "seconds": 1.0004762411117554,
+      "wall_seconds": null,
+      "difficulty": "Difficulty_Edit",
+      "keys": [
+        "beat",
+        "gameplay_seconds",
+        "phase",
+        "players",
+        "scene",
+        "seconds"
+      ]
+    },
+    {
+      "phase": "progress",
+      "scene": 2,
+      "seconds": 2.0007710456848145,
+      "wall_seconds": null,
+      "difficulty": "Difficulty_Edit",
+      "keys": [
+        "beat",
+        "gameplay_seconds",
+        "phase",
+        "players",
+        "scene",
+        "seconds"
+      ]
+    },
+    {
+      "phase": "progress",
+      "scene": 2,
+      "seconds": 3.000657558441162,
+      "wall_seconds": null,
+      "difficulty": "Difficulty_Edit",
+      "keys": [
+        "beat",
+        "gameplay_seconds",
+        "phase",
+        "players",
+        "scene",
+        "seconds"
+      ]
+    }
+  ],
+  "frames": [
+    {
+      "beat": -6.794943332672119,
+      "delta": 0,
+      "scene": 1,
+      "seconds": -1.9999773502349854,
+      "sequence": 1,
+      "wall_seconds": 2.007459
+    },
+    {
+      "beat": -6.794943332672119,
+      "delta": 0,
+      "scene": 2,
+      "seconds": -1.9999773502349854,
+      "sequence": 2,
+      "wall_seconds": 2.638003
+    },
+    {
+      "beat": -6.787860870361328,
+      "delta": 0.003085999982431531,
+      "scene": 2,
+      "seconds": -1.997144341468811,
+      "sequence": 3,
+      "wall_seconds": 2.640644
+    }
+  ],
+  "events": [
+    {
+      "seq": 10,
+      "scene": 1,
+      "operation": "GameState.SetCurrentSteps",
+      "kind": "call",
+      "command": "OnCommand",
+      "line": 3,
+      "source": "song:/.//default.lua",
+      "seconds": -1.9999773502349854,
+      "beat": -6.794943332672119,
+      "args": [
+        0,
+        {
+          "description": "JA+ XO BR-",
+          "difficulty": "Difficulty_Edit",
+          "index": 2,
+          "meter": 12,
+          "song_dir": "song:/",
+          "steps_type": "StepsType_Dance_Single",
+          "type": "Steps"
+        }
+      ],
+      "results": null,
+      "detail": null
+    },
+    {
+      "seq": 11,
+      "scene": 1,
+      "operation": "ScreenManager.SetNewScreen",
+      "kind": "call",
+      "command": "OnCommand",
+      "line": 3,
+      "source": "song:/.//default.lua",
+      "seconds": -1.9999773502349854,
+      "beat": -6.794943332672119,
+      "args": [
+        "ScreenGameplay"
+      ],
+      "results": null,
+      "detail": null
+    }
+  ],
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "diagnosis": "Native progress observation runs in gameplay Overlay before SongForeground, which selects Edit in the same zero-delta frame. Post-frame sampling sees the later selection. Capture bytes remain unchanged; no full repair spent."
+}

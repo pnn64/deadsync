@@ -1,0 +1,27 @@
+{
+  "position": 315,
+  "source_simfile": "minefield surfing_1/minefield.ssc",
+  "candidate_sha256": "18a897c673dd1a149bebb3b5550fa4e0b566dcfb056d31d57b0204baf640b44b",
+  "trace_sha256": "439ae124191fac7a85bf7a37b0fd799817f07b3bcd9d112441866ba0b7238b7d",
+  "simfile_sha256": "9c659d45bb1c5e5babd62121fa61ad87f8ffa7b7918b6dd1b3488de9d71e6530",
+  "binary_sha256": "60a12cf2dec73902df89171b680e24ffbc9301bccc2147dae35a7fb0aab1ecbb",
+  "diagnostic_exit": 2,
+  "seconds": 69.78817379800603,
+  "full_repair_attempts_spent": 0,
+  "native_capture_reused": true,
+  "native_frames": 100704,
+  "replayed_frames": 3018,
+  "errors": [],
+  "mismatch_count": 1,
+  "first_mismatches": [
+    {
+      "phase": "progress",
+      "seconds": -1.9999773502349854,
+      "field": "difficulty",
+      "native": "Difficulty_Challenge",
+      "deadsync": "Difficulty_Edit"
+    }
+  ],
+  "report_sha256": "16fe245c484e550edc2252015001649a7727288bd0b8f7cb7f8c2dedcff89b36",
+  "archive_accepted": false
+}

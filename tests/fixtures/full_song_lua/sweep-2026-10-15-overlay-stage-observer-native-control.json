@@ -1,0 +1,110 @@
+{
+  "input_sha256": {
+    "control.wav": "71d93ef76e5ff6087d522277e83309f1d8d790e9b756324dec73d216ea57cc75",
+    "control.ssc": "7b9ae536638beb2a96513da56a36f5bcb318a063fc3980ac68a64d908a00323a",
+    "control.lua": "d5868dc6b989f83f6ea0dfae97026b830ce5a3038d80a244d2ec028c704168a6"
+  },
+  "harness_sha256": "e067360d8120ee0a174b0848832856325ef62b709287fb48976441a277b26563",
+  "native_sha256": "a9d70b63dc11601634e67cb59fe1a7e7d12c57788bd525dba014f51a99d110fe",
+  "trace_sha256": "e20cb53d99c71356157e14bf0df59752e3acf937bfe24a572b28abd83465e8ce",
+  "native_frames": 3093,
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "first_progress": {
+    "beat": -12.033953666687012,
+    "gameplay_seconds": 0,
+    "phase": "progress",
+    "players": [
+      {
+        "actual": 0,
+        "alive_seconds": 0,
+        "autoplay": 1,
+        "current_max_score": 0,
+        "current_possible": 0,
+        "description": "Challenge",
+        "difficulty": "Difficulty_Challenge",
+        "failed": false,
+        "life_begin": 0.5,
+        "life_latest": 0.5,
+        "meter": 1,
+        "misses": 0,
+        "player": "PlayerNumber_P1",
+        "possible": 5,
+        "score": 0,
+        "w1": 0,
+        "w2": 0
+      }
+    ],
+    "scene": 1,
+    "seconds": -5.999977111816406
+  },
+  "next_progress": {
+    "beat": -10.030734062194824,
+    "gameplay_seconds": 0,
+    "phase": "progress",
+    "players": [
+      {
+        "actual": 0,
+        "alive_seconds": 0,
+        "autoplay": 1,
+        "current_max_score": 0,
+        "current_possible": 0,
+        "description": "Edit",
+        "difficulty": "Difficulty_Edit",
+        "failed": false,
+        "life_begin": 0.5,
+        "life_latest": 0.5,
+        "meter": 2,
+        "misses": 0,
+        "player": "PlayerNumber_P1",
+        "possible": 5,
+        "score": 0,
+        "w1": 0,
+        "w2": 0
+      }
+    ],
+    "scene": 1,
+    "seconds": -4.9983673095703125
+  },
+  "selection_write": {
+    "args": [
+      "PlayerNumber_P1",
+      {
+        "description": "Edit",
+        "difficulty": "Difficulty_Edit",
+        "index": 2,
+        "meter": 2,
+        "song_dir": "song:/",
+        "steps_type": "StepsType_Dance_Single",
+        "type": "Steps"
+      }
+    ],
+    "beat": -12.033953666687012,
+    "caller": {
+      "line": 4,
+      "source": "song:/control.lua",
+      "tail_call": false
+    },
+    "command": "OnCommand",
+    "definition_id": "def-0001",
+    "kind": "call",
+    "line": 4,
+    "operation": "GameState.SetCurrentSteps",
+    "phase": "callback",
+    "scene": 1,
+    "seconds": -5.999977111816406,
+    "seq": 9,
+    "source": "song:/control.lua"
+  },
+  "probe_observes_stage_before_foreground_selection": true,
+  "scoring_counters_unchanged_during_metadata_write": true,
+  "original_complete_native_capture_reused": true,
+  "earlier_verification_failure": "Reader incorrectly assumed possible dance points2; native uses active scoring metrics and records5. Original capture and failed assertion/log preserved. Phase assertions passed; v2 verifies the retained capture and observed counter stability.",
+  "chart_full_repairs_spent": 0,
+  "acceptance_changed": false
+}

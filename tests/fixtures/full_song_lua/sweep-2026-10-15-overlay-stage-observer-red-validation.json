@@ -1,0 +1,20 @@
+{
+  "both_platform_semantic_red_verified": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_source_pins_verified": true,
+  "windows_result": "FAILED. 0 passed; 1 failed",
+  "windows_log_sha256": "89f797c7caf1194141070cf3eac4ff8e7c92a94661cd15cc1901886f9a871392",
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 388.0802102370071,
+      "log_sha256": "fdeee94da1e4579a1426ea2d32806b5b915c82a31b5214f67135e7aaaab8c32f",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 610 filtered out; finished in 0.23s"
+      ]
+    }
+  ],
+  "regression": "Read-only stage observation at Overlay update must retain metadata, points, tap counts, life and failure before foreground callbacks mutate selection/life/failure.",
+  "chart_full_repairs_spent": 0,
+  "full_comparison_keys_tolerances_and_acceptance_unchanged": true
+}
