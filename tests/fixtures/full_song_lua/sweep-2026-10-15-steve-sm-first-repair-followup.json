@@ -1,0 +1,78 @@
+{
+  "position": 419,
+  "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
+  "repair_attempts": 1,
+  "native_frames": 68814,
+  "replayed_frames": 68814,
+  "replay_exit": 2,
+  "errors": [],
+  "mismatch_count": 156463,
+  "candidate_sha256": "bb83ba7ca5fb9ebfbc0545f42338c4208ec92571e9159479e1abb847d265265f",
+  "trace_sha256": "fdf27f2973969793ab4402e8388e23fd4cf4fde1c2de2936ed965a2fa764e53d",
+  "simfile_sha256": "7da60c3cba1434e6c4eb48937abb9dcb0266a9a2686196274252fa555c3af30d",
+  "report_sha256": "df484d635122a8aa685309cf38d72d0d7072478bdaadce714c7a921a145f41d6",
+  "one_full_repair_remaining": true,
+  "final_attempt_not_started": true,
+  "actual_followup": "Scoped loader restores secondary ready function; callback errors absent. Remaining failures include recursive ActorFrame.GetNumChildren in Cancel, ScoreP1, LyricDisplay, PlayerP1, In and Underlay. Primary Transition::Load adopts one loaded actor; LyricDisplay constructor adopts LyricBack/LyricFront; ScoreDisplayPercentage constructor adopts unnamed frame and percent. Full recursive native theme ownership is still incomplete; no captured counts or actor arrays used as gameplay input.",
+  "first_mismatches": [
+    {
+      "field": "command_query_count",
+      "native": 163581,
+      "deadsync": 156487
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "external-0023",
+        "args": [],
+        "beat": -2.376021146774292,
+        "caller": {
+          "line": 43,
+          "source": "song:/code/update.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0008",
+        "detail": {
+          "native_tween_time_left": 0,
+          "results": [
+            1
+          ]
+        },
+        "kind": "query",
+        "line": 43,
+        "operation": "ActorFrame.GetNumChildren",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": -1.9999773502349854,
+        "seq": 33,
+        "source": "song:/code/update.lua",
+        "results": [
+          1
+        ]
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "ActorFrame.GetNumChildren",
+        "source": "song:/code/update.lua",
+        "line": 43,
+        "phase": "callback",
+        "beat": -2.376021146774292,
+        "seconds": -1.9999773502349854,
+        "args": [],
+        "results": [
+          0
+        ]
+      }
+    }
+  ],
+  "acceptance_comparisons_changed": false,
+  "full_native_capture_preserved": true,
+  "primary_source_sha256": {
+    "vendor/itgmania/src/Transition.cpp": "b8262c86c0656fa5c9c31ecbc95db81c0232d60cbb55add41d297a4e3d5e41f9",
+    "vendor/itgmania/src/LyricDisplay.cpp": "4eac5efbf318ad8fb2c95795181185afcc6ca012fe5b130d53659667310ac31e",
+    "vendor/itgmania/src/ScoreDisplayPercentage.cpp": "e9698e59d312ba932df393f2522cae5f3345754e6bcbf8d6185ccadada3c0edb",
+    "vendor/itgmania/src/Player.cpp": "fb9fbc6ead8073b26cc8ff9097068ed2c33b8d8c2bea58b43eb61e0384ae1935"
+  }
+}

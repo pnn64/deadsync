@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T00:13:13Z",
+  "updated_utc": "2026-10-15T00:32:31Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 355,
-    "pending": 109,
-    "unprocessed": 37
+    "passed": 358,
+    "pending": 108,
+    "unprocessed": 35
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3317,9 +3317,9 @@
       "position": 394,
       "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
       "simfile_sha256": "45d9d5f8655020c9086fbeef5ad48616f82fb351961223046e68d95bed94e0bf",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-14-shakunetsu2-sm-listener-first-repair.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-15-shakunetsu-native-cmd-final-repair.json"
     },
     {
       "position": 395,
@@ -3865,9 +3865,9 @@
       "position": 466,
       "source_simfile": "Wake Up/Wake Up.ssc",
       "simfile_sha256": "82fd8abc80e5a812b098793e3d82a90b54de42016e68c7ef37db66e0eefbbf8f",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-14-wake-up-ssc-listener-first-repair.json"
     },
     {
       "position": 467,
@@ -3949,7 +3949,9 @@
       "position": 478,
       "source_simfile": "You are Goomba Play ITG/You are Gooma Play ITG.sm",
       "simfile_sha256": "64da7a41d112f9f31f06625f6f5af6e864ba58dedddfe9d5af42ae15e20eff8f",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 479,
@@ -4043,7 +4045,9 @@
       "position": 492,
       "source_simfile": "james/james.ssc",
       "simfile_sha256": "9c675cd26cc1f0b2c00956c7901ef13957d68ade067469fbfc8abd58dfdecdda",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 493,

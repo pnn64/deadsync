@@ -1,0 +1,37 @@
+{
+  "source_simfile": "/tmp/.tmpqXw70G/song/Pop.ssc",
+  "native_frames": 81313,
+  "report_sha256": "7c1c970eb91d58afe0335a7bb0b0acd01d2007c982084ccd2a163d68c004b193",
+  "full_repairs_spent": 0,
+  "actual_failure": "Off command returns after Steps.GetDifficulty in owned replay; native continues through GetTopScreen/GetCurrentSong/GetSongDir. Native selected Challenge has SSC warp4 length20; PlayerState.GetSongPosition incorrectly aliases global Song timing in owned host. Global beat240.31958 is below authored259.5 threshold; selected chart beat is above threshold. ITGmania updates each PlayerState position using selected Steps timing, separately from global Song timing.",
+  "native_queries": [
+    "command.begin",
+    "ScreenManager.GetTopScreen",
+    "Actor.GetName",
+    "GameState.GetCurrentSteps",
+    "GameState.GetPlayerState",
+    "Steps.GetDifficulty",
+    "ScreenManager.GetTopScreen",
+    "GameState.GetCurrentSong",
+    "Song.GetSongDir",
+    "command.end"
+  ],
+  "owned_queries": [
+    "command.begin",
+    "ScreenManager.GetTopScreen",
+    "Actor.GetName",
+    "GameState.GetCurrentSteps",
+    "GameState.GetPlayerState",
+    "Steps.GetDifficulty",
+    "command.end"
+  ],
+  "primary_source_sha256": {
+    "../itgmania-harness/vendor/itgmania/src/PlayerState.cpp": "d54ad94985f1917627af53a55d96986777c9c0b3949768d7822074b09b796280",
+    "../itgmania-harness/vendor/itgmania/src/GameState.cpp": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+    "../rework/lua-songs/Pop/code.lua": "3c6760f8fc09b221ef67c707606a3c75688c83b88a4930dabf8b85ff3f93ad86",
+    "../rework/lua-songs/Pop/Pop.ssc": "1d74d7d3fea33b0ac6eb7c4e19b3035f1aa65b7feefb86c16fb5229a3b728ff7",
+    "crates/deadsync-song-lua/src/song_tables.rs": "ba1b9e7b690b21166350cb1284fbe6832af53552d34ee96227a8a4a9cb5152a9"
+  },
+  "proposed_repair": "Own one SongPosition clock per enabled player; advance from its selected chart TimingData at the shared native music timestamp, retaining separate global song position. Regression covers two players with warp, stop and delay.",
+  "acceptance_comparisons_changed": false
+}

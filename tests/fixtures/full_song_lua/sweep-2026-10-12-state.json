@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T00:13:13Z",
-  "previous_goal_turn": "Progress: U.N. Owen first late-command observer repair passes58,499 frames; My Exes SM first captured-listener repair passes66,182 frames; Finally Landing original replay passes66,681 frames. Fixtures saved and local decompressed SHA verified, charts closed. Stella Glow original CLI completed152,631 actual frames and224 stage samples with zero mismatches/callback errors, then report serialization failed with verified ENOSPC. Frozen original helper745eee7d and all36 source pins verified; exact archive_passes function and source order prove acceptance computed before retained summary log and failed report write. Exact candidate3915e33e and every original manifest member/native trace/simfile verified; native capture confirms152,631 frames and committed gameplay exit. Recovered acceptance summary is explicitly marked derived, original detailed report unavailable, CLI exit1/log/failure preserved and missing operation coverage kept separate. Executed the exact pinned Rust acceptance function on observed counts; accepts Full and rejects diagnostic/partial/error/mismatch variants. Existing harness pack saves the exact original candidate, local decompressed bytes verified; no replay repeated, zero repair attempts spent, chart closed. Native cmd parser fix5e44aa8e7 now passes six checks on Windows/Linux target1/parser10/live69/replay33/identity1/both builds, all1,175 raw/crossplatform pins and six Linux log hashes verified; private helper56714f6f includes nonfatal progress fix. Shakunetsu retained-capture diagnostic passes3,853 frames through second12 with zero errors/mismatches, proving restored background and char initialization; final full repair2 now live, no third permitted. Who the Hell Is Edgar has no usable old comparison output (empty log/report); first full repair now live on same validated helper and original complete capture, one later maximum. Global original-sweep helper711a5230 unchanged. Entity first repair passes35,590 frames, saved/committed and decompressed bytes verified, chart closed; storage capture queue complete. STEVE SM first, Wake first, Koi final2, Mawaru8 first and original queues continue. All501 original simfile bytes unchanged, missing coverage separate, full acceptance unchanged, oversized archives ignored/local, active incomplete sweep.",
+  "updated_utc": "2026-10-15T00:32:31Z",
+  "previous_goal_turn": "Progress: Wake Up first repair closed84,024 frames, Goomba SM original pass closed37,874 frames, Shakunetsu final repair2 closed14,728 frames. Full comparisons report zero mismatches/callback errors; fixtures saved, decompressed bytes verified and committed. Shakunetsu has no third repair and is closed. Circles startup diagnostic2800 frames and iLLness LiLin startup diagnostic3268 frames have zero errors/mismatches on validated helper56714f6f, proving original entry mismatches resolved; each first full repair started on unchanged native capture. Diagnostic acceptance remains false; full acceptance unchanged. STEVE SM first repair completes68,814 frames with no callback errors but156,463 command/query mismatches; recursive owned theme topology remains incomplete, final attempt not started. Pop actual Off failure traced to PlayerState SongPosition aliasing global Song clock despite selected SSC chart warp20 beats. Focused two-player regression now building on Windows/Linux; no Pop full repair spent and no production change selected yet. Edgar first replay and original queues remain live. Global original-sweep selection711a5230 unchanged. All501 original simfile bytes unchanged; missing coverage remains separate; files over100MB ignored and retained locally. Sweep active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "540d918927d87b6371c46882f145385bffea99b2",
+      "deadsync": "5aa943b84883e490ad19201cd2afb270665a7a03",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -151,9 +151,9 @@
       "pending": 64,
       "processed": 102,
       "last_log_lines": [
-        "[3641.3s] replaying every native gameplay frame: frame 67358/107886 (62.4%)",
-        "[3643.3s] replaying every native gameplay frame: frame 67391/107886 (62.5%)",
-        "[3645.3s] replaying every native gameplay frame: frame 67426/107886 (62.5%)"
+        "[4797.8s] replaying every native gameplay frame: frame 89377/107886 (82.8%)",
+        "[4799.8s] replaying every native gameplay frame: frame 89416/107886 (82.9%)",
+        "[4801.8s] replaying every native gameplay frame: frame 89456/107886 (82.9%)"
       ],
       "supervisor_running": true
     },
@@ -1921,6 +1921,20 @@
         "record": "sweep-2026-10-15-shakunetsu-native-cmd-final-repair.json",
         "fix_commit": "5e44aa8e7",
         "finish_status": "bounded full replay complete; complete original capture reused"
+      },
+      {
+        "name": "circles-entry-clock-first-repair-v1",
+        "remote": "/home/parity/jobs/circles-entry-clock-first-repair-v1",
+        "record": "sweep-2026-10-15-circles-entry-clock-first-repair-v1.json",
+        "fix_commit": "5e44aa8e7",
+        "finish_status": "bounded first full replay complete; diagnostic verified previous entry mismatch resolved; native capture reused"
+      },
+      {
+        "name": "illness-lilin-entry-clock-first-repair-v1",
+        "remote": "/home/parity/jobs/illness-lilin-entry-clock-first-repair-v1",
+        "record": "sweep-2026-10-15-illness-lilin-entry-clock-first-repair-v1.json",
+        "fix_commit": "5e44aa8e7",
+        "finish_status": "bounded first full replay complete; diagnostic verified previous startup ordering mismatches resolved; native capture reused"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -1937,230 +1951,34 @@
         "pending": 64,
         "processed": 102,
         "last_log_lines": [
-          "[3641.3s] replaying every native gameplay frame: frame 67358/107886 (62.4%)",
-          "[3643.3s] replaying every native gameplay frame: frame 67391/107886 (62.5%)",
-          "[3645.3s] replaying every native gameplay frame: frame 67426/107886 (62.5%)"
+          "[4797.8s] replaying every native gameplay frame: frame 89377/107886 (82.8%)",
+          "[4799.8s] replaying every native gameplay frame: frame 89416/107886 (82.9%)",
+          "[4801.8s] replaying every native gameplay frame: frame 89456/107886 (82.9%)"
         ],
         "supervisor_running": true
       },
       "jobs": [
         {
-          "job": "who-edgar-storage-first-repair-v1",
+          "job": "illness-lilin-entry-clock-first-repair-v1",
           "complete": false,
           "supervisor_running": true,
           "passed": 0,
           "pending": 0,
           "processed": 0,
           "last_phase": "replay",
-          "source_simfile": "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc",
+          "source_simfile": "iLLness LiLin/iLLness LiLin.ssc",
           "child_running": true
         },
         {
-          "job": "shakunetsu-native-cmd-final-repair-v1",
+          "job": "circles-entry-clock-first-repair-v1",
           "complete": false,
           "supervisor_running": true,
           "passed": 0,
           "pending": 0,
           "processed": 0,
           "last_phase": "replay",
-          "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
+          "source_simfile": "Circles/Circles.ssc",
           "child_running": true
-        },
-        {
-          "job": "un-owen-late-command-first-repair-v1",
-          "complete": true,
-          "supervisor_running": false,
-          "passed": 1,
-          "pending": 0,
-          "processed": 1,
-          "last_phase": "pack",
-          "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.ssc",
-          "child_running": false,
-          "position": 452
-        },
-        {
-          "job": "storage-capture-first-repairs-v1",
-          "complete": true,
-          "supervisor_running": false,
-          "passed": 2,
-          "pending": 0,
-          "processed": 2,
-          "last_phase": "pack",
-          "source_simfile": "The Entity/The Entity.ssc",
-          "child_running": false,
-          "position": 432
-        },
-        {
-          "job": "jack-reaper-listener-first-repair-v1",
-          "complete": true,
-          "supervisor_running": false,
-          "passed": 1,
-          "pending": 0,
-          "processed": 1,
-          "last_phase": "pack",
-          "source_simfile": "Jack The Reaper/Jack The Reaper.sm",
-          "child_running": false
-        },
-        {
-          "job": "my-exes-sm-listener-first-repair-v1",
-          "complete": true,
-          "supervisor_running": false,
-          "passed": 1,
-          "pending": 0,
-          "processed": 1,
-          "last_phase": "pack",
-          "source_simfile": "My Exes Bestfriend/ExBestFriend.sm",
-          "child_running": false
-        },
-        {
-          "job": "pokemon-sparse-declaration-first-repair-v1",
-          "complete": true,
-          "supervisor_running": false,
-          "passed": 1,
-          "pending": 0,
-          "processed": 1,
-          "last_phase": "pack",
-          "source_simfile": "Pokemon Gym Battle Remix/pokes.ssc",
-          "child_running": false,
-          "position": 498
-        },
-        {
-          "job": "pokemon-failed-load-first-repair-v1",
-          "complete": false,
-          "supervisor_running": false,
-          "passed": 0,
-          "pending": 0,
-          "processed": 0
-        },
-        {
-          "job": "steve-ssc-loader-multi-return-first-repair-v1",
-          "complete": true,
-          "supervisor_running": false,
-          "passed": 0,
-          "pending": 1,
-          "processed": 1,
-          "last_phase": "replay",
-          "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
-          "child_running": false
-        },
-        {
-          "job": "steve-sm-loader-multi-return-first-repair-v1",
-          "complete": true,
-          "supervisor_running": false,
-          "passed": 0,
-          "pending": 1,
-          "processed": 1,
-          "last_phase": "replay",
-          "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
-          "child_running": false
-        },
-        {
-          "job": "turn-a-preferences-first-repair-v1",
-          "complete": true,
-          "supervisor_running": false,
-          "passed": 1,
-          "pending": 0,
-          "processed": 1,
-          "last_phase": "pack",
-          "source_simfile": "Turn A - [Freya]/turn_a.ssc",
-          "child_running": false
-        },
-        {
-          "job": "shakunetsu2-sm-listener-first-repair-v1",
-          "complete": true,
-          "supervisor_running": false,
-          "passed": 0,
-          "pending": 1,
-          "processed": 1,
-          "last_phase": "replay",
-          "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
-          "child_running": false
-        },
-        {
-          "job": "wake-up-ssc-listener-first-repair-v1",
-          "complete": false,
-          "supervisor_running": false,
-          "passed": 1,
-          "pending": 0,
-          "processed": 1,
-          "last_phase": "pack",
-          "source_simfile": "Wake Up/Wake Up.ssc",
-          "child_running": false
-        },
-        {
-          "job": "capture-selection-first-repairs-v1",
-          "complete": true,
-          "supervisor_running": false,
-          "passed": 2,
-          "pending": 0,
-          "processed": 2,
-          "last_phase": "pack",
-          "source_simfile": "the fresh prince of bel air (razihel remix)/steps.sm",
-          "child_running": false,
-          "position": 433
-        },
-        {
-          "job": "shivers-sm-arrow-alpha-first-repair-v1",
-          "complete": true,
-          "supervisor_running": false,
-          "passed": 1,
-          "pending": 0,
-          "processed": 1,
-          "last_phase": "pack",
-          "source_simfile": "Shivers/Shivers.sm",
-          "child_running": false
-        },
-        {
-          "job": "shivers-ssc-arrow-alpha-first-repair-v1",
-          "complete": true,
-          "supervisor_running": false,
-          "passed": 1,
-          "pending": 0,
-          "processed": 1,
-          "last_phase": "pack",
-          "source_simfile": "Shivers/Shivers.ssc",
-          "child_running": false
-        },
-        {
-          "job": "see-tinh-sm-game-state-class-first-repair-v1",
-          "complete": true,
-          "supervisor_running": false,
-          "passed": 1,
-          "pending": 0,
-          "processed": 1,
-          "last_phase": "pack",
-          "source_simfile": "See Tinh/See Tinh.sm",
-          "child_running": false
-        },
-        {
-          "job": "see-tinh-ssc-game-state-class-first-repair-v1",
-          "complete": true,
-          "supervisor_running": false,
-          "passed": 1,
-          "pending": 0,
-          "processed": 1,
-          "last_phase": "pack",
-          "source_simfile": "See Tinh/See Tinh.ssc",
-          "child_running": false
-        },
-        {
-          "job": "koi-ssc-message-coverage-final-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
-          "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
-          "source_simfile": "Koi [UPS2016]/koi.ssc",
-          "child_running": true
-        },
-        {
-          "job": "rite-ssc-message-coverage-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
-          "pending": 0,
-          "processed": 0
         },
         {
           "job": "retrospective-background-effect-first-repair-v1",
@@ -2276,13 +2094,13 @@
           "job": "chart-sweep-parallel-v5-3",
           "complete": false,
           "supervisor_running": true,
-          "passed": 7,
+          "passed": 8,
           "pending": 9,
-          "processed": 16,
+          "processed": 17,
           "last_phase": "replay",
-          "source_simfile": "You are Goomba Play ITG/You are Gooma Play ITG.sm",
+          "source_simfile": "[12] Ascendanz/Ascendanz.ssc",
           "child_running": true,
-          "position": 478
+          "position": 486
         },
         {
           "job": "chart-sweep-parallel-v5-4",
@@ -2303,9 +2121,9 @@
           "passed": 9,
           "pending": 6,
           "processed": 15,
-          "last_phase": "capture",
+          "last_phase": "replay",
           "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
-          "child_running": true,
+          "child_running": false,
           "position": 472
         },
         {
@@ -3168,12 +2986,12 @@
           "complete": false,
           "supervisor_running": true,
           "passed": 39,
-          "pending": 40,
-          "processed": 79,
-          "last_phase": "capture",
-          "source_simfile": "james/james.ssc",
+          "pending": 41,
+          "processed": 80,
+          "last_phase": "replay",
+          "source_simfile": "Rayc Fire 2/Rayc Fire 2.ssc",
           "child_running": true,
-          "position": 492
+          "position": 500
         },
         {
           "job": "chart-sweep-parallel-v4-2",
@@ -3182,7 +3000,7 @@
           "passed": 27,
           "pending": 32,
           "processed": 59,
-          "last_phase": "capture",
+          "last_phase": "replay",
           "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
           "child_running": true,
           "position": 445
@@ -3311,7 +3129,7 @@
     "selected_replay_binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 129,
+    "publisher_stream_count": 131,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -3484,7 +3302,11 @@
       "ssc_first_repair_status": "pending",
       "ssc_first_repair_attempts": 1,
       "ssc_one_full_repair_remaining": true,
-      "sm_first_repair_running": true
+      "sm_first_repair_running": false,
+      "sm_first_repair_complete": true,
+      "sm_first_repair_status": "pending",
+      "sm_first_repair_attempts": 1,
+      "sm_one_full_repair_remaining": true
     },
     "storage_recovery": {
       "native_trace_compaction": "tests/fixtures/full_song_lua/sweep-2026-10-15-native-trace-storage-recovery.json",
@@ -3516,12 +3338,16 @@
           "repair_limit": 2
         },
         "additional-listener-first-repairs-queue-v1.json": {
-          "status": "starting_first_listener_repair",
-          "job": "wake-up-ssc-listener-first-repair-v1",
+          "status": "complete",
           "completed": [
             {
               "job": "shakunetsu2-sm-listener-first-repair-v1",
               "status": "pending",
+              "repair_attempts": 1
+            },
+            {
+              "job": "wake-up-ssc-listener-first-repair-v1",
+              "status": "passed",
               "repair_attempts": 1
             }
           ]
@@ -3589,9 +3415,11 @@
       "native_control": "tests/fixtures/full_song_lua/sweep-2026-10-15-shakunetsu-native-cmd-control.json",
       "full_repairs_spent": 2,
       "final_attempt_not_started": false,
-      "next_action": "Implement native argument expression boundaries in cmd parser; avoid newline-only split, preserve source lines and complete nested Lua expressions/functions.",
-      "final_attempt_running": true,
-      "no_third_full_repair": true
+      "next_action": "Closed after full14,728-frame pass and decompressed byte verification; no further replay.",
+      "final_attempt_running": false,
+      "no_third_full_repair": true,
+      "status": "passed",
+      "passing_chart_closed": true
     },
     "jack_reaper_closed": {
       "full_repair_attempts_spent": 1,
@@ -3617,9 +3445,13 @@
       "binary_sha256": "56714f6f0061d2bee125fc7b36a0889bedcc9e7f018e66bdd36be9ff9d12cda5",
       "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-native-cmd-linux-validation.json",
       "shakunetsu_diagnostic": "tests/fixtures/full_song_lua/sweep-2026-10-15-shakunetsu-cmd-entry-diagnostic.json",
-      "shakunetsu_final_full_repair_running": true,
+      "shakunetsu_final_full_repair_running": false,
       "no_third_full_repair": true,
-      "final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-shakunetsu-cmd-final-repair-launch.json"
+      "final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-shakunetsu-cmd-final-repair-launch.json",
+      "shakunetsu_status": "passed",
+      "shakunetsu_passing_chart_closed": true,
+      "shakunetsu_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-shakunetsu-fixture-verification.json",
+      "shakunetsu_further_replay_allowed": false
     },
     "watching_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-watching-fixture-verification.json",
     "my_exes_sm_closed": {
@@ -3651,14 +3483,47 @@
       "duplicate_bytes_reclaimed": 1943480748,
       "all_decompressed_hashes_verified": true,
       "passing_charts_replayed": false
+    },
+    "wake_up_closed": {
+      "full_repair_attempts_spent": 1,
+      "native_frames": 84024,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-wake-up-fixture-verification.json"
+    },
+    "goomba_sm_closed": {
+      "full_repair_attempts_spent": 0,
+      "native_frames": 37874,
+      "passing_chart_closed": true,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-goomba-sm-fixture-verification.json"
+    },
+    "steve_sm_first_followup": "tests/fixtures/full_song_lua/sweep-2026-10-15-steve-sm-first-repair-followup.json",
+    "entry_clock_first_repairs": {
+      "circles_diagnostic_frames": 2800,
+      "illness_lilin_diagnostic_frames": 3268,
+      "diagnostic_mismatches": 0,
+      "diagnostic_callback_errors": 0,
+      "diagnostic_archive_accepted": false,
+      "circles_full_repairs_spent": 1,
+      "illness_lilin_full_repairs_spent": 1,
+      "original_complete_native_captures_reused": true,
+      "helper_sha256": "56714f6f0061d2bee125fc7b36a0889bedcc9e7f018e66bdd36be9ff9d12cda5",
+      "circles_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-circles-entry-clock-first-repair-launch.json",
+      "illness_lilin_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-illness-lilin-entry-clock-first-repair-v1-launch.json"
+    },
+    "pop_player_clock": {
+      "diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-pop-player-position-diagnosis.json",
+      "full_repairs_spent": 0,
+      "regression_builds_running": true,
+      "production_helper_selected": false
     }
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 208,
-    "new_pending_charts": 108,
-    "new_processed_sources": 316,
+    "new_passed_fixtures": 211,
+    "new_pending_charts": 107,
+    "new_processed_sources": 318,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 37,
+    "unprocessed_sources": 35,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -5418,22 +5283,6 @@
       ]
     },
     {
-      "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
-      "repair_attempts": 1,
-      "failure": null,
-      "errors": [
-        "UpdateCommand failed for Quad: runtime error: [string \"/tmp/.tmp7nTzSh/song/lua/default.lua\"]:717: attempt to index global 'char_ayaze' (a nil value)\nstack traceback:\n\t[C]: in ?\n\t[string \"/tmp/.tmp7nTzSh/song/lua/default.lua\"]:717: in field '?'\n\t[string \"/tmp/.tmp7nTzSh/song/lua/default.lua\"]:1983: in function <[string \"/tmp/.tmp7nTzSh/song/lua/default.lua\"]:1693>"
-      ],
-      "mismatch_count": 19749,
-      "first_mismatch": [
-        {
-          "field": "source_broadcast_count",
-          "native": 47,
-          "deadsync": 1
-        }
-      ]
-    },
-    {
       "source_simfile": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
       "repair_attempts": 0,
       "failure": null,
@@ -5888,24 +5737,6 @@
       ]
     },
     {
-      "source_simfile": "Wake Up/Wake Up.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [
-        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 16.001: missing captured subscriber identity for ScreenGameplay/19/1"
-      ],
-      "mismatch_count": 72260,
-      "first_mismatch": [
-        {
-          "phase": "progress",
-          "seconds": 130.00022888183594,
-          "field": "failed",
-          "native": true,
-          "deadsync": false
-        }
-      ]
-    },
-    {
       "source_simfile": "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc",
       "repair_attempts": 0,
       "failure": "",
@@ -6016,6 +5847,14 @@
       "source_simfile": "Dongo Bongo/dongobongo2.ssc",
       "repair_attempts": 0,
       "failure": "replaying every native gameplay frame: 0 checks completed, 0 failed\n[1896.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1898.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1900.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1902.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1904.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1906.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1908.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1910.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1912.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1914.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1916.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1918.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1920.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1922.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1924.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1926.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1928.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1930.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1932.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1934.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1936.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1938.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1940.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1942.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1944.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1946.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1948.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1950.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1952.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1954.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1956.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1958.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1960.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1962.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1964.8s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1966.8s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1968.9s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1971.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1973.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1975.3s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1977.3s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1979.5s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1981.6s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1983.8s] replaying every native gameplay frame: 0 checks completed, 0 failed\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "james/james.ssc",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1468866-1792022466740688095-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1468866-1792022466740688095-0\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
