@@ -1,0 +1,25 @@
+{
+  "windows_initial_green_reused_red_test_binary": true,
+  "original_failed_check": {
+    "label": "target-control",
+    "exit_code": 101,
+    "seconds": 1.944071999998414,
+    "log_sha256": "d154f608b026275a03bb457f937d3082222b213e2fe9a2e3cd62eb04e4050dac",
+    "results": [
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 625 filtered out; finished in 0.22s"
+    ]
+  },
+  "initial_green_log_sha256": "d154f608b026275a03bb457f937d3082222b213e2fe9a2e3cd62eb04e4050dac",
+  "source_mtime_ns_before": {
+    "crates/deadsync-song-lua/src/live.rs": 1792063857890670100,
+    "crates/deadsync-song-lua/src/lua_util.rs": 1792063576469960700
+  },
+  "last_test_compilation_invoked_mtime_ns": 1792063955573425900,
+  "retained_old_test_binary_sha256": "52c65edcec4a7620317f1b13460f3f0c89c1a64b2746c2120641f9385445d474",
+  "correction": "Touch changed Windows source inputs before a new validation run so Cargo recompiles their actual bytes. Preserve all source bytes, implementation and regression assertions. Linux runner already touches its frozen source inputs before compiling.",
+  "source_bytes_changed": false,
+  "regression_changed": false,
+  "old_failed_log_preserved": true,
+  "full_chart_repairs_added": 0,
+  "acceptance_changed": false
+}
