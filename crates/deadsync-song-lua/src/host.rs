@@ -64,6 +64,20 @@ fn initialize_gameplay_steps(lua: &Lua, context: &SongLuaCompileContext) -> mlua
     Ok(())
 }
 
+#[cfg(feature = "test-support")]
+pub(crate) fn selected_step_indices(lua: &Lua, step_count: usize) -> mlua::Result<[Option<usize>; LUA_PLAYERS]> {
+    let state = lua.app_data_ref::<SongLuaGameStateGlobals>()
+        .ok_or_else(|| mlua::Error::runtime("missing gameplay selection state"))?;
+    let mut indices = [None; LUA_PLAYERS];
+    for (player, index) in indices.iter_mut().enumerate() {
+        let steps = state.current_steps.raw_get::<Option<Table>>(player + 1)?;
+        *index = steps.as_ref().and_then(|steps| state.step_objects.iter()
+            .position(|(known, _)| known.to_pointer() == steps.to_pointer()))
+            .filter(|&index| index < step_count);
+    }
+    Ok(indices)
+}
+
 pub(crate) fn selected_scene_context(
     lua: &Lua,
     context: &SongLuaCompileContext,

@@ -404,6 +404,39 @@ pub struct SongLuaLivePlayer {
 
 pub(crate) struct LivePlayers([SongLuaLivePlayer; LUA_PLAYERS]);
 
+#[cfg(feature = "test-support")]
+#[derive(Clone, Debug)]
+pub struct SongLuaOverlayStageObservation {
+    pub beat: f32,
+    pub music_seconds: f32,
+    pub players: [SongLuaLivePlayer; LUA_PLAYERS],
+    pub player_step_indices: [Option<usize>; LUA_PLAYERS],
+}
+
+#[cfg(feature = "test-support")]
+struct OverlayStageObserver {
+    actor: usize,
+    step_count: usize,
+    observation: Option<SongLuaOverlayStageObservation>,
+}
+
+#[cfg(feature = "test-support")]
+pub(crate) fn observe_overlay_stage(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let Some((owner, step_count)) = lua.app_data_ref::<OverlayStageObserver>()
+        .map(|observer| (observer.actor, observer.step_count)) else { return Ok(()); };
+    if owner != actor.to_pointer() as usize { return Ok(()); }
+    let Some(players) = lua.app_data_ref::<LivePlayers>().map(|players| players.0)
+        else { return Ok(()); };
+    let player_step_indices = crate::host::selected_step_indices(lua, step_count)?;
+    let (beat, music_seconds) = crate::compile_song_runtime_values(lua)?;
+    if let Some(mut observer) = lua.app_data_mut::<OverlayStageObserver>() {
+        observer.observation = Some(SongLuaOverlayStageObservation {
+            beat, music_seconds, players, player_step_indices,
+        });
+    }
+    Ok(())
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SongLuaLivePlayerWrite {
     SetLife { player: usize, life: f32 },
@@ -912,6 +945,25 @@ impl fmt::Debug for SongLuaLiveScene {
 }
 
 impl SongLuaLiveScene {
+    /// Enable a read-only observation at the native gameplay overlay probe phase.
+    #[cfg(feature = "test-support")]
+    pub fn enable_overlay_stage_observer(&self) -> mlua::Result<()> {
+        let screen: Table = self.lua.globals().raw_get("__songlua_top_screen")?;
+        let children = crate::actor_children(&self.lua, &screen)?;
+        let overlay: Table = children.raw_get("Overlay")?;
+        self.lua.set_app_data(OverlayStageObserver {
+            actor: overlay.to_pointer() as usize,
+            step_count: self.context.song_steps.len(), observation: None,
+        });
+        Ok(())
+    }
+
+    #[cfg(feature = "test-support")]
+    pub fn take_overlay_stage_observation(&self) -> Option<SongLuaOverlayStageObservation> {
+        self.lua.app_data_mut::<OverlayStageObserver>()
+            .and_then(|mut observer| observer.observation.take())
+    }
+
     pub(crate) fn new(
         lua: Lua,
         root: Value,
@@ -988,6 +1040,10 @@ impl SongLuaLiveScene {
     /// or replacement before deciding whether this scene is still drawn.
     pub fn update(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<SongLuaLiveOutput> {
         if self.ended { return Err(mlua::Error::runtime("cannot advance an ended song Lua scene")); }
+        #[cfg(feature = "test-support")]
+        if let Some(mut observer) = self.lua.app_data_mut::<OverlayStageObserver>() {
+            observer.observation = None;
+        }
         // GameState.cpp::UpdateSongPosition maintains global Song timing apart
         // from each Player's selected Steps timing. The domain frame carries
         // the player's beat; Lua's GAMESTATE and music effects use the song.
@@ -1539,6 +1595,57 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "test-support")]
+    #[test]
+    fn live_overlay_stage_observation_precedes_foreground_mutations() {
+        let mut compiled = compile_with_context("overlay-stage-phase", r#"
+return Def.Actor {
+    InitCommand = function(self) self:sleep(1000) end,
+    OnCommand = function(self)
+        GAMESTATE:SetCurrentSteps(PLAYER_1, GAMESTATE:GetCurrentSong():GetAllSteps()[2])
+        SCREENMAN:GetTopScreen():GetChild('PlayerP1'):SetLife(0.2)
+        STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1):FailPlayer()
+    end,
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.layer_start_beats = vec![-24.0];
+            context.players[0].enabled = true;
+            context.players[1].enabled = false;
+            context.song_steps = [SongLuaDifficulty::Challenge, SongLuaDifficulty::Edit]
+                .into_iter().map(|difficulty| crate::SongLuaStep {
+                    steps_type: "StepsType_Dance_Single".into(), difficulty,
+                    description: format!("{difficulty:?}"), chart_name: String::new(),
+                    credit: String::new(), meter: 9, music_file: String::new(), possible_grade_points: 100,
+                }).collect();
+            context.player_step_indices = [Some(0), Some(0)];
+        });
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.enable_overlay_stage_observer().unwrap();
+        let mut frame = SongLuaLiveFrame { beat: -4.0, music_seconds: -2.0,
+            screen_seconds: 0.0, delta_seconds: 0.0, ..Default::default() };
+        frame.players[0] = SongLuaLivePlayer { possible_points: 100, actual_points: 17,
+            current_possible_points: 25, life: 0.7, fail_enabled: true, ..Default::default() };
+        frame.players[0].tap_scores[4] = 3;
+        frame.players[0].tap_scores[8] = 1;
+        frame.players[0].tap_scores[9] = 2;
+        let output = scene.advance(frame).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(scene.selected_context().unwrap().player_step_indices[0], Some(1));
+        assert!(output.player_writes.contains(&SongLuaLivePlayerWrite::Fail { player: 0 }));
+        let observed = scene.take_overlay_stage_observation()
+            .expect("overlay stage observation must precede foreground mutations");
+        assert_eq!(observed.player_step_indices[0], Some(0));
+        assert_eq!(observed.music_seconds, -2.0);
+        assert_eq!(observed.beat, -4.0);
+        let player = observed.players[0];
+        assert_eq!((player.possible_points, player.actual_points, player.current_possible_points), (100, 17, 25));
+        assert_eq!(player.life, 0.7);
+        assert!(!player.failed);
+        assert_eq!((player.tap_scores[4], player.tap_scores[8], player.tap_scores[9]), (3, 1, 2));
+        assert!(scene.take_overlay_stage_observation().is_none(), "observations drain once");
+    }
+
     #[test]
     fn live_untyped_foreground_uses_native_dummy_actor() {
         let mut compiled = compile_with_context("untyped-foreground", "CONSTRUCTED = true; return {}", |context| {

@@ -2716,6 +2716,7 @@ fn compare_stage_sample(
     state: &gameplay::State,
     song: &deadsync_chart::song::SongData,
     sample: &Value,
+    overlay_observation: Option<&deadsync_song_lua::SongLuaOverlayStageObservation>,
     seconds: f64,
     scene: u64,
     mismatches: &mut Vec<Value>,
@@ -2723,16 +2724,29 @@ fn compare_stage_sample(
 ) -> Result<usize, String> {
     let player = &state.players_runtime.players[0];
     let score = state.stage_itg_score_inputs(0).ok_or("missing active player score inputs")?;
-    let selected = state.song_lua.as_ref().ok_or("missing Lua metadata")?
-        .selected_context().map_err(|error| error.to_string())?.player_step_indices[0]
-        .ok_or("GAMESTATE has no selected P1 chart")?;
+    let selected = if let Some(observation) = overlay_observation {
+        observation.player_step_indices[0]
+    } else {
+        state.song_lua.as_ref().ok_or("missing Lua metadata")?
+            .selected_context().map_err(|error| error.to_string())?.player_step_indices[0]
+    }.ok_or("GAMESTATE has no selected P1 chart")?;
     let metadata = song.charts.get(selected).ok_or("GAMESTATE selected an absent chart")?;
-    let actual = json!({"possible":score.possible_grade_points, "current_possible":player.current_possible_points,
+    let actual = if let Some(observation) = overlay_observation {
+        let observed = &observation.players[0];
+        json!({"possible":observed.possible_points, "current_possible":observed.current_possible_points,
+            "actual":observed.actual_points, "misses":observed.tap_scores[4],
+            "w1":observed.tap_scores[9], "w2":observed.tap_scores[8],
+            "failed":observed.failed, "life_latest":observed.life,
+            "difficulty":format!("Difficulty_{}", metadata.difficulty),
+            "description":metadata.description, "meter":metadata.meter})
+    } else {
+        json!({"possible":score.possible_grade_points, "current_possible":player.current_possible_points,
         "actual":player.earned_grade_points, "misses":player.judgment_counts[5],
         "w1":player.judgment_counts[0], "w2":player.judgment_counts[1],
         "failed":player.stage_failed || player.fail_time.is_some(), "life_latest":player.life,
         "difficulty":format!("Difficulty_{}", metadata.difficulty),
-        "description":metadata.description, "meter":metadata.meter});
+        "description":metadata.description, "meter":metadata.meter})
+    };
     let native = &sample["players"][0];
     let fields = ["possible", "current_possible", "actual", "misses", "w1", "w2",
         "failed", "life_latest", "difficulty", "description", "meter"];
@@ -2946,6 +2960,7 @@ pub(crate) fn replay_with_command_observer(
         &song, &context, deadsync_assets::song_lua::compile_song_lua,
         deadsync_assets::song_lua::compile_song_lua_layers,
     );
+    let observe_overlay = trace["update_frame_phase"].as_str() == Some("gameplay-overlay-probe");
     let init_scene = |prepared: deadsync_song_lua::playback::PreparedGameplaySongLua<
         deadsync_assets::noteskin::SpriteSlot,
     >|
@@ -2995,6 +3010,10 @@ pub(crate) fn replay_with_command_observer(
         // Player::HandleTapRowScore/HandleHoldScore skip release autoplay
         // scoring; run the production autoplay path with the same input.
         state.set_live_autoplay_enabled(autoplay);
+        if observe_overlay {
+            state.song_lua.as_ref().expect("validated Lua scene")
+                .enable_overlay_stage_observer().map_err(|error| error.to_string())?;
+        }
         Ok(state)
     };
     let mut state = init_scene(prepared)?;
@@ -3092,7 +3111,7 @@ pub(crate) fn replay_with_command_observer(
                     return Err("native activation clock follows the first gameplay frame".into());
                 }
                 state.set_current_music_time_ns((at * 1e9).round() as i64);
-                compared_fields += compare_stage_sample(&state, &song, sample, at,
+                compared_fields += compare_stage_sample(&state, &song, sample, None, at,
                     scene_count, &mut mismatches, &mut observations)?;
                 checked_samples += 1;
                 sample_cursor += 1;
@@ -3111,6 +3130,11 @@ pub(crate) fn replay_with_command_observer(
         };
         let mut effects = Vec::new();
         gameplay::update(&mut state, delta as f32, snapshot, || host, &mut effects);
+        let overlay_observation = state.song_lua.as_ref()
+            .and_then(|scene| scene.take_overlay_stage_observation());
+        if observe_overlay && overlay_observation.is_none() {
+            runtime_coverage.insert("owned gameplay overlay observation phase is unavailable".into());
+        }
         used_frames += 1;
         progress(used_frames, frame_count);
         pending_reload = effects.iter().any(|effect| {
@@ -3194,7 +3218,8 @@ pub(crate) fn replay_with_command_observer(
                 continue;
             }
             checked_samples += 1;
-            compared_fields += compare_stage_sample(&state, &song, sample, seconds,
+            compared_fields += compare_stage_sample(&state, &song, sample,
+                (sample["phase"] == "progress").then_some(overlay_observation.as_ref()).flatten(), seconds,
                 scene_count, &mut mismatches, &mut observations)?;
         }
     }

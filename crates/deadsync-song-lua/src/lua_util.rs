@@ -13025,7 +13025,11 @@ pub(crate) fn run_actor_compile_update_functions_with_entry(
                     }
                 }
                 SongLuaCompileUpdateJob::Callback { actor, .. } => {
-                    run_update_callback(lua, actor, delta_seconds)?
+                    run_update_callback(lua, actor, delta_seconds)?;
+                    // The native trace probe follows the base Overlay's child
+                    // updates and precedes the scheduled song foreground.
+                    #[cfg(feature = "test-support")]
+                    crate::live::observe_overlay_stage(lua, actor)?;
                 }
                 SongLuaCompileUpdateJob::Enter { .. } | SongLuaCompileUpdateJob::Texture { .. }
                 | SongLuaCompileUpdateJob::PlayerFeedback { .. } | SongLuaCompileUpdateJob::Transition { .. }
