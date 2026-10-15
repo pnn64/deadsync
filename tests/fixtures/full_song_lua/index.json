@@ -4427,17 +4427,14 @@
       "aliases": []
     },
     {
-      "title": "The Rite of Spring",
+      "title": "The Rite of Spring Sacrificial Dance",
       "source_simfile": "rite of spring/rite.ssc",
-      "harness_version": "0.1.0",
-      "archive": "78f644521bf3cf8ad55174c3c5bbd617407b7dee870a9288cd7e7db5238a932a.tar.zst",
-      "sha256": "78f644521bf3cf8ad55174c3c5bbd617407b7dee870a9288cd7e7db5238a932a",
-      "compressed_bytes": 569699,
-      "uncompressed_sha256": "179573794583709c050510ab9a18380fb0c3798c5dab6fbd53dac270d686710c",
-      "compression_level": 22,
-      "aliases": [
-        "f961a338e939336b8cbc88797f3ad665b30f4adc9b8ea81a637453d7bdd302fb.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "a4a49ad8c1d695b04be9c471845d2c9c92483b7a08a7a06938028c0514be7fb0.tar.zst",
+      "sha256": "a4a49ad8c1d695b04be9c471845d2c9c92483b7a08a7a06938028c0514be7fb0",
+      "compressed_bytes": 5692564,
+      "uncompressed_sha256": "fa30207b35448ca133d0e13bf2377c07ba2037f042e00f19a5d9fb4bf03287c3",
+      "aliases": []
     },
     {
       "title": "Episode 02 Jenny (I wanna Ruin Our Friendship)",
