@@ -1,0 +1,12 @@
+{
+  "fix_commit": "b5291f3e0200d91479e69ddb68cc6103c1986f8f",
+  "source_root": "/home/parity/workspace/percentage-display-inheritance-green-v1/deadsync",
+  "binary_sha256": "3a697a73073821c71e783829659a1ebaef5a6ed0350bb6060fbbc1cf4fca136e",
+  "build_proof": "/home/parity/jobs/percentage-display-inheritance-linux-green-v1/proof.json",
+  "all_four_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "honor native PercentageDisplay ActorFrame inheritance, including class query overrides and callbacks",
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
