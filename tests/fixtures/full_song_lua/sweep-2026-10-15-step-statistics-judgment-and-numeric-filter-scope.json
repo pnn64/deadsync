@@ -1,0 +1,75 @@
+{
+  "failed_checks_preserved": {
+    "windows-v4": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 334.09572630000184,
+        "log_sha256": "9717e6075ace2d9809a0c7e736789ff1052a2ef320c0605e7357e1657af14b7c",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 637 filtered out; finished in 0.34s"
+        ]
+      }
+    ],
+    "linux-v4": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 260.4136388479965,
+        "log_sha256": "be2e3b55bfdc1fbb9cb81944a96a94bba0cbc0c0e2e239609629cfa55bb5641d",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 635 filtered out; finished in 0.31s"
+        ]
+      }
+    ],
+    "windows-v5": [
+      {
+        "label": "target-control",
+        "exit_code": 0,
+        "seconds": 332.9040270000114,
+        "log_sha256": "f53b0b832d77e3b80232c9b6e8bcedf67b6ed52466ad2eb6d4432c67121db010",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 637 filtered out; finished in 1.69s"
+        ]
+      },
+      {
+        "label": "live-controls",
+        "exit_code": 101,
+        "seconds": 59.32938850001665,
+        "log_sha256": "3d901d5ca41af9e6e5cf275e500382ea2ccf12e801b0a2957f635d2803b02dab",
+        "results": [
+          "test result: FAILED. 98 passed; 1 failed; 0 ignored; 0 measured; 539 filtered out; finished in 57.69s"
+        ]
+      }
+    ],
+    "linux-v5": [
+      {
+        "label": "target-control",
+        "exit_code": 0,
+        "seconds": 259.22232036397327,
+        "log_sha256": "3b2efaa55c65c112c120367c5a17e274ae0163f0dae68d0773595cccc45b5295",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 635 filtered out; finished in 1.42s"
+        ]
+      },
+      {
+        "label": "live-controls",
+        "exit_code": 101,
+        "seconds": 38.78588178800419,
+        "log_sha256": "0d405d5ae2c04190e6e70440a5c6acf4946f26279105f485c32051ac892f3b78",
+        "results": [
+          "test result: FAILED. 98 passed; 1 failed; 0 ignored; 0 measured; 537 filtered out; finished in 38.06s"
+        ]
+      }
+    ]
+  },
+  "version4_cause": "The new regression sent Judgment through authored Broadcast normalization, which supplies HoldNoteScore_None. Original native TapNoteJudgments.lua deliberately returns when any HoldNoteScore is present. The test now uses broadcast_native_song_lua_message with Player and TapNoteScore only, matching the actual engine event; every assertion is retained.",
+  "version5_result": "The focused regression passed on both hosts. Both wider live suites passed98 tests and failed the unchanged existing background-filter profile control at native DarkBackground.lua:6. That control supplies the supported arbitrary production percentage37, which was absent from BackgroundFilterValues.",
+  "version6_fix": "Extend the shared BackgroundFilterValues numeric identity entries from four named percentages to all supported integer profile percentages0..100. Native named entries and all native Lua resource files remain unchanged.",
+  "version5_to6_all_regression_source_byte_identical": true,
+  "all_new_post_update_assertions_retained": true,
+  "all_98_prior_live_controls_unchanged": true,
+  "full_chart_repairs_spent": 0,
+  "passing_charts_reopened": false,
+  "acceptance_logic_or_tolerances_changed": false
+}
