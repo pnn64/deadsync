@@ -1,0 +1,2946 @@
+{
+  "scope": "latest recorded coverage observations for original source simfiles",
+  "updated_utc": "2026-10-15T05:34:54Z",
+  "coverage_is_separate_from_existing_full_replay_acceptance": true,
+  "passing_charts_replayed_or_investigated": false,
+  "rows": [
+    {
+      "position": 148,
+      "source_simfile": "Circles/Circles.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-historical-circles-sm-entry-clock-first-repair-v1.json"
+    },
+    {
+      "position": 149,
+      "source_simfile": "Circles/Circles.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-circles-entry-clock-first-repair-v1.json"
+    },
+    {
+      "position": 150,
+      "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.addy, Actor.basezoomx, Actor.basezoomy, Actor.blend, Actor.fadebottom, Actor.fadetop, Actor.horizalign, Actor.rotationx, Actor.rotationy, Actor.shadowlength, Actor.skewx, Actor.vertalign, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, GameState.GetSongPosition, PlayerOptions.FromString, Sprite.texcoordvelocity",
+        "native drawable state/resources: ActorProxy, BitmapText, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 151,
+      "source_simfile": "Cold/Cold.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.blend, Actor.hibernate, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.texturetranslate, Actor.wag, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.SetStateProperties, Sprite.setstate",
+        "native drawable state/resources: Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-factory-ownership-repairs.json"
+    },
+    {
+      "position": 152,
+      "source_simfile": "copter/copter.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.zoomy, GameState.ApplyStageModifiers",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-stage-modifier-repairs.json"
+    },
+    {
+      "position": 153,
+      "source_simfile": "copter/copter.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.zoomy, GameState.ApplyStageModifiers",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-stage-modifier-repairs.json"
+    },
+    {
+      "position": 156,
+      "source_simfile": "crew -All Hands on the Deck-/crew.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Steps.GetChartName",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-12-factory-ownership-repairs.json"
+    },
+    {
+      "position": 157,
+      "source_simfile": "Cuphead [TaroNuke]/botanic.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.GetZ, Actor.accelerate, Actor.addx, Actor.addy, Actor.basezoomx, Actor.basezoomy, Actor.bouncebegin, Actor.bounceend, Actor.cropbottom, Actor.cropleft, Actor.cropright, Actor.croptop, Actor.diffuseblink, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.fadebottom, Actor.fadetop, Actor.glow, Actor.horizalign, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.spring, Actor.stopeffect, Actor.stoptweening, Actor.vertalign, Actor.wag, Actor.z, Actor.zoomy, Actor.zoomz, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Hallway, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Incoming, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Roll, PlayerOptions.Space, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave, PlayerOptions.XMod, PlayerOptions.Xmode, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-background-entry-ownership-repairs.json"
+    },
+    {
+      "position": 158,
+      "source_simfile": "Cursed 2/Cursed 2.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.smooth, ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-enabled-underlay-repairs.json"
+    },
+    {
+      "position": 159,
+      "source_simfile": "Cursed 2/Cursed 2.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.smooth, ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-enabled-underlay-repairs.json"
+    },
+    {
+      "position": 160,
+      "source_simfile": "Cursed Metamorph - [Zaia]/Cursed Metamorph.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.SetHeight, Actor.SetTextureFiltering, Actor.SetWidth, Actor.bob, Actor.effectoffset, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.SetTextureName, PlayerOptions.CMod, PlayerOptions.Cover, PlayerOptions.FromString",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 162,
+      "source_simfile": "Dance Robot/dancerobot-fakemines.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 163,
+      "source_simfile": "Dance Robot/dancerobot-fakemines.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 164,
+      "source_simfile": "Data Loss/Data_Loss.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.CMod, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 165,
+      "source_simfile": "Datamania (tpz Overheat Remix)/Datamania (tpz Overheat Remix).ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy"
+      ],
+      "evidence": "sweep-2026-10-12-outro-options-repairs.json"
+    },
+    {
+      "position": 166,
+      "source_simfile": "Datura -paroxysm-/Datura -paroxysm-.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.GetZ, Actor.smooth, PlayerOptions.BounceZ, PlayerOptions.BounceZOffset, PlayerOptions.BounceZPeriod, PlayerOptions.CMod, PlayerOptions.Centered, PlayerOptions.ConfusionOffset1, PlayerOptions.ConfusionOffset2, PlayerOptions.ConfusionOffset3, PlayerOptions.ConfusionOffset4, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.DrunkZ, PlayerOptions.DrunkZOffset, PlayerOptions.DrunkZPeriod, PlayerOptions.Expand, PlayerOptions.ExpandPeriod, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.MoveX1, PlayerOptions.MoveX4, PlayerOptions.MoveY2, PlayerOptions.MoveY3, PlayerOptions.SawtoothZ, PlayerOptions.Skew, PlayerOptions.Stealth, PlayerOptions.TanBumpyX, PlayerOptions.TanTornado, PlayerOptions.Tilt, PlayerOptions.Tiny, PlayerOptions.XMod, Song.GetDisplayBpms, Song.GetDisplayMainTitle",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-12-screen-layer-tweens-repairs.json"
+    },
+    {
+      "position": 167,
+      "source_simfile": "Daywalker/Daywalker.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 168,
+      "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.Draw, Actor.GetX, Actor.SetHeight, Actor.SetWidth, Actor.accelerate, Actor.addrotationx, Actor.addrotationy, Actor.addrotationz, Actor.addx, Actor.addy, Actor.align, Actor.blend, Actor.bob, Actor.bouncebegin, Actor.bounceend, Actor.cropbottom, Actor.cropleft, Actor.cropright, Actor.croptop, Actor.cullmode, Actor.diffuseblink, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.fadebottom, Actor.fadetop, Actor.finishtweening, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.stopeffect, Actor.vertalign, Actor.z, Actor.zoomy, ActorFrame.SetDrawByZPosition, ActorFrame.fov, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.SetTextureName, PlayerState.GetPlayerOptionsArray, Sprite.setstate",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-debug-source-lines-repairs.json"
+    },
+    {
+      "position": 169,
+      "source_simfile": "Delayed Friend Request/Delayed Friend Request.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 170,
+      "source_simfile": "Delayed Friend Request/Delayed Friend Request.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 171,
+      "source_simfile": "Delightful Day/Delightful Day.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addrotationz, Actor.hibernate, Actor.smooth, ActorFrame.GetChildren, GameState.GetHumanPlayers",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 172,
+      "source_simfile": "Delightful Day/Delightful Day.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addrotationz, Actor.hibernate, Actor.smooth, ActorFrame.GetChildren, GameState.GetHumanPlayers",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 173,
+      "source_simfile": "Dig Dug Theme/Dig Dug Theme.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, ScreenGameplay.PauseGame",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-12-uptime-pause-repairs.json"
+    },
+    {
+      "position": 174,
+      "source_simfile": "Dimmadome/doug dimmadome owner of the dimmsdale dimmadome.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addrotationz",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-background-effect-owner-repairs.json"
+    },
+    {
+      "position": 175,
+      "source_simfile": "Distraction/sm.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addrotationz, Actor.setsize, Actor.xy, BitmapText.settext, Screen.AddInputCallback, ScreenManager.SystemMessage",
+        "native drawable state/resources: BitmapText, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 177,
+      "source_simfile": "Doubles-45-HALF-[MASTER] Tacos/Tacos.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Shuffle, PlayerOptions.SuperShuffle",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-14-tacos-double-repair.json"
+    },
+    {
+      "position": 178,
+      "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.Draw, Actor.GetSecsIntoEffect, Actor.GetX, Actor.GetY, Actor.SetHeight, Actor.SetTextureFiltering, Actor.SetWidth, Actor.addx, Actor.addy, Actor.blend, Actor.diffuseshift, Actor.effectclock, Actor.horizalign, Actor.pause, Actor.play, Actor.playcommand, Actor.stoptweening, Actor.stretchto, Actor.vertalign, Actor.z, ActorFrame.SetDrawByZPosition, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.SetTextureName, ActorSound.get, ActorSound.play, ActorSound.stop, BitmapText.GetText, BitmapText.settext, GameState.GetCurMusicSeconds, GameState.GetEnabledPlayers, GameState.GetNumPlayersEnabled, PlayerOptions.MaxScrollBPM, PlayerOptions.ScrollSpeed, PlayerOptions.TimeSpacing, PlayerOptions.XMod, Screen.AddInputCallback, Screen.RemoveInputCallback, Song.GetDisplayBpms, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: ActorFrameTexture, BitmapText, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-dreaming-sound-volume-repairs.json"
+    },
+    {
+      "position": 180,
+      "source_simfile": "E2/E.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.SetHeight, Actor.SetTextureFiltering, Actor.SetWidth, Actor.addrotationz, Actor.baserotationz, Actor.bob, Actor.bounce, Actor.effectclock, Actor.effectoffset, Actor.rotationx, Actor.rotationy, Actor.smooth, Actor.stopeffect, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.SetTextureName, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.SetStateProperties, Sprite.setstate",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 181,
+      "source_simfile": "E2/E.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.SetHeight, Actor.SetTextureFiltering, Actor.SetWidth, Actor.addrotationz, Actor.baserotationz, Actor.bob, Actor.bounce, Actor.effectclock, Actor.effectoffset, Actor.rotationx, Actor.rotationy, Actor.smooth, Actor.stopeffect, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.SetTextureName, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.SetStateProperties, Sprite.setstate",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 182,
+      "source_simfile": "edamame (except bbno$ produced it under C&A)/edamame.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: ActorSound.play",
+        "native drawable state/resources: Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 183,
+      "source_simfile": "edamame (except bbno$ produced it under C&A)/edamame.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: ActorSound.play",
+        "native drawable state/resources: Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 184,
+      "source_simfile": "Electrified/Electrified cut.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 185,
+      "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.rotationx, Actor.rotationy, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: BitmapText, Model, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-feely-final-song-end-repairs.json"
+    },
+    {
+      "position": 186,
+      "source_simfile": "Fiji (Lange Remix)/Fiji (Lange Remix).ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers, PlayerOptions.CMod, PlayerOptions.MMod, PlayerOptions.XMod, PlayerState.GetCurrentPlayerOptions"
+      ],
+      "evidence": "sweep-2026-10-12-null-foreground-repairs.json"
+    },
+    {
+      "position": 187,
+      "source_simfile": "Final Flash Flight/Final Flash Flight.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 188,
+      "source_simfile": "Final Flash Flight/Final Flash Flight.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 189,
+      "source_simfile": "finite/sta - Finite.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.addx, Actor.skewx, Actor.zoomz, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.BumpyX, PlayerOptions.BumpyXPeriod, PlayerOptions.Centered, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Hallway, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.StealthPastReceptors, PlayerOptions.StealthType, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Wave, PlayerOptions.XMod"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 190,
+      "source_simfile": "flores sulphuris - [Zaia]/flores sulphuris.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 191,
+      "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.addrotationy, Actor.addrotationz, Actor.addy, Actor.baserotationz, Actor.blend, Actor.bob, Actor.bounce, Actor.cropbottom, Actor.croptop, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.rotationx, Actor.rotationy, Actor.spring, Actor.stopeffect, Actor.texturetranslate, Actor.vertalign, Actor.wag, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.SetAllStateDelays, Sprite.SetStateProperties, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: ActorProxy, BitmapText, Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-flowers-cringle-tap-and-margins-repairs.json"
+    },
+    {
+      "position": 192,
+      "source_simfile": "flowers [R.I.G.H.T.S]/flowers.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.Draw, Actor.MaskDest, Actor.MaskSource, Actor.SetHeight, Actor.SetWidth, Actor.addy, Actor.align, Actor.blend, Actor.hibernate, Actor.horizalign, Actor.pause, Actor.play, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.smooth, Actor.stoptweening, Actor.vertalign, Actor.xy, ActorFrame.GetChildren, ActorFrame.fov, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.SetTextureName, GameState.GetHumanPlayers, PlayerOptions.CMod, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.Twirl, Song.GetBackgroundPath",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-actor-paths-repairs.json"
+    },
+    {
+      "position": 193,
+      "source_simfile": "flowers/flowers.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.Draw, Actor.MaskDest, Actor.MaskSource, Actor.SetHeight, Actor.SetWidth, Actor.addy, Actor.align, Actor.blend, Actor.hibernate, Actor.horizalign, Actor.pause, Actor.play, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.smooth, Actor.stoptweening, Actor.vertalign, Actor.xy, ActorFrame.GetChildren, ActorFrame.fov, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.SetTextureName, GameState.GetHumanPlayers, PlayerOptions.CMod, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.Twirl, Song.GetBackgroundPath",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 194,
+      "source_simfile": "Flying Castle/flying castle.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.z, Actor.zoomy, Actor.zoomz, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.ConfusionOffset1, PlayerOptions.ConfusionOffset2, PlayerOptions.ConfusionOffset3, PlayerOptions.ConfusionOffset4, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.DrunkOffset, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.MoveX1, PlayerOptions.MoveX2, PlayerOptions.MoveX3, PlayerOptions.MoveX4, PlayerOptions.MoveY1, PlayerOptions.MoveY2, PlayerOptions.MoveY3, PlayerOptions.MoveY4, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 195,
+      "source_simfile": "Flying Castle/flying castle.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.z, Actor.zoomy, Actor.zoomz, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.ConfusionOffset1, PlayerOptions.ConfusionOffset2, PlayerOptions.ConfusionOffset3, PlayerOptions.ConfusionOffset4, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.DrunkOffset, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.MoveX1, PlayerOptions.MoveX2, PlayerOptions.MoveX3, PlayerOptions.MoveX4, PlayerOptions.MoveY1, PlayerOptions.MoveY2, PlayerOptions.MoveY3, PlayerOptions.MoveY4, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 197,
+      "source_simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-14-fortuna-quirks-off-repair.json"
+    },
+    {
+      "position": 198,
+      "source_simfile": "Freaky Deaky/Freaky Deaky.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad"
+      ],
+      "evidence": "sweep-2026-10-15-freaky-deaky-sm-screen-children-first-repair-v1.json"
+    },
+    {
+      "position": 199,
+      "source_simfile": "Freaky Deaky/Freaky Deaky.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad"
+      ],
+      "evidence": "sweep-2026-10-15-freaky-deaky-ssc-screen-children-first-repair-v1.json"
+    },
+    {
+      "position": 200,
+      "source_simfile": "freg/freg.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.stoptweening",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-13-freg-autoplay-final-repair.json"
+    },
+    {
+      "position": 201,
+      "source_simfile": "FTW/FTW.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, ActorFrame.SetDrawByZPosition, GameState.GetCurMusicSeconds, PlayerOptions.FromString",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-ftw-metadata-repairs.json"
+    },
+    {
+      "position": 202,
+      "source_simfile": "FTW/FTW.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, ActorFrame.SetDrawByZPosition, GameState.GetCurMusicSeconds, PlayerOptions.FromString",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-ftw-ssc-description-repairs.json"
+    },
+    {
+      "position": 203,
+      "source_simfile": "Furst/furst-fakemines.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 204,
+      "source_simfile": "Furst/furst-fakemines.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 205,
+      "source_simfile": "Gallium Phosphide/Gallium Phosphide.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 206,
+      "source_simfile": "Gaming in 2018/Gaming in 2018.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native drawable state/resources: BitmapText"
+      ],
+      "evidence": "sweep-2026-10-13-gaming-fg-filename-final-repair.json"
+    },
+    {
+      "position": 207,
+      "source_simfile": "Gangu Kyousou Kyoku -Shuuen-/chart.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.SetHeight, Actor.SetWidth, Actor.bob, Actor.effectoffset, Actor.xy, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.SetTextureName, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Dark, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Stealth, PlayerOptions.Tipsy",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 208,
+      "source_simfile": "Gemini in Clockland/Gemini in Clockland.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.SetHeight, Actor.SetTextureFiltering, Actor.SetWidth, Actor.bob, Actor.effectoffset, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.SetTextureName, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.CMod, PlayerOptions.Centered, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Mini, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.XMod",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 209,
+      "source_simfile": "Genshin Quiz/Megaquiz.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.horizalign, Actor.setsize, Actor.stoptweening, Actor.xy, ActorSound.play, BitmapText.settext, GameState.GetHumanPlayers, PlayerOptions.Bumpy, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Mini, PlayerOptions.Stealth, PlayerOptions.Tilt, Screen.AddInputCallback",
+        "native drawable state/resources: BitmapText, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-genshin-day-of-year-repair.json"
+    },
+    {
+      "position": 210,
+      "source_simfile": "Get Into It/GetIntoIt.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.accelerate, Actor.addx, Actor.bob, Actor.rotationy, Actor.setstate, Actor.wag, ActorSound.get, ActorSound.play, ActorSound.stop, Sprite.LinearFrames, Sprite.setstate",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json"
+    },
+    {
+      "position": 211,
+      "source_simfile": "Get Into It/GetIntoIt.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.accelerate, Actor.addx, Actor.bob, Actor.rotationy, Actor.setstate, Actor.wag, ActorSound.get, ActorSound.play, ActorSound.stop, Sprite.LinearFrames, Sprite.setstate",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-13-get-into-it-ssc-begin-final-repair-v2.json"
+    },
+    {
+      "position": 212,
+      "source_simfile": "ghost [Telperion]/ghost.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Player.SetLife, ScreenGameplay.GetLifeMeter"
+      ],
+      "evidence": "sweep-2026-10-12-ghost-player-life-repairs.json"
+    },
+    {
+      "position": 213,
+      "source_simfile": "Girls MIA/girlsmia-fakemines.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 214,
+      "source_simfile": "Girls MIA/girlsmia-fakemines.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 215,
+      "source_simfile": "Godspeed [TaroNuke]/godspeed.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetSecsIntoEffect, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.accelerate, Actor.addx, Actor.addy, Actor.blend, Actor.bounce, Actor.bouncebegin, Actor.bounceend, Actor.diffuseblink, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.fadebottom, Actor.fadetop, Actor.playcommand, Actor.rotationx, Actor.skewx, Actor.stopeffect, Actor.vertalign, Actor.wag, Actor.z, Actor.zoomy, ActorFrame.SetDrawByZPosition, ActorFrame.fov, BitmapText.GetText, BitmapText.settext, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Hallway, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Incoming, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Roll, PlayerOptions.Space, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave, PlayerOptions.XMod, PlayerOptions.Xmode, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: BitmapText, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 216,
+      "source_simfile": "gone_KidFresino/song.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: ActorFrame.SetDrawByZPosition"
+      ],
+      "evidence": "sweep-2026-10-15-gone-source-path-first-repair-v1.json"
+    },
+    {
+      "position": 217,
+      "source_simfile": "Goodbye/Goodbye.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.CenterX, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.cropbottom, Actor.croptop, Actor.diffusecolor, Actor.glow, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.shadowcolor, Actor.shadowlengthx, Actor.shadowlengthy, Actor.valign, Actor.zoomy, Actor.zoomz, GameState.IsHumanPlayer, PlayerOptions.CMod, PlayerOptions.ConfusionOffset1, PlayerOptions.ConfusionOffset2, PlayerOptions.ConfusionOffset3, PlayerOptions.ConfusionOffset4, PlayerOptions.Dark, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.MoveX1, PlayerOptions.MoveX4, PlayerOptions.MoveY1, PlayerOptions.MoveY4, PlayerOptions.ParabolaX, PlayerOptions.Skew, PlayerOptions.Stealth, PlayerOptions.Tilt, PlayerOptions.XMod, Song.GetDisplayBpms, Song.GetDisplayMainTitle, Sprite.SetEffectMode, Sprite.SetTexture",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 218,
+      "source_simfile": "Gossipo Perpetuo [chairodactyl] - Cameron Wiggers/gossiperpet.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 219,
+      "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addcommand, Player.SetLife, PlayerOptions.CMod, PlayerStageStats.FailPlayer, PlayerState.GetHealthState, ScreenGameplay.GetLifeMeter"
+      ],
+      "evidence": "sweep-2026-10-12-great-great-final-repairs.json"
+    },
+    {
+      "position": 228,
+      "source_simfile": "Hispanic Panic/sm.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.setsize, Actor.stoptweening, Actor.xy, ActorSound.play, BitmapText.settext, GameState.IsEventMode, Screen.AddInputCallback",
+        "native drawable state/resources: BitmapText, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 230,
+      "source_simfile": "I (Ai)/I (Ai).ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.blend, Actor.playcommand, Actor.stopeffect, Actor.zoomy, ActorFrame.SetDrawByZPosition, GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini, Sprite.customtexturerect, Sprite.texcoordvelocity",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 231,
+      "source_simfile": "I Like To Move It/I Like To Move It.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers, Screen.AddInputCallback"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 232,
+      "source_simfile": "I Really Like You [dbk2]/I Really Like You.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-14-really-like-empty-layers-repair.json"
+    },
+    {
+      "position": 233,
+      "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, Screen.AddInputCallback, ScreenGameplay.PauseGame",
+        "native drawable state/resources: BitmapText, Quad"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 234,
+      "source_simfile": "I'm sorry/sm.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.setsize, Actor.xy, GameState.ApplyGameCommand, Screen.AddInputCallback",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 235,
+      "source_simfile": "I'm sorry/sm.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.setsize, Actor.xy, GameState.ApplyGameCommand, Screen.AddInputCallback",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 237,
+      "source_simfile": "ICON KILLER - [Zaia + StarrySergal + dimo + Brother Mojo]/ICON KILLER.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.stopeffect",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 238,
+      "source_simfile": "If You Crump Stand Up/crump.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-14-crump-quirks-off-repair.json"
+    },
+    {
+      "position": 239,
+      "source_simfile": "Igaku/Igaku.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.Draw, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.SetHeight, Actor.SetWidth, Actor.accelerate, Actor.addx, Actor.draworder, Actor.horizalign, Actor.rotationx, Actor.rotationy, Actor.stoptweening, Actor.valign, Actor.vertalign, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.fov, ActorFrame.vanishpoint, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.SetTextureName, GameState.GetCurrentGame, GameState.GetEnabledPlayers, GameState.GetHumanPlayers, GameState.GetNumPlayersEnabled, PlayerOptions.BeatPeriod, PlayerOptions.CMod, PlayerOptions.Drunk, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.MoveX1, PlayerOptions.MoveX4, PlayerOptions.MoveY1, PlayerOptions.MoveY2, PlayerOptions.MoveY3, PlayerOptions.MoveY4, PlayerOptions.NoteSkin, PlayerOptions.ParabolaX, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Stealth, PlayerOptions.Tilt, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Wave, PlayerOptions.XMod, Song.GetBackgroundPath, Song.GetDisplayBpms, Song.GetDisplayMainTitle",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 240,
+      "source_simfile": "Igaku/Igaku.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.Draw, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.SetHeight, Actor.SetWidth, Actor.accelerate, Actor.addx, Actor.draworder, Actor.horizalign, Actor.rotationx, Actor.rotationy, Actor.stoptweening, Actor.valign, Actor.vertalign, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.fov, ActorFrame.vanishpoint, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.SetTextureName, GameState.GetCurrentGame, GameState.GetEnabledPlayers, GameState.GetHumanPlayers, GameState.GetNumPlayersEnabled, PlayerOptions.BeatPeriod, PlayerOptions.CMod, PlayerOptions.Drunk, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.MoveX1, PlayerOptions.MoveX4, PlayerOptions.MoveY1, PlayerOptions.MoveY2, PlayerOptions.MoveY3, PlayerOptions.MoveY4, PlayerOptions.NoteSkin, PlayerOptions.ParabolaX, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Stealth, PlayerOptions.Tilt, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Wave, PlayerOptions.XMod, Song.GetBackgroundPath, Song.GetDisplayBpms, Song.GetDisplayMainTitle",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 241,
+      "source_simfile": "iLLness LiLin/iLLness LiLin.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.addrotationy, Actor.addx, Actor.addy, Actor.glow, Actor.playcommand, ActorFrame.SetDrawByZPosition, GameState.GetCurMusicSeconds, PlayerOptions.FromString",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-illness-lilin-entry-clock-first-repair-v1.json"
+    },
+    {
+      "position": 242,
+      "source_simfile": "Impulse/impulse.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-13-impulse-sm-fg-filename-final-repair.json"
+    },
+    {
+      "position": 243,
+      "source_simfile": "Impulse/impulse.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-13-impulse-ssc-fg-filename-final-repair.json"
+    },
+    {
+      "position": 244,
+      "source_simfile": "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.halign, Actor.valign, Actor.xy, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetLineWidth, ActorMultiVertex.SetNumVertices, ActorMultiVertex.SetVertices, GameState.GetHumanPlayers, Screen.AddInputCallback",
+        "native drawable state/resources: ActorMultiVertex, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-13-mountain-listed-lua-final-repair.json"
+    },
+    {
+      "position": 246,
+      "source_simfile": "Into The Light2/Into The Light.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 247,
+      "source_simfile": "Into The Light2/Into The Light.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 249,
+      "source_simfile": "Invert/invert.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 250,
+      "source_simfile": "Invert/invert.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 251,
+      "source_simfile": "It's Showtime/mettaton.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.bob, Actor.hidden, Actor.horizalign, Actor.vertalign, Actor.wag, Actor.xy, Actor.z, Actor.zoomy, BitmapText.settext, GameState.GetSongPosition, Screen.AddInputCallback, Screen.SetNextScreenName, Song.GetOneSteps",
+        "native drawable state/resources: BitmapText, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-showtime-final-repair.json"
+    },
+    {
+      "position": 252,
+      "source_simfile": "itg bloodrush 2005/itg bloodrush 2005.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetEffectDelta, PlayerOptions.CMod, PlayerOptions.Stealth"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 253,
+      "source_simfile": "Jack The Reaper/Jack The Reaper.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-15-jack-reaper-listener-first-repair.json"
+    },
+    {
+      "position": 254,
+      "source_simfile": "Jack The Reaper/Jack The Reaper.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 255,
+      "source_simfile": "jeans/abj.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.skewx, Actor.skewy",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-13-jeans-fg-entry-repair.json"
+    },
+    {
+      "position": 256,
+      "source_simfile": "Jerk/Jerk.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 257,
+      "source_simfile": "Jesus He Knows me/jesusheknowsme.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 258,
+      "source_simfile": "Jokes/Write Final Round.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.CenterX, BitmapText.settext, Screen.AddInputCallback",
+        "native drawable state/resources: BitmapText, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 259,
+      "source_simfile": "Jumper/Jumper.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.MaskDest, Actor.MaskSource, Actor.finishtweening, Actor.horizalign, Actor.playcommand, Actor.smooth, Actor.xy, ActorFrame.GetChildren, BitmapText.GetText, BitmapText.settext, GameState.GetHumanPlayers, PlayerStageStats.FailPlayer, Screen.AddInputCallback, ScreenManager.SystemMessage",
+        "native drawable state/resources: BitmapText, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 260,
+      "source_simfile": "Jumper/Jumper.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.MaskDest, Actor.MaskSource, Actor.finishtweening, Actor.horizalign, Actor.playcommand, Actor.smooth, Actor.xy, ActorFrame.GetChildren, BitmapText.GetText, BitmapText.settext, GameState.GetHumanPlayers, PlayerStageStats.FailPlayer, Screen.AddInputCallback, ScreenManager.SystemMessage",
+        "native drawable state/resources: BitmapText, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 261,
+      "source_simfile": "Just a Friend To  You/Just a Friend To  You.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.xy, GameState.GetHumanPlayers, PlayerOptions.Mini",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 262,
+      "source_simfile": "Just a Friend To  You/Just a Friend To  You.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.xy, GameState.GetHumanPlayers, PlayerOptions.Mini",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 263,
+      "source_simfile": "K-Pop Foxture/K-Pop Foxture.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.bob, Actor.xy",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 264,
+      "source_simfile": "kaboooooom!/KABOOOOOM!!!!.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.accelerate, Actor.addrotationz, Actor.addx, Actor.addy, Actor.baserotationz, Actor.bob, Actor.bounce, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.rotationx, Actor.rotationy, Actor.smooth, Actor.spring, Actor.stopeffect, Actor.texturetranslate, Actor.wag, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.settext, BitmapText.strokecolor, GameState.GetCurrentGame, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: BitmapText, Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 265,
+      "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.accelerate, Actor.addrotationz, Actor.addx, Actor.addy, Actor.baserotationz, Actor.bob, Actor.bounce, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.rotationx, Actor.rotationy, Actor.smooth, Actor.spring, Actor.stopeffect, Actor.texturetranslate, Actor.wag, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.settext, BitmapText.strokecolor, GameState.GetCurrentGame, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: BitmapText, Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 266,
+      "source_simfile": "Karachi/Jorts - Karachi.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.zoomy, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Roll, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 267,
+      "source_simfile": "Kita Saitama 2000/Kita Saitama 2000.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 268,
+      "source_simfile": "Kizuato - [Zaia]/Kizuato.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 269,
+      "source_simfile": "Koi [UPS2016]/koi.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetDestX, Actor.GetDestY, Actor.MaskDest, Actor.MaskSource, Actor.clearzbuffer, Actor.cropright",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-13-koi-sm-judgment-final-repair.json"
+    },
+    {
+      "position": 270,
+      "source_simfile": "Koi [UPS2016]/koi.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetDestX, Actor.GetDestY, Actor.MaskDest, Actor.MaskSource, Actor.clearzbuffer, Actor.cropright",
+        "native drawable state/resources: Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1"
+      ],
+      "evidence": "sweep-2026-10-15-koi-post-accept-reporter-recovery-v1.json"
+    },
+    {
+      "position": 271,
+      "source_simfile": "Kuru Kuru kururin/Kuru Kuru kururin.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.rotationy, PlayerOptions.FromString",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 272,
+      "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.Draw, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.addcommand, Actor.getrotation, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov, ActorFrame.vanishpoint, ActorMultiVertex.GetTexture, BitmapText.GetText, BitmapText.settext, GameState.GetSongPosition, PlayerOptions.CMod, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Drunk, PlayerOptions.DrunkZ, PlayerOptions.FromString, PlayerOptions.Hallway, PlayerOptions.Incoming, PlayerOptions.MMod, PlayerOptions.ParabolaZ, PlayerOptions.Space, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Wave, PlayerOptions.XMod, Song.GetTimingData",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-13-lake-live-draw-repair.json"
+    },
+    {
+      "position": 273,
+      "source_simfile": "LALA/lala.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Wave"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 274,
+      "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.addx, Actor.hibernate, Actor.smooth, ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-door-cringle-sm-attack-final-repair.json"
+    },
+    {
+      "position": 275,
+      "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.addx, Actor.hibernate, Actor.smooth, ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-door-cringle-ssc-screen-tree-repair.json"
+    },
+    {
+      "position": 276,
+      "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.addx, Actor.hibernate, Actor.smooth, ActorFrame.GetChildren, GameState.GetHumanPlayers, GameState.GetNumPlayersEnabled, PlayerOptions.NoteSkin, ScreenManager.SystemMessage",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-door-rights-sm-screen-tree-repair.json"
+    },
+    {
+      "position": 277,
+      "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.addx, Actor.hibernate, Actor.smooth, ActorFrame.GetChildren, GameState.GetHumanPlayers, GameState.GetNumPlayersEnabled, PlayerOptions.NoteSkin, ScreenManager.SystemMessage",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-door-open-screen-tree-repair.json"
+    },
+    {
+      "position": 279,
+      "source_simfile": "Levels/levels-fakemines.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 280,
+      "source_simfile": "Life Cheating Game/lifecheatinggame.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Screen.AddInputCallback",
+        "native drawable state/resources: Quad, Sound"
+      ],
+      "evidence": "sweep-2026-10-14-life-cheating-screen-tree-repair.json"
+    },
+    {
+      "position": 281,
+      "source_simfile": "Limitless/Limitless.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 282,
+      "source_simfile": "Limitless/Limitless.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 283,
+      "source_simfile": "Lip-Sync [Gpop]/Lip-Sync.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Beat, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Stealth, PlayerOptions.Tipsy"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 284,
+      "source_simfile": "Lonely/Lonely.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.smooth, GameState.GetCurrentGame, GameState.GetHumanPlayers, GameState.GetMasterPlayerNumber, GameState.GetSongBPS, PlayerOptions.CMod, PlayerOptions.Dark1, PlayerOptions.Dark2, PlayerOptions.Dark3, PlayerOptions.Dark4, PlayerState.GetSongPosition",
+        "native drawable state/resources: ActorProxy, Quad"
+      ],
+      "evidence": "sweep-2026-10-13-lonely-column-final-repair.json"
+    },
+    {
+      "position": 285,
+      "source_simfile": "Lonely/Lonely.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.smooth, GameState.GetCurrentGame, GameState.GetHumanPlayers, GameState.GetMasterPlayerNumber, GameState.GetSongBPS, PlayerOptions.CMod, PlayerOptions.Dark1, PlayerOptions.Dark2, PlayerOptions.Dark3, PlayerOptions.Dark4, PlayerState.GetSongPosition",
+        "native drawable state/resources: ActorProxy, Quad"
+      ],
+      "evidence": "sweep-2026-10-13-lonely-ssc-column-repair.json"
+    },
+    {
+      "position": 286,
+      "source_simfile": "Longinus - [Zaia]/Longinus.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-14-longinus-quirks-off-repair.json"
+    },
+    {
+      "position": 287,
+      "source_simfile": "Loop/loop.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.rotationx, Actor.rotationy, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.vanishpoint, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Song.GetMainTitle",
+        "native drawable state/resources: BitmapText, Model, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 288,
+      "source_simfile": "LORELEI/LORELEI.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.Draw, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.SetHeight, Actor.SetWidth, Actor.addcommand, Actor.blend, Actor.clearzbuffer, Actor.cropright, Actor.playcommand, Actor.scaletofit, Actor.xy, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov, ActorFrame.vanishpoint, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableDepthBuffer, ActorFrameTexture.GetTexture, GameState.GetSongPosition, RageDisplay.GetDisplayHeight, RageDisplay.GetDisplayWidth, Song.GetTimingData, Sprite.SetTexture",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 289,
+      "source_simfile": "Lower Times/Lower Times.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Sprite.SetAllStateDelays",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-13-lower-ssc-overlay-final-repair.json"
+    },
+    {
+      "position": 290,
+      "source_simfile": "Lower/Lower.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Beat, PlayerOptions.Dark, PlayerOptions.Flip, PlayerOptions.Tiny"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 291,
+      "source_simfile": "Loyal Divide [TaroNuke]/Loyal Divide.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-14-loyal-divide-quirks-off-repair.json"
+    },
+    {
+      "position": 292,
+      "source_simfile": "Macarena/Macarena.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.accelerate, Actor.addrotationz, Actor.addx, Actor.addy, Actor.setsize, Actor.stopeffect, Actor.xy, PlayerOptions.Mini",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 293,
+      "source_simfile": "Magic Torus/torus3.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.spring, Actor.stoptweening, Actor.zoomy, Actor.zoomz",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 295,
+      "source_simfile": "Marshall Maximizer/marshall maximizer.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Player.SetLife, ScreenGameplay.GetLifeMeter"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 296,
+      "source_simfile": "Marvins Room/MarvinsRoom.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 297,
+      "source_simfile": "Marvins Room/MarvinsRoom.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 298,
+      "source_simfile": "Maware! Setsugetsuka (ric3show3r bootleg)/maware ric3show3r.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 299,
+      "source_simfile": "mawaru1/mawaru.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-14-mawaru1-empty-layers-repair.json"
+    },
+    {
+      "position": 300,
+      "source_simfile": "mawaru2/mawaru2.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.horizalign, Actor.vertalign",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 301,
+      "source_simfile": "mawaru3/mawaru3.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.horizalign, Actor.vertalign, Actor.zoomtowidth",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 302,
+      "source_simfile": "mawaru4/mawaru4.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.addx, Actor.addy, Actor.cropleft, Actor.cropright, Actor.effectcolor1, Actor.effectcolor2, Actor.fadeleft, Actor.faderight, Actor.glowshift, Actor.horizalign, Actor.stretchto, Actor.zoomtowidth, Actor.zoomy",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-mawaru4-sm-background-cache-repair.json"
+    },
+    {
+      "position": 303,
+      "source_simfile": "mawaru4/mawaru4.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.addx, Actor.addy, Actor.cropleft, Actor.cropright, Actor.effectcolor1, Actor.effectcolor2, Actor.fadeleft, Actor.faderight, Actor.glowshift, Actor.horizalign, Actor.stretchto, Actor.zoomtowidth, Actor.zoomy",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-mawaru4-background-cache-repair.json"
+    },
+    {
+      "position": 304,
+      "source_simfile": "mawaru5/mawaru5.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.blend, Actor.bouncebegin, Actor.bounceend, Actor.clearzbuffer, Actor.cropleft, Actor.cropright, Actor.effectcolor1, Actor.effectcolor2, Actor.glowshift, Actor.horizalign, Actor.playcommand, Actor.rotationx, Actor.stretchto, Actor.vertalign, Actor.wag, Actor.zoomtowidth, Actor.zoomy, Actor.ztest, Actor.zwrite, GameState.IsHumanPlayer",
+        "native drawable state/resources: BitmapText, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-mawaru5-filename-final-repair.json"
+    },
+    {
+      "position": 305,
+      "source_simfile": "mawaru6/mawaru6.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.accelerate, Actor.addx, Actor.addy, Actor.blend, Actor.bob, Actor.bounce, Actor.bouncebegin, Actor.bounceend, Actor.croptop, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.fadetop, Actor.finishtweening, Actor.glowshift, Actor.horizalign, Actor.rotationx, Actor.rotationy, Actor.shadowlength, Actor.stopeffect, Actor.vertalign, Actor.wag, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, Actor.zoomz, Actor.ztest, Actor.zwrite, ActorFrame.fov, BitmapText.maxwidth, BitmapText.settext, GameState.PlayerIsUsingModifier, PlayerOptions.Beat, PlayerOptions.CMod, PlayerOptions.Centered, PlayerOptions.Flip, PlayerOptions.Stealth, PlayerOptions.XMod, Screen.AddInputCallback, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: BitmapText, Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-13-mawaru6-foreground-row-repair.json"
+    },
+    {
+      "position": 306,
+      "source_simfile": "mawaru7/mawaru7.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetWidth, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.accelerate, Actor.addx, Actor.addy, Actor.addz, Actor.basezoomx, Actor.basezoomy, Actor.blend, Actor.bob, Actor.bounce, Actor.bouncebegin, Actor.bounceend, Actor.cropbottom, Actor.cropleft, Actor.cropright, Actor.croptop, Actor.diffuseshift, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.fadebottom, Actor.fadetop, Actor.finishtweening, Actor.glow, Actor.glowshift, Actor.horizalign, Actor.playcommand, Actor.pulse, Actor.rotationx, Actor.rotationy, Actor.shadowlength, Actor.stopeffect, Actor.stoptweening, Actor.vertalign, Actor.wag, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, Actor.zoomz, Actor.ztest, Actor.ztestmode, Actor.zwrite, ActorFrame.SetDrawByZPosition, ActorFrame.fov, BitmapText.maxwidth, BitmapText.settext, GameState.IsHumanPlayer, GameState.PlayerIsUsingModifier, PlayerOptions.Beat, PlayerOptions.Bumpy, PlayerOptions.CMod, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Incoming, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tipsy, PlayerOptions.Tornado, Screen.AddInputCallback, Sprite.Load, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: BitmapText, Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 307,
+      "source_simfile": "mawaru8/mawaru8.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetSecsIntoEffect, Actor.GetX, Actor.GetY, Actor.GetZoomX, Actor.accelerate, Actor.addx, Actor.addy, Actor.basezoomx, Actor.basezoomy, Actor.blend, Actor.bob, Actor.bounceend, Actor.cropleft, Actor.croptop, Actor.diffuseramp, Actor.diffuseshift, Actor.effect_hold_at_full, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.finishtweening, Actor.glow, Actor.glowshift, Actor.horizalign, Actor.playcommand, Actor.pulse, Actor.rotationy, Actor.shadowlength, Actor.skewx, Actor.stopeffect, Actor.stoptweening, Actor.vertalign, Actor.wag, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, Actor.ztest, Actor.zwrite, ActorFrame.SetDrawByZPosition, ActorFrame.fov, BitmapText.GetText, BitmapText.maxwidth, BitmapText.settext, GameState.IsHumanPlayer, GameState.PlayerIsUsingModifier, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Hallway, PlayerOptions.Mini, PlayerOptions.Stealth, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Wave, PlayerOptions.XMod, PlayerStageStats.GetPercentDancePoints, Screen.AddInputCallback, Sprite.Load, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: BitmapText, Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 308,
+      "source_simfile": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [],
+      "evidence": "sweep-2026-10-13-wargame-single-subscriber-repair.json"
+    },
+    {
+      "position": 309,
+      "source_simfile": "Max 300/MAX 300.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: ActorSound.load, Screen.AddInputCallback",
+        "native drawable state/resources: Sound"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 310,
+      "source_simfile": "media offline/media offline.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 311,
+      "source_simfile": "media offline/media offline.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-13-media-offline-single-subscriber-repair.json"
+    },
+    {
+      "position": 314,
+      "source_simfile": "Midnight Madness/midnight.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-13-midnight-empty-layers-repair.json"
+    },
+    {
+      "position": 315,
+      "source_simfile": "minefield surfing_1/minefield.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [],
+      "evidence": "sweep-2026-10-15-minefield-overlay-stage-first-repair-v1.json"
+    },
+    {
+      "position": 316,
+      "source_simfile": "MISSION SPUTNIK/sputnik.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Song.GetOneSteps"
+      ],
+      "evidence": "sweep-2026-10-14-mission-sputnik-final-repair.json"
+    },
+    {
+      "position": 317,
+      "source_simfile": "MODULO/modulo.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.halign, Actor.valign, BitmapText.settext, PlayerOptions.MMod, Song.GetAllSteps",
+        "native drawable state/resources: BitmapText, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-modulo-cpu-steps-final-repair.json"
+    },
+    {
+      "position": 318,
+      "source_simfile": "Molly/Molly.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurrentGame, GameState.GetHumanPlayers, GameState.GetMasterPlayerNumber, PlayerOptions.CMod, PlayerState.GetSongPosition",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 319,
+      "source_simfile": "Molly/Molly.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurrentGame, GameState.GetHumanPlayers, GameState.GetMasterPlayerNumber, PlayerOptions.CMod, PlayerState.GetSongPosition",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 320,
+      "source_simfile": "My Exes Bestfriend/ExBestFriend.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.blend, Actor.smooth, ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-my-exes-sm-listener-first-repair.json"
+    },
+    {
+      "position": 321,
+      "source_simfile": "My Exes Bestfriend/ExBestFriend.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.blend, Actor.smooth, ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-my-exes-row-beats-final-repair.json"
+    },
+    {
+      "position": 323,
+      "source_simfile": "Myths You Forgot/Myths You Forgot.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-13-myths-single-subscriber-repair.json"
+    },
+    {
+      "position": 325,
+      "source_simfile": "Neon Nights - [Zaia]/Neon Nights.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+    },
+    {
+      "position": 326,
+      "source_simfile": "new earth/new earth.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.blend, Actor.diffuseshift, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetNumVertices, ActorMultiVertex.SetVertices, GameState.GetSongBPS",
+        "native drawable state/resources: ActorMultiVertex, Sprite"
+      ],
+      "evidence": "sweep-2026-10-13-new-earth-reset-bps-final-repair.json"
+    },
+    {
+      "position": 327,
+      "source_simfile": "No Role Modelz/No Role Modelz.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 328,
+      "source_simfile": "No Role Modelz/No Role Modelz.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addy, Actor.blend, Actor.cropbottom, Actor.croptop, Actor.fadebottom, Actor.fadetop, Actor.playcommand, Actor.stretchto, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, GameState.ApplyGameCommand, Sprite.customtexturerect",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+    },
+    {
+      "position": 329,
+      "source_simfile": "No Tears Left To Cry - [JNero]/No-Tears.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addy, PlayerOptions.Centered",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-13-no-tears-option-path-repair.json"
+    },
+    {
+      "position": 330,
+      "source_simfile": "no touchy/no touchy.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.rotationy, PlayerOptions.Dark, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 331,
+      "source_simfile": "No.13/no13.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [],
+      "evidence": "sweep-2026-10-14-no13-keysound-first-repair.json"
+    },
+    {
+      "position": 332,
+      "source_simfile": "Number 9/1556 - Number 9.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 333,
+      "source_simfile": "Numujika ac.10/Numujika ac.10.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.xy, Actor.zoomy, GameState.Env, Song.MusicLengthSeconds, SongOptions.Haste",
+        "native drawable state/resources: Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-numujika-metrics-repair.json"
+    },
+    {
+      "position": 334,
+      "source_simfile": "OIIA OIIA - [Zaia]/OIIA OIIA.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 335,
+      "source_simfile": "Oil Ocean Act 2/steps.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 336,
+      "source_simfile": "OK/OK.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 337,
+      "source_simfile": "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.accelerate, Actor.playcommand, Actor.spring, Actor.stopeffect, ActorFrame.SetDrawByZPosition, GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 338,
+      "source_simfile": "Other Guy/Other Guy.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.bounce",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 339,
+      "source_simfile": "Over the Top - [Zaia][FX]/Over the Top.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 340,
+      "source_simfile": "Paint the Town Red/PaintTheTownRed.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.MaskDest, Actor.MaskSource, Actor.accelerate, Actor.addrotationy, Actor.addrotationz, Actor.addx, Actor.addy, Actor.baserotationz, Actor.blend, Actor.bob, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.setstate, Actor.smooth, Actor.stopeffect, Actor.stoptweening, Actor.texturetranslate, Actor.wag, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetVertices, ActorSound.play, ActorSound.stop, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.LinearFrames, Sprite.SetAllStateDelays, Sprite.SetStateProperties, Sprite.setstate",
+        "native drawable state/resources: ActorMultiVertex, ActorProxy, BitmapText, Model, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 342,
+      "source_simfile": "Pale/Pale.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.blend",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 343,
+      "source_simfile": "Pale/Pale.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.blend",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 344,
+      "source_simfile": "panopticon/panopticon.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Stealth"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 345,
+      "source_simfile": "Paradise [Cringle Desolation]/Paradise.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 346,
+      "source_simfile": "Paradise [Cringle Desolation]/Paradise.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addz, Actor.playcommand, Actor.stretchto, Actor.z, ActorFrame.GetChildren, ActorFrame.fov",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-4.json"
+    },
+    {
+      "position": 347,
+      "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-paradise-children-repair.json"
+    },
+    {
+      "position": 348,
+      "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addz, Actor.playcommand, Actor.stretchto, Actor.z, ActorFrame.GetChildren, ActorFrame.fov",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 349,
+      "source_simfile": "Paradise/Paradise.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+    },
+    {
+      "position": 350,
+      "source_simfile": "Paradise/Paradise.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addz, Actor.playcommand, Actor.stretchto, Actor.z, ActorFrame.GetChildren, ActorFrame.fov",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-paradise-ssc-children-repair.json"
+    },
+    {
+      "position": 351,
+      "source_simfile": "PARTY [pArTy eDiTioN]/Party.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers, PlayerOptions.Bumpy, PlayerOptions.Confusion, PlayerOptions.Dizzy, PlayerOptions.Mini, PlayerOptions.Wave, PlayerState.GetSongPosition"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+    },
+    {
+      "position": 352,
+      "source_simfile": "paw, paw!/paw paw.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Dark, PlayerOptions.Dark1, PlayerOptions.Dark2, PlayerOptions.Dark3, PlayerOptions.Dark4, PlayerOptions.Drunk, PlayerOptions.DrunkOffset, PlayerOptions.Flip, PlayerOptions.Stealth, PlayerOptions.Stealth1, PlayerOptions.Stealth2, PlayerOptions.Stealth3, PlayerOptions.Stealth4, PlayerOptions.StealthPastReceptors, PlayerOptions.Tipsy"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+    },
+    {
+      "position": 353,
+      "source_simfile": "Picture in My Mind [nikko X WINK RMX]/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 355,
+      "source_simfile": "Planet Calling/Planet Calling.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.rotationx, Actor.rotationy, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: BitmapText, Model, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 356,
+      "source_simfile": "PO (wrashi Bootleg) [Gpop]/PO (wrashi Bootleg).ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.playcommand, Actor.xy, ActorFrame.SetDrawByZPosition, PlayerOptions.Beat, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Tipsy",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 357,
+      "source_simfile": "POP MY SHIT (FOXSKY REMIX)/pop my shit.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Brake, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Flip, PlayerOptions.MoveX1, PlayerOptions.MoveX2, PlayerOptions.MoveX3, PlayerOptions.MoveX4, PlayerOptions.MoveX5, PlayerOptions.MoveX6, PlayerOptions.MoveX7, PlayerOptions.MoveX8, PlayerOptions.Stealth, PlayerOptions.Tiny"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 358,
+      "source_simfile": "Pop/Pop.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers, PlayerState.GetSongPosition, ScreenGameplay.GetLifeMeter"
+      ],
+      "evidence": "sweep-2026-10-15-pop-player-position-first-repair-v1.json"
+    },
+    {
+      "position": 359,
+      "source_simfile": "Popek feat. Titans Fall Harder - Downfall/Downfall.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.SetHeight, Actor.SetTextureFiltering, Actor.SetWidth, Actor.bob, Actor.effectoffset, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.SetTextureName, PlayerOptions.Beat",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 360,
+      "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-4.json"
+    },
+    {
+      "position": 361,
+      "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Beat, PlayerOptions.Confusion, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Tipsy"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+    },
+    {
+      "position": 362,
+      "source_simfile": "Quarantine/Quarantine.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.blend, Actor.bob, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.finishtweening, Actor.hibernate, Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: BitmapText, Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 363,
+      "source_simfile": "Quarantine/Quarantine.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.blend, Actor.bob, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.finishtweening, Actor.hibernate, Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: BitmapText, Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+    },
+    {
+      "position": 364,
+      "source_simfile": "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.blend, Actor.xy",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+    },
+    {
+      "position": 365,
+      "source_simfile": "Rapture/Rapture cut-fakemines.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 366,
+      "source_simfile": "Raving With Fire/Raving With Fire.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.rotationx, Actor.rotationy, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: BitmapText, Model, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 367,
+      "source_simfile": "Raving With Fire/Raving With Fire.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.rotationx, Actor.rotationy, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: BitmapText, Model, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 368,
+      "source_simfile": "Rayc Fire 2 (SM5)/Rayc Fire 2.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetVisible, Actor.xy, GameState.GetCurMusicSeconds",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 369,
+      "source_simfile": "Rayc Fire 2 (SM5)/Rayc Fire 2.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetVisible, Actor.xy, GameState.GetCurMusicSeconds",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 370,
+      "source_simfile": "Reach The Light Switch, Without Asking you/Reach The Light Switch, Without Asking you.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addx, Actor.addy, GameState.GetHumanPlayers, PlayerOptions.Stealth",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 371,
+      "source_simfile": "REASON for RED/reasonforgay.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addx, Actor.addy, Actor.finishtweening, Actor.horizalign, Actor.vertalign, Actor.xy, Actor.zoomy, BitmapText.settext, Screen.AddInputCallback",
+        "native drawable state/resources: BitmapText, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 372,
+      "source_simfile": "REASON for RED/reasonforgay.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addx, Actor.addy, Actor.finishtweening, Actor.horizalign, Actor.vertalign, Actor.xy, Actor.zoomy, BitmapText.settext, Screen.AddInputCallback",
+        "native drawable state/resources: BitmapText, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-4.json"
+    },
+    {
+      "position": 373,
+      "source_simfile": "redesign your logo/Redesign your logo.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+    },
+    {
+      "position": 374,
+      "source_simfile": "Remind The Souls/remindthesouls-fakemines.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 375,
+      "source_simfile": "Remind The Souls/remindthesouls-fakemines.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+    },
+    {
+      "position": 376,
+      "source_simfile": "Retrospective/Retrospective.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.ApplyGameCommand",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-retrospective-background-first-repair.json"
+    },
+    {
+      "position": 377,
+      "source_simfile": "Riddle/Riddle.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Blind, PlayerOptions.Brake, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Tipsy, PlayerOptions.Tornado"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 378,
+      "source_simfile": "rite of spring/rite.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addy, Actor.blend, Actor.shadowlength, Actor.stoptweening, Actor.xy, Actor.zoomtoheight, Actor.zoomtowidth, BitmapText.settext, GameState.GetCurMusicSeconds, Player.SetLife",
+        "native drawable state/resources: BitmapText, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1"
+      ],
+      "evidence": "sweep-2026-10-14-rite-ssc-first-repair.json"
+    },
+    {
+      "position": 379,
+      "source_simfile": "Ruin Our Friendship/RuinOurFriendship.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate, Actor.smooth, ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 380,
+      "source_simfile": "Ruin Our Friendship/RuinOurFriendship.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate, Actor.smooth, ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-ruin-transition-first-repair.json"
+    },
+    {
+      "position": 381,
+      "source_simfile": "saitama2000/Saitama2000.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addx, Actor.addy, Actor.blend, Actor.bounce, Actor.clearzbuffer, Actor.effectclock, Actor.horizalign, Actor.rotationx, Actor.stopeffect, Actor.wag, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, Actor.ztest, Actor.zwrite, PlayerOptions.XMod",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 382,
+      "source_simfile": "saitama2000/Saitama2000.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addx, Actor.addy, Actor.blend, Actor.bounce, Actor.clearzbuffer, Actor.effectclock, Actor.horizalign, Actor.rotationx, Actor.stopeffect, Actor.wag, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, Actor.ztest, Actor.zwrite, PlayerOptions.XMod",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 383,
+      "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate, ActorFrame.GetChildren, ActorSound.play",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-save-tears-sm-first-repair.json"
+    },
+    {
+      "position": 384,
+      "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate, ActorFrame.GetChildren, ActorSound.play",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-save-tears-ssc-first-repair.json"
+    },
+    {
+      "position": 385,
+      "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate, ActorFrame.GetChildren, ActorSound.play",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+    },
+    {
+      "position": 386,
+      "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate, ActorFrame.GetChildren, ActorSound.play",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+    },
+    {
+      "position": 387,
+      "source_simfile": "Save Your Tears/SaveYourTears.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate, ActorFrame.GetChildren, ActorSound.play",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 388,
+      "source_simfile": "Save Your Tears/SaveYourTears.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate, ActorFrame.GetChildren, ActorSound.play",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 389,
+      "source_simfile": "Scorpion King [TaroNuke]/scorpion.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetSecsIntoEffect, Actor.blend, Actor.bob, Actor.diffuseblink, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.fadebottom, Actor.fadetop, Actor.playcommand, Actor.vertalign, ActorFrame.SetDrawByZPosition, ActorFrame.fov, BitmapText.GetText, BitmapText.settext, ScreenManager.SystemMessage, Sprite.customtexturerect, Sprite.texcoordvelocity",
+        "native drawable state/resources: ActorProxy, BitmapText, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 390,
+      "source_simfile": "See Tinh/See Tinh.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetSecsIntoEffect, Actor.GetX, Actor.GetY, Actor.effectclock, Actor.playcommand, Actor.xy, BitmapText.GetText, BitmapText.settext, PlayerOptions.Beat, PlayerOptions.Centered, PlayerOptions.Cover, PlayerOptions.DizzyHolds, PlayerOptions.DrunkZ, PlayerOptions.MaxScrollBPM, PlayerOptions.ScrollSpeed, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.TimeSpacing, ScreenManager.SystemMessage",
+        "native drawable state/resources: ActorProxy, BitmapText, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-see-tinh-sm-first-repair.json"
+    },
+    {
+      "position": 391,
+      "source_simfile": "See Tinh/See Tinh.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetSecsIntoEffect, Actor.GetX, Actor.GetY, Actor.effectclock, Actor.playcommand, Actor.xy, BitmapText.GetText, BitmapText.settext, PlayerOptions.Beat, PlayerOptions.Centered, PlayerOptions.Cover, PlayerOptions.DizzyHolds, PlayerOptions.DrunkZ, PlayerOptions.MaxScrollBPM, PlayerOptions.ScrollSpeed, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.TimeSpacing, ScreenManager.SystemMessage",
+        "native drawable state/resources: ActorProxy, BitmapText, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-see-tinh-ssc-first-repair.json"
+    },
+    {
+      "position": 392,
+      "source_simfile": "Selfie - [JNero]/Selfie.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.stoptweening, GameState.GetCurMusicSeconds",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+    },
+    {
+      "position": 393,
+      "source_simfile": "September/september.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+    },
+    {
+      "position": 394,
+      "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.accelerate, Actor.blend, Actor.bob, Actor.bouncebegin, Actor.bounceend, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.pulse, Actor.rotationy, Actor.skewx, Actor.spring, Actor.stopeffect, Actor.valign, Actor.wag, Actor.zoomy, Actor.zoomz, ActorFrame.fov, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Hallway, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Incoming, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Roll, PlayerOptions.Space, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave, PlayerOptions.XMod, PlayerOptions.Xmode, ScreenManager.SystemMessage, Sprite.setstate",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-shakunetsu-native-cmd-final-repair.json"
+    },
+    {
+      "position": 395,
+      "source_simfile": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.Draw, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.SetSize, Actor.addcommand, Actor.blend, Actor.fadeleft, Actor.faderight, Actor.getrotation, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.scale_or_crop_background, Actor.xy, Actor.z, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov, ActorFrame.vanishpoint, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableDepthBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.EnablePreserveTexture, ActorFrameTexture.GetTexture, ActorMultiVertex.GetTexture, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetTexture, ActorMultiVertex.SetVertices, BitmapText.GetText, GameState.GetSongPosition, PlayerOptions.CMod, PlayerOptions.Distant, PlayerOptions.FromString, PlayerOptions.Hallway, PlayerOptions.Incoming, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.Overhead, PlayerOptions.Space, PlayerOptions.XMod, Song.GetTimingData, Sprite.LoadFromCurrentSongBackground",
+        "native drawable state/resources: ActorFrameTexture, ActorMultiVertex, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 396,
+      "source_simfile": "SharpNel/HashtagNel.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: ActorSound.playforplayer, PlayerState.GetHealthState",
+        "native drawable state/resources: Quad, Sound"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 397,
+      "source_simfile": "Shine!/Shine!.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers, GameState.GetSongOptionsString, PlayerState.GetPlayerOptionsArray",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 398,
+      "source_simfile": "Shivers/Shivers.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.blend, Actor.hibernate, Actor.rotationx, Actor.rotationy, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.SetStateProperties, Sprite.setstate",
+        "native drawable state/resources: Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-shivers-sm-first-repair.json"
+    },
+    {
+      "position": 399,
+      "source_simfile": "Shivers/Shivers.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.blend, Actor.hibernate, Actor.rotationx, Actor.rotationy, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.SetStateProperties, Sprite.setstate",
+        "native drawable state/resources: Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-shivers-ssc-first-repair.json"
+    },
+    {
+      "position": 400,
+      "source_simfile": "ShockWAVE Syndrome  [-YOSEFU-]/ShockWAVE Syndrome.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.xy",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+    },
+    {
+      "position": 401,
+      "source_simfile": "Shooting Love/Shooting Love.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.rotationx, Actor.rotationy, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.settext, BitmapText.strokecolor, GameState.GetCurrentGame, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: BitmapText, Model, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+    },
+    {
+      "position": 402,
+      "source_simfile": "Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+    },
+    {
+      "position": 403,
+      "source_simfile": "Slamurai/Slamurai.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 404,
+      "source_simfile": "Someone Special - hubert/Someone Special.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.addrotationy, Actor.baserotationz, Actor.bounce, Actor.effectclock, Actor.rotationx, Actor.rotationy, Actor.spring, Actor.stopeffect, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: ActorProxy, BitmapText, Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 405,
+      "source_simfile": "Someone Special - hubert/Someone Special.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.addrotationy, Actor.baserotationz, Actor.bounce, Actor.effectclock, Actor.rotationx, Actor.rotationy, Actor.spring, Actor.stopeffect, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
+        "native drawable state/resources: ActorProxy, BitmapText, Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-post-accept-reporter-recovery.json"
+    },
+    {
+      "position": 406,
+      "source_simfile": "Space Creation Theory/space creation theory.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.rotationx, Actor.rotationy, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.vanishpoint, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Song.GetMainTitle",
+        "native drawable state/resources: BitmapText, Model, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 407,
+      "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.Draw, Actor.GetX, Actor.GetY, Actor.SetHeight, Actor.SetWidth, Actor.blend, Actor.bob, Actor.effectclock, Actor.effectoffset, Actor.finishtweening, Actor.hibernate, Actor.smooth, Actor.texturetranslate, Actor.xy, Actor.z, ActorFrame.fov, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.GetTexture, ActorFrameTexture.SetTextureName, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetTexture, ActorMultiVertex.SetVertices, GameState.GetEnabledPlayers, GameState.GetSongBPS, GameState.IsHumanPlayer, PlayerOptions.Alternate, PlayerOptions.AttackMines, PlayerOptions.BMRize, PlayerOptions.Backwards, PlayerOptions.Beat, PlayerOptions.Big, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Boomerang, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.DrainSetting, PlayerOptions.Drunk, PlayerOptions.Echo, PlayerOptions.Expand, PlayerOptions.FailSetting, PlayerOptions.Flip, PlayerOptions.Floored, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.HoldRolls, PlayerOptions.Invert, PlayerOptions.Left, PlayerOptions.LifeSetting, PlayerOptions.Little, PlayerOptions.MaxScrollBPM, PlayerOptions.MinTNSToHideNotes, PlayerOptions.Mines, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.MuteOnError, PlayerOptions.NoAttack, PlayerOptions.NoFakes, PlayerOptions.NoHands, PlayerOptions.NoHolds, PlayerOptions.NoJumps, PlayerOptions.NoLifts, PlayerOptions.NoMines, PlayerOptions.NoQuads, PlayerOptions.NoRolls, PlayerOptions.NoStretch, PlayerOptions.NoteSkin, PlayerOptions.Passmark, PlayerOptions.Planted, PlayerOptions.PlayerAutoPlay, PlayerOptions.Quick, PlayerOptions.RandAttack, PlayerOptions.RandomSpeed, PlayerOptions.RandomVanish, PlayerOptions.Right, PlayerOptions.Roll, PlayerOptions.ScrollBPM, PlayerOptions.ScrollSpeed, PlayerOptions.Shuffle, PlayerOptions.Skew, PlayerOptions.Skippy, PlayerOptions.SoftShuffle, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Stomp, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.SuperShuffle, PlayerOptions.Tilt, PlayerOptions.TimeSpacing, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.TurnNone, PlayerOptions.Twirl, PlayerOptions.Twister, PlayerOptions.Wave, PlayerOptions.Wide, PlayerOptions.Xmode, Screen.GetScreenType, Sprite.SetTexture",
+        "native drawable state/resources: ActorFrameTexture, ActorMultiVertex, ActorProxy, Model, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-4.json"
+    },
+    {
+      "position": 408,
+      "source_simfile": "Spectrum Sequence/spectrumsequence.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetEasiestStepsDifficulty, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+    },
+    {
+      "position": 409,
+      "source_simfile": "SPLAK IT DOWN - [Zaia +ruunix2]/SPLAK IT DOWN.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.BumpyPeriod, PlayerOptions.Confusion, PlayerOptions.Cross, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Split, PlayerOptions.Tipsy, PlayerOptions.Wave"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+    },
+    {
+      "position": 410,
+      "source_simfile": "spooky (SM 12)/spooky (Tech-Stam cut).ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [],
+      "evidence": "sweep-2026-10-14-capture-selection-first-repairs.json"
+    },
+    {
+      "position": 411,
+      "source_simfile": "spooky (SX 14)/spooky (Tech-Stam cut).ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 412,
+      "source_simfile": "Spooky/1.09 - Spooky.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.basezoom, Actor.cropleft, Actor.cropright, Actor.skewx, Actor.stretchto, Actor.xy, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.CMod, PlayerOptions.Centered, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.MMod, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.XMod",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 413,
+      "source_simfile": "Spooky/1.09 - Spooky.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.basezoom, Actor.cropleft, Actor.cropright, Actor.skewx, Actor.stretchto, Actor.xy, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.CMod, PlayerOptions.Centered, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.MMod, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.XMod",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 414,
+      "source_simfile": "STAGE 0.ac11/STAGE 0.ac11.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.xy, Actor.zoomy, GameState.Env, Song.MusicLengthSeconds, SongOptions.Haste",
+        "native drawable state/resources: Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 415,
+      "source_simfile": "Stay Alive/Stay Alive.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.stoptweening, GameState.GetCurMusicSeconds, GameState.IsHumanPlayer, PlayerOptions.Stealth, PlayerState.GetHealthState",
+        "native drawable state/resources: Quad",
+        "missing captured subscriber identity for ScreenGameplay/19/1"
+      ],
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-1.json"
+    },
+    {
+      "position": 416,
+      "source_simfile": "Stella Glow/Stella Glow.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "Detailed comparison observations and operation coverage were not serialized because ENOSPC followed completed comparisons; missing coverage remains separate."
+      ],
+      "evidence": "sweep-2026-10-15-stella-completed-comparison-recovery.json"
+    },
+    {
+      "position": 417,
+      "source_simfile": "Step Your Game Up (Director's Cut)/stepyourgameup.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.accelerate, Actor.cropbottom, Actor.cropleft, Actor.cropright, Actor.croptop, Actor.diffuseshift, Actor.effectcolor1, Actor.effectcolor2, Actor.rotationx, Actor.rotationy, Actor.xy, Actor.z, Actor.zoomy, ActorFrame.fov, PlayerOptions.Beat, PlayerOptions.ConfusionYOffset, PlayerOptions.Dark, PlayerOptions.Stealth, PlayerOptions.StealthPastReceptors, Sprite.customtexturerect, Sprite.texcoordvelocity",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+    },
+    {
+      "position": 418,
+      "source_simfile": "Stepping Music/simfile.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetEnabledPlayers, ScreenManager.SystemMessage"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+    },
+    {
+      "position": 419,
+      "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.Draw, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.accelerate, Actor.addcommand, Actor.addx, Actor.addy, Actor.cropleft, Actor.cropright, Actor.fadeleft, Actor.faderight, Actor.getrotation, Actor.playcommand, Actor.xy, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-steve-sm-loader-multi-return-first-repair.json"
+    },
+    {
+      "position": 420,
+      "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.Draw, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.accelerate, Actor.addcommand, Actor.addx, Actor.addy, Actor.cropleft, Actor.cropright, Actor.fadeleft, Actor.faderight, Actor.getrotation, Actor.playcommand, Actor.xy, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-steve-ssc-loader-multi-return-first-repair.json"
+    },
+    {
+      "position": 421,
+      "source_simfile": "Stuck in the Abyss [DDDAAA]/stuckintheabyss.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.basezoom, Actor.xy, PlayerOptions.Beat, PlayerOptions.Confusion, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Tipsy",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 422,
+      "source_simfile": "Subway Surfers/subwaysurfers.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.draworder, Actor.xy",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 423,
+      "source_simfile": "Tacos/Tacos.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json"
+    },
+    {
+      "position": 424,
+      "source_simfile": "Talk About/talkabout.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-15-storage-capture-first-repairs.json"
+    },
+    {
+      "position": 425,
+      "source_simfile": "Talk About/talkabout.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+    },
+    {
+      "position": 426,
+      "source_simfile": "Tamamo no Mae/Tamamo no Mae.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+    },
+    {
+      "position": 427,
+      "source_simfile": "tamashi/tamashi.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.accelerate, Actor.blend, Actor.finishtweening, Actor.hibernate, Actor.skewx, Actor.z, Actor.zoomz, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Hallway, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Incoming, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Roll, PlayerOptions.Space, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave, PlayerOptions.Xmode",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-post-accept-reporter-recovery.json"
+    },
+    {
+      "position": 428,
+      "source_simfile": "Tear Jerker/tearjerker.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 429,
+      "source_simfile": "Tear Jerker/tearjerker.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 430,
+      "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.Draw, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.addcommand, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.xy, Actor.z, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov, ActorFrame.vanishpoint, GameState.GetSongPosition, Player.SetLife, PlayerStageStats.FailPlayer, PlayerState.GetHealthState, ScreenGameplay.GetLifeMeter, Song.GetTimingData, Sprite.GetNumStates, Sprite.setstate",
+        "native drawable state/resources: Quad",
+        "missing captured subscriber identity for ScreenGameplay/19/1"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 431,
+      "source_simfile": "The Entity/The Entity.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, Actor.spring, ActorFrame.SetDrawByZPosition, GameState.GetCurMusicSeconds, PlayerOptions.FromString",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-1.json"
+    },
+    {
+      "position": 432,
+      "source_simfile": "The Entity/The Entity.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, Actor.spring, ActorFrame.SetDrawByZPosition, GameState.GetCurMusicSeconds, PlayerOptions.FromString",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-storage-capture-first-repairs.json"
+    },
+    {
+      "position": 433,
+      "source_simfile": "the fresh prince of bel air (razihel remix)/steps.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-14-capture-selection-first-repairs.json"
+    },
+    {
+      "position": 434,
+      "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, PlayerOptions.Beat, PlayerOptions.Centered, PlayerOptions.ConfusionOffset1, PlayerOptions.ConfusionOffset2, PlayerOptions.ConfusionOffset3, PlayerOptions.ConfusionOffset4, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Skew, PlayerOptions.Stealth, PlayerOptions.StealthPastReceptors, PlayerOptions.Tilt, PlayerOptions.XMod, Screen.AddInputCallback, ScreenManager.SystemMessage"
+      ],
+      "evidence": "sweep-2026-10-14-great-divide-sm-first-repair.json"
+    },
+    {
+      "position": 435,
+      "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, PlayerOptions.Beat, PlayerOptions.Centered, PlayerOptions.ConfusionOffset1, PlayerOptions.ConfusionOffset2, PlayerOptions.ConfusionOffset3, PlayerOptions.ConfusionOffset4, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Skew, PlayerOptions.Stealth, PlayerOptions.StealthPastReceptors, PlayerOptions.Tilt, PlayerOptions.XMod, Screen.AddInputCallback, ScreenManager.SystemMessage"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 436,
+      "source_simfile": "The Scale/The Scale.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.CenterX, GameState.GetHumanPlayers, Screen.AddInputCallback",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-post-accept-reporter-recovery.json"
+    },
+    {
+      "position": 437,
+      "source_simfile": "The Video Boaboaboaboab/The Video Boab Oyedivuth.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: GameState.ApplyGameCommand, GameState.GetMasterPlayerNumber"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 438,
+      "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.SetTextureFiltering, Actor.accelerate, Actor.addx, Actor.addy, Actor.bob, Actor.bouncebegin, Actor.bounceend, Actor.cullmode, Actor.effectclock, Actor.effectoffset, Actor.finishtweening, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.stoptweening, Actor.stretchto, Actor.z, Actor.zoomy, ActorFrame.fov, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetTexture, ActorMultiVertex.SetVertices, GameState.IsHumanPlayer, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Hallway, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Incoming, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Roll, PlayerOptions.Space, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave, PlayerOptions.XMod, PlayerOptions.Xmode, Sprite.setstate",
+        "native drawable state/resources: ActorMultiVertex, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 439,
+      "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.SetTextureFiltering, Actor.accelerate, Actor.addx, Actor.addy, Actor.bob, Actor.bouncebegin, Actor.bounceend, Actor.cullmode, Actor.effectclock, Actor.effectoffset, Actor.finishtweening, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.stoptweening, Actor.stretchto, Actor.z, Actor.zoomy, ActorFrame.fov, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetTexture, ActorMultiVertex.SetVertices, GameState.IsHumanPlayer, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Hallway, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Incoming, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Roll, PlayerOptions.Space, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave, PlayerOptions.XMod, PlayerOptions.Xmode, Sprite.setstate",
+        "native drawable state/resources: ActorMultiVertex, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json"
+    },
+    {
+      "position": 442,
+      "source_simfile": "This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!/This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.addcommand, Actor.basezoomx, Actor.getrotation, Actor.playcommand, Actor.rotationy, ActorFrame.GetChildren, ActorFrame.SetFOV, ActorFrame.fov, ActorFrame.vanishpoint, ActorMultiVertex.GetTexture, BitmapText.GetText, BitmapText.settext, GameState.GetSongPosition, PlayerOptions.CMod, PlayerOptions.FromString, PlayerOptions.MMod, PlayerOptions.XMod, PlayerStageStats.GetPercentDancePoints, RageDisplay.GetDisplayHeight, RageDisplay.GetDisplayWidth, Song.GetTimingData",
+        "native drawable state/resources: Quad"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+    },
+    {
+      "position": 443,
+      "source_simfile": "Toho Mathematics (LADIES CHECK THIS OUT)/thischartsucks.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addy, Actor.horizalign, Actor.vertalign, Actor.xy, Actor.zoomy, BitmapText.settext, Screen.AddInputCallback",
+        "native drawable state/resources: BitmapText, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 444,
+      "source_simfile": "Toki o Kizamu Uta (Nhato Remix)/Toki o Kizamu Uta (Nhato Remix).ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, Actor.setsize, Actor.xy, ActorFrame.SetDrawByZPosition, GameState.GetCurMusicSeconds, PlayerOptions.FromString",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 445,
+      "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.bob, Actor.fadetop, Actor.hibernate, Actor.hurrytweening, Actor.tween",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-tower-generic-tween-first-repair-v1.json"
+    },
+    {
+      "position": 446,
+      "source_simfile": "Trancing Pulse (Random)/Trancing Pulse (Random).ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetSecsIntoEffect, Actor.cropbottom, Actor.croptop, Actor.effectclock, Actor.playcommand, Actor.rotationy, Actor.scaletocover, BitmapText.GetText, BitmapText.settext, GameState.GetEnabledPlayers, PlayerOptions.MaxScrollBPM, PlayerOptions.ScrollSpeed, PlayerOptions.TimeSpacing, Screen.AddInputCallback, Song.GetBackgroundPath",
+        "native drawable state/resources: BitmapText, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 447,
+      "source_simfile": "Trinity Field/Trinity Field.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetSecsIntoEffect, Actor.addx, Actor.diffuseshift, Actor.effectclock, Actor.playcommand, Actor.scaletocover, BitmapText.GetText, BitmapText.settext, GameState.GetEnabledPlayers, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Boomerang, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Hallway, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Incoming, PlayerOptions.Invert, PlayerOptions.Little, PlayerOptions.MaxScrollBPM, PlayerOptions.Mini, PlayerOptions.MoveX1, PlayerOptions.MoveX2, PlayerOptions.MoveX3, PlayerOptions.MoveX4, PlayerOptions.MoveY1, PlayerOptions.MoveY2, PlayerOptions.MoveY3, PlayerOptions.MoveY4, PlayerOptions.NoFakes, PlayerOptions.NoHands, PlayerOptions.NoHolds, PlayerOptions.NoJumps, PlayerOptions.NoLifts, PlayerOptions.NoMines, PlayerOptions.NoQuads, PlayerOptions.NoRolls, PlayerOptions.NoStretch, PlayerOptions.Overhead, PlayerOptions.Passmark, PlayerOptions.RandAttack, PlayerOptions.RandomSpeed, PlayerOptions.RandomVanish, PlayerOptions.Roll, PlayerOptions.ScrollBPM, PlayerOptions.ScrollSpeed, PlayerOptions.Space, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tilt, PlayerOptions.TimeSpacing, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave, PlayerOptions.Xmode, PlayerState.GetPlayerNumber, Screen.AddInputCallback, Screen.RemoveInputCallback, ScreenManager.SystemMessage, Song.GetBackgroundPath, Song.GetDisplayBpms, Sprite.cropto, Sprite.setstate",
+        "native drawable state/resources: BitmapText, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-trinity-cropto-alias-first-repair-v1.json"
+    },
+    {
+      "position": 448,
+      "source_simfile": "TRIP MACHINE -Resuscitation MIX-/TRIP MACHINE -Resuscitation MIX-.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.SetSize, Actor.blend, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableDepthBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.EnablePreserveTexture, ActorFrameTexture.GetTexture, GameState.ApplyGameCommand, Sprite.SetTexture",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+    },
+    {
+      "position": 449,
+      "source_simfile": "Turn A - [Freya]/turn_a.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.basezoom, Actor.basezoomx, Actor.basezoomy, BitmapText.GetText, PlayerOptions.CMod, PlayerOptions.FromString, PlayerOptions.MMod, PlayerOptions.Tiny, PlayerOptions.XMod, ScreenManager.SystemMessage",
+        "native drawable state/resources: ActorProxy, Quad"
+      ],
+      "evidence": "sweep-2026-10-14-turn-a-preference-first-repair.json"
+    },
+    {
+      "position": 450,
+      "source_simfile": "U-0 - [PCBoyGames]/Srezcat - U-0.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.skewx, PlayerOptions.AttenuateX, PlayerOptions.Bumpy, PlayerOptions.BumpyX, PlayerOptions.BumpyXPeriod, PlayerOptions.Dark, PlayerOptions.Dark1, PlayerOptions.Dark2, PlayerOptions.Dark3, PlayerOptions.Dark4, PlayerOptions.Drunk, PlayerOptions.DrunkZ, PlayerOptions.Mini, PlayerOptions.MoveY1, PlayerOptions.MoveY2, PlayerOptions.MoveY3, PlayerOptions.MoveY4, PlayerOptions.Skew, PlayerOptions.Stealth, PlayerOptions.Stealth1, PlayerOptions.Stealth2, PlayerOptions.Stealth3, PlayerOptions.Stealth4, PlayerOptions.StealthPastReceptors, PlayerOptions.Tilt, PlayerOptions.Tipsy, PlayerOptions.XMod, PlayerOptions.Zigzag, PlayerOptions.ZigzagPeriod"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+    },
+    {
+      "position": 451,
+      "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-un-owen-sm-late-command-first-repair-v1.json"
+    },
+    {
+      "position": 452,
+      "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-un-owen-late-command-first-repair.json"
+    },
+    {
+      "position": 453,
+      "source_simfile": "Ultimate taste/Ultimate taste.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, Actor.setsize, Actor.xy, Actor.zoomy, ActorFrame.SetDrawByZPosition, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Tiny, PlayerOptions.Tipsy",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
+    },
+    {
+      "position": 454,
+      "source_simfile": "Ultra B+K/ultrabk.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.blend, Actor.zoomtowidth",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 455,
+      "source_simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY",
+        "native drawable state/resources: ActorProxy, Quad"
+      ],
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json"
+    },
+    {
+      "position": 456,
+      "source_simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY",
+        "native drawable state/resources: ActorProxy, Quad"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+    },
+    {
+      "position": 457,
+      "source_simfile": "Up Up Up Up/Up Up Up Up.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+    },
+    {
+      "position": 458,
+      "source_simfile": "Vanishing Point - [Zaia][FX]/Vanishing Point.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+    },
+    {
+      "position": 459,
+      "source_simfile": "Vector Field/Vector Field.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 461,
+      "source_simfile": "Void Virus/Void_Virus.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-1.json"
+    },
+    {
+      "position": 462,
+      "source_simfile": "Vtubers Never Die! [Gpop]/Vtubers Never Die!.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.scale_or_crop_background, GameState.GetMasterPlayerNumber",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 464,
+      "source_simfile": "wah-propaganwah (habstrakt remix) (ddrillini remix)/Propaganda (Habstrakt Remix).ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: ActorSound.play",
+        "native drawable state/resources: Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+    },
+    {
+      "position": 465,
+      "source_simfile": "Waiting/Waiting.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers, GameState.GetSongOptionsString, PlayerOptions.CMod, PlayerOptions.MMod",
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+    },
+    {
+      "position": 466,
+      "source_simfile": "Wake Up/Wake Up.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetWidth, Actor.addx, Actor.halign, GameState.ApplyGameCommand, GameState.GetHumanPlayers, GameState.IsHumanPlayer, PlayerOptions.Stealth, PlayerOptions.StealthPastReceptors, ScreenGameplay.GetLifeMeter",
+        "native drawable state/resources: Quad, Sound, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1"
+      ],
+      "evidence": "sweep-2026-10-14-wake-up-ssc-listener-first-repair.json"
+    },
+    {
+      "position": 467,
+      "source_simfile": "Watching/watching-fakemines.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 468,
+      "source_simfile": "Watching/watching-fakemines.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    },
+    {
+      "position": 469,
+      "source_simfile": "Watermelon/Watermelon.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.smooth, Actor.z, ActorFrame.GetChildren, ActorFrame.SetDrawByZPosition, GameState.GetHumanPlayers, PlayerOptions.Dark",
+        "native drawable state/resources: Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-1.json"
+    },
+    {
+      "position": 470,
+      "source_simfile": "We're Finally Landing/landing.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.smooth, ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 472,
+      "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetY, Actor.addcommand, Actor.effectclock, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.skewy, Actor.z, ActorFrame.GetChildren, GameState.GetSongPosition, PlayerOptions.FromString, RageDisplay.GetDisplayHeight, RageDisplay.GetDisplayWidth, Song.GetTimingData"
+      ],
+      "evidence": "sweep-2026-10-15-what-if-command-observer-final-repair-v1.json"
+    },
+    {
+      "position": 473,
+      "source_simfile": "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.rotationx, Actor.rotationy, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Song.GetMainTitle",
+        "native drawable state/resources: Model, Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-who-edgar-storage-first-repair.json"
+    },
+    {
+      "position": 475,
+      "source_simfile": "Wobbpotato [Blue Shift Phase 1]/wobbpotato.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-15-wobbpotato-untyped-actor-first-repair-v1.json"
+    },
+    {
+      "position": 476,
+      "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-15-wobbpotato-egg-carton-untyped-actor-first-repair-v1.json"
+    },
+    {
+      "position": 478,
+      "source_simfile": "You are Goomba Play ITG/You are Gooma Play ITG.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.smooth, ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 479,
+      "source_simfile": "You are Goomba Play ITG/You are Gooma Play ITG.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.smooth, ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json"
+    },
+    {
+      "position": 482,
+      "source_simfile": "Zoku Shimedore 2000/Zoku Shimedore 2000.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.xy, GameState.ApplyGameCommand, GameState.GetHumanPlayers, Sprite.SetAllStateDelays",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json"
+    },
+    {
+      "position": 483,
+      "source_simfile": "Ztar Trek/steps.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 486,
+      "source_simfile": "[12] Ascendanz/Ascendanz.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 488,
+      "source_simfile": "Collaboration with Paul J Kim/Something.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.xy",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+    },
+    {
+      "position": 494,
+      "source_simfile": "Lots of Spices - [tari]/spices.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 498,
+      "source_simfile": "Pokemon Gym Battle Remix/pokes.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.hibernate, Actor.xy, PlayerState.GetHealthState, ScreenManager.SystemMessage, Sprite.Load",
+        "native drawable state/resources: Quad, Sprite",
+        "native scene 1: no captured factory identity for 1 background entries; foreground ranks retained"
+      ],
+      "evidence": "sweep-2026-10-15-pokemon-sparse-declaration-first-repair.json"
+    },
+    {
+      "position": 499,
+      "source_simfile": "Rayc Fire 2/Rayc Fire 2.sm",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-12-results.json"
+    },
+    {
+      "position": 500,
+      "source_simfile": "Rayc Fire 2/Rayc Fire 2.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
+    }
+  ]
+}
