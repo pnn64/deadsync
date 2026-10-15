@@ -1,0 +1,172 @@
+{
+  "all_seventeen_checks_passed": true,
+  "all_1175_normalized_source_pins_and_all_log_hashes_verified": true,
+  "red_large_live_scene_stack_error_reproduced": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 360.81863369999337,
+      "log_sha256": "314842e0028eb7488e1fa7f524973564499460f53179d29488ba155de232095d",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 620 filtered out; finished in 47.33s"
+      ]
+    },
+    {
+      "label": "quad-texture-control",
+      "exit_code": 0,
+      "seconds": 1.8971055000001797,
+      "log_sha256": "cd9a1afa064fc36ddb4ef4f34c764db3e54d19eb1ec99aea11b8df28ae95ae12",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 620 filtered out; finished in 0.44s"
+      ]
+    },
+    {
+      "label": "cancel-child-control",
+      "exit_code": 0,
+      "seconds": 1.7275118000106886,
+      "log_sha256": "525d4edea074486e092ae4d866a0119fff19c82f11368fd6f09138ca9cb6a41c",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 620 filtered out; finished in 0.28s"
+      ]
+    },
+    {
+      "label": "registry-handles-control",
+      "exit_code": 0,
+      "seconds": 1.4517131000029622,
+      "log_sha256": "99cfd05f7fd5d65674e8c5287b2bab4e78b89a7966ae1f55422626e9d435f4b3",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 620 filtered out; finished in 0.07s"
+      ]
+    },
+    {
+      "label": "mine-boundary-control",
+      "exit_code": 0,
+      "seconds": 155.77461399999447,
+      "log_sha256": "b930a95bb495d5fdf96b1ce2dd13d8233aa079294223fa6e20f6f1ff307fced5",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 336 filtered out; finished in 20.68s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 1.7188794999965467,
+      "log_sha256": "fb74de9a651a5198362aedffe4a4524ffa3b724c00945ae135ca13eaf55c6c1e",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 620 filtered out; finished in 0.21s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 1.9398927000002004,
+      "log_sha256": "09737209f42c1601b36e81f2529de275dbb4f9d8fed1bb9300de84ff5fbd3dbc",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.3867453999991994,
+      "log_sha256": "aa61a72bbd4b664337b7c9c0034aa914a67b7c6b2bc71c35b88f1c6406269d43",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 611 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 57.60256859999208,
+      "log_sha256": "e2c3be919604072491f72f95e04ddd8f9eee70ae1fb5f6d6d8dafc9e99b4cfc1",
+      "results": [
+        "test result: ok. 82 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 56.18s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 23.98124400000961,
+      "log_sha256": "9c9e31323468144269f521498663f7a792755c36a66839c4328d9c32c00ec55e",
+      "results": [
+        "test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 22.01s"
+      ]
+    },
+    {
+      "label": "sm-compatibility-control",
+      "exit_code": 0,
+      "seconds": 1.6425922000053106,
+      "log_sha256": "552f19175c1abc7274d29c78e0dd9948da3b4630f3c3853ec009f69d4b1e55dd",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 620 filtered out; finished in 0.18s"
+      ]
+    },
+    {
+      "label": "crop-compatibility-control",
+      "exit_code": 0,
+      "seconds": 1.7232918000081554,
+      "log_sha256": "3cc371116f2d6c3542e8ee5e98bb4bc6ea2d091da4b71d6c1ca1dd4bcbc982d2",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 620 filtered out; finished in 0.21s"
+      ]
+    },
+    {
+      "label": "model-controls",
+      "exit_code": 0,
+      "seconds": 2.98565720001352,
+      "log_sha256": "350a06f725fbdb3648930fb186fcfb722c9949e176d8d0c29527d22be9f53c94",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 276 filtered out; finished in 0.07s"
+      ]
+    },
+    {
+      "label": "model-differential-control",
+      "exit_code": 0,
+      "seconds": 1.201663699990604,
+      "log_sha256": "c81633b3e3457b016245fc094359fb8500e2ac543dac4389614e7dd9b5aee07d",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 287 filtered out; finished in 0.24s"
+      ]
+    },
+    {
+      "label": "completion-controls",
+      "exit_code": 0,
+      "seconds": 0.7958670000080019,
+      "log_sha256": "8fc68e4dca33e2d7830816f26c82184d35f99c0795d3ba3ddef0eb68846c0498",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 815 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 1.3781024000054458,
+      "log_sha256": "615a8adb5bdf785cba32561ec9917e96aa74f25ff8fe02cd2ef7fe1e0004356d",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 620 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 32.407869100003154,
+      "log_sha256": "5288a5e240cb1f8c76981a32be368330532eab1e330c2591707907013d065d5a",
+      "results": []
+    }
+  ],
+  "red_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 316.4777377999999,
+      "log_sha256": "19bee62c17926b920da8f73a6f762bf21743902d16557e8726dc1b9964996779",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 620 filtered out; finished in 6.58s"
+      ]
+    }
+  ],
+  "native_source_cause": "sweep-2026-10-15-mawaru9-canonical-entry-diagnostic.json",
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

@@ -11174,6 +11174,7 @@ struct LiveBroadcasts(Vec<(f32, String, bool)>);
 struct LiveSourceBroadcasts(Vec<crate::live::SongLuaLiveBroadcast>);
 
 pub(crate) fn begin_live_runtime(lua: &Lua) -> mlua::Result<()> {
+    lua.remove_app_data::<CanonicalLiveActorHandles>();
     // The process VM survives ScreenGameplay reentry; the actor execution
     // plan belongs to the outgoing screen and must release its old tables.
     invalidate_compile_update_plan(lua);
@@ -12384,6 +12385,11 @@ fn collect_compile_update_jobs(
     jobs: &mut Vec<SongLuaCompileUpdateJob>,
     order: &mut usize,
 ) -> mlua::Result<()> {
+    let canonical = lua.app_data_mut::<CanonicalLiveActorHandles>()
+        .map(|mut cache| cache.0.entry(actor.to_pointer() as usize)
+            .or_insert_with(|| actor.clone()).clone());
+    let actor = canonical.as_ref().unwrap_or(actor);
+
     collect_compile_update_self_jobs(lua, actor, parent, delta_source, jobs, order)?;
     for child in actor.sequence_values::<Value>() {
         let Value::Table(child) = child? else {
@@ -12528,6 +12534,27 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
         .app_data_ref::<SongLuaCompileUpdatePlan>()
         .map(|plan| plan.jobs.clone())
         .unwrap_or_default())
+}
+
+// mlua Table clones share one auxiliary stack reference. Keep one retained
+// handle per actor across the live registry and update jobs, instead of reading
+// the same Lua object into a new auxiliary reference at every tree traversal.
+struct CanonicalLiveActorHandles(FxHashMap<usize, Table>);
+
+pub(crate) fn prepare_live_actor_handle_cache(
+    lua: &Lua,
+    actors: impl IntoIterator<Item = Table>,
+) -> mlua::Result<Vec<Table>> {
+    let mut canonical = actors.into_iter()
+        .map(|actor| (actor.to_pointer() as usize, actor))
+        .collect::<FxHashMap<_, _>>();
+    let mut registry = Vec::new();
+    for actor in song_lua_actor_registry(lua)?.sequence_values::<Table>() {
+        let actor = actor?;
+        registry.push(canonical.entry(actor.to_pointer() as usize).or_insert(actor).clone());
+    }
+    lua.set_app_data(CanonicalLiveActorHandles(canonical));
+    Ok(registry)
 }
 
 pub(crate) fn prepare_live_updates(lua: &Lua, root: &Value) -> mlua::Result<()> {

@@ -989,8 +989,9 @@ impl SongLuaLiveScene {
                 stats.raw_set("__songlua_life_meter", meter)?;
             }
         }
-        let registry = crate::song_lua_actor_registry(&lua)?
-            .sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>()?;
+        let registry = crate::lua_util::prepare_live_actor_handle_cache(
+            &lua, actors.iter().cloned().chain(tracked.iter().map(|(_, actor, _)| actor.clone())),
+        )?;
         crate::lua_util::prepare_live_updates(&lua, &root)?;
         let states = actors.iter().map(|actor| read_state(&lua, actor))
             .collect::<mlua::Result<Vec<_>>>()?;
@@ -3447,6 +3448,69 @@ assert(FLASH:GetParent():GetParent() == CUES and CUES:GetParent() == CONTAINER)
             assert!((remaining - expected).abs() < 1e-6, "{remaining} != {expected}");
             assert_eq!(crate::actor_tween_time_left(&scene.lua, &underlay).unwrap(), remaining);
         }
+    }
+
+    #[test]
+    fn live_large_scene_preserves_actor_identity_and_update_order() {
+        let mut compiled = compile("canonical-large-scene", "return Def.ActorFrame {}");
+        let base = compiled.live_scene.take().expect("base live scene");
+        let lua = base.lua.clone();
+        let context = base.context.clone();
+        drop(base);
+        let declaration: Table = lua.load(r#"
+local root = { Class = 'ActorFrame' }
+for i = 1, 2800 do
+    root[i] = { Class = 'Quad', Name = 'Child' .. i }
+end
+return root
+"#).eval().expect("declare large actor tree");
+        // Use the gameplay host's materialization path, rather than invoking
+        // Def's declaration decorators outside their source-loading phase.
+        let Value::Table(root) = crate::lua_util::own_actor_root(
+            &lua, Value::Table(declaration), |_, _| Ok(()),
+        ).expect("materialize large actor tree") else { panic!("actor root") };
+        lua.globals().set("LARGE_ROOT", root.clone()).unwrap();
+        let actors = root.sequence_values::<Table>()
+            .collect::<mlua::Result<Vec<_>>>().expect("retain authored actor handles");
+        // Compilation registers each initialized actor before retaining the
+        // live scene. This also creates its native tween replay state.
+        crate::lua_util::register_song_lua_actor(&lua, &root).unwrap();
+        for actor in &actors {
+            crate::lua_util::register_song_lua_actor(&lua, actor).unwrap();
+        }
+        let roots = lua.create_sequence_from([root]).unwrap();
+        crate::lua_util::invalidate_compile_update_plan(&lua);
+        let mut scene = SongLuaLiveScene::new(lua, Value::Table(roots), context,
+            Vec::new(), 0, actors, Vec::new(), Vec::new()).expect("construct large live scene");
+        let initial = scene.advance(SongLuaLiveFrame::default())
+            .expect("initialize large live scene before installing runtime tweens");
+        assert!(initial.errors.is_empty(), "{:?}", initial.errors);
+        scene.lua.load(r#"
+local count = 2800
+local root = LARGE_ROOT
+local retained = {}
+for i = 1, count do
+    local child = root:GetChild('Child' .. i)
+    retained[i] = child
+    child:x(i):aux(i):linear(1):x(i + 1)
+end
+root:SetUpdateFunction(function(self, delta)
+    if delta <= 0 then return end
+    for i = 1, count do
+        local child = self:GetChild('Child' .. i)
+        assert(child == retained[i], 'live preparation must preserve actor identity')
+        assert(child:getaux() == i, 'authored child identity and order must be preserved')
+        assert(math.abs(child:GetX() - (i + 0.25)) < 0.001,
+            'parent Update must observe every child advanced exactly once: child=' .. i ..
+            ' x=' .. child:GetX() .. ' delta=' .. delta .. ' left=' .. child:GetTweenTimeLeft())
+    end
+end)
+"#).exec().expect("install large-scene update assertions");
+        let output = scene.advance(SongLuaLiveFrame {
+            screen_seconds: 0.25, music_seconds: 0.25, delta_seconds: 0.25,
+            ..Default::default()
+        }).expect("advance large live scene");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
     }
 
     #[test]
