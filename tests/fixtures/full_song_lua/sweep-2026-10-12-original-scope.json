@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T02:42:40Z",
+  "updated_utc": "2026-10-15T03:25:48Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 373,
-    "pending": 108,
-    "unprocessed": 20
+    "passed": 380,
+    "pending": 106,
+    "unprocessed": 15
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1349,9 +1349,9 @@
       "source_simfile": "Circles/Circles.sm",
       "historical_archive": "9a02dc0e8edc064173c8d8011348bb34b722cb7f63ff85db8453b318493686b6.tar.zst",
       "simfile_sha256": "c56c02f2f589f4ee8cd855477469e68ce7bbed4e8d37f844954b9eebb0ad95d5",
-      "status": "pending",
-      "evidence": "sweep-2026-10-12-state.json",
-      "repair_attempts": 0
+      "status": "passed",
+      "evidence": "sweep-2026-10-15-historical-circles-sm-entry-clock-first-repair-v1.json",
+      "repair_attempts": 1
     },
     {
       "position": 149,
@@ -2325,9 +2325,9 @@
       "position": 270,
       "source_simfile": "Koi [UPS2016]/koi.ssc",
       "simfile_sha256": "2efedac6dcecd6354ba67a65cc0f0732260d4f37536fe2522a6ee6402a7be205",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-14-koi-ssc-rec-print-repair.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-15-koi-post-accept-reporter-recovery-v1.json"
     },
     {
       "position": 271,
@@ -3421,7 +3421,9 @@
       "position": 407,
       "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
       "simfile_sha256": "029596d9d093479e06f71010fdda42b381856414c3bc8678f62ddf4aa70025ee",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-4.json"
     },
     {
       "position": 408,
@@ -3483,7 +3485,9 @@
       "position": 415,
       "source_simfile": "Stay Alive/Stay Alive.ssc",
       "simfile_sha256": "3e226becec13ec3915539c0a39690b9d3421f7c0dfb454e6e063d0cbb2ed633b",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-1.json"
     },
     {
       "position": 416,
@@ -3545,7 +3549,9 @@
       "position": 423,
       "source_simfile": "Tacos/Tacos.ssc",
       "simfile_sha256": "f381a5f2e116668828e6903131adf2affdd1be42eed3c636b846a8a2de1e5520",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json"
     },
     {
       "position": 424,
@@ -3777,7 +3783,9 @@
       "position": 453,
       "source_simfile": "Ultimate taste/Ultimate taste.ssc",
       "simfile_sha256": "b01a15355bb6cf7f033fd2316b9e874d6d5083289e82251f98e2b80bbcefc959",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 454,
@@ -3941,17 +3949,17 @@
       "position": 475,
       "source_simfile": "Wobbpotato [Blue Shift Phase 1]/wobbpotato.ssc",
       "simfile_sha256": "85652fc5fe5dbdfd1bf7fba6a8e531504013a373d1835b568abd297270489888",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-wobbpotato-untyped-actor-first-repair-v1.json"
     },
     {
       "position": 476,
       "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
       "simfile_sha256": "b401ffe8880d652b2da8c5347cbf8db01be52038899e6c19b80ab748e93ae5aa",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-wobbpotato-egg-carton-untyped-actor-first-repair-v1.json"
     },
     {
       "position": 477,
@@ -4121,7 +4129,9 @@
       "position": 499,
       "source_simfile": "Rayc Fire 2/Rayc Fire 2.sm",
       "simfile_sha256": "d90743d240bffd1d225185769c52a692c240531382e1cc617890e278e3d5b331",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 500,

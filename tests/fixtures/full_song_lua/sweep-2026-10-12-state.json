@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T02:42:40Z",
-  "previous_goal_turn": "Progress: Gone and both Freaky Deaky original failures diagnosed against native Foreground::LoadFromSong and ActorFrame::PushChildrenTable plus already-committed fixes469d6157b (raw authored foreground chunk source spelling) and7960c8a1e (native gameplay screen child inventory/traversal). Current immutable helper60a12cf2 has all8checks passed on both hosts and all1175raw/normalized source pins verified. Complete original captures reused unchanged; clean diagnostics: Gone5,805/125,586 frames, Freaky SM2,833/126,098, SSC2,674/109,088, all0errors/0mismatches. Diagnostic CLI exits2 because partial scopes cannot accept archives; queuev1 incorrectly expected0, failures preserved, v2 guards corrected without altering CLI/comparators and no full attempts spent by failed queues. All3 first full repairs launched on exact original captures,1attempt each, one later maximum. Seventeen untouched original charts queued behind long Spectrum and Ultimate taste replays transferred to2additional workers. Exact original replay PIDs139882/1776250, start ticks, argv, cwd, candidate/member bytes retained; live children never signaled or restarted. Only old parent supervisors stopped; v6 collectors retain kernel exit-status collection and terminate those stopped parents after children complete. New collectors2394974/2394975 supervise existing runs; new original workers2395452/2395456 already captured Stay Alive415 and Tacos423 and are replaying them, remaining17future positions uniquely assigned. All21previous unprocessed positions accounted for, original global helper711a5230/source/harness selection unchanged, new assignment/source digest and pre-handoff metadata saved. James SM original capture times out after900sec, no complete native trace, recorded pending without a full repair. Other live repairs continue without restart. All501original simfile bytes unchanged, pending coverage separate, oversized fixtures ignored/local, sweep active/incomplete.",
+  "updated_utc": "2026-10-15T03:25:48Z",
+  "previous_goal_turn": "Progress: Both Wobbpotato first repairs pass74,561/78,636frames, historical Circles SM first repair passes117,065, Tacos original passes63,571, Rayc Fire2SM original passes76,482, Stay Alive original passes85,478; all0errors/0mismatches, compressed fixtures saved, local decompressed SHA verified/committed, charts closed. Historical148source group now all passed; original SM source-binding history preserved and active historical failure resolved. Koi final2 completes116,240frames with0errors/0mismatches and accepted full report, then old progress reporter Drop panics. Exact original complete report/hash, all candidate member bytes, original simfile bytes and frozen source/binary verified; pack recovered pass without replay or new repair, original exit1 and total2attempts preserved; local archive decompressed SHA verified/committed. Rite first repair follows existing chain. Spectrum112,654frames and Ultimate taste95,127frames original runs finish under v6 collectors; native replay PIDs/argv/cwd retained, kernel exit status recorded and stopped old parents cleaned after completion. Both pending on concrete command/query mismatches,0full repairs spent. Spectrum additionally has function-valued GradientChange broadcast metadata pending; Ultimate firstshift is missing native root On boundary at bg/default.lua1036. All17transferred future originals uniquely owned by2live workers; initial original queue complete, remaining original charts continue without restart. Minefield actual1difficulty mismatch reproduced in3,018-frame retained-capture diagnostic. Native independent3,093-frame control proves Overlay stage probe precedes foreground selection at same clock; initial reader wrongly assumed dance points2 while native active metrics yield5, failed reader/capture preserved and complete capture reused for v2verification. Fix4c9ae9ef093b2cc8d35f6266920ab6763b4385d9 adds read-only owned Overlay observation of all11compared stage fields, without native expected values entering gameplay. Both hosts meaningful red verified; all8green checks target1/hurry1/easing1/parser10/live75/replay34/identity1/both builds pass, all1175raw Linux/normalized crossplatform pins plus log/helper hashes verified. Helper86439e24 private to diagnosed repair. Same retained Minefield capture after diagnostic3,018/100,704frames now0errors/0mismatches; first full repair launched,1attempt spent, one later maximum. Comparison keys/tolerances/full acceptance predicate unchanged; absent observer phase recorded as coverage, no added acceptance gate. Global original helper711a5230 unchanged. All501 original simfile bytes unchanged, coverage separate, oversized fixtures ignored/local, sweep active/incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "964f7a6e516748f5570821a362442ecbad6ee0aa",
+      "deadsync": "349f4f96e459e9f8c496121684213ba566ed124d",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -141,21 +141,19 @@
     "host": "192.168.1.33",
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
-      "status": "running",
+      "status": "complete",
       "current": "Rayc Fire 2/Rayc Fire 2.sm",
       "position": 499,
-      "phase": "replay",
-      "pid": 2405749,
-      "process_matches": true,
-      "passed": 42,
+      "phase": "pack",
+      "pid": 2532406,
+      "process_matches": false,
+      "passed": 43,
       "pending": 67,
-      "processed": 109,
+      "processed": 110,
       "last_log_lines": [
-        "[112.2s] replaying every native gameplay frame: frame 5362/76482 (7.0%)",
-        "[114.2s] replaying every native gameplay frame: frame 5436/76482 (7.1%)",
-        "[116.2s] replaying every native gameplay frame: frame 5498/76482 (7.2%)"
+        "wrote verified song archive: /home/parity/jobs/chart-sweep-20261012-v2/chart-499/accepted/058f87cfad4c18d83e64383e4a607d60d994b63ac49a4f1cc368b6016be0b216.tar.zst"
       ],
-      "supervisor_running": true
+      "supervisor_running": false
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
     "runner": "../itgmania-harness/target/server-parity/run_chart_sweep_v4.py",
@@ -2026,52 +2024,75 @@
         "record": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json",
         "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
         "finish_status": "original queued chart transfer v6 complete; full acceptance unchanged; original long replays retained"
+      },
+      {
+        "name": "minefield-overlay-stage-first-repair-v1",
+        "remote": "/home/parity/jobs/minefield-overlay-stage-first-repair-v1",
+        "record": "sweep-2026-10-15-minefield-overlay-stage-first-repair-v1.json",
+        "fix_commit": "4c9ae9ef093b2cc8d35f6266920ab6763b4385d9",
+        "finish_status": "bounded first owned Overlay stage observation repair complete; original full capture reused; one later full repair maximum"
+      },
+      {
+        "name": "koi-post-accept-reporter-recovery-v1",
+        "remote": "/home/parity/jobs/koi-post-accept-reporter-recovery-v1",
+        "record": "sweep-2026-10-15-koi-post-accept-reporter-recovery-v1.json",
+        "fix_commit": "d69f0a20fd7a8b9a00fef1680365364522a51706; completed comparison recovered without replay",
+        "finish_status": "accepted complete comparison packed after reporter shutdown panic; original exit1 and repair count2 preserved; no chart replay repeated"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
     "get_into_it_sm_fixture_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-get-into-it-sm-fixture-verification.json",
     "other_jobs_live_observation": {
       "initial_sweep": {
-        "status": "running",
+        "status": "complete",
         "current": "Rayc Fire 2/Rayc Fire 2.sm",
         "position": 499,
-        "phase": "replay",
-        "pid": 2405749,
-        "process_matches": true,
-        "passed": 42,
+        "phase": "pack",
+        "pid": 2532406,
+        "process_matches": false,
+        "passed": 43,
         "pending": 67,
-        "processed": 109,
+        "processed": 110,
         "last_log_lines": [
-          "[112.2s] replaying every native gameplay frame: frame 5362/76482 (7.0%)",
-          "[114.2s] replaying every native gameplay frame: frame 5436/76482 (7.1%)",
-          "[116.2s] replaying every native gameplay frame: frame 5498/76482 (7.2%)"
+          "wrote verified song archive: /home/parity/jobs/chart-sweep-20261012-v2/chart-499/accepted/058f87cfad4c18d83e64383e4a607d60d994b63ac49a4f1cc368b6016be0b216.tar.zst"
         ],
-        "supervisor_running": true
+        "supervisor_running": false
       },
       "jobs": [
         {
-          "job": "chart-sweep-parallel-v6-1",
+          "job": "minefield-overlay-stage-first-repair-v1",
           "complete": false,
           "supervisor_running": true,
           "passed": 0,
           "pending": 0,
           "processed": 0,
           "last_phase": "replay",
-          "source_simfile": "Stay Alive/Stay Alive.ssc",
+          "source_simfile": "minefield surfing_1/minefield.ssc",
+          "child_running": true
+        },
+        {
+          "job": "chart-sweep-parallel-v6-1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 1,
+          "pending": 0,
+          "processed": 1,
+          "last_phase": "replay",
+          "source_simfile": "The Entity/The Entity.sm",
           "child_running": true,
-          "position": 415
+          "position": 431
         },
         {
           "job": "chart-sweep-parallel-v6-2",
           "complete": false,
           "supervisor_running": true,
-          "passed": 0,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
+          "processed": 1,
           "last_phase": "replay",
-          "source_simfile": "Tacos/Tacos.ssc",
+          "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.ssc",
           "child_running": true,
-          "position": 423
+          "position": 439
         },
         {
           "job": "gone-source-path-first-repair-v1",
@@ -2108,25 +2129,25 @@
         },
         {
           "job": "wobbpotato-egg-carton-untyped-actor-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "wobbpotato-untyped-actor-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "Wobbpotato [Blue Shift Phase 1]/wobbpotato.ssc",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "what-if-command-observer-final-repair-v1",
@@ -2141,14 +2162,14 @@
         },
         {
           "job": "historical-circles-sm-entry-clock-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "Circles/Circles.sm",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "un-owen-sm-late-command-first-repair-v1",
@@ -2187,14 +2208,14 @@
         },
         {
           "job": "koi-ssc-message-coverage-final-repair-v1",
-          "complete": false,
+          "complete": true,
           "supervisor_running": true,
           "passed": 0,
-          "pending": 0,
-          "processed": 0,
+          "pending": 1,
+          "processed": 1,
           "last_phase": "replay",
           "source_simfile": "Koi [UPS2016]/koi.ssc",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "rite-ssc-message-coverage-first-repair-v1",
@@ -2202,7 +2223,10 @@
           "supervisor_running": true,
           "passed": 0,
           "pending": 0,
-          "processed": 0
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "rite of spring/rite.ssc",
+          "child_running": true
         },
         {
           "job": "pop-player-position-first-repair-v1",
@@ -2361,14 +2385,14 @@
         },
         {
           "job": "chart-sweep-parallel-v5-4",
-          "complete": false,
-          "supervisor_running": true,
+          "complete": true,
+          "supervisor_running": false,
           "passed": 3,
-          "pending": 4,
-          "processed": 7,
+          "pending": 5,
+          "processed": 8,
           "last_phase": "replay",
           "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
-          "child_running": true,
+          "child_running": false,
           "position": 407
         },
         {
@@ -3140,8 +3164,8 @@
         },
         {
           "job": "known-failure-recovery-v1",
-          "complete": false,
-          "supervisor_running": true,
+          "complete": true,
+          "supervisor_running": false,
           "passed": 0,
           "pending": 1,
           "processed": 1,
@@ -3252,14 +3276,14 @@
         },
         {
           "job": "chart-sweep-parallel-v4-2",
-          "complete": false,
-          "supervisor_running": true,
+          "complete": true,
+          "supervisor_running": false,
           "passed": 27,
-          "pending": 33,
-          "processed": 60,
+          "pending": 34,
+          "processed": 61,
           "last_phase": "replay",
           "source_simfile": "Ultimate taste/Ultimate taste.ssc",
-          "child_running": true,
+          "child_running": false,
           "position": 453
         },
         {
@@ -3386,7 +3410,7 @@
     "selected_replay_binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 144,
+    "publisher_stream_count": 146,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -3628,11 +3652,14 @@
     "post_accept_reporter_recovery": {
       "record": "tests/fixtures/full_song_lua/sweep-2026-10-15-post-accept-reporter-recovery.json",
       "fix_commit": "814d6cf84",
-      "comparison_passes_recovered_without_replay": 3,
+      "comparison_passes_recovered_without_replay": 4,
       "original_nonzero_exits_preserved": true,
       "new_chart_repair_attempts_spent": 0,
       "io_regression": "tests/fixtures/full_song_lua/sweep-2026-10-15-progress-reporter-io-validation.json",
-      "storage": "tests/fixtures/full_song_lua/sweep-2026-10-15-post-accept-recovery-storage.json"
+      "storage": "tests/fixtures/full_song_lua/sweep-2026-10-15-post-accept-recovery-storage.json",
+      "koi_ssc_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-15-koi-post-accept-reporter-recovery-v1.json",
+      "koi_original_exit1_preserved": true,
+      "koi_repair_attempts_preserved": 2
     },
     "additional_judgment_listener_first_repairs": "tests/fixtures/full_song_lua/sweep-2026-10-15-additional-judgment-listener-first-repairs-launch.json",
     "world_revolving_phase_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-world-revolving-end-phase-diagnosis.json",
@@ -3918,7 +3945,12 @@
       "one_later_full_repair_maximum": true,
       "first_diagnostic_failed_before_replay": true,
       "native_capture_reused": true,
-      "first_full_repair_running": true
+      "first_full_repair_running": false,
+      "status": "passed",
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "native_frames": 117065,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-historical-circles-sm-fixture-verification.json"
     },
     "dynamic_command_observer_profile": {
       "fix_commit": "6a2fcdd49",
@@ -3973,9 +4005,9 @@
       "all_eight_checks_both_hosts_required": true,
       "remaining_validation_running": false,
       "wobbpotato_first_full_repair_queued": false,
-      "wobbpotato_first_full_repair_running": true,
+      "wobbpotato_first_full_repair_running": false,
       "wobbpotato_full_repairs_spent": 1,
-      "one_later_full_repair_maximum": true,
+      "one_later_full_repair_maximum": false,
       "native_capture_reused": true,
       "native_frames": 74561,
       "windows_validator_pid": 53976,
@@ -3999,8 +4031,16 @@
       "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-untyped-actor-linux-validation.json",
       "selection": "tests/fixtures/full_song_lua/sweep-2026-10-15-untyped-actor-selection.json",
       "wobbpotato_first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-wobbpotato-untyped-actor-first-repair-launch.json",
-      "egg_carton_first_full_repair_running": true,
-      "egg_carton_first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-wobbpotato-egg-carton-first-repair-launch.json"
+      "egg_carton_first_full_repair_running": false,
+      "egg_carton_first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-wobbpotato-egg-carton-first-repair-launch.json",
+      "wobbpotato_status": "passed",
+      "wobbpotato_passing_chart_closed": true,
+      "wobbpotato_further_replay_allowed": false,
+      "wobbpotato_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-wobbpotato-blue-shift-fixture-verification.json",
+      "egg_carton_status": "passed",
+      "egg_carton_passing_chart_closed": true,
+      "egg_carton_further_replay_allowed": false,
+      "egg_carton_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-wobbpotato-egg-carton-fixture-verification.json"
     },
     "ztar_trek_closed": {
       "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-ztar-trek-fixture-verification.json",
@@ -4058,17 +4098,74 @@
       "live_replays_restarted": false,
       "all_21_original_unprocessed_positions_accounted_for_at_handoff": true,
       "selected_global_helper_unchanged": true,
-      "original_source_bytes_unchanged": true
+      "original_source_bytes_unchanged": true,
+      "retained_original_replays_complete": true,
+      "retained_original_replays_restarted": false,
+      "stopped_old_supervisors_cleaned_after_kernel_status_collection": true,
+      "spectrum_status": "pending",
+      "ultimate_taste_status": "pending",
+      "spectrum_native_frames": 112654,
+      "ultimate_taste_native_frames": 95127,
+      "spectrum_full_repairs_spent": 0,
+      "ultimate_taste_full_repairs_spent": 0
+    },
+    "koi_ssc_closed": {
+      "full_repairs_spent": 2,
+      "no_third_full_repair": true,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "native_frames": 116240,
+      "original_replay_exit": 1,
+      "accepted_full_original_report_verified": true,
+      "all_original_candidate_member_bytes_verified": true,
+      "full_replay_repeated": false,
+      "new_chart_repair_attempts_spent": 0,
+      "recovery": "tests/fixtures/full_song_lua/sweep-2026-10-15-koi-post-accept-reporter-recovery-v1.json",
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-koi-fixture-verification.json"
+    },
+    "additional_original_passes_closed_v2": {
+      "tacos_single": {
+        "native_frames": 63571,
+        "verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-tacos-single-fixture-verification.json"
+      },
+      "rayc_fire2_sm": {
+        "native_frames": 76482,
+        "verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-rayc-fire2-sm-fixture-verification.json"
+      },
+      "stay_alive": {
+        "native_frames": 85478,
+        "verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-stay-alive-fixture-verification.json"
+      }
+    },
+    "overlay_stage_observer": {
+      "fix_commit": "4c9ae9ef093b2cc8d35f6266920ab6763b4385d9",
+      "both_host_eight_checks_passed": true,
+      "all_1175_raw_and_normalized_source_pins_verified": true,
+      "binary_sha256": "86439e2494912eec80c902e6f1ae1bdd576a96f4f919107996b300d981701d8d",
+      "windows_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-overlay-stage-observer-windows-validation.json",
+      "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-overlay-stage-observer-linux-validation.json",
+      "native_control": "tests/fixtures/full_song_lua/sweep-2026-10-15-overlay-stage-observer-native-control.json",
+      "before": "tests/fixtures/full_song_lua/sweep-2026-10-15-minefield-stage-observer-before.json",
+      "after": "tests/fixtures/full_song_lua/sweep-2026-10-15-minefield-stage-observer-after.json",
+      "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-minefield-overlay-stage-first-repair-launch.json",
+      "minefield_full_repairs_spent": 1,
+      "minefield_one_later_full_repair_maximum": true,
+      "minefield_first_full_repair_running": true,
+      "native_capture_reused_unchanged": true,
+      "all_eleven_stage_fields_observed_from_owned_state": true,
+      "native_expected_values_enter_gameplay": false,
+      "comparison_keys_tolerances_acceptance_predicate_unchanged": true,
+      "global_original_selection_unchanged": true
     }
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 226,
-    "new_pending_charts": 107,
-    "new_processed_sources": 333,
+    "new_passed_fixtures": 232,
+    "new_pending_charts": 106,
+    "new_processed_sources": 338,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 20,
-    "historical_pending_sources": 1,
-    "historical_passed_sources": 147
+    "unprocessed_sources": 15,
+    "historical_pending_sources": 0,
+    "historical_passed_sources": 148
   },
   "additional_sources_outside_original_scope": [
     {
@@ -5123,26 +5220,6 @@
       ]
     },
     {
-      "source_simfile": "Koi [UPS2016]/koi.ssc",
-      "repair_attempts": 1,
-      "failure": null,
-      "errors": [
-        "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 24.858: missing captured subscriber identity for ScreenGameplay/19/1",
-        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 31.001: missing captured subscriber identity for ScreenGameplay/19/1",
-        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 32.992: missing captured subscriber identity for ScreenGameplay/19/1"
-      ],
-      "mismatch_count": 1080,
-      "first_mismatch": [
-        {
-          "phase": "progress",
-          "seconds": 202.0009002685547,
-          "field": "failed",
-          "native": true,
-          "deadsync": false
-        }
-      ]
-    },
-    {
       "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
       "repair_attempts": 1,
       "failure": null,
@@ -5716,6 +5793,27 @@
       ]
     },
     {
+      "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 99214,
+      "first_mismatch": [
+        {
+          "field": "source_broadcast_params_unsupported",
+          "deadsync": {
+            "seconds": 3.1648752689361572,
+            "beat": 8.049345016479492,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange"
+            ],
+            "params_error": "broadcast function trace remains pending"
+          }
+        }
+      ]
+    },
+    {
       "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
       "repair_attempts": 1,
       "failure": null,
@@ -6132,6 +6230,20 @@
       ]
     },
     {
+      "source_simfile": "Ultimate taste/Ultimate taste.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 371538,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 372682,
+          "deadsync": 372684
+        }
+      ]
+    },
+    {
       "source_simfile": "Velvet LEFTS 1/chart.ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-1256551-1792020219622826275-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1256551-1792020219622826275-0\n",
@@ -6159,22 +6271,6 @@
       "source_simfile": "wndrwll/wndrwll.ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-247409-1792008774508778954-0\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
-    },
-    {
-      "source_simfile": "Wobbpotato [Blue Shift Phase 1]/wobbpotato.ssc",
-      "repair_attempts": 0,
-      "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for '[10] Wobbpotato': error converting Lua nil to function; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for '[10] Wobbpotato' from '/tmp/.tmpUDxZTi/song/lua/default.lua': error converting Lua nil to function\n\nthread 'main' (2173123) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
-    },
-    {
-      "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
-      "repair_attempts": 0,
-      "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Wobbpotato': error converting Lua nil to function; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Wobbpotato' from '/tmp/.tmpbZSdUN/song/lua/default.lua': error converting Lua nil to function\n\nthread 'main' (1384391) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
@@ -6311,14 +6407,7 @@
       "first_mismatch": []
     }
   ],
-  "historical_concrete_failures": [
-    {
-      "position": 148,
-      "source_simfile": "Circles/Circles.sm",
-      "failure": "Underlay descendant tween time at Actor.visible(false): native 6.393762111663818 seconds; DeadSync 0",
-      "evidence": "../itgmania-harness/target/server-parity/scalar-mutation-prefix-v2-proof.json"
-    }
-  ],
+  "historical_concrete_failures": [],
   "historical_classification_correction": {
     "source_simfile": "Choices - [Aoreo]/Choices.ssc",
     "position": 146,
@@ -6336,5 +6425,17 @@
     "Repair observed failures using pinned local sources, reusing captures, with at most two attempts per chart",
     "Finish with verified passed/pending counts and concrete failure details"
   ],
-  "previous_goal_turn_classification": "progress"
+  "previous_goal_turn_classification": "progress",
+  "resolved_historical_concrete_failures": [
+    {
+      "position": 148,
+      "source_simfile": "Circles/Circles.sm",
+      "failure": "Underlay descendant tween time at Actor.visible(false): native 6.393762111663818 seconds; DeadSync 0",
+      "evidence": "../itgmania-harness/target/server-parity/scalar-mutation-prefix-v2-proof.json",
+      "status": "resolved by first complete entry-clock repair",
+      "native_frames": 117065,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-historical-circles-sm-fixture-verification.json",
+      "passing_chart_closed": true
+    }
+  ]
 }
