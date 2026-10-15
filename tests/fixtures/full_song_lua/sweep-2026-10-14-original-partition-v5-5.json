@@ -1710,6 +1710,33 @@
       "harness_version": "0.1.80",
       "title": "Miitopia Event Battle",
       "local_archive_verified": true
+    },
+    {
+      "position": 496,
+      "source_simfile": "Metronogik/Song.ssc",
+      "simfile_sha256": "b47ec860275040252ac437d921d2c8b04338a126a65f0fd84fee2494781d4808",
+      "historical_failure": {
+        "simfile": "Metronogik/Song.ssc",
+        "status": "partial",
+        "category": "unsupported_theme_context",
+        "reason": "corpus:/Metronogik/code/update.lua:439: bad argument #1 to 'ipairs' (table expected, got nil); full Simply Love HUD text actors are not instantiated by this host",
+        "diagnostics": "target/song-lua-repair/phase2/bd062750cefe5be7",
+        "dropped_events": 0,
+        "end_position": {
+          "beat": 2702,
+          "seconds": 146.14315795898438
+        },
+        "target_beat": 2702.0
+      },
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 900.070456343994,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1861772-1792026485413807569-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1861772-1792026485413807569-0\n"
     }
   ],
   "scope": {
@@ -1721,6 +1748,6 @@
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 10,
-  "pending_charts": 8,
-  "processed_charts": 18
+  "pending_charts": 9,
+  "processed_charts": 19
 }
