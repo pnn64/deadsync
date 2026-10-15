@@ -4016,6 +4016,38 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn live_note_field_loads_inherited_board_sprite_outside_column_vector() {
+        let compiled = compile("note-field-board", r#"
+return Def.ActorFrame { OnCommand = function()
+    BOARDS_CHECKED = 0
+    local previous
+    for index = 1, 2 do
+        local field = SCREENMAN:GetTopScreen():GetChild('PlayerP' .. index):GetChild('NoteField')
+        assert(field:GetNumChildren() == 1, 'NoteField must load its native Board child')
+        local board = assert(field:GetChild('Board'))
+        assert(board:GetName() == 'Board' and board:GetParent() == field)
+        assert(field:GetChildren().Board == board and board ~= previous)
+        local texture = assert(board:GetTexture(), 'Board must load the inherited blank bitmap')
+        assert(texture:GetPath() == 'Themes/_fallback/Graphics/_blank.png')
+        assert(texture:GetSourceWidth() == 4 and texture:GetSourceHeight() == 2)
+        assert(texture:GetImageWidth() == 8 and texture:GetImageHeight() == 8)
+        assert(texture:GetTextureWidth() == 8 and texture:GetTextureHeight() == 8)
+        assert(texture:GetNumFrames() == 1 and board:GetWidth() == 4 and board:GetHeight() == 2)
+        local columns = field:GetColumnActors()
+        assert(#columns == 4)
+        assert(field:GetNumChildren() == 1 and field:GetChild('Board') == board)
+        assert(field:GetChild('Column1') == nil, 'column vector is separate from Board child inventory')
+        previous = board
+        BOARDS_CHECKED = BOARDS_CHECKED + 1
+    end
+end }
+"#);
+        let scene = compiled.live_scene.expect("native NoteField board");
+        assert_eq!(scene.lua.globals().get::<i64>("BOARDS_CHECKED").unwrap(), 2,
+            "regression must inspect both live NoteFields");
+    }
+
+    #[test]
     fn live_player_attack_display_preserves_native_inventory_and_hold_indices() {
         for (style, columns) in [("single", 4), ("double", 8)] {
             let source = r#"

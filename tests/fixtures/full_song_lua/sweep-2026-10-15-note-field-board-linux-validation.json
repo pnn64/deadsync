@@ -1,0 +1,47 @@
+{
+  "source_root": "/home/parity/workspace/note-field-board-green-v1/deadsync",
+  "binary_sha256": "1650d967d552686f44c2c78e96579ef0536db602b606bd500313b9e6ddcf60d8",
+  "all_four_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "entire_regression_source_identical_red_green": true,
+  "native_bitmap_asset_log_and_binary_hashes_verified": true,
+  "red_missing_board_reproduced_both_hosts": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 241.38795811700402,
+      "log_sha256": "0552c12edde8e84586e2644625e9c86c32209df25ae3dc8365b679c8f6823a4a",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 624 filtered out; finished in 0.17s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 34.02757375600049,
+      "log_sha256": "d6ed9c138db946672ba79b04eb8908f859f1a4166f8db8d24f4ebda273dd87fb",
+      "results": [
+        "test result: ok. 88 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 33.41s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 224.83626024995465,
+      "log_sha256": "0b35a10eb843ecfd9334762ed05f7458138f8a648d2e39e357d39706a103e855",
+      "results": [
+        "test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 18.56s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 36.61931194696808,
+      "log_sha256": "fc6ab945947128fcba1849dab866b7589bfeef780dd37fd18312fb71cdf9a0ef",
+      "results": []
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

@@ -14529,6 +14529,13 @@ pub fn create_note_field_actor(
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
 ) -> mlua::Result<Table> {
     let actor = create_dummy_actor(lua, "NoteField")?;
+    // NoteField constructs Board from the inherited blank bitmap. A bitmap
+    // has no On handler; its constructor dispatch leaves the Sprite unchanged.
+    let board = create_named_actor(lua, "Sprite", "Board", create_dummy_actor)?;
+    set_actor_texture_from_path(&board, load_native_blank_texture()?)?;
+    board.raw_set("__songlua_parent", actor.clone())?;
+    push_sequence_child_once(&actor, board.clone())?;
+    actor_children(lua, &actor)?.set("Board", board)?;
     actor.set("__songlua_player_index", player_index as i64)?;
     actor.set("__songlua_style_name", style_name)?;
     actor.set("__songlua_player_child_name", "NoteField")?;
