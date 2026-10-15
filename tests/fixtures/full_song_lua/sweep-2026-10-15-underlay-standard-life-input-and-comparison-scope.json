@@ -5,7 +5,7 @@
   "full_song_lua_acceptance_source_byte_identical": true,
   "all_original_production_renderer_profile_control_assertions_retained": true,
   "new_standard_life_regression_identical_red_green": true,
-  "only_existing_live_test_change": "two explicit HideLifebar inputs in density-only fixtures; all assertions retained byte-identical",
+  "only_existing_live_test_change": "HideLifebar inputs isolate two density fixtures and the single-callback fixture; every existing assertion remains byte-identical",
   "native_sources_and_asset_sha256": {
     "default.lua": "55cb4cb8962c7dd0a15fd08323b45301b3923dfde20836e4640536b50bcc3114",
     "Standard.lua": "1114443765ad89d2ac5f0e2ec79bb13fa90cc834ce58c174aaa00623f2120e2e",
@@ -13,5 +13,57 @@
   },
   "source_cause": "sweep-2026-10-15-hope-underlay-inventory-source-cause.json",
   "full_repairs_spent": 0,
-  "no_passing_chart_reopened": true
+  "no_passing_chart_reopened": true,
+  "pre_song_recording_boundary": "Native LifeMeterBar::Load broadcasts after Underlay load and before song Foreground load. Dispatch these actual theme callbacks with song-output recording temporarily absent and restore the recorder on success or error. Existing ScreenChanged-only song-startup assertion remains unchanged.",
+  "source_evidence": [
+    "vendor/itgmania/src/ScreenWithMenuElements.cpp:Underlay load in Init",
+    "vendor/itgmania/src/ScreenGameplay.cpp:ScreenWithMenuElements::Init then LifeMeter::Load then LoadNextSong",
+    "vendor/itgmania/src/LifeMeterBar.cpp:LifeMeterBar::Load calls AfterLifeChanged"
+  ],
+  "first_green_checks": {
+    "windows": [
+      {
+        "label": "target-control",
+        "exit_code": 0,
+        "seconds": 326.76703980000457,
+        "log_sha256": "89c4d7b37a0e31d52e4b023b6aad80e5ecb6a704e78ab9fb7fe576bbbe248ada",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 632 filtered out; finished in 1.07s"
+        ]
+      },
+      {
+        "label": "live-controls",
+        "exit_code": 101,
+        "seconds": 64.36395179999818,
+        "log_sha256": "2e73e6273dc733eadcd667ac3896760faa2f93a5ca5aa67558cf4957d2f3f6ac",
+        "results": [
+          "test result: FAILED. 92 passed; 2 failed; 0 ignored; 0 measured; 539 filtered out; finished in 57.61s"
+        ]
+      }
+    ],
+    "linux": [
+      {
+        "label": "target-control",
+        "exit_code": 0,
+        "seconds": 262.38953490002314,
+        "log_sha256": "86185867963a7366cf3424b3094de4dd548232804cc4e687cc5327a7d34eac35",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 630 filtered out; finished in 0.84s"
+        ]
+      },
+      {
+        "label": "live-controls",
+        "exit_code": 101,
+        "seconds": 34.211724504013546,
+        "log_sha256": "cf1b67a2c4708002979d8dc6d72a205474afc872f4f7ffc5056ae9df16b8fc3f",
+        "results": [
+          "test result: FAILED. 92 passed; 2 failed; 0 ignored; 0 measured; 537 filtered out; finished in 33.54s"
+        ]
+      }
+    ]
+  },
+  "first_green_controls_failed": [
+    "live_background_starts_at_change_beat",
+    "live_empty_callback_slots_preserve_single_update_detection"
+  ]
 }
