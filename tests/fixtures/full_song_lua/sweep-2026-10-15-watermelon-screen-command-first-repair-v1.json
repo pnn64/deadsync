@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "first bounded Screen command propagation repair complete; original full capture reused; one later full repair maximum",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "80e6fbaf79be4163ea08dc1ba2f9f31d5dc827ca",
