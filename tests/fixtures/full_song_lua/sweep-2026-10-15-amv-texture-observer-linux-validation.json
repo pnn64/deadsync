@@ -1,0 +1,48 @@
+{
+  "source_root": "/home/parity/workspace/amv-texture-observer-green-v3/deadsync",
+  "binary_sha256": "33aaaa1ff3476da9528f20d648ea7537a4faa99b03f4031c508c5e03914f8d3c",
+  "all_four_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "entire_new_regression_and_all_40_prior_replay_controls_identical_red_green": true,
+  "all_99_prior_live_controls_byte_identical": true,
+  "all_34_native_assets_log_and_helper_hashes_verified": true,
+  "meaningful_missing_native_AMV_default_texture_red_both_hosts": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 180.74000984698068,
+      "log_sha256": "6f3b7f4ae29fe0dd9d10b434ac9e103cccf4a06d13e18e9c944219dcfd4bfa35",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 342 filtered out; finished in 0.27s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 22.308664298965596,
+      "log_sha256": "971a9a35d3fe2d28a5a5e9b268e600fc1d12dbe4b3a086877845a0166ec9dccd",
+      "results": [
+        "test result: ok. 41 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 21.49s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 292.86880951799685,
+      "log_sha256": "7d2afa59cb488dfb65e146e45634a537bfe545e67ca2fc4492915f2a03df1155",
+      "results": [
+        "test result: ok. 99 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 34.06s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 34.98553388903383,
+      "log_sha256": "cd6b8447b6a57590223a304e5505c0bf9ad9de333efb70174518e88ee57ea451",
+      "results": []
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

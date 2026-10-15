@@ -3143,9 +3143,9 @@ pub fn create_dummy_actor(
 
 fn init_actor_type(lua: &Lua, actor: &Table, actor_type: &'static str) -> mlua::Result<()> {
     actor.set("__songlua_actor_type", actor_type)?;
-    // Quad's constructor loads RageTexture_Default. Its manager lookup key is
+    // Quad and ActorMultiVertex constructors load RageTexture_Default. Its manager lookup key is
     // __blank__, but the resource itself has an empty filename and 1x1 size.
-    if actor_type.eq_ignore_ascii_case("Quad") {
+    if actor_type.eq_ignore_ascii_case("Quad") || actor_type.eq_ignore_ascii_case("ActorMultiVertex") {
         actor.raw_set("__songlua_default_texture", true)?;
     }
     if actor_type.eq_ignore_ascii_case("ActorFrameTexture")
@@ -5337,6 +5337,7 @@ pub fn set_actor_texture_from_path(actor: &Table, path: &str) -> mlua::Result<bo
         return Ok(false);
     }
     actor.set("Texture", path.to_string())?;
+    actor.raw_set("__songlua_amv_texture_handle", Value::Nil)?;
     actor.raw_set("__songlua_default_texture", false)?;
     actor.set("__songlua_aft_capture_name", Value::Nil)?;
     set_actor_decode_movie_for_texture(actor)?;
@@ -5378,6 +5379,23 @@ pub fn set_actor_texture_from_value(
     value: Option<&Value>,
     clear_on_nil: bool,
 ) -> mlua::Result<()> {
+    if actor_type_is(actor, "ActorMultiVertex")? {
+        // Native SetTexture retains the copied RageTexture, including its
+        // allocation and frame metadata, independently of this actor's size.
+        match value {
+            Some(Value::Table(texture))
+                if texture.raw_get::<Option<String>>("__songlua_native_type")?.as_deref()
+                    == Some("RageTexture") =>
+            {
+                actor.raw_set("__songlua_amv_texture_handle", texture.clone())?;
+            }
+            Some(Value::String(_)) => actor.raw_set("__songlua_amv_texture_handle", Value::Nil)?,
+            Some(Value::Nil) | None if clear_on_nil => {
+                actor.raw_set("__songlua_amv_texture_handle", Value::Nil)?;
+            }
+            _ => (),
+        }
+    }
     match value {
         Some(Value::String(texture)) => {
             actor.set("Texture", texture.to_str()?.to_string())?;
@@ -5963,6 +5981,9 @@ pub fn actor_sprite_frame_count(actor: &Table) -> mlua::Result<u32> {
 }
 
 pub fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
+    if let Some(texture) = actor.raw_get::<Option<Table>>("__songlua_amv_texture_handle")? {
+        return Ok(texture);
+    }
     let texture = lua.create_table()?;
     texture.raw_set("__songlua_native_type", "RageTexture")?;
     if actor.raw_get::<bool>("__songlua_default_texture")? {

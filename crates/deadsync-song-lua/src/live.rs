@@ -250,6 +250,11 @@ pub(crate) fn trace_bound_method(lua: &Lua, name: &'static str, args: &MultiValu
     let class = match name {
         "GetChild" | "GetNumChildren" | "SetUpdateFunction" => "ActorFrame",
         "SetTarget" => "ActorProxy",
+        // AMV defines its own getter on Actor, outside the existing observed
+        // texture method set. Its call must not insert a Sprite observation.
+        "GetTexture" if args.front().and_then(Value::as_table).is_some_and(|actor|
+            actor.raw_get::<Option<String>>("__songlua_actor_type").ok().flatten().as_deref()
+                == Some("ActorMultiVertex")) => return,
         "GetTexture" if args.front().and_then(Value::as_table).is_some_and(|actor|
             actor.raw_get::<Option<String>>("__songlua_actor_type").ok().flatten().as_deref()
                 == Some("ActorFrameTexture")) => "ActorFrameTexture",
