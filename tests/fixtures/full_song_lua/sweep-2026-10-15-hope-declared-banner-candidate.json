@@ -1,0 +1,27 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "original_candidate_compressed_sha256": "dba998ce762304a6994791cb4693f427de56aaf38a493736787f3e5f5c55683c",
+  "original_candidate_uncompressed_sha256": "3e6bb65b474d86cd14f4354e2cbb8e65a3f4896b527137fa82e2325a3691e6b0",
+  "candidate_compressed": "/home/parity/jobs/hope-declared-banner-candidate-v1/7f9257e36e050c005120d8a6f5807ce9368b0a58b3e3fbff8fee5c424d2ab1a0.tar.zst",
+  "candidate_compressed_sha256": "7f9257e36e050c005120d8a6f5807ce9368b0a58b3e3fbff8fee5c424d2ab1a0",
+  "candidate_compressed_bytes": 19912828,
+  "candidate_uncompressed_sha256": "90735b82e1e5a4b89b0aff617c457efb383b236b99eb8b4e3053349904160dbb",
+  "candidate_uncompressed_bytes": 732047360,
+  "all_original_file_payload_bytes_and_hashes_unchanged": true,
+  "original_file_members_verified": 29,
+  "native_trace_sha256": "88b20e678a79afd20607bb861bde142f73c817749b04504b84ae23314ceb89d6",
+  "simfile_sha256": "40320b6ae63e366213e7fbb060fc36beadd09fa2bb33be032bc9177e8a7b023d",
+  "native_frames": 20574,
+  "added_asset": {
+    "path": "song/bannrt.png",
+    "role": "required-asset",
+    "bytes": 182413,
+    "sha256": "2cd6411c0d72f1d7c9cabb9ed2d71637859e286ea5ea5bec5f893a4437272e3f",
+    "matches_original_physical_song_input": true
+  },
+  "only_manifest_and_declared_asset_added": true,
+  "native_capture_or_chart_replay_repeated": false,
+  "new_full_repairs_spent": 0,
+  "raw_archive_never_materialized_on_full_server": true,
+  "compressed_capture_decompression_byte_verified": true
+}

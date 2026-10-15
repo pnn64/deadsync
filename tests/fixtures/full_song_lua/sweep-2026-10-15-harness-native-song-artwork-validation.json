@@ -1,0 +1,102 @@
+{
+  "harness_fix_commit": "5d70aea08c300bd78c64a1da011c97574449366c",
+  "all_three_checks_both_hosts_passed": true,
+  "windows": {
+    "source_sha256": "94a5acf6d2190919205c4f1c411b668d1b0b8d915b31f953f73d14c6e03156ca",
+    "checks": [
+      {
+        "label": "target",
+        "exit_code": 0,
+        "seconds": 6.280833199998597,
+        "log_sha256": "f957516f0d8b72a594e83a283da5f679792c4eadf83cea782e95b0ed9dc015b0"
+      },
+      {
+        "label": "archive-controls",
+        "exit_code": 0,
+        "seconds": 5.162504000007175,
+        "log_sha256": "fe32761c96b3fd6585e5f348046ca612b9dc09f5190ad10e4b9e359d8a72254d"
+      },
+      {
+        "label": "build",
+        "exit_code": 0,
+        "seconds": 0.31456249998882413,
+        "log_sha256": "d7dae192715495fa89ccbe279af3efb9792c1dae1768228e369035e68a1df673"
+      }
+    ],
+    "mode": "green",
+    "expected_red_observed": false
+  },
+  "linux": {
+    "source_root": "/home/parity/workspace/harness-song-artwork-green-v1/itgmania-harness",
+    "source_sha256": {
+      "build.rs": "e41d8d9b1272c58caf43e7829dfd6649ad3e7ad422565460ffd45718e422fb4d",
+      "src/font_baseline.rs": "86106b8ea428951c949d0d7a5f61bd3fdf2cc04058216d0055d063e3aea62a04",
+      "src/noteskin_baseline.rs": "3b7a9177d350c0ee8341c978e2f1ab09ef5a83dd9e7f61b35ac07f30ce365457",
+      "src/song_lua_runtime.rs": "2282d197834c8451622a0cff3dbc38e971ae9a764c792244a18a2f33feb95515",
+      "src/song_lua_headless.rs": "1a7a9ccb7822b297a673389dd92248479b44536dbb8690f5ecac5407fa9e9f1c",
+      "src/song_lua_oracle.rs": "e0a18b177b501a8bc7feafe0540a929abcc8dbbc66e35c2d7cdd14725a0c282c",
+      "src/main.rs": "cbd3f409fcb01578d619b51d48987dc49514095d6d939db92ae5c55f3c68b1a5",
+      "src/noteskin_oracle.rs": "a119644e521237c583dc6ed568d24a330319d9c148d3ef0adf765143c6b00e12",
+      "src/actor_conformance.rs": "ad3e7a2967ed0195e483ccec7d7560c74eb7440519cd3dc58e7ea2240080f6f0",
+      "src/json_diff.rs": "b80cb6b9cd3824f320d249dfffd9f7b970f14057aaa20a4c19f0d735ca965b86",
+      "src/oracle.rs": "0a016182a1584bfb90fc38f71b61c19ac2da84ca31982233bbc4e24641c7146f",
+      "src/song_lua_baseline.rs": "1a40fc6e58008d50f1262c3853c0f6b0d95e578a6554906c35c650df4167102e",
+      "src/font_oracle.rs": "5085084f3d391a6301723f856a4f8cea843741cd1dfedf91aa2557ee086820b1",
+      "src/song_lua_archive.rs": "94a5acf6d2190919205c4f1c411b668d1b0b8d915b31f953f73d14c6e03156ca",
+      "src/chart_report.rs": "64bb2f1b5ad76dea3b5954a81ce69c003e668a197c81eea863dcc1413bde1821",
+      "src/song_lua_semantics.rs": "a46e440bd4abc02ab298f99f25faf0a15b5be1f4bc3e1a3664f838454a52ea2e",
+      "src/song_lua_semantic_baseline.rs": "b52321d9dcb340f6abfa763078c5b09b6228d63b08002e1b1e7dbc4dd869fa3a",
+      "src/baseline.rs": "f7e00816ee493c1b27adcbca27e828ceb7e0577c394e73346685b132cd8344b3",
+      "src/selector.rs": "f1fe004d9918138ae8b960511434f59b194e340631b3492dd8c4c510c29d14b6",
+      "tests/oracle_cli.rs": "1dbac6378d49aa6467bdcb2e4ce12f0d76a0ef23702244b31aa50031f6f25a1b",
+      "tests/chart_baselines.rs": "6c14a572bae318bd2d1d2160997e6b331e368df6a51fef4e98866f1216473e93",
+      "tests/actor_conformance.rs": "1ceb584e49c6d35509d4ad76562be201b0c16c625dc34e284da6a34665a53fc1",
+      "tests/diff_cli.rs": "dde03be314c76303a272c0293ffc7072f263b0aec57ce8bda4e54c0186f09bc5",
+      "tests/support/mod.rs": "f55a106fe7304b337d2607d721c30fc5a3550bf21e15deacf1ca19265aef7af0"
+    },
+    "checks": [
+      {
+        "label": "target",
+        "exit_code": 0,
+        "seconds": 180.0892780930153,
+        "log_sha256": "3e4804225ab5ce8279d199f7e26d875eac7a73bbfdd6b88b0851b09b22e81bdf",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 202 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "label": "archive-controls",
+        "exit_code": 0,
+        "seconds": 0.6839957369957119,
+        "log_sha256": "131e5d881e53260c1dd2fe7e2877d92def6fd12865b8e55f478e8fb1ab8574bd",
+        "results": [
+          "test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 0.52s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "label": "build",
+        "exit_code": 0,
+        "seconds": 0.10476938704960048,
+        "log_sha256": "3997fc6790b8063b86c119e91f87ac7395ac6cf26135da637dcb229006bc32dc",
+        "results": []
+      }
+    ],
+    "binary": "/home/parity/jobs/harness-song-artwork-linux-green-v1/harness",
+    "binary_sha256": "8e386bb7290ad55e16eae65d034dc9088d6dcc91ff3effd404fa5cb373cf3ff7"
+  },
+  "source_pins_log_hashes_and_helper_verified": true,
+  "archive_source_normalized_equal_both_hosts": true,
+  "all_archive_comparison_and_pack_acceptance_logic_identical_outside_media_collection_and_new_regression": true,
+  "native_or_gameplay_capture_repeated": false,
+  "global_original_helper_unchanged": true,
+  "new_input_regression": "native theme artwork absent from Lua texture requests remains an exact required-asset member with audio preserved",
+  "initial_windows_test_root_canonicalization_corrected_without_production_change": true
+}
