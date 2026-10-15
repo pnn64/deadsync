@@ -3451,6 +3451,41 @@ assert(FLASH:GetParent():GetParent() == CUES and CUES:GetParent() == CONTAINER)
     }
 
     #[test]
+    fn live_percentage_display_inherits_actor_frame_class_methods() {
+        compile("percentage-display-inheritance", r#"
+return Def.ActorFrame {
+    OnCommand = function()
+        local screen = SCREENMAN:GetTopScreen()
+        local first = screen:GetChild('ScoreP1'):GetChild('ScoreDisplayPercentage Percent')
+        local second = screen:GetChild('ScoreP2'):GetChild('ScoreDisplayPercentage Percent')
+        local native_count = ActorFrame.GetNumChildren
+        local native_children = ActorFrame.GetChildren
+        local counts, children = 0, 0
+        ActorFrame.GetNumChildren = function(self)
+            if self == first or self == second then counts = counts + 1 end
+            return native_count(self)
+        end
+        ActorFrame.GetChildren = function(self)
+            if self == first or self == second then children = children + 1 end
+            return native_children(self)
+        end
+        for index, percent in ipairs{first, second} do
+            assert(percent:GetNumChildren() == 1)
+            assert(percent:GetChildren()['PercentP' .. index] == percent:GetChild('PercentP' .. index))
+        end
+        assert(counts == 2 and children == 2,
+            'PercentageDisplay must inherit ActorFrame class method overrides')
+        ActorFrame.GetNumChildren = native_count
+        ActorFrame.GetChildren = native_children
+        assert(first.SetUpdateFunction == ActorFrame.SetUpdateFunction)
+        first:SetUpdateFunction(function() end)
+        first:SetUpdateFunction(nil)
+    end,
+}
+"#);
+    }
+
+    #[test]
     fn live_score_display_loads_unnamed_blank_frame_before_percent() {
         compile("score-display-frame", r#"
 return Def.ActorFrame {

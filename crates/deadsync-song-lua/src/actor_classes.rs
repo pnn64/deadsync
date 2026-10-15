@@ -515,6 +515,7 @@ fn is_frame(kind: &str) -> bool {
             | "MeterDisplay"
             | "CourseContentsList"
             | "StepsDisplay"
+            | "PercentageDisplay"
             | "WrapperState"
     )
 }
