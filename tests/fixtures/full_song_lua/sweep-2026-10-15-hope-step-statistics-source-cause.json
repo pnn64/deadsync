@@ -1,0 +1,112 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "entry_evidence": "sweep-2026-10-15-hope-underlay-header-entry-diagnostic.json",
+  "entry_frames": 1688,
+  "entry_errors": 0,
+  "entry_mismatches": 20442,
+  "first_remaining_native_seq": 653,
+  "native_actor": "external-0112",
+  "native_actor_name": "StepStatsPaneP1",
+  "native_actor_path": "ScreenGameplay/Underlay/StepStatsPaneP1",
+  "first_remaining_mismatch": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "external-0112",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 36,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          3
+        ]
+      },
+      "kind": "query",
+      "line": 36,
+      "operation": "ActorFrame.GetNumChildren",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 653,
+      "source": "song:/sm5/modules/grabactors.lua",
+      "results": [
+        3
+      ]
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "query",
+      "operation": "ActorFrame.GetNumChildren",
+      "source": "song:/sm5/modules/grabactors.lua",
+      "line": 36,
+      "phase": "callback",
+      "beat": -15.99990177154541,
+      "seconds": -4.08297061920166,
+      "args": [],
+      "results": [
+        1
+      ]
+    }
+  },
+  "source_cause": "PerPlayer/StepStatistics/default.lua constructs three actual direct children: DarkBackground, named BannerAndData and DensityGraph. BannerAndData owns Banner, TapNoteJudgments, HoldsMinesRolls, Time and Scorebox source actors. Owned create_underlay_theme_actor currently constructs only one unnamed density sleep-queue frame, with no real graph descendants, dark background or BannerAndData hierarchy. Its direct child count is1 instead of3. Native geometry, selected style/centering behavior, fonts, textures, statistics, messages and live graph updates belong to these actual source actors; padding the count with empty owners would preserve the wrong runtime hierarchy.",
+  "native_direct_children": [
+    "DarkBackground.lua (Quad for non-double; two-Quad ActorFrame for double)",
+    "ActorFrame named BannerAndData, owning five loaded source actors",
+    "DensityGraph.lua ActorFrame, owning actual background/histogram/life graph children"
+  ],
+  "current_owned_direct_children": [
+    "unnamed ActorFrame with recurring density sleep queue only"
+  ],
+  "native_primary_sources": {
+    "physical_source_directory": "/home/parity/native/source-v1/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics",
+    "files": {
+      "DarkBackground.lua": {
+        "path": "/home/parity/native/source-v1/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DarkBackground.lua",
+        "sha256_lf_normalized": "7eefce949b3072c58dc153e29bacb8ca15632d1fbb2559fa023327f81a4540db"
+      },
+      "TapNoteJudgments.lua": {
+        "path": "/home/parity/native/source-v1/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/TapNoteJudgments.lua",
+        "sha256_lf_normalized": "e52bc6d4e78d4bf1c0a8122a8b33e9185a2f7bc4a189a46976cd72b221c6f8bd"
+      },
+      "Time.lua": {
+        "path": "/home/parity/native/source-v1/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/Time.lua",
+        "sha256_lf_normalized": "c35d12fb57054a7602c3e5bf7985bf5a7eaa5bfb0e872cd5a055553451536064"
+      },
+      "HoldsMinesRolls.lua": {
+        "path": "/home/parity/native/source-v1/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/HoldsMinesRolls.lua",
+        "sha256_lf_normalized": "10f18b74335746393c6804342be4981a16db5567206272eec3351e20f04db9c4"
+      },
+      "Scorebox.lua": {
+        "path": "/home/parity/native/source-v1/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/Scorebox.lua",
+        "sha256_lf_normalized": "ded2913af4ec0d100b9608a2c73427f50b07609d913c3ae66938e707149eff94"
+      },
+      "Banner.lua": {
+        "path": "/home/parity/native/source-v1/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/Banner.lua",
+        "sha256_lf_normalized": "f043d2eb3d3991ee898b1a4d53308e9cafc53b406057541ae086b44f43492635"
+      },
+      "DensityGraph.lua": {
+        "path": "/home/parity/native/source-v1/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua",
+        "sha256_lf_normalized": "1f822aa1fd2022c53ecf3025de1d39d353dfdacc0c3dd5d7f1582773606c57d6"
+      },
+      "default.lua": {
+        "path": "/home/parity/native/source-v1/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua",
+        "sha256_lf_normalized": "31585de870edc1519b91b5aab0188b1e8aed49ecee3f09105db9c5644e371ee7"
+      }
+    }
+  },
+  "all_eight_physical_native_source_files_match_local_vendor_lf_normalized": true,
+  "header_failure_resolved_by": "0b3b12b7b6fb83b93b1661c4395b8d2151253cba",
+  "previous_first_remaining_native_seq": 649,
+  "original_capture_reused": true,
+  "full_repairs_spent": 0,
+  "expected_query_results_used_as_engine_inputs": false,
+  "comparison_logic_changed": false,
+  "production_step_statistics_fix_added": false,
+  "next_action": "Build the actual StepStatistics source-selected hierarchy and runtime behavior from its eight primary Lua files, including real child types, geometry, resources, statistics/message updates and graph ownership. Use real initial gameplay/profile inputs. Preserve the previously qualified quantized recurring density timing and all existing controls. Qualify meaningful runtime assertions on both hosts before retained entry; no full HOPE repair while known entry failures remain."
+}

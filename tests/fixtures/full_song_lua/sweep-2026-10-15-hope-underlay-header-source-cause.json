@@ -4,7 +4,6 @@
   "entry_frames": 1688,
   "entry_errors": 0,
   "entry_mismatches": 20444,
-  "first_remaining_native_seq": 649,
   "native_actor": "external-0111",
   "native_actor_name": "Header",
   "native_actor_path": "ScreenGameplay/Underlay/Header",
@@ -93,6 +92,11 @@
   "full_repairs_spent": 0,
   "expected_query_results_used_as_engine_inputs": false,
   "comparison_logic_changed": false,
-  "production_header_fix_added": false,
-  "next_action": "Construct the real Underlay Header Quad and execute the native Init command, using the existing native Quad default texture implementation. Validate actual actor type, parent, texture metadata, geometry and diffuse state on both hosts with unchanged acceptance comparisons before another retained entry. No full HOPE repair while known entry failures remain."
+  "production_header_fix_added": true,
+  "next_action": "Construct the real Underlay Header Quad and execute the native Init command, using the existing native Quad default texture implementation. Validate actual actor type, parent, texture metadata, geometry and diffuse state on both hosts with unchanged acceptance comparisons before another retained entry. No full HOPE repair while known entry failures remain.",
+  "original_failure_native_seq": 649,
+  "fix_commit": "0b3b12b7b6fb83b93b1661c4395b8d2151253cba",
+  "followup_entry": "sweep-2026-10-15-hope-underlay-header-entry-diagnostic.json",
+  "first_remaining_native_seq_after_fix": 653,
+  "status": "resolved by native Header Quad/default texture and original Init; StepStatistics hierarchy remains pending"
 }
