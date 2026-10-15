@@ -1,0 +1,23 @@
+{
+  "generated_utc": "2026-10-15T09:04:33.378658+00:00",
+  "concrete_ledger_sha256": "d428b6f81e021d9e3fcceeb2f8830c927795d7ebbf0de60a126606c90c9adc1c",
+  "counts": {
+    "passed": 397,
+    "pending": 104,
+    "unprocessed": 0
+  },
+  "maximum_published_terminal_attempt_histogram": {
+    "0": 82,
+    "1": 11,
+    "2": 11
+  },
+  "pending_sources": 104,
+  "terminal_attempts_exceed_two": [],
+  "differences": [],
+  "running_repair_not_counted_as_terminal": {
+    "source_simfile": "mawaru6/mawaru6.sm",
+    "running_attempt": 2,
+    "already_authorized_no_restart": true
+  },
+  "no_chart_replays_or_source_mutations": true
+}
