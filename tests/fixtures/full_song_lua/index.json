@@ -5078,15 +5078,12 @@
     {
       "title": "THE WORLD REVOLVING",
       "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.ssc",
-      "harness_version": "0.1.0",
-      "archive": "f1eb13e3e7fa2807483fdec7378a3862ff04222586129c30b62936d2ce2b4746.tar.zst",
-      "sha256": "f1eb13e3e7fa2807483fdec7378a3862ff04222586129c30b62936d2ce2b4746",
-      "compressed_bytes": 1986207,
-      "uncompressed_sha256": "fd7b9ac1f030527c70506bec4cb538542dad4a9f60f81ac1e7c0eba379c9e54c",
-      "compression_level": 22,
-      "aliases": [
-        "cde65486c09c6722415ba228e913e3eb74ef996ecb26f1c343ef570190e31922.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "640c48d2df81663e1a2271544a3119d4b0f6694e7476e23ce170cd68669fc8dd.tar.zst",
+      "sha256": "640c48d2df81663e1a2271544a3119d4b0f6694e7476e23ce170cd68669fc8dd",
+      "compressed_bytes": 10635473,
+      "uncompressed_sha256": "d49cc7417a0d73c262b8404fe240f7307cfc611ad352f6b997c908050bb399d4",
+      "aliases": []
     },
     {
       "title": "Episode 12",

@@ -53,6 +53,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 439,
+      "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.ssc",
+      "simfile_sha256": "ae38b82cd09bdaaa1dc0b5599e341b5d46befa7aefb3962de70f679bed63a1f0",
+      "retained_original_archive": "f1eb13e3e7fa2807483fdec7378a3862ff04222586129c30b62936d2ce2b4746.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 246.90551417399547,
+      "trace_sha256": "3a8adf750a21f769209de59f3242a2877c976370e8ab9a4b789d9e6c44441e36",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v6-2/chart-439/candidates/d49cc7417a0d73c262b8404fe240f7307cfc611ad352f6b997c908050bb399d4.tar",
+      "replay_exit": 0,
+      "replay_seconds": 2487.7423462249862,
+      "candidate_sha256": "d49cc7417a0d73c262b8404fe240f7307cfc611ad352f6b997c908050bb399d4",
+      "native_frames": 14360,
+      "replayed_frames": 14360,
+      "compared_stage_fields": 1276,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.SetTextureFiltering, Actor.accelerate, Actor.addx, Actor.addy, Actor.bob, Actor.bouncebegin, Actor.bounceend, Actor.cullmode, Actor.effectclock, Actor.effectoffset, Actor.finishtweening, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.stoptweening, Actor.stretchto, Actor.z, Actor.zoomy, ActorFrame.fov, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetTexture, ActorMultiVertex.SetVertices, GameState.IsHumanPlayer, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Hallway, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Incoming, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Roll, PlayerOptions.Space, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave, PlayerOptions.XMod, PlayerOptions.Xmode, Sprite.setstate",
+        "native drawable state/resources: ActorMultiVertex, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "9f6eb2b28ff3bf52ecf8540d2d365dfc7d7104c253687a561797c0f3be05dd9e",
+      "archive": "640c48d2df81663e1a2271544a3119d4b0f6694e7476e23ce170cd68669fc8dd.tar.zst",
+      "archive_sha256": "640c48d2df81663e1a2271544a3119d4b0f6694e7476e23ce170cd68669fc8dd",
+      "compressed_bytes": 10635473,
+      "pack_seconds": 21.484904732002178,
+      "harness_version": "0.1.80",
+      "title": "THE WORLD REVOLVING",
+      "retained_original_entry": {
+        "title": "THE WORLD REVOLVING",
+        "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.ssc",
+        "harness_version": "0.1.0",
+        "archive": "f1eb13e3e7fa2807483fdec7378a3862ff04222586129c30b62936d2ce2b4746.tar.zst",
+        "sha256": "f1eb13e3e7fa2807483fdec7378a3862ff04222586129c30b62936d2ce2b4746",
+        "compressed_bytes": 1986207,
+        "uncompressed_sha256": "fd7b9ac1f030527c70506bec4cb538542dad4a9f60f81ac1e7c0eba379c9e54c",
+        "compression_level": 22,
+        "aliases": [
+          "cde65486c09c6722415ba228e913e3eb74ef996ecb26f1c343ef570190e31922.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -63,7 +114,7 @@
   },
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 1,
+  "passed_fixtures": 2,
   "pending_charts": 0,
-  "processed_charts": 1
+  "processed_charts": 2
 }
