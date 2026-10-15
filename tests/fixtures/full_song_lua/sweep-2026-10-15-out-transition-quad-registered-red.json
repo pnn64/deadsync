@@ -23,7 +23,7 @@
       ]
     }
   ],
-  "source_cause": "sweep-2026-10-15-hope-out-transition-quad-source-cause.json",
+  "source_cause": "sweep-2026-10-15-hope-out-transition-source-cause.json",
   "changed_source_mtimes_refreshed_before_compilation_both_hosts": true,
   "full_chart_repairs_spent": 0,
   "acceptance_comparisons_changed": false
