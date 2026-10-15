@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Ascendanz/Ascendanz.ssc",
+  "native_frames": 98852,
+  "replayed_frames": 98852,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "26999f98362096a4d11ed3972278c33a1a9188ca9f907804493a1e6e1412f43e.tar.zst",
+  "compressed_sha256": "26999f98362096a4d11ed3972278c33a1a9188ca9f907804493a1e6e1412f43e",
+  "uncompressed_sha256": "20bb680d05140c95752f3d34ab749710ddd41b0e6d6e2fd33ec6d2535acd9b5c",
+  "compressed_bytes": 9462800,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
