@@ -10646,6 +10646,27 @@
       "capture_exit": 1,
       "capture_seconds": 901.0094915929949,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1384708-1792021564886666940-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1384708-1792021564886666940-0\n"
+    },
+    {
+      "position": 492,
+      "source_simfile": "james/james.ssc",
+      "simfile_sha256": "9c675cd26cc1f0b2c00956c7901ef13957d68ade067469fbfc8abd58dfdecdda",
+      "historical_failure": {
+        "simfile": "james/james.ssc",
+        "status": "timeout",
+        "category": "capture_timeout",
+        "reason": "native capture exceeded 600 seconds",
+        "diagnostics": "target/song-lua-repair/phase4/ee72a53d84d7fc88"
+      },
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 902.6671685950132,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1468866-1792022466740688095-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1468866-1792022466740688095-0\n"
     }
   ],
   "scope": {
@@ -10658,6 +10679,6 @@
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 39,
-  "pending_charts": 40,
-  "processed_charts": 79
+  "pending_charts": 41,
+  "processed_charts": 80
 }
