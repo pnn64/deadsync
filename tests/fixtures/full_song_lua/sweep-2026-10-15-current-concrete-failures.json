@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T07:41:18Z",
+  "updated_utc": "2026-10-15T07:48:38Z",
   "counts": {
     "passed": 396,
     "pending": 105,
@@ -8160,17 +8160,19 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-15-hope-complete-lua-namespace-diagnostic.json",
+      "followup": "sweep-2026-10-15-hope-cancel-child-entry-diagnostic.json",
       "source_cause": "sweep-2026-10-15-hope-cancel-source-cause.json",
       "entry_diagnostic_frames": 1688,
       "entry_diagnostic_errors": 0,
-      "entry_diagnostic_mismatches": 20514,
-      "first_native_cancel_children": 1,
-      "first_owned_cancel_children": 0,
+      "entry_diagnostic_mismatches": 20510,
       "archive_namespace_startup_error_cleared_in_diagnostic": true,
       "native_trace_and_all_original_member_bytes_unchanged": true,
       "original_terminal_full_result_preserved": true,
-      "new_full_repair_started": false
+      "new_full_repair_started": false,
+      "cancel_child_missing_failure_fixed_by": "c71cc5f319cd5b950b6ce107ec23f65772062260",
+      "remaining_source_cause": "sweep-2026-10-15-hope-quad-default-texture-source-cause.json",
+      "current_diagnostic_failure": "native Quad Sprite.GetTexture returns RageTexture; owned returns nil; full entry has20510 command/query mismatches",
+      "diagnostic_only_not_full_acceptance": true
     },
     {
       "position": 230,

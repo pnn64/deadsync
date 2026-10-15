@@ -1,0 +1,95 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "evidence": "sweep-2026-10-15-hope-cancel-child-entry-diagnostic.json",
+  "fix_already_validated": "c71cc5f319cd5b950b6ce107ec23f65772062260",
+  "full_repairs_spent": 0,
+  "native_capture_reused": true,
+  "entry_frames": 1688,
+  "entry_callback_errors": 0,
+  "entry_mismatches": 20510,
+  "native_command_queries": 21008,
+  "owned_command_queries": 20585,
+  "first_remaining_mismatch": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "external-0054",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          {
+            "type": "RageTexture"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 3,
+      "operation": "Sprite.GetTexture",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 137,
+      "source": "song:/sm5/modules/grabactors.lua",
+      "results": [
+        {
+          "type": "RageTexture"
+        }
+      ]
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "query",
+      "operation": "Sprite.GetTexture",
+      "source": "song:/sm5/modules/grabactors.lua",
+      "line": 3,
+      "phase": "callback",
+      "beat": -15.99990177154541,
+      "seconds": -4.08297061920166,
+      "args": [],
+      "results": [
+        {
+          "type": "nil"
+        }
+      ]
+    }
+  },
+  "local_primary_sources": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Quad.cpp",
+      "sha256_lf_normalized": "4f1e12f180c0496ea07a98c24f84b1ab267ce34910a59ff7d1e53c6397df40b7"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Quad.h",
+      "sha256_lf_normalized": "d583a565dcaa30859dad1f04805d50d8b36338fb768544f6837fc9d6499eed84"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\RageTextureManager.cpp",
+      "sha256_lf_normalized": "bd7665ebe12533a5e7ce3ed45a8a71bcc25d0a602dd316a9bd601e8e67bdda50"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\RageTexture.cpp",
+      "sha256_lf_normalized": "209126b1acf0b3f825a55315b748c3558725183d22477ced7c198fef9bd1b6c7"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\RageTextureID.h",
+      "sha256_lf_normalized": "fb877c2f728a6b9e8b89a0a76ace4e23b3e9ce4944158705bf465320ce380e1b"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs",
+      "sha256_lf_normalized": "f56e83b78c1b55069505f58b2ca8ea94d8c7ebb3b7905dbc3a26a789880852fd"
+    }
+  ],
+  "source_cause": "Quad derives from Sprite and its constructor loads TEXTUREMAN->GetDefaultTextureID(). RageTextureManager returns a nonnull RageTexture_Default with source, texture and image dimensions all1x1. It is initialized with a default RageTextureID, whose filename is empty; the manager lookup key __blank__ is not the resource GetPath value. The owned GetTexture gate only recognizes an authored Texture field or an allocated AFT, so an ordinary Quad returns nil despite its native default texture.",
+  "next_action": "Implement the native Quad default texture handle and metadata without treating an unloaded Sprite as loaded; use the same retained HOPE entry to identify any further actual mismatches before a full repair.",
+  "production_quad_texture_fix_added": false,
+  "acceptance_comparisons_changed": false,
+  "expected_outputs_imported_into_engine": false
+}
