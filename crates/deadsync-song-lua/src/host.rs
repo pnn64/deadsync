@@ -1755,7 +1755,9 @@ pub fn install_game_state_globals(
     )?;
     globals.set(
         "GetNotefieldWidth",
-        lua.create_function(|_, _args: MultiValue| Ok(256.0_f32))?,
+        lua.create_function(|lua, _args: MultiValue| {
+            Ok(crate::song_lua_style_info(&current_song_lua_style_name(lua)).width)
+        })?,
     )?;
     globals.set(
         "GetGameplayLayout",

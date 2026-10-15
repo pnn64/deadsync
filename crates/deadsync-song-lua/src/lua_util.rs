@@ -14053,7 +14053,7 @@ return {
         if name.eq_ignore_ascii_case("Underlay") {
             copy_dummy_actor_tags(parent, &actor)?;
             actor.set("__songlua_top_screen_child_name", "Underlay")?;
-            install_underlay_theme_children(lua, &actor, create_named_child_actor)?;
+            install_underlay_theme_children(lua, &actor, create_dummy_actor, create_named_child_actor)?;
         }
         if name.eq_ignore_ascii_case("Overlay") {
             // Simply Love's FailOnHoldStart owns its judgment latch under
@@ -14550,12 +14550,87 @@ pub fn install_top_screen_theme_children(
     Ok(())
 }
 
+fn create_underlay_background_filter(
+    lua: &Lua, underlay: &Table, player: usize,
+    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+) -> mlua::Result<Option<Table>> {
+    let commands = lua.load(r#"
+local player = ...
+local pn = ToEnumShortString(player)
+local mods = SL[pn].ActiveModifiers
+
+-- if no BackgroundFilter is necessary, it's safe to bail now
+if mods.BackgroundFilter == "Off" then return end
+if IsRoutine() and player ~= GAMESTATE:GetMasterPlayerNumber() then return end
+
+local FilterAlpha = BackgroundFilterValues()
+-- Native named choices are unchanged; the production profile also supports percentages.
+if type(mods.BackgroundFilter) == "number" then FilterAlpha[mods.BackgroundFilter] = mods.BackgroundFilter end
+return {
+	InitCommand=function(self)
+		self:xy(GetNotefieldX(player), _screen.cy )
+			:diffuse(Color.Black)
+			:diffusealpha( FilterAlpha[mods.BackgroundFilter]/100 or 0 )
+			:zoomto( GetNotefieldWidth(), _screen.h )
+	end,
+	OffCommand=function(self) self:queuecommand("ComboFlash") end,
+	ComboFlashCommand=function(self)
+		local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
+		local FlashColor = nil
+		local WorstAcceptableFC = SL.Preferences[SL.Global.GameMode].MinTNSToHideNotes:gsub("TapNoteScore_W", "")
+
+		for i=1, tonumber(WorstAcceptableFC) do
+			if pss:FullComboOfScore("TapNoteScore_W"..i) then
+				FlashColor = SL.JudgmentColors[SL.Global.GameMode][i]
+				break
+			end
+		end
+
+		if (FlashColor ~= nil) then
+			self:accelerate(0.25):diffuse( FlashColor )
+				:accelerate(0.5):faderight(1):fadeleft(1)
+				:accelerate(0.15):diffusealpha(0)
+		end
+	end
+}
+"#).set_name("@theme:/BGAnimations/ScreenGameplay underlay/PerPlayer/BackgroundFilter.lua")
+        .call::<Option<Table>>(player_number_name(player))?;
+    let Some(commands) = commands else { return Ok(None); };
+    let sl = lua.globals().get::<Table>("SL")?;
+    let mods = sl.get::<Table>(format!("P{}", player + 1))?.get::<Table>("ActiveModifiers")?;
+    let filter = mods.get::<Value>("BackgroundFilter")?;
+    let alpha = match filter {
+        Value::Integer(value) => value as f32 / 100.0,
+        Value::Number(value) => value as f32 / 100.0,
+        Value::String(name) => {
+            let values = lua.globals().get::<Function>("BackgroundFilterValues")?.call::<Table>(())?;
+            values.get::<f32>(name)? / 100.0
+        }
+        _ => return Err(mlua::Error::runtime("invalid initial BackgroundFilter")),
+    };
+    let actor = create_named_actor(lua, "Quad", "", create_dummy_actor)?;
+    actor.raw_set("__songlua_parent", underlay.clone())?;
+    for command in ["InitCommand", "OffCommand", "ComboFlashCommand"] {
+        actor.raw_set(command, commands.raw_get::<Function>(command)?)?;
+    }
+    // Constructor initialization occurs before authored observation.
+    let x = lua.globals().get::<Function>("GetNotefieldX")?.call::<f32>(player_number_name(player))?;
+    let width = lua.globals().get::<Function>("GetNotefieldWidth")?.call::<f32>(())?;
+    let height = lua.globals().get::<f32>("SCREEN_HEIGHT")?;
+    actor.get::<Function>("xy")?.call::<()>((actor.clone(), x, height * 0.5))?;
+    actor.get::<Function>("diffuse")?.call::<()>((actor.clone(), 0.0, 0.0, 0.0, alpha))?;
+    actor.get::<Function>("zoomto")?.call::<()>((actor.clone(), width, height))?;
+    Ok(Some(actor))
+}
+
 pub fn install_underlay_theme_children(
     lua: &Lua,
     underlay: &Table,
+    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
 ) -> mlua::Result<()> {
     let children = actor_children(lua, underlay)?;
+    let filters = create_actor_child_group(lua)?;
     for &name in UNDERLAY_THEME_CHILD_NAMES {
         // Simply Love builds its PerPlayer underlay actors by iterating
         // GAMESTATE:GetHumanPlayers; an inactive side has no score or pane.
@@ -14576,6 +14651,17 @@ pub fn install_underlay_theme_children(
             push_sequence_child_once(underlay, child.clone())?;
         }
         children.set(name, child)?;
+        if let Some(player) = top_screen_step_stats_pane_index(name)
+            && let Some(filter) = create_underlay_background_filter(lua, underlay, player, create_dummy_actor)?
+        {
+            push_sequence_child_once(underlay, filter.clone())?;
+            filters.raw_set(filters.raw_len() + 1, filter)?;
+        }
+    }
+    match filters.raw_len() {
+        0 => (),
+        1 => children.raw_set("", filters.raw_get::<Table>(1)?)?,
+        _ => children.raw_set("", filters)?,
     }
     Ok(())
 }

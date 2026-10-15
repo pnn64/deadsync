@@ -1,0 +1,56 @@
+{
+  "source_root": "/home/parity/workspace/underlay-background-filter-green-v2/deadsync",
+  "binary_sha256": "dcbadf907f736d82f1a4918643d06dac44c1c9cb635b2e7c0869afd3e4329add",
+  "all_five_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "entire_regression_source_identical_red_green": true,
+  "native_bitmap_asset_log_and_binary_hashes_verified": true,
+  "red_missing_background_filter_reproduced_both_hosts": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 267.7541592270136,
+      "log_sha256": "f6a5d07777a31ac2589aee12ec0cfa159d09d3e44ca477e57d2a8685243404a3",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 628 filtered out; finished in 0.87s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 36.06044472998474,
+      "log_sha256": "d9c7ce61ee859f2748bbe3ffe5fb317bb231d66378483cb2ebfdd8c204f92c79",
+      "results": [
+        "test result: ok. 92 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 35.30s"
+      ]
+    },
+    {
+      "label": "profile-input-control",
+      "exit_code": 0,
+      "seconds": 88.70320883597014,
+      "log_sha256": "a76ac41eb6977c4b19b888cb5a3b364dcdb21cb0e5f1ddbdcfab52997dd73226",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 227.06849038397195,
+      "log_sha256": "8eb0a1527ddc8df114f202eac99ae076fde8bf050ad5afbd3e1a98576ae163a9",
+      "results": [
+        "test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 20.49s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 36.285966092022136,
+      "log_sha256": "b67b9271ab394b75e338171b1ea04f2dece4c4ad85b3b28fbf07f5bccac792eb",
+      "results": []
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
