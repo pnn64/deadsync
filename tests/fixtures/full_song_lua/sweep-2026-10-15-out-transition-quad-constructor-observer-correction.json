@@ -1,0 +1,75 @@
+{
+  "green_v2_target_and_all_90_live_controls_passed_both_hosts": true,
+  "green_v2_replay_controls_failed_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 327.6968127,
+      "log_sha256": "d93c7975e5ae1683f3f03710d15ec5d34fe88963569e72f93a72653dc99b0191",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 628 filtered out; finished in 0.33s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 59.03986430000805,
+      "log_sha256": "cd971c7e9145acfa4ada0b76af8ee8724869441e9b1af0bc7ec54db0c0aece45",
+      "results": [
+        "test result: ok. 90 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 57.36s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 101,
+      "seconds": 148.86513959999138,
+      "log_sha256": "775f27444978d3723715f0518b0a9a0664a570b4e1258c51472be899df718bbc",
+      "results": [
+        "test result: FAILED. 33 passed; 2 failed; 0 ignored; 0 measured; 302 filtered out; finished in 22.62s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 242.126461302978,
+      "log_sha256": "d2fce6e7ebc9a02ef854e06d9b656fff46ced1ab5c1a43c14687ee2ee2d24d3c",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 626 filtered out; finished in 0.25s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 33.31606491096318,
+      "log_sha256": "46dcfdae01ccb1a9b8451793348d70a68ffd0440093a97234befa21896f3926d",
+      "results": [
+        "test result: ok. 90 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 32.64s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 101,
+      "seconds": 215.2599240760319,
+      "log_sha256": "8748d921dfbf4dfc936e07ba1a14630ceb90e953613cd17b5331f86d8891d31d",
+      "results": [
+        "test result: FAILED. 33 passed; 2 failed; 0 ignored; 0 measured; 302 filtered out; finished in 22.06s"
+      ]
+    }
+  ],
+  "failing_existing_controls": [
+    "native_gameplay::tests::option_trace_keeps_native_returns_and_strings",
+    "native_gameplay::tests::actor_and_query_trace_keep_lua_callers"
+  ],
+  "cause": "Calling the native Lua On function during constructor initialization supplies a Lua caller for Actor.sleep, emitting a spurious theme construction event. Existing observers correctly reject the additional call.",
+  "correction": "Initialize the native FullScreen/diffuse/sleep/linear/diffusealpha state through the same engine calls used by other built-in constructor paths, before authored observation. Keep the exact native Init/On/Off functions registered for later commands.",
+  "regression_and_IsRoutine_helper_bytes_identical_green_v2_v3": true,
+  "existing_replay_control_source_hash_unchanged": true,
+  "windows_all_1175_source_pins_and_check_log_hashes_verified": true,
+  "green_v3_all_four_groups_required_both_hosts_before_helper_selection": true,
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false,
+  "native_capture_changed": false
+}
