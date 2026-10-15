@@ -1,0 +1,12 @@
+{
+  "pid": 1952498,
+  "command": [
+    "python3",
+    "/home/parity/jobs/wait_generic_tween_validation_then_tower_v1.py"
+  ],
+  "full_repairs_spent": 0,
+  "first_full_repair_started": false,
+  "requires_both_platform_eight_checks": true,
+  "requires_all_1175_raw_and_normalized_pins": true,
+  "native_capture_reused": true
+}
