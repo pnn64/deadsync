@@ -5614,17 +5614,12 @@
     {
       "title": "Ztar Trek",
       "source_simfile": "Ztar Trek/steps.sm",
-      "harness_version": "0.1.6",
-      "archive": "0edac4c296c7f9f71f47b66bd7316e618c860967ddc61a596a95a3b56c34dfc6.tar.zst",
-      "sha256": "0edac4c296c7f9f71f47b66bd7316e618c860967ddc61a596a95a3b56c34dfc6",
-      "compressed_bytes": 19664,
-      "uncompressed_sha256": "eb8605578320fa2b883a5d873169cf8c763df49a258e9b1f806a5e66c0bd61ee",
-      "compression_level": 22,
-      "aliases": [
-        "90f9ec6b5ff5382b4429b604a6625ab68d1d11a23f7bc2f16aac3a9f5c50b547.tar.zst",
-        "ce701a63b08c67e386931d9791ac1df4ed62324b7ed2ef206312464d0a69197c.tar.zst",
-        "c3537fc854086b4f0004446fd017d65c59b4f8a8adc57ffe2853980050e3f245.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "54e314619e1ca14d0d32f4acd2b6670d5029aa6958093a98e686b8989bfd1405.tar.zst",
+      "sha256": "54e314619e1ca14d0d32f4acd2b6670d5029aa6958093a98e686b8989bfd1405",
+      "compressed_bytes": 3841496,
+      "uncompressed_sha256": "bcedb012b58a42c1cd378c8c83c29dcc5d36933171ceef26dda7846e7128380b",
+      "aliases": []
     },
     {
       "title": "RUNWAY",

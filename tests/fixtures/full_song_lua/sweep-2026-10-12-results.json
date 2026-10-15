@@ -14482,6 +14482,58 @@
       "replay_seconds": 1.426690341992071,
       "candidate_sha256": "de708ddff7e43c0c9c1c7cddb57bb58184ce5eef2b3ba6907380bc2aa0d0eb4a",
       "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for '[10] Wobbpotato': error converting Lua nil to function; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for '[10] Wobbpotato' from '/tmp/.tmpUDxZTi/song/lua/default.lua': error converting Lua nil to function\n\nthread 'main' (2173123) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 483,
+      "source_simfile": "Ztar Trek/steps.sm",
+      "simfile_sha256": "ee49242dc6636c34dcc44b25b05c4b3ab71ee90bb7416ef1f9d219280fffba6c",
+      "retained_original_archive": "0edac4c296c7f9f71f47b66bd7316e618c860967ddc61a596a95a3b56c34dfc6.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 109.00230339798145,
+      "trace_sha256": "e7ea55f3f7462dd0cd52630e80b64a4983c7c46f52a5587d69fb16bbe9475aed",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-483/candidates/bcedb012b58a42c1cd378c8c83c29dcc5d36933171ceef26dda7846e7128380b.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1330.7730619149806,
+      "candidate_sha256": "bcedb012b58a42c1cd378c8c83c29dcc5d36933171ceef26dda7846e7128380b",
+      "native_frames": 69378,
+      "replayed_frames": 69378,
+      "compared_stage_fields": 1188,
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "94a613ac9e2b4dc6d17264889785153107d9fb79b9cf38cc8323a1827cd26c6d",
+      "archive": "54e314619e1ca14d0d32f4acd2b6670d5029aa6958093a98e686b8989bfd1405.tar.zst",
+      "archive_sha256": "54e314619e1ca14d0d32f4acd2b6670d5029aa6958093a98e686b8989bfd1405",
+      "compressed_bytes": 3841496,
+      "pack_seconds": 2.2787075660016853,
+      "harness_version": "0.1.80",
+      "title": "Ztar Trek",
+      "retained_original_entry": {
+        "title": "Ztar Trek",
+        "source_simfile": "Ztar Trek/steps.sm",
+        "harness_version": "0.1.6",
+        "archive": "0edac4c296c7f9f71f47b66bd7316e618c860967ddc61a596a95a3b56c34dfc6.tar.zst",
+        "sha256": "0edac4c296c7f9f71f47b66bd7316e618c860967ddc61a596a95a3b56c34dfc6",
+        "compressed_bytes": 19664,
+        "uncompressed_sha256": "eb8605578320fa2b883a5d873169cf8c763df49a258e9b1f806a5e66c0bd61ee",
+        "compression_level": 22,
+        "aliases": [
+          "90f9ec6b5ff5382b4429b604a6625ab68d1d11a23f7bc2f16aac3a9f5c50b547.tar.zst",
+          "ce701a63b08c67e386931d9791ac1df4ed62324b7ed2ef206312464d0a69197c.tar.zst",
+          "c3537fc854086b4f0004446fd017d65c59b4f8a8adc57ffe2853980050e3f245.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -14507,7 +14559,7 @@
   },
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 41,
+  "passed_fixtures": 42,
   "pending_charts": 66,
-  "processed_charts": 107
+  "processed_charts": 108
 }
