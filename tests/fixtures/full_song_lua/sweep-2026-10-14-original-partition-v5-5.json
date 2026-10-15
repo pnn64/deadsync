@@ -987,6 +987,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 464,
+      "source_simfile": "wah-propaganwah (habstrakt remix) (ddrillini remix)/Propaganda (Habstrakt Remix).ssc",
+      "simfile_sha256": "512975cf66528e0f97eb9eda05e663d90c9281280794226f18779020d3e0ed0d",
+      "retained_original_archive": "5bd8af7128a7bf99749e22e881f4c86a5245513811b2faf270358e1fc5e4715e.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 156.85418742799084,
+      "trace_sha256": "4a91e19bdda8b13532dc5078a46a6389735bf43248282cec6ed717a13ced5654",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-464/candidates/0a03ac841965997fb7e1f26e2e5bc187c22043d9088be878784304fa2cad823b.tar",
+      "replay_exit": 0,
+      "replay_seconds": 2247.5366059399967,
+      "candidate_sha256": "0a03ac841965997fb7e1f26e2e5bc187c22043d9088be878784304fa2cad823b",
+      "native_frames": 105949,
+      "replayed_frames": 105949,
+      "compared_stage_fields": 1705,
+      "pending_coverage": [
+        "uncompared song operations: ActorSound.play",
+        "native drawable state/resources: Sound, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "41724c3579ab6c6388f41570d5fad4fe0e398ebb9ce4bbc839a78e5b88ee6ef2",
+      "archive": "18879f80885a3a21c487d78071b310065af2d602d0ea8ca9d2fd3aa326b5d151.tar.zst",
+      "archive_sha256": "18879f80885a3a21c487d78071b310065af2d602d0ea8ca9d2fd3aa326b5d151",
+      "compressed_bytes": 5760563,
+      "pack_seconds": 2.035144487977959,
+      "harness_version": "0.1.80",
+      "title": "Wah-Propaganwah (Habstrakt Remix)",
+      "retained_original_entry": {
+        "title": "Wah-Propaganwah",
+        "source_simfile": "wah-propaganwah (habstrakt remix) (ddrillini remix)/Propaganda (Habstrakt Remix).ssc",
+        "harness_version": "0.1.0",
+        "archive": "5bd8af7128a7bf99749e22e881f4c86a5245513811b2faf270358e1fc5e4715e.tar.zst",
+        "sha256": "5bd8af7128a7bf99749e22e881f4c86a5245513811b2faf270358e1fc5e4715e",
+        "compressed_bytes": 76475,
+        "uncompressed_sha256": "7ac281cb55ad0b2396c6994ca50edb9ef1525e5d14b0c581a944b9566cf49708",
+        "compression_level": 22,
+        "aliases": [
+          "f5cf4207c8458824652cccdbec6ccfe0e132acd4fb95e74bae611be9dca00ae7.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -997,7 +1048,7 @@
   },
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 8,
+  "passed_fixtures": 9,
   "pending_charts": 6,
-  "processed_charts": 14
+  "processed_charts": 15
 }
