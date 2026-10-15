@@ -1,0 +1,61 @@
+{
+  "status": "supervision transferred; two additional original workers launched",
+  "transferred_queued_originals": 17,
+  "all_21_original_unprocessed_positions_accounted_for": true,
+  "all_retained_capture_member_bytes_verified": true,
+  "all_1175_selected_original_helper_source_pins_verified": true,
+  "original_global_selection_unchanged": true,
+  "full_acceptance_unchanged": true,
+  "live_replays_restarted": false,
+  "live_replay_processes_signaled": false,
+  "retained_and_new_workers": [
+    {
+      "name": "chart-sweep-parallel-v5-4",
+      "supervisor_pid": 2394974,
+      "retained_child_pid": 139882,
+      "retained_child_start_ticks": 21703628,
+      "retained_child_cwd": "/home/parity/workspace/snapshots-v1/deadsync",
+      "live_command_unchanged": true,
+      "old_supervisor_stopped": true
+    },
+    {
+      "name": "chart-sweep-parallel-v4-2",
+      "supervisor_pid": 2394975,
+      "retained_child_pid": 1776250,
+      "retained_child_start_ticks": 23500206,
+      "retained_child_cwd": "/home/parity/workspace/snapshots-v1/deadsync",
+      "live_command_unchanged": true,
+      "old_supervisor_stopped": true
+    },
+    {
+      "name": "chart-sweep-parallel-v6-1",
+      "supervisor_pid": 2395452,
+      "positions": [
+        415,
+        431,
+        447,
+        461,
+        469,
+        477,
+        485,
+        493,
+        501
+      ]
+    },
+    {
+      "name": "chart-sweep-parallel-v6-2",
+      "supervisor_pid": 2395456,
+      "positions": [
+        423,
+        439,
+        455,
+        463,
+        471,
+        479,
+        487,
+        495
+      ]
+    }
+  ],
+  "runner_sha256": "be843636da49640f420f8e75cff8669f8655dcd79de56e5d68b431f51a61359d"
+}

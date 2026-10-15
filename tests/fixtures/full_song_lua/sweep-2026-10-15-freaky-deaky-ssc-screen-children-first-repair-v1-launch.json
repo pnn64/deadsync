@@ -1,0 +1,10 @@
+{
+  "pid": 2370040,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_freaky_deaky_ssc_screen_children_first_repair_v1.py"
+  ],
+  "first_full_attempt_started": true,
+  "full_repairs_spent_on_start": 1,
+  "one_later_full_repair_maximum": true
+}
