@@ -192,7 +192,7 @@ fn create_sl_player_mods(lua: &Lua, player: &SongLuaPlayerContext) -> mlua::Resu
     table.set("HideCombo", false)?;
     table.set("HideLifebar", player.hide_lifebar)?;
     table.set("HideScore", false)?;
-    table.set("HideDanger", false)?;
+    table.set("HideDanger", player.hide_danger)?;
     table.set("HideComboExplosions", false)?;
     table.set("ColumnFlashOnMiss", false)?;
     table.set("SubtractiveScoring", false)?;

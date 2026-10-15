@@ -1,0 +1,68 @@
+{
+  "source_root": "/home/parity/workspace/danger-quad-green-v3/deadsync",
+  "binary_sha256": "a36f5fb04e8cf38cb7cfe36a3ac1ef354768ddaae31329a5a6a61d4f47147b95",
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "all_35_native_assets_logs_and_helper_hashes_verified": true,
+  "meaningful_missing_native_Quad_resource_red_both_hosts": true,
+  "all_prior_101_live_and_42_replay_test_sources_identical_lf_normalized": true,
+  "new_capture_input_regression_identical_red_green": true,
+  "new_runtime_geometry_and_health_setup_correction_from_native_primary_source": "--- new-red-regression\n+++ new-green-regression\n@@ -30,7 +30,7 @@\n         assert(actor and actor:GetTexture(), 'Danger must own the native Quad default texture')\n         assert(actor:GetTexture():GetSourceWidth()==1 and actor:GetTexture():GetSourceHeight()==1)\n         assert(actor:GetParent()==underlay and actor:GetVisible()==not HIDDEN)\n-        assert(actor:GetWidth()==(DOUBLE and 854 or 427) and actor:GetHeight()==480)\n+        assert(actor:GetZoomedWidth()==(DOUBLE and 854 or 427) and actor:GetZoomedHeight()==480)\n         assert(actor:GetX()==(DOUBLE and 427 or (p==1 and 213.5 or 640.5)) and actor:GetY()==240)\n         assert(actor:GetDiffuseAlpha()==0)\n         assert(SL['P'..p].ActiveModifiers.HideDanger==HIDE_DANGER)\n@@ -39,22 +39,24 @@\n end\n \"#).exec().unwrap();\n             scene.advance(SongLuaLiveFrame::default()).unwrap();\n+            scene.advance(SongLuaLiveFrame { screen_seconds:0.3,delta_seconds:0.3,\n+                music_seconds:0.3,beat:0.6,..Default::default() }).unwrap();\n             scene.lua.load(r#\"\n MESSAGEMAN:Broadcast('HealthStateChanged',{PlayerNumber=PN,HealthState='HealthState_Danger'})\n assert(math.abs(DANGER:GetTweenTimeLeft()-(HIDE_DANGER and 0 or 0.3))<0.00001)\n \"#).exec().unwrap();\n-            scene.advance(SongLuaLiveFrame { screen_seconds:0.3,delta_seconds:0.3,\n-                music_seconds:0.3,beat:0.6,..Default::default() }).unwrap();\n+            scene.advance(SongLuaLiveFrame { screen_seconds:0.6,delta_seconds:0.3,\n+                music_seconds:0.6,beat:1.2,..Default::default() }).unwrap();\n             scene.lua.load(r#\"\n assert(math.abs(DANGER:GetDiffuseAlpha()-(HIDE_DANGER and 0 or 0.7))<0.00001)\n MESSAGEMAN:Broadcast('HealthStateChanged',{PlayerNumber=PN,HealthState='HealthState_Dead'})\n assert(math.abs(DANGER:GetTweenTimeLeft()-0.6)<0.00001, 'fail flash survives HideDanger')\n \"#).exec().unwrap();\n-            scene.advance(SongLuaLiveFrame { screen_seconds:0.6,delta_seconds:0.3,\n-                music_seconds:0.6,beat:1.2,..Default::default() }).unwrap();\n-            scene.lua.load(\"assert(math.abs(DANGER:GetDiffuseAlpha()-0.8)<0.00001)\").exec().unwrap();\n             scene.advance(SongLuaLiveFrame { screen_seconds:0.9,delta_seconds:0.3,\n                 music_seconds:0.9,beat:1.8,..Default::default() }).unwrap();\n+            scene.lua.load(\"assert(DANGER:GetDiffuseAlpha()==0 and math.abs(DANGER:GetTweenTimeLeft()-0.3)<0.00001, 'native diffuse getter reports queued destination while the fail flash still has a pending tween')\").exec().unwrap();\n+            scene.advance(SongLuaLiveFrame { screen_seconds:1.2,delta_seconds:0.3,\n+                music_seconds:1.2,beat:2.4,..Default::default() }).unwrap();\n             scene.lua.load(\"assert(DANGER:GetDiffuseAlpha()==0 and DANGER:GetTweenTimeLeft()==0)\").exec().unwrap();\n         }\n         for (name, setup) in [",
+  "full_acceptance_source_byte_identical": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 263.527975658013,
+      "log_sha256": "2de91beab01fc1c0e44633e219132d2d1d5afc6693ba7ff3c67f28911e074f02",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 638 filtered out; finished in 2.48s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 216.02521443297155,
+      "log_sha256": "c291e825565a85937bab097718ac482a58617ec8cfabe63dbbaec35942f96115",
+      "results": [
+        "test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 29.11s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 34.214747069985606,
+      "log_sha256": "a57f2ef6445c6ef98bfb154e61571fb2bf1c6b13f535ceb36c390e945d874cd3",
+      "results": [
+        "test result: ok. 102 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 33.53s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 74.4754958099802,
+      "log_sha256": "e5a51bfb7ddb274ee0ca47bc1f455a15a21efc2f0720da49c757fac7fa8a267d",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 1.1131255209911615,
+      "log_sha256": "0e43a615f84ba1e8f98d7d54430139d33714f8590468127496d72bb2c1be68f5",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 638 filtered out; finished in 0.44s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 44.21607839304488,
+      "log_sha256": "ca9b4f0aabc57328b92bd38294c77d51e471df31eba842d7fccd97ba2c826ef6",
+      "results": []
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

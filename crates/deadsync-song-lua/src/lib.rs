@@ -685,6 +685,8 @@ pub struct SongLuaPlayerContext {
     pub background_filter_percent: u8,
     /// Initial profile selection for Simply Love's Lua-owned life meter.
     pub hide_lifebar: bool,
+    /// Hide native danger flashes while retaining the fail flash.
+    pub hide_danger: bool,
     pub life_meter_type: String,
     /// Initial profile layout choice used by the shared BPM owner.
     pub nps_graph_at_top: bool,
@@ -717,6 +719,7 @@ impl Default for SongLuaPlayerContext {
             column_cues: false,
             background_filter_percent: 0,
             hide_lifebar: false,
+            hide_danger: false,
             life_meter_type: "Standard".into(),
             nps_graph_at_top: false,
             step_statistics_enabled: true,

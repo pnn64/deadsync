@@ -2442,7 +2442,6 @@ pub fn can_create_named_child_actor(parent: &Table, name: &str) -> mlua::Result<
         }
         return Ok(underlay_score_index(name).is_some()
             || name.eq_ignore_ascii_case("SongMeter")
-            || top_screen_danger_index(name).is_some()
             || name.eq_ignore_ascii_case("Header"));
     }
     Ok(false)
@@ -14239,14 +14238,6 @@ pub fn create_underlay_theme_actor(
         init.call::<()>(actor.clone())?;
         return Ok(Some(actor));
     }
-    if top_screen_danger_index(name).is_some() {
-        return Ok(Some(create_named_actor(
-            lua,
-            "Sprite",
-            name,
-            create_dummy_actor,
-        )?));
-    }
     Ok(None)
 }
 
@@ -15112,6 +15103,8 @@ pub fn install_underlay_theme_children(
             }
             continue; // Native StepStatistics is loaded after its host services exist.
         }
+        // Danger.lua needs GAMESTATE and Def, installed later with StepStatistics.
+        if top_screen_danger_index(name).is_some() { continue; }
         let child = create_named_child_actor(lua, underlay, name)?;
         if name.starts_with("NoteFieldContainerP") {
             // Named lookup and screen Update share the same pane owner.
@@ -22219,7 +22212,7 @@ fn native_step_statistics_lookup(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
-pub(crate) fn install_native_step_statistics(
+pub(crate) fn install_native_gameplay_underlay(
     lua: &Lua, install_methods: Option<fn(&Lua, &Table) -> mlua::Result<()>>,
 ) -> mlua::Result<()> {
     // The native theme loads before song Foreground and query observation.
@@ -22241,8 +22234,22 @@ pub(crate) fn install_native_step_statistics(
     let result = (|| -> mlua::Result<()> {
         let mut panes = Vec::new();
         for player in players.sequence_values::<Value>() {
+            let player = player?;
+            let danger = lua.load(include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/Danger.lua"))
+                .set_name("@theme:/BGAnimations/ScreenGameplay underlay/PerPlayer/Danger.lua")
+                .call::<Value>(player.clone())?;
+            if !danger.is_nil() {
+                let Value::Table(danger) = own_actor_root(lua, danger, install_methods)? else {
+                    return Err(mlua::Error::runtime("native Danger must load an actor"));
+                };
+                danger.raw_set("__songlua_parent", underlay.clone())?;
+                run_actor_init_commands_for_table(lua, &danger)?;
+                actor_children(lua, &underlay)?.raw_set(actor_name(&danger)?, danger.clone())?;
+                push_sequence_child_once(&underlay, danger.clone())?;
+                panes.push(danger);
+            }
             let definition = load_native_step_statistics(lua, &environment, "default.lua",
-                MultiValue::from_vec(vec![player?]))?;
+                MultiValue::from_vec(vec![player]))?;
             if definition.is_nil() { continue; }
             let pane = own_actor_root(lua, definition, install_methods)?;
             let Value::Table(pane) = pane else { return Err(mlua::Error::runtime("native StepStatistics must load an actor")); };

@@ -3846,6 +3846,88 @@ return Def.Banner {
     }
 
 
+
+    #[test]
+    fn live_danger_owns_native_quad_and_health_lifecycle() {
+        for (name, enabled, double, hidden, hide_danger) in [
+            ("p1",[true,false],false,false,false),
+            ("p2",[false,true],false,false,false),
+            ("double",[true,false],true,false,false),
+            ("hidden-life",[true,false],false,true,false),
+            ("hide-danger",[true,false],false,false,true),
+        ] {
+            let mut compiled=compile_with_context(&format!("native-danger-{name}"),
+                "return Def.ActorFrame {}", |context| {
+                    context.screen_width=854.0;
+                    context.defer_initial_live_update=true;
+                    if double { context.style_name="double".into(); }
+                    for player in 0..2 {
+                        context.players[player].enabled=enabled[player];
+                        context.players[player].hide_lifebar=hidden;
+                        context.players[player].hide_danger=hide_danger;
+                    }
+                });
+            let mut scene=compiled.live_scene.take().expect("retained Danger scene");
+            scene.lua.globals().set("DOUBLE",double).unwrap();
+            scene.lua.globals().set("HIDDEN",hidden).unwrap();
+            scene.lua.globals().set("HIDE_DANGER",hide_danger).unwrap();
+            scene.lua.load(r#"
+local underlay=SCREENMAN:GetTopScreen():GetChild('Underlay')
+for p=1,2 do
+    local actor=underlay:GetChild('DangerP'..p)
+    if GAMESTATE:IsPlayerEnabled('PlayerNumber_P'..p) then
+        assert(actor and actor:GetTexture(), 'Danger must own the native Quad default texture')
+        assert(actor:GetTexture():GetSourceWidth()==1 and actor:GetTexture():GetSourceHeight()==1)
+        assert(actor:GetParent()==underlay and actor:GetVisible()==not HIDDEN)
+        assert(actor:GetZoomedWidth()==(DOUBLE and 854 or 427) and actor:GetZoomedHeight()==480)
+        assert(actor:GetX()==(DOUBLE and 427 or (p==1 and 213.5 or 640.5)) and actor:GetY()==240)
+        assert(actor:GetDiffuseAlpha()==0)
+        assert(SL['P'..p].ActiveModifiers.HideDanger==HIDE_DANGER)
+        DANGER=actor; PN='PlayerNumber_P'..p
+    else assert(actor==nil, 'inactive player has no Danger actor') end
+end
+"#).exec().unwrap();
+            scene.advance(SongLuaLiveFrame::default()).unwrap();
+            scene.advance(SongLuaLiveFrame { screen_seconds:0.3,delta_seconds:0.3,
+                music_seconds:0.3,beat:0.6,..Default::default() }).unwrap();
+            scene.lua.load(r#"
+MESSAGEMAN:Broadcast('HealthStateChanged',{PlayerNumber=PN,HealthState='HealthState_Danger'})
+assert(math.abs(DANGER:GetTweenTimeLeft()-(HIDE_DANGER and 0 or 0.3))<0.00001)
+"#).exec().unwrap();
+            scene.advance(SongLuaLiveFrame { screen_seconds:0.6,delta_seconds:0.3,
+                music_seconds:0.6,beat:1.2,..Default::default() }).unwrap();
+            scene.lua.load(r#"
+assert(math.abs(DANGER:GetDiffuseAlpha()-(HIDE_DANGER and 0 or 0.7))<0.00001)
+MESSAGEMAN:Broadcast('HealthStateChanged',{PlayerNumber=PN,HealthState='HealthState_Dead'})
+assert(math.abs(DANGER:GetTweenTimeLeft()-0.6)<0.00001, 'fail flash survives HideDanger')
+"#).exec().unwrap();
+            scene.advance(SongLuaLiveFrame { screen_seconds:0.9,delta_seconds:0.3,
+                music_seconds:0.9,beat:1.8,..Default::default() }).unwrap();
+            scene.lua.load("assert(DANGER:GetDiffuseAlpha()==0 and math.abs(DANGER:GetTweenTimeLeft()-0.3)<0.00001, 'native diffuse getter reports queued destination while the fail flash still has a pending tween')").exec().unwrap();
+            scene.advance(SongLuaLiveFrame { screen_seconds:1.2,delta_seconds:0.3,
+                music_seconds:1.2,beat:2.4,..Default::default() }).unwrap();
+            scene.lua.load("assert(DANGER:GetDiffuseAlpha()==0 and DANGER:GetTweenTimeLeft()==0)").exec().unwrap();
+        }
+        for (name, setup) in [
+            ("casual", "SL.Global.GameMode='Casual'"),
+            ("fail-off", "GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Preferred'):FailSetting('FailType_Off')"),
+        ] {
+            let source=format!(r#"
+ROUND=(ROUND or 0)+1
+return Def.ActorFrame {{ OnCommand=function(self)
+    if ROUND==1 then {setup}; SCREENMAN:SetNewScreen('ScreenGameplay') end
+end }}
+"#);
+            let compiled=compile_with_context(&format!("native-danger-{name}"),&source,|context| {
+                context.players[1].enabled=false;
+                context.defer_initial_live_update=true;
+            });
+            assert_eq!(compiled.startup_reloads,1);
+            let scene=compiled.live_scene.expect("retained eligibility reload");
+            scene.lua.load("assert(SCREENMAN:GetTopScreen():GetChild('Underlay'):GetChild('DangerP1')==nil, 'native Danger eligibility must survive screen reconstruction')").exec().unwrap();
+        }
+    }
+
     #[test]
     fn live_step_statistics_judgment_labels_follow_initial_timing_windows() {
         for (name, windows, count) in [

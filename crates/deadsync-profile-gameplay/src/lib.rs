@@ -549,6 +549,7 @@ pub fn song_lua_compile_context(
             player_profiles[player].background_filter.percent()
         } else { 0 },
         hide_lifebar: player >= num_players || player_profiles[player].hide_lifebar,
+        hide_danger: player_profiles[player].hide_danger,
         life_meter_type: player_profiles[player].lifemeter_type.to_string(),
         nps_graph_at_top: player < num_players && player_profiles[player].nps_graph_at_top,
         step_statistics_enabled: player < num_players && !player_profiles[player].step_statistics.is_empty(),

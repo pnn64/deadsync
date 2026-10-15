@@ -749,6 +749,18 @@ return Def.ActorFrame{}
     }
 
 
+
+    #[test]
+    fn native_danger_visibility_uses_initial_profile_input() {
+        let mut trace=serde_json::json!({"input":{"gameplay_preferences":{"default_modifiers":"",
+            "players":[{"theme_modifiers":{"HideDanger":true}},
+                {"theme_modifiers":{"HideDanger":false}}]}}});
+        let profiles=super::native_profile_inputs(&trace).unwrap();
+        assert!(profiles[0].hide_danger && !profiles[1].hide_danger);
+        trace["input"]["gameplay_preferences"]["players"][0]["theme_modifiers"]["HideDanger"]=serde_json::json!("true");
+        assert!(super::native_profile_inputs(&trace).is_err());
+    }
+
     #[test]
     fn native_theme_timing_windows_use_initial_inputs_without_query_calibration() {
         let mut trace=serde_json::json!({"input":{"gameplay_preferences":{"players":[
@@ -2966,6 +2978,9 @@ fn native_profile_inputs(trace: &Value) -> Result<[deadsync_profile::Profile; 2]
         }
         let initial = trace.pointer("/input/gameplay_preferences/players")
             .and_then(Value::as_array).and_then(|players| players.get(player));
+        if let Some(value) = initial.and_then(|p| p.pointer("/theme_modifiers/HideDanger")) {
+            profile.hide_danger = value.as_bool().ok_or("initial HideDanger must be boolean")?;
+        }
         if let Some(value) = initial.and_then(|p| p.pointer("/theme_modifiers/HideLifebar")) {
             profile.hide_lifebar = value.as_bool().ok_or("initial HideLifebar must be boolean")?;
         }
