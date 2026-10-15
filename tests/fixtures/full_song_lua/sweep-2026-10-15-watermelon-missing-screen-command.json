@@ -1,0 +1,382 @@
+{
+  "position": 469,
+  "source_simfile": "Watermelon/Watermelon.ssc",
+  "native_frames": 35146,
+  "replayed_frames": 35146,
+  "report_sha256": "aa62775ab26c4e0e69f8ff28df41a1096d6173c1c75fbf445c8cc02524626845",
+  "mismatches": [
+    {
+      "field": "command_query_count",
+      "native": 61217,
+      "deadsync": 61213
+    }
+  ],
+  "errors": [],
+  "full_repairs_spent": 0,
+  "native_last_events": [
+    {
+      "actor": "external-0034",
+      "args": [
+        "HidePlayers"
+      ],
+      "beat": 212.0081329345703,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 36,
+        "source": "song:/code/fgchanges.lua",
+        "tail_call": false
+      },
+      "command": "InitCommand",
+      "definition_id": "def-0030",
+      "detail": {
+        "native_tween_time_left": {
+          "type": "number",
+          "value": "infinity"
+        }
+      },
+      "kind": "call",
+      "line": 36,
+      "operation": "Actor.queuecommand",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 86.4334945678711,
+      "seq": 122170,
+      "source": "song:/code/fgchanges.lua",
+      "tween_time_left": {
+        "type": "number",
+        "value": "infinity"
+      }
+    },
+    {
+      "actor": "def-0019",
+      "args": [],
+      "beat": 214.01162719726562,
+      "command": "HideCommand",
+      "definition_id": "def-0019",
+      "detail": {
+        "name": "HideCommand"
+      },
+      "kind": "command",
+      "line": 67,
+      "operation": "command.begin",
+      "scene": 1,
+      "seconds": 87.16560363769531,
+      "seq": 122171,
+      "source": "song:/code/bg-art.lua"
+    },
+    {
+      "actor": "def-0019",
+      "args": [
+        false
+      ],
+      "beat": 214.01162719726562,
+      "caller": {
+        "line": 67,
+        "source": "song:/code/bg-art.lua",
+        "tail_call": false
+      },
+      "command": "HideCommand",
+      "definition_id": "def-0019",
+      "detail": {
+        "native_tween_time_left": 0
+      },
+      "kind": "call",
+      "line": 67,
+      "operation": "Actor.visible",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 87.16560363769531,
+      "seq": 122172,
+      "source": "song:/code/bg-art.lua",
+      "tween_time_left": 0
+    },
+    {
+      "actor": "def-0019",
+      "args": [],
+      "beat": 214.01162719726562,
+      "command": "HideCommand",
+      "definition_id": "def-0019",
+      "detail": {
+        "name": "HideCommand"
+      },
+      "kind": "command",
+      "line": 67,
+      "operation": "command.end",
+      "scene": 1,
+      "seconds": 87.16560363769531,
+      "seq": 122173,
+      "source": "song:/code/bg-art.lua"
+    },
+    {
+      "actor": "def-0030",
+      "args": [],
+      "beat": 216.11744689941406,
+      "command": "HidePlayersCommand",
+      "definition_id": "def-0030",
+      "detail": {
+        "name": "HidePlayersCommand"
+      },
+      "kind": "command",
+      "line": 95,
+      "operation": "command.begin",
+      "scene": 1,
+      "seconds": 87.93510437011719,
+      "seq": 122174,
+      "source": "song:/code/fgchanges.lua"
+    },
+    {
+      "args": [],
+      "beat": 216.11744689941406,
+      "caller": {
+        "line": 95,
+        "source": "song:/code/fgchanges.lua",
+        "tail_call": false
+      },
+      "command": "HidePlayersCommand",
+      "definition_id": "def-0030",
+      "detail": {
+        "results": [
+          {
+            "actor": "external-0034",
+            "name": "ScreenGameplay",
+            "path": "ScreenGameplay"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 95,
+      "operation": "ScreenManager.GetTopScreen",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 87.93510437011719,
+      "seq": 122175,
+      "source": "song:/code/fgchanges.lua",
+      "results": [
+        {
+          "actor": 1,
+          "name": "ScreenGameplay",
+          "path": "ScreenGameplay"
+        }
+      ]
+    },
+    {
+      "actor": "external-0035",
+      "args": [
+        false
+      ],
+      "beat": 216.11744689941406,
+      "caller": {
+        "line": 95,
+        "source": "song:/code/fgchanges.lua",
+        "tail_call": false
+      },
+      "command": "HidePlayersCommand",
+      "definition_id": "def-0030",
+      "detail": {
+        "native_tween_children": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "commands": [],
+                      "name": "HoldJudgment",
+                      "time_left": 0.7644010186195374
+                    }
+                  ],
+                  "commands": [],
+                  "name": "",
+                  "time_left": 0.7644010186195374
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "commands": [],
+                      "name": "HoldJudgment",
+                      "time_left": 0.7644010186195374
+                    }
+                  ],
+                  "commands": [],
+                  "name": "",
+                  "time_left": 0.7644010186195374
+                }
+              ]
+            }
+          ],
+          "commands": [],
+          "name": "PlayerP1",
+          "time_left": 0.7644010186195374
+        },
+        "native_tween_time_left": 0.7644010186195374
+      },
+      "kind": "call",
+      "line": 95,
+      "operation": "Actor.visible",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 87.93510437011719,
+      "seq": 122177,
+      "source": "song:/code/fgchanges.lua",
+      "tween_time_left": 0.7644010186195374
+    },
+    {
+      "actor": "def-0030",
+      "args": [],
+      "beat": 216.11744689941406,
+      "command": "HidePlayersCommand",
+      "definition_id": "def-0030",
+      "detail": {
+        "name": "HidePlayersCommand"
+      },
+      "kind": "command",
+      "line": 95,
+      "operation": "command.end",
+      "scene": 1,
+      "seconds": 87.93510437011719,
+      "seq": 122178,
+      "source": "song:/code/fgchanges.lua"
+    }
+  ],
+  "owned_last_events": [
+    {
+      "scene": 1,
+      "kind": "query",
+      "operation": "GameState.GetPlayerState",
+      "source": "song:/code/fgchanges.lua",
+      "line": 36,
+      "phase": "callback",
+      "beat": 212.0081329345703,
+      "seconds": 86.4334945678711,
+      "args": [
+        "PlayerNumber_P1"
+      ],
+      "results": [
+        {
+          "type": "PlayerState",
+          "path": "player-state:PlayerNumber_P1"
+        }
+      ]
+    },
+    {
+      "scene": 1,
+      "kind": "query",
+      "operation": "PlayerState.GetPlayerOptions",
+      "source": "song:/code/fgchanges.lua",
+      "line": 36,
+      "phase": "callback",
+      "beat": 212.0081329345703,
+      "seconds": 86.4334945678711,
+      "args": [
+        "ModsLevel_Song"
+      ],
+      "results": [
+        {
+          "type": "PlayerOptions",
+          "path": "player-state:PlayerNumber_P1/options:ModsLevel_Song"
+        }
+      ]
+    },
+    {
+      "scene": 1,
+      "kind": "query",
+      "operation": "ScreenManager.GetTopScreen",
+      "source": "song:/code/fgchanges.lua",
+      "line": 36,
+      "phase": "callback",
+      "beat": 212.0081329345703,
+      "seconds": 86.4334945678711,
+      "args": [],
+      "results": [
+        {
+          "actor": 1,
+          "name": "ScreenGameplay",
+          "path": "ScreenGameplay"
+        }
+      ]
+    },
+    {
+      "scene": 1,
+      "kind": "call",
+      "operation": "Actor.sleep",
+      "source": "song:/code/fgchanges.lua",
+      "line": 36,
+      "phase": "callback",
+      "beat": 212.0081329345703,
+      "seconds": 86.4334945678711,
+      "args": [
+        1.5
+      ],
+      "tween_time_left": {
+        "type": "number",
+        "value": "infinity"
+      }
+    },
+    {
+      "scene": 1,
+      "kind": "call",
+      "operation": "Actor.queuecommand",
+      "source": "song:/code/fgchanges.lua",
+      "line": 36,
+      "phase": "callback",
+      "beat": 212.0081329345703,
+      "seconds": 86.4334945678711,
+      "args": [
+        "HidePlayers"
+      ],
+      "tween_time_left": {
+        "type": "number",
+        "value": "infinity"
+      }
+    },
+    {
+      "scene": 1,
+      "kind": "command",
+      "operation": "command.begin",
+      "command": "HideCommand",
+      "source": "song:/code/bg-art.lua",
+      "line": 67,
+      "beat": 214.01162719726562,
+      "seconds": 87.16560363769531,
+      "args": null
+    },
+    {
+      "scene": 1,
+      "kind": "call",
+      "operation": "Actor.visible",
+      "source": "song:/code/bg-art.lua",
+      "line": 67,
+      "phase": "callback",
+      "beat": 214.01162719726562,
+      "seconds": 87.16560363769531,
+      "args": [
+        false
+      ],
+      "results": [
+        {
+          "actor": "0x6365a3e55660",
+          "name": "",
+          "path": "ScreenGameplay/SongForeground/code/fgchanges.lua"
+        }
+      ],
+      "tween_time_left": 0.0
+    },
+    {
+      "scene": 1,
+      "kind": "command",
+      "operation": "command.end",
+      "command": "HideCommand",
+      "source": "song:/code/bg-art.lua",
+      "line": 67,
+      "beat": 214.01162719726562,
+      "seconds": 87.16560363769531,
+      "args": null
+    }
+  ],
+  "lua_requests": [],
+  "first_domain_navigation_seconds": 93.39671325683594,
+  "frames_after_domain_navigation": 0,
+  "continued_after_domain_navigation": false
+}

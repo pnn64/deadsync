@@ -1,0 +1,19 @@
+{
+  "position": 463,
+  "source_simfile": "wah-leven [telperion (ddrillini remix)]/eleven.ssc",
+  "candidate_sha256": "599f0736e27c6ea8c1753a90b665cf7ea03dc72c31422f80cc8ba4340fddd340",
+  "trace_sha256": "b525f939d306d63e9a9b68d92133874cfb1b9a9b2fdc607dc2956722f0630ae0",
+  "simfile_sha256": "17e70b53a8af11e65045e4cbb29b3f1841914cbacefcc1b13d5b4335fa8cb4ca",
+  "binary_sha256": "74d2cd015b590d762a1611a21bff1b6caf0db7d3193d7501d7c039ff984f8f29",
+  "diagnostic_exit": 2,
+  "seconds": 140.7997568139981,
+  "full_repair_attempts_spent": 0,
+  "native_capture_reused": true,
+  "native_frames": 67913,
+  "replayed_frames": 2588,
+  "errors": [],
+  "mismatch_count": 0,
+  "first_mismatches": [],
+  "report_sha256": "a8422ec044590158278f09a9ed6d92e3f8e9f5b43379580269d7a9679a02bff1",
+  "archive_accepted": false
+}

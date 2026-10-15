@@ -1,0 +1,211 @@
+{
+  "input_sha256": {
+    "control.wav": "71d93ef76e5ff6087d522277e83309f1d8d790e9b756324dec73d216ea57cc75",
+    "control.ssc": "ca048877fe860652da4e17e4160f05be122ef61b6161ed2e4f4386469011e4b0",
+    "control.lua": "17b939729e988c0ebe76b0dcaaefd124a84f30ec288411cff54a7a0d6d505371"
+  },
+  "harness_sha256": "e067360d8120ee0a174b0848832856325ef62b709287fb48976441a277b26563",
+  "native_sha256": "a9d70b63dc11601634e67cb59fe1a7e7d12c57788bd525dba014f51a99d110fe",
+  "trace_sha256": "4693d4464d2ad71c8ee121332febbdf3958d2c56b0c061544461d691778f04f7",
+  "capture_exit": 0,
+  "native_frames": 6160,
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "events": [
+    {
+      "args": [
+        "ScreenCommandReached",
+        {
+          "name": "control.lua",
+          "phase": "immediate"
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 2,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "ScreenCommandProbeCommand",
+      "definition_id": "def-0003",
+      "kind": "message",
+      "line": 2,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 7,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "ScreenCommandReached",
+        {
+          "name": "Nested",
+          "phase": "immediate"
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 2,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "ScreenCommandProbeCommand",
+      "definition_id": "def-0002",
+      "kind": "message",
+      "line": 2,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 11,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "ScreenCommandReached",
+        {
+          "name": "Leaf",
+          "phase": "immediate"
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 2,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "ScreenCommandProbeCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 2,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 15,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "ScreenCommandQueued",
+        []
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 7,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0003",
+      "kind": "message",
+      "line": 7,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 17,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "ScreenCommandReached",
+        {
+          "name": "control.lua",
+          "phase": "queued"
+        }
+      ],
+      "beat": -11.734906196594238,
+      "caller": {
+        "line": 2,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "ScreenCommandProbeCommand",
+      "definition_id": "def-0003",
+      "kind": "message",
+      "line": 2,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.8504533767700195,
+      "seq": 23,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "ScreenCommandReached",
+        {
+          "name": "Nested",
+          "phase": "queued"
+        }
+      ],
+      "beat": -11.734906196594238,
+      "caller": {
+        "line": 2,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "ScreenCommandProbeCommand",
+      "definition_id": "def-0002",
+      "kind": "message",
+      "line": 2,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.8504533767700195,
+      "seq": 27,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "ScreenCommandReached",
+        {
+          "name": "Leaf",
+          "phase": "queued"
+        }
+      ],
+      "beat": -11.734906196594238,
+      "caller": {
+        "line": 2,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "ScreenCommandProbeCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 2,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.8504533767700195,
+      "seq": 31,
+      "source": "song:/control.lua"
+    }
+  ],
+  "screen_direct_and_queued_commands_propagate_to_nested_song_children": true,
+  "propagation_preorder_per_command": [
+    "control.lua",
+    "Nested",
+    "Leaf"
+  ],
+  "native_assigns_loaded_root_filename": "control.lua",
+  "requested_actor_sleep_seconds": 0.25,
+  "observed_startup_music_clock_delta_seconds": [
+    0.14952373504638672,
+    0.14952373504638672,
+    0.14952373504638672
+  ],
+  "actor_update_clock_is_distinct_from_startup_music_clock": true,
+  "parent_command_completes_while_descendant_sleeps_1000_seconds": true,
+  "original_native_capture_reused_for_corrected_post_capture_verification": true,
+  "chart_full_repairs_spent": 0,
+  "acceptance_changed": false
+}
