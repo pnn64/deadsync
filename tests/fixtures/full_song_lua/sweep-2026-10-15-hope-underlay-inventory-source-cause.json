@@ -1,12 +1,12 @@
 {
   "source_simfile": "HOPE/HOPE.ssc",
-  "entry_evidence": "sweep-2026-10-15-hope-in-transition-bitmaps-entry-diagnostic.json",
+  "entry_evidence": "sweep-2026-10-15-hope-underlay-background-filter-entry-diagnostic.json",
   "entry_frames": 1688,
   "entry_errors": 0,
-  "entry_mismatches": 20427,
+  "entry_mismatches": 20432,
   "first_remaining_native_seq": 529,
   "native_underlay_child_count": 10,
-  "owned_underlay_child_count": 7,
+  "owned_underlay_child_count": 8,
   "native_direct_children": [
     {
       "id": "external-0107",
@@ -60,7 +60,7 @@
     }
   ],
   "native_direct_unnamed_children": 4,
-  "owned_p1_only_named_list": [
+  "owned_p1_only_named_children": [
     "BPMDisplay",
     "Header",
     "StepStatsPaneP1",
@@ -69,7 +69,13 @@
     "P1Score",
     "SongMeter"
   ],
-  "source_cause": "Owned install_underlay_theme_children constructs only a fixed named list. The retained native P1 scene exposes four unnamed direct actors plus Header, StepStatsPaneP1, DangerP1, P1Score, SongMeter and NoteFieldContainerP1. Owned exposes seven named actors including a direct BPMDisplay and no unnamed inventory, so the concrete difference is four missing unnamed owners and a different BPMDisplay ownership level. Native default.lua constructs conditional per-player/shared LoadActor results; child selection must follow those scripts and captured initial options, not the expected GetNumChildren value.",
+  "source_cause": "The validated BackgroundFilter fix adds the actual selected unnamed Quad, bringing owned Underlay direct children to eight. The retained native P1 scene still exposes ten: four unnamed direct actors plus six named actors. Primary theme scripts identify the other three unnamed owners as DifficultyMeter, Standard LifeMeter and shared BPM outer frame. Owned still exposes BPMDisplay directly rather than under the actual shared BPM owner. These three absent owners and one extra direct named BPM explain the count difference; construct their actual source-selected contents and lifecycle rather than padding the child count.",
+  "owned_direct_unnamed_children": 1,
+  "background_filter_fix_commit": "b0a9976b938ef94c390b1f9db8e0cca479eb599d",
+  "background_filter_qualified_and_loaded": true,
+  "previous_owned_child_count": 7,
+  "previous_entry_mismatches": 20427,
+  "positional_mismatch_totals_are_not_monotonic": true,
   "native_direct_bpm_display_not_present": true,
   "physical_native_theme_source_matches_local_vendor": true,
   "native_source_sha256": "e14778bee5358671b510fb15b9c1d4ea1642a799766a231cc8e4a5a764346bc5",
@@ -288,7 +294,7 @@
   "source_pins": {
     "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\BGAnimations\\ScreenGameplay underlay\\default.lua": "e14778bee5358671b510fb15b9c1d4ea1642a799766a231cc8e4a5a764346bc5",
     "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\top_screen.rs": "cdf8e199c05c21355f6708efc1a289c54488f5a6ce516bf3f2bac73883616c74",
-    "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs": "44e36ae3454ccb7dc4548ba2c4e289a56dc75054ccfb7b1def6b63b67d323216"
+    "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs": "92991f904acd8f2d6845e352b768da20def1b8f64f7dbcb0b0a0eddbc09f9b2d"
   },
   "production_fix_added": false,
   "full_repairs_spent": 0,
