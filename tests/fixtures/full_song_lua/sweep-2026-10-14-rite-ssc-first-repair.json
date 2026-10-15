@@ -1,0 +1,545 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "d69f0a20fd7a8b9a00fef1680365364522a51706",
+  "results": [
+    {
+      "position": 378,
+      "source_simfile": "rite of spring/rite.ssc",
+      "status": "pending",
+      "repair_attempts": 1,
+      "candidate_sha256": "fa30207b35448ca133d0e13bf2377c07ba2037f042e00f19a5d9fb4bf03287c3",
+      "trace_sha256": "f25daa8bbea570fec79713a278558b8336e3ee879d935c3e6ba006ee30241567",
+      "simfile_sha256": "7ce2cf7cfa441b16842c6577e922df25f8c49258da2b1cd49358f0f1a428c0fc",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "04af4ff5dfcbbf4a0290dfe81b5e1b5690fa28289a2e2fdbebb293006a88bce2",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/message-coverage-linux-green-v1/proof.json",
+      "fix_commit": "d69f0a20fd7a8b9a00fef1680365364522a51706",
+      "previous_failure": null,
+      "previous_errors": [],
+      "replay_exit": 2,
+      "replay_seconds": 3720.067818573996,
+      "native_frames": 104414,
+      "replayed_frames": 104414,
+      "compared_stage_fields": 1738,
+      "pending_coverage": [
+        "uncompared song operations: Actor.addy, Actor.blend, Actor.shadowlength, Actor.stoptweening, Actor.xy, Actor.zoomtoheight, Actor.zoomtowidth, BitmapText.settext, GameState.GetCurMusicSeconds, Player.SetLife",
+        "native drawable state/resources: BitmapText, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1"
+      ],
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 121,
+      "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 17476,
+          "deadsync": 17472
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0010",
+            "args": [],
+            "beat": 496.8111572265625,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0010",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 342,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 146.65133666992188,
+            "seq": 32640,
+            "source": "song:/rite.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "LockLifeCommand",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "beat": 496.9778747558594,
+            "seconds": 146.70135498046875,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0010",
+            "args": [],
+            "beat": 496.8111572265625,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0010",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 342,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 146.65133666992188,
+            "seq": 32642,
+            "source": "song:/rite.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ScreenManager.GetTopScreen",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "phase": "callback",
+            "beat": 496.9778747558594,
+            "seconds": 146.70135498046875,
+            "args": [],
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0011",
+            "args": [],
+            "beat": 496.8111572265625,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0011",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 342,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 146.65133666992188,
+            "seq": 32643,
+            "source": "song:/rite.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "phase": "callback",
+            "beat": 496.9778747558594,
+            "seconds": 146.70135498046875,
+            "args": [
+              "PlayerP1"
+            ],
+            "results": [
+              {
+                "actor": 2,
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0011",
+            "args": [],
+            "beat": 496.8111572265625,
+            "command": "JudgmentMessageCommand",
+            "definition_id": "def-0011",
+            "detail": {
+              "name": "JudgmentMessageCommand"
+            },
+            "kind": "command",
+            "line": 342,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 146.65133666992188,
+            "seq": 32644,
+            "source": "song:/rite.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ScreenManager.GetTopScreen",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "phase": "callback",
+            "beat": 496.9778747558594,
+            "seconds": 146.70135498046875,
+            "args": [],
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0008",
+            "args": [],
+            "beat": 496.9778747558594,
+            "command": "LockLifeCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "name": "LockLifeCommand"
+            },
+            "kind": "command",
+            "line": 302,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 146.70135498046875,
+            "seq": 32645,
+            "source": "song:/rite.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "phase": "callback",
+            "beat": 496.9778747558594,
+            "seconds": 146.70135498046875,
+            "args": [
+              "PlayerP2"
+            ],
+            "results": [
+              {
+                "type": "nil"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 496.9778747558594,
+            "caller": {
+              "line": 302,
+              "source": "song:/rite.lua",
+              "tail_call": false
+            },
+            "command": "LockLifeCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "results": [
+                {
+                  "actor": "external-0017",
+                  "name": "ScreenGameplay",
+                  "path": "ScreenGameplay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 302,
+            "operation": "ScreenManager.GetTopScreen",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 146.70135498046875,
+            "seq": 32646,
+            "source": "song:/rite.lua",
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.sleep",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "phase": "callback",
+            "beat": 496.9778747558594,
+            "seconds": 146.70135498046875,
+            "args": [
+              0.1
+            ],
+            "tween_time_left": 0.10000000149011612
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0017",
+            "args": [
+              "PlayerP1"
+            ],
+            "beat": 496.9778747558594,
+            "caller": {
+              "line": 302,
+              "source": "song:/rite.lua",
+              "tail_call": false
+            },
+            "command": "LockLifeCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              },
+              "results": [
+                {
+                  "actor": "external-0018",
+                  "name": "PlayerP1",
+                  "path": "ScreenGameplay/PlayerP1"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 302,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 146.70135498046875,
+            "seq": 32647,
+            "source": "song:/rite.lua",
+            "results": [
+              {
+                "actor": 2,
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.queuecommand",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "phase": "callback",
+            "beat": 496.9778747558594,
+            "seconds": 146.70135498046875,
+            "args": [
+              "LockLife"
+            ],
+            "tween_time_left": 0.10000000149011612
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 496.9778747558594,
+            "caller": {
+              "line": 302,
+              "source": "song:/rite.lua",
+              "tail_call": false
+            },
+            "command": "LockLifeCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "results": [
+                {
+                  "actor": "external-0017",
+                  "name": "ScreenGameplay",
+                  "path": "ScreenGameplay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 302,
+            "operation": "ScreenManager.GetTopScreen",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 146.70135498046875,
+            "seq": 32657,
+            "source": "song:/rite.lua",
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "LockLifeCommand",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "beat": 496.9778747558594,
+            "seconds": 146.70135498046875,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0017",
+            "args": [
+              "PlayerP2"
+            ],
+            "beat": 496.9778747558594,
+            "caller": {
+              "line": 302,
+              "source": "song:/rite.lua",
+              "tail_call": false
+            },
+            "command": "LockLifeCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              },
+              "results": [
+                {
+                  "type": "nil"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 302,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 146.70135498046875,
+            "seq": 32658,
+            "source": "song:/rite.lua",
+            "results": [
+              {
+                "type": "nil"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "LockLifeCommand",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "beat": 497.31011962890625,
+            "seconds": 146.801025390625,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0008",
+            "args": [
+              0.1
+            ],
+            "beat": 496.9778747558594,
+            "caller": {
+              "line": 302,
+              "source": "song:/rite.lua",
+              "tail_call": false
+            },
+            "command": "LockLifeCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0.10000000149011612
+            },
+            "kind": "call",
+            "line": 302,
+            "operation": "Actor.sleep",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 146.70135498046875,
+            "seq": 32659,
+            "source": "song:/rite.lua",
+            "tween_time_left": 0.10000000149011612
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ScreenManager.GetTopScreen",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "phase": "callback",
+            "beat": 497.31011962890625,
+            "seconds": 146.801025390625,
+            "args": [],
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0008",
+            "args": [
+              "LockLife"
+            ],
+            "beat": 496.9778747558594,
+            "caller": {
+              "line": 302,
+              "source": "song:/rite.lua",
+              "tail_call": false
+            },
+            "command": "LockLifeCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0.10000000149011612
+            },
+            "kind": "call",
+            "line": 302,
+            "operation": "Actor.queuecommand",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 146.70135498046875,
+            "seq": 32660,
+            "source": "song:/rite.lua",
+            "tween_time_left": 0.10000000149011612
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/rite.lua",
+            "line": 302,
+            "phase": "callback",
+            "beat": 497.31011962890625,
+            "seconds": 146.801025390625,
+            "args": [
+              "PlayerP1"
+            ],
+            "results": [
+              {
+                "actor": 2,
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ]
+          }
+        }
+      ],
+      "report_sha256": "a63a7d98891dd52804eeaea0d0c004c9619ff4885d5a191e290330646b49efd3"
+    }
+  ],
+  "binary_sha256": "04af4ff5dfcbbf4a0290dfe81b5e1b5690fa28289a2e2fdbebb293006a88bce2",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "repair 1: dispatch callbacks with missing imported ordering recorded as coverage; original archive and full comparisons unchanged",
+  "passed_fixtures": 0,
+  "pending_charts": 1,
+  "processed_charts": 1
+}
