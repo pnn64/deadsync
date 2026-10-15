@@ -1,0 +1,106 @@
+{
+  "all_2223_raw_and_normalized_harness_source_pins_verified": true,
+  "both_hosts_runtime_controls_passed": 12,
+  "linux_build_passed": true,
+  "native_complete_baseline_and_fixed_captures_passed": true,
+  "harness_fix_commit": "f90b49d48d023977b5e67196700c027d6752484f",
+  "harness_sha256": "e067360d8120ee0a174b0848832856325ef62b709287fb48976441a277b26563",
+  "source_root": "/home/parity/workspace/dynamic-command-observer-v1/itgmania-harness",
+  "windows_checks": [
+    {
+      "label": "runtime-tests",
+      "exit_code": 0,
+      "seconds": 38.377390900001046,
+      "log_sha256": "7ab95a5e3b4fb542d284d6eabe3cb195ee9983bc3a024ccf702cd2cd56bd680f",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 191 filtered out; finished in 0.08s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "runtime-tests",
+      "exit_code": 0,
+      "seconds": 165.30779182398692,
+      "log_sha256": "6b7d8289b78178e940ba7e7bef6d8e4162fe489848e678d7e762194ae7a30e31",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 17.32009190201643,
+      "log_sha256": "b3a968ac71fa4fda07cdac0a9d80b5a743fe9f91a755427ae15f3db81653d297",
+      "results": []
+    }
+  ],
+  "native_control": {
+    "input_sha256": {
+      "/home/parity/jobs/dynamic-command-native-control-v1/input/control.sm": "ca1ed6de17d41dd47632e36fb682bb5cee4dcc9edf96261a86b881f40acbfb76",
+      "/home/parity/jobs/dynamic-command-native-control-v1/input/control.wav": "71d93ef76e5ff6087d522277e83309f1d8d790e9b756324dec73d216ea57cc75",
+      "/home/parity/jobs/dynamic-command-native-control-v1/input/control.lua": "f12a411156637f0cd81ab89ec30c4bf1732aae5de780f8b042dec29c9ff2d030"
+    },
+    "checks": [
+      {
+        "mode": "baseline",
+        "harness_sha256": "2f2ef99fc977f900bae2f65fc96e550418720d3abb03b045a25e2ea35b7f5e3f",
+        "native_sha256": "a9d70b63dc11601634e67cb59fe1a7e7d12c57788bd525dba014f51a99d110fe",
+        "capture_exit": null,
+        "complete_native_capture_reused": true,
+        "seconds": 0.6021724620077293,
+        "native_frames": 5946,
+        "trace_sha256": "219cead94f9bc77c3dd5cad57e81fa34d5a33c1d106f4713a913107e50a01fff",
+        "dynamic_ready_begin_count": 0,
+        "dynamic_ready_end_count": 0,
+        "actual_visible_call_count": 1324,
+        "all_visible_arguments_preserved": true,
+        "all_visible_phases": [
+          "construction"
+        ],
+        "completion": {
+          "next_screen": "ScreenEvaluationStage",
+          "reason": "gameplay-exit",
+          "stage_committed": true,
+          "stages_played_after": 1,
+          "stages_played_before": 0
+        }
+      },
+      {
+        "mode": "fixed",
+        "harness_sha256": "e067360d8120ee0a174b0848832856325ef62b709287fb48976441a277b26563",
+        "native_sha256": "a9d70b63dc11601634e67cb59fe1a7e7d12c57788bd525dba014f51a99d110fe",
+        "capture_exit": 0,
+        "complete_native_capture_reused": false,
+        "seconds": 10.692292367981281,
+        "native_frames": 6011,
+        "trace_sha256": "6a3339cf1fdc3b5e387880d1745a71faa669ce717915ca641c62cfa540dc3485",
+        "dynamic_ready_begin_count": 1,
+        "dynamic_ready_end_count": 1,
+        "actual_visible_call_count": 1356,
+        "all_visible_arguments_preserved": true,
+        "all_visible_phases": [
+          "callback"
+        ],
+        "completion": {
+          "next_screen": "ScreenEvaluationStage",
+          "reason": "gameplay-exit",
+          "stage_committed": true,
+          "stages_played_after": 1,
+          "stages_played_before": 0
+        }
+      }
+    ],
+    "actual_complete_native_captures": true,
+    "baseline_missing_dynamic_command_reproduced": true,
+    "fixed_dynamic_command_observer_captures_callback_once": true,
+    "chart_repair_attempts_spent": 0,
+    "acceptance_changed": false
+  },
+  "first_control_reader_failure": "Original reader expected absent top-level errors field; corrected to inspect actual error events. Complete baseline capture was reused; its old CLI exit is left null, original reader failure retained.",
+  "native_control_fixed_visible_calls": 1356,
+  "native_control_baseline_visible_calls": 1324,
+  "acceptance_comparisons_changed": false,
+  "full_chart_repairs_spent_by_controls": 0,
+  "active_capture_roots_modified": false
+}

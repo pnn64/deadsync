@@ -1,0 +1,22 @@
+{
+  "scope": {
+    "original_simfiles": 501,
+    "charts": 1,
+    "original_scope_preserved": true
+  },
+  "charts": [
+    {
+      "position": 472,
+      "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+      "simfile_sha256": "3d4d8467ebbbd92076d67f661822eead8387f4c7e05fd5fb4bdf5ec3b3d5db4e",
+      "style": "single",
+      "difficulty": "Challenge",
+      "previous_failure": "208244 command/query mismatches after45538 full frames, no callback errors; dynamic On/Ready added through Actor.addcommand are unobserved, so SetUpdateFunction loses callback context and native update calls are labeled construction. Complete native control reproduces gap.",
+      "full_repairs_previously_spent": 0,
+      "original_candidate_sha256": "9313d04cf4057122ed4be8f73cec7a3c95af3de01c79aace148dd3b76de0b40c",
+      "original_trace_sha256": "8e80e2483859437360a79b2b15a1452aa8a04f07d153fc68d8c1d7968c83e726"
+    }
+  ],
+  "one_later_full_repair_maximum": true,
+  "native_observer_validation": "sweep-2026-10-15-dynamic-command-observer-validation.json"
+}

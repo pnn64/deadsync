@@ -1,0 +1,11 @@
+{
+  "pid": 1758805,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_what_if_dynamic_command_first_repair_v1.py"
+  ],
+  "repair_attempt": 1,
+  "maximum_full_repairs": 2,
+  "old_complete_capture_retained": true,
+  "recapture_reason": "Native control proves missing addcommand command context in old observer; no acceptance changes"
+}
