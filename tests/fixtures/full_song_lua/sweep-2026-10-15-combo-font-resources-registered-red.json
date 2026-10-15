@@ -1,0 +1,30 @@
+{
+  "regression": "live_player_combo_uses_current_theme_font_resources",
+  "meaningful_missing_combo_leaf_red_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 342.2110377999925,
+      "log_sha256": "dcda928feaff80ecbdb720d3549ef9cd37bcd20d940e4d311e0800d85e8cbafd",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 627 filtered out; finished in 0.31s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 259.9122068530414,
+      "log_sha256": "a2d7a90544c33c000c0fd12f5f73fef9da99868d0d849316331d66d3ba232164",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 625 filtered out; finished in 0.19s"
+      ]
+    }
+  ],
+  "source_cause": "sweep-2026-10-15-hope-combo-font-resources-source-cause.json",
+  "changed_source_mtimes_refreshed_before_compilation_both_hosts": true,
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

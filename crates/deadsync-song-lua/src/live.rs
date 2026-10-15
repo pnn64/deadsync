@@ -4106,6 +4106,62 @@ end }
     }
 
     #[test]
+    fn live_player_combo_uses_current_theme_font_resources() {
+        for populated in [false, true] {
+            let source = r#"
+COMBOS = {}
+return Def.Actor { OnCommand = function()
+    for index = 1, 2 do
+        local player = SCREENMAN:GetTopScreen():GetChild('PlayerP' .. index)
+        local combo = player:GetChild('Combo')
+        assert(combo:GetParent() == player and combo:GetName() == 'Combo')
+        if $POPULATED then
+            assert(tostring(combo):find('ActorFrame', 1, true))
+            local number = combo:GetChild('Number')
+            assert(tostring(number):find('BitmapText', 1, true))
+            assert(number:GetParent() == combo and combo:GetNumChildren() == 1)
+            assert(combo:GetChildren().Number == number)
+        else
+            assert(not tostring(combo):find('ActorFrame', 1, true),
+                'Combo without current-theme fonts must be a leaf Actor')
+            assert(combo:GetVisible() == false and combo.GetNumChildren == nil)
+        end
+        assert(SL['P' .. index].ActiveModifiers.HideCombo == false)
+        COMBOS[index] = combo
+    end
+end }
+"#.replace("$POPULATED", if populated { "true" } else { "false" });
+            let compiled = compile_with_context(
+                &format!("combo-current-theme-resources-{populated}"), &source, |context| {
+                    let fonts = context.song_dir.join(crate::SONG_LUA_THEME_PATH_PREFIX)
+                        .join("Fonts/_Combo Fonts");
+                    if populated {
+                        for name in ["Asap", "Wendy", "Wendy (Cursed)", "MissingIni", "MissingPng", "WrongName"] {
+                            let folder = fonts.join(name);
+                            fs::create_dir_all(&folder).unwrap();
+                            if name != "MissingIni" {
+                                fs::write(folder.join(format!("{name}.ini")), "[main]\n").unwrap();
+                            }
+                            if name != "MissingPng" {
+                                let stem = if name == "WrongName" { "Other" } else { name };
+                                fs::write(folder.join(format!("{stem} 4x4.png")), b"").unwrap();
+                            }
+                        }
+                    }
+                });
+            let scene = compiled.live_scene.expect("owned Combo resource selection");
+            let combos = scene.lua.globals().get::<Table>("COMBOS").unwrap();
+            assert_eq!(combos.raw_len(), 2, "inspect both configured players after On");
+            assert_ne!(combos.raw_get::<Table>(1).unwrap().to_pointer(),
+                combos.raw_get::<Table>(2).unwrap().to_pointer());
+            let fonts = scene.lua.globals().get::<Function>("GetComboFonts").unwrap()
+                .call::<Table>(()).unwrap().sequence_values::<String>()
+                .map(Result::unwrap).collect::<Vec<_>>();
+            assert_eq!(fonts, if populated { vec!["Wendy", "Asap", "Wendy (Cursed)"] } else { vec![] });
+        }
+    }
+
+    #[test]
     fn live_player_hold_judgment_tree() {
         let mut compiled = compile("player-hold-judgment-tree", r#"
 local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
