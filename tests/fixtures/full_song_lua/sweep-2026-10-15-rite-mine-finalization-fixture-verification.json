@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "rite of spring/rite.ssc",
+  "native_frames": 104414,
+  "replayed_frames": 104414,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "a4a49ad8c1d695b04be9c471845d2c9c92483b7a08a7a06938028c0514be7fb0.tar.zst",
+  "compressed_sha256": "a4a49ad8c1d695b04be9c471845d2c9c92483b7a08a7a06938028c0514be7fb0",
+  "uncompressed_sha256": "fa30207b35448ca133d0e13bf2377c07ba2037f042e00f19a5d9fb4bf03287c3",
+  "compressed_bytes": 5692564,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
