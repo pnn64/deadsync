@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Watching/watching-fakemines.sm",
+  "native_frames": 39501,
+  "replayed_frames": 39501,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "034b312917c680893a63384b8a04cb3b685c305666662465648c2f47e662955c.tar.zst",
+  "compressed_sha256": "034b312917c680893a63384b8a04cb3b685c305666662465648c2f47e662955c",
+  "uncompressed_sha256": "9e66329fbf7deeaa3e11cb80ada830e6295f45e04992b156e6ec31c08e741aca",
+  "compressed_bytes": 13121969,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
