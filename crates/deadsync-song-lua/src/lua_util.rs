@@ -14203,7 +14203,24 @@ pub fn create_underlay_theme_actor(
         }
         return Ok(Some(pane));
     }
-    if top_screen_danger_index(name).is_some() || name.eq_ignore_ascii_case("Header") {
+    if name.eq_ignore_ascii_case("Header") {
+        let actor = create_named_actor(lua, "Quad", "Header", create_dummy_actor)?;
+        actor.raw_set("__songlua_parent", parent.clone())?;
+        let commands = lua.load(r#"return {
+	Name="Header",
+	InitCommand=function(self)
+		self:diffuse(0,0,0,0.85):valign(0):xy( _screen.cx, 0 )
+		self:zoomtowidth(_screen.w):zoomtoheight(80)
+	end
+}"#)
+            .set_name("@theme:/BGAnimations/ScreenGameplay underlay/Shared/Header.lua")
+            .eval::<Table>()?;
+        let init = commands.raw_get::<Function>("InitCommand")?;
+        actor.raw_set("InitCommand", init.clone())?;
+        init.call::<()>(actor.clone())?;
+        return Ok(Some(actor));
+    }
+    if top_screen_danger_index(name).is_some() {
         return Ok(Some(create_named_actor(
             lua,
             "Sprite",
