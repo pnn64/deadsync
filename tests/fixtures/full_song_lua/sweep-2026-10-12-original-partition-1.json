@@ -10625,6 +10625,27 @@
       "replay_seconds": 1.5219025390106253,
       "candidate_sha256": "8988758df161a64fe92831476b38d15d6208ed2ca080032f20cb8b538cfb8c69",
       "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Wobbpotato': error converting Lua nil to function; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Wobbpotato' from '/tmp/.tmpbZSdUN/song/lua/default.lua': error converting Lua nil to function\n\nthread 'main' (1384391) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 484,
+      "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
+      "simfile_sha256": "fb767f349b23e62155118f76097269da54e20bf983f6bd0a71e8baba098d266e",
+      "historical_failure": {
+        "simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
+        "status": "timeout",
+        "category": "capture_timeout",
+        "reason": "native capture exceeded 600 seconds",
+        "diagnostics": "target/song-lua-repair/phase4/67053c6979c0becb"
+      },
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_exit": 1,
+      "capture_seconds": 901.0094915929949,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1384708-1792021564886666940-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1384708-1792021564886666940-0\n"
     }
   ],
   "scope": {
@@ -10637,6 +10658,6 @@
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 39,
-  "pending_charts": 39,
-  "processed_charts": 78
+  "pending_charts": 40,
+  "processed_charts": 79
 }
