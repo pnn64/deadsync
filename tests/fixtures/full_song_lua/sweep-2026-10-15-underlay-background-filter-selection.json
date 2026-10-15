@@ -1,0 +1,12 @@
+{
+  "fix_commit": "b0a9976b938ef94c390b1f9db8e0cca479eb599d",
+  "source_root": "/home/parity/workspace/underlay-background-filter-green-v2/deadsync",
+  "binary_sha256": "dcbadf907f736d82f1a4918643d06dac44c1c9cb635b2e7c0869afd3e4329add",
+  "build_proof": "/home/parity/jobs/underlay-background-filter-linux-green-v2/proof.json",
+  "all_five_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "carry real profile and captured initial BackgroundFilter inputs into the source-selected unnamed Quad, preserve native Off/ComboFlash commands, and use actual style width",
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
