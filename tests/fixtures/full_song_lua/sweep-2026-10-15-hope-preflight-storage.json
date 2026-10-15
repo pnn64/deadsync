@@ -1,0 +1,20 @@
+{
+  "original_pending_capture_preserved": true,
+  "live_replay_archive_unchanged": "/home/parity/jobs/hope-complete-lua-namespace-diagnostic-v1/candidates/3e6bb65b474d86cd14f4354e2cbb8e65a3f4896b527137fa82e2325a3691e6b0.tar",
+  "copies": [
+    {
+      "removed_preflight_copy": "/home/parity/jobs/hope-complete-lua-namespace-diagnostic-v1/131158cdb6bad30509de8dd452f771c8b12582c3ad86ea9b37a1fa46d4153919.tar",
+      "uncompressed_sha256": "131158cdb6bad30509de8dd452f771c8b12582c3ad86ea9b37a1fa46d4153919",
+      "retained_verified_copy": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-229/private-candidate.tar.zst",
+      "bytes": 731851776
+    },
+    {
+      "removed_preflight_copy": "/home/parity/jobs/hope-complete-lua-namespace-diagnostic-v1/traces/native.json",
+      "uncompressed_sha256": "88b20e678a79afd20607bb861bde142f73c817749b04504b84ae23314ceb89d6",
+      "retained_verified_copy": "/home/parity/jobs/hope-complete-lua-namespace-diagnostic-v1/candidates/3e6bb65b474d86cd14f4354e2cbb8e65a3f4896b527137fa82e2325a3691e6b0.tar",
+      "bytes": 728327805
+    }
+  ],
+  "free_before": 3404148736,
+  "free_after": 4797214720
+}
