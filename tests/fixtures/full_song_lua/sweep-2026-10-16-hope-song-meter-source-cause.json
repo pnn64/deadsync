@@ -1,0 +1,65 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "actual_entry": "sweep-2026-10-15-hope-danger-quad-entry-diagnostic.json",
+  "first_concrete_mismatch": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "external-0115",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 36,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          4
+        ]
+      },
+      "kind": "query",
+      "line": 36,
+      "operation": "ActorFrame.GetNumChildren",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 979,
+      "source": "song:/sm5/modules/grabactors.lua",
+      "results": [
+        4
+      ]
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "query",
+      "operation": "ActorFrame.GetNumChildren",
+      "source": "song:/sm5/modules/grabactors.lua",
+      "line": 36,
+      "phase": "callback",
+      "beat": -15.99990177154541,
+      "seconds": -4.08297061920166,
+      "args": [],
+      "results": [
+        1
+      ]
+    }
+  },
+  "native_actor_identity": {
+    "id": "external-0115",
+    "name": "SongMeter",
+    "path": "ScreenGameplay/Underlay/SongMeter"
+  },
+  "native_source": "C:\\GitHub\\Simply-Love-SM5\\BGAnimations\\ScreenGameplay underlay\\Shared\\SongInfoBar.lua",
+  "native_source_sha256": "a6974b5520feb5a0655ac152fec9224598ac695d87378cdf51c62359051b11ee",
+  "physical_native_source_hash_verified_equal_local": true,
+  "native_structure": "SongInfoBar.lua returns SongMeter ActorFrame with two border Quads, a SongMeterDisplay owning its Stream Quad, and SongTitle BitmapText. Native CurrentSongChanged updates the title.",
+  "owned_source": "crates/deadsync-song-lua/src/lua_util.rs: SongMeter branch in create_top_screen_theme_child",
+  "owned_structure": "A manually constructed ActorFrame with only SongTitle. It omits the real two borders and SongMeterDisplay, so GetNumChildren reports1 instead of4 and subsequent recursive authored queries shift.",
+  "fix_added": false,
+  "acceptance_changes": false,
+  "full_repairs_spent": 0,
+  "next_action": "Replace the SongMeter placeholder with actual original SongInfoBar construction and lifecycle; first reproduce child-count mismatch in a source-based regression, qualify it, then rerun retained entry. Mawaru9 remains deferred."
+}
