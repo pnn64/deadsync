@@ -1,0 +1,17 @@
+{
+  "fix_commit": "9fa7f7732f6ecf1f1a17ff407281fba21c579556",
+  "build_proof": "/home/parity/jobs/sprite-cropto-alias-linux-green-v1/proof.json",
+  "binary_sha256": "ec9b6f57486530ed7bb200fefeb5f21bf56e632e37660b57225df985303b89df",
+  "tested_source_root": "/home/parity/workspace/sprite-cropto-alias-v1/deadsync",
+  "all_ten_checks_both_platforms_passed": true,
+  "all_1175_raw_linux_and_cross_platform_normalized_source_pins_verified": true,
+  "scope": "Trinity Field actual unsupported fallback Sprite.cropto alias and resulting startup command clocks",
+  "native_control_frames": 4616,
+  "native_capture_reused": true,
+  "full_repairs_spent_before_diagnostic": 0,
+  "first_full_repair_only_after_clean_retained_capture_diagnostic": true,
+  "one_later_full_repair_maximum_after_first": true,
+  "global_original_helper_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_acceptance_predicate_unchanged": true
+}
