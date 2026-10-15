@@ -1,6 +1,6 @@
 {
   "scope": "latest recorded coverage observations for original source simfiles",
-  "updated_utc": "2026-10-15T10:24:48Z",
+  "updated_utc": "2026-10-15T10:38:30Z",
   "coverage_is_separate_from_existing_full_replay_acceptance": true,
   "passing_charts_replayed_or_investigated": false,
   "rows": [
@@ -1315,12 +1315,12 @@
     {
       "position": 305,
       "source_simfile": "mawaru6/mawaru6.sm",
-      "fixture_status": "pending",
+      "fixture_status": "passed",
       "pending_coverage": [
         "uncompared song operations: Actor.GetX, Actor.GetY, Actor.accelerate, Actor.addx, Actor.addy, Actor.blend, Actor.bob, Actor.bounce, Actor.bouncebegin, Actor.bounceend, Actor.croptop, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.fadetop, Actor.finishtweening, Actor.glowshift, Actor.horizalign, Actor.rotationx, Actor.rotationy, Actor.shadowlength, Actor.stopeffect, Actor.vertalign, Actor.wag, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, Actor.zoomz, Actor.ztest, Actor.zwrite, ActorFrame.fov, BitmapText.maxwidth, BitmapText.settext, GameState.PlayerIsUsingModifier, PlayerOptions.Beat, PlayerOptions.CMod, PlayerOptions.Centered, PlayerOptions.Flip, PlayerOptions.Stealth, PlayerOptions.XMod, Screen.AddInputCallback, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
         "native drawable state/resources: BitmapText, Model, Quad, Sprite"
       ],
-      "evidence": "sweep-2026-10-13-mawaru6-foreground-row-repair.json"
+      "evidence": "sweep-2026-10-15-mawaru6-message-coverage-final-repair-v1.json"
     },
     {
       "position": 306,

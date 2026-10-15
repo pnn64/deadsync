@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T10:24:45Z",
-  "previous_goal_turn": "All501 original simfiles have terminal initial outcomes:397 passed,104 pending,0 unprocessed. Score blank-frame fixc86a7a030c775514aa4ad1ccc51efc0727463b56 is committed after meaningful red and all four validation groups on both hosts, including84 live controls,35 replay controls and helper build. All1175 raw Linux and normalized cross-platform source pins, identical regression source, native bitmap, logs and helper59262da0 were verified. The collector pre-fix source lookup correction is documented and no tests were rerun. HOPE retained entry completed1688 frames with zero callback errors and20471 mismatches, down from20475. The next concrete source cause is missing native ActorFrame inheritance for PercentageDisplay in owned actor_classes::is_frame; it bypasses the observed inherited query bindings despite traversing the existing PercentP1 child. Native trace and primary source hashes are recorded; no next fix or full HOPE repair has been started. Mawaru6 final2 and Mawaru9 first1 continue without restart under their original frozen helpers, with existing publisher/closers collecting terminal results. All397 passing originals stay closed,311 coverage rows remain separate, originalbytes and acceptance are unchanged, all8 fixture files over100MB remain ignored/untracked, and the two-full-repair cap is unchanged. Goal remains active.",
+  "updated_utc": "2026-10-15T10:38:27Z",
+  "previous_goal_turn": "All501 original simfiles have terminal initial outcomes: 398 passed,103 pending,0 unprocessed. Mawaru6 final2 passed all121856 frames with zero errors/mismatches, replay exit0 and accepted archive87856596,23,523,388 bytes; fixture6e5eff66a and local decompression verificationa0c97b94c are committed. No third replay or reopening is allowed. Mawaru9 first1 remains running with actual command verified. HOPE PercentageDisplay inheritance fix is meaningful red reproduced on both hosts; one-line source fix is in scoped green validation. Latest retained entry has 1688 frames,0 callback errors and20471 mismatches; full repairs spent0. Every original simfile byte was rehashed unchanged; acceptance remains unchanged, coverage is separate, passing originals stay closed and oversized fixtures remain ignored. Goal remains active.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "1f2b84a8645f0ba9af8786d86165115bc41ababc",
+      "deadsync": "a0c97b94cb74e857e19429ef31bf76bf098f923a",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -2191,14 +2191,14 @@
         },
         {
           "job": "mawaru6-message-coverage-final-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "mawaru6/mawaru6.sm",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "minefield-overlay-stage-first-repair-v1",
@@ -4385,8 +4385,11 @@
     },
     "mawaru6_message_coverage_final_queue": {
       "queue_observation": {
-        "status": "starting final repair 2",
-        "pid": 2706879,
+        "status": "supervisor complete",
+        "exit_code": 0,
+        "full_repair_started": true,
+        "full_repairs_spent": 2,
+        "no_third_full_repair": true,
         "diagnostic": {
           "position": 305,
           "source_simfile": "mawaru6/mawaru6.sm",
@@ -4405,9 +4408,7 @@
           "first_mismatches": [],
           "report_sha256": "b436ed1ad563185c8d54d1ea2721362c67a5f474cb25bd735c40d0db0012110b",
           "archive_accepted": false
-        },
-        "no_third_full_repair": true,
-        "native_capture_reused": true
+        }
       },
       "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-mawaru6-message-coverage-final-queue-launch.json",
       "full_repair_limit": 2,
@@ -4423,14 +4424,14 @@
       "replay_pid": 2784760,
       "current_job": {
         "job": "mawaru6-message-coverage-final-repair-v1",
-        "complete": false,
-        "supervisor_running": true,
-        "passed": 0,
+        "complete": true,
+        "supervisor_running": false,
+        "passed": 1,
         "pending": 0,
-        "processed": 0,
-        "last_phase": "replay",
+        "processed": 1,
+        "last_phase": "pack",
         "source_simfile": "mawaru6/mawaru6.sm",
-        "child_running": true
+        "child_running": false
       }
     },
     "simply_love_sm": {
@@ -4995,9 +4996,10 @@
     },
     "live_full_repairs_remaining": [
       {
-        "source_simfile": "mawaru6/mawaru6.sm",
-        "attempt": 2,
-        "pid": 2784760,
+        "source_simfile": "mawaru9/mawaru9.sm",
+        "attempt": 1,
+        "pid": 892716,
+        "actual_command_matches_record": true,
         "restarted": false
       }
     ],
@@ -5067,11 +5069,21 @@
       "replay_controls": 35,
       "all_1175_source_pins_asset_log_and_binary_hashes_verified": true,
       "entire_regression_source_identical_red_green": true
+    },
+    "mawaru6_closed": {
+      "native_frames": 121856,
+      "full_repairs_spent": 2,
+      "status": "passed",
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-mawaru6-final-fixture-verification.json",
+      "archive": "8785659616da1ad8cdd92907893ba11fe35833f1f9f5188c6a6e51f7ded35fee.tar.zst",
+      "local_decompression_byte_verified": true
     }
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 249,
-    "new_pending_charts": 104,
+    "new_passed_fixtures": 250,
+    "new_pending_charts": 103,
     "new_processed_sources": 353,
     "charts_in_remaining_queue": 353,
     "unprocessed_sources": 0,
@@ -6036,26 +6048,6 @@
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
-    },
-    {
-      "source_simfile": "mawaru6/mawaru6.sm",
-      "repair_attempts": 1,
-      "failure": null,
-      "errors": [
-        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 16.002: missing captured subscriber identity for ScreenGameplay/6/1",
-        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 47.492: missing captured subscriber identity for ScreenGameplay/6/1",
-        "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 112.903: missing captured subscriber identity for ScreenGameplay/6/1"
-      ],
-      "mismatch_count": 3,
-      "first_mismatch": [
-        {
-          "phase": "progress",
-          "seconds": 264.00067138671875,
-          "field": "failed",
-          "native": true,
-          "deadsync": false
-        }
-      ]
     },
     {
       "source_simfile": "mawaru7/mawaru7.sm",
@@ -7105,7 +7097,7 @@
     "note": "Earlier sweep checkpoints incorrectly carried the superseded one-mismatch replay forward as pending. The complete corrected replay and saved fixture already passed."
   },
   "next_actions": [
-    "Collect Mawaru6 final2 and Mawaru9 first1 without restarting; save and byte-verify complete passes or preserve concrete terminal failures.",
+    "Collect Mawaru9 first1 without restarting; save and byte-verify a complete pass or preserve concrete terminal failures. Mawaru6 final2 is passed and closed; no further replay is allowed.",
     "Implement source-proven PercentageDisplay ActorFrame inheritance; validate with focused regression and existing controls before another retained HOPE entry and any full repair.",
     "Keep I Really Like You pending on missing initialization-clock inputs before its one remaining full repair.",
     "Keep passing originals closed, coverage separate, original bytes and acceptance unchanged, oversized fixtures ignored and the two-full-repair cap unchanged."

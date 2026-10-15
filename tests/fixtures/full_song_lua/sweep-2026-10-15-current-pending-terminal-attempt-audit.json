@@ -1,22 +1,22 @@
 {
-  "generated_utc": "2026-10-15T09:04:33.378658+00:00",
-  "concrete_ledger_sha256": "d428b6f81e021d9e3fcceeb2f8830c927795d7ebbf0de60a126606c90c9adc1c",
+  "generated_utc": "2026-10-15T10:38:31.039555+00:00",
+  "concrete_ledger_sha256": "11d589e3bd8bc908df6c92ed3d798392d95a028042fec8fb2b3994dcb896a73a",
   "counts": {
-    "passed": 397,
-    "pending": 104,
+    "passed": 398,
+    "pending": 103,
     "unprocessed": 0
   },
   "maximum_published_terminal_attempt_histogram": {
     "0": 82,
-    "1": 11,
+    "1": 10,
     "2": 11
   },
-  "pending_sources": 104,
+  "pending_sources": 103,
   "terminal_attempts_exceed_two": [],
   "differences": [],
   "running_repair_not_counted_as_terminal": {
-    "source_simfile": "mawaru6/mawaru6.sm",
-    "running_attempt": 2,
+    "source_simfile": "mawaru9/mawaru9.sm",
+    "running_attempt": 1,
     "already_authorized_no_restart": true
   },
   "no_chart_replays_or_source_mutations": true

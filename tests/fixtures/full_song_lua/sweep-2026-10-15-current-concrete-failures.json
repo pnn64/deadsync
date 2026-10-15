@@ -1,10 +1,10 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T10:24:48Z",
+  "updated_utc": "2026-10-15T10:38:30Z",
   "counts": {
-    "passed": 397,
-    "pending": 104,
+    "passed": 398,
+    "pending": 103,
     "unprocessed": 0
   },
   "report_kind": "current concrete failures; sweep still active",
@@ -13501,50 +13501,6 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false
-    },
-    {
-      "position": 305,
-      "source_simfile": "mawaru6/mawaru6.sm",
-      "completed_full_repairs": 1,
-      "evidence": "sweep-2026-10-13-mawaru6-foreground-row-repair.json",
-      "failure_text": null,
-      "callback_errors": [
-        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 16.002: missing captured subscriber identity for ScreenGameplay/6/1",
-        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 47.492: missing captured subscriber identity for ScreenGameplay/6/1",
-        "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 112.903: missing captured subscriber identity for ScreenGameplay/6/1"
-      ],
-      "mismatch_count": 3,
-      "first_concrete_mismatches": [
-        {
-          "phase": "progress",
-          "seconds": 264.00067138671875,
-          "field": "failed",
-          "native": true,
-          "deadsync": false
-        },
-        {
-          "phase": "screen-end",
-          "seconds": 264.67852783203125,
-          "field": "failed",
-          "native": true,
-          "deadsync": false
-        },
-        {
-          "phase": "gameplay-exit",
-          "seconds": 264.67852783203125,
-          "field": "failed",
-          "native": true,
-          "deadsync": false
-        }
-      ],
-      "capture_exit": null,
-      "replay_exit": 2,
-      "native_frames": 121856,
-      "replayed_frames": 121856,
-      "capture_errors": null,
-      "completion": null,
-      "no_third_full_repair": false,
-      "running_full_repair_attempt": 2
     },
     {
       "position": 306,

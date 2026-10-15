@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T10:24:45Z",
+  "updated_utc": "2026-10-15T10:38:27Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,8 +13,8 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 397,
-    "pending": 104,
+    "passed": 398,
+    "pending": 103,
     "unprocessed": 0
   },
   "complete": false,
@@ -2606,11 +2606,10 @@
       "position": 305,
       "source_simfile": "mawaru6/mawaru6.sm",
       "simfile_sha256": "394d4b03ce745a22d46dfef9bf581301840ee654ebd382d2c76412260694c37c",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-13-mawaru6-foreground-row-repair.json",
-      "running_full_repair_attempt": 2,
-      "completed_repair_attempts_at_checkpoint": 1
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-15-mawaru6-message-coverage-final-repair-v1.json",
+      "completed_repair_attempts_at_checkpoint": 2
     },
     {
       "position": 306,
