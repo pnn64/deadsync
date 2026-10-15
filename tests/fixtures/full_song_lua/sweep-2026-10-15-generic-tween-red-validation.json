@@ -1,0 +1,32 @@
+{
+  "regressions": [
+    "live_native_tween_curves_match_native_probes",
+    "live_native_tween_argument_and_hurry_contract"
+  ],
+  "both_platform_expected_failure_verified": true,
+  "failure": "Both regressions fail because native actor method tween has no semantic implementation.",
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "log_sha256": "0431f91887834f7dbe1747e685b80860e6e3ff43327b543cdd5c161553e49a9c",
+      "results": [
+        "test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 608 filtered out; finished in 0.20s\r"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 301.047556149977,
+      "log_sha256": "43bc3e42561973fc50e6c88a54e4501af2ba65390700a1128e8112491dbd1735",
+      "results": [
+        "test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 606 filtered out; finished in 0.23s"
+      ]
+    }
+  ],
+  "both_source_pin_counts": 1175,
+  "chart_full_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
