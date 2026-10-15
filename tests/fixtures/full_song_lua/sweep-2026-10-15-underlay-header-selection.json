@@ -1,0 +1,12 @@
+{
+  "fix_commit": "0b3b12b7b6fb83b93b1661c4395b8d2151253cba",
+  "source_root": "/home/parity/workspace/underlay-header-green-v2/deadsync",
+  "binary_sha256": "8180d5098c1c5a585fd6e9bf7a39a8528d871fa4d113c517347a39af5bbd0336",
+  "build_proof": "/home/parity/jobs/underlay-header-linux-green-v3/proof.json",
+  "all_four_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "construct actual Shared/Header.lua Quad with existing native default texture, exact retained Init command, parent, screen geometry and diffuse state",
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
