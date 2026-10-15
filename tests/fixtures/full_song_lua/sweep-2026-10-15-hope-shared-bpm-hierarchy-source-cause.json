@@ -4,7 +4,6 @@
   "entry_frames": 1688,
   "entry_errors": 0,
   "entry_mismatches": 20445,
-  "first_remaining_native_seq": 617,
   "native_actor": "external-0110",
   "native_operation": "ActorFrame.GetNumChildren",
   "native_results": [
@@ -44,6 +43,11 @@
   "original_capture_reused": true,
   "expected_query_results_used_as_engine_inputs": false,
   "comparison_logic_changed": false,
-  "production_bpm_fix_added": false,
-  "next_action": "Build the real shared BPM hierarchy and native current-player BPS/rate updates from primary Lua source, including source-selected one/two-player timing behavior and exact named lookup levels. Preserve existing comparison logic and use actual initial profile/timing inputs. Validate runtime structure, changing BPM/rate behavior and unchanged controls on both hosts before retained entry; no full repair while known entry failures remain."
+  "production_bpm_fix_added": true,
+  "next_action": "Build the real shared BPM hierarchy and native current-player BPS/rate updates from primary Lua source, including source-selected one/two-player timing behavior and exact named lookup levels. Preserve existing comparison logic and use actual initial profile/timing inputs. Validate runtime structure, changing BPM/rate behavior and unchanged controls on both hosts before retained entry; no full repair while known entry failures remain.",
+  "original_failure_native_seq": 617,
+  "fix_commit": "2e561959d28baded6219078922c8fd38012aaaf5",
+  "followup_entry": "sweep-2026-10-15-hope-shared-bpm-hierarchy-entry-diagnostic.json",
+  "first_remaining_native_seq_after_fix": 649,
+  "status": "resolved by actual native shared BPM ownership, selected timing, rate update and observer scope; Underlay Header remains pending"
 }
