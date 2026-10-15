@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Void Virus/Void_Virus.ssc",
+  "native_frames": 26515,
+  "replayed_frames": 26515,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "3679cfc0f434ab3d26695726e90b9e73cacd3d1d8e7bb6f77feb5f8de82cbe50.tar.zst",
+  "compressed_sha256": "3679cfc0f434ab3d26695726e90b9e73cacd3d1d8e7bb6f77feb5f8de82cbe50",
+  "uncompressed_sha256": "87db8241ab0fa360829a1c7cee3dac1f504d740bbc94e48d83927f8ad019ce8c",
+  "compressed_bytes": 10027114,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "gone_KidFresino/song.ssc",
+  "native_frames": 125586,
+  "replayed_frames": 125586,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "fb1696ac05718ab2de6a2884b9ee6effa9df50c66f5679feb3530c9e1cf6d1a6.tar.zst",
+  "compressed_sha256": "fb1696ac05718ab2de6a2884b9ee6effa9df50c66f5679feb3530c9e1cf6d1a6",
+  "uncompressed_sha256": "4377ee34a2e0e1eccd975b25eff17964fecfa2ef39e74a2cc9fb39891769e502",
+  "compressed_bytes": 4904490,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
