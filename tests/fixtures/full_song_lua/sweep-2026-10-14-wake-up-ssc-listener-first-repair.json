@@ -1,0 +1,66 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef / includes d69f0a20f",
+  "results": [
+    {
+      "position": 466,
+      "source_simfile": "Wake Up/Wake Up.ssc",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "d441ccf0f454966757144e0165a0b62e34fb1fcc538964a31204ffe55dc69a58",
+      "trace_sha256": "531e3a2150e78dfe98b4fa8ce61fc74cfb146a4123c2e9c332e8f24488420dfd",
+      "simfile_sha256": "82fd8abc80e5a812b098793e3d82a90b54de42016e68c7ef37db66e0eefbbf8f",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/arrow-alpha-linux-green-v1/proof.json",
+      "fix_commit": "f2a8bbc0853cd55b8a83f1725ac0669016ab8fef",
+      "previous_failure": null,
+      "previous_errors": [],
+      "replay_exit": 0,
+      "replay_seconds": 2882.276550281007,
+      "native_frames": 84024,
+      "replayed_frames": 84024,
+      "compared_stage_fields": 1507,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetWidth, Actor.addx, Actor.halign, GameState.ApplyGameCommand, GameState.GetHumanPlayers, GameState.IsHumanPlayer, PlayerOptions.Stealth, PlayerOptions.StealthPastReceptors, ScreenGameplay.GetLifeMeter",
+        "native drawable state/resources: Quad, Sound, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "422be4d288bfebadb3600e6bb7c5ce1a7f9e0fea303cf7b7f72ed8a12f6021a5",
+      "archive": "84dc20777ca1534dfe694b61d3a53fa41161e78d2638ac50d75ab99998472029.tar.zst",
+      "archive_sha256": "84dc20777ca1534dfe694b61d3a53fa41161e78d2638ac50d75ab99998472029",
+      "compressed_bytes": 9058095,
+      "harness_version": "0.1.80",
+      "title": "Wake Up Open The Door And Escape To The Sea",
+      "pack_seconds": 5.594763655011775,
+      "retained_original_entry": {
+        "title": "Wake Up",
+        "source_simfile": "Wake Up/Wake Up.ssc",
+        "harness_version": "0.1.0",
+        "archive": "087058a7d38b6c7c88131e1204e74e93ab8ab4a1b32f1551bd06e15620de7ad5.tar.zst",
+        "sha256": "087058a7d38b6c7c88131e1204e74e93ab8ab4a1b32f1551bd06e15620de7ad5",
+        "compressed_bytes": 469559,
+        "uncompressed_sha256": "9001021ff6bc377309b9d94952807076db706f373e511463cc16e2aa9dcd9fed",
+        "compression_level": 22,
+        "aliases": [
+          "a32b8233660d81703312e1e2b3b0707ae4fcca685f948e009cba781e22997e07.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "f93db55dba7c00301379c489516ee95d72852fee0271908d8c1a2c8f6fda1665",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first repair: callback delivery with missing observational ordering recorded as coverage; original archive and full comparisons unchanged",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}

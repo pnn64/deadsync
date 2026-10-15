@@ -5436,17 +5436,14 @@
       "aliases": []
     },
     {
-      "title": "Wake Up",
+      "title": "Wake Up Open The Door And Escape To The Sea",
       "source_simfile": "Wake Up/Wake Up.ssc",
-      "harness_version": "0.1.0",
-      "archive": "087058a7d38b6c7c88131e1204e74e93ab8ab4a1b32f1551bd06e15620de7ad5.tar.zst",
-      "sha256": "087058a7d38b6c7c88131e1204e74e93ab8ab4a1b32f1551bd06e15620de7ad5",
-      "compressed_bytes": 469559,
-      "uncompressed_sha256": "9001021ff6bc377309b9d94952807076db706f373e511463cc16e2aa9dcd9fed",
-      "compression_level": 22,
-      "aliases": [
-        "a32b8233660d81703312e1e2b3b0707ae4fcca685f948e009cba781e22997e07.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "84dc20777ca1534dfe694b61d3a53fa41161e78d2638ac50d75ab99998472029.tar.zst",
+      "sha256": "84dc20777ca1534dfe694b61d3a53fa41161e78d2638ac50d75ab99998472029",
+      "compressed_bytes": 9058095,
+      "uncompressed_sha256": "d441ccf0f454966757144e0165a0b62e34fb1fcc538964a31204ffe55dc69a58",
+      "aliases": []
     },
     {
       "title": "Watching",
