@@ -1,0 +1,19 @@
+{
+  "fix_commit": "40afbf0b9633de3c9efeb89339d6166dad3b28c3",
+  "build_proof": "/home/parity/jobs/mine-finalization-boundary-linux-green-v2/proof.json",
+  "binary_sha256": "8bc6998ad067729087f992a1158d922ac0c0a24a2694fcaffc9b45bde59503a7",
+  "tested_source_root": "/home/parity/workspace/mine-finalization-boundary-v2/deadsync",
+  "all_thirteen_checks_both_platforms_passed": true,
+  "all_1175_raw_linux_and_cross_platform_normalized_source_pins_verified": true,
+  "scope": "Rite actual final AvoidMine notification lost to forced natural-end accounting; preserve ordinary immediate and live-outro handoffs",
+  "native_capture_reused": true,
+  "native_capture_frames": 104414,
+  "full_repairs_spent_before_final": 1,
+  "final_full_repair_attempt": 2,
+  "no_third_full_repair": true,
+  "live_outro_and_ordinary_handoff_regression_passed": true,
+  "legacy_completed_song_controls_passed": 2,
+  "global_original_helper_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_acceptance_predicate_unchanged": true
+}
