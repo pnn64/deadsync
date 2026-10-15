@@ -1,0 +1,70 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "6676e8417d43558d94e2dc6666c18286453c7831",
+  "results": [
+    {
+      "position": 463,
+      "source_simfile": "wah-leven [telperion (ddrillini remix)]/eleven.ssc",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "599f0736e27c6ea8c1753a90b665cf7ea03dc72c31422f80cc8ba4340fddd340",
+      "trace_sha256": "b525f939d306d63e9a9b68d92133874cfb1b9a9b2fdc607dc2956722f0630ae0",
+      "simfile_sha256": "17e70b53a8af11e65045e4cbb29b3f1841914cbacefcc1b13d5b4335fa8cb4ca",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "74d2cd015b590d762a1611a21bff1b6caf0db7d3193d7501d7c039ff984f8f29",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/model-comment-header-linux-green-v1/proof.json",
+      "fix_commit": "6676e8417d43558d94e2dc6666c18286453c7831",
+      "previous_failure": "[1.6s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: frame 0/67913 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'WAH-LEVEN (DDRIllini Remix)': model '/tmp/.tmp6eWLyC/song/lua/../assets/waluigi-model/wah-tpose.txt' did not produce any geometry; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile foreground lua layer for 'WAH-LEVEN (DDRIllini Remix)' from '/tmp/.tmp6eWLyC/song/lua/fly.lua': model '/tmp/.tmp6eWLyC/song/lua/../assets/waluigi-model/wah-tpose.txt' did not produce any geometry\n[4.0s] replaying every native gameplay frame: frame 0/67913 (0.0%)\n\nthread 'main' (2929566) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "previous_errors": [],
+      "native_frames_before_repair": 67913,
+      "resolved_by_source_fix_commit": "6676e8417d43558d94e2dc6666c18286453c7831",
+      "original_capture_harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "diagnostic_replayed_frames": 2588,
+      "one_later_full_repair_maximum": true,
+      "replay_exit": 0,
+      "replay_seconds": 4210.551343798987,
+      "native_frames": 67913,
+      "replayed_frames": 67913,
+      "compared_stage_fields": 1584,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetHeight, Actor.GetWidth, Actor.addrotationy, Actor.addrotationz, Actor.cullmode, Actor.rotationy, Actor.xy",
+        "native drawable state/resources: Model, Sprite"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "c9bade28ac90faba696a0bd0ff76f136efde54df25ec21d6ac7ea4c696e23b4a",
+      "archive": "7bc0c6066e856a164fb608fe44b41959d0f51d6d1b767f38ba27d6b3bb5f91bf.tar.zst",
+      "archive_sha256": "7bc0c6066e856a164fb608fe44b41959d0f51d6d1b767f38ba27d6b3bb5f91bf",
+      "compressed_bytes": 8924893,
+      "harness_version": "0.1.80",
+      "title": "WAH-LEVEN (DDRIllini Remix)",
+      "pack_seconds": 4.492737785010831,
+      "retained_original_entry": {
+        "title": "WAH-LEVEN (DDRIllini Remix)",
+        "source_simfile": "wah-leven [telperion (ddrillini remix)]/eleven.ssc",
+        "harness_version": "0.1.0",
+        "archive": "51f50b97cd8baa7cf1b7dd4d8ecdb2ae342df5b112e50eb45a8804878f3f1db5.tar.zst",
+        "sha256": "51f50b97cd8baa7cf1b7dd4d8ecdb2ae342df5b112e50eb45a8804878f3f1db5",
+        "compressed_bytes": 1986522,
+        "uncompressed_sha256": "59a8b2e9c2ea7034749891fece73612b4f5c9830400d8d927959de5476c64300",
+        "compression_level": 22,
+        "aliases": [
+          "8093ff6328b9f425eb52d540852c6f754a53efa084160307edcaa4cf03c0ce34.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "74d2cd015b590d762a1611a21bff1b6caf0db7d3193d7501d7c039ff984f8f29",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first repair: parse actual MilkShape mesh sections independently of optional exporter comment headers, matching native RageModelGeometry; real vertices, normals, UVs, bounds, materials and bones retained; clean startup diagnostic required; original complete67913-frame capture reused; existing comparisons unchanged",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
