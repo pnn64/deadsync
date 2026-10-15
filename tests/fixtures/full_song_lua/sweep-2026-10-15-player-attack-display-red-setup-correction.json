@@ -1,0 +1,23 @@
+{
+  "initial_red_v1_regression_invalid": true,
+  "initial_regression_exercised_no_visible_players": true,
+  "initial_target_check": {
+    "label": "target-control",
+    "exit_code": 0,
+    "seconds": 335.8114877999906,
+    "log_sha256": "a74fb470bcfa45c605e3a01366d4ee7399802abab624a7853e31f2f461fe6abc",
+    "results": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 625 filtered out; finished in 0.48s"
+    ]
+  },
+  "correction": "Run inventory assertions in OnCommand and inspect an explicit number of players configured by the test context. Assert the inspected-player count in Rust before checking child order and every hold index.",
+  "old_regression_source_sha256": "b0937693b370313d58ce925b06e7914c8fa8a22d63698257a9167bc4ed244e2c",
+  "corrected_regression_source_sha256": "e090a5ac284f647765ed4aafbe57ac964698e2b9b6a6022837f9fabfe658e805",
+  "native_inventory_assertions_retained": true,
+  "production_source_unchanged_before_meaningful_red": true,
+  "old_handoff_stopped_before_production_mutation": 43664,
+  "old_collector_stopped_before_selection": 26928,
+  "frozen_invalid_red_roots_and_logs_preserved": true,
+  "full_chart_repairs_spent": 0,
+  "full_song_acceptance_changed": false
+}
