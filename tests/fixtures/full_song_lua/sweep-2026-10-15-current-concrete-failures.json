@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T19:12:00Z",
+  "updated_utc": "2026-10-15T19:35:41Z",
   "counts": {
     "passed": 398,
     "pending": 103,
@@ -8160,18 +8160,18 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-15-hope-underlay-header-entry-diagnostic.json",
+      "followup": "sweep-2026-10-15-hope-step-statistics-entry-diagnostic.json",
       "source_cause": "sweep-2026-10-15-hope-cancel-source-cause.json",
       "entry_diagnostic_frames": 1688,
       "entry_diagnostic_errors": 0,
-      "entry_diagnostic_mismatches": 20442,
+      "entry_diagnostic_mismatches": 20507,
       "archive_namespace_startup_error_cleared_in_diagnostic": true,
       "native_trace_and_all_original_member_bytes_unchanged": true,
       "original_terminal_full_result_preserved": true,
       "new_full_repair_started": false,
       "cancel_child_missing_failure_fixed_by": "c71cc5f319cd5b950b6ce107ec23f65772062260",
-      "remaining_source_cause": "sweep-2026-10-15-hope-step-statistics-source-cause.json",
-      "current_diagnostic_failure": "first remaining sequence653: native StepStatsPaneP1 has3 actual children versus owned density shell1; the real Steps density cache prerequisite is now source-qualified on both hosts",
+      "remaining_source_cause": null,
+      "current_diagnostic_failure": "actual retained-entry result after native StepStatistics source construction; inspect first remaining error or mismatch before claiming its cause",
       "diagnostic_only_not_full_acceptance": true,
       "quad_default_texture_fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
       "quad_texture_all_sixteen_groups_both_hosts_passed": true,
@@ -8190,7 +8190,8 @@
       "standard_life_child_enumeration_fix_commit": "206677f0f46938082a7605b76db4dd787e79733e",
       "shared_bpm_hierarchy_fix_commit": "2e561959d28baded6219078922c8fd38012aaaf5",
       "underlay_header_fix_commit": "0b3b12b7b6fb83b93b1661c4395b8d2151253cba",
-      "steps_density_prerequisite_fix_commit": "b43bcea765536e63a9f12ce220c1226023bfe19c"
+      "steps_density_prerequisite_fix_commit": "b43bcea765536e63a9f12ce220c1226023bfe19c",
+      "step_statistics_fix_commit": "135dcdfd107e0b2cf527c010b827593139433102"
     },
     {
       "position": 230,
