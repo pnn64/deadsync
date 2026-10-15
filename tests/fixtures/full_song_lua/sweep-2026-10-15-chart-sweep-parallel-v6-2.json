@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "original queued chart transfer v6 complete; full acceptance unchanged; original long replays retained",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
