@@ -690,6 +690,63 @@
         }
       ],
       "report_sha256": "aa62775ab26c4e0e69f8ff28df41a1096d6173c1c75fbf445c8cc02524626845"
+    },
+    {
+      "position": 477,
+      "source_simfile": "WOP/WOP.ssc",
+      "simfile_sha256": "2f2d3db0bf83de274f01f03ce9dfa337aa8dbf8496079052881a4049446726c5",
+      "retained_original_archive": "bdc1f910efc602d0759169348edcb0927c4b7d6f916ac60a0dc273f6212dc3f8.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v6-1/chart-477/candidates/68421b4dc0af898026ab0717d9d0200391a4293f6aa6c59fd58bffebb71b6bee.tar",
+      "candidate_sha256": "68421b4dc0af898026ab0717d9d0200391a4293f6aa6c59fd58bffebb71b6bee",
+      "trace_sha256": "c3740b0cb934bf34d90dfa5a4b1dbb8ac77110463b5fc8854b3b277004d54ef9",
+      "native_capture_reused": true,
+      "supervisor_handoff_v7": {
+        "retained_pid": 3155070,
+        "replay_restarted": false,
+        "kernel_wait_status": 0,
+        "exit_status_source": "kernel zombie exit status before old-parent reap"
+      },
+      "replay_exit": 0,
+      "replay_seconds": 3309.050682030007,
+      "native_frames": 97282,
+      "replayed_frames": 97282,
+      "compared_stage_fields": 1925,
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.bounce, Actor.effectclock, Actor.hibernate, Actor.stopeffect, ActorFrame.GetChildren, ActorSound.play, ActorSound.stop, PlayerOptions.Mini, Sprite.LinearFrames",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "a401ba84bf3b543904ccb6f95279578dd98b5de56ac8ba7dc42d626972226a65",
+      "archive": "41f228078a2190b770ff47b500c187161787d123a7e917d7b7773dac7d6acd66.tar.zst",
+      "archive_sha256": "41f228078a2190b770ff47b500c187161787d123a7e917d7b7773dac7d6acd66",
+      "compressed_bytes": 25389205,
+      "pack_seconds": 12.946212315990124,
+      "harness_version": "0.1.80",
+      "title": "Wop",
+      "retained_original_entry": {
+        "title": "Wop",
+        "source_simfile": "WOP/WOP.ssc",
+        "harness_version": "0.1.0",
+        "archive": "bdc1f910efc602d0759169348edcb0927c4b7d6f916ac60a0dc273f6212dc3f8.tar.zst",
+        "sha256": "bdc1f910efc602d0759169348edcb0927c4b7d6f916ac60a0dc273f6212dc3f8",
+        "compressed_bytes": 8873271,
+        "uncompressed_sha256": "e1661de3debd498c06cd3cfd7a27c5d8a197e723dd76a60a3f0ba368376ac0e4",
+        "compression_level": 22,
+        "aliases": [
+          "5c03b04e8c6b22cf24dfe3c6004b68c09ec644568b72c3318b5831da5bb34929.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -700,7 +757,7 @@
   },
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 3,
+  "passed_fixtures": 4,
   "pending_charts": 2,
-  "processed_charts": 5
+  "processed_charts": 6
 }

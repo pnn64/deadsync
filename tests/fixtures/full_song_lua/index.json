@@ -5491,15 +5491,12 @@
     {
       "title": "Wop",
       "source_simfile": "WOP/WOP.ssc",
-      "harness_version": "0.1.0",
-      "archive": "bdc1f910efc602d0759169348edcb0927c4b7d6f916ac60a0dc273f6212dc3f8.tar.zst",
-      "sha256": "bdc1f910efc602d0759169348edcb0927c4b7d6f916ac60a0dc273f6212dc3f8",
-      "compressed_bytes": 8873271,
-      "uncompressed_sha256": "e1661de3debd498c06cd3cfd7a27c5d8a197e723dd76a60a3f0ba368376ac0e4",
-      "compression_level": 22,
-      "aliases": [
-        "5c03b04e8c6b22cf24dfe3c6004b68c09ec644568b72c3318b5831da5bb34929.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "41f228078a2190b770ff47b500c187161787d123a7e917d7b7773dac7d6acd66.tar.zst",
+      "sha256": "41f228078a2190b770ff47b500c187161787d123a7e917d7b7773dac7d6acd66",
+      "compressed_bytes": 25389205,
+      "uncompressed_sha256": "68421b4dc0af898026ab0717d9d0200391a4293f6aa6c59fd58bffebb71b6bee",
+      "aliases": []
     },
     {
       "title": "You are Goomba Play ITG",
