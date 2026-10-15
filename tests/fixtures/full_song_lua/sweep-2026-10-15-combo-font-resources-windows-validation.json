@@ -1,0 +1,63 @@
+{
+  "all_five_groups_passed": true,
+  "all_1175_normalized_source_pins_asset_and_log_hashes_verified": true,
+  "red_fontless_combo_reproduced": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 332.0013814999984,
+      "log_sha256": "69cc89e44e43be60991485aa09e3515f200ae447c314ff3541a88d3abec650d7",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 627 filtered out; finished in 0.49s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 59.826717199990526,
+      "log_sha256": "f42f748d37c0ca24e4a799e25f152f7896d3bba85809b57d30e3a6c2d652826b",
+      "results": [
+        "test result: ok. 89 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 58.19s"
+      ]
+    },
+    {
+      "label": "asset-helper-controls",
+      "exit_code": 0,
+      "seconds": 1.5973899000091478,
+      "log_sha256": "fff8a0f1545e5c3af1e6aa4f973d028a1bf5b5aae52107e65d25fe6bb445c499",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 627 filtered out; finished in 0.19s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 144.62058290001005,
+      "log_sha256": "726028c214f061a5b0f94556a72c8f40b97825129eff14cd59a10779cf9c4e4f",
+      "results": [
+        "test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 22.98s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 25.413821199996164,
+      "log_sha256": "0b59f07705a551d26532b02c6d372630671e548bca6c3af257a8cc9aab3cf744",
+      "results": []
+    }
+  ],
+  "red_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 342.2110377999925,
+      "log_sha256": "dcda928feaff80ecbdb720d3549ef9cd37bcd20d940e4d311e0800d85e8cbafd",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 627 filtered out; finished in 0.31s"
+      ]
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

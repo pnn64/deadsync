@@ -13622,14 +13622,24 @@ pub fn create_named_child_actor(
             actor_children(lua, &frame)?.set("JudgmentWithOffsets", sprite)?;
             frame
         } else if name.eq_ignore_ascii_case("Combo") {
-            // Simply Love's Player combo.lua owns a BitmapText named Number.
-            // Keep its native class and exact child lookup, like Judgment.
-            let frame = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
-            let number = create_named_actor(lua, "BitmapText", "Number", create_dummy_actor)?;
-            number.set("__songlua_parent", frame.clone())?;
-            push_sequence_child_once(&frame, number.clone())?;
-            actor_children(lua, &frame)?.set("Number", number)?;
-            frame
+            // Player combo.lua returns an invisible leaf when hidden or when
+            // GetComboFonts finds no valid assets in the current theme.
+            let fonts = lua.globals().get::<Function>("GetComboFonts")?.call::<Table>(())?;
+            let sl = lua.globals().get::<Table>("SL")?;
+            let mods = sl.get::<Table>(format!("P{}", player_index + 1))?
+                .get::<Table>("ActiveModifiers")?;
+            if truthy(&mods.get::<Value>("HideCombo")?) || fonts.raw_len() == 0 {
+                let actor = create_named_actor(lua, "Actor", name, create_dummy_actor)?;
+                actor.raw_set("__songlua_visible", false)?;
+                actor
+            } else {
+                let frame = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
+                let number = create_named_actor(lua, "BitmapText", "Number", create_dummy_actor)?;
+                number.set("__songlua_parent", frame.clone())?;
+                push_sequence_child_once(&frame, number.clone())?;
+                actor_children(lua, &frame)?.set("Number", number)?;
+                frame
+            }
         } else {
             create_dummy_actor(lua, "ChildActor")?
         }

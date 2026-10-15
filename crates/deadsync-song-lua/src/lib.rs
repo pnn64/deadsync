@@ -23896,7 +23896,7 @@ mod_actions = {
         GetJudgmentGraphics()[1],
         GetHoldJudgments()[1],
         GetHeldMissGraphics()[1],
-        GetComboFonts()[1],
+        tostring(#GetComboFonts()),
         tostring(#columns),
         tostring(columns[4]),
         tostring(#GetStepsCredit(PLAYER_1)),
@@ -23922,7 +23922,7 @@ return Def.ActorFrame{}
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "50|5|2|0|1|Love|None|None|None|None|4|4|0|false|false|NoHideLights, Overhead|0|0|__songlua_theme_path"
+            "50|5|2|0|1|Love|None|None|None|0|4|4|0|false|false|NoHideLights, Overhead|0|0|__songlua_theme_path"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
     }

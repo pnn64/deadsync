@@ -1,0 +1,56 @@
+{
+  "source_root": "/home/parity/workspace/combo-font-resources-green-v1/deadsync",
+  "binary_sha256": "6db9a48cf5c22c9c22a012fb8380877024b4f2ec519c4945b6970d52d7ee214c",
+  "all_five_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "entire_regression_source_identical_red_green": true,
+  "asset_log_and_binary_hashes_verified": true,
+  "red_fontless_combo_reproduced_both_hosts": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 244.42002247198252,
+      "log_sha256": "bf5542d50010560a47b43c2ce2f98e2e00a3558ef333017ca27906e096cb7303",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 625 filtered out; finished in 0.32s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 34.899347939004656,
+      "log_sha256": "bf42e1c73bcd1c56f1c5748cd31b13b8d539a78d0900b661fae919c6530c27a5",
+      "results": [
+        "test result: ok. 89 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 34.22s"
+      ]
+    },
+    {
+      "label": "asset-helper-controls",
+      "exit_code": 0,
+      "seconds": 0.7827425160212442,
+      "log_sha256": "b3fd3f0e2bf32c5b8947e2b0a476526f195743e43697bde6494572b280609e10",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 625 filtered out; finished in 0.15s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 219.19902075000573,
+      "log_sha256": "6095548cc6f397a9dbdfceef428829d59e50e933086fcfc5dff4b07d1ae04f63",
+      "results": [
+        "test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 19.95s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 35.18669883196708,
+      "log_sha256": "9d3b13bee647b6acb148b9b7502f62fc6ea88915ac5479eeb6e70ff3238f1416",
+      "results": []
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
