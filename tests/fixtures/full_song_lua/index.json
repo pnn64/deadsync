@@ -5336,17 +5336,14 @@
       "aliases": []
     },
     {
-      "title": "Vector Field",
+      "title": "Vector Field But Nothing Just Vector Field",
       "source_simfile": "Vector Field/Vector Field.ssc",
-      "harness_version": "0.1.0",
-      "archive": "8152f73a818a4931c802e7d4f4d192e6671e28c69481838c1c964fb29452636b.tar.zst",
-      "sha256": "8152f73a818a4931c802e7d4f4d192e6671e28c69481838c1c964fb29452636b",
-      "compressed_bytes": 15973,
-      "uncompressed_sha256": "cc781bd9191402e4fc356f1604bebd90c84fedbd266ddb7483f7bdc7df5c0d57",
-      "compression_level": 22,
-      "aliases": [
-        "2af0844733fd8ecc58483b940918bdafff5f8a1266911304353fa2cf1753aab4.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "8b5db7036e4976eb7312a99547ceb0df494a3cf5416da3540332c38837a3e6ab.tar.zst",
+      "sha256": "8b5db7036e4976eb7312a99547ceb0df494a3cf5416da3540332c38837a3e6ab",
+      "compressed_bytes": 8669782,
+      "uncompressed_sha256": "4d6b24865ce3c440585c21373a54a65da59203bdf60bcb603285d7f73ca8876f",
+      "aliases": []
     },
     {
       "title": "Turii -Panta Rhei-",

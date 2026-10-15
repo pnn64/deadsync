@@ -14363,6 +14363,56 @@
         }
       ],
       "report_sha256": "754b9bc5c3f0f466b770979dcf159aa49f052a6947c0af9e1621c0e48fa315bf"
+    },
+    {
+      "position": 459,
+      "source_simfile": "Vector Field/Vector Field.ssc",
+      "simfile_sha256": "940c17077877f0de5b20f0976892b372b1a95313ad772062d3d2607a8fcc0537",
+      "retained_original_archive": "8152f73a818a4931c802e7d4f4d192e6671e28c69481838c1c964fb29452636b.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 130.83127936098026,
+      "trace_sha256": "456666f63d8d5b081204d9be3d28c80a3247e9752b029bc8724f5081bec2f155",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-459/candidates/4d6b24865ce3c440585c21373a54a65da59203bdf60bcb603285d7f73ca8876f.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1342.0650987839908,
+      "candidate_sha256": "4d6b24865ce3c440585c21373a54a65da59203bdf60bcb603285d7f73ca8876f",
+      "native_frames": 68688,
+      "replayed_frames": 68688,
+      "compared_stage_fields": 1430,
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "a30aafdd2e303c1fcbb443fe563b808525fff9f7e81a5a56a7b7cdb96183c65f",
+      "archive": "8b5db7036e4976eb7312a99547ceb0df494a3cf5416da3540332c38837a3e6ab.tar.zst",
+      "archive_sha256": "8b5db7036e4976eb7312a99547ceb0df494a3cf5416da3540332c38837a3e6ab",
+      "compressed_bytes": 8669782,
+      "pack_seconds": 1.802521344012348,
+      "harness_version": "0.1.80",
+      "title": "Vector Field But Nothing Just Vector Field",
+      "retained_original_entry": {
+        "title": "Vector Field",
+        "source_simfile": "Vector Field/Vector Field.ssc",
+        "harness_version": "0.1.0",
+        "archive": "8152f73a818a4931c802e7d4f4d192e6671e28c69481838c1c964fb29452636b.tar.zst",
+        "sha256": "8152f73a818a4931c802e7d4f4d192e6671e28c69481838c1c964fb29452636b",
+        "compressed_bytes": 15973,
+        "uncompressed_sha256": "cc781bd9191402e4fc356f1604bebd90c84fedbd266ddb7483f7bdc7df5c0d57",
+        "compression_level": 22,
+        "aliases": [
+          "2af0844733fd8ecc58483b940918bdafff5f8a1266911304353fa2cf1753aab4.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -14388,7 +14438,7 @@
   },
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 39,
+  "passed_fixtures": 40,
   "pending_charts": 65,
-  "processed_charts": 104
+  "processed_charts": 105
 }
