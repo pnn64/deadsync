@@ -1,0 +1,12 @@
+{
+  "fix_commit": "faa925c43a4b959114ffb1eb97d82b830d5983e7",
+  "source_root": "/home/parity/workspace/combo-font-resources-green-v1/deadsync",
+  "binary_sha256": "6db9a48cf5c22c9c22a012fb8380877024b4f2ec519c4945b6970d52d7ee214c",
+  "build_proof": "/home/parity/jobs/combo-font-resources-linux-green-v1/proof.json",
+  "all_five_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "enumerate valid current-theme Combo font assets and select the native invisible leaf when none are present; retain the existing font-backed Number child",
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
