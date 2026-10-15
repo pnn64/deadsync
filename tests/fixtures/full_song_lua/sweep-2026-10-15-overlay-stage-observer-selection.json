@@ -1,0 +1,13 @@
+{
+  "fix_commit": "4c9ae9ef093b2cc8d35f6266920ab6763b4385d9",
+  "harness_fix_commit": "c283a8a",
+  "build_proof": "/home/parity/jobs/overlay-stage-observer-linux-green-v1/proof.json",
+  "binary_sha256": "86439e2494912eec80c902e6f1ae1bdd576a96f4f919107996b300d981701d8d",
+  "both_hosts_eight_checks_passed": true,
+  "all_1175_raw_linux_and_cross_platform_normalized_source_pins_verified": true,
+  "full_repair_limit_per_chart": 2,
+  "first_attempt": 1,
+  "native_capture_reused": true,
+  "comparison_keys_and_acceptance_unchanged": true,
+  "global_original_selection_unchanged": true
+}

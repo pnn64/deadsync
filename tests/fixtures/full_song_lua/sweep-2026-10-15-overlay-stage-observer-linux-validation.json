@@ -1,0 +1,86 @@
+{
+  "fix_commit": "4c9ae9ef093b2cc8d35f6266920ab6763b4385d9",
+  "source_root": "/home/parity/workspace/overlay-stage-observer-v1/deadsync",
+  "binary_sha256": "86439e2494912eec80c902e6f1ae1bdd576a96f4f919107996b300d981701d8d",
+  "all_eight_checks_both_platforms_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_source_pins_verified": true,
+  "all_linux_log_and_binary_hashes_verified": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 414.4549719640054,
+      "log_sha256": "23317bf101f17d7968d2872357a190cbadfac915ab544a7a8d714836d7edb421",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 610 filtered out; finished in 0.21s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 1.1401967190031428,
+      "log_sha256": "7a7a6f251e5fb10910d02c70690c9800a7e47cdc1ca08b9caa23b98caca76188",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 610 filtered out; finished in 0.23s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 0.6267664119950496,
+      "log_sha256": "7b41acb570cb17a854c7ad6a7b95c8fec964d56f4c6b7b8c6d697dc5be60651e",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.6567121430125553,
+      "log_sha256": "e2663dc175a040cc196b5e90c97503e9640ff3e60fca2b262e8196b03cb897ea",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 601 filtered out; finished in 0.02s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 66.33359687801567,
+      "log_sha256": "3881e54289ba38df130d3d3aa4910629ab6c3bc87bada9e894c3f0dc4f5347e2",
+      "results": [
+        "test result: ok. 75 passed; 0 failed; 0 ignored; 0 measured; 536 filtered out; finished in 64.69s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 370.62726206099615,
+      "log_sha256": "fdbc833e038280ade77f5096b947462da6340502feb4a290c225cb936c9ad716",
+      "results": [
+        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.32s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 0.707979767001234,
+      "log_sha256": "1917a6763069e79cad6114d6fc414c95365fc746f058b967c8aa34fcd4e7fc4d",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 610 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 56.45713933699881,
+      "log_sha256": "2510fd6ea7bbb8ea664b3d8c03eff47e4082242ba40297f01e7a9b87ac86eb70",
+      "results": []
+    }
+  ],
+  "windows_validation": "sweep-2026-10-15-overlay-stage-observer-windows-validation.json",
+  "owned_overlay_stage_phase_verified": true,
+  "all_eleven_compared_fields_from_owned_phase_snapshot": true,
+  "native_control": "sweep-2026-10-15-overlay-stage-observer-native-control.json",
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true,
+  "global_original_helper_unchanged": true
+}
