@@ -1,0 +1,75 @@
+{
+  "position": 469,
+  "source_simfile": "Watermelon/Watermelon.ssc",
+  "full_repairs_spent": 0,
+  "original_regression_failed_both_hosts": true,
+  "original_regression_missing_immediate_handlers": 3,
+  "first_proposal_fixed_immediate_dispatch_but_failed_queued_dispatch_both_hosts": true,
+  "first_proposal_missing_queued_handlers": 3,
+  "original_red_checks": {
+    "windows": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 125.12726079999993,
+        "log_sha256": "89631b584169414224a5763d2ca46841b24d7965f90400cd3843eeb617bf48ba",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.20s"
+        ]
+      }
+    ],
+    "linux": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 293.685754990991,
+        "log_sha256": "1dc0cf83486270b32ea9918b71f0a79e4d84b96e8ef84685a46f31a107781b54",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 614 filtered out; finished in 0.24s"
+        ]
+      }
+    ]
+  },
+  "first_proposal_failed_checks": {
+    "windows": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 279.70873810000194,
+        "log_sha256": "eebe4a61375ebc957f7103ce68f9907e484a7e63eebccaebe319a164c7ee963f",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.22s"
+        ]
+      }
+    ],
+    "linux": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 303.42583093600115,
+        "log_sha256": "83f6c48cb14bbb8d8c8954ffeb910a30efc32748573c35ee20beaca955b798fa",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 614 filtered out; finished in 0.30s"
+        ]
+      }
+    ]
+  },
+  "first_proposal_not_selected_for_chart_repair": true,
+  "native_control": "sweep-2026-10-15-screen-command-native-control.json",
+  "native_control_frames": 6160,
+  "additional_owned_cause": "compile_update_jobs schedules owned theme/player/song actors but omits TopScreen itself; its own delayed queue never advances. Direct command propagation alone cannot fix the missing queued HidePlayersCommand.",
+  "native_order": "Screen::Update calls ActorFrame::Update; ActorFrame::UpdateInternal advances Actor::UpdateInternal before children, and runs its callback afterward.",
+  "native_source_sha256_lf": {
+    "Screen.cpp": "d77fc7cd061a7a90584529f95966badc0b5b327438b2b00376c463151fb9ec9a",
+    "ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac"
+  },
+  "corrected_implementation": "Reuse the existing actor entry/wrapper/queue/recurring scheduling for Screen itself before existing child jobs, retain existing child traversal exactly once, and schedule its callback after children. Forward its direct commands through the native ActorFrame child traversal.",
+  "corrected_validation_root": "/home/parity/workspace/screen-command-propagation-v2/deadsync",
+  "corrected_build_proof": "/home/parity/jobs/screen-command-propagation-linux-green-v2/proof.json",
+  "corrected_windows_stage": "screen-command-propagation-windows-green-v2",
+  "corrected_all_twelve_groups_required_both_hosts": true,
+  "native_capture_reused": true,
+  "original_global_helper_unchanged": true,
+  "frozen_v1_and_model_roots_unchanged": true,
+  "acceptance_keys_tolerances_predicate_unchanged": true
+}
