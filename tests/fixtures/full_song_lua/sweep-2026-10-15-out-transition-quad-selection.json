@@ -1,0 +1,12 @@
+{
+  "fix_commit": "461434bacf9449ddba8a8e3a9dc980f8e05ef3c1",
+  "source_root": "/home/parity/workspace/out-transition-quad-green-v3/deadsync",
+  "binary_sha256": "3f8bcb2850011563893532d3621d90a51bc23b313d451ca82c3ef3a7ce027f87",
+  "build_proof": "/home/parity/jobs/out-transition-quad-linux-green-v3/proof.json",
+  "all_four_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "construct the direct Out Quad with native Init/On/Off handlers and preserve the transition virtual tween getter and lifecycle",
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
