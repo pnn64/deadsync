@@ -4921,15 +4921,12 @@
     {
       "title": "Tacos",
       "source_simfile": "Tacos/Tacos.ssc",
-      "harness_version": "0.1.0",
-      "archive": "10a753e82c3d3b40641c307da4c03f0d36317fd8bcbbd156d65a61af11d2804b.tar.zst",
-      "sha256": "10a753e82c3d3b40641c307da4c03f0d36317fd8bcbbd156d65a61af11d2804b",
-      "compressed_bytes": 41674,
-      "uncompressed_sha256": "1b01455bc40f026287b9d5d68a756ca4286bb46f606a7454d04a63dea43dc4f5",
-      "compression_level": 22,
-      "aliases": [
-        "929cf4fe5b76617a9fb270a811fc7adebc968c38472997b0432703190dbd33ec.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "625fbf56b644ee359819b42439517240ec9079c43163df72718d6a163f466b37.tar.zst",
+      "sha256": "625fbf56b644ee359819b42439517240ec9079c43163df72718d6a163f466b37",
+      "compressed_bytes": 6892747,
+      "uncompressed_sha256": "c55b09335011d6ac629686a7663f7eca0ef55f92b78c9272d19b77471d897170",
+      "aliases": []
     },
     {
       "title": "Talk About",
