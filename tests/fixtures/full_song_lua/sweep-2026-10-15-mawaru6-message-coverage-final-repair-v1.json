@@ -1,0 +1,74 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "4c9ae9ef093b2cc8d35f6266920ab6763b4385d9; subscriber dispatch fix d69f0a20fd7a8b9a00fef1680365364522a51706",
+  "results": [
+    {
+      "position": 305,
+      "source_simfile": "mawaru6/mawaru6.sm",
+      "status": "passed",
+      "repair_attempts": 2,
+      "candidate_sha256": "2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb",
+      "trace_sha256": "4d205ed710879e4011d75fc735b3ae9fa7e9e9b6c53eb81873b64fff35771b7f",
+      "simfile_sha256": "394d4b03ce745a22d46dfef9bf581301840ee654ebd382d2c76412260694c37c",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "86439e2494912eec80c902e6f1ae1bdd576a96f4f919107996b300d981701d8d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/overlay-stage-observer-linux-green-v1/proof.json",
+      "fix_commit": "4c9ae9ef093b2cc8d35f6266920ab6763b4385d9",
+      "previous_failure": null,
+      "previous_errors": [
+        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 16.002: missing captured subscriber identity for ScreenGameplay/6/1",
+        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 47.492: missing captured subscriber identity for ScreenGameplay/6/1",
+        "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 112.903: missing captured subscriber identity for ScreenGameplay/6/1"
+      ],
+      "native_frames_before_repair": 121856,
+      "resolved_by_source_fix_commit": "d69f0a20fd7a8b9a00fef1680365364522a51706",
+      "original_capture_harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "diagnostic_replayed_frames": 6073,
+      "no_third_full_repair": true,
+      "replay_exit": 0,
+      "replay_seconds": 23554.46047780002,
+      "native_frames": 121856,
+      "replayed_frames": 121856,
+      "compared_stage_fields": 2992,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.accelerate, Actor.addx, Actor.addy, Actor.blend, Actor.bob, Actor.bounce, Actor.bouncebegin, Actor.bounceend, Actor.croptop, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.fadetop, Actor.finishtweening, Actor.glowshift, Actor.horizalign, Actor.rotationx, Actor.rotationy, Actor.shadowlength, Actor.stopeffect, Actor.vertalign, Actor.wag, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, Actor.zoomz, Actor.ztest, Actor.zwrite, ActorFrame.fov, BitmapText.maxwidth, BitmapText.settext, GameState.PlayerIsUsingModifier, PlayerOptions.Beat, PlayerOptions.CMod, PlayerOptions.Centered, PlayerOptions.Flip, PlayerOptions.Stealth, PlayerOptions.XMod, Screen.AddInputCallback, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: BitmapText, Model, Quad, Sprite"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "89ba0df5c8a61157a86746be22b1d6ccbbe5ceebca7a53e91175689816083623",
+      "archive": "8785659616da1ad8cdd92907893ba11fe35833f1f9f5188c6a6e51f7ded35fee.tar.zst",
+      "archive_sha256": "8785659616da1ad8cdd92907893ba11fe35833f1f9f5188c6a6e51f7ded35fee",
+      "compressed_bytes": 23523388,
+      "harness_version": "0.1.80",
+      "title": "MAWARU RIDES AGAIN RANDOMLY GENERATED SUBTITLE",
+      "pack_seconds": 20.662215444957837,
+      "retained_original_entry": {
+        "title": "MAWARU RIDES AGAIN",
+        "source_simfile": "mawaru6/mawaru6.sm",
+        "harness_version": "0.1.0",
+        "archive": "91656989a3f606655a16d576d510c9e010bfb7c61dc8d48880fa9314b0ae1f3c.tar.zst",
+        "sha256": "91656989a3f606655a16d576d510c9e010bfb7c61dc8d48880fa9314b0ae1f3c",
+        "compressed_bytes": 6641789,
+        "uncompressed_sha256": "8d07f2f40c928ae0a960210216d3f34898a8fa6a1e55ff71a646644e562dfe50",
+        "compression_level": 22,
+        "aliases": [
+          "73e9a75fecd3e3b2ff879f4d45f102cf081bef9b56d6d0a2f3274e1fa63eb195.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "86439e2494912eec80c902e6f1ae1bdd576a96f4f919107996b300d981701d8d",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "final repair 2: dispatch original subscriber callbacks when imported subscriber ordering is missing, record missing native ordering as coverage, preserve all full replay comparisons; original complete121856-frame capture reused",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}

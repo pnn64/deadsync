@@ -3647,17 +3647,14 @@
       "aliases": []
     },
     {
-      "title": "MAWARU RIDES AGAIN",
+      "title": "MAWARU RIDES AGAIN RANDOMLY GENERATED SUBTITLE",
       "source_simfile": "mawaru6/mawaru6.sm",
-      "harness_version": "0.1.0",
-      "archive": "91656989a3f606655a16d576d510c9e010bfb7c61dc8d48880fa9314b0ae1f3c.tar.zst",
-      "sha256": "91656989a3f606655a16d576d510c9e010bfb7c61dc8d48880fa9314b0ae1f3c",
-      "compressed_bytes": 6641789,
-      "uncompressed_sha256": "8d07f2f40c928ae0a960210216d3f34898a8fa6a1e55ff71a646644e562dfe50",
-      "compression_level": 22,
-      "aliases": [
-        "73e9a75fecd3e3b2ff879f4d45f102cf081bef9b56d6d0a2f3274e1fa63eb195.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "8785659616da1ad8cdd92907893ba11fe35833f1f9f5188c6a6e51f7ded35fee.tar.zst",
+      "sha256": "8785659616da1ad8cdd92907893ba11fe35833f1f9f5188c6a6e51f7ded35fee",
+      "compressed_bytes": 23523388,
+      "uncompressed_sha256": "2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb",
+      "aliases": []
     },
     {
       "title": "MAWARUCHI SURVIVER",
