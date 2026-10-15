@@ -1155,6 +1155,7 @@ pub fn theme_string_names(section: &str) -> Vec<String> {
 
 #[must_use]
 pub fn theme_string(section: &str, name: &str) -> String {
+    if section == "OptionTitles" && name == "MusicRateMultiplier" { return "x rate".into(); }
     if section.eq_ignore_ascii_case("Difficulty")
         || section.eq_ignore_ascii_case("CustomDifficulty")
     {
@@ -19972,7 +19973,19 @@ return Def.ActorFrame{
     InitCommand=function(self)
         local top = SCREENMAN:GetTopScreen()
         local underlay = top:GetChild("Underlay")
-        local bpm = underlay:GetChild("BPMDisplay")
+        local function bpm_leaf(underlay)
+            local owners=underlay:GetChildren()['']
+            if owners and tostring(owners):find('ActorFrame',1,true) then owners={owners} end
+            for _, owner in ipairs(owners or {}) do
+                if owner.GetChild and owner:GetChild('RatemodDisplay') then
+                    local inner=owner:GetChild('')
+                    return inner:GetChild('BPMDisplay') or inner:GetChild('DisplayP1')
+                end
+            end
+            error('native shared BPM owner missing')
+        end
+        local bpm = bpm_leaf(underlay)
+        assert(underlay:GetChild("BPMDisplay") == nil)
         assert(top:GetScreenType() == "ScreenType_Gameplay")
         assert(self.GetScreenType == nil)
         assert(top:GetChild("BPMDisplay") == nil)
@@ -20013,7 +20026,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "BPMDisplay:120 - 180:Theme Actor Shapes:true:P1Score:0.00%:SongMeter:Overlay"
+            "DisplayP1::Theme Actor Shapes:true:P1Score:0.00%:SongMeter:Overlay"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
     }
@@ -20034,7 +20047,7 @@ return Def.ActorFrame{
                 assert((children[name] ~= nil) == enabled, name..' enumeration')
             end
         end
-        assert(underlay:GetChild('BPMDisplay'))
+        assert(underlay:GetChild('BPMDisplay') == nil)
         assert(underlay:GetChild('SongMeter'))
     end,
 }
@@ -20130,7 +20143,20 @@ return Def.ActorFrame{
         for _, name in ipairs(wanted) do
             assert(children[name], name)
         end
+        local function bpm_leaf(underlay)
+            local owners=underlay:GetChildren()['']
+            if owners and tostring(owners):find('ActorFrame',1,true) then owners={owners} end
+            for _, owner in ipairs(owners or {}) do
+                if owner.GetChild and owner:GetChild('RatemodDisplay') then
+                    local inner=owner:GetChild('')
+                    return inner:GetChild('BPMDisplay') or inner:GetChild('DisplayP1')
+                end
+            end
+            error('native shared BPM owner missing')
+        end
         local underlay_children = children.Underlay:GetChildren()
+        local bpm=bpm_leaf(children.Underlay)
+        assert(underlay_children.BPMDisplay == nil)
         assert(underlay_children.P1Score:GetText() == "0.00%")
         assert(underlay_children.SongMeter:GetChild("SongTitle"):GetText() == "Enumeration")
         mod_actions = {
@@ -20139,7 +20165,7 @@ return Def.ActorFrame{
                 string.format(
                     "%s:%s:%s:%s:%s:%s",
                     tostring(top:GetNumChildren() >= 12),
-                    underlay_children.BPMDisplay:GetText(),
+                    bpm:GetText(),
                     tostring(children.StepsDisplayP1.GetText == nil),
                     underlay_children.P1Score:GetName(),
                     underlay_children.SongMeter:GetChild("SongTitle"):GetText(),
@@ -20161,7 +20187,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "true:150:true:P1Score:Enumeration:true"
+            "true::true:P1Score:Enumeration:true"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
     }
@@ -26021,7 +26047,7 @@ return Def.ActorFrame{
     fn theme_children_follow_screen_hierarchy() {
         assert!(!TOP_SCREEN_THEME_CHILD_NAMES.contains(&"BPMDisplay"));
         assert!(TOP_SCREEN_THEME_CHILD_NAMES.contains(&"StepsDisplayP2"));
-        assert!(UNDERLAY_THEME_CHILD_NAMES.contains(&"BPMDisplay"));
+        assert!(!UNDERLAY_THEME_CHILD_NAMES.contains(&"BPMDisplay"));
         assert!(UNDERLAY_THEME_CHILD_NAMES.contains(&"StepStatsPaneP1"));
         assert!(UNDERLAY_THEME_CHILD_NAMES.contains(&"SongMeter"));
     }

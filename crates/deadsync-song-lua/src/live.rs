@@ -74,9 +74,16 @@ fn query_trace_ready(lua: &Lua) -> bool {
     lua.app_data_ref::<QueryTrace>().is_some_and(|trace| trace.scene == scene)
 }
 
+// Native SongLuaTrace.lua wraps authored callbacks only. Reserved theme chunks
+// run normally; nested calls remain visible under an existing song command.
+pub(crate) fn observes_song_callback(callback: &Function) -> bool {
+    !callback.info().source.is_some_and(|source| source.starts_with("@theme:"))
+}
+
 // Trace logging observes the live VM without replacing callbacks or query results.
 pub(crate) fn trace_command(lua: &Lua, command: &Function, name: &str, phase: &str) {
-    if !query_trace_ready(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return; }
+    if !query_trace_ready(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace)
+        || !observes_song_callback(command) { return; }
     callback_phase(lua, phase == "begin");
     let info = command.info();
     let Some(source) = info.source else { return; };
@@ -135,8 +142,10 @@ fn trace_method(lua: &Lua, kind: &str, operation: &str, details: impl FnOnce() -
     if let (Some((Some(source), line)), Ok((beat, seconds))) =
         (source, crate::compile_song_runtime_values(lua))
     {
+        let in_song_command = lua.app_data_ref::<QueryTrace>().is_some_and(|trace| trace.commands != 0);
+        if source.starts_with("@theme:") && !in_song_command { return; }
         let scene = lua.app_data_ref::<LiveMode>().map_or(0, |mode| mode.0);
-        let phase = if lua.app_data_ref::<QueryTrace>().is_some_and(|trace| trace.commands != 0) {
+        let phase = if in_song_command {
             "callback"
         } else { "construction" };
         let mut event = serde_json::json!({"scene":scene,"kind":kind,"operation":operation,
@@ -2675,7 +2684,17 @@ return Def.ActorFrame {
 "#, |context| {
             for player in &mut context.players { player.hide_lifebar = true; }
         });
-        let scene = compiled.live_scene.take().expect("scene");
+        let mut scene = compiled.live_scene.take().expect("scene");
+        // The screen's native BPM callback is independent of the subtree under test.
+        let screen = scene.lua.globals().get::<Table>("__songlua_top_screen").unwrap();
+        let underlay = crate::actor_children(&scene.lua, &screen).unwrap().raw_get::<Table>("Underlay").unwrap();
+        for owner in crate::lua_util::actor_direct_children(&scene.lua, &underlay).unwrap() {
+            if crate::actor_children(&scene.lua, &owner).unwrap().raw_get::<Option<Table>>("RatemodDisplay").unwrap().is_some() {
+                let inner = crate::lua_util::actor_direct_children(&scene.lua, &owner).unwrap()[1].clone();
+                inner.get::<Function>("SetUpdateFunction").unwrap().call::<()>((inner, Value::Nil)).unwrap();
+            }
+        }
+        scene.advance(SongLuaLiveFrame::default()).unwrap();
         assert!(crate::lua_util::actor_tree_update_only(&scene.lua, &scene.root, "Update")
             .expect("only the current update callback counts"));
         let root: Table = scene.root.as_table().expect("session roots").raw_get(1).expect("authored root");

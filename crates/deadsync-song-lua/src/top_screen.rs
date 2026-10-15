@@ -91,7 +91,6 @@ pub const TOP_SCREEN_THEME_CHILD_NAMES: &[&str] = &[
 ];
 
 pub const UNDERLAY_THEME_CHILD_NAMES: &[&str] = &[
-    "BPMDisplay",
     "Header",
     "StepStatsPaneP1",
     "StepStatsPaneP2",
