@@ -1,0 +1,263 @@
+{
+  "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
+  "position": 385,
+  "terminal_result": "/home/parity/jobs/chart-sweep-parallel-v5-6/chart-385/result.json",
+  "native_frames": 80179,
+  "replayed_frames": 80179,
+  "full_repairs_spent": 0,
+  "mismatch_count": 1,
+  "report_sha256": "5dfc59a1356870a90e15104888252f6def7e62eaf2f02a616b31384dcb9e6b81",
+  "compressed_report_sha256": "dd7d489c96d809c9e582057fe6a2b0e84d03723161ecf1581bebae06af4ff2d8",
+  "all_existing_comparisons_retained": true,
+  "failure": "The complete original replay matches every compared event in its common prefix, but its owned trace ends eight GameState.GetSongBeat queries before the native trace. The eight queries belong to four final scene2 updates in song:/lua/default.lua line222.",
+  "last_owned_query": {
+    "scene": 2,
+    "kind": "query",
+    "operation": "GameState.GetSongBeat",
+    "source": "song:/lua/default.lua",
+    "line": 222,
+    "phase": "callback",
+    "beat": 339.6319885253906,
+    "seconds": 172.78521728515625,
+    "args": [],
+    "results": [
+      339.6319885253906
+    ]
+  },
+  "remaining_native_queries": [
+    {
+      "args": [],
+      "beat": 339.6358642578125,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 222,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0034",
+      "detail": {
+        "results": [
+          339.6358642578125
+        ]
+      },
+      "kind": "query",
+      "line": 222,
+      "operation": "GameState.GetSongBeat",
+      "phase": "callback",
+      "scene": 2,
+      "seconds": 172.7871856689453,
+      "seq": 562472,
+      "source": "song:/lua/default.lua",
+      "results": [
+        339.6358642578125
+      ]
+    },
+    {
+      "args": [],
+      "beat": 339.6358642578125,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 222,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0034",
+      "detail": {
+        "results": [
+          339.6358642578125
+        ]
+      },
+      "kind": "query",
+      "line": 222,
+      "operation": "GameState.GetSongBeat",
+      "phase": "callback",
+      "scene": 2,
+      "seconds": 172.7871856689453,
+      "seq": 562474,
+      "source": "song:/lua/default.lua",
+      "results": [
+        339.6358642578125
+      ]
+    },
+    {
+      "args": [],
+      "beat": 339.639892578125,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 222,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0034",
+      "detail": {
+        "results": [
+          339.639892578125
+        ]
+      },
+      "kind": "query",
+      "line": 222,
+      "operation": "GameState.GetSongBeat",
+      "phase": "callback",
+      "scene": 2,
+      "seconds": 172.7892303466797,
+      "seq": 562476,
+      "source": "song:/lua/default.lua",
+      "results": [
+        339.639892578125
+      ]
+    },
+    {
+      "args": [],
+      "beat": 339.639892578125,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 222,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0034",
+      "detail": {
+        "results": [
+          339.639892578125
+        ]
+      },
+      "kind": "query",
+      "line": 222,
+      "operation": "GameState.GetSongBeat",
+      "phase": "callback",
+      "scene": 2,
+      "seconds": 172.7892303466797,
+      "seq": 562478,
+      "source": "song:/lua/default.lua",
+      "results": [
+        339.639892578125
+      ]
+    },
+    {
+      "args": [],
+      "beat": 339.6438903808594,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 222,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0034",
+      "detail": {
+        "results": [
+          339.6438903808594
+        ]
+      },
+      "kind": "query",
+      "line": 222,
+      "operation": "GameState.GetSongBeat",
+      "phase": "callback",
+      "scene": 2,
+      "seconds": 172.79127502441406,
+      "seq": 562480,
+      "source": "song:/lua/default.lua",
+      "results": [
+        339.6438903808594
+      ]
+    },
+    {
+      "args": [],
+      "beat": 339.6438903808594,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 222,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0034",
+      "detail": {
+        "results": [
+          339.6438903808594
+        ]
+      },
+      "kind": "query",
+      "line": 222,
+      "operation": "GameState.GetSongBeat",
+      "phase": "callback",
+      "scene": 2,
+      "seconds": 172.79127502441406,
+      "seq": 562482,
+      "source": "song:/lua/default.lua",
+      "results": [
+        339.6438903808594
+      ]
+    },
+    {
+      "args": [],
+      "beat": 339.6476745605469,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 222,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0034",
+      "detail": {
+        "results": [
+          339.6476745605469
+        ]
+      },
+      "kind": "query",
+      "line": 222,
+      "operation": "GameState.GetSongBeat",
+      "phase": "callback",
+      "scene": 2,
+      "seconds": 172.79319763183594,
+      "seq": 562484,
+      "source": "song:/lua/default.lua",
+      "results": [
+        339.6476745605469
+      ]
+    },
+    {
+      "args": [],
+      "beat": 339.6476745605469,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 222,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0034",
+      "detail": {
+        "results": [
+          339.6476745605469
+        ]
+      },
+      "kind": "query",
+      "line": 222,
+      "operation": "GameState.GetSongBeat",
+      "phase": "callback",
+      "scene": 2,
+      "seconds": 172.79319763183594,
+      "seq": 562486,
+      "source": "song:/lua/default.lua",
+      "results": [
+        339.6476745605469
+      ]
+    }
+  ],
+  "remaining_native_update_seconds": [
+    172.7871856689453,
+    172.7892303466797,
+    172.79127502441406,
+    172.79319763183594
+  ],
+  "cause_not_yet_claimed": true,
+  "no_chart_replay_or_repair_attempt_started": true,
+  "expected_query_values_not_used_as_runtime_inputs": true,
+  "next_action": "Inspect real song-end inputs and native/owned final foreground update timing from primary sources. Preserve the complete capture and existing full acceptance predicate; do not calibrate runtime clocks from these query outputs."
+}
