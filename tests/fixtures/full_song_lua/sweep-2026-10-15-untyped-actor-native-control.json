@@ -1,0 +1,26 @@
+{
+  "input_sha256": {
+    "control.sm": "b40e61152d9fceb895182131c0d8da5eb8e7a0ee91638620dbe0762896529a38",
+    "control.wav": "71d93ef76e5ff6087d522277e83309f1d8d790e9b756324dec73d216ea57cc75",
+    "control.lua": "aa1a3d8e829ff9ff637afa5014c0407d13348ce4d581b4265cebaf0556679e90",
+    "empty.lua": "bef99ba4f23a625d47f567518d95890ec03ee1fbf129fd61549fa072418ee795"
+  },
+  "harness_sha256": "e067360d8120ee0a174b0848832856325ef62b709287fb48976441a277b26563",
+  "native_sha256": "a9d70b63dc11601634e67cb59fe1a7e7d12c57788bd525dba014f51a99d110fe",
+  "trace_sha256": "9e755b7fdcccf75bd8777e0a3870751ae04c3a97c2948c4cee2ab69583511fba",
+  "capture_exit": 0,
+  "seconds": 10.603018317982787,
+  "native_frames": 7069,
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "native_assertions_passed": true,
+  "untyped_foreground_and_child_ignore_properties_commands_children": true,
+  "constructor_side_effects_preserved": true,
+  "chart_full_repairs_spent": 0,
+  "acceptance_changed": false
+}
