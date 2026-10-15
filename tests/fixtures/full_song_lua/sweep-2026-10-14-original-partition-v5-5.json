@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "original scope partition v5-5 initial replay complete",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": null,
