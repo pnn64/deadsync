@@ -1,0 +1,26 @@
+{
+  "regression": "live_large_scene_preserves_actor_identity_and_update_order",
+  "meaningful_red_evidence": "sweep-2026-10-15-canonical-live-handles-meaningful-red.json",
+  "green_v4_constructor_completed_without_stack_error": true,
+  "green_v4_later_probe_failed": "parent Update must observe every child advanced exactly once",
+  "green_v4_windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 343.3483201999916,
+      "log_sha256": "f12f01199edd4d096aab3288119d65e4ba44abe8fb83a957f631502e179532bb",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 620 filtered out; finished in 24.79s"
+      ]
+    }
+  ],
+  "all_1175_windows_green_v4_source_pins_and_failed_log_reverified": true,
+  "v5_setup_change": "Advance a zero-delta initial frame before installing runtime tween probes on newly materialized actors. Keep identity, authored order, expected i+0.25 positions and 0.001 threshold unchanged. Add actual-value details to the existing assertion message.",
+  "exact_red_execution_prefix_through_failing_constructor_unchanged": true,
+  "existing_tests_or_acceptance_changed": false,
+  "v5_terminal_result_not_yet_claimed": true,
+  "v5_groups_per_host": 17,
+  "production_canonical_handle_fix_committed": false,
+  "native_capture_replays_spent": 0,
+  "full_chart_repairs_spent": 0
+}
