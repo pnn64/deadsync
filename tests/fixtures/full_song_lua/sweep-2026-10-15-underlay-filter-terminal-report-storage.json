@@ -1,0 +1,50 @@
+{
+  "reason": "Free duplicate raw reports already preserved losslessly as compressed terminal diagnostics; no captures, fixture archives, source files or live inputs are removed.",
+  "reports": [
+    {
+      "raw_path": "/home/parity/jobs/lake-live-draw-repair-v1/chart-272/report.json",
+      "raw_bytes": 904226865,
+      "raw_sha256": "531c3a0094e4a518a2c04236a84b0ce1440b87f3e9a5b27fab52ba7a0967ed0b",
+      "compressed_path": "/home/parity/jobs/lake-live-draw-repair-v1/chart-272/report.json.zst",
+      "compressed_bytes": 10910645,
+      "compressed_sha256": "7213a972df5c26e657fa4e5cad22995e46dd30e53b413366026417d28b131d05",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "d14f85ed414600d95ada514c183b61901b68a398c4e5e152d4b9f0c70ae44a0c",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/get-into-it-sm-frames-repair-v1/chart-210/report.json",
+      "raw_bytes": 618942385,
+      "raw_sha256": "98323b46c180c2992001aa137154b4abba018ea43742d31009c8adab7d9919ea",
+      "compressed_path": "/home/parity/jobs/get-into-it-sm-frames-repair-v1/chart-210/report.json.zst",
+      "compressed_bytes": 8359897,
+      "compressed_sha256": "9fa88c985fb0a9789109a2cbd287749cd211efc1b354ae2718e469ceea6ccdef",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "86befd0de1ec45957b65d0e5dd01e8c3c9b3ffbfc9d7c60146335079603ba8e0",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/what-if-dynamic-command-first-repair-v1/chart-472/report.json",
+      "raw_bytes": 551287376,
+      "raw_sha256": "0cc2259ca84c4fb9a7a2487b4af187f21f4c6acbc57bd23f56494681854b4b9c",
+      "compressed_path": "/home/parity/jobs/what-if-dynamic-command-first-repair-v1/chart-472/report.json.zst",
+      "compressed_bytes": 9500463,
+      "compressed_sha256": "14faf856cc3b53e66295dbdbb3ae54980868c226f1834f771c42ce5679da5752",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "c6bcc5bcc70fed0e8ab7ddac500212f008344dc022efe0e5f4b59d3f4f8fcfcb",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    }
+  ],
+  "raw_report_bytes_removed": 2074456626,
+  "free_before": 40792064,
+  "free_after": 2105688064,
+  "mawaru9_helper_hash_unchanged": true,
+  "chart_replays_or_compilers_stopped": false,
+  "acceptance_or_attempt_counts_changed": false
+}
