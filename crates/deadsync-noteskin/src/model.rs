@@ -598,6 +598,7 @@ fn itg_parse_milkshape_mesh_material_index(header: &str) -> i32 {
         .unwrap_or(0)
 }
 
+#[cfg(test)]
 #[inline]
 fn itg_contains_milkshape_ascii_signature(mut content: &[u8], signature: &[u8]) -> bool {
     while content.len() >= signature.len() {
@@ -617,6 +618,7 @@ fn itg_contains_milkshape_ascii_signature(mut content: &[u8], signature: &[u8]) 
     false
 }
 
+#[cfg(test)]
 #[inline]
 fn has_milkshape_ascii_signature(content: &str) -> bool {
     const SIGNATURE: &[u8] = b"milkshape 3d ascii";
@@ -749,10 +751,8 @@ pub fn itg_parse_milkshape_model_layers(
     materials_path: &Path,
 ) -> Option<Vec<ItgResolvedModelLayer>> {
     let content = fs::read_to_string(meshes_path).ok()?;
-    if !has_milkshape_ascii_signature(&content) {
-        return None;
-    }
-
+    // RageModelGeometry::LoadMilkshapeAscii scans Meshes after skipping comments.
+    // Exporter comments are optional; the mesh sections define the format.
     let mut lines = content
         .lines()
         .map(str::trim)
@@ -1197,6 +1197,43 @@ mod tests {
         );
         fs::remove_file(&path).unwrap();
         fs::remove_dir(&root).unwrap();
+    }
+
+    #[test]
+    fn mesh_sections_accept_optional_comment_headers() {
+        let root = temp_model_root("mesh-optional-header");
+        let path = root.join("model.txt");
+        let source = include_str!(concat!(env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-song-lua-micro/model-merged-meshes/model-merged-meshes.txt"));
+        let source = source.replace("\r\n", "\n");
+        let data = noteskin_itg::NoteskinData { name:"fixture".into(), overrides:vec![],
+            metrics:noteskin_itg::IniData::default(), search_dirs:vec![root.clone()] };
+        fs::write(&path, &source).unwrap();
+        let canonical = itg_parse_milkshape_model_layers(&data, &path, &path).unwrap();
+        assert_eq!(canonical.len(), 2);
+        assert_eq!(canonical.iter().map(|layer| layer.mesh.vertices.len()).collect::<Vec<_>>(), [6,3]);
+        assert_eq!(canonical[0].mesh.bounds, [0.0,0.0,0.0,40.0,20.0,5.0]);
+        assert_eq!(canonical[0].mesh.vertices[1].pos, [10.0,0.0,0.0]);
+        assert_eq!(canonical[0].mesh.vertices[1].uv, [1.0,0.0]);
+        assert_eq!(canonical[0].mesh.vertices[1].normal, [0.0,0.0,1.0]);
+        assert!(canonical[0].mesh.material.is_some());
+        assert_eq!(canonical[0].bone_index, None);
+        let body = source.strip_prefix("// MilkShape 3D ASCII\n").unwrap();
+        for header in ["", "// TPose model version\n// Custom rig export\n",
+            "// Generated mesh data\nFrames: 30\nFrame: 1\n"] {
+            fs::write(&path, format!("{header}{body}")).unwrap();
+            let layers = itg_parse_milkshape_model_layers(&data, &path, &path)
+                .expect("native mesh sections do not require a signature comment");
+            assert_eq!(format!("{layers:?}"), format!("{canonical:?}"),
+                "the complete geometry, material, texture and bone data must survive header changes");
+        }
+        for malformed in ["// Custom header\nMaterials: 0\nBones: 0\n",
+            "Meshes: 1\n\"broken\" 0 0\n3\n"] {
+            fs::write(&path, malformed).unwrap();
+            assert!(itg_parse_milkshape_model_layers(&data, &path, &path).is_none());
+        }
+        fs::remove_file(path).unwrap();
+        fs::remove_dir(root).unwrap();
     }
 
     #[test]

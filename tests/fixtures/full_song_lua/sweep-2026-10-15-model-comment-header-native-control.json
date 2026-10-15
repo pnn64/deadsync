@@ -1,0 +1,112 @@
+{
+  "input_sha256": {
+    "control.wav": "71d93ef76e5ff6087d522277e83309f1d8d790e9b756324dec73d216ea57cc75",
+    "custom.txt": "5ec8db81b87b5b462505b517b90c370cf4ab481b2f821c865a27fdaa22e378d7",
+    "control.ssc": "bf49c91334d3690c8385a15f7be058a8d7ea40cd6549b2fab28f891b72e8d878",
+    "control.lua": "6400cea52cfb00770bfa0130018abf15623d970b8b2e16a298ad8538812051da",
+    "canonical.txt": "058241d67d49b88c5314c06b2c5c37b03ab9114e6552c9bea2467807627bb0c6",
+    "bare.txt": "0492aa9d537f467c1dbe6cc25d5b5fc9fddf92bf64dc5e3fbc39d855663504ef"
+  },
+  "harness_sha256": "e067360d8120ee0a174b0848832856325ef62b709287fb48976441a277b26563",
+  "native_sha256": "a9d70b63dc11601634e67cb59fe1a7e7d12c57788bd525dba014f51a99d110fe",
+  "trace_sha256": "cac76f45414f875ec036033a772bb472557befc04642ab3269a03edb8568962f",
+  "capture_exit": 0,
+  "seconds": 18.847456482995767,
+  "native_frames": 2443,
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "events": [
+    {
+      "args": [
+        "HeaderModelLoaded",
+        {
+          "animation": "",
+          "name": "canonical",
+          "states": 1
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 6,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "kind": "message",
+      "line": 6,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 8,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "HeaderModelLoaded",
+        {
+          "animation": "",
+          "name": "bare",
+          "states": 1
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 6,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0003",
+      "kind": "message",
+      "line": 6,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 14,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "HeaderModelLoaded",
+        {
+          "animation": "",
+          "name": "custom",
+          "states": 1
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 6,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0004",
+      "kind": "message",
+      "line": 6,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 20,
+      "source": "song:/control.lua"
+    }
+  ],
+  "native_header_variants_loaded": 3,
+  "same_native_model_properties_across_headers": true,
+  "identical_geometry_material_bone_body_sha256_lf": "0492aa9d537f467c1dbe6cc25d5b5fc9fddf92bf64dc5e3fbc39d855663504ef",
+  "geometry_fixture": "model-merged-meshes/model-merged-meshes.txt",
+  "declared_meshes_per_model": 2,
+  "full_geometry_loader_executed_by_Model_LoadPieces": true,
+  "owned_regression_checks_real_vertices_normals_uvs_bounds_materials_and_bone_bindings": true,
+  "chart_full_repairs_spent": 0,
+  "acceptance_changed": false
+}
