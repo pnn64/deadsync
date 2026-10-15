@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T21:57:19Z",
-  "previous_goal_turn": "All501 original simfiles have terminal initial outcomes: 398 passed,103 pending,0 unprocessed. Mawaru6 final2 passed all121856 frames with zero errors/mismatches, replay exit0 and accepted archive87856596,23,523,388 bytes; fixture6e5eff66a and local decompression verificationa0c97b94c are committed. No third replay or reopening is allowed. Mawaru9 first1 remains terminal; collect the actual result. HOPE PercentageDisplay inheritance fix is committed and all four groups passed on both hosts;85 live controls,35 replay controls,1175 raw/normalized source pins, identical regression source, asset/log/binary hashes verified. Latest retained entry has 1688 frames,0 callback errors and20490 mismatches; full repairs spent0. Every original simfile byte was rehashed unchanged; acceptance remains unchanged, coverage is separate, passing originals stay closed and oversized fixtures remain ignored. Goal remains active. Current concrete HOPE issue: pending: inspect actual retained-entry result after initial timing-window mask repair. LyricDisplay construction fix aa22e9e7029b7d57fbe5aaa9804ab362cd8c6872 is committed after meaningful red on both hosts and all four validation groups on both hosts, including86 live controls and35 replay controls; all1175 source pins, identical regression source, asset/log/binary hashes verified. Ordered text layers bind inherited Miso font and native lyric/position commands; no expected trace values enter the implementation. Player AttackDisplay inventory fix 7efd988fdcc73bb3601b9b60981e5e89bbe0d21c is committed after meaningful red on both hosts and all four validation groups on both hosts, including87 live controls and35 replay controls; all1175 source pins, identical regression source, asset/log/binary hashes verified. Native single/double inventory and child order are strict, and all original Rust hold-feedback timing/player-isolation assertions are retained byte-identical. Full-song acceptance is unchanged. NoteField Board bitmap fix b5594d9bb0e4f66e34f32e22cca38a86fd7db574 is committed after meaningful red on both hosts and all four validation groups on both hosts, including88 live controls and35 replay controls; all1175 source pins, identical nonempty regression source, native bitmap, log and binary hashes verified. Fresh changed-source timestamps were enforced on both hosts. Column vectors and full-song acceptance remain unchanged. Mawaru6 closed-pass storage freed1,108,094,592 unique raw bytes after compressed fixture/report and uncompressed hashes were verified; distinct diagnostic bytes were preserved and no replay was reopened. Combo font resource selection fix faa925c43a4b959114ffb1eb97d82b830d5983e7 passed a meaningful fontless-Combo red on both hosts, then all five validation groups on both hosts (target,89 live controls, asset helper,35 replay controls and helper build). All1175 source pins, identical red/green regression source, asset/log/binary hashes and fresh timestamps were verified. Regression exercises two players with empty and valid font inventories. Retained HOPE entry is diagnostic only; no full repair or acceptance was claimed. Out transition direct-Quad fix 461434bacf9449ddba8a8e3a9dc980f8e05ef3c1 passed a meaningful extra-Out-frame red on both hosts, then all four validation groups on both hosts (target,90 live controls,35 replay controls and helper build). All1175 source pins, identical red/green regression source, asset/log/binary hashes and fresh timestamps were verified. Regression exercises direct Quad ownership, full-screen transparent Init, native Off, frozen waiting state, fade interpolation and completion. Retained HOPE entry is diagnostic only; no full repair or acceptance was claimed. In bitmap and native visual construction fix 89441b1030309f76fba0b5098df2c364af5a7525 passed a meaningful missing-In-texture red on both hosts, then all six validation groups on both hosts (target,91 live controls,2 theme-preference controls,1 theme-option-row control,35 replay controls and helper build). All1175 source pins, unchanged missing-bitmap red prefix plus the exact documented native zoom-getter correction and added rendered-pose checks, asset/log/binary hashes and fresh timestamps were verified. Regression exercises all three In sprites with real native pixels, bitmap identity, logical dimensions, initial poses and native queue durations. All23 added bitmap assets match the frozen native installation byte for byte; default Technique selection follows fresh staging and primary theme sources. Retained HOPE entry is diagnostic only; no full repair or acceptance was claimed. Underlay BackgroundFilter input and Quad fix b0a9976b938ef94c390b1f9db8e0cca479eb599d passed a meaningful missing-filter red with initial-input plumbing on both hosts, then all five validation groups on both hosts (target,92 live controls,1 production profile-input control,36 replay controls and helper build). All1175 source pins, identical red/green regression source, asset/log/binary hashes and fresh timestamps were verified. Regression exercises actual selected filter geometry/alpha, Off, single/double/two-player/routine selection. Existing comparison logic and prior replay controls are byte-identical; only the initial input reader and one new input control changed. The remaining full Underlay inventory still needs source-based construction. Retained HOPE entry is diagnostic only; no full repair or acceptance was claimed. Underlay DifficultyMeter fix 194a47d0bce78275d98fd954f38fbb09004ec366 passed a meaningful missing-owner red on both hosts and all four qualification groups on both hosts (target,93 live controls,36 replay controls and helper build). All1175 source pins, native bitmap assets, logs and binary hashes were verified. Regression source differs only by the documented new-test child normalization, explicit chart-selection input and existing filter-test single-actor normalization corrections; all runtime inventory and behavior assertions remain. The actual selected Steps supply meter/color, with native Init/Begin/CurrentSongChanged handlers preserved. LifeMeter and BPM ownership still require source-based construction; retained entry is diagnostic only and no full repair or acceptance is claimed. Standard LifeMeter fix 1d24d8cc2001d05f2350d3b2b88d161d818ea3fb passed a meaningful missing-meter red on both hosts with initial profile input plumbing, then all five qualification groups on both hosts (target,94 live controls,1 production profile-input control,37 replay controls and helper build). All1175 source pins,25 native bitmap assets, logs and binary hashes were verified. The new regression is identical red/green; the only regression-function differences are explicit HideLifebar inputs isolating density-graph and single-callback fixtures, whose assertions remain unchanged. Pre-song engine messages dispatch to native theme listeners before song startup recording; the command observer starts after theme construction in each loaded scene. The actual selected Standard meter retains its four children, native swoosh pixels, native initial LifeMeter load message and live life/health handlers. Full Underlay parity still needs remaining source-based repairs; retained entry is diagnostic only and no full repair or acceptance is claimed. Standard LifeMeter child-table construction fix 206677f0f46938082a7605b76db4dd787e79733e passed a meaningful native traversal red on both hosts and all four qualification groups on both hosts (target,95 live controls,37 replay controls and helper build). All1175 source pins,25 native bitmap assets, logs and binary hashes were verified; the entire red/green regression source is identical. Both human-player meters retain their actual Standard.lua subactor sequence and use it directly for native GetChildren insertion history, identity, duplicate grouping and fresh snapshots. All acceptance comparisons remain unchanged. The retained HOPE entry is diagnostic only; no full repair or fixture acceptance is claimed. Shared BPM hierarchy fix 2e561959d28baded6219078922c8fd38012aaaf5 passed meaningful missing-owner red on both hosts and all nine qualification groups on both hosts (target,96 live controls,1 profile-input control,39 replay controls,4 legacy hierarchy controls and helper build). All1175 source pins,25 native bitmap assets, logs and binary hashes were verified. The entire new BPM runtime regression is identical red/green. The original native Lua hierarchy, selection and update functions use real selected Steps timing, player BPS and mutable SongOptions music rate. Four legacy tests now follow native named lookup levels; their unrelated assertions and all37 original native replay controls remain unchanged. Autonomous theme observation follows the primary native probe while nested song-triggered calls remain observed. Retained HOPE entry is diagnostic only; no full repair or acceptance is claimed. Underlay Header Quad fix 0b3b12b7b6fb83b93b1661c4395b8d2151253cba passed meaningful unloaded-Sprite red on both hosts and all four qualification groups on both hosts (target,97 live controls,39 replay controls and helper build). All1175 source pins,25 native bitmap assets, logs and binary hashes were verified. The entire live regression source is identical red/green and all96 prior live tests are byte identical to the qualified shared BPM baseline. Header owns its real native Init function, existing Quad default texture, exact parent, color and screen geometry. Retained HOPE entry is diagnostic only; no full repair or acceptance is claimed. Steps density prerequisite fix b43bcea765536e63a9f12ce220c1226023bfe19c passed meaningful missing-cache red and all five qualification groups on both hosts (target, native signature-boundary control,98 live controls,39 replay controls and helper build). The unchanged theme-support helper and full rules suite also passed on both hosts (120 passed,2 pre-existing ignored). All1175 raw Linux and normalized cross-host source pins,25 assets, logs and helper hashes were verified. All prior97 live tests, all39 replay controls and the full acceptance source remain byte identical. The actual StepStatistics hierarchy is still pending at retained native sequence653; no redundant entry or full repair was run for this prerequisite. Mawaru9 is now deferred at the explicit user request: verified PID892716 was terminated at logged frame23807/131493; attempt1 was started but incomplete, no fixture acceptance. Capture and logs are preserved and no restart is authorized until the user resumes this chart. Original native StepStatistics actor fix 135dcdfd107e0b2cf527c010b827593139433102 passed a meaningful missing-pane red on both hosts and all six qualification groups on both hosts: target,99 live controls,1 production-input control,40 replay controls,1 legacy enabled-player control and helper build. All1175 source pins,34 exact native assets, log and helper hashes were verified. All98 prior live regressions and all new post-update assertions are retained. Native sources supply the complete pane hierarchy, resources, real radar/density data and Init/Begin/On/song-change lifecycle through existing startup queues. Failed constructor/color/timer-fixture/judgment-fixture/numeric-filter/non-live-queue checks and linker storage recovery are explicitly preserved. No full HOPE repair or fixture acceptance was claimed by this entry diagnostic. Native AMV texture/default/resource/observer fix 22e67e7f2a9085661a52bfd8edbdd7762ee966fd passed meaningful missing-default-texture red on both hosts and all four qualification groups on both hosts (target,41 replay controls,99 live controls and helper build). All1175 raw Linux and normalized cross-platform source pins,34 exact native assets, log and helper hashes were verified. All original40 replay controls and99 live controls are unchanged, and the new runtime regression is identical red/green. Native AMV constructors use the real1x1 blank texture; valid SetTexture retains the actual RageTexture handle and its allocation metadata; the owned observer no longer labels AMV getters as Sprite calls. Initial invalid new-test nil-setter assumptions, raw-versus-normalized metadata recovery and actual valid rebinding failure are preserved. The retained entry remains diagnostic; no new full HOPE repair or fixture acceptance was claimed. Declared song banner input/runtime fix 520e261907a0e57d075e2fe932834620f91d7a7c passed meaningful ignored-declared-path red and all five qualification groups on both hosts (target,41 replay controls,100 live controls,1 production metadata-forwarding control and helper build). All1175 raw Linux and normalized cross-platform source pins,34 exact native assets, logs and helper hashes were verified. The strengthened new regression is identical red/green; all original99 live and41 replay controls are unchanged. Actual SongData.banner_path reaches Song APIs, explicit metadata wins over a conventional decoy, HasBanner checks the file and native Banner.LoadFromSong loads actual selected/fallback resources and resets scrolling. Harness native-media archive fix5d70aea passed all three groups on both hosts. Private HOPE candidate adds only exact original182413-byte bannrt.png and manifest metadata while all29 prior payloads, native trace and simfile bytes are unchanged. No full HOPE repair or fixture acceptance is claimed by the entry diagnostic. Retained declared-banner entry completed1688 frames with0 Lua errors and20499 mismatches. Banner failure atseq727 is resolved; first remaining actual event atseq773 is TapNoteJudgments.GetNumChildren native12/owned10. Captured initial TimingWindows are alltrue, but owned SL hardcodes Casual true,true,true,false,false; exact original Lua omits W4/W5 labels. Native SL_Init,SL-Helpers and TapNoteJudgments hashes match local primary sources. Source cause recorded; no full HOPE repair spent, no fixture accepted. Mawaru9 remains stopped and deferred, with capture/logs preserved; only inactive duplicate extraction was removed after all415 payload files matched its preserved compressed capture and two process-reference checks were clear. Initial timing-window label fix 73562663c1fda754b7cb34c4dd4ccdb849dbfdcd passed meaningful original-runtime ignored-mask red and all six qualification groups on both hosts: target,42 replay controls,101 live controls,production profile-forwarding control,legacy namespace control and helper build. All1175 source pins,34 assets,logs and helper hashes verified. New runtime/input assertions identical red/green, prior live/replay assertions retained; two old test fixtures explicitly keep their original Casual mask. Production profile enabled windows and captured initial theme masks reach SL.ActiveModifiers independently of engine timing bits; actual original TapNoteJudgments creates label actors. Full acceptance source unchanged. Retained HOPE entry completed1688 frames with0 errors and20490 mismatches; native seq773 resolved=True. No full HOPE repair spent or fixture acceptance claimed. Mawaru9 remains stopped and deferred. Timing-window seq773 is resolved in retained entry; first remaining actual seq965 is native Danger Quad RageTexture versus owned unloaded Sprite nil, with original physical Danger.lua hash matching local source. No full HOPE repair spent. Rights2 Save Your Tears SM first1 full repair started on unchanged original80179-frame capture with qualified helper73562663c after confirming the original helper predates pack-sync/music-fade/Out lifecycle fixes. Original payloads,simfile,trace and uncompressed candidate hash verified; comparisons unchanged. Actual process inspected; only one bounded full attempt started. Cloud99 retained entry on qualified helper73562663c passes2496 frames with0 errors/0 mismatches; prior first Underlay.visible tween-time failure is gone without changing the original capture or comparisons. First1 full repair now runs on the unchanged original6623-frame capture; budget remains at most2 and no acceptance claim precedes the full result. Rights2 Save Your Tears SM full first1 completed pending; frames=80179/80179, mismatches=18. Fixture accepted only by unchanged full replay checks, then packed and decompressed-byte verified if passed. No chart restarted or new acceptance gate added.",
+  "updated_utc": "2026-10-15T22:13:37Z",
+  "previous_goal_turn": "All501 original simfiles have terminal initial outcomes: 399 passed,102 pending,0 unprocessed. Mawaru6 final2 passed all121856 frames with zero errors/mismatches, replay exit0 and accepted archive87856596,23,523,388 bytes; fixture6e5eff66a and local decompression verificationa0c97b94c are committed. No third replay or reopening is allowed. Mawaru9 first1 remains terminal; collect the actual result. HOPE PercentageDisplay inheritance fix is committed and all four groups passed on both hosts;85 live controls,35 replay controls,1175 raw/normalized source pins, identical regression source, asset/log/binary hashes verified. Latest retained entry has 1688 frames,0 callback errors and20490 mismatches; full repairs spent0. Every original simfile byte was rehashed unchanged; acceptance remains unchanged, coverage is separate, passing originals stay closed and oversized fixtures remain ignored. Goal remains active. Current concrete HOPE issue: pending: inspect actual retained-entry result after initial timing-window mask repair. LyricDisplay construction fix aa22e9e7029b7d57fbe5aaa9804ab362cd8c6872 is committed after meaningful red on both hosts and all four validation groups on both hosts, including86 live controls and35 replay controls; all1175 source pins, identical regression source, asset/log/binary hashes verified. Ordered text layers bind inherited Miso font and native lyric/position commands; no expected trace values enter the implementation. Player AttackDisplay inventory fix 7efd988fdcc73bb3601b9b60981e5e89bbe0d21c is committed after meaningful red on both hosts and all four validation groups on both hosts, including87 live controls and35 replay controls; all1175 source pins, identical regression source, asset/log/binary hashes verified. Native single/double inventory and child order are strict, and all original Rust hold-feedback timing/player-isolation assertions are retained byte-identical. Full-song acceptance is unchanged. NoteField Board bitmap fix b5594d9bb0e4f66e34f32e22cca38a86fd7db574 is committed after meaningful red on both hosts and all four validation groups on both hosts, including88 live controls and35 replay controls; all1175 source pins, identical nonempty regression source, native bitmap, log and binary hashes verified. Fresh changed-source timestamps were enforced on both hosts. Column vectors and full-song acceptance remain unchanged. Mawaru6 closed-pass storage freed1,108,094,592 unique raw bytes after compressed fixture/report and uncompressed hashes were verified; distinct diagnostic bytes were preserved and no replay was reopened. Combo font resource selection fix faa925c43a4b959114ffb1eb97d82b830d5983e7 passed a meaningful fontless-Combo red on both hosts, then all five validation groups on both hosts (target,89 live controls, asset helper,35 replay controls and helper build). All1175 source pins, identical red/green regression source, asset/log/binary hashes and fresh timestamps were verified. Regression exercises two players with empty and valid font inventories. Retained HOPE entry is diagnostic only; no full repair or acceptance was claimed. Out transition direct-Quad fix 461434bacf9449ddba8a8e3a9dc980f8e05ef3c1 passed a meaningful extra-Out-frame red on both hosts, then all four validation groups on both hosts (target,90 live controls,35 replay controls and helper build). All1175 source pins, identical red/green regression source, asset/log/binary hashes and fresh timestamps were verified. Regression exercises direct Quad ownership, full-screen transparent Init, native Off, frozen waiting state, fade interpolation and completion. Retained HOPE entry is diagnostic only; no full repair or acceptance was claimed. In bitmap and native visual construction fix 89441b1030309f76fba0b5098df2c364af5a7525 passed a meaningful missing-In-texture red on both hosts, then all six validation groups on both hosts (target,91 live controls,2 theme-preference controls,1 theme-option-row control,35 replay controls and helper build). All1175 source pins, unchanged missing-bitmap red prefix plus the exact documented native zoom-getter correction and added rendered-pose checks, asset/log/binary hashes and fresh timestamps were verified. Regression exercises all three In sprites with real native pixels, bitmap identity, logical dimensions, initial poses and native queue durations. All23 added bitmap assets match the frozen native installation byte for byte; default Technique selection follows fresh staging and primary theme sources. Retained HOPE entry is diagnostic only; no full repair or acceptance was claimed. Underlay BackgroundFilter input and Quad fix b0a9976b938ef94c390b1f9db8e0cca479eb599d passed a meaningful missing-filter red with initial-input plumbing on both hosts, then all five validation groups on both hosts (target,92 live controls,1 production profile-input control,36 replay controls and helper build). All1175 source pins, identical red/green regression source, asset/log/binary hashes and fresh timestamps were verified. Regression exercises actual selected filter geometry/alpha, Off, single/double/two-player/routine selection. Existing comparison logic and prior replay controls are byte-identical; only the initial input reader and one new input control changed. The remaining full Underlay inventory still needs source-based construction. Retained HOPE entry is diagnostic only; no full repair or acceptance was claimed. Underlay DifficultyMeter fix 194a47d0bce78275d98fd954f38fbb09004ec366 passed a meaningful missing-owner red on both hosts and all four qualification groups on both hosts (target,93 live controls,36 replay controls and helper build). All1175 source pins, native bitmap assets, logs and binary hashes were verified. Regression source differs only by the documented new-test child normalization, explicit chart-selection input and existing filter-test single-actor normalization corrections; all runtime inventory and behavior assertions remain. The actual selected Steps supply meter/color, with native Init/Begin/CurrentSongChanged handlers preserved. LifeMeter and BPM ownership still require source-based construction; retained entry is diagnostic only and no full repair or acceptance is claimed. Standard LifeMeter fix 1d24d8cc2001d05f2350d3b2b88d161d818ea3fb passed a meaningful missing-meter red on both hosts with initial profile input plumbing, then all five qualification groups on both hosts (target,94 live controls,1 production profile-input control,37 replay controls and helper build). All1175 source pins,25 native bitmap assets, logs and binary hashes were verified. The new regression is identical red/green; the only regression-function differences are explicit HideLifebar inputs isolating density-graph and single-callback fixtures, whose assertions remain unchanged. Pre-song engine messages dispatch to native theme listeners before song startup recording; the command observer starts after theme construction in each loaded scene. The actual selected Standard meter retains its four children, native swoosh pixels, native initial LifeMeter load message and live life/health handlers. Full Underlay parity still needs remaining source-based repairs; retained entry is diagnostic only and no full repair or acceptance is claimed. Standard LifeMeter child-table construction fix 206677f0f46938082a7605b76db4dd787e79733e passed a meaningful native traversal red on both hosts and all four qualification groups on both hosts (target,95 live controls,37 replay controls and helper build). All1175 source pins,25 native bitmap assets, logs and binary hashes were verified; the entire red/green regression source is identical. Both human-player meters retain their actual Standard.lua subactor sequence and use it directly for native GetChildren insertion history, identity, duplicate grouping and fresh snapshots. All acceptance comparisons remain unchanged. The retained HOPE entry is diagnostic only; no full repair or fixture acceptance is claimed. Shared BPM hierarchy fix 2e561959d28baded6219078922c8fd38012aaaf5 passed meaningful missing-owner red on both hosts and all nine qualification groups on both hosts (target,96 live controls,1 profile-input control,39 replay controls,4 legacy hierarchy controls and helper build). All1175 source pins,25 native bitmap assets, logs and binary hashes were verified. The entire new BPM runtime regression is identical red/green. The original native Lua hierarchy, selection and update functions use real selected Steps timing, player BPS and mutable SongOptions music rate. Four legacy tests now follow native named lookup levels; their unrelated assertions and all37 original native replay controls remain unchanged. Autonomous theme observation follows the primary native probe while nested song-triggered calls remain observed. Retained HOPE entry is diagnostic only; no full repair or acceptance is claimed. Underlay Header Quad fix 0b3b12b7b6fb83b93b1661c4395b8d2151253cba passed meaningful unloaded-Sprite red on both hosts and all four qualification groups on both hosts (target,97 live controls,39 replay controls and helper build). All1175 source pins,25 native bitmap assets, logs and binary hashes were verified. The entire live regression source is identical red/green and all96 prior live tests are byte identical to the qualified shared BPM baseline. Header owns its real native Init function, existing Quad default texture, exact parent, color and screen geometry. Retained HOPE entry is diagnostic only; no full repair or acceptance is claimed. Steps density prerequisite fix b43bcea765536e63a9f12ce220c1226023bfe19c passed meaningful missing-cache red and all five qualification groups on both hosts (target, native signature-boundary control,98 live controls,39 replay controls and helper build). The unchanged theme-support helper and full rules suite also passed on both hosts (120 passed,2 pre-existing ignored). All1175 raw Linux and normalized cross-host source pins,25 assets, logs and helper hashes were verified. All prior97 live tests, all39 replay controls and the full acceptance source remain byte identical. The actual StepStatistics hierarchy is still pending at retained native sequence653; no redundant entry or full repair was run for this prerequisite. Mawaru9 is now deferred at the explicit user request: verified PID892716 was terminated at logged frame23807/131493; attempt1 was started but incomplete, no fixture acceptance. Capture and logs are preserved and no restart is authorized until the user resumes this chart. Original native StepStatistics actor fix 135dcdfd107e0b2cf527c010b827593139433102 passed a meaningful missing-pane red on both hosts and all six qualification groups on both hosts: target,99 live controls,1 production-input control,40 replay controls,1 legacy enabled-player control and helper build. All1175 source pins,34 exact native assets, log and helper hashes were verified. All98 prior live regressions and all new post-update assertions are retained. Native sources supply the complete pane hierarchy, resources, real radar/density data and Init/Begin/On/song-change lifecycle through existing startup queues. Failed constructor/color/timer-fixture/judgment-fixture/numeric-filter/non-live-queue checks and linker storage recovery are explicitly preserved. No full HOPE repair or fixture acceptance was claimed by this entry diagnostic. Native AMV texture/default/resource/observer fix 22e67e7f2a9085661a52bfd8edbdd7762ee966fd passed meaningful missing-default-texture red on both hosts and all four qualification groups on both hosts (target,41 replay controls,99 live controls and helper build). All1175 raw Linux and normalized cross-platform source pins,34 exact native assets, log and helper hashes were verified. All original40 replay controls and99 live controls are unchanged, and the new runtime regression is identical red/green. Native AMV constructors use the real1x1 blank texture; valid SetTexture retains the actual RageTexture handle and its allocation metadata; the owned observer no longer labels AMV getters as Sprite calls. Initial invalid new-test nil-setter assumptions, raw-versus-normalized metadata recovery and actual valid rebinding failure are preserved. The retained entry remains diagnostic; no new full HOPE repair or fixture acceptance was claimed. Declared song banner input/runtime fix 520e261907a0e57d075e2fe932834620f91d7a7c passed meaningful ignored-declared-path red and all five qualification groups on both hosts (target,41 replay controls,100 live controls,1 production metadata-forwarding control and helper build). All1175 raw Linux and normalized cross-platform source pins,34 exact native assets, logs and helper hashes were verified. The strengthened new regression is identical red/green; all original99 live and41 replay controls are unchanged. Actual SongData.banner_path reaches Song APIs, explicit metadata wins over a conventional decoy, HasBanner checks the file and native Banner.LoadFromSong loads actual selected/fallback resources and resets scrolling. Harness native-media archive fix5d70aea passed all three groups on both hosts. Private HOPE candidate adds only exact original182413-byte bannrt.png and manifest metadata while all29 prior payloads, native trace and simfile bytes are unchanged. No full HOPE repair or fixture acceptance is claimed by the entry diagnostic. Retained declared-banner entry completed1688 frames with0 Lua errors and20499 mismatches. Banner failure atseq727 is resolved; first remaining actual event atseq773 is TapNoteJudgments.GetNumChildren native12/owned10. Captured initial TimingWindows are alltrue, but owned SL hardcodes Casual true,true,true,false,false; exact original Lua omits W4/W5 labels. Native SL_Init,SL-Helpers and TapNoteJudgments hashes match local primary sources. Source cause recorded; no full HOPE repair spent, no fixture accepted. Mawaru9 remains stopped and deferred, with capture/logs preserved; only inactive duplicate extraction was removed after all415 payload files matched its preserved compressed capture and two process-reference checks were clear. Initial timing-window label fix 73562663c1fda754b7cb34c4dd4ccdb849dbfdcd passed meaningful original-runtime ignored-mask red and all six qualification groups on both hosts: target,42 replay controls,101 live controls,production profile-forwarding control,legacy namespace control and helper build. All1175 source pins,34 assets,logs and helper hashes verified. New runtime/input assertions identical red/green, prior live/replay assertions retained; two old test fixtures explicitly keep their original Casual mask. Production profile enabled windows and captured initial theme masks reach SL.ActiveModifiers independently of engine timing bits; actual original TapNoteJudgments creates label actors. Full acceptance source unchanged. Retained HOPE entry completed1688 frames with0 errors and20490 mismatches; native seq773 resolved=True. No full HOPE repair spent or fixture acceptance claimed. Mawaru9 remains stopped and deferred. Timing-window seq773 is resolved in retained entry; first remaining actual seq965 is native Danger Quad RageTexture versus owned unloaded Sprite nil, with original physical Danger.lua hash matching local source. No full HOPE repair spent. Rights2 Save Your Tears SM first1 full repair started on unchanged original80179-frame capture with qualified helper73562663c after confirming the original helper predates pack-sync/music-fade/Out lifecycle fixes. Original payloads,simfile,trace and uncompressed candidate hash verified; comparisons unchanged. Actual process inspected; only one bounded full attempt started. Cloud99 retained entry on qualified helper73562663c passes2496 frames with0 errors/0 mismatches; prior first Underlay.visible tween-time failure is gone without changing the original capture or comparisons. First1 full repair now runs on the unchanged original6623-frame capture; budget remains at most2 and no acceptance claim precedes the full result. Rights2 Save Your Tears SM full first1 completed pending; frames=80179/80179, mismatches=18. Fixture accepted only by unchanged full replay checks, then packed and decompressed-byte verified if passed. No chart restarted or new acceptance gate added. Cloud99 full first1 completed passed; frames=6623/6623, mismatches=0. Fixture accepted only by unchanged full replay checks, then packed and decompressed-byte verified if passed. No chart restarted or new acceptance gate added.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "d6e54b05422a9c0f1b8d98702ca434a52c34c172",
+      "deadsync": "0be1dc0cc933771b4a6f496a910a6672866f667f",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -5030,15 +5030,7 @@
       "full_replay_repeated": false,
       "coverage_observations_separate": true
     },
-    "live_full_repairs_remaining": [
-      {
-        "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
-        "attempt": 1,
-        "pid": 1876495,
-        "actual_command_matches_record": true,
-        "restarted": false
-      }
-    ],
+    "live_full_repairs_remaining": [],
     "canonical_live_actor_handles": {
       "fix_commit": "dca9ac1926ac34426a31964e94d1ca37692c0065",
       "selection": "tests/fixtures/full_song_lua/sweep-2026-10-15-canonical-live-actor-handles-selection.json",
@@ -5684,7 +5676,7 @@
         ],
         "report_sha256": "e81ce27d074e87b2d91553bc7ef98f8837779a34405209b0c58362777aafdf5b"
       },
-      "checked_utc": "2026-10-15T21:57:23.410063+00:00",
+      "checked_utc": "2026-10-15T22:13:42.177224+00:00",
       "status": "pending",
       "full_repairs_completed": 1
     },
@@ -5698,32 +5690,93 @@
       "maximum_full_repairs_per_sweep": 2,
       "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
       "attempt_started": 1,
-      "pid": 1876495,
-      "actual_command": [
-        "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
-        "--archive",
-        "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e.tar",
-        "--report",
-        "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/report.json"
-      ],
+      "pid": 2028009,
+      "actual_command": [],
       "recorded_command": [
-        "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
-        "--archive",
+        "/home/parity/jobs/listed-lua-schema-build-v1/harness",
+        "song-lua-pack",
         "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e.tar",
         "--report",
-        "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/report.json"
+        "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/report.json",
+        "--out",
+        "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/accepted"
       ],
-      "actual_command_matches_record": true,
-      "running": true,
-      "phase": "replay",
-      "result_exists": false,
-      "terminal_result": null,
-      "checked_utc": "2026-10-15T21:57:23.811965+00:00"
+      "actual_command_matches_record": false,
+      "running": false,
+      "phase": "pack",
+      "result_exists": true,
+      "terminal_result": {
+        "position": 150,
+        "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
+        "status": "passed",
+        "repair_attempts": 1,
+        "candidate_sha256": "4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e",
+        "trace_sha256": "d055eface40dddff507772568170c0fdd16f60bcb4bcef9b5e0ee34230a6977f",
+        "simfile_sha256": "162ebaf65a1a39818e74a10cea6f2e2a49b0af07b2dfce1224de0bd85395a9e5",
+        "native_capture_reused": true,
+        "all_candidate_manifest_members_byte_verified": true,
+        "binary_sha256": "6a2dfe1c2e802c83bf102deac4f4476c86ab3ba93652f9a8817f99420b844162",
+        "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+        "build_proof": "/home/parity/jobs/timing-window-labels-linux-green-v1/proof.json",
+        "fix_commit": "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd",
+        "previous_failure": null,
+        "previous_errors": [],
+        "qualified_existing_underlay_fixes": [
+          "135dcdfd107e0b2cf527c010b827593139433102",
+          "2e561959d28baded6219078922c8fd38012aaaf5",
+          "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd"
+        ],
+        "no_query_outputs_used_as_inputs": true,
+        "original_full_failure": "22 command query mismatches; first Underlay.visible call has native tween time10.878245 versus owned0; qualified current entry now passes cleanly",
+        "full_acceptance_criteria_unchanged": true,
+        "capture_repeated": false,
+        "mawaru9_remains_deferred": true,
+        "replay_exit": 0,
+        "replay_seconds": 1193.6480198439676,
+        "native_frames": 6623,
+        "replayed_frames": 6623,
+        "compared_stage_fields": 2233,
+        "pending_coverage": [
+          "uncompared song operations: Actor.AddWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.addy, Actor.basezoomx, Actor.basezoomy, Actor.blend, Actor.fadebottom, Actor.fadetop, Actor.horizalign, Actor.rotationx, Actor.rotationy, Actor.shadowlength, Actor.skewx, Actor.vertalign, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, GameState.GetSongPosition, PlayerOptions.FromString, Sprite.texcoordvelocity",
+          "native drawable state/resources: ActorProxy, BitmapText, Quad, Sprite"
+        ],
+        "archive_accepted": true,
+        "errors": [],
+        "mismatch_count": 0,
+        "concrete_failures": [],
+        "report_sha256": "6f6c8765b68c07528bc918c813101df62075a8a105c25a90bb67fcf3dd476866",
+        "archive": "1bcc1a4ca0385bafaf8cfb255b5e89d8ea2741ec789f893dfc8daeb75cbea4f8.tar.zst",
+        "archive_sha256": "1bcc1a4ca0385bafaf8cfb255b5e89d8ea2741ec789f893dfc8daeb75cbea4f8",
+        "compressed_bytes": 31939914,
+        "harness_version": "0.1.80",
+        "title": "Cloud99 (As Above Mix)",
+        "pack_seconds": 41.42654600797687,
+        "retained_original_entry": {
+          "title": "Cloud99",
+          "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
+          "harness_version": "0.1.0",
+          "archive": "a1c144e3e344655e5b72c60889e209e5803c5d8be3dbc61183084c928295b35a.tar.zst",
+          "sha256": "a1c144e3e344655e5b72c60889e209e5803c5d8be3dbc61183084c928295b35a",
+          "compressed_bytes": 25381936,
+          "uncompressed_sha256": "a6c22fd4efc37e8817388c9ae93406c8581fc61f600f1080072b0604f4a6dd4f",
+          "compression_level": 22,
+          "aliases": [
+            "ca5b3026e8ea5600acfaebd0d71279adada8c7d860add2b68d5f2a24496fa042.tar.zst"
+          ]
+        },
+        "local_archive_verified": true
+      },
+      "checked_utc": "2026-10-15T22:13:42.571996+00:00",
+      "status": "passed",
+      "full_repairs_completed": 1,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-cloud99-fixture-verification.json"
     }
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 250,
-    "new_pending_charts": 103,
+    "new_passed_fixtures": 251,
+    "new_pending_charts": 102,
     "new_processed_sources": 353,
     "charts_in_remaining_queue": 353,
     "unprocessed_sources": 0,
@@ -5742,65 +5795,6 @@
   ],
   "additional_source_binding": "tests/fixtures/full_song_lua/sweep-2026-10-12-addition-source-binding.json",
   "pending_replay_failures": [
-    {
-      "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 22,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "external-0151",
-            "args": [
-              false
-            ],
-            "beat": 0.0005225837230682373,
-            "caller": {
-              "line": 177,
-              "source": "song:/lua/default.lua",
-              "tail_call": false
-            },
-            "command": "UpdateCommand",
-            "definition_id": "def-0134",
-            "detail": {
-              "native_tween_time_left": 10.87824535369873
-            },
-            "kind": "call",
-            "line": 177,
-            "operation": "Actor.visible",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 0.5011791586875916,
-            "seq": 1300,
-            "source": "song:/lua/default.lua",
-            "tween_time_left": 10.87824535369873
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.visible",
-            "source": "song:/lua/default.lua",
-            "line": 177,
-            "phase": "callback",
-            "beat": 0.0005225837230682373,
-            "seconds": 0.5011791586875916,
-            "args": [
-              false
-            ],
-            "results": [
-              {
-                "actor": "0x5b036fc31070",
-                "name": "Underlay",
-                "path": "ScreenGameplay/Underlay"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        }
-      ]
-    },
     {
       "source_simfile": "Cold/Cold.ssc",
       "repair_attempts": 2,
@@ -7737,7 +7731,7 @@
     "note": "Earlier sweep checkpoints incorrectly carried the superseded one-mismatch replay forward as pending. The complete corrected replay and saved fixture already passed."
   },
   "next_actions": [
-    "Rights2 Save Your Tears SM first1 completed pending; inspect concrete saved failures before selecting any later bounded repair. Continue other eligible charts. Mawaru9 remains deferred.",
+    "Cloud99 first1 passed and its fixture is saved and byte-verified. Move to another pending chart; no further replay for this passing chart. Mawaru9 remains deferred.",
     "Use exact native Danger.lua Quad construction, eligibility and health commands; qualify a meaningful regression before retained HOPE entry. Mawaru9 remains explicitly deferred.",
     "Keep I Really Like You pending on missing initialization-clock inputs before its one remaining full repair.",
     "Keep passing originals closed, coverage separate, original bytes and acceptance unchanged, oversized fixtures ignored and the two-full-repair cap unchanged."

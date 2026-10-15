@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T21:57:19Z",
+  "updated_utc": "2026-10-15T22:13:37Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,8 +13,8 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 398,
-    "pending": 103,
+    "passed": 399,
+    "pending": 102,
     "unprocessed": 0
   },
   "complete": false,
@@ -1365,9 +1365,9 @@
       "position": 150,
       "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
       "simfile_sha256": "162ebaf65a1a39818e74a10cea6f2e2a49b0af07b2dfce1224de0bd85395a9e5",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-cloud99-qualified-underlay-first-repair-v1.json"
     },
     {
       "position": 151,

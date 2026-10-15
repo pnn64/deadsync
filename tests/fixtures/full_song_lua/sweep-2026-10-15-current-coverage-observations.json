@@ -1,6 +1,6 @@
 {
   "scope": "latest recorded coverage observations for original source simfiles",
-  "updated_utc": "2026-10-15T21:57:23Z",
+  "updated_utc": "2026-10-15T22:13:41Z",
   "coverage_is_separate_from_existing_full_replay_acceptance": true,
   "passing_charts_replayed_or_investigated": false,
   "rows": [
@@ -25,12 +25,12 @@
     {
       "position": 150,
       "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
-      "fixture_status": "pending",
+      "fixture_status": "passed",
       "pending_coverage": [
         "uncompared song operations: Actor.AddWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.addy, Actor.basezoomx, Actor.basezoomy, Actor.blend, Actor.fadebottom, Actor.fadetop, Actor.horizalign, Actor.rotationx, Actor.rotationy, Actor.shadowlength, Actor.skewx, Actor.vertalign, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, GameState.GetSongPosition, PlayerOptions.FromString, Sprite.texcoordvelocity",
         "native drawable state/resources: ActorProxy, BitmapText, Quad, Sprite"
       ],
-      "evidence": "sweep-2026-10-12-results.json"
+      "evidence": "sweep-2026-10-15-cloud99-qualified-underlay-first-repair-v1.json"
     },
     {
       "position": 151,

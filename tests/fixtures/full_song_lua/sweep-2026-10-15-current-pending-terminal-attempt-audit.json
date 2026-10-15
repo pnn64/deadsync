@@ -1,17 +1,17 @@
 {
-  "generated_utc": "2026-10-15T21:57:24.037058+00:00",
-  "concrete_ledger_sha256": "b327fc92a05c4c9c4216f888f11a8c4e7100210e230e46fc3b27aeb255ed795c",
+  "generated_utc": "2026-10-15T22:13:42.252340+00:00",
+  "concrete_ledger_sha256": "9b685239dc6c45943750af86ff56259d344a5513d27bb0c88fc2d6d636b9ce9a",
   "counts": {
-    "passed": 398,
-    "pending": 103,
+    "passed": 399,
+    "pending": 102,
     "unprocessed": 0
   },
   "maximum_published_terminal_attempt_histogram": {
-    "0": 80,
+    "0": 79,
     "1": 12,
     "2": 11
   },
-  "pending_sources": 103,
+  "pending_sources": 102,
   "terminal_attempts_exceed_two": [],
   "differences": [],
   "running_repair_not_counted_as_terminal": null,
@@ -20,32 +20,5 @@
     "completed_full_replay": false,
     "restart_requires_user_resuming_chart": true
   },
-  "no_chart_replays_or_source_mutations": true,
-  "additional_running_repairs_not_counted_as_terminal": [
-    {
-      "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
-      "attempt_started": 1,
-      "pid": 1876495,
-      "actual_command": [
-        "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
-        "--archive",
-        "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e.tar",
-        "--report",
-        "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/report.json"
-      ],
-      "recorded_command": [
-        "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
-        "--archive",
-        "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e.tar",
-        "--report",
-        "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/report.json"
-      ],
-      "actual_command_matches_record": true,
-      "running": true,
-      "phase": "replay",
-      "result_exists": false,
-      "terminal_result": null,
-      "checked_utc": "2026-10-15T21:57:26.150554+00:00"
-    }
-  ]
+  "no_chart_replays_or_source_mutations": true
 }

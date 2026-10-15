@@ -1,0 +1,16 @@
+{
+  "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
+  "native_frames": 6623,
+  "replayed_frames": 6623,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "full_repairs_spent": 1,
+  "archive": "1bcc1a4ca0385bafaf8cfb255b5e89d8ea2741ec789f893dfc8daeb75cbea4f8.tar.zst",
+  "compressed_sha256": "1bcc1a4ca0385bafaf8cfb255b5e89d8ea2741ec789f893dfc8daeb75cbea4f8",
+  "uncompressed_sha256": "4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e",
+  "compressed_bytes": 31939914,
+  "local_decompression_byte_verified": true,
+  "original_native_capture_and_payloads_unchanged": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
