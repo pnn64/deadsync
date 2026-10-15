@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T10:03:51Z",
-  "previous_goal_turn": "All 501 original simfiles have terminal initial outcomes: 397 passed, 104 pending, 0 unprocessed. Mawaru8 is closed and locally byte-verified without replay after accepted-report recovery; redundant raw storage was safely removed with receipt6a5cdd582. Mawaru6 final repair2 and Mawaru9 first repair1 are running without restart. Mawaru9 production entry completed1628 frames with zero errors/mismatches using canonical handle fixdca9ac1926ac34426a31964e94d1ca37692c0065 and helperd52e92dbdab0eb79f09965d26a3d91e7f795838778dda2d9826ff03b090ebd12; all17 validation groups both hosts and1175 source pins were verified before launch. The Oni inherited bitmap fixfa9b72f49badac89ba2bda525cae90e28bffd636 is committed with all23 validation groups both hosts,1175 source pins, native PNG bytes, logs and helper verified. Seventeen unaffected successful groups were reused after a cfg(test)-only decode_perf fixture correction; affected asset checks and build were rerun. HOPE retained entry now completes1688 frames without callback errors and20475 query mismatches. Its next concrete failure is the omitted unnamed ScoreP1 blank-frame Sprite: native childcount2 versus owned1. Primary source and native identity evidence are recorded before implementation. No full HOPE repair has been spent. All397 passing originals remain closed, coverage stays separate, original bytes and acceptance are unchanged, oversized fixtures remain ignored, and no third full repair is allowed. Goal remains active.",
+  "updated_utc": "2026-10-15T10:22:43Z",
+  "previous_goal_turn": "All501 original simfiles have terminal initial outcomes; current counts are recomputed from the155 publisher streams. All passing originals remain closed and coverage separate. Mawaru6 final2 and Mawaru9 first1 continue without restart and their original frozen helpers remain selected. Mawaru9 production entry passed1628 frames with zero errors/mismatches before its first full repair. HOPE score blank-frame fix c86a7a030c775514aa4ad1ccc51efc0727463b56 is committed after meaningful red on both hosts and all four validation groups on both hosts: target,84 live controls,35 replay controls and helper build. All1175 raw Linux and normalized cross-platform red/green source pins, identical regression source, native bitmap, logs and binary were verified. Retained HOPE entry completed 1688 frames, callback errors 0, mismatches 20471. This is diagnostic only; no full HOPE repair or fixture acceptance is claimed. Full terminal results are collected by existing publisher/closers. Acceptance, original bytes, two-repair cap and ignored oversized fixtures remain unchanged. The goal remains active.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "bebaaf36abb2a99a2b24de3bb12427a59e4f7e60",
+      "deadsync": "4a25d4d127c56ef73b8b0bd982d4e49b2dc1ac30",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -4859,7 +4859,7 @@
       "native_frames": 20574,
       "diagnostic_frames": 1688,
       "callback_errors": 0,
-      "command_query_mismatches": 20475,
+      "command_query_mismatches": 20471,
       "native_first_cancel_children": 1,
       "owned_first_cancel_children": 0,
       "native_capture_bytes_unchanged": true,
@@ -4868,19 +4868,20 @@
       "evidence": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-complete-lua-namespace-diagnostic.json",
       "storage": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-preflight-storage.json",
       "source_archive_fix": "79bb77d",
-      "status": "pending: omitted unnamed ScoreP1 blank-frame Sprite; native childcount2 versus owned1",
+      "status": "pending: collect source evidence for actual remaining retained-entry comparisons",
       "cancel_source_cause": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-cancel-source-cause.json",
       "pending_candidate_storage": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-pending-candidate-storage.json",
       "production_cancel_fix_applied": true,
       "production_cancel_patch_added": true,
       "production_cancel_fix_validation_complete": true,
       "production_cancel_fix_commit": "c71cc5f319cd5b950b6ce107ec23f65772062260",
-      "latest_diagnostic": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-oni-game-over-bitmap-entry-diagnostic.json",
-      "remaining_source_cause": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-score-frame-source-cause.json",
+      "latest_diagnostic": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-score-display-frame-entry-diagnostic.json",
+      "remaining_source_cause": null,
       "production_quad_default_texture_fix_applied": true,
       "production_quad_default_texture_fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
       "quad_texture_entry_diagnostic_job": "/home/parity/jobs/hope-quad-default-texture-entry-diagnostic-v1",
-      "quad_texture_entry_diagnostic_terminal_result_not_yet_claimed": false
+      "quad_texture_entry_diagnostic_terminal_result_not_yet_claimed": false,
+      "score_display_frame_fix_commit": "c86a7a030c775514aa4ad1ccc51efc0727463b56"
     },
     "rite_closed": {
       "status": "passed",
@@ -5029,6 +5030,43 @@
       "all_1175_source_pins_asset_log_and_binary_hashes_verified": true,
       "unaffected_successful_checks_reused_after_test_only_fixture_correction": 17,
       "affected_asset_checks_and_build_rerun": true
+    },
+    "mawaru9_current_full_observation": {
+      "entry_stage": "/home/parity/jobs/mawaru9-canonical-handles-production-entry-v1",
+      "entry_terminal": true,
+      "full_stage": "/home/parity/jobs/mawaru9-canonical-handles-first-repair-v1",
+      "full_attempt_start_recorded": true,
+      "full_repair_running": true,
+      "entry_frames": 1628,
+      "entry_errors": [],
+      "entry_mismatches": 0,
+      "entry_report_sha256": "559127f6538dfc2a1d8d98e62114d48e19a975ff0c3e32bc6e1344cb4a681a64",
+      "entry_fix_commit": "dca9ac1926ac34426a31964e94d1ca37692c0065",
+      "entry_binary_sha256": "d52e92dbdab0eb79f09965d26a3d91e7f795838778dda2d9826ff03b090ebd12",
+      "entry_pid": 606388,
+      "entry_process_running": false,
+      "entry_actual_command": [],
+      "entry_actual_command_matches_record": false,
+      "full_pid": 892716,
+      "full_process_running": true,
+      "full_actual_command": [
+        "/home/parity/jobs/canonical-live-actor-handles-linux-green-v6/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/mawaru9-canonical-handles-first-repair-v1/chart-495/7b631569cbc05b52490fced196166794926f6eadbd4590f37af5bf19ee395be5.tar",
+        "--report",
+        "/home/parity/jobs/mawaru9-canonical-handles-first-repair-v1/chart-495/report.json"
+      ],
+      "full_actual_command_matches_record": true,
+      "full_repairs_spent": 1
+    },
+    "score_display_frame": {
+      "fix_commit": "c86a7a030c775514aa4ad1ccc51efc0727463b56",
+      "selection": "tests/fixtures/full_song_lua/sweep-2026-10-15-score-display-frame-selection.json",
+      "all_four_groups_both_hosts_passed": true,
+      "live_controls": 84,
+      "replay_controls": 35,
+      "all_1175_source_pins_asset_log_and_binary_hashes_verified": true,
+      "entire_regression_source_identical_red_green": true
     }
   },
   "counts_at_checkpoint": {
@@ -7067,10 +7105,10 @@
     "note": "Earlier sweep checkpoints incorrectly carried the superseded one-mismatch replay forward as pending. The complete corrected replay and saved fixture already passed."
   },
   "next_actions": [
-    "Collect Mawaru6 final2 and Mawaru9 first1 without restarting either live process; save and byte-verify complete passes or preserve concrete terminal failures.",
-    "Implement the source-proven missing ScoreP1/P2 blank-frame Sprite using the existing native bitmap resource; validate then inspect retained HOPE entry before any full repair.",
+    "Collect Mawaru6 final2 and Mawaru9 first1 without restarting; save and byte-verify complete passes or preserve concrete terminal failures.",
+    "Inspect only actual remaining HOPE entry failures using the retained native capture and local native/theme sources before any full repair.",
     "Keep I Really Like You pending on missing initialization-clock inputs before its one remaining full repair.",
-    "Preserve397 passing originals as closed; keep coverage separate, original bytes and acceptance unchanged, oversized fixtures ignored and the two-full-repair cap unchanged."
+    "Keep passing originals closed, coverage separate, original bytes and acceptance unchanged, oversized fixtures ignored and the two-full-repair cap unchanged."
   ],
   "previous_goal_turn_classification": "progress",
   "resolved_historical_concrete_failures": [
