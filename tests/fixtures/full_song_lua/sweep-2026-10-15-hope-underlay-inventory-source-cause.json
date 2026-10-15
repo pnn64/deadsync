@@ -296,7 +296,6 @@
     "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\top_screen.rs": "cdf8e199c05c21355f6708efc1a289c54488f5a6ce516bf3f2bac73883616c74",
     "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs": "3d7f66282253cda4eb5d7832f7549fbb3c7b838a20ea7161552aa969a1d7bc57"
   },
-  "production_fix_added": false,
   "full_repairs_spent": 0,
   "original_capture_reused": true,
   "expected_query_results_used_as_engine_inputs": false,
@@ -318,5 +317,6 @@
     ],
     "owned_operation": "Actor.GetParent",
     "native_source": "PerPlayer/LifeMeter/Standard.lua"
-  }
+  },
+  "remaining_inventory_production_fix_added": false
 }

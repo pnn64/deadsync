@@ -5,7 +5,7 @@
     "after": "if unnamed and tostring(unnamed):find('ActorFrame', 1, true) then unnamed = {unnamed} end"
   },
   "source_evidence": "create_actor_child_group forwards named methods to its final member, while a real ActorFrame also contains numeric sequence children. Use the public tostring ActorFrame class, which is available on the actor but not its plain duplicate-child group.",
-  "scope": "only test inventory normalization; the missing-meter assertion and all geometry, color, selected Steps, font, parent and message checks remain unchanged",
+  "scope": "New DifficultyMeter test: correct unnamed child normalization and explicitly select the supplied chart indices. Existing BackgroundFilter test: normalize a lone unnamed ActorFrame. All inventory, geometry, colors, meter, font, parent, message, filter-count and disabled-case assertions remain unchanged.",
   "native_difficulty_meter_lua_sha256": "a7447a230176c6f5478b0c233165a519a723042106f9abb3ae3f126af510a0a9",
   "physical_native_source_matches_local_vendor": true,
   "source_capture_changed": false,
@@ -76,5 +76,7 @@
     "after": "if unnamed and (tostring(unnamed):find('Sprite', 1, true) or tostring(unnamed):find('ActorFrame', 1, true)) then unnamed = {unnamed} end",
     "reason": "New real DifficultyMeter may be the only unnamed Underlay actor. Normalize a single ActorFrame before filtering Sprite children; otherwise ipairs descends into the meter Quad and misidentifies it as a BackgroundFilter.",
     "all_existing_filter_count_geometry_texture_alpha_and_disabled_assertions_unchanged": true
-  }
+  },
+  "final_diff_verified_against_entire_red_regression_source": true,
+  "final_verification": "sweep-2026-10-15-underlay-difficulty-meter-linux-validation.json"
 }
