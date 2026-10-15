@@ -1,0 +1,12 @@
+{
+  "fix_commit": "89441b1030309f76fba0b5098df2c364af5a7525",
+  "source_root": "/home/parity/workspace/in-transition-bitmaps-green-v3/deadsync",
+  "binary_sha256": "a3f474ee34c4815bef043309ee2b4ae4b46fdc57ff593916ba9e37ab1a0a0967",
+  "build_proof": "/home/parity/jobs/in-transition-bitmaps-linux-green-v3/proof.json",
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "load the selected native In visual bitmaps and reproduce native initial poses and tween curves; initialize Technique theme preferences before actor construction and preserve spooky selection",
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
