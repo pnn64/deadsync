@@ -1,0 +1,89 @@
+{
+  "reason": "Free duplicate raw reports already preserved losslessly as compressed terminal diagnostics; no captures, fixture archives, source files or live inputs are removed.",
+  "reports": [
+    {
+      "raw_path": "/home/parity/jobs/hope-shared-bpm-hierarchy-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62236230,
+      "raw_sha256": "dd62008addb044580ca9d89d633d0592f5014ce252849402b5bc1382bc6ba4d8",
+      "compressed_path": "/home/parity/jobs/hope-shared-bpm-hierarchy-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 968191,
+      "compressed_sha256": "b2d6eeffe9bf031b9a47ef298c42242bf95675b9c3472e19d0cdf377f6364f99",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "4182796ab5e034a5613ca475b7357008c64bf16c5559e269b128624ac95db9ae",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-underlay-standard-life-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62235746,
+      "raw_sha256": "4c32a110de3c2a8eeb4f234b136ebcd46d5bd667e44dbafbd3e7f3b06c8c5063",
+      "compressed_path": "/home/parity/jobs/hope-underlay-standard-life-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 976155,
+      "compressed_sha256": "56c7d97bb8868f19047f4067d551a4a5b0987940eb09d558337448bd169fde87",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "0dd1babd4929da85816291de65d34df8ae58409ecc99926a5962749a43f520ac",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-standard-life-child-enumeration-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62233395,
+      "raw_sha256": "26070ac267d5b97bb7f23ed54be2fde8cb1751f49b01d56f5963cae6a11a409e",
+      "compressed_path": "/home/parity/jobs/hope-standard-life-child-enumeration-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 978397,
+      "compressed_sha256": "d562593aece5e887761007e5d7fe1bd7c98bba67ce543ebf4243d2908673f600",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "a1ea8b35e07f8f97dd1a812d2fd315d553de8545c86b617fb2f8f5fe7a7e1009",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-underlay-difficulty-meter-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62210221,
+      "raw_sha256": "90726be492045479be643ccb419efc11d0bbc3c494d6748e3a1f74ae867a080e",
+      "compressed_path": "/home/parity/jobs/hope-underlay-difficulty-meter-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 992528,
+      "compressed_sha256": "1ef86bfef7c121a17a69f3f699a6d739ec8686a0c027cdfa74c8a3455d71934b",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "1f83b48ab50283766f5836e364878bccd697b442b499464dda86c70a2f64c603",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-underlay-background-filter-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62196488,
+      "raw_sha256": "a72cf1c7c6644cb33edfdde49c25332fc82cc3d5e9451a8bd6cf3a849a7b5c90",
+      "compressed_path": "/home/parity/jobs/hope-underlay-background-filter-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 991042,
+      "compressed_sha256": "ed7174475e47c06eef24af6ce41a5ff818cca834f41005c48b74e7251993ed97",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "41dd9655aa4cd826c58d62743fc904e4a39b5f8fdff85a4a70007569541afb25",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-in-transition-bitmaps-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62185426,
+      "raw_sha256": "5b819b522e78805c9d5faff0c1b97cb50768fc6afae12ddb9ffbf9d4b0fcc4d3",
+      "compressed_path": "/home/parity/jobs/hope-in-transition-bitmaps-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 980013,
+      "compressed_sha256": "d46d9cb1eac3a8550559aceb201fb7e4f16ddc0304947acf3d20ef3190f7120d",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "a856651906e92217bbb4c16b49a056231cdf0daf7b0ce45ac5d1446d1756c5b5",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    }
+  ],
+  "raw_report_bytes_removed": 373297506,
+  "free_before": 220409856,
+  "free_after": 587776000,
+  "mawaru9_helper_hash_unchanged": true,
+  "chart_replays_or_compilers_stopped": false,
+  "acceptance_or_attempt_counts_changed": false
+}
