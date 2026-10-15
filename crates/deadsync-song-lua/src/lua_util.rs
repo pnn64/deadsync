@@ -13794,57 +13794,122 @@ pub fn create_top_screen_theme_actor(
     if ["In", "Out", "Cancel"].iter().any(|known| name.eq_ignore_ascii_case(known)) {
         let actor = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
         actor.raw_set("__songlua_transition_state", 0_u8)?;
-        if name.eq_ignore_ascii_case("In") || name.eq_ignore_ascii_case("Out") {
+        if name.eq_ignore_ascii_case("In") {
             let child = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
             child.raw_set("__songlua_parent", actor.clone())?;
             actor.raw_set("__songlua_transition_child", child.clone())?;
             push_sequence_child_once(&actor, child.clone())?;
-            if name.eq_ignore_ascii_case("In") {
-                // Simply Love's gameplay-in lead-in owns these actual queues.
-                // On precedes StartTransitioning; the wrapper's own tweens
-                // never contribute to its virtual GetTweenTimeLeft result.
-                let visuals = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
-                visuals.raw_set("__songlua_parent", child.clone())?;
-                push_sequence_child_once(&child, visuals.clone())?;
-                let reload = lua.globals().get::<Table>("SL")?.get::<Table>("Global")?
-                    .get::<bool>("GameplayReloadCheck")?;
-                visuals.raw_set("HideCommand", lua.create_function(|lua, actor: Table| {
-                    actor.get::<Function>("visible")?.call::<()>((actor.clone(), false))?;
-                    lua.globals().get::<Table>("SL")?.get::<Table>("Global")?.raw_set("GameplayReloadCheck", true)
-                })?)?;
-                visuals.raw_set("OffCommand", lua.create_function(|lua, _: Table| {
-                    lua.globals().get::<Table>("SL")?.get::<Table>("Global")?.raw_set("GameplayReloadCheck", false)
-                })?)?;
-                if !reload {
-                    visuals.get::<Function>("sleep")?.call::<()>((visuals.clone(), 2.0))?;
-                    visuals.get::<Function>("queuecommand")?.call::<()>((visuals.clone(), "Hide"))?;
-                    for (kind, first, last) in [("Quad", 1.4, 0.6), ("Sprite", 0.4, 0.6),
-                        ("Sprite", 0.4, 0.6), ("Sprite", 0.4, 0.8)] {
-                        let sprite = create_named_actor(lua, kind, "", create_dummy_actor)?;
-                        sprite.raw_set("__songlua_parent", visuals.clone())?;
-                        sprite.get::<Function>("sleep")?.call::<()>((sprite.clone(), first))?;
-                        sprite.get::<Function>("accelerate")?.call::<()>((sprite.clone(), last))?;
-                        sprite.get::<Function>("diffusealpha")?.call::<()>((sprite.clone(), 0.0))?;
-                        push_sequence_child_once(&visuals, sprite)?;
-                    }
-                    let text = create_named_text_actor(lua, "BitmapText", "", String::new(), create_dummy_actor)?;
-                    text.raw_set("__songlua_parent", child.clone())?;
-                    text.get::<Function>("accelerate")?.call::<()>((text.clone(), 0.5))?;
-                    text.get::<Function>("diffusealpha")?.call::<()>((text.clone(), 1.0))?;
-                    text.get::<Function>("sleep")?.call::<()>((text.clone(), 0.66))?;
-                    text.get::<Function>("accelerate")?.call::<()>((text.clone(), 0.33))?;
-                    push_sequence_child_once(&child, text)?;
-                } else {
-                    visuals.get::<Function>("playcommand")?.call::<()>((visuals, "Hide"))?;
+            // Simply Love's gameplay-in lead-in owns these actual queues.
+            // On precedes StartTransitioning; the wrapper's own tweens
+            // never contribute to its virtual GetTweenTimeLeft result.
+            let visuals = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
+            visuals.raw_set("__songlua_parent", child.clone())?;
+            push_sequence_child_once(&child, visuals.clone())?;
+            let reload = lua.globals().get::<Table>("SL")?.get::<Table>("Global")?
+                .get::<bool>("GameplayReloadCheck")?;
+            visuals.raw_set("HideCommand", lua.create_function(|lua, actor: Table| {
+                actor.get::<Function>("visible")?.call::<()>((actor.clone(), false))?;
+                lua.globals().get::<Table>("SL")?.get::<Table>("Global")?.raw_set("GameplayReloadCheck", true)
+            })?)?;
+            visuals.raw_set("OffCommand", lua.create_function(|lua, _: Table| {
+                lua.globals().get::<Table>("SL")?.get::<Table>("Global")?.raw_set("GameplayReloadCheck", false)
+            })?)?;
+            if !reload {
+                visuals.get::<Function>("sleep")?.call::<()>((visuals.clone(), 2.0))?;
+                visuals.get::<Function>("queuecommand")?.call::<()>((visuals.clone(), "Hide"))?;
+                for (kind, first, last) in [("Quad", 1.4, 0.6), ("Sprite", 0.4, 0.6),
+                    ("Sprite", 0.4, 0.6), ("Sprite", 0.4, 0.8)] {
+                    let sprite = create_named_actor(lua, kind, "", create_dummy_actor)?;
+                    sprite.raw_set("__songlua_parent", visuals.clone())?;
+                    sprite.get::<Function>("sleep")?.call::<()>((sprite.clone(), first))?;
+                    sprite.get::<Function>("accelerate")?.call::<()>((sprite.clone(), last))?;
+                    sprite.get::<Function>("diffusealpha")?.call::<()>((sprite.clone(), 0.0))?;
+                    push_sequence_child_once(&visuals, sprite)?;
                 }
+                let text = create_named_text_actor(lua, "BitmapText", "", String::new(), create_dummy_actor)?;
+                text.raw_set("__songlua_parent", child.clone())?;
+                text.get::<Function>("accelerate")?.call::<()>((text.clone(), 0.5))?;
+                text.get::<Function>("diffusealpha")?.call::<()>((text.clone(), 1.0))?;
+                text.get::<Function>("sleep")?.call::<()>((text.clone(), 0.66))?;
+                text.get::<Function>("accelerate")?.call::<()>((text.clone(), 0.33))?;
+                push_sequence_child_once(&child, text)?;
             } else {
-                let quad = create_named_actor(lua, "Quad", "", create_dummy_actor)?;
-                quad.raw_set("__songlua_parent", child.clone())?;
-                quad.get::<Function>("sleep")?.call::<()>((quad.clone(), 0.5))?;
-                quad.get::<Function>("linear")?.call::<()>((quad.clone(), 1.0))?;
-                quad.get::<Function>("diffusealpha")?.call::<()>((quad.clone(), 1.0))?;
-                push_sequence_child_once(&child, quad)?;
+                visuals.get::<Function>("playcommand")?.call::<()>((visuals, "Hide"))?;
             }
+        } else if name.eq_ignore_ascii_case("Out") {
+            // Transition::Load adopts the returned Quad directly. Retain the
+            // native Init/On/Off handlers rather than an extra frame owner.
+            let quad = create_named_actor(lua, "Quad", "", create_dummy_actor)?;
+            quad.raw_set("__songlua_parent", actor.clone())?;
+            let commands = lua.load(r#"
+return {
+	InitCommand=function(self) self:FullScreen():diffuse(0,0,0,0) end,
+	OnCommand=function(self) self:sleep(0.5):linear(1):diffusealpha(1) end,
+	OffCommand=function(self)
+		if SL.Global.GameMode == "ITG" then
+			local song = GAMESTATE:GetCurrentSong()
+			local totalWhites = 0
+			for player in ivalues( GAMESTATE:GetHumanPlayers() ) do
+				local pn = ToEnumShortString(player)
+				local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
+				local number = pss:GetTapNoteScores("TapNoteScore_W1")
+				local faPlus = SL[pn].Stages.Stats[SL.Global.Stages.PlayedThisGame + 1].ex_counts.W0_total
+				-- Subtract FA+ count from the overall fantastic window count.
+				local whites = number - faPlus
+				totalWhites = totalWhites + whites
+				-- This will save the white count to Stats.xml, so we can later recover
+				-- it when we deprecate FA+ mode and introduce W0.
+				--
+				-- The Score field is completely unused in Simply Love, and the ability
+				-- to set the field is exposed to lua so we can hijack it for our own\
+				-- purposes.
+				local bestWhites = whites
+				if PROFILEMAN:IsPersistentProfile(pn) then
+					local steps = GAMESTATE:GetCurrentSteps(pn)
+					local scores = PROFILEMAN:GetProfile(pn):GetHighScoreList(song, steps):GetHighScores()
+					for hs in ivalues(scores) do
+						-- If the player previously quadded the song, retain the better white count.
+						-- Technically this is a workaround because the date would be wrong, but
+						-- it's still worth to keep the score around
+						if (pss:GetPercentDancePoints() == hs:GetPercentDP() and hs:GetPercentDP() == 1.0) then
+							bestWhites = math.min(bestWhites, hs:GetScore())
+						end
+					end
+				end
+				pss:SetScore(bestWhites)
+			end
+			if IsRoutine() then
+				local routineStats = STATSMAN:GetCurStageStats():GetRoutineStageStats()
+				local bestWhites = totalWhites
+				if PROFILEMAN:IsPersistentProfile(GAMESTATE:GetMasterPlayerNumber()) then
+					local steps = GAMESTATE:GetCurrentSteps(GAMESTATE:GetMasterPlayerNumber())
+					local scores = PROFILEMAN:GetProfile(GAMESTATE:GetMasterPlayerNumber()):GetHighScoreList(song, steps):GetHighScores()
+					for hs in ivalues(scores) do
+						-- If the player previously quadded the song, retain the better white count.
+						-- Technically this is a workaround because the date would be wrong, but
+						-- it's still worth to keep the score around
+						if (routineStats:GetPercentDancePoints() == hs:GetPercentDP() and hs:GetPercentDP() == 1.0) then
+							bestWhites = math.min(bestWhites, hs:GetScore())
+						end
+					end
+				end
+				routineStats:SetScore(bestWhites)
+			end
+		end
+	end
+}"#).set_name("@theme:/BGAnimations/ScreenGameplay out.lua").eval::<Table>()?;
+            for name in ["InitCommand", "OnCommand", "OffCommand"] {
+                quad.raw_set(name, commands.raw_get::<Function>(name)?)?;
+            }
+            // Initialize before authored observation, as for the other native
+            // actors. Keep the Lua handlers for subsequent command dispatch.
+            quad.get::<Function>("FullScreen")?.call::<()>(quad.clone())?;
+            quad.get::<Function>("diffuse")?.call::<()>((quad.clone(), 0.0, 0.0, 0.0, 0.0))?;
+            quad.get::<Function>("sleep")?.call::<()>((quad.clone(), 0.5))?;
+            quad.get::<Function>("linear")?.call::<()>((quad.clone(), 1.0))?;
+            quad.get::<Function>("diffusealpha")?.call::<()>((quad.clone(), 1.0))?;
+            actor.raw_set("__songlua_transition_child", quad.clone())?;
+            push_sequence_child_once(&actor, quad)?;
         } else {
             // Transition::Load keeps the loaded actor as its child. Simply
             // Love's gameplay-cancel redirects to _fade out normal.lua.

@@ -500,6 +500,17 @@ end"#)
         lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
     )?;
     globals.set(
+        "IsRoutine",
+        // _fallback/Scripts/02 Utilities.lua; used by gameplay-out's Off.
+        lua.load(r#"return function()
+    local style = GAMESTATE:GetCurrentStyle()
+    if style and style:GetStyleType() == "StyleType_TwoPlayersSharedSides" then
+        return true
+    end
+    return false
+end"#).set_name("@theme:/Scripts/02 Utilities.lua:IsRoutine").eval::<Function>()?,
+    )?;
+    globals.set(
         "IsGameAndMenuButton",
         lua.create_function(|_, _args: MultiValue| Ok(false))?,
     )?;
