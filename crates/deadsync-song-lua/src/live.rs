@@ -4016,13 +4016,74 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn live_player_attack_display_preserves_native_inventory_and_hold_indices() {
+        for (style, columns) in [("single", 4), ("double", 8)] {
+            let source = r#"
+INVENTORY_PLAYERS = {}
+return Def.ActorFrame { OnCommand = function()
+local screen = SCREENMAN:GetTopScreen()
+for index = 1, $PLAYERS do
+    local player = screen:GetChild('PlayerP' .. index)
+    assert(player:GetNumChildren() == $COLUMNS + 4,
+        'visible Player must include its native AttackDisplay')
+    local children = player:GetChildren()['']
+    local named = player:GetChild('')
+    assert(#children == $COLUMNS + 1 and #named == #children)
+    local attack = children[1]
+    assert(attack:GetName() == '' and attack:GetParent() == player)
+    assert(tostring(attack):find('ActorFrame', 1, true) and attack:GetNumChildren() == 0)
+    assert(attack:GetX() == -40 and attack:GetY() == 0 and attack:GetTweenTimeLeft() == 0)
+    for index = 1, #children do
+        assert(named[index] == children[index], 'lookups share the same unnamed actors')
+        if index > 1 then
+            local hold = children[index]
+            assert(tostring(hold):find('HoldJudgment', 1, true))
+            assert(hold:GetParent() == player and hold:GetNumChildren() == 1)
+            assert(hold:GetChild('HoldJudgment'):GetParent() == hold)
+        end
+    end
+    table.insert(INVENTORY_PLAYERS, player)
+end
+end }
+"#.replace("$COLUMNS", &columns.to_string())
+                .replace("$PLAYERS", if style == "single" { "2" } else { "1" });
+            let compiled = compile_with_context(&format!("player-attack-display-{style}"), &source, |context| {
+                context.style_name = style.into();
+                context.players[1].enabled = style == "single";
+            });
+            let scene = compiled.live_scene.expect("native Player inventory");
+            let players = scene.lua.globals().get::<Table>("INVENTORY_PLAYERS").unwrap();
+            assert_eq!(players.raw_len(), if style == "single" { 2 } else { 1 },
+                "regression must inspect every configured visible player");
+            for player in players.sequence_values::<Table>() {
+                let player = player.unwrap();
+                let children = crate::lua_util::actor_direct_children(&scene.lua, &player).unwrap();
+                let mut expected = vec!["", "Combo", "Judgment"];
+                expected.extend(std::iter::repeat_n("", columns));
+                expected.push("NoteField");
+                assert_eq!(children.iter().map(|child| crate::lua_util::actor_name(child).unwrap())
+                    .collect::<Vec<_>>(), expected, "native constructor and Init child order");
+                let holds = player.raw_get::<Table>("__songlua_hold_judgments").unwrap();
+                assert_eq!(holds.raw_len(), columns, "feedback retains exactly one frame per column");
+                for column in 0..columns {
+                    assert_eq!(holds.raw_get::<Table>(column + 1).unwrap().to_pointer(),
+                        children[column + 3].to_pointer(), "attack display must not shift hold indices");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn live_player_hold_judgment_tree() {
         let mut compiled = compile("player-hold-judgment-tree", r#"
 local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
-local holds = player:GetChildren()['']
+local unnamed = player:GetChildren()['']
 local named = player:GetChild('')
-assert(#holds == 4 and #named == 4 and named[1] == holds[1])
-assert(player:GetNumChildren() == 7)
+assert(#unnamed == 5 and #named == 5 and named[1] == unnamed[1])
+assert(player:GetNumChildren() == 8)
+assert(unnamed[1]:GetNumChildren() == 0 and unnamed[1]:GetParent() == player)
+local holds = {unnamed[2], unnamed[3], unnamed[4], unnamed[5]}
+assert(#holds == 4 and named[2] == holds[1])
 assert(tostring(holds[1]):find('HoldJudgment', 1, true))
 for _, frame in ipairs(holds) do
     assert(frame:GetChild('HoldJudgment'):GetParent() == frame)

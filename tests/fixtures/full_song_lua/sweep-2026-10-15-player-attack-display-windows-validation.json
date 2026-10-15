@@ -1,0 +1,54 @@
+{
+  "all_four_groups_passed": true,
+  "all_1175_normalized_source_pins_asset_and_log_hashes_verified": true,
+  "red_missing_attack_display_reproduced": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 330.24556999999913,
+      "log_sha256": "54ca9e1a7b295f62807ecaccdd132e42dc285bf7875ab017c6be90243665c90b",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 625 filtered out; finished in 0.49s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 61.077055800007656,
+      "log_sha256": "60bd31205c9cd595c018aa1407ee6423f1108f5a464c1c2279fc47d6a6571514",
+      "results": [
+        "test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 59.22s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 150.46106909999799,
+      "log_sha256": "7bd744db962e08986a9433b9c97013e4f6d76d870336c41b6e73f39cbba11832",
+      "results": [
+        "test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 24.60s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 26.48659420000331,
+      "log_sha256": "cdf0ae82b31bd0f400f72adbdc537d9239ef91cccc698cf79ea1e2ebf612923d",
+      "results": []
+    }
+  ],
+  "red_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 332.1890385000006,
+      "log_sha256": "defae1edf0e096b4c1d2604b475a4320aa3c09a5530bb618a69b61bcb69ff22a",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 625 filtered out; finished in 0.22s"
+      ]
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

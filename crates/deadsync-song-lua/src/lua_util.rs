@@ -14293,6 +14293,16 @@ pub fn create_top_screen_player_actor(
     actor.set("__songlua_player_index", player_index as i64)?;
     actor.set("__songlua_style_name", style_name)?;
     actor.set("__songlua_visible", true)?;
+    // Player constructs this unnamed ActorFrame before Init adds its visible
+    // parts. AttackDisplay has no child Sprite in the host's regular play mode.
+    let attack = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
+    attack.raw_set("__songlua_parent", actor.clone())?;
+    // The inherited one-side and both-side X offsets are all zero; Player::Load
+    // subtracts40. Native leaves Y at its constructor default.
+    capture_block_set_f32(lua, &attack, "x", -40.0)?;
+    push_sequence_child_once(&actor, attack.clone())?;
+    actor_children(lua, &actor)?.set("", attack.clone())?;
+    actor.raw_set("__songlua_attack_display", attack)?;
     // The dummy has already registered its live tween pose. Native SetX and
     // PlayerInitCommand initialize that current pose as well as the destination.
     capture_block_set_f32(lua, &actor, "x", player.screen_x)?;
@@ -14402,11 +14412,14 @@ fn install_named_theme_children(
 ) -> mlua::Result<()> {
     let children = actor_children(lua, parent)?;
     for &name in names {
-        if children.get::<Option<Table>>(name)?.is_some() {
-            continue;
-        }
-        let child = create_named_child_actor(lua, parent, name)?;
-        children.set(name, child)?;
+        let child = if let Some(child) = children.get::<Option<Table>>(name)? {
+            child
+        } else {
+            let child = create_named_child_actor(lua, parent, name)?;
+            children.set(name, child.clone())?;
+            child
+        };
+        push_sequence_child_once(parent, child)?;
     }
     Ok(())
 }
@@ -14418,6 +14431,10 @@ fn install_hold_judgments(
     // Player::Init adds an unnamed HoldJudgment ActorFrame for each column.
     // Its named Sprite is shared by sequence traversal and GetChildren.
     let frames = create_actor_child_group(lua)?;
+    let unnamed = create_actor_child_group(lua)?;
+    if let Some(attack) = player.raw_get::<Option<Table>>("__songlua_attack_display")? {
+        unnamed.raw_set(1, attack)?;
+    }
     let sl: Table = lua.globals().raw_get("SL")?;
     let mods: Table = sl.raw_get::<Table>(if player_index == 0 { "P1" } else { "P2" })?.raw_get("ActiveModifiers")?;
     let label = mods.raw_get::<Option<String>>("HoldJudgment")?.unwrap_or_else(|| "None 1x2.png".into());
@@ -14435,9 +14452,10 @@ fn install_hold_judgments(
         push_sequence_child_once(&frame, sprite.clone())?;
         actor_children(lua, &frame)?.set("HoldJudgment", sprite)?;
         frames.raw_set(column + 1, frame.clone())?;
+        unnamed.raw_set(unnamed.raw_len() + 1, frame.clone())?;
         push_sequence_child_once(player, frame)?;
     }
-    actor_children(lua, player)?.set("", frames.clone())?;
+    actor_children(lua, player)?.set("", unnamed)?;
     player.raw_set("__songlua_hold_judgments", frames)?;
     Ok(())
 }
@@ -14639,7 +14657,7 @@ pub fn create_top_screen_table(
         player_actor.set("__songlua_parent", top_screen.clone())?;
         // Player retains its life meter while its screen dispatches End.
         player_actor.raw_set("__songlua_life_meter", life_meters[player_index].clone())?;
-        install_named_theme_children(lua, player_actor, &["Judgment", "Combo"],
+        install_named_theme_children(lua, player_actor, &["Combo", "Judgment"],
             create_named_child_actor)?;
         install_hold_judgments(lua, player_actor, player_index, &context.style_name, create_dummy_actor)?;
         install_named_theme_children(lua, player_actor, &["NoteField"], create_named_child_actor)?;

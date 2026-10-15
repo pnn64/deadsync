@@ -1,0 +1,47 @@
+{
+  "source_root": "/home/parity/workspace/player-attack-display-green-v1/deadsync",
+  "binary_sha256": "b4903ea2d0a7be4107dae95752351bfc6b1a70d50fe0f3b58423e229bda31a88",
+  "all_four_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "entire_regression_source_identical_red_green": true,
+  "native_bitmap_asset_log_and_binary_hashes_verified": true,
+  "red_missing_attack_display_reproduced_both_hosts": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 248.44042066298425,
+      "log_sha256": "8327595e5880b860828c21d65bf0a103dd81037ffe173598b441c218e546cf27",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 623 filtered out; finished in 0.35s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 34.46377302100882,
+      "log_sha256": "8888aab508950cd39cc405c0a54282c0fc6dbba95f467ba57629d339f2d9f7e0",
+      "results": [
+        "test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 33.78s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 225.6590084459749,
+      "log_sha256": "70b9bef7b0d94d933bb20e4d54cc74ed697508596b26e48bf1b3ce9060520e74",
+      "results": [
+        "test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 21.45s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 35.346673677966464,
+      "log_sha256": "77fd01b220b59bf40a506e84d5f1761bc9dde6a5dac8f73544cec07f5d135357",
+      "results": []
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
