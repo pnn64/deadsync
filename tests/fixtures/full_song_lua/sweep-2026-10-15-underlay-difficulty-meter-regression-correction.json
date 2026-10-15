@@ -2,14 +2,27 @@
   "regression": "live_underlay_difficulty_meter_owns_native_quad_and_text",
   "correction": {
     "before": "if unnamed and unnamed.GetNumChildren then unnamed = {unnamed} end",
-    "after": "if unnamed and rawget(unnamed, 1) == nil then unnamed = {unnamed} end"
+    "after": "if unnamed and tostring(unnamed):find('ActorFrame', 1, true) then unnamed = {unnamed} end"
   },
-  "source_evidence": "lua_util.rs create_actor_child_group __index forwards named methods to the last child. GetNumChildren cannot distinguish a group from its ActorFrame member; a numeric raw first element can.",
+  "source_evidence": "create_actor_child_group forwards named methods to its final member, while a real ActorFrame also contains numeric sequence children. Use the public tostring ActorFrame class, which is available on the actor but not its plain duplicate-child group.",
   "scope": "only test inventory normalization; the missing-meter assertion and all geometry, color, selected Steps, font, parent and message checks remain unchanged",
   "native_difficulty_meter_lua_sha256": "a7447a230176c6f5478b0c233165a519a723042106f9abb3ae3f126af510a0a9",
   "physical_native_source_matches_local_vendor": true,
   "source_capture_changed": false,
   "acceptance_comparisons_changed": false,
   "red_and_green_regression_source_claimed_identical": false,
-  "green_regression_lf_sha256": "6c98223e360d65c39991c47b62bf79b658baa016d793e6cbb3f3be273be8f5a1"
+  "green_regression_lf_sha256": "bd378d98bc5a5cff7b943668810809982cc40d97d9aec34e797b09abaa3458c8",
+  "first_correction_failed_both_hosts": true,
+  "first_green_windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 356.87069619999966,
+      "log_sha256": "a4e3a76b2ba49c5e9f0f056f76be23dca2219472af67c339311bf898aaad549d",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 631 filtered out; finished in 0.24s"
+      ]
+    }
+  ],
+  "failed_normalization": "if unnamed and rawget(unnamed, 1) == nil then unnamed = {unnamed} end"
 }
