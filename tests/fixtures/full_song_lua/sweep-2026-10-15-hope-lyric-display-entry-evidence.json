@@ -1,0 +1,179 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "entry_frames": 1688,
+  "entry_errors": 0,
+  "entry_mismatches": 20467,
+  "native_command_queries": 21008,
+  "owned_command_queries": 20611,
+  "remaining_first_actor": "external-0034",
+  "remaining_actor_path": "ScreenGameplay/LyricDisplay",
+  "report_and_log_hashes_verified": true,
+  "report_sha256": "f8526530a91c14862844cd5dabdaf072c363951acdac4ade2569b58af11d6762",
+  "remaining_actor_early_native_events": [
+    {
+      "actor": "external-0034",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 36,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          2
+        ]
+      },
+      "kind": "query",
+      "line": 36,
+      "operation": "ActorFrame.GetNumChildren",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 315,
+      "source": "song:/sm5/modules/grabactors.lua",
+      "results": [
+        2
+      ]
+    }
+  ],
+  "native_child_parent_and_name_events": [
+    {
+      "actor": "external-0073",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          {
+            "actor": "external-0034",
+            "name": "LyricDisplay",
+            "path": "ScreenGameplay/LyricDisplay"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 3,
+      "operation": "Actor.GetParent",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 320,
+      "source": "song:/sm5/modules/grabactors.lua",
+      "results": [
+        {
+          "actor": 10,
+          "name": "LyricDisplay",
+          "path": "ScreenGameplay/LyricDisplay"
+        }
+      ]
+    },
+    {
+      "actor": "external-0073",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          "LyricBack"
+        ]
+      },
+      "kind": "query",
+      "line": 3,
+      "operation": "Actor.GetName",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 324,
+      "source": "song:/sm5/modules/grabactors.lua",
+      "results": [
+        "LyricBack"
+      ]
+    },
+    {
+      "actor": "external-0074",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          {
+            "actor": "external-0034",
+            "name": "LyricDisplay",
+            "path": "ScreenGameplay/LyricDisplay"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 3,
+      "operation": "Actor.GetParent",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 330,
+      "source": "song:/sm5/modules/grabactors.lua",
+      "results": [
+        {
+          "actor": 10,
+          "name": "LyricDisplay",
+          "path": "ScreenGameplay/LyricDisplay"
+        }
+      ]
+    },
+    {
+      "actor": "external-0074",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          "LyricFront"
+        ]
+      },
+      "kind": "query",
+      "line": 3,
+      "operation": "Actor.GetName",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 334,
+      "source": "song:/sm5/modules/grabactors.lua",
+      "results": [
+        "LyricFront"
+      ]
+    }
+  ],
+  "full_repairs_spent_before_and_after": 0,
+  "no_fixture_acceptance": true
+}

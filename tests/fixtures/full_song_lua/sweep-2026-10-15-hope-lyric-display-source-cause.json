@@ -1,0 +1,45 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "entry_evidence": "sweep-2026-10-15-hope-percentage-display-inheritance-entry-diagnostic.json",
+  "native_actor_identity_evidence": "sweep-2026-10-15-hope-lyric-display-entry-evidence.json",
+  "entry_frames": 1688,
+  "entry_errors": 0,
+  "entry_mismatches": 20467,
+  "first_remaining_actor": "ScreenGameplay/LyricDisplay",
+  "first_remaining_operation": "ActorFrame.GetNumChildren",
+  "native_result": 2,
+  "owned_result": 0,
+  "local_primary_sources": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\LyricDisplay.cpp",
+      "sha256": "4eac5efbf318ad8fb2c95795181185afcc6ca012fe5b130d53659667310ac31e"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\LyricDisplay.h",
+      "sha256": "ceab72f26648ed92f826fb70ca6b3db84095b0bf08030ef0f3b86c725cd896dc"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\metrics.ini",
+      "sha256": "470ae3b31c17ca4e194530b9ca543a15439c134a3aefa47d6d25dd55d1f5bff5"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\Fonts\\LyricDisplay text.redir",
+      "sha256": "c37fd510fd07f2ff8825629b33babc7f45beda6489f6a479ce50121742e7b20f"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\simply-love\\metrics.ini",
+      "sha256": "221b449c94e5ed38bbdfb4cee157582f20c85ffa8e234398309768945b370a80"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs",
+      "sha256": "f66b0a7d8604402f239e12ec5fed03b4f5eabae914b43c49528c1a36e43279cf"
+    }
+  ],
+  "source_cause": "Native LyricDisplay constructs two BitmapText children in order LyricBack then LyricFront, loads each LyricDisplay command set and text font, and initializes both strings empty. Fallback LyricDisplay text redirects to Common Normal; Changed commands dispatch LyricCommand for Back/Front. Owned create_top_screen_theme_actor groups LyricDisplay with generic empty ActorFrames and constructs no children. Retained native GetParent/GetName events independently identify both missing children under ScreenGameplay/LyricDisplay.",
+  "production_fix_added": false,
+  "full_repairs_spent": 0,
+  "original_native_capture_reused": true,
+  "expected_query_results_used_as_engine_inputs": false,
+  "acceptance_comparisons_changed": false,
+  "next_action": "Implement faithful native LyricDisplay construction including its ordered named text children, inherited text font and theme command initialization; validate against existing controls and retained entry before any full repair."
+}
