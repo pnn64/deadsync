@@ -2982,15 +2982,12 @@
     {
       "title": "iLLness LiLin",
       "source_simfile": "iLLness LiLin/iLLness LiLin.ssc",
-      "harness_version": "0.1.0",
-      "archive": "dbb1cb47d9f52b9ae437615e1410a49feed6ad122612538cde4c3283d01682ed.tar.zst",
-      "sha256": "dbb1cb47d9f52b9ae437615e1410a49feed6ad122612538cde4c3283d01682ed",
-      "compressed_bytes": 700260,
-      "uncompressed_sha256": "cec40edd761a2c9ad19fd17c526f9c906432b57d323dc1f3b912353fd4a48078",
-      "compression_level": 22,
-      "aliases": [
-        "38ef74cfc44fce0b2cc5c72d49dad75f7c3e8f5adcd8fb1a1d791b1f5069c6f1.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "1b00bc9e88f70761ada1c12dfd37581ab79bc146b0ee774a8683a9d1de9b2669.tar.zst",
+      "sha256": "1b00bc9e88f70761ada1c12dfd37581ab79bc146b0ee774a8683a9d1de9b2669",
+      "compressed_bytes": 11508795,
+      "uncompressed_sha256": "a431032570bbe464640d8e9a248df755d90222ce9a06efb4df1a7e19f72eb8cc",
+      "aliases": []
     },
     {
       "title": "Impulse",
