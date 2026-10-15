@@ -5679,6 +5679,16 @@
       "compressed_bytes": 4850245,
       "uncompressed_sha256": "480b33f71e075d7e59942f2c966ec386b75c5fe153ec82573f7deb8c5b84ef2e",
       "aliases": []
+    },
+    {
+      "title": "[12] Ascendanz",
+      "source_simfile": "[12] Ascendanz/Ascendanz.ssc",
+      "harness_version": "0.1.80",
+      "archive": "c63d1523ae6a67d6c16795d2546d7448d7321ebdf913ae07eca8894b76d5e1e2.tar.zst",
+      "sha256": "c63d1523ae6a67d6c16795d2546d7448d7321ebdf913ae07eca8894b76d5e1e2",
+      "compressed_bytes": 9083995,
+      "uncompressed_sha256": "0d92fec459341f51af8ad70d848a7826ec0a48a74e658521c39c1c397c8fe2b1",
+      "aliases": []
     }
   ],
   "compression_level": 22
