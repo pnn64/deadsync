@@ -286,6 +286,8 @@ where
     crate::lua_util::install_message_order(&lua, &context.message_actor_order)
         .map_err(|err| err.to_string())?;
     crate::live::install_query_trace(&lua).map_err(|err| err.to_string())?;
+    #[cfg(feature = "test-support")]
+    crate::live::set_dynamic_command_observer(&lua, context.trace_dynamic_commands);
     compile_timer.push_stage("host");
     #[cfg(feature = "test-support")]
     lua.set_app_data(crate::song_tables::SongLuaSkinWrites::default());
@@ -487,6 +489,8 @@ where
         scene_context = crate::host::selected_scene_context(&lua, &scene_context)
             .map_err(|err| err.to_string())?;
         crate::live::install_query_trace(&lua).map_err(|err| err.to_string())?;
+        #[cfg(feature = "test-support")]
+        crate::live::set_dynamic_command_observer(&lua, scene_context.trace_dynamic_commands);
         reloads += 1;
     };
     prior_broadcasts.append(&mut captured_startup.broadcasts);

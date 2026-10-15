@@ -1476,6 +1476,9 @@ pub struct SongLuaCompileContext {
     /// external screen path. These inputs contain no handler results.
     #[cfg(feature = "test-support")]
     pub message_actor_order: Vec<(String, usize)>,
+    /// Observational capture profile; does not change actor dispatch or queries.
+    #[cfg(feature = "test-support")]
+    pub trace_dynamic_commands: bool,
     pub music_length_seconds: f32,
     pub style_name: String,
     /// Song charts in simfile load order; never synthesize missing difficulties.
@@ -1525,6 +1528,8 @@ impl SongLuaCompileContext {
             random_seed: 1,
             #[cfg(feature = "test-support")]
             message_actor_order: Vec::new(),
+            #[cfg(feature = "test-support")]
+            trace_dynamic_commands: false,
             music_length_seconds: 0.0,
             style_name: "single".to_string(),
             song_steps: Vec::new(),

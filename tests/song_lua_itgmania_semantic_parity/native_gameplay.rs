@@ -1616,13 +1616,12 @@ return Def.Actor {}
         assert_eq!(queries[0]["results"][0]["name"], "single");
     }
 
-    #[test]
-    fn dynamically_added_commands_keep_native_observer_provenance() {
+    fn dynamic_command_observations(enabled: bool) -> Vec<serde_json::Value> {
         use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame,
             SongLuaNoteskinResolver, compile_song_lua_with_default_host};
         use std::{fs, sync::Arc};
         super::start_call_log(10_000).expect("observational logger");
-        let dir = std::env::temp_dir().join(format!("deadsync-dynamic-trace-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("deadsync-dynamic-trace-{}-{enabled}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("default.lua");
         fs::write(&entry, r#"
@@ -1639,6 +1638,7 @@ return Def.Actor {
 "#).unwrap();
         let mut context = SongLuaCompileContext::new(&dir, "dynamic observer");
         context.live = true;
+        context.trace_dynamic_commands = enabled;
         let mut compiled = compile_song_lua_with_default_host::<(), (), _>(
             &entry, &context, SongLuaNoteskinResolver::default(),
             |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).unwrap();
@@ -1647,12 +1647,28 @@ return Def.Actor {
             delta_seconds: 0.1, ..Default::default()
         }).unwrap();
         assert!(output.errors.is_empty(), "{:?}", output.errors);
-        let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
+        super::CALL_EVENTS.with_borrow(|capture| capture.events.clone())
+    }
+
+    #[test]
+    fn dynamically_added_commands_keep_native_observer_provenance() {
+        let events = dynamic_command_observations(false);
         assert!(!events.iter().any(|event| event["command"] == "SetCommand"), "{events:?}");
         let queries: Vec<_> = events.iter().filter(|event| event["operation"] == "GameState.GetSongBeat").collect();
         assert_eq!(queries.len(), 2);
         assert_eq!(queries[0]["phase"], "construction");
         assert_eq!(queries[1]["phase"], "callback");
+        assert_eq!(events.iter().filter(|event| event["command"] == "DeclaredCommand").count(), 2);
+    }
+
+    #[test]
+    fn dynamically_added_commands_observe_enabled_capture_profile() {
+        let events = dynamic_command_observations(true);
+        assert_eq!(events.iter().filter(|event| event["command"] == "SetCommand").count(),
+            2, "dynamic command boundaries must observe actual dispatch: {events:?}");
+        let queries: Vec<_> = events.iter().filter(|event| event["operation"] == "GameState.GetSongBeat").collect();
+        assert_eq!(queries.len(), 2);
+        assert!(queries.iter().all(|event| event["phase"] == "callback"));
         assert_eq!(events.iter().filter(|event| event["command"] == "DeclaredCommand").count(), 2);
     }
 
@@ -2762,6 +2778,19 @@ pub(crate) fn replay(
     simfile: &Path,
     last_seen_video_driver: Option<&str>,
     scope: Scope,
+    progress: impl FnMut(usize, usize),
+) -> Result<Value, String> {
+    replay_with_command_observer(trace, trace_path, simfile, last_seen_video_driver,
+        false, scope, progress)
+}
+
+pub(crate) fn replay_with_command_observer(
+    trace: &Value,
+    trace_path: &Path,
+    simfile: &Path,
+    last_seen_video_driver: Option<&str>,
+    dynamic_commands: bool,
+    scope: Scope,
     mut progress: impl FnMut(usize, usize),
 ) -> Result<Value, String> {
     validate_capture(&trace)?;
@@ -2903,6 +2932,9 @@ pub(crate) fn replay(
     context.last_seen_video_driver = last_seen_video_driver
         .or_else(|| preferences.get("last_seen_video_driver").and_then(Value::as_str))
         .unwrap_or_default().to_string();
+    // This is a capture-tool observation contract, not a gameplay input.
+    // No native command events, query results or expected values enter the VM.
+    context.trace_dynamic_commands = dynamic_commands;
     let (creation_order, factory_coverage) = native_creation_order_with_coverage_for_entries(
         trace, 1, song.background_lua_changes.len())?;
     context.message_actor_order = creation_order;

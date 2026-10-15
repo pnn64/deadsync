@@ -3857,12 +3857,13 @@ fn run_guarded_actor_command(
     let prior_update = lua
         .app_data_mut::<SongLuaOverlayUpdateCapture>()
         .map(|mut capture| std::mem::replace(&mut capture.update_command, name == "UpdateCommand"));
-    // The native observer wraps Def declaration functions only. A function
-    // installed later by Actor:addcommand has no command observer of its own.
-    // Snapshot this provenance before the callback can replace its command.
+    // Legacy capture tools wrap declaration functions only. The capture's
+    // source-backed observer profile can also observe real dynamic dispatch.
+    // Snapshot provenance before the callback can replace its command.
     let dynamic = actor.raw_get::<Option<Table>>("__songlua_dynamic_commands")?
         .map(|commands| commands.raw_get::<Option<Function>>(name)).transpose()?.flatten();
-    let observed = dynamic.is_none_or(|function| function.to_pointer() != command.to_pointer());
+    let observed = crate::live::observes_dynamic_commands(lua)
+        || dynamic.is_none_or(|function| function.to_pointer() != command.to_pointer());
     if observed { crate::live::trace_command(lua, command, name, "begin"); }
     let result = call_actor_function(lua, actor, command, params).map_err(|err| {
         mlua::Error::external(format!(

@@ -70,7 +70,15 @@ struct ArchiveRuntime {
     frame_clock: Option<String>,
     #[serde(default)]
     machine_preferences: Option<ArchiveMachinePreferences>,
+    #[serde(default)]
+    command_observer: Option<ArchiveCommandObserver>,
     random_state: RandomState,
+}
+
+#[derive(Deserialize)]
+struct ArchiveCommandObserver {
+    dynamic_commands: bool,
+    capture_binary_sha256: String,
 }
 
 #[derive(Deserialize)]
@@ -1466,12 +1474,19 @@ fn replay_native_archive(
         native_gameplay::Scope::Full => "replaying every native gameplay frame",
         native_gameplay::Scope::ThroughSecond(_) => "replaying native frames through the diagnostic cutoff",
     });
-    let mut report = native_gameplay::replay(&trace, &trace_path, &archive.root.join(&archive.manifest.chart.simfile),
+    let mut report = native_gameplay::replay_with_command_observer(&trace, &trace_path, &archive.root.join(&archive.manifest.chart.simfile),
         archive.manifest.runtime.machine_preferences.as_ref().map(|prefs| prefs.last_seen_video_driver.as_str()),
+        archive.manifest.runtime.command_observer.as_ref().is_some_and(|observer| observer.dynamic_commands),
         scope, |frame, frames| {
             progress.frame.store(frame, Ordering::Relaxed);
             progress.frames.store(frames, Ordering::Relaxed);
         }).unwrap_or_else(|error| panic!("native gameplay replay failed: {error}"));
+    if let Some(observer) = &archive.manifest.runtime.command_observer {
+        report["command_observer"] = serde_json::json!({
+            "dynamic_commands": observer.dynamic_commands,
+            "capture_binary_sha256": observer.capture_binary_sha256,
+        });
+    }
     report["fixture_sha256"] = Value::String(fixture.1.into());
     report["fixture_path"] = Value::String(fixture.0.to_string_lossy().into_owned());
     let mismatches = report["mismatches"].as_array().expect("native comparison failures");

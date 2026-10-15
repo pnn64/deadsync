@@ -149,6 +149,18 @@ struct QueryTrace {
     hooks: Vec<(Table, &'static str)>,
     depth: usize,
     commands: usize,
+    dynamic_commands: bool,
+}
+
+#[cfg(feature = "test-support")]
+pub(crate) fn set_dynamic_command_observer(lua: &Lua, enabled: bool) {
+    if let Some(mut trace) = lua.app_data_mut::<QueryTrace>() {
+        trace.dynamic_commands = enabled;
+    }
+}
+
+pub(crate) fn observes_dynamic_commands(lua: &Lua) -> bool {
+    lua.app_data_ref::<QueryTrace>().is_some_and(|trace| trace.dynamic_commands)
 }
 
 fn query_value(lua: &Lua, value: &Value, depth: usize) -> mlua::Result<serde_json::Value> {
