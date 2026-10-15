@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "final bounded message subscriber coverage repair complete; original full capture reused; no third full repair",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "4c9ae9ef093b2cc8d35f6266920ab6763b4385d9; subscriber dispatch fix d69f0a20fd7a8b9a00fef1680365364522a51706",
