@@ -1,0 +1,12 @@
+{
+  "fix_commit": "135dcdfd107e0b2cf527c010b827593139433102",
+  "source_root": "/home/parity/workspace/step-statistics-green-v8/deadsync",
+  "binary_sha256": "c712e2416685fdecfec24dac506e5b8d93c4829ac17dc5007fa1b28f9af6f12b",
+  "build_proof": "/home/parity/jobs/step-statistics-linux-green-v8/proof.json",
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "execute original native StepStatistics and histogram Lua through real actor construction, Init/Begin/On/song-change lifecycle, resources, real radar/density data and actual profile selection",
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
