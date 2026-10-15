@@ -1,0 +1,30 @@
+{
+  "regression": "live_player_attack_display_preserves_native_inventory_and_hold_indices",
+  "meaningful_missing_attack_display_red_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 332.1890385000006,
+      "log_sha256": "defae1edf0e096b4c1d2604b475a4320aa3c09a5530bb618a69b61bcb69ff22a",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 625 filtered out; finished in 0.22s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 245.34630225203,
+      "log_sha256": "a1cee04da1e908e18d71fd9e9767d7ba61f0fbff8346cc518cf7d2922da6d429",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 623 filtered out; finished in 0.17s"
+      ]
+    }
+  ],
+  "native_inventory": "sweep-2026-10-15-hope-player-inventory-entry-evidence.json",
+  "fixture_correction_selection": "sweep-2026-10-15-player-attack-display-regression-selection.json",
+  "full_chart_repairs_spent": 0,
+  "full_song_acceptance_comparisons_changed": false
+}
