@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T13:37:24Z",
+  "updated_utc": "2026-10-15T14:12:51Z",
   "counts": {
     "passed": 398,
     "pending": 103,
@@ -8160,18 +8160,18 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-15-hope-out-transition-quad-entry-diagnostic.json",
+      "followup": "sweep-2026-10-15-hope-in-transition-bitmaps-entry-diagnostic.json",
       "source_cause": "sweep-2026-10-15-hope-cancel-source-cause.json",
       "entry_diagnostic_frames": 1688,
       "entry_diagnostic_errors": 0,
-      "entry_diagnostic_mismatches": 20443,
+      "entry_diagnostic_mismatches": 20427,
       "archive_namespace_startup_error_cleared_in_diagnostic": true,
       "native_trace_and_all_original_member_bytes_unchanged": true,
       "original_terminal_full_result_preserved": true,
       "new_full_repair_started": false,
       "cancel_child_missing_failure_fixed_by": "c71cc5f319cd5b950b6ce107ec23f65772062260",
-      "remaining_source_cause": "sweep-2026-10-15-hope-in-transition-texture-source-cause.json",
-      "current_diagnostic_failure": "native In Sprite GetTexture returns RageTexture while owned returns nil at native sequence481; native LoadActor assets are not bound",
+      "remaining_source_cause": null,
+      "current_diagnostic_failure": "actual remaining entry comparisons after current-theme Combo font selection; source cause not yet claimed",
       "diagnostic_only_not_full_acceptance": true,
       "quad_default_texture_fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
       "quad_texture_all_sixteen_groups_both_hosts_passed": true,
@@ -8182,7 +8182,8 @@
       "player_attack_display_fix_commit": "7efd988fdcc73bb3601b9b60981e5e89bbe0d21c",
       "note_field_board_fix_commit": "b5594d9bb0e4f66e34f32e22cca38a86fd7db574",
       "combo_font_resources_fix_commit": "faa925c43a4b959114ffb1eb97d82b830d5983e7",
-      "out_transition_quad_fix_commit": "461434bacf9449ddba8a8e3a9dc980f8e05ef3c1"
+      "out_transition_quad_fix_commit": "461434bacf9449ddba8a8e3a9dc980f8e05ef3c1",
+      "in_transition_bitmaps_fix_commit": "89441b1030309f76fba0b5098df2c364af5a7525"
     },
     {
       "position": 230,
