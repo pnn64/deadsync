@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Pop/Pop.ssc",
+  "native_frames": 81313,
+  "replayed_frames": 81313,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "16176f9da63a65b34832d8f9304891ab213389841fa02bb0181769bfc641de84.tar.zst",
+  "compressed_sha256": "16176f9da63a65b34832d8f9304891ab213389841fa02bb0181769bfc641de84",
+  "uncompressed_sha256": "ef67277eb0633abbfa52a9846caefdb397834de258bbe99ffd5888cae7544dd1",
+  "compressed_bytes": 4474916,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
