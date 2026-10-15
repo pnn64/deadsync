@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+  "native_frames": 47002,
+  "replayed_frames": 47002,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "cf9c08bd681e27edebd0cf7754106cd6bebe800295c8a184e377d7397a411c25.tar.zst",
+  "compressed_sha256": "cf9c08bd681e27edebd0cf7754106cd6bebe800295c8a184e377d7397a411c25",
+  "uncompressed_sha256": "570a1c7187c0bccc4bde87f2649980c600b3b34377701d9d90d0b402e78153b9",
+  "compressed_bytes": 11045498,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
