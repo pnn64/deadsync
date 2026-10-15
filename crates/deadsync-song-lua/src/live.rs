@@ -3788,6 +3788,58 @@ return Def.Actor { OnCommand = function(self) self:sleep(9999) end }
     }
 
     #[test]
+    fn live_underlay_header_uses_native_quad_texture_and_init() {
+        for (width, height, enabled) in [(640.0, 480.0, [true, false]),
+            (854.0, 480.0, [true, true]), (1280.0, 720.0, [false, true])] {
+            let mut compiled = compile_with_context(&format!("underlay-header-{width}"),
+                "return Def.ActorFrame {}", |context| {
+                    context.screen_width = width;
+                    context.screen_height = height;
+                    context.players[0].enabled = enabled[0];
+                    context.players[1].enabled = enabled[1];
+                });
+            let mut scene = compiled.live_scene.take().unwrap();
+            let screen = scene.lua.globals().get::<Table>("__songlua_top_screen").unwrap();
+            let underlay = crate::actor_children(&scene.lua, &screen).unwrap().raw_get::<Table>("Underlay").unwrap();
+            let header = crate::actor_children(&scene.lua, &underlay).unwrap().raw_get::<Table>("Header").unwrap();
+            assert!(crate::lua_util::actor_type_is(&header, "Quad").unwrap(),
+                "Underlay Header must be the native Quad, including its default texture");
+            scene.lua.globals().set("HEADER", header.clone()).unwrap();
+            scene.lua.globals().set("UNDERLAY", underlay).unwrap();
+            scene.lua.load(r#"
+assert(HEADER:GetName() == 'Header' and HEADER:GetParent() == UNDERLAY)
+assert(tostring(HEADER):find('Sprite', 1, true))
+local texture = HEADER:GetTexture()
+assert(texture ~= nil and texture:GetPath() == '')
+assert(texture:GetSourceWidth() == 1 and texture:GetSourceHeight() == 1)
+assert(texture:GetTextureWidth() == 1 and texture:GetTextureHeight() == 1)
+assert(texture:GetImageWidth() == 1 and texture:GetImageHeight() == 1)
+assert(HEADER:GetWidth() == 1 and HEADER:GetHeight() == 1)
+assert(HEADER:GetZoomedWidth() == SCREEN_WIDTH and HEADER:GetZoomedHeight() == 80)
+assert(HEADER:GetX() == SCREEN_WIDTH/2 and HEADER:GetY() == 0)
+assert(HEADER:GetVAlign() == 0)
+local color = HEADER:GetDiffuse()
+assert(color[1] == 0 and color[2] == 0 and color[3] == 0 and math.abs(color[4] - 0.85) < 0.000001)
+"#).exec().unwrap();
+            let state = read_state(&scene.lua, &header).unwrap();
+            assert_eq!((state.x, state.y), (width * 0.5, 0.0));
+            assert_eq!((state.zoom_x, state.zoom_y), (width, 80.0));
+            assert_eq!(state.diffuse, [0.0, 0.0, 0.0, 0.85]);
+            let init = header.raw_get::<Function>("InitCommand").unwrap();
+            assert_eq!(init.info().source.as_deref(), Some("@theme:/BGAnimations/ScreenGameplay underlay/Shared/Header.lua"));
+            scene.lua.load("HEADER:xy(1,2):diffuse(1,1,1,1):zoomto(4,5):valign(1)").exec().unwrap();
+            init.call::<()>(header.clone()).unwrap();
+            let output = scene.advance(SongLuaLiveFrame { delta_seconds: 0.01, screen_seconds: 0.01,
+                ..Default::default() }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            let restored = read_state(&scene.lua, &header).unwrap();
+            assert_eq!((restored.x, restored.y, restored.zoom_x, restored.zoom_y),
+                (width * 0.5, 0.0, width, 80.0));
+            assert_eq!(restored.diffuse, state.diffuse);
+        }
+    }
+
+    #[test]
     fn live_shared_bpm_owns_native_hierarchy_and_updates_real_timing_and_rate() {
         use deadsync_rules::timing::{TimingData, TimingSegments};
         for (enabled, split, upper) in [([true,false],false,false), ([true,true],false,false),

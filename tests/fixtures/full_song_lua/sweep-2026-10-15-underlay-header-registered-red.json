@@ -1,0 +1,29 @@
+{
+  "regression": "live_underlay_header_uses_native_quad_texture_and_init",
+  "meaningful_unloaded_sprite_instead_of_quad_red_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 340.6830451999849,
+      "log_sha256": "a655f428ddc40cf19cb9441236cd9dc3ec0ccf0b40f78cc7e274ea3c594a33cc",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 635 filtered out; finished in 0.24s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 258.0703165490413,
+      "log_sha256": "24edb6eb9703818a37eb769394722f120ded8be4cf8c91f0c7fe26c932cdd940",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 633 filtered out; finished in 0.22s"
+      ]
+    }
+  ],
+  "source_cause": "sweep-2026-10-15-hope-underlay-header-source-cause.json",
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
