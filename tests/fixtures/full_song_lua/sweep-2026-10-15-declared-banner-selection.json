@@ -1,0 +1,11 @@
+{
+  "fix_commit": "520e261907a0e57d075e2fe932834620f91d7a7c",
+  "source_root": "/home/parity/workspace/declared-banner-green-v2/deadsync",
+  "binary_sha256": "8bdb73c3f841410dd63ed139d32b3f8d025df9a7a5b658356bd60d3b4496dd21",
+  "build_proof": "/home/parity/jobs/declared-banner-linux-green-v2/proof.json",
+  "all_five_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "real parsed song banner metadata, explicit path precedence, native HasBanner file check and Banner.LoadFromSong/fallback resources and scrolling reset",
+  "hope_full_repairs_spent": 0,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
