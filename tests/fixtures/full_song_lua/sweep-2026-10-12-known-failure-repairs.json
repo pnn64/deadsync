@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "bounded known failure recovery complete",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "a3fac0d8b / harness 78d4a1e",
