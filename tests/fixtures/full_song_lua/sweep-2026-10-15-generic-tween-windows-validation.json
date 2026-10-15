@@ -1,5 +1,5 @@
 {
-  "status": "all eight Windows checks passed; Linux remaining checks running",
+  "status": "all eight Windows checks passed",
   "source_pin_count": 1175,
   "all_1175_normalized_source_pins_verified": true,
   "all_eight_log_hashes_verified": true,

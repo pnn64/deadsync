@@ -1,0 +1,80 @@
+{
+  "all_1175_raw_and_crossplatform_source_pins_verified": true,
+  "all_eight_checks_and_log_hashes_verified": true,
+  "binary_sha256": "3e7c6a5edbb2df015cb15f6deaa2a8c73d729123e8a30e8a9105a07d501a04eb",
+  "source_root": "/home/parity/workspace/generic-tween-v1/deadsync",
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 318.92055695099407,
+      "log_sha256": "27786103b71d35428943069d808b806366e71f77d4ec1f0381f1d7f76966e9e5",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 606 filtered out; finished in 0.36s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 1.2275974590156693,
+      "log_sha256": "bd0dd39c85ad439108449c6186ce191c385b3171d853f1bc0d38710c8d3fc7b8",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 607 filtered out; finished in 0.23s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 107.04521162400488,
+      "log_sha256": "724db64184f26e703c80d21099abf4bb5730435dbbab296131b0bc6e61e55551",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.162064461997943,
+      "log_sha256": "a7d44d864d58dab2b2684f97259f43e1a5b9cc2706217455f4bab1df3b076077",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 598 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 41.302999703999376,
+      "log_sha256": "b96658291f926d6b5f861ff5bf34bbd91994db568b08a9d18c7fb066151f1319",
+      "results": [
+        "test result: ok. 72 passed; 0 failed; 0 ignored; 0 measured; 536 filtered out; finished in 40.31s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 262.3864964619861,
+      "log_sha256": "9f9d093909d4ed5dc8bd2831b224a1295f6a79ba560c0706cac6a9118b59c687",
+      "results": [
+        "test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 0.94s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 0.7422641919984017,
+      "log_sha256": "ceb96c3b6b6b6a8bfd7e5ad8362c5f7d31f22beb9ed7ea0f40e4838eeeb90ab9",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 607 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 45.9657796479878,
+      "log_sha256": "740c3ad007950fed2dd6285bc871a466b033eb6e7194da8bb9425c306dc3e119",
+      "results": []
+    }
+  ],
+  "fix_commit": "db721070909353b343cdf3a2b85ba90da700a99f",
+  "global_original_sweep_selection_unchanged": true
+}
