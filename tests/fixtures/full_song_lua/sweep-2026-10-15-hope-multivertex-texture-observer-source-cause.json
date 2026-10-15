@@ -1,0 +1,83 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "entry_evidence": "sweep-2026-10-15-hope-step-statistics-entry-diagnostic.json",
+  "entry_frames": 1688,
+  "entry_errors": 0,
+  "entry_mismatches": 20507,
+  "first_remaining_native_seq": 708,
+  "first_remaining_mismatch": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "external-0146",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 3,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          {
+            "actor": "external-0142",
+            "name": "",
+            "path": "ScreenGameplay/Underlay/StepStatsPaneP1"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 3,
+      "operation": "Actor.GetParent",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 708,
+      "source": "song:/sm5/modules/grabactors.lua",
+      "results": [
+        {
+          "actor": 21,
+          "name": "",
+          "path": "ScreenGameplay/Underlay/StepStatsPaneP1"
+        }
+      ]
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "query",
+      "operation": "Sprite.GetTexture",
+      "source": "song:/sm5/modules/grabactors.lua",
+      "line": 3,
+      "phase": "callback",
+      "beat": -15.99990177154541,
+      "seconds": -4.08297061920166,
+      "args": [],
+      "results": [
+        {
+          "type": "nil"
+        }
+      ]
+    }
+  },
+  "previous_first_remaining_native_seq": 653,
+  "previous_missing_native_pane_count_resolved": true,
+  "step_statistics_fix_commit": "135dcdfd107e0b2cf527c010b827593139433102",
+  "source_cause": "The owned bound-method observer labels every GetTexture except ActorFrameTexture as Sprite.GetTexture, including actual ActorMultiVertex instances in the newly loaded native density graph. Native ActorMultiVertex.cpp registers its own GetTexture method and derives ActorMultiVertex directly from Actor, so this is an ActorMultiVertex.GetTexture call. The existing acceptance operation list includes Sprite.GetTexture and excludes ActorMultiVertex.GetTexture; the native trace therefore excludes the AMV getter from this comparison while the owned observer inserts a falsely labeled Sprite query. The extra nil-texture observation shifts the later traversal sequence. This is a concrete observer-class error, independent of additional later ownership/traversal failures.",
+  "native_actor_multivertex_cpp_sha256": "5ee73f28421f39b3b22955e6735f8979fb63948baf23261272d11965e42b8dd8",
+  "native_physical_source_file": "/home/parity/native/source-v1/src/ActorMultiVertex.cpp",
+  "native_physical_source_hash_verified_equal_local_vendor": true,
+  "native_class_registration": "LUA_REGISTER_DERIVED_CLASS(ActorMultiVertex, Actor)",
+  "native_own_method_registration": "ADD_METHOD(GetTexture);",
+  "owned_wrong_class_mapping": "\"GetTexture\" | \"loop\" | \"rate\" => \"Sprite\"",
+  "existing_comparison_scope": {
+    "Sprite.GetTexture": "compared",
+    "ActorMultiVertex.GetTexture": "uncompared; report coverage separately"
+  },
+  "expected_query_values_used_as_inputs": false,
+  "full_repairs_spent": 0,
+  "production_observer_fix_added": false,
+  "acceptance_source_byte_identical_to_density_baseline": true,
+  "next_action": "Correct defining-class handling in the owned GetTexture observer while preserving the existing comparison scope, runtime getter behavior, keys and tolerances. Add a meaningful runtime regression distinguishing native Sprite, ActorFrameTexture and ActorMultiVertex texture observations, retain all existing controls, qualify on both hosts, and inspect the next actual retained-entry result before a full HOPE repair."
+}

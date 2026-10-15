@@ -4,7 +4,6 @@
   "entry_frames": 1688,
   "entry_errors": 0,
   "entry_mismatches": 20442,
-  "first_remaining_native_seq": 653,
   "native_actor": "external-0112",
   "native_actor_name": "StepStatsPaneP1",
   "native_actor_path": "ScreenGameplay/Underlay/StepStatsPaneP1",
@@ -107,9 +106,14 @@
   "full_repairs_spent": 0,
   "expected_query_results_used_as_engine_inputs": false,
   "comparison_logic_changed": false,
-  "production_step_statistics_fix_added": false,
+  "production_step_statistics_fix_added": true,
   "next_action": "Build the actual StepStatistics source-selected hierarchy and runtime behavior from its eight primary Lua files, including real child types, geometry, resources, statistics/message updates and graph ownership. Use real initial gameplay/profile inputs. Preserve the previously qualified quantized recurring density timing and all existing controls. Qualify meaningful runtime assertions on both hosts before retained entry; no full HOPE repair while known entry failures remain.",
   "steps_density_prerequisite_fix_commit": "b43bcea765536e63a9f12ce220c1226023bfe19c",
   "steps_density_prerequisite_qualified_both_hosts": true,
-  "steps_density_source_scope": "sweep-2026-10-15-steps-density-comparison-and-source-scope.json"
+  "steps_density_source_scope": "sweep-2026-10-15-steps-density-comparison-and-source-scope.json",
+  "original_failure_native_seq": 653,
+  "fix_commit": "135dcdfd107e0b2cf527c010b827593139433102",
+  "followup_entry": "sweep-2026-10-15-hope-step-statistics-entry-diagnostic.json",
+  "first_remaining_native_seq_after_fix": 708,
+  "status": "resolved original missing3-versus1 direct children by executing original native StepStatistics source; first remaining mismatch is an AMV GetTexture observer-class error"
 }
