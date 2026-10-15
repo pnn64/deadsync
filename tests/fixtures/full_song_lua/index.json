@@ -4995,15 +4995,12 @@
     {
       "title": "The Entity",
       "source_simfile": "The Entity/The Entity.sm",
-      "harness_version": "0.1.0",
-      "archive": "a5219f3e355965a385ee0acb93b4a9c556f3235df10907c1f36b1cb5026d13ed.tar.zst",
-      "sha256": "a5219f3e355965a385ee0acb93b4a9c556f3235df10907c1f36b1cb5026d13ed",
-      "compressed_bytes": 815798,
-      "uncompressed_sha256": "eecc2b48b8008af740971c8ad863e468f09d35ef22aa3918bc230941cf05be7c",
-      "compression_level": 22,
-      "aliases": [
-        "b4289d7ae108644488da25bec89f7737ce5fd48faac28fbb0d44fec9a20af814.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "d01e09c869226b6fcac517cdfa0708cb4324306646b03ce0b01bf5ba872570b8.tar.zst",
+      "sha256": "d01e09c869226b6fcac517cdfa0708cb4324306646b03ce0b01bf5ba872570b8",
+      "compressed_bytes": 12462279,
+      "uncompressed_sha256": "74a780f774a55d30cca5cb499e0fa1a33902da92de8cb999fe433ce7b5812084",
+      "aliases": []
     },
     {
       "title": "The Entity",

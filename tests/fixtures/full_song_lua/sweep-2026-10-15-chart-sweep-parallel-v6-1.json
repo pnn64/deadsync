@@ -55,6 +55,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 431,
+      "source_simfile": "The Entity/The Entity.sm",
+      "simfile_sha256": "0b88f5eaeda0df0cfe8443d59bc7d94a386ec82bbde8ab813efd27e156d7fccc",
+      "retained_original_archive": "a5219f3e355965a385ee0acb93b4a9c556f3235df10907c1f36b1cb5026d13ed.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 158.65932053202414,
+      "trace_sha256": "1b83a55eb5f9caee168acb67eb11307311465b1b8bdb0ef7d46f36e07c9405c2",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v6-1/chart-431/candidates/74a780f774a55d30cca5cb499e0fa1a33902da92de8cb999fe433ce7b5812084.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1004.0872932380007,
+      "candidate_sha256": "74a780f774a55d30cca5cb499e0fa1a33902da92de8cb999fe433ce7b5812084",
+      "native_frames": 25109,
+      "replayed_frames": 25109,
+      "compared_stage_fields": 1386,
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, Actor.spring, ActorFrame.SetDrawByZPosition, GameState.GetCurMusicSeconds, PlayerOptions.FromString",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "20b8a1f50c43db8b8433844f61658c00901c4b92dad85202c10893c9536f1e1f",
+      "archive": "d01e09c869226b6fcac517cdfa0708cb4324306646b03ce0b01bf5ba872570b8.tar.zst",
+      "archive_sha256": "d01e09c869226b6fcac517cdfa0708cb4324306646b03ce0b01bf5ba872570b8",
+      "compressed_bytes": 12462279,
+      "pack_seconds": 15.933855545998085,
+      "harness_version": "0.1.80",
+      "title": "The Entity",
+      "retained_original_entry": {
+        "title": "The Entity",
+        "source_simfile": "The Entity/The Entity.sm",
+        "harness_version": "0.1.0",
+        "archive": "a5219f3e355965a385ee0acb93b4a9c556f3235df10907c1f36b1cb5026d13ed.tar.zst",
+        "sha256": "a5219f3e355965a385ee0acb93b4a9c556f3235df10907c1f36b1cb5026d13ed",
+        "compressed_bytes": 815798,
+        "uncompressed_sha256": "eecc2b48b8008af740971c8ad863e468f09d35ef22aa3918bc230941cf05be7c",
+        "compression_level": 22,
+        "aliases": [
+          "b4289d7ae108644488da25bec89f7737ce5fd48faac28fbb0d44fec9a20af814.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -65,7 +116,7 @@
   },
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 1,
+  "passed_fixtures": 2,
   "pending_charts": 0,
-  "processed_charts": 1
+  "processed_charts": 2
 }
