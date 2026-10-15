@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T01:56:11Z",
-  "previous_goal_turn": "Progress: Vector Field original full replay passes68,688 frames and U.N. Owen SM first corrected-observer repair passes67,636; zero callback errors/mismatches, saved fixtures locally decompressed and SHA-verified, passing charts closed and committed. Historical Circles SM complete117,065-frame native capture source binding repaired in manifest only, every trace/source member unchanged; first diagnostic failed before replay, corrected2,807-frame diagnostic has0errors/0mismatches, first full repair running with one later maximum. Dynamic command observation profile reproduced actual What If failure on both hosts: legacy test passes, enabled-profile test lacks2dispatch boundaries; compile typo first logs preserved and excluded from semantic red. Fix6a2fcdd49 traces actual owned dynamic command dispatch only when explicit source-backed capture observer profile is enabled; legacy captures retain prior observation behavior, actual actor dispatch/query values unchanged. Target controls pass both hosts; remaining eight-check matrices running. Harness79005e1 preserves optional observer provenance in archive runtime; both hosts runtime12/archive12/build pass, all2223raw/normalized source pins and log/binary hashes verified. What If corrected complete47,002-frame capture reused byte-for-byte; only runtime.command_observer metadata added, all nonmanifest members and original candidate retained/verified. Final second repair queued behind all8checks on both hosts and all1175raw/normalized source pins; no third repair. Tower first generic-tween repair, historical SM first repair, original queues and other existing repairs remain active without restart. Global original helper711a5230 unchanged. All501 original simfile bytes unchanged; missing coverage separate, oversized archives ignored/local, sweep active/incomplete.",
+  "updated_utc": "2026-10-15T02:01:09Z",
+  "previous_goal_turn": "Progress: Vector Field original full replay passes68,688 frames, Watching SM original passes39,501, and U.N. Owen SM first corrected-observer repair passes67,636; zero callback errors/mismatches, saved fixtures locally decompressed and SHA-verified, passing charts closed and committed. Historical Circles SM complete117,065-frame native capture source binding repaired in manifest only, every trace/source member unchanged; first diagnostic failed before replay, corrected2,807-frame diagnostic has0errors/0mismatches, first full repair running with one later maximum. Dynamic command observation profile reproduced actual What If failure on both hosts: legacy test passes, enabled-profile test lacks2dispatch boundaries; compile typo first logs preserved and excluded from semantic red. Fix6a2fcdd49 traces actual owned dynamic command dispatch only when explicit source-backed capture observer profile is enabled; legacy captures retain prior observation behavior, actual actor dispatch/query values unchanged. Target controls pass both hosts; all eight checks pass on both hosts (target2/hurry1/easing1/parser10/live72/replay34/identity1/both builds), all1175raw Linux and normalized cross-platform pins and binary/log hashes verified. Harness79005e1 preserves optional observer provenance in archive runtime; both hosts runtime12/archive12/build pass, all2223raw/normalized source pins and log/binary hashes verified. What If corrected complete47,002-frame capture reused byte-for-byte; only runtime.command_observer metadata added, all nonmanifest members and original candidate retained/verified. Final second repair launched after all8checks on both hosts and all1175raw/normalized source pins; native capture reused, no third repair. Tower first generic-tween repair, historical SM first repair, original queues and other existing repairs remain active without restart. Global original helper711a5230 unchanged. All501 original simfile bytes unchanged; missing coverage separate, oversized archives ignored/local, sweep active/incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "6a2fcdd4949e1fb2d7c7989842c91951c2d6fba6",
+      "deadsync": "114df0b7a694896d86b7651babd0aab9b32809a3",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -142,18 +142,18 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Watching/watching-fakemines.sm",
-      "position": 467,
+      "current": "Ztar Trek/steps.sm",
+      "position": 483,
       "phase": "replay",
-      "pid": 2056079,
+      "pid": 2184828,
       "process_matches": true,
-      "passed": 40,
-      "pending": 65,
-      "processed": 105,
+      "passed": 41,
+      "pending": 66,
+      "processed": 107,
       "last_log_lines": [
-        "[946.3s] replaying every native gameplay frame: 1485 checks completed, 0 failed",
-        "[948.3s] replaying every native gameplay frame: 1485 checks completed, 0 failed",
-        "[950.3s] replaying every native gameplay frame: 1485 checks completed, 0 failed"
+        "[14.0s] replaying every native gameplay frame: frame 896/69378 (1.3%)",
+        "[16.0s] replaying every native gameplay frame: frame 1027/69378 (1.5%)",
+        "[18.0s] replaying every native gameplay frame: frame 1159/69378 (1.7%)"
       ],
       "supervisor_running": true
     },
@@ -1984,22 +1984,33 @@
     "other_jobs_live_observation": {
       "initial_sweep": {
         "status": "running",
-        "current": "Watching/watching-fakemines.sm",
-        "position": 467,
+        "current": "Ztar Trek/steps.sm",
+        "position": 483,
         "phase": "replay",
-        "pid": 2056079,
+        "pid": 2184828,
         "process_matches": true,
-        "passed": 40,
-        "pending": 65,
-        "processed": 105,
+        "passed": 41,
+        "pending": 66,
+        "processed": 107,
         "last_log_lines": [
-          "[946.3s] replaying every native gameplay frame: 1485 checks completed, 0 failed",
-          "[948.3s] replaying every native gameplay frame: 1485 checks completed, 0 failed",
-          "[950.3s] replaying every native gameplay frame: 1485 checks completed, 0 failed"
+          "[14.0s] replaying every native gameplay frame: frame 896/69378 (1.3%)",
+          "[16.0s] replaying every native gameplay frame: frame 1027/69378 (1.5%)",
+          "[18.0s] replaying every native gameplay frame: frame 1159/69378 (1.7%)"
         ],
         "supervisor_running": true
       },
       "jobs": [
+        {
+          "job": "what-if-command-observer-final-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+          "child_running": true
+        },
         {
           "job": "historical-circles-sm-entry-clock-first-repair-v1",
           "complete": false,
@@ -3700,13 +3711,15 @@
       "actual_complete_native_baseline_and_fixed_controls_verified": true,
       "validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-dynamic-command-observer-validation.json",
       "what_if_first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-what-if-dynamic-command-first-repair-launch.json",
-      "what_if_full_repairs_spent": 1,
-      "what_if_one_later_repair_maximum": true,
+      "what_if_full_repairs_spent": 2,
+      "what_if_one_later_repair_maximum": false,
       "original_complete_capture_retained": true,
       "original_global_capture_selection_unchanged": true,
       "what_if_first_repair_status": "pending",
-      "what_if_final_attempt_not_started": true,
-      "what_if_followup": "tests/fixtures/full_song_lua/sweep-2026-10-15-what-if-first-repair-followup.json"
+      "what_if_final_attempt_not_started": false,
+      "what_if_followup": "tests/fixtures/full_song_lua/sweep-2026-10-15-what-if-first-repair-followup.json",
+      "what_if_no_third_full_repair": true,
+      "what_if_final_attempt_running": true
     },
     "tower_generic_tween_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-tower-pokey-generic-tween-diagnosis.json",
     "additional_original_passes_closed": {
@@ -3775,28 +3788,43 @@
       "harness_fix_commit": "79005e1",
       "both_host_semantic_red_verified": true,
       "both_host_target_control_passed": true,
-      "remaining_validation_running": true,
+      "remaining_validation_running": false,
       "all_eight_checks_required_before_selection": true,
       "all_1175_raw_and_normalized_source_pins_required": true,
       "archive_metadata_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-command-observer-metadata-validation.json",
       "candidate_member_integrity": "tests/fixtures/full_song_lua/sweep-2026-10-15-what-if-command-observer-candidate.json",
       "final_repair_queue": "tests/fixtures/full_song_lua/sweep-2026-10-15-what-if-command-observer-final-repair-queue.json",
-      "what_if_full_repairs_spent": 1,
-      "what_if_final_attempt_queued": true,
-      "what_if_final_attempt_running": false,
+      "what_if_full_repairs_spent": 2,
+      "what_if_final_attempt_queued": false,
+      "what_if_final_attempt_running": true,
       "what_if_no_third_full_repair": true,
       "native_capture_reused": true,
       "all_nonmanifest_member_bytes_unchanged": true,
       "full_acceptance_unchanged": true,
-      "global_original_selection_unchanged": true
+      "global_original_selection_unchanged": true,
+      "all_eight_checks_both_hosts_passed": true,
+      "all_1175_raw_and_normalized_source_pins_verified": true,
+      "binary_sha256": "fa324206ba7f62042b59f44613115cdc2e8dc928223a505f746f3a952672f650",
+      "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-dynamic-observer-profile-linux-validation.json",
+      "windows_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-dynamic-observer-profile-windows-validation.json",
+      "selection": "tests/fixtures/full_song_lua/sweep-2026-10-15-dynamic-observer-profile-selection.json",
+      "final_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-what-if-command-observer-final-repair-launch.json",
+      "what_if_final_attempt_supervisor_pid": 2181912
+    },
+    "watching_sm_closed": {
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-watching-sm-fixture-verification.json",
+      "native_frames": 39501,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "full_repairs_spent": 0
     }
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 222,
-    "new_pending_charts": 107,
-    "new_processed_sources": 329,
+    "new_passed_fixtures": 223,
+    "new_pending_charts": 108,
+    "new_processed_sources": 331,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 24,
+    "unprocessed_sources": 22,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -5919,6 +5947,14 @@
       "source_simfile": "wndrwll/wndrwll.ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-247409-1792008774508778954-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Wobbpotato [Blue Shift Phase 1]/wobbpotato.ssc",
+      "repair_attempts": 0,
+      "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for '[10] Wobbpotato': error converting Lua nil to function; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for '[10] Wobbpotato' from '/tmp/.tmpUDxZTi/song/lua/default.lua': error converting Lua nil to function\n\nthread 'main' (2173123) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []

@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T01:56:11Z",
+  "updated_utc": "2026-10-15T02:01:09Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 369,
-    "pending": 108,
-    "unprocessed": 24
+    "passed": 370,
+    "pending": 109,
+    "unprocessed": 22
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3881,7 +3881,9 @@
       "position": 467,
       "source_simfile": "Watching/watching-fakemines.sm",
       "simfile_sha256": "1c7dfef2fa28adb1f74b7e4ba7f84542e8d5c9b2dd4095bdf3f9d0ad853e4a19",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 468,
@@ -3939,7 +3941,9 @@
       "position": 475,
       "source_simfile": "Wobbpotato [Blue Shift Phase 1]/wobbpotato.ssc",
       "simfile_sha256": "85652fc5fe5dbdfd1bf7fba6a8e531504013a373d1835b568abd297270489888",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 476,
