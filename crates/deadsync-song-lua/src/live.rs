@@ -3756,6 +3756,49 @@ return Def.Actor { OnCommand = function(self) self:sleep(9999) end }
     }
 
     #[test]
+    fn live_in_transition_loads_native_style_bitmaps_and_poses() {
+        let compiled = compile("in-transition-bitmaps", r#"
+IN_SPRITES = {}
+return Def.Actor { OnCommand = function()
+    local transition = SCREENMAN:GetTopScreen():GetChild('In')
+    local loaded = transition:GetChildren()['']
+    local visuals = loaded:GetChildren()[''][1]
+    local children = visuals:GetChildren()['']
+    assert(#children == 4)
+    for index = 2, 4 do
+        local sprite = children[index]
+        local texture = assert(sprite:GetTexture(), 'In visual Sprite must load its native bitmap')
+        assert(sprite:GetParent() == visuals and sprite:GetName() == '')
+        assert(sprite:GetWidth() == 640 and sprite:GetHeight() == 480)
+        assert(texture:GetNumFrames() == 1)
+        assert(texture:GetPath():find('/Technique/GameplayIn ', 1, true))
+        assert(sprite:GetX() == SCREEN_CENTER_X and sprite:GetY() == SCREEN_CENTER_Y)
+        assert(sprite:GetZoomX() == 0 and sprite:GetZoomY() == 0)
+        IN_SPRITES[#IN_SPRITES + 1] = sprite
+    end
+    assert(ThemePrefs.Get('VisualStyle') == 'Technique')
+end }
+"#);
+        let scene = compiled.live_scene.expect("native In resource construction");
+        let sprites = scene.lua.globals().get::<Table>("IN_SPRITES").unwrap();
+        assert_eq!(sprites.raw_len(), 3, "inspect all three native In sprites");
+        let sprites = sprites.sequence_values::<Table>().map(Result::unwrap).collect::<Vec<_>>();
+        let paths = sprites.iter().map(|sprite| crate::actor_texture_path(sprite).unwrap().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(paths[0], paths[1], "the two splodes share the same native resource");
+        assert_ne!(paths[0], paths[2], "minisplode retains its own bitmap");
+        for path in &paths {
+            let texture = deadlib_assets::generated_texture(&path.to_string_lossy()).unwrap();
+            assert_eq!(texture.source_size, [1280, 960]);
+            assert!(texture.image.pixels().any(|pixel| pixel[3] != 0), "native bitmap contains visible pixels");
+        }
+        for (index, sprite) in sprites.iter().enumerate() {
+            assert_eq!(crate::actor_tween_time_left(&scene.lua, sprite).unwrap(), if index == 2 { 1.2 } else { 1.0 });
+            assert_eq!(read_state(&scene.lua, sprite).unwrap().rot_z_deg, if index == 1 { -10.0 } else { 10.0 });
+        }
+    }
+
+    #[test]
     fn live_out_transition_loads_quad_directly_with_native_commands() {
         let mut compiled = compile("out-transition-direct-quad", r#"
 return Def.Actor { OnCommand = function()
