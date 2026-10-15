@@ -1,0 +1,24 @@
+{
+  "reason": "Free duplicate raw reports already preserved losslessly as compressed terminal diagnostics; no captures, fixture archives, source files or live inputs are removed.",
+  "reports": [
+    {
+      "raw_path": "/home/parity/jobs/definition-concat-repair-v1/chart-168/report.json",
+      "raw_bytes": 499859173,
+      "raw_sha256": "a3f26230936fdafc5152651cea5b563713b61fd0ed373a4f0f7c8b1de2b50845",
+      "compressed_path": "/home/parity/jobs/definition-concat-repair-v1/chart-168/report.json.zst",
+      "compressed_bytes": 7784101,
+      "compressed_sha256": "c9d68fe8eb0e229747c3b5eac6eb46646152f10101bc841a55bcf5320ffd8f14",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "4191ea3b83a54a9c4c9045b76c0849f9c7526374b3cccb5c47abd163f02ad212",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    }
+  ],
+  "raw_report_bytes_removed": 499859173,
+  "free_before": 339668992,
+  "free_after": 831713280,
+  "mawaru9_helper_hash_unchanged": true,
+  "chart_replays_or_compilers_stopped": false,
+  "acceptance_or_attempt_counts_changed": false
+}
