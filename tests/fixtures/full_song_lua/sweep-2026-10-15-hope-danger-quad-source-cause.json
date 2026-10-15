@@ -67,8 +67,13 @@
   "owned_source": "crates/deadsync-song-lua/src/lua_util.rs:create_underlay_child, top_screen_danger_index branch",
   "timing_window_seq773_resolved": true,
   "timing_window_fix_commit": "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd",
-  "fix_added": false,
+  "fix_added": true,
   "full_repairs_spent": 0,
   "captured_query_values_used_as_inputs": false,
-  "next_action": "Construct the actual original Danger Quad and retain its source Init/health lifecycle and Casual/FailType_Off eligibility. Add a meaningful resource/lifecycle regression, qualify both hosts and only then use a retained entry. No full HOPE repair while the known entry failure remains."
+  "next_action": "Inspect actual first retained entry failure, or begin first full replay if clean. Mawaru9 remains deferred.",
+  "fix_commit": "8bfa5e62fbd842efd8d7136f9137759e96c80a43",
+  "qualified_six_groups_both_hosts": true,
+  "followup_entry": "sweep-2026-10-15-hope-danger-quad-entry-diagnostic.json",
+  "seq965_resolved": true,
+  "first_remaining_native_seq_after_fix": 979
 }
