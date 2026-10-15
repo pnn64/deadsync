@@ -466,6 +466,7 @@ pub fn song_lua_compile_context(
         song.title.clone(),
     );
     context.song_steps = song.charts.iter().map(deadsync_song_lua::SongLuaStep::from).collect();
+    context.song_banner_path.clone_from(&song.banner_path);
     context.player_step_indices = std::array::from_fn(|player| {
         song.charts.iter().position(|chart| chart.chart_type == charts[player].chart_type
             && chart.difficulty == charts[player].difficulty

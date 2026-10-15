@@ -46,12 +46,13 @@ fn song_lua_player_positions_apply_native_integer_margins() {
 
 #[test]
 fn null_renderer_reaches_song_lua_unchanged() {
-    let song = deadsync_simfile::song::parse_song_meta_file(
+    let mut song = deadsync_simfile::song::parse_song_meta_file(
         &deadsync_root().join("tests/fixtures/song_lua/display-size.ssc"),
         &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
         0.0,
         |_| 2.0,
     ).expect("small context chart");
+    song.banner_path = Some(deadsync_root().join("crates/deadsync-song-lua/assets/itgmania/_blank.png"));
     let charts = std::array::from_fn(|_| Arc::new(song.charts[0].clone()));
     let timing = TimingData::default();
     let mut profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
@@ -70,6 +71,7 @@ fn null_renderer_reaches_song_lua_unchanged() {
     assert_eq!((context.screen_width, context.screen_height), (854.0, 480.0));
     assert_eq!((context.display_width, context.display_height), (0.0, 0.0));
     assert_eq!(context.display_aspect_ratio, 16.0 / 9.0);
+    assert_eq!(context.song_banner_path, song.banner_path);
     assert_eq!(context.players[0].autoplay, 1.0);
     assert_eq!(context.players[1].autoplay, 0.0);
     assert_eq!(context.players[0].background_filter_percent, 37);

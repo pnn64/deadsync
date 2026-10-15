@@ -1,0 +1,29 @@
+{
+  "meaningful_declared_banner_api_red_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 373.9656507000036,
+      "log_sha256": "899e58b8e630f2b3a13e0809435231e35baa4ff13846c51e51976c3cc65d9a9d",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 638 filtered out; finished in 0.53s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 247.0914428109536,
+      "log_sha256": "cead5caa1894ad3ec1eec62ad567ef53bfebea13b240a1041e42afbdaa90c4c9",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 636 filtered out; finished in 0.49s"
+      ]
+    }
+  ],
+  "input_plumbing": "real SongData.banner_path forwarded into SongLuaCompileContext; no query outputs enter gameplay",
+  "new_runtime_regression": "declared non-conventional image overrides conventional decoy; actual Banner/StepStatistics image metadata, nil/missing-song fallback and scrolling reset",
+  "all_prior_99_live_tests_41_replay_controls_and_acceptance_assertions_retained": true,
+  "full_chart_repairs_spent": 0
+}

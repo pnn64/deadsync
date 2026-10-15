@@ -1471,6 +1471,8 @@ pub struct SongLuaCompileContext {
     /// compiling standalone actors without simfile foreground declarations.
     pub foreground_names: Vec<String>,
     pub song_dir: PathBuf,
+    /// Resolved artwork from the parsed song, including non-conventional filenames.
+    pub song_banner_path: Option<PathBuf>,
     pub main_title: String,
     pub song_display_bpms: [f32; 2],
     pub song_timing_bpms: Vec<(f32, f32)>,
@@ -1534,6 +1536,7 @@ impl SongLuaCompileContext {
             defer_initial_live_update: false,
             screen_loading: false,
             song_dir: song_dir.into(),
+            song_banner_path: None,
             main_title: main_title.into(),
             song_display_bpms: [60.0, 60.0],
             song_timing_bpms: Vec::new(),

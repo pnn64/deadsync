@@ -3793,6 +3793,59 @@ return Def.Actor { OnCommand = function(self) self:sleep(9999) end }
     }
 
     #[test]
+    fn live_banner_uses_declared_artwork_and_native_fallback() {
+        for (name, selected) in [("declared", true), ("fallback", false)] {
+            let source = r#"
+local song = GAMESTATE:GetCurrentSong()
+local expected = $SELECTED
+local function check(banner)
+    local texture = assert(banner:GetTexture(), 'Banner must load a real selected or fallback texture')
+    if expected then
+        assert(texture:GetPath():find('chosen artwork.png', 1, true))
+        assert(texture:GetSourceWidth() == 16 and texture:GetSourceHeight() == 8)
+    else
+        assert(texture:GetPath():find('Themes/_fallback/Graphics/_blank.png', 1, true))
+        assert(texture:GetSourceWidth() == 4 and texture:GetSourceHeight() == 2)
+    end
+end
+return Def.Banner {
+    OnCommand=function(self)
+        if expected then
+            assert(song:HasBanner())
+            assert(song:GetBannerPath():find('chosen artwork.png', 1, true),
+                'Song banner API must use the parsed declared artwork')
+        else assert(not song:HasBanner()) end
+        self:SetScrolling(true, 0.25):LoadFromSong(song)
+        check(self)
+        assert(not self:GetScrolling())
+        local pane = SCREENMAN:GetTopScreen():GetChild('Underlay'):GetChild('StepStatsPaneP1')
+        check(pane:GetChild('BannerAndData'):GetChild('')[1])
+        self:SetScrolling(true, 0.5):LoadFromSong(nil)
+        local fallback = assert(self:GetTexture())
+        assert(fallback:GetPath():find('Themes/_fallback/Graphics/_blank.png', 1, true))
+        assert(fallback:GetSourceWidth() == 4 and fallback:GetSourceHeight() == 2)
+        assert(not self:GetScrolling())
+    end,
+}
+"#.replace("$SELECTED", if selected { "true" } else { "false" });
+            let compiled = compile_with_context(&format!("declared-banner-{name}"), &source, |context| {
+                context.screen_width = 854.0;
+                if selected {
+                    let art = context.song_dir.join("art");
+                    fs::create_dir_all(&art).unwrap();
+                    let declared = art.join("chosen artwork.png");
+                    image::RgbaImage::from_pixel(16, 8, image::Rgba([11, 22, 33, 255]))
+                        .save(&declared).unwrap();
+                    image::RgbaImage::from_pixel(8, 8, image::Rgba([99, 88, 77, 255]))
+                        .save(context.song_dir.join("banner.png")).unwrap();
+                    context.song_banner_path = Some(declared);
+                }
+            });
+            assert!(compiled.live_scene.is_some(), "banner case must retain its real live scene");
+        }
+    }
+
+    #[test]
     fn live_step_statistics_owns_native_resources_and_updates_real_data() {
         use deadsync_rules::timing::{TimingData, TimingSegments};
         for (name, width, height, enabled, centered, selected) in [
