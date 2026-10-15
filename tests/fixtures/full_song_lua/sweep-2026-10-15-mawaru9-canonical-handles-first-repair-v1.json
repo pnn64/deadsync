@@ -1,5 +1,5 @@
 {
-  "status": "first bounded Mawaru9 repair handoff complete; full launch requires zero-error zero-mismatch completed production entry; original capture reused; at most one later full repair",
+  "status": "Mawaru9 deferred at the explicit user request; attempt1 deliberately stopped incomplete; capture and logs retained; do not restart unless user resumes chart",
   "repair": "first Mawaru9 full repair after source-proven registry/update-plan handle sharing; same original full capture and existing comparisons",
   "binary_sha256": "d52e92dbdab0eb79f09965d26a3d91e7f795838778dda2d9826ff03b090ebd12",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
