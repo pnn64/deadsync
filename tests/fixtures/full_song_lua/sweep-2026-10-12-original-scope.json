@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T22:31:15Z",
+  "updated_utc": "2026-10-15T22:51:56Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -3940,8 +3940,8 @@
       "source_simfile": "What A Wonderful World/WAWW.sm",
       "simfile_sha256": "44d9e8c548a43bfbf4e7b1f35229c66a5063759098784abd70c542409d7f22b5",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-16-waww-qualified-first-repair-v1.json"
     },
     {
       "position": 472,

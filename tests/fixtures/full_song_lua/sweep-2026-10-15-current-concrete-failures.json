@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T22:31:20Z",
+  "updated_utc": "2026-10-15T22:52:02Z",
   "counts": {
     "passed": 399,
     "pending": 102,
@@ -17988,318 +17988,42 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-15-save-tears-rights-sm-first-repair-v1.json",
-      "current_diagnostic_failure": "first1 complete with0errors/18broadcast mismatches: two pre-song PeakNPSUpdated events; all17 remaining broadcasts match unchanged comparisons. Boundary candidate qualification in progress; no final2 attempt yet",
-      "new_full_repair_started": false,
-      "started_full_repairs": 1,
+      "followup": "sweep-2026-10-16-save-tears-second-repair-launch.json",
+      "current_diagnostic_failure": "First1 full result had18broadcast mismatches. Qualified pre-song boundary source fix now runs final2; full result and broadcast parity remain unproven until terminal. No further repair if pending.",
+      "new_full_repair_started": true,
+      "started_full_repairs": 2,
       "actual_running_observation": {
         "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
-        "attempt_started": 1,
-        "pid": 1621878,
-        "actual_command": [],
-        "recorded_command": [
-          "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+        "attempt_started": 2,
+        "pid": 2311416,
+        "actual_command": [
+          "/home/parity/jobs/pre-song-broadcast-linux-green-v4/full-song-lua",
           "--archive",
-          "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182.tar",
+          "/home/parity/jobs/save-tears-rights-sm-second-repair-v1/chart-385/ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182.tar",
           "--report",
-          "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/report.json"
+          "/home/parity/jobs/save-tears-rights-sm-second-repair-v1/chart-385/report.json"
         ],
-        "actual_command_matches_record": false,
-        "running": false,
+        "recorded_command": [
+          "/home/parity/jobs/pre-song-broadcast-linux-green-v4/full-song-lua",
+          "--archive",
+          "/home/parity/jobs/save-tears-rights-sm-second-repair-v1/chart-385/ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182.tar",
+          "--report",
+          "/home/parity/jobs/save-tears-rights-sm-second-repair-v1/chart-385/report.json"
+        ],
+        "actual_command_matches_record": true,
+        "running": true,
         "phase": "replay",
-        "result_exists": true,
-        "terminal_result": {
-          "position": 385,
-          "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
-          "status": "pending",
-          "repair_attempts": 1,
-          "candidate_sha256": "ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182",
-          "trace_sha256": "6f8c03926c8d6f630eb9204f132507574943a4a61cb1f30d83ab40fad493bf0b",
-          "simfile_sha256": "8fe26f5a104dc99f0cea900b336f5404b18f0048a758829f1f4c09c00f99d5c4",
-          "native_capture_reused": true,
-          "all_candidate_manifest_members_byte_verified": true,
-          "binary_sha256": "6a2dfe1c2e802c83bf102deac4f4476c86ab3ba93652f9a8817f99420b844162",
-          "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-          "build_proof": "/home/parity/jobs/timing-window-labels-linux-green-v1/proof.json",
-          "fix_commit": "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd",
-          "previous_failure": null,
-          "previous_errors": [],
-          "qualified_existing_song_end_fixes": [
-            "3d314ba64cfadf2dbdb8ac761bbaf34890c84127",
-            "b97bcedd8f8d8d88dac55531a7d287cb7bbccd69",
-            "461434bacf9449ddba8a8e3a9dc980f8e05ef3c1"
-          ],
-          "no_query_outputs_used_as_inputs": true,
-          "original_full_failure": "only command_query_count: final eight GetSongBeat queries absent",
-          "full_acceptance_criteria_unchanged": true,
-          "capture_repeated": false,
-          "mawaru9_remains_deferred": true,
-          "replay_exit": 2,
-          "replay_seconds": 2408.539482298016,
-          "native_frames": 80179,
-          "replayed_frames": 80179,
-          "compared_stage_fields": 2101,
-          "pending_coverage": [
-            "uncompared song operations: Actor.hibernate, ActorFrame.GetChildren, ActorSound.play",
-            "native drawable state/resources: ActorProxy, Quad, Sound, Sprite",
-            "missing captured subscriber identity for ScreenGameplay/19/1",
-            "missing captured subscriber identity for ScreenGameplay/2/2/2/1",
-            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
-            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
-            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
-            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
-            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
-            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
-            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
-            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
-            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
-            "missing captured subscriber identity for ScreenGameplay/2/2/2/4",
-            "missing captured subscriber identity for ScreenGameplay/2/2/3/1",
-            "missing captured subscriber identity for ScreenGameplay/2/2/3/3",
-            "missing captured subscriber identity for ScreenGameplay/2/2/3/3/1",
-            "missing captured subscriber identity for ScreenGameplay/2/2/3/3/2",
-            "missing captured subscriber identity for ScreenGameplay/2/4/3",
-            "missing captured subscriber identity for ScreenGameplay/2/4/4",
-            "missing captured subscriber identity for ScreenGameplay/2/7/1",
-            "missing captured subscriber identity for ScreenGameplay/2/7/2",
-            "missing captured subscriber identity for ScreenGameplay/2/9/1"
-          ],
-          "archive_accepted": false,
-          "errors": [],
-          "mismatch_count": 18,
-          "concrete_failures": [
-            {
-              "field": "source_broadcast_count",
-              "native": 17,
-              "deadsync": 19
-            },
-            {
-              "field": "source_broadcast",
-              "native": {
-                "seconds": 5.177709579467773,
-                "beat": 10.003862380981445,
-                "name": "LightsOn",
-                "args": [
-                  "LightsOn"
-                ]
-              },
-              "deadsync": {
-                "seconds": 0.0,
-                "beat": 0.0,
-                "name": "PeakNPSUpdated",
-                "args": [
-                  "PeakNPSUpdated"
-                ],
-                "params_error": null
-              }
-            },
-            {
-              "field": "source_broadcast",
-              "native": {
-                "seconds": 15.356077194213867,
-                "beat": 30.021318435668945,
-                "name": "LightsOn",
-                "args": [
-                  "LightsOn"
-                ]
-              },
-              "deadsync": {
-                "seconds": 0.0,
-                "beat": 0.0,
-                "name": "PeakNPSUpdated",
-                "args": [
-                  "PeakNPSUpdated"
-                ],
-                "params_error": null
-              }
-            },
-            {
-              "field": "source_broadcast",
-              "native": {
-                "seconds": 27.04083824157715,
-                "beat": 53.00135040283203,
-                "name": "LightsOn",
-                "args": [
-                  "LightsOn"
-                ]
-              },
-              "deadsync": {
-                "seconds": 5.177709579467773,
-                "beat": 10.003862380981445,
-                "name": "LightsOn",
-                "args": [
-                  "LightsOn"
-                ],
-                "params_error": null
-              }
-            },
-            {
-              "field": "source_broadcast",
-              "native": {
-                "seconds": 39.24893569946289,
-                "beat": 77.01061248779297,
-                "name": "Flash",
-                "args": [
-                  "Flash"
-                ]
-              },
-              "deadsync": {
-                "seconds": 15.356077194213867,
-                "beat": 30.021318435668945,
-                "name": "LightsOn",
-                "args": [
-                  "LightsOn"
-                ],
-                "params_error": null
-              }
-            },
-            {
-              "field": "source_broadcast",
-              "native": {
-                "seconds": 41.0240364074707,
-                "beat": 80.50164031982422,
-                "name": "LightsOn",
-                "args": [
-                  "LightsOn"
-                ]
-              },
-              "deadsync": {
-                "seconds": 27.04083824157715,
-                "beat": 53.00135040283203,
-                "name": "LightsOn",
-                "args": [
-                  "LightsOn"
-                ],
-                "params_error": null
-              }
-            },
-            {
-              "field": "source_broadcast",
-              "native": {
-                "seconds": 61.61759567260742,
-                "beat": 121.00230407714844,
-                "name": "LightsOn",
-                "args": [
-                  "LightsOn"
-                ]
-              },
-              "deadsync": {
-                "seconds": 39.24893569946289,
-                "beat": 77.01061248779297,
-                "name": "Flash",
-                "args": [
-                  "Flash"
-                ],
-                "params_error": null
-              }
-            },
-            {
-              "field": "source_broadcast",
-              "native": {
-                "seconds": 64.66920471191406,
-                "beat": 127.00379943847656,
-                "name": "Flash",
-                "args": [
-                  "Flash"
-                ]
-              },
-              "deadsync": {
-                "seconds": 41.0240364074707,
-                "beat": 80.50164031982422,
-                "name": "LightsOn",
-                "args": [
-                  "LightsOn"
-                ],
-                "params_error": null
-              }
-            },
-            {
-              "field": "source_broadcast",
-              "native": {
-                "seconds": 72.04231262207031,
-                "beat": 141.50424194335938,
-                "name": "Flash",
-                "args": [
-                  "Flash"
-                ]
-              },
-              "deadsync": {
-                "seconds": 61.61759567260742,
-                "beat": 121.00230407714844,
-                "name": "LightsOn",
-                "args": [
-                  "LightsOn"
-                ],
-                "params_error": null
-              }
-            },
-            {
-              "field": "source_broadcast",
-              "native": {
-                "seconds": 81.95818328857422,
-                "beat": 161.00546264648438,
-                "name": "Flash2",
-                "args": [
-                  "Flash2"
-                ]
-              },
-              "deadsync": {
-                "seconds": 64.66920471191406,
-                "beat": 127.00379943847656,
-                "name": "Flash",
-                "args": [
-                  "Flash"
-                ],
-                "params_error": null
-              }
-            },
-            {
-              "field": "source_broadcast",
-              "native": {
-                "seconds": 85.51677703857422,
-                "beat": 168.0040283203125,
-                "name": "LightsOn",
-                "args": [
-                  "LightsOn"
-                ]
-              },
-              "deadsync": {
-                "seconds": 72.04231262207031,
-                "beat": 141.50424194335938,
-                "name": "Flash",
-                "args": [
-                  "Flash"
-                ],
-                "params_error": null
-              }
-            },
-            {
-              "field": "source_broadcast",
-              "native": {
-                "seconds": 89.5827407836914,
-                "beat": 176.00042724609375,
-                "name": "Flash2",
-                "args": [
-                  "Flash2"
-                ]
-              },
-              "deadsync": {
-                "seconds": 81.95818328857422,
-                "beat": 161.00546264648438,
-                "name": "Flash2",
-                "args": [
-                  "Flash2"
-                ],
-                "params_error": null
-              }
-            }
-          ],
-          "report_sha256": "e81ce27d074e87b2d91553bc7ef98f8837779a34405209b0c58362777aafdf5b"
-        },
-        "checked_utc": "2026-10-15T22:31:21.471704+00:00"
+        "result_exists": false,
+        "terminal_result": null,
+        "checked_utc": "2026-10-15T22:52:03.887369+00:00"
       },
       "full_replay_completed": true,
-      "remaining_source_cause": "sweep-2026-10-16-save-tears-pre-song-broadcast-cause.json"
+      "remaining_source_cause": "sweep-2026-10-16-save-tears-pre-song-broadcast-cause.json",
+      "entry_evidence": "sweep-2026-10-16-save-tears-pre-song-broadcast-entry.json",
+      "entry_diagnostic_frames": 9306,
+      "entry_diagnostic_errors": 0,
+      "entry_diagnostic_mismatches": 0,
+      "entry_does_not_compare_broadcasts": true
     },
     {
       "position": 395,
@@ -23395,20 +23119,422 @@
     {
       "position": 471,
       "source_simfile": "What A Wonderful World/WAWW.sm",
-      "completed_full_repairs": 0,
-      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json",
-      "failure_text": "",
+      "completed_full_repairs": 1,
+      "evidence": "sweep-2026-10-16-waww-qualified-first-repair-v1.json",
+      "failure_text": null,
       "callback_errors": [],
-      "mismatch_count": null,
-      "first_concrete_mismatches": [],
+      "mismatch_count": 4657,
+      "first_concrete_mismatches": [
+        {
+          "field": "source_broadcast_count",
+          "native": 4,
+          "deadsync": 5
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 14.311383247375488,
+            "beat": 16.649391174316406,
+            "name": "VibratePlayer",
+            "args": [
+              "VibratePlayer"
+            ]
+          },
+          "deadsync": {
+            "seconds": 0.0,
+            "beat": 0.0,
+            "name": "PeakNPSUpdated",
+            "args": [
+              "PeakNPSUpdated"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 16.25045394897461,
+            "beat": 19.010284423828125,
+            "name": "Stop",
+            "args": [
+              "Stop"
+            ]
+          },
+          "deadsync": {
+            "seconds": 14.311383247375488,
+            "beat": 16.649391174316406,
+            "name": "VibratePlayer",
+            "args": [
+              "VibratePlayer"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 17.488481521606445,
+            "beat": 20.508676528930664,
+            "name": "Vibrate",
+            "args": [
+              "Vibrate"
+            ]
+          },
+          "deadsync": {
+            "seconds": 16.25045394897461,
+            "beat": 19.010284423828125,
+            "name": "Stop",
+            "args": [
+              "Stop"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 19.58301544189453,
+            "beat": 23.019187927246094,
+            "name": "Vibratestop",
+            "args": [
+              "Vibratestop"
+            ]
+          },
+          "deadsync": {
+            "seconds": 17.488481521606445,
+            "beat": 20.508676528930664,
+            "name": "Vibrate",
+            "args": [
+              "Vibrate"
+            ],
+            "params_error": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0022",
+            "args": [
+              75
+            ],
+            "beat": 23.97637939453125,
+            "caller": {
+              "line": 31,
+              "source": "song:/roses/default.lua",
+              "tail_call": false
+            },
+            "command": "moveCommand",
+            "definition_id": "def-0022",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 31,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 20.379547119140625,
+            "seq": 89801,
+            "source": "song:/roses/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/roses/default.lua",
+            "line": 31,
+            "phase": "callback",
+            "beat": 23.97637939453125,
+            "seconds": 20.379547119140625,
+            "args": [
+              599
+            ],
+            "results": [
+              {
+                "actor": "0x5775ce6b44d0",
+                "name": "",
+                "path": "ScreenGameplay/SongForeground/roses"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0022",
+            "args": [
+              468
+            ],
+            "beat": 23.97637939453125,
+            "caller": {
+              "line": 31,
+              "source": "song:/roses/default.lua",
+              "tail_call": false
+            },
+            "command": "moveCommand",
+            "definition_id": "def-0022",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 31,
+            "operation": "Actor.y",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 20.379547119140625,
+            "seq": 89803,
+            "source": "song:/roses/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.y",
+            "source": "song:/roses/default.lua",
+            "line": 31,
+            "phase": "callback",
+            "beat": 23.97637939453125,
+            "seconds": 20.379547119140625,
+            "args": [
+              365
+            ],
+            "results": [
+              {
+                "actor": "0x5775ce6b44d0",
+                "name": "",
+                "path": "ScreenGameplay/SongForeground/roses"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0025",
+            "args": [
+              599
+            ],
+            "beat": 23.97637939453125,
+            "caller": {
+              "line": 31,
+              "source": "song:/roses/default.lua",
+              "tail_call": false
+            },
+            "command": "moveCommand",
+            "definition_id": "def-0025",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 31,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 20.379547119140625,
+            "seq": 89814,
+            "source": "song:/roses/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/roses/default.lua",
+            "line": 31,
+            "phase": "callback",
+            "beat": 23.97637939453125,
+            "seconds": 20.379547119140625,
+            "args": [
+              744
+            ],
+            "results": [
+              {
+                "actor": "0x5775ce6bb730",
+                "name": "",
+                "path": "ScreenGameplay/SongForeground/roses"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0025",
+            "args": [
+              365
+            ],
+            "beat": 23.97637939453125,
+            "caller": {
+              "line": 31,
+              "source": "song:/roses/default.lua",
+              "tail_call": false
+            },
+            "command": "moveCommand",
+            "definition_id": "def-0025",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 31,
+            "operation": "Actor.y",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 20.379547119140625,
+            "seq": 89816,
+            "source": "song:/roses/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.y",
+            "source": "song:/roses/default.lua",
+            "line": 31,
+            "phase": "callback",
+            "beat": 23.97637939453125,
+            "seconds": 20.379547119140625,
+            "args": [
+              264
+            ],
+            "results": [
+              {
+                "actor": "0x5775ce6bb730",
+                "name": "",
+                "path": "ScreenGameplay/SongForeground/roses"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0028",
+            "args": [],
+            "beat": 23.97637939453125,
+            "command": "moveCommand",
+            "definition_id": "def-0028",
+            "detail": {
+              "name": "moveCommand"
+            },
+            "kind": "command",
+            "line": 31,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 20.379547119140625,
+            "seq": 89825,
+            "source": "song:/roses/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/lua/default.lua",
+            "line": 84,
+            "phase": "callback",
+            "beat": 23.984580993652344,
+            "seconds": 20.386371612548828,
+            "args": [],
+            "results": [
+              23.984580993652344
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0028",
+            "args": [
+              744
+            ],
+            "beat": 23.97637939453125,
+            "caller": {
+              "line": 31,
+              "source": "song:/roses/default.lua",
+              "tail_call": false
+            },
+            "command": "moveCommand",
+            "definition_id": "def-0028",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 31,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 20.379547119140625,
+            "seq": 89827,
+            "source": "song:/roses/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/lua/default.lua",
+            "line": 84,
+            "phase": "callback",
+            "beat": 23.984580993652344,
+            "seconds": 20.386371612548828,
+            "args": [],
+            "results": [
+              23.984580993652344
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0028",
+            "args": [
+              264
+            ],
+            "beat": 23.97637939453125,
+            "caller": {
+              "line": 31,
+              "source": "song:/roses/default.lua",
+              "tail_call": false
+            },
+            "command": "moveCommand",
+            "definition_id": "def-0028",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 31,
+            "operation": "Actor.y",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 20.379547119140625,
+            "seq": 89829,
+            "source": "song:/roses/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "moveCommand",
+            "source": "song:/roses/default.lua",
+            "line": 31,
+            "beat": 23.984580993652344,
+            "seconds": 20.386371612548828,
+            "args": null
+          }
+        }
+      ],
       "capture_exit": null,
-      "replay_exit": 1,
-      "native_frames": null,
-      "replayed_frames": null,
+      "replay_exit": 2,
+      "native_frames": 7119,
+      "replayed_frames": 7119,
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "concrete_terminal_outcome": "full replay exit 1; no replay report or error text retained",
       "followup": "sweep-2026-10-16-waww-first-repair-launch.json",
       "entry_diagnostic_frames": 1016,
       "entry_diagnostic_errors": 0,
@@ -23416,18 +23542,12 @@
       "original_full_exit1_cause_unproven": true,
       "entry_evidence": "sweep-2026-10-16-waww-qualified-entry-diagnostic.json",
       "started_full_repairs": 1,
-      "new_full_repair_started": true,
+      "new_full_repair_started": false,
       "actual_running_observation": {
         "source_simfile": "What A Wonderful World/WAWW.sm",
         "attempt_started": 1,
         "pid": 2155531,
-        "actual_command": [
-          "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
-          "--archive",
-          "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c.tar",
-          "--report",
-          "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/report.json"
-        ],
+        "actual_command": [],
         "recorded_command": [
           "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
           "--archive",
@@ -23435,12 +23555,465 @@
           "--report",
           "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/report.json"
         ],
-        "actual_command_matches_record": true,
-        "running": true,
+        "actual_command_matches_record": false,
+        "running": false,
         "phase": "replay",
-        "result_exists": false,
-        "terminal_result": null,
-        "checked_utc": "2026-10-15T22:31:21.861786+00:00"
+        "result_exists": true,
+        "terminal_result": {
+          "position": 471,
+          "source_simfile": "What A Wonderful World/WAWW.sm",
+          "status": "pending",
+          "repair_attempts": 1,
+          "candidate_sha256": "8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c",
+          "trace_sha256": "a68b0341299dde7797f9b55eabd8f7dc50630c93c8d8d0f4d064e69b8eedccf9",
+          "simfile_sha256": "44d9e8c548a43bfbf4e7b1f35229c66a5063759098784abd70c542409d7f22b5",
+          "native_capture_reused": true,
+          "all_candidate_manifest_members_byte_verified": true,
+          "binary_sha256": "6a2dfe1c2e802c83bf102deac4f4476c86ab3ba93652f9a8817f99420b844162",
+          "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+          "build_proof": "/home/parity/jobs/timing-window-labels-linux-green-v1/proof.json",
+          "fix_commit": "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd",
+          "previous_failure": "",
+          "previous_errors": [],
+          "qualified_existing_underlay_fixes": [
+            "135dcdfd107e0b2cf527c010b827593139433102",
+            "2e561959d28baded6219078922c8fd38012aaaf5",
+            "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd"
+          ],
+          "no_query_outputs_used_as_inputs": true,
+          "original_full_failure": "Original full replay produced no report or log; retained original capture has complete gameplay and no dropped data. Qualified helper entry passes1016 frames with0errors/0mismatches; full acceptance remains unproven.",
+          "full_acceptance_criteria_unchanged": true,
+          "capture_repeated": false,
+          "mawaru9_remains_deferred": true,
+          "replay_exit": 2,
+          "replay_seconds": 1219.0627900299733,
+          "native_frames": 7119,
+          "replayed_frames": 7119,
+          "compared_stage_fields": 1540,
+          "pending_coverage": [
+            "uncompared song operations: Actor.GetX, Actor.GetY, Actor.addrotationz, Actor.playcommand, Actor.stopeffect",
+            "native drawable state/resources: ActorProxy, Quad, Sprite",
+            "missing captured subscriber identity for ScreenGameplay/19/1",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6"
+          ],
+          "archive_accepted": false,
+          "errors": [],
+          "mismatch_count": 4657,
+          "concrete_failures": [
+            {
+              "field": "source_broadcast_count",
+              "native": 4,
+              "deadsync": 5
+            },
+            {
+              "field": "source_broadcast",
+              "native": {
+                "seconds": 14.311383247375488,
+                "beat": 16.649391174316406,
+                "name": "VibratePlayer",
+                "args": [
+                  "VibratePlayer"
+                ]
+              },
+              "deadsync": {
+                "seconds": 0.0,
+                "beat": 0.0,
+                "name": "PeakNPSUpdated",
+                "args": [
+                  "PeakNPSUpdated"
+                ],
+                "params_error": null
+              }
+            },
+            {
+              "field": "source_broadcast",
+              "native": {
+                "seconds": 16.25045394897461,
+                "beat": 19.010284423828125,
+                "name": "Stop",
+                "args": [
+                  "Stop"
+                ]
+              },
+              "deadsync": {
+                "seconds": 14.311383247375488,
+                "beat": 16.649391174316406,
+                "name": "VibratePlayer",
+                "args": [
+                  "VibratePlayer"
+                ],
+                "params_error": null
+              }
+            },
+            {
+              "field": "source_broadcast",
+              "native": {
+                "seconds": 17.488481521606445,
+                "beat": 20.508676528930664,
+                "name": "Vibrate",
+                "args": [
+                  "Vibrate"
+                ]
+              },
+              "deadsync": {
+                "seconds": 16.25045394897461,
+                "beat": 19.010284423828125,
+                "name": "Stop",
+                "args": [
+                  "Stop"
+                ],
+                "params_error": null
+              }
+            },
+            {
+              "field": "source_broadcast",
+              "native": {
+                "seconds": 19.58301544189453,
+                "beat": 23.019187927246094,
+                "name": "Vibratestop",
+                "args": [
+                  "Vibratestop"
+                ]
+              },
+              "deadsync": {
+                "seconds": 17.488481521606445,
+                "beat": 20.508676528930664,
+                "name": "Vibrate",
+                "args": [
+                  "Vibrate"
+                ],
+                "params_error": null
+              }
+            },
+            {
+              "field": "command_query_event",
+              "native": {
+                "actor": "def-0022",
+                "args": [
+                  75
+                ],
+                "beat": 23.97637939453125,
+                "caller": {
+                  "line": 31,
+                  "source": "song:/roses/default.lua",
+                  "tail_call": false
+                },
+                "command": "moveCommand",
+                "definition_id": "def-0022",
+                "detail": {
+                  "native_tween_time_left": 0
+                },
+                "kind": "call",
+                "line": 31,
+                "operation": "Actor.x",
+                "phase": "callback",
+                "scene": 1,
+                "seconds": 20.379547119140625,
+                "seq": 89801,
+                "source": "song:/roses/default.lua",
+                "tween_time_left": 0
+              },
+              "deadsync": {
+                "scene": 1,
+                "kind": "call",
+                "operation": "Actor.x",
+                "source": "song:/roses/default.lua",
+                "line": 31,
+                "phase": "callback",
+                "beat": 23.97637939453125,
+                "seconds": 20.379547119140625,
+                "args": [
+                  599
+                ],
+                "results": [
+                  {
+                    "actor": "0x5775ce6b44d0",
+                    "name": "",
+                    "path": "ScreenGameplay/SongForeground/roses"
+                  }
+                ],
+                "tween_time_left": 0.0
+              }
+            },
+            {
+              "field": "command_query_event",
+              "native": {
+                "actor": "def-0022",
+                "args": [
+                  468
+                ],
+                "beat": 23.97637939453125,
+                "caller": {
+                  "line": 31,
+                  "source": "song:/roses/default.lua",
+                  "tail_call": false
+                },
+                "command": "moveCommand",
+                "definition_id": "def-0022",
+                "detail": {
+                  "native_tween_time_left": 0
+                },
+                "kind": "call",
+                "line": 31,
+                "operation": "Actor.y",
+                "phase": "callback",
+                "scene": 1,
+                "seconds": 20.379547119140625,
+                "seq": 89803,
+                "source": "song:/roses/default.lua",
+                "tween_time_left": 0
+              },
+              "deadsync": {
+                "scene": 1,
+                "kind": "call",
+                "operation": "Actor.y",
+                "source": "song:/roses/default.lua",
+                "line": 31,
+                "phase": "callback",
+                "beat": 23.97637939453125,
+                "seconds": 20.379547119140625,
+                "args": [
+                  365
+                ],
+                "results": [
+                  {
+                    "actor": "0x5775ce6b44d0",
+                    "name": "",
+                    "path": "ScreenGameplay/SongForeground/roses"
+                  }
+                ],
+                "tween_time_left": 0.0
+              }
+            },
+            {
+              "field": "command_query_event",
+              "native": {
+                "actor": "def-0025",
+                "args": [
+                  599
+                ],
+                "beat": 23.97637939453125,
+                "caller": {
+                  "line": 31,
+                  "source": "song:/roses/default.lua",
+                  "tail_call": false
+                },
+                "command": "moveCommand",
+                "definition_id": "def-0025",
+                "detail": {
+                  "native_tween_time_left": 0
+                },
+                "kind": "call",
+                "line": 31,
+                "operation": "Actor.x",
+                "phase": "callback",
+                "scene": 1,
+                "seconds": 20.379547119140625,
+                "seq": 89814,
+                "source": "song:/roses/default.lua",
+                "tween_time_left": 0
+              },
+              "deadsync": {
+                "scene": 1,
+                "kind": "call",
+                "operation": "Actor.x",
+                "source": "song:/roses/default.lua",
+                "line": 31,
+                "phase": "callback",
+                "beat": 23.97637939453125,
+                "seconds": 20.379547119140625,
+                "args": [
+                  744
+                ],
+                "results": [
+                  {
+                    "actor": "0x5775ce6bb730",
+                    "name": "",
+                    "path": "ScreenGameplay/SongForeground/roses"
+                  }
+                ],
+                "tween_time_left": 0.0
+              }
+            },
+            {
+              "field": "command_query_event",
+              "native": {
+                "actor": "def-0025",
+                "args": [
+                  365
+                ],
+                "beat": 23.97637939453125,
+                "caller": {
+                  "line": 31,
+                  "source": "song:/roses/default.lua",
+                  "tail_call": false
+                },
+                "command": "moveCommand",
+                "definition_id": "def-0025",
+                "detail": {
+                  "native_tween_time_left": 0
+                },
+                "kind": "call",
+                "line": 31,
+                "operation": "Actor.y",
+                "phase": "callback",
+                "scene": 1,
+                "seconds": 20.379547119140625,
+                "seq": 89816,
+                "source": "song:/roses/default.lua",
+                "tween_time_left": 0
+              },
+              "deadsync": {
+                "scene": 1,
+                "kind": "call",
+                "operation": "Actor.y",
+                "source": "song:/roses/default.lua",
+                "line": 31,
+                "phase": "callback",
+                "beat": 23.97637939453125,
+                "seconds": 20.379547119140625,
+                "args": [
+                  264
+                ],
+                "results": [
+                  {
+                    "actor": "0x5775ce6bb730",
+                    "name": "",
+                    "path": "ScreenGameplay/SongForeground/roses"
+                  }
+                ],
+                "tween_time_left": 0.0
+              }
+            },
+            {
+              "field": "command_query_event",
+              "native": {
+                "actor": "def-0028",
+                "args": [],
+                "beat": 23.97637939453125,
+                "command": "moveCommand",
+                "definition_id": "def-0028",
+                "detail": {
+                  "name": "moveCommand"
+                },
+                "kind": "command",
+                "line": 31,
+                "operation": "command.begin",
+                "scene": 1,
+                "seconds": 20.379547119140625,
+                "seq": 89825,
+                "source": "song:/roses/default.lua"
+              },
+              "deadsync": {
+                "scene": 1,
+                "kind": "query",
+                "operation": "GameState.GetSongBeat",
+                "source": "song:/lua/default.lua",
+                "line": 84,
+                "phase": "callback",
+                "beat": 23.984580993652344,
+                "seconds": 20.386371612548828,
+                "args": [],
+                "results": [
+                  23.984580993652344
+                ]
+              }
+            },
+            {
+              "field": "command_query_event",
+              "native": {
+                "actor": "def-0028",
+                "args": [
+                  744
+                ],
+                "beat": 23.97637939453125,
+                "caller": {
+                  "line": 31,
+                  "source": "song:/roses/default.lua",
+                  "tail_call": false
+                },
+                "command": "moveCommand",
+                "definition_id": "def-0028",
+                "detail": {
+                  "native_tween_time_left": 0
+                },
+                "kind": "call",
+                "line": 31,
+                "operation": "Actor.x",
+                "phase": "callback",
+                "scene": 1,
+                "seconds": 20.379547119140625,
+                "seq": 89827,
+                "source": "song:/roses/default.lua",
+                "tween_time_left": 0
+              },
+              "deadsync": {
+                "scene": 1,
+                "kind": "query",
+                "operation": "GameState.GetSongBeat",
+                "source": "song:/lua/default.lua",
+                "line": 84,
+                "phase": "callback",
+                "beat": 23.984580993652344,
+                "seconds": 20.386371612548828,
+                "args": [],
+                "results": [
+                  23.984580993652344
+                ]
+              }
+            },
+            {
+              "field": "command_query_event",
+              "native": {
+                "actor": "def-0028",
+                "args": [
+                  264
+                ],
+                "beat": 23.97637939453125,
+                "caller": {
+                  "line": 31,
+                  "source": "song:/roses/default.lua",
+                  "tail_call": false
+                },
+                "command": "moveCommand",
+                "definition_id": "def-0028",
+                "detail": {
+                  "native_tween_time_left": 0
+                },
+                "kind": "call",
+                "line": 31,
+                "operation": "Actor.y",
+                "phase": "callback",
+                "scene": 1,
+                "seconds": 20.379547119140625,
+                "seq": 89829,
+                "source": "song:/roses/default.lua",
+                "tween_time_left": 0
+              },
+              "deadsync": {
+                "scene": 1,
+                "kind": "command",
+                "operation": "command.begin",
+                "command": "moveCommand",
+                "source": "song:/roses/default.lua",
+                "line": 31,
+                "beat": 23.984580993652344,
+                "seconds": 20.386371612548828,
+                "args": null
+              }
+            }
+          ],
+          "report_sha256": "835ddbdaa434e29c5c07469bc80c28b279f1e7e817f17f89fe45ba98f7bbf617"
+        },
+        "checked_utc": "2026-10-15T22:52:04.308772+00:00"
       },
       "current_diagnostic_failure": "Historical blank/no-report infrastructure result; current retained-capture entry is clean, awaiting first bounded full repair on all7119 native frames"
     },

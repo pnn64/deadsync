@@ -1,14 +1,14 @@
 {
-  "generated_utc": "2026-10-15T22:31:20.781944+00:00",
-  "concrete_ledger_sha256": "ed782cad14d43c885a36fadac5de5535534929fa0f0af07a7211e59942716431",
+  "generated_utc": "2026-10-15T22:52:03.208005+00:00",
+  "concrete_ledger_sha256": "42653ac577ffe6c79cd30338df6b700137329f4398de70cd9a20af99a8edf7a9",
   "counts": {
     "passed": 399,
     "pending": 102,
     "unprocessed": 0
   },
   "maximum_published_terminal_attempt_histogram": {
-    "0": 79,
-    "1": 12,
+    "0": 78,
+    "1": 13,
     "2": 11
   },
   "pending_sources": 102,
@@ -23,29 +23,29 @@
   "no_chart_replays_or_source_mutations": true,
   "additional_running_repairs_not_counted_as_terminal": [
     {
-      "source_simfile": "What A Wonderful World/WAWW.sm",
-      "attempt_started": 1,
-      "pid": 2155531,
+      "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
+      "attempt_started": 2,
+      "pid": 2311416,
       "actual_command": [
-        "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+        "/home/parity/jobs/pre-song-broadcast-linux-green-v4/full-song-lua",
         "--archive",
-        "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c.tar",
+        "/home/parity/jobs/save-tears-rights-sm-second-repair-v1/chart-385/ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182.tar",
         "--report",
-        "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/report.json"
+        "/home/parity/jobs/save-tears-rights-sm-second-repair-v1/chart-385/report.json"
       ],
       "recorded_command": [
-        "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+        "/home/parity/jobs/pre-song-broadcast-linux-green-v4/full-song-lua",
         "--archive",
-        "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c.tar",
+        "/home/parity/jobs/save-tears-rights-sm-second-repair-v1/chart-385/ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182.tar",
         "--report",
-        "/home/parity/jobs/waww-qualified-first-repair-v1/chart-471/report.json"
+        "/home/parity/jobs/save-tears-rights-sm-second-repair-v1/chart-385/report.json"
       ],
       "actual_command_matches_record": true,
       "running": true,
       "phase": "replay",
       "result_exists": false,
       "terminal_result": null,
-      "checked_utc": "2026-10-15T22:31:23.347572+00:00"
+      "checked_utc": "2026-10-15T22:52:06.295671+00:00"
     }
   ]
 }

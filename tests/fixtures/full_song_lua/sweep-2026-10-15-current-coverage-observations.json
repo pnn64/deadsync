@@ -1,6 +1,6 @@
 {
   "scope": "latest recorded coverage observations for original source simfiles",
-  "updated_utc": "2026-10-15T22:31:20Z",
+  "updated_utc": "2026-10-15T22:52:02Z",
   "coverage_is_separate_from_existing_full_replay_acceptance": true,
   "passing_charts_replayed_or_investigated": false,
   "rows": [
@@ -2840,6 +2840,26 @@
         "native drawable state/resources: ActorProxy, Quad, Sprite"
       ],
       "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+    },
+    {
+      "position": 471,
+      "source_simfile": "What A Wonderful World/WAWW.sm",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.addrotationz, Actor.playcommand, Actor.stopeffect",
+        "native drawable state/resources: ActorProxy, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6"
+      ],
+      "evidence": "sweep-2026-10-16-waww-qualified-first-repair-v1.json"
     },
     {
       "position": 472,
