@@ -1,0 +1,79 @@
+{
+  "source_root": "/home/parity/workspace/pre-song-broadcast-green-v4/deadsync",
+  "binary_sha256": "5e9ae4d9d1cfeffb5c8bfb931fb523f95e72a8d6917821a7fb6d08bddcb3992e",
+  "all_six_groups_both_hosts_passed": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 254.37411467998754,
+      "log_sha256": "1dcf5d5015a442f7edc59f30175cfb8e6aa1e609148c201bbbac8057d2a85c11",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 639 filtered out; finished in 0.88s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 200.19634447002318,
+      "log_sha256": "b90979ea927cafd020b598866fd2315eef96e65518f944a36887868eadda0781",
+      "results": [
+        "test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 19.33s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 34.28597126697423,
+      "log_sha256": "bc84d3f6893f3d3833d6f668754da4f3ebc7588f4d8fe518071e11a876a5f4d3",
+      "results": [
+        "test result: ok. 103 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 33.57s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 74.19329903495964,
+      "log_sha256": "120172e830b13b8d584ec6b243242455a8c35a156bab0337df8d2d30137ab848",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 1.0362391619710252,
+      "log_sha256": "96fd7a150cd4f3ec93e5f46247e23ddd28012d6917b6d19f26a30e0cc9077aba",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 639 filtered out; finished in 0.36s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 35.51961317000678,
+      "log_sha256": "6543d77eb6d30cb6bd5fec4232d23f96b41fd78dd2bcf42946ec9c1f63a76305",
+      "results": []
+    }
+  ],
+  "all_1175_raw_linux_and_normalized_cross_platform_source_pins_verified": true,
+  "all_35_exact_native_assets_and_log_helper_hashes_verified": true,
+  "all_prior_102_live_and_43_replay_test_sources_unchanged": true,
+  "new_boundary_regression_first_red_case_preserved": true,
+  "new_test_retained_scene_expectation_correction": "--- red-new-test\n+++ green-new-test\n@@ -3892,7 +3892,13 @@\n             let mut scene=compiled.live_scene.take().expect(\"retained boundary scene\");\n             let startup=scene.take_startup_output();\n             assert!(startup.errors.is_empty(), \"{:?}\", startup.errors);\n-            let expected=[\"PeakNPSUpdated\", \"AuthoredPeakReaction\"].repeat(if reload {2} else {1});\n+            // compile.rs resets source capture when reconstructing a startup scene;\n+            // take_startup_output exposes the retained scene's source output. The\n+            // legacy stream separately keeps broadcasts from prior startup scenes.\n+            assert_eq!(scene.lua.globals().get::<u32>(\"ROUND\").unwrap(), if reload {2} else {1});\n+            assert_eq!(startup.broadcasts.iter().filter(|(_, name, _)| name==\"PeakNPSUpdated\").count(),\n+                if reload {2} else {1});\n+            let expected=[\"PeakNPSUpdated\", \"AuthoredPeakReaction\"];\n             assert_eq!(startup.source_broadcasts.iter().map(|event|event.name.as_str()).collect::<Vec<_>>(),\n                 expected, \"pre-song theme broadcasts must stay outside authored song output\");\n             scene.advance(SongLuaLiveFrame::default()).unwrap();",
+  "meaningful_pre_song_extra_broadcast_red_both_hosts": true,
+  "normal_authored_same_name_and_nested_theme_runtime_broadcasts_preserved_and_retained_reload_scene_clear": true,
+  "native_probe_and_histogram_primary_source_hashes_reverified": true,
+  "production_change": "Temporarily suspend and restore LiveSourceBroadcasts alongside LiveBroadcasts in the two existing pre-song theme construction scopes; ordinary listener dispatch remains active. One incidental embedded Lua pronunciation comment has an encoding change; verified comment-only and recorded separately.",
+  "incidental_lua_comment_encoding_delta": [
+    {
+      "line": 14813,
+      "before": "\t\t--  /\u00cb\u02c6la\u00c9\u00aaf\u00cb\u0152t\u00ca\u0192e\u00c9\u00aan.d\u00ca\u2019\u00c9\u00aa\u00c5\u2039/",
+      "after": "\t\t--  /\u00c3\u2039\u00cb\u2020la\u00c3\u2030\u00c2\u00aaf\u00c3\u2039\u00c5\u2019t\u00c3\u0160\u00c6\u2019e\u00c3\u2030\u00c2\u00aan.d\u00c3\u0160\u00e2\u20ac\u2122\u00c3\u2030\u00c2\u00aa\u00c3\u2026\u00e2\u20ac\u00b9/"
+    }
+  ],
+  "production_diff": "--- \n+++ \n@@ -14810,7 +14810,7 @@\n \n \t\t-- life-changing\n \t\t-- adjective\n-\t\t--  /\u00cb\u02c6la\u00c9\u00aaf\u00cb\u0152t\u00ca\u0192e\u00c9\u00aan.d\u00ca\u2019\u00c9\u00aa\u00c5\u2039/\n+\t\t--  /\u00c3\u2039\u00cb\u2020la\u00c3\u2030\u00c2\u00aaf\u00c3\u2039\u00c5\u2019t\u00c3\u0160\u00c6\u2019e\u00c3\u2030\u00c2\u00aan.d\u00c3\u0160\u00e2\u20ac\u2122\u00c3\u2030\u00c2\u00aa\u00c3\u2026\u00e2\u20ac\u00b9/\n \t\t-- having an effect that is strong enough to change someone's life\n \t\t-- synonyms: compelling, life-altering, puissant, blazing\n \t\tLifeChangedMessageCommand=function(self,params)\n@@ -15430,6 +15430,9 @@\n     // These messages precede song construction, so dispatch them to the loaded\n     // theme without adding pre-song events to the song's startup output.\n     let song_output = lua.remove_app_data::<LiveBroadcasts>();\n+    // These theme-only construction callbacks precede authored song contexts.\n+    // Keep normal listener dispatch while excluding both song output streams.\n+    let source_output = lua.remove_app_data::<LiveSourceBroadcasts>();\n     let loaded_life = (|| -> mlua::Result<()> {\n         for (player, life_meter) in life_meters.iter().enumerate() {\n             if !players[player].enabled { continue; }\n@@ -15441,6 +15444,7 @@\n         Ok(())\n     })();\n     if let Some(song_output) = song_output { lua.set_app_data(song_output); }\n+    if let Some(source_output) = source_output { lua.set_app_data(source_output); }\n     loaded_life?;\n     // ScreenGameplay.h declares all five unnamed owners as Transition.\n     // Keep the duplicate-name group as lookup aliases of the same actor tree.\n@@ -22231,6 +22235,9 @@\n         lua.set_app_data(SongLuaStartupQueues(Vec::new()));\n     }\n     let song_output = lua.remove_app_data::<LiveBroadcasts>();\n+    // These theme-only construction callbacks precede authored song contexts.\n+    // Keep normal listener dispatch while excluding both song output streams.\n+    let source_output = lua.remove_app_data::<LiveSourceBroadcasts>();\n     let result = (|| -> mlua::Result<()> {\n         let mut panes = Vec::new();\n         for player in players.sequence_values::<Value>() {\n@@ -22282,5 +22289,6 @@\n         Ok(())\n     })();\n     if let Some(song_output) = song_output { lua.set_app_data(song_output); }\n+    if let Some(source_output) = source_output { lua.set_app_data(source_output); }\n     result\n }",
+  "full_acceptance_and_input_reader_sources_unchanged": true,
+  "query_outputs_used_as_inputs": false,
+  "full_repairs_spent_by_qualification": 0
+}

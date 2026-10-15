@@ -1,0 +1,72 @@
+{
+  "all_six_groups_passed": true,
+  "all_1175_normalized_source_pins_35_assets_logs_verified": true,
+  "meaningful_pre_song_extra_broadcast_red_observed": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 359.8907881999912,
+      "log_sha256": "235ef192e91e8db94603de4603d45e8d5ce9829931423077362970f7f0e2df15",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 641 filtered out; finished in 1.02s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 139.8244833999779,
+      "log_sha256": "762324a83e48563a2117ed399d430a7fec6991a47daa6bc3914bb7eb4eed8364",
+      "results": [
+        "test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 23.90s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 62.486550700006774,
+      "log_sha256": "e15d381cc5dc3213306b4f300dc9b448884a340d4afc045f0d93be4f51061cfd",
+      "results": [
+        "test result: ok. 103 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 60.99s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 71.90741169999819,
+      "log_sha256": "73a32e46bddbb807ec92eeef259c6f4e18fbc5576aaadd2bacdbdf7e32fe595e",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 1.9227448000165168,
+      "log_sha256": "cd6af8da514b4d2479f94879c846173237bba557d72d60a195c34641bf93c700",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 641 filtered out; finished in 0.44s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 25.562233699980425,
+      "log_sha256": "d4ac42e62b7bbd2cdf12dac0acb6f7bf2f2041f0ee1bbe270930b663db5e8068",
+      "results": []
+    }
+  ],
+  "red_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 371.02155800000764,
+      "log_sha256": "af8d341997f54297e8538955bd3ea1ff129f77648575b1c8eeb9a9388a0216d6",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 641 filtered out; finished in 0.39s"
+      ]
+    }
+  ],
+  "new_test_first_red_case_preserved_and_retained_scene_expectation_corrected_via_cross_platform_verifier": true,
+  "no_acceptance_changes": true
+}

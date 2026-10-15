@@ -3848,6 +3848,70 @@ return Def.Banner {
 
 
     #[test]
+    fn live_theme_setup_broadcasts_respect_song_construction_boundary() {
+        use deadsync_rules::timing::{TimingData, TimingSegments};
+        for reload in [false, true] {
+            let source=format!(r#"
+ROUND=(ROUND or 0)+1
+return Def.ActorFrame {{
+    InitCommand=function(self)
+        assert(GAMESTATE:Env().P1PeakNPS==1.5, 'real theme histogram must initialize before song Init')
+    end,
+    OnCommand=function(self)
+        MESSAGEMAN:Broadcast('PeakNPSUpdated')
+        self:sleep(0.25):queuecommand('AuthoredRuntime')
+        if {reload} and ROUND==1 then SCREENMAN:SetNewScreen('ScreenGameplay') end
+    end,
+    PeakNPSUpdatedMessageCommand=function(self)
+        MESSAGEMAN:Broadcast('AuthoredPeakReaction')
+    end,
+    AuthoredRuntimeCommand=function(self)
+        MESSAGEMAN:Broadcast('CurrentSongChanged')
+        MESSAGEMAN:Broadcast('PeakNPSUpdated')
+    end,
+}}
+"#);
+            let mut compiled=compile_with_context(&format!("theme-broadcast-boundary-{reload}"), &source, |context| {
+                context.defer_initial_live_update=true;
+                context.screen_width=854.0;
+                context.players[0].enabled=true;
+                context.players[1].enabled=false;
+                context.players[0].step_statistics_enabled=true;
+                context.player_step_indices=[Some(0), None];
+                context.song_steps=vec![crate::SongLuaStep { steps_type:"StepsType_Dance_Single".into(),
+                    difficulty:crate::SongLuaDifficulty::Challenge, description:String::new(),chart_name:String::new(),
+                    credit:String::new(),meter:12,music_file:String::new(),possible_grade_points:100 }];
+                let timing=TimingData::from_segments(0.0,0.0,&TimingSegments {
+                    bpms:vec![(0.0,120.0)],..Default::default()},&[]);
+                context.song_step_timing=vec![timing.clone()];
+                context.player_timing=[Some(timing),None];
+                context.song_step_notes=vec![std::sync::Arc::from(&b"1000\n0100\n2000\n3000\nM000\n4000\n3000\n1000\n"[..])];
+                context.song_step_row_beats=vec![std::sync::Arc::from(&[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0][..])];
+            });
+            assert_eq!(compiled.startup_reloads, u32::from(reload));
+            let mut scene=compiled.live_scene.take().expect("retained boundary scene");
+            let startup=scene.take_startup_output();
+            assert!(startup.errors.is_empty(), "{:?}", startup.errors);
+            // compile.rs resets source capture when reconstructing a startup scene;
+            // take_startup_output exposes the retained scene's source output. The
+            // legacy stream separately keeps broadcasts from prior startup scenes.
+            assert_eq!(scene.lua.globals().get::<u32>("ROUND").unwrap(), if reload {2} else {1});
+            assert_eq!(startup.broadcasts.iter().filter(|(_, name, _)| name=="PeakNPSUpdated").count(),
+                if reload {2} else {1});
+            let expected=["PeakNPSUpdated", "AuthoredPeakReaction"];
+            assert_eq!(startup.source_broadcasts.iter().map(|event|event.name.as_str()).collect::<Vec<_>>(),
+                expected, "pre-song theme broadcasts must stay outside authored song output");
+            scene.advance(SongLuaLiveFrame::default()).unwrap();
+            let output=scene.advance(SongLuaLiveFrame { screen_seconds:0.5,delta_seconds:0.5,
+                music_seconds:0.5,beat:1.0,..Default::default() }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            assert_eq!(output.source_broadcasts.iter().map(|event|event.name.as_str()).collect::<Vec<_>>(),
+                ["CurrentSongChanged", "PeakNPSUpdated", "AuthoredPeakReaction", "PeakNPSUpdated", "AuthoredPeakReaction"],
+                "theme broadcasts nested under authored runtime commands must remain observable");
+        }
+    }
+
+    #[test]
     fn live_danger_owns_native_quad_and_health_lifecycle() {
         for (name, enabled, double, hidden, hide_danger) in [
             ("p1",[true,false],false,false,false),

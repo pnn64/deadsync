@@ -1,0 +1,24 @@
+{
+  "actual_failure": "sweep-2026-10-16-save-tears-pre-song-broadcast-cause.json",
+  "production_cause": "Real native theme setup occurs before authored song contexts. Existing scopes suspended legacy LiveBroadcasts only, allowing PeakNPSUpdated from Histogram setup to leak into the independent source stream once per scene.",
+  "production_repair": "Suspend and restore both output streams only within the two existing pre-song theme construction scopes. Continue normal theme listener dispatch.",
+  "incidental_lua_comment_encoding_delta": [
+    {
+      "line": 14813,
+      "before": "\t\t--  /\u00cb\u02c6la\u00c9\u00aaf\u00cb\u0152t\u00ca\u0192e\u00c9\u00aan.d\u00ca\u2019\u00c9\u00aa\u00c5\u2039/",
+      "after": "\t\t--  /\u00c3\u2039\u00cb\u2020la\u00c3\u2030\u00c2\u00aaf\u00c3\u2039\u00c5\u2019t\u00c3\u0160\u00c6\u2019e\u00c3\u2030\u00c2\u00aan.d\u00c3\u0160\u00e2\u20ac\u2122\u00c3\u2030\u00c2\u00aa\u00c3\u2026\u00e2\u20ac\u00b9/"
+    }
+  ],
+  "comment_correction_deferred_to_next_qualified_edit_of_same_source_file": true,
+  "primary_sources": {
+    "native_probe_sha256": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f",
+    "native_histogram_sha256": "65facaf03c71edd46644d7e8021c430483f8df09aa7038ca703cd082b2c4f326"
+  },
+  "regression": "Real histogram initialization before song Init; authored same-name startup broadcasts and theme broadcasts nested under an authored runtime command remain observable. A compiler startup reload retains clear final-scene source output and both legacy startup broadcasts; aggregate prior-scene source history is recorded as separate unvalidated coverage.",
+  "all_prior_102_live_and_43_replay_sources_unchanged": true,
+  "native_capture_reused": true,
+  "existing_acceptance_predicate_comparison_keys_inputs_and_tolerances_unchanged": true,
+  "query_outputs_used_as_inputs": false,
+  "full_repairs_spent_during_qualification": 0,
+  "test_setup_corrections": "Initial v1 test scaffolding used incorrect Step context type names and did not compile; it is not claimed as meaningful red. v2 generator selected a redundant Cargo target, which was stopped and removed. v3 reproduces the extra pre-song broadcast on both hosts. Green v3 exposed that the new test incorrectly expected prior compiler-startup scenes in the retained scene source output. Green v4 corrects that API-specific expectation, adds separate legacy-history/reconstruction assertions, and leaves the meaningful first-case red assertion and all prior tests unchanged."
+}

@@ -14810,7 +14810,7 @@ local meter = {
 
 		-- life-changing
 		-- adjective
-		--  /ËˆlaÉªfËŒtÊƒeÉªn.dÊ’ÉªÅ‹/
+		--  /Ã‹Ë†laÃ‰ÂªfÃ‹Å’tÃŠÆ’eÃ‰Âªn.dÃŠâ€™Ã‰ÂªÃ…â€¹/
 		-- having an effect that is strong enough to change someone's life
 		-- synonyms: compelling, life-altering, puissant, blazing
 		LifeChangedMessageCommand=function(self,params)
@@ -15430,6 +15430,9 @@ pub fn create_top_screen_table(
     // These messages precede song construction, so dispatch them to the loaded
     // theme without adding pre-song events to the song's startup output.
     let song_output = lua.remove_app_data::<LiveBroadcasts>();
+    // These theme-only construction callbacks precede authored song contexts.
+    // Keep normal listener dispatch while excluding both song output streams.
+    let source_output = lua.remove_app_data::<LiveSourceBroadcasts>();
     let loaded_life = (|| -> mlua::Result<()> {
         for (player, life_meter) in life_meters.iter().enumerate() {
             if !players[player].enabled { continue; }
@@ -15441,6 +15444,7 @@ pub fn create_top_screen_table(
         Ok(())
     })();
     if let Some(song_output) = song_output { lua.set_app_data(song_output); }
+    if let Some(source_output) = source_output { lua.set_app_data(source_output); }
     loaded_life?;
     // ScreenGameplay.h declares all five unnamed owners as Transition.
     // Keep the duplicate-name group as lookup aliases of the same actor tree.
@@ -22231,6 +22235,9 @@ pub(crate) fn install_native_gameplay_underlay(
         lua.set_app_data(SongLuaStartupQueues(Vec::new()));
     }
     let song_output = lua.remove_app_data::<LiveBroadcasts>();
+    // These theme-only construction callbacks precede authored song contexts.
+    // Keep normal listener dispatch while excluding both song output streams.
+    let source_output = lua.remove_app_data::<LiveSourceBroadcasts>();
     let result = (|| -> mlua::Result<()> {
         let mut panes = Vec::new();
         for player in players.sequence_values::<Value>() {
@@ -22282,5 +22289,6 @@ pub(crate) fn install_native_gameplay_underlay(
         Ok(())
     })();
     if let Some(song_output) = song_output { lua.set_app_data(song_output); }
+    if let Some(source_output) = source_output { lua.set_app_data(source_output); }
     result
 }
