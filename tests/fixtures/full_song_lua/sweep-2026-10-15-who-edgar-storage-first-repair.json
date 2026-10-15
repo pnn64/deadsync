@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "bounded full replay complete; complete original capture reused",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "5e44aa8e7",
