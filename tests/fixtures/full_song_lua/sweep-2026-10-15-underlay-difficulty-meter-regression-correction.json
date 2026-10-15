@@ -11,7 +11,7 @@
   "source_capture_changed": false,
   "acceptance_comparisons_changed": false,
   "red_and_green_regression_source_claimed_identical": false,
-  "green_regression_lf_sha256": "bd378d98bc5a5cff7b943668810809982cc40d97d9aec34e797b09abaa3458c8",
+  "green_regression_lf_sha256": "4a8ad3c74eb4c269c0ce9c5fb7dfffa0e86f1fcdae5646dcf4dce1e6a628cfc2",
   "first_correction_failed_both_hosts": true,
   "first_green_windows_checks": [
     {
@@ -35,5 +35,20 @@
         "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 629 filtered out; finished in 0.19s"
       ]
     }
-  ]
+  ],
+  "explicit_selected_chart_input_added": "context.player_step_indices = [Some(0), Some(1)];",
+  "second_green_windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 331.9128120999958,
+      "log_sha256": "f31db46d4f9e50152b4e89625493238b459b815b332489c56f441c97da93a2b3",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 631 filtered out; finished in 0.25s"
+      ]
+    }
+  ],
+  "second_green_failure": "expected 12 but read real fallback meter 10 because test omitted player_step_indices",
+  "selected_chart_input_source": "SongLuaCompileContext.player_step_indices and existing song_steps_use_metadata regression",
+  "meter_assertions_unchanged": true
 }
