@@ -8779,6 +8779,85 @@
         }
       ],
       "report_sha256": "838fcb63bd1b1644a39d4b0221450cf6d79be772441db3a6cb005836eee16d17"
+    },
+    {
+      "position": 445,
+      "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
+      "simfile_sha256": "3d43975664a8d1b0cdb6e9a5192126af61b447b10da2f94f1d9d4a1d9ba22645",
+      "retained_original_archive": "61f5f4a0ff7fde7e802dda787495150e1537c7195c8a095aff519f8d459e4082.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 155.84634493902558,
+      "trace_sha256": "fe1689a623805000a2358fd580725c8ef2d29c69869f6bca1b41c4d794a7b733",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-445/candidates/86ca2d782bd0150fa4f0aa8b66e4a6c01ec1307cb724e1ee780df108589bfe82.tar",
+      "replay_exit": 2,
+      "replay_seconds": 1985.773695492011,
+      "candidate_sha256": "86ca2d782bd0150fa4f0aa8b66e4a6c01ec1307cb724e1ee780df108589bfe82",
+      "native_frames": 105094,
+      "replayed_frames": 105094,
+      "compared_stage_fields": 1694,
+      "pending_coverage": [
+        "uncompared song operations: Actor.bob, Actor.fadetop, Actor.hibernate, Actor.hurrytweening, Actor.tween",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [
+        "OnCommand failed for Sprite 'EYES': runtime error: native actor method tween has no semantic implementation\nstack traceback:\n\t[C]: in function 'Actor.tween'\n\t[string \"/tmp/.tmpavgaKS/song/lua/EYES.lua\"]:14: in function <[string \"/tmp/.tmpavgaKS/song/lua/EYES.lua\"]:12>\n"
+      ],
+      "mismatch_count": 2,
+      "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 14,
+          "deadsync": 10
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0002",
+            "args": [
+              1
+            ],
+            "beat": 0.0023238849826157093,
+            "caller": {
+              "line": 12,
+              "source": "song:/lua/EYES.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "native_tween_time_left": 72.37000274658203
+            },
+            "kind": "call",
+            "line": 12,
+            "operation": "Actor.diffusealpha",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.01807256229221821,
+            "seq": 14,
+            "source": "song:/lua/EYES.lua",
+            "tween_time_left": 72.37000274658203
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "OnCommand",
+            "source": "song:/lua/EYES.lua",
+            "line": 12,
+            "beat": 0.002323887078091502,
+            "seconds": 0.01807256229221821,
+            "args": null
+          }
+        }
+      ],
+      "report_sha256": "6030e76ef01598efbce14536440935e1005c191de3d96922313c5d5a77d0cd87"
     }
   ],
   "scope": {
@@ -8791,6 +8870,6 @@
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 27,
-  "pending_charts": 32,
-  "processed_charts": 59
+  "pending_charts": 33,
+  "processed_charts": 60
 }
