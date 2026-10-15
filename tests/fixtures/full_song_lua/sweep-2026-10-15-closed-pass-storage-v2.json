@@ -1,0 +1,77 @@
+{
+  "closed_passes_only": true,
+  "lossless_uncompressed_hashes_verified": true,
+  "no_replays_or_frozen_sources_changed": true,
+  "files": [
+    {
+      "raw": "/home/parity/jobs/circles-entry-clock-first-repair-v1/chart-149/report.json",
+      "compressed": "/home/parity/jobs/circles-entry-clock-first-repair-v1/chart-149/report.json.zst",
+      "uncompressed_sha256": "af96e3030bc4368c2eeb7f6a29d30db65c4ca76876d6e0e4bedb3d570dfd1f9e",
+      "raw_bytes": 422301624,
+      "compressed_bytes": 8070906
+    },
+    {
+      "raw": "/home/parity/jobs/circles-entry-clock-first-repair-v1/chart-149/03dbad4e9494f54a43329880faf94ee7965302711a62250a3c0b995ae11b571d.tar",
+      "compressed": "/home/parity/jobs/circles-entry-clock-first-repair-v1/chart-149/accepted/760498c66a49c2d97874fbbaddff5458f5e914bb4df498b150199ea1fecf2569.tar.zst",
+      "uncompressed_sha256": "03dbad4e9494f54a43329880faf94ee7965302711a62250a3c0b995ae11b571d",
+      "raw_bytes": 524843520,
+      "compressed_bytes": 43969709
+    },
+    {
+      "raw": "/home/parity/jobs/historical-circles-sm-entry-clock-first-repair-v1/chart-148/report.json",
+      "compressed": "/home/parity/jobs/historical-circles-sm-entry-clock-first-repair-v1/chart-148/report.json.zst",
+      "uncompressed_sha256": "26e5f4d5a435c96ae6d0aa7341dd7c54494cd562abe5a0c12bf650d4edcf40c3",
+      "raw_bytes": 436739331,
+      "compressed_bytes": 8314247
+    },
+    {
+      "raw": "/home/parity/jobs/historical-circles-sm-entry-clock-first-repair-v1/chart-148/52534be29cddb9bdc64bc67463dc101b70246622885d630a527c927e2dc9eff8.tar",
+      "compressed": "/home/parity/jobs/historical-circles-sm-entry-clock-first-repair-v1/chart-148/accepted/a596574fe1fd7aece912b0375d81db0d8b6caeb574ba1a0d5fa896abf72581f8.tar.zst",
+      "uncompressed_sha256": "52534be29cddb9bdc64bc67463dc101b70246622885d630a527c927e2dc9eff8",
+      "raw_bytes": 542832640,
+      "compressed_bytes": 44254155
+    },
+    {
+      "raw": "/home/parity/jobs/storage-capture-first-repairs-v1/chart-432/report.json",
+      "compressed": "/home/parity/jobs/storage-capture-first-repairs-v1/chart-432/report.json.zst",
+      "uncompressed_sha256": "ccfeff22fb524d2ca67ffa3f7c44646cc35672c5662af589b3721e7510580ddc",
+      "raw_bytes": 440214140,
+      "compressed_bytes": 6422331
+    },
+    {
+      "raw": "/home/parity/jobs/storage-capture-first-repairs-v1/chart-432/candidates/7c5afc8a421064968465606b58b7ac9af32a07ada0cf46b6704ba667e8a71ae5.tar",
+      "compressed": "/home/parity/jobs/storage-capture-first-repairs-v1/chart-432/accepted/443e2f2bc19e85342e68a9ee620c05106dd5a7391123a5d35b03953567b78998.tar.zst",
+      "uncompressed_sha256": "7c5afc8a421064968465606b58b7ac9af32a07ada0cf46b6704ba667e8a71ae5",
+      "raw_bytes": 392697344,
+      "compressed_bytes": 14314621
+    },
+    {
+      "raw": "/home/parity/jobs/see-tinh-sm-game-state-class-first-repair-v1/chart-390/report.json",
+      "compressed": "/home/parity/jobs/see-tinh-sm-game-state-class-first-repair-v1/chart-390/report.json.zst",
+      "uncompressed_sha256": "36c3dc4a2106931f08121b901d31328c1f429859ce4872085e8568c3c4e0b118",
+      "raw_bytes": 574072537,
+      "compressed_bytes": 7762675
+    },
+    {
+      "raw": "/home/parity/jobs/see-tinh-sm-game-state-class-first-repair-v1/chart-390/3c4a446cab0be9b5682b71c92d4949ab27883c8c891755d25894f4f23db432ac.tar",
+      "compressed": "/home/parity/jobs/see-tinh-sm-game-state-class-first-repair-v1/chart-390/accepted/391975fd164d893c11ca8306904cc5a8f33c924542670e8f3fc85aabb8c37804.tar.zst",
+      "uncompressed_sha256": "3c4a446cab0be9b5682b71c92d4949ab27883c8c891755d25894f4f23db432ac",
+      "raw_bytes": 603767808,
+      "compressed_bytes": 12641388
+    },
+    {
+      "raw": "/home/parity/jobs/see-tinh-ssc-game-state-class-first-repair-v1/chart-391/report.json",
+      "compressed": "/home/parity/jobs/see-tinh-ssc-game-state-class-first-repair-v1/chart-391/report.json.zst",
+      "uncompressed_sha256": "9b52d411e7f8d683c6bdd50599383ac5992b7f134da4eacaa977979abd40afba",
+      "raw_bytes": 587421310,
+      "compressed_bytes": 7877465
+    },
+    {
+      "raw": "/home/parity/jobs/see-tinh-ssc-game-state-class-first-repair-v1/chart-391/fd6d290bc5da6313c089b3000d454ca65023587404fbad506f86235387d18131.tar",
+      "compressed": "/home/parity/jobs/see-tinh-ssc-game-state-class-first-repair-v1/chart-391/accepted/b5f570b58947f9dee7f130910b1007177b5f35b6394cd782a0e2ccd83d78602a.tar.zst",
+      "uncompressed_sha256": "fd6d290bc5da6313c089b3000d454ca65023587404fbad506f86235387d18131",
+      "raw_bytes": 621523456,
+      "compressed_bytes": 12837823
+    }
+  ]
+}
