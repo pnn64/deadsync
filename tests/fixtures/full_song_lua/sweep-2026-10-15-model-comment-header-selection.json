@@ -1,0 +1,17 @@
+{
+  "fix_commit": "6676e8417d43558d94e2dc6666c18286453c7831",
+  "build_proof": "/home/parity/jobs/model-comment-header-linux-green-v1/proof.json",
+  "binary_sha256": "74d2cd015b590d762a1611a21bff1b6caf0db7d3193d7501d7c039ff984f8f29",
+  "tested_source_root": "/home/parity/workspace/model-comment-header-v1/deadsync",
+  "all_twelve_checks_both_platforms_passed": true,
+  "all_1175_raw_linux_and_cross_platform_normalized_source_pins_verified": true,
+  "scope": "wah-leven actual model preparation failure on optional custom exporter comments",
+  "native_control_frames": 2443,
+  "native_capture_reused": true,
+  "full_repairs_spent_before_diagnostic": 0,
+  "first_full_repair_only_after_clean_retained_capture_diagnostic": true,
+  "one_later_full_repair_maximum_after_first": true,
+  "global_original_helper_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_acceptance_predicate_unchanged": true
+}
