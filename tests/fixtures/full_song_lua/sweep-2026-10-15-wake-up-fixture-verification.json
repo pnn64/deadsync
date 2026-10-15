@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Wake Up/Wake Up.ssc",
+  "native_frames": 84024,
+  "replayed_frames": 84024,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "84dc20777ca1534dfe694b61d3a53fa41161e78d2638ac50d75ab99998472029.tar.zst",
+  "compressed_sha256": "84dc20777ca1534dfe694b61d3a53fa41161e78d2638ac50d75ab99998472029",
+  "uncompressed_sha256": "d441ccf0f454966757144e0165a0b62e34fb1fcc538964a31204ffe55dc69a58",
+  "compressed_bytes": 9058095,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
