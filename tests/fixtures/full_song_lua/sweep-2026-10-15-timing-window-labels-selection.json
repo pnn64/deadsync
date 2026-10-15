@@ -1,0 +1,15 @@
+{
+  "fix_commit": "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd",
+  "source_root": "/home/parity/workspace/timing-window-labels-green-v1/deadsync",
+  "binary_sha256": "6a2dfe1c2e802c83bf102deac4f4476c86ab3ba93652f9a8817f99420b844162",
+  "build_proof": "/home/parity/jobs/timing-window-labels-linux-green-v1/proof.json",
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "live_controls": 101,
+  "replay_controls": 42,
+  "profile_controls": 1,
+  "legacy_namespace_controls": 1,
+  "scope": "real initial per-player timing windows, fresh native all-enabled default, actual original Lua judgment label construction",
+  "hope_full_repairs_spent": 0,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
