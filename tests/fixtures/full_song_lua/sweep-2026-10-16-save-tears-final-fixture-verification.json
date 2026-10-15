@@ -1,0 +1,16 @@
+{
+  "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
+  "native_frames": 80179,
+  "replayed_frames": 80179,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "full_repairs_spent": 2,
+  "archive": "273f4228e454a8361f63a073e2f34019241c8f886bf69569f3b03b0abbc15f4d.tar.zst",
+  "compressed_sha256": "273f4228e454a8361f63a073e2f34019241c8f886bf69569f3b03b0abbc15f4d",
+  "uncompressed_sha256": "ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182",
+  "compressed_bytes": 23287239,
+  "local_decompression_byte_verified": true,
+  "original_native_capture_and_payloads_unchanged": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

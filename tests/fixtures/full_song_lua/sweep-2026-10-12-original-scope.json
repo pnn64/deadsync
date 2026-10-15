@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T23:11:39Z",
+  "updated_utc": "2026-10-15T23:29:08Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,8 +13,8 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 399,
-    "pending": 102,
+    "passed": 400,
+    "pending": 101,
     "unprocessed": 0
   },
   "complete": false,
@@ -3248,9 +3248,9 @@
       "position": 385,
       "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
       "simfile_sha256": "8fe26f5a104dc99f0cea900b336f5404b18f0048a758829f1f4c09c00f99d5c4",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-15-save-tears-rights-sm-first-repair-v1.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-16-save-tears-rights-sm-second-repair-v1.json"
     },
     {
       "position": 386,
