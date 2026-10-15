@@ -11,7 +11,7 @@
   "source_capture_changed": false,
   "acceptance_comparisons_changed": false,
   "red_and_green_regression_source_claimed_identical": false,
-  "green_regression_lf_sha256": "4a8ad3c74eb4c269c0ce9c5fb7dfffa0e86f1fcdae5646dcf4dce1e6a628cfc2",
+  "green_regression_lf_sha256": "fb170fb32b018ade6b1589c7431688dc5436dc0d33aa144a6036176d67cd6446",
   "first_correction_failed_both_hosts": true,
   "first_green_windows_checks": [
     {
@@ -50,5 +50,31 @@
   ],
   "second_green_failure": "expected 12 but read real fallback meter 10 because test omitted player_step_indices",
   "selected_chart_input_source": "SongLuaCompileContext.player_step_indices and existing song_steps_use_metadata regression",
-  "meter_assertions_unchanged": true
+  "meter_assertions_unchanged": true,
+  "third_green_windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 336.9013765999989,
+      "log_sha256": "67cef2fbedba378008a5ef380de82de42c80a38e13c4cd3b77cea4bbbfb5f2b7",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 631 filtered out; finished in 0.77s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 101,
+      "seconds": 59.49948709999444,
+      "log_sha256": "634bf00d9fe89d8cd023d8de012fe1d93771f8693ced98657c9af2f6e3f7098d",
+      "results": [
+        "test result: FAILED. 92 passed; 1 failed; 0 ignored; 0 measured; 539 filtered out; finished in 57.97s"
+      ]
+    }
+  ],
+  "existing_background_filter_control_lookup_corrected": {
+    "before": "if unnamed and tostring(unnamed):find('Sprite', 1, true) then unnamed = {unnamed} end",
+    "after": "if unnamed and (tostring(unnamed):find('Sprite', 1, true) or tostring(unnamed):find('ActorFrame', 1, true)) then unnamed = {unnamed} end",
+    "reason": "New real DifficultyMeter may be the only unnamed Underlay actor. Normalize a single ActorFrame before filtering Sprite children; otherwise ipairs descends into the meter Quad and misidentifies it as a BackgroundFilter.",
+    "all_existing_filter_count_geometry_texture_alpha_and_disabled_assertions_unchanged": true
+  }
 }
