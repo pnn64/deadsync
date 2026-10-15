@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Sequential Dreambox - [Zaia]/Sequential Dreambox.ssc",
+  "native_frames": 235675,
+  "replayed_frames": 235675,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "5077e6aea0055072fbe8769109d4e9ff540f404f1db36d0f14c40d65518d380d.tar.zst",
+  "compressed_sha256": "5077e6aea0055072fbe8769109d4e9ff540f404f1db36d0f14c40d65518d380d",
+  "uncompressed_sha256": "394dc6c9625c3726430c4cea8636dba824a76b78f3ec61b719860148cc4ebdc2",
+  "compressed_bytes": 38272734,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
