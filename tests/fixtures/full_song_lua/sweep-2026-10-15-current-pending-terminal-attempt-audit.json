@@ -1,6 +1,6 @@
 {
-  "generated_utc": "2026-10-15T21:19:01.147491+00:00",
-  "concrete_ledger_sha256": "c221a8d9c82080f1c84aa41e55e2f97e650b096a75c17c4192a0a06578cfa92f",
+  "generated_utc": "2026-10-15T21:53:51.548735+00:00",
+  "concrete_ledger_sha256": "6290a8a1a2045dbf478e1af41685ab9f2e3a423cf1f2436130da456cb5507934",
   "counts": {
     "passed": 398,
     "pending": 103,
@@ -37,12 +37,39 @@
     "phase": "replay",
     "result_exists": false,
     "terminal_result": null,
-    "checked_utc": "2026-10-15T21:19:02.812787+00:00"
+    "checked_utc": "2026-10-15T21:53:53.285869+00:00"
   },
   "mawaru9_deferred_at_user_request": {
     "started_attempt": 1,
     "completed_full_replay": false,
     "restart_requires_user_resuming_chart": true
   },
-  "no_chart_replays_or_source_mutations": true
+  "no_chart_replays_or_source_mutations": true,
+  "additional_running_repairs_not_counted_as_terminal": [
+    {
+      "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
+      "attempt_started": 1,
+      "pid": 1876495,
+      "actual_command": [
+        "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e.tar",
+        "--report",
+        "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/report.json"
+      ],
+      "recorded_command": [
+        "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e.tar",
+        "--report",
+        "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/report.json"
+      ],
+      "actual_command_matches_record": true,
+      "running": true,
+      "phase": "replay",
+      "result_exists": false,
+      "terminal_result": null,
+      "checked_utc": "2026-10-15T21:53:53.691537+00:00"
+    }
+  ]
 }

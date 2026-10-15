@@ -1,0 +1,23 @@
+{
+  "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
+  "position": 150,
+  "native_frames": 6623,
+  "candidate_uncompressed_sha256": "4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e",
+  "trace_sha256": "d055eface40dddff507772568170c0fdd16f60bcb4bcef9b5e0ee34230a6977f",
+  "simfile_sha256": "162ebaf65a1a39818e74a10cea6f2e2a49b0af07b2dfce1224de0bd85395a9e5",
+  "all_original_payload_bytes_unchanged_and_verified": true,
+  "binary_sha256": "6a2dfe1c2e802c83bf102deac4f4476c86ab3ba93652f9a8817f99420b844162",
+  "fix_commit": "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd",
+  "all_six_groups_both_hosts_and_1175_source_pins_verified": true,
+  "diagnostic_exit": 2,
+  "diagnostic_seconds": 467.30708820803557,
+  "full_repairs_spent_before_and_after": 0,
+  "no_fixture_acceptance": true,
+  "no_native_recapture": true,
+  "log_sha256": "8d82c844fa2e94d57ce5d6eb98701de11df7cc3e1642b90559edd26250c846a0",
+  "replayed_frames": 2496,
+  "errors": [],
+  "mismatch_count": 0,
+  "first_mismatches": [],
+  "report_sha256": "6838fa29ba476a896342913ab19f9e4b032a2f6ca71beedf928f65c55eda4837"
+}

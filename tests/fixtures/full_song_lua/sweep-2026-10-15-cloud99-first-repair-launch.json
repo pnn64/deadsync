@@ -1,0 +1,71 @@
+{
+  "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
+  "position": 150,
+  "status": "running",
+  "repair_attempt": 1,
+  "previous_full_repairs": 0,
+  "maximum_full_repairs_per_sweep": 2,
+  "entry_evidence": "sweep-2026-10-15-cloud99-qualified-underlay-entry.json",
+  "entry_frames": 2496,
+  "entry_errors": 0,
+  "entry_mismatches": 0,
+  "native_frames": 6623,
+  "attempt_start": {
+    "position": 150,
+    "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
+    "status": "pending",
+    "repair_attempts": 1,
+    "candidate_sha256": "4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e",
+    "trace_sha256": "d055eface40dddff507772568170c0fdd16f60bcb4bcef9b5e0ee34230a6977f",
+    "simfile_sha256": "162ebaf65a1a39818e74a10cea6f2e2a49b0af07b2dfce1224de0bd85395a9e5",
+    "native_capture_reused": true,
+    "all_candidate_manifest_members_byte_verified": true,
+    "binary_sha256": "6a2dfe1c2e802c83bf102deac4f4476c86ab3ba93652f9a8817f99420b844162",
+    "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "build_proof": "/home/parity/jobs/timing-window-labels-linux-green-v1/proof.json",
+    "fix_commit": "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd",
+    "previous_failure": null,
+    "previous_errors": [],
+    "qualified_existing_underlay_fixes": [
+      "135dcdfd107e0b2cf527c010b827593139433102",
+      "2e561959d28baded6219078922c8fd38012aaaf5",
+      "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd"
+    ],
+    "no_query_outputs_used_as_inputs": true,
+    "original_full_failure": "22 command query mismatches; first Underlay.visible call has native tween time10.878245 versus owned0; qualified current entry now passes cleanly",
+    "full_acceptance_criteria_unchanged": true,
+    "capture_repeated": false,
+    "mawaru9_remains_deferred": true
+  },
+  "actual_running_observation": {
+    "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
+    "attempt_started": 1,
+    "pid": 1876495,
+    "actual_command": [
+      "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e.tar",
+      "--report",
+      "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/report.json"
+    ],
+    "recorded_command": [
+      "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e.tar",
+      "--report",
+      "/home/parity/jobs/cloud99-qualified-underlay-first-repair-v1/chart-150/report.json"
+    ],
+    "actual_command_matches_record": true,
+    "running": true,
+    "phase": "replay",
+    "result_exists": false,
+    "terminal_result": null,
+    "checked_utc": "2026-10-15T21:53:47.521880+00:00"
+  },
+  "original_candidate_uncompressed_hash": "4f8827983c2db3c7c27d3d30de6b825b6f12d9cf038d068fc06d8ab652a82a8e",
+  "all_original_payload_bytes_unchanged_and_verified": true,
+  "no_native_recapture": true,
+  "existing_full_comparisons_unchanged": true,
+  "no_fixture_acceptance_claimed": true,
+  "mawaru9_remains_deferred": true
+}
