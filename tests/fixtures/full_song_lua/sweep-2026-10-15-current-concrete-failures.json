@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T23:01:06Z",
+  "updated_utc": "2026-10-15T23:11:44Z",
   "counts": {
     "passed": 399,
     "pending": 102,
@@ -7542,18 +7542,18 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-15-hope-danger-quad-entry-diagnostic.json",
+      "followup": "sweep-2026-10-16-hope-song-meter-entry-diagnostic.json",
       "source_cause": "sweep-2026-10-15-hope-cancel-source-cause.json",
       "entry_diagnostic_frames": 1688,
       "entry_diagnostic_errors": 0,
-      "entry_diagnostic_mismatches": 20486,
+      "entry_diagnostic_mismatches": 20493,
       "archive_namespace_startup_error_cleared_in_diagnostic": true,
       "native_trace_and_all_original_member_bytes_unchanged": true,
       "original_terminal_full_result_preserved": true,
       "new_full_repair_started": false,
       "cancel_child_missing_failure_fixed_by": "c71cc5f319cd5b950b6ce107ec23f65772062260",
-      "remaining_source_cause": "sweep-2026-10-16-hope-song-meter-source-cause.json",
-      "current_diagnostic_failure": "actual next retained-entry failure at native seq979: SongMeter GetNumChildren native4/owned1; original SongInfoBar source has two borders, SongMeterDisplay with Stream, and SongTitle; Danger texture seq965 is fixed",
+      "remaining_source_cause": null,
+      "current_diagnostic_failure": "Actual next native seq1024 NoteFieldContainerP1 GetNumChildren3/owned1; source actor owns more children than the current ColumnCues-only container. Native SongInfoBar seq979 is fixed.",
       "diagnostic_only_not_full_acceptance": true,
       "quad_default_texture_fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
       "quad_texture_all_sixteen_groups_both_hosts_passed": true,
@@ -7580,7 +7580,8 @@
       "timing_window_labels_fix_commit": "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd",
       "timing_window_label_seq773_resolved": true,
       "danger_quad_fix_commit": "8bfa5e62fbd842efd8d7136f9137759e96c80a43",
-      "danger_texture_seq965_resolved": true
+      "danger_texture_seq965_resolved": true,
+      "song_meter_seq979_resolved": true
     },
     {
       "position": 230,
@@ -18015,7 +18016,7 @@
         "phase": "replay",
         "result_exists": false,
         "terminal_result": null,
-        "checked_utc": "2026-10-15T23:01:07.575609+00:00"
+        "checked_utc": "2026-10-15T23:11:45.829419+00:00"
       },
       "full_replay_completed": true,
       "remaining_source_cause": "sweep-2026-10-16-save-tears-pre-song-broadcast-cause.json",
@@ -23811,7 +23812,7 @@
           ],
           "report_sha256": "835ddbdaa434e29c5c07469bc80c28b279f1e7e817f17f89fe45ba98f7bbf617"
         },
-        "checked_utc": "2026-10-15T23:01:08.148661+00:00"
+        "checked_utc": "2026-10-15T23:11:46.213733+00:00"
       },
       "current_diagnostic_failure": "full first1 completed7119 frames/0errors/4657mismatches: source broadcast count1 plus4 shifted events; 4652 command query mismatches begin at native seq89801 around20.379547 in roses/default.lua:31. Extra pre-song PeakNPSUpdated matches qualified boundary cause, but rose position/ordering cause remains unproven; no final2 started.",
       "full_replay_completed": true,

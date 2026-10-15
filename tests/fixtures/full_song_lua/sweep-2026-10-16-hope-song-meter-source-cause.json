@@ -58,8 +58,13 @@
   "native_structure": "SongInfoBar.lua returns SongMeter ActorFrame with two border Quads, a SongMeterDisplay owning its Stream Quad, and SongTitle BitmapText. Native CurrentSongChanged updates the title.",
   "owned_source": "crates/deadsync-song-lua/src/lua_util.rs: SongMeter branch in create_top_screen_theme_child",
   "owned_structure": "A manually constructed ActorFrame with only SongTitle. It omits the real two borders and SongMeterDisplay, so GetNumChildren reports1 instead of4 and subsequent recursive authored queries shift.",
-  "fix_added": false,
+  "fix_added": true,
   "acceptance_changes": false,
   "full_repairs_spent": 0,
-  "next_action": "Replace the SongMeter placeholder with actual original SongInfoBar construction and lifecycle; first reproduce child-count mismatch in a source-based regression, qualify it, then rerun retained entry. Mawaru9 remains deferred."
+  "next_action": "Replace the SongMeter placeholder with actual original SongInfoBar construction and lifecycle; first reproduce child-count mismatch in a source-based regression, qualify it, then rerun retained entry. Mawaru9 remains deferred.",
+  "fix_commit": "8510f759639bee4ed0338379e03da2243f33a07d",
+  "six_groups_both_hosts_passed": true,
+  "seq979_resolved": true,
+  "entry_evidence": "sweep-2026-10-16-hope-song-meter-entry-diagnostic.json",
+  "first_remaining_native_seq": 1024
 }
