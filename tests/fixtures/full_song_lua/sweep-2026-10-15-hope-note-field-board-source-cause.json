@@ -1,0 +1,41 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "entry_evidence": "sweep-2026-10-15-hope-player-attack-display-entry-diagnostic.json",
+  "native_actor_identity_evidence": "sweep-2026-10-15-hope-note-field-board-entry-evidence.json",
+  "entry_frames": 1688,
+  "entry_errors": 0,
+  "entry_mismatches": 20461,
+  "first_remaining_actor": "ScreenGameplay/PlayerP1/NoteField",
+  "first_remaining_operation": "ActorFrame.GetNumChildren",
+  "native_seq": 386,
+  "native_result": 1,
+  "owned_result": 0,
+  "local_primary_sources": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\NoteField.cpp",
+      "sha256": "a08c46e722bfc727158caab50ad0c753ac93e9a2521c73e46182e9693ad02c74"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\Graphics\\NoteField board.redir",
+      "sha256": "130ce35772ded9394bc9f89ffee75b07eff713361d0326100aa4f4157ee7480b"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\Graphics\\_blank.png",
+      "sha256": "1bc6840fdf516b59b9439951834326ca1643f014ed0767d6bb3da3ae39768868"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs",
+      "sha256": "8abc73c55af50e456d210ef85aaf6c605786902d104f29d2a5b83d1246558ab4"
+    }
+  ],
+  "source_cause": "Native NoteField construction loads THEME GetPathG(\"NoteField\", \"board\"), names the actor Board, runs its On command, and adds it as a real child. The inherited fallback redirects to the actual _blank.png bitmap already supported by the native blank resource helper. Owned create_note_field_actor constructs no Board child. Native GetParent/GetName/texture events independently identify Board under this NoteField. Column actors remain a separate native vector, and adding the Board must not expose those columns as ActorFrame children.",
+  "native_blank_png_sha256": "1bc6840fdf516b59b9439951834326ca1643f014ed0767d6bb3da3ae39768868",
+  "existing_native_blank_resource_may_be_reused": true,
+  "production_fix_added": false,
+  "full_repairs_spent": 0,
+  "original_native_capture_reused": true,
+  "expected_query_results_used_as_engine_inputs": false,
+  "acceptance_comparisons_changed": false,
+  "player_inventory_fix_first_remaining_mismatch_moved_from_native_seq347_to386": true,
+  "next_action": "Construct the actual Board Sprite and load its inherited blank bitmap while preserving separate column actors; validate parent/name, real resource metadata and child inventory with a nonempty OnCommand regression before another retained HOPE entry and any full repair."
+}
