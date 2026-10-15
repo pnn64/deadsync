@@ -1,0 +1,34 @@
+{
+  "baseline_fix_commit": "206677f0f46938082a7605b76db4dd787e79733e",
+  "full_native_comparison_source_and_all_37_prior_controls_unchanged_outside_initial_nps_reader_and_two_new_controls": true,
+  "full_song_lua_acceptance_source_byte_identical": true,
+  "entire_new_bpm_regression_identical_red_green": true,
+  "all_other_live_regressions_unchanged_except_callback_fixture_setup_with_all_assertions_retained": true,
+  "legacy_bpm_contract_test_changes": {
+    "compile_song_lua_exposes_top_screen_theme_actor_shapes": {
+      "red_sha256": "7e9b0b3da1fb95736e0d26bd7bbd366473577fb626946a742aa476c83cbb3b2b",
+      "green_sha256": "24ba44ce0a84cbe02a6eb04e96e145ac641095601ffeb3280650f53f8dccb403"
+    },
+    "compile_song_lua_underlay_has_only_enabled_player_children": {
+      "red_sha256": "a9b75c9c14551ec1699842206f0f7e5d30aab13ab90062795f6b06a7a879e26f",
+      "green_sha256": "efb252df4cab33ff33c444d3671546a85d4e2739869a167cb4d641e55bfce5b5"
+    },
+    "compile_song_lua_enumerates_top_screen_theme_children": {
+      "red_sha256": "1b1a1a029d637860e8abb5eea490925a7a66e105eaa35449106cea8b3724070a",
+      "green_sha256": "5d91e8d4e05ba3a76db0950f226458b8abf373403799ed3129105b8bbc619e02"
+    },
+    "theme_children_follow_screen_hierarchy": {
+      "red_sha256": "16bc4ba00e359e5dcb5461504ef337e2b776d054a3e24c2fdf7dfe83956f6459",
+      "green_sha256": "81fb01fb5e4fe45f7e43c48dccddb0685cdcd17e153e8009f318f12c69d60e2d"
+    }
+  },
+  "legacy_scope": "Four old flat-BPM lookup/initial-range assumptions now follow native outer/rate/inner ownership and empty text before first Update; unrelated player, score, title, layer and identity assertions retained.",
+  "native_lua_function_bodies_selection_and_updates_retained": true,
+  "native_bpm_source_sha256": "899be31df0896bbcef8d8888e3bc70780ec692e375c1bf5239805e01a0859ee1",
+  "native_english_strings_sha256": "a2e11cc9a2bc4b035a25c35b72cbda28b1a47730b3feffc468018d6adc1e3169",
+  "frozen_probe_sha256": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f",
+  "native_observer_rule": "active_context ~= nil or song_source(caller.source); autonomous theme callbacks are unwrapped; nested calls inside actual song context remain observed",
+  "full_repairs_spent": 0,
+  "expected_query_results_used_as_engine_inputs": false,
+  "no_passing_chart_reopened": true
+}
