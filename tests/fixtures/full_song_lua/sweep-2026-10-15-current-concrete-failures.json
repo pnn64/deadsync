@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T12:55:35Z",
+  "updated_utc": "2026-10-15T13:35:15Z",
   "counts": {
     "passed": 398,
     "pending": 103,
@@ -8160,18 +8160,18 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-15-hope-combo-font-resources-entry-diagnostic.json",
+      "followup": "sweep-2026-10-15-hope-out-transition-quad-entry-diagnostic.json",
       "source_cause": "sweep-2026-10-15-hope-cancel-source-cause.json",
       "entry_diagnostic_frames": 1688,
       "entry_diagnostic_errors": 0,
-      "entry_diagnostic_mismatches": 20454,
+      "entry_diagnostic_mismatches": 20443,
       "archive_namespace_startup_error_cleared_in_diagnostic": true,
       "native_trace_and_all_original_member_bytes_unchanged": true,
       "original_terminal_full_result_preserved": true,
       "new_full_repair_started": false,
       "cancel_child_missing_failure_fixed_by": "c71cc5f319cd5b950b6ce107ec23f65772062260",
-      "remaining_source_cause": "sweep-2026-10-15-hope-out-transition-source-cause.json",
-      "current_diagnostic_failure": "native Out loads direct Quad; owned adds an extra ActorFrame before Quad at native sequence446",
+      "remaining_source_cause": null,
+      "current_diagnostic_failure": "actual remaining entry comparisons after current-theme Combo font selection; source cause not yet claimed",
       "diagnostic_only_not_full_acceptance": true,
       "quad_default_texture_fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
       "quad_texture_all_sixteen_groups_both_hosts_passed": true,
@@ -8181,7 +8181,8 @@
       "lyric_display_construction_fix_commit": "aa22e9e7029b7d57fbe5aaa9804ab362cd8c6872",
       "player_attack_display_fix_commit": "7efd988fdcc73bb3601b9b60981e5e89bbe0d21c",
       "note_field_board_fix_commit": "b5594d9bb0e4f66e34f32e22cca38a86fd7db574",
-      "combo_font_resources_fix_commit": "faa925c43a4b959114ffb1eb97d82b830d5983e7"
+      "combo_font_resources_fix_commit": "faa925c43a4b959114ffb1eb97d82b830d5983e7",
+      "out_transition_quad_fix_commit": "461434bacf9449ddba8a8e3a9dc980f8e05ef3c1"
     },
     {
       "position": 230,
