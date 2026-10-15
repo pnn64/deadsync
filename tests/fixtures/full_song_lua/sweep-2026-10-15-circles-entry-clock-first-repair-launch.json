@@ -1,0 +1,11 @@
+{
+  "pid": 1586668,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_circles_entry_clock_first_repair_v1.py"
+  ],
+  "repair_attempt": 1,
+  "maximum_full_repairs": 2,
+  "native_capture_reused": true,
+  "diagnostic_gate": "zero mismatches/errors through second1 on same helper"
+}

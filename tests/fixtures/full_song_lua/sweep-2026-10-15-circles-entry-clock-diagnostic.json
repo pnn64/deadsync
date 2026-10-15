@@ -1,0 +1,19 @@
+{
+  "position": 149,
+  "source_simfile": "Circles/Circles.ssc",
+  "candidate_sha256": "03dbad4e9494f54a43329880faf94ee7965302711a62250a3c0b995ae11b571d",
+  "trace_sha256": "b3dcc3c6c0a64c826f3bcff76c2d9d721670ecd8a81c12d09bdc40df552bbb8d",
+  "simfile_sha256": "ebc1974ab7c0c83af9e0255566396f6c5a3c73f4c10590f990acb1035f30b15d",
+  "binary_sha256": "56714f6f0061d2bee125fc7b36a0889bedcc9e7f018e66bdd36be9ff9d12cda5",
+  "diagnostic_exit": 2,
+  "seconds": 115.46517802099697,
+  "full_repair_attempts_spent": 0,
+  "native_capture_reused": true,
+  "native_frames": 112467,
+  "replayed_frames": 2800,
+  "errors": [],
+  "mismatch_count": 0,
+  "first_mismatches": [],
+  "report_sha256": "0af761375edef60d7c052a542e37be2e636590230a89935730b17dcbffe6383b",
+  "archive_accepted": false
+}
