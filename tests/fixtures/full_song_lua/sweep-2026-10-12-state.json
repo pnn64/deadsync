@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T00:40:55Z",
-  "previous_goal_turn": "Progress: Wake Up first repair closed84,024 frames, Goomba SM original pass closed37,874 frames, Shakunetsu final repair2 closed14,728 frames, Edgar first repair closed8,238 frames. All have zero mismatches/callback errors under unchanged full acceptance; compressed fixtures saved, decompressed bytes verified and committed. Passing charts closed. Circles startup diagnostic2800 frames and iLLness LiLin startup diagnostic3268 frames have zero errors/mismatches on validated56714f6f; first full repairs running on unchanged complete native captures. Diagnostics remain unaccepted; full acceptance unchanged. STEVE SM first repair completes68,814 frames errors0 with156,463 command/query mismatches; recursive native theme ownership incomplete, final attempt not started. Pop actual Off failure traced to global SongPosition incorrectly shared with PlayerState despite selected SSC20-beat warp. Regression reproduces beat1.5 versus3.0 on both hosts. Fix4b07d505988e43dabb14441f0a3c6696d0e06009 owns live per-player position clocks and advances selected Steps TimingData at shared music timestamp; target1/parser10/live70 pass on Windows/Linux. Remaining replay33/identity/build checks running. Pop first full repair queued behind both complete six-check proofs, frozen helper/log hashes and all1,175 raw/crossplatform source pins; zero Pop full attempts spent until launch. Global original-sweep helper711a5230 unchanged. What If Whole World original replay now pending; original supervisors continue. All501 original simfile bytes unchanged; missing coverage separate; eight files over100MB ignored and retained locally. Sweep active and incomplete.",
+  "updated_utc": "2026-10-15T00:53:26Z",
+  "previous_goal_turn": "Progress: iLLness LiLin first repair passes43,546 frames; Ascendanz original passes80,260; Rayc Fire2 SSC original passes103,991; Toho Mathematics original passes107,886. All zero errors/mismatches under unchanged full acceptance, compressed fixtures saved, decompressed bytes verified and committed; charts closed. Original partition1 complete and other original supervisors continue. Player clock fix4b07d505988e43dabb14441f0a3c6696d0e06009 now passes all six checks on Windows/Linux target1/parser10/live70/replay33/identity1/both builds; all1,175 raw/crossplatform source pins and six log hashes verified. Private helperc25c88cc selected for diagnosed Pop first full repair, original complete capture reused; replay live, one later maximum. Native dynamic addcommand observer f90b49d48d023977b5e67196700c027d6752484f fixes actual What If208,244 query mismatches: Init installs On/Ready via Actor.addcommand; old observer does not retain dispatch context, so later SetUpdateFunction loses callback phase. Complete native baseline reused: Ready begin/end0,1324 visible calls construction, native5946 frames committed. Fixed complete native control: Ready begin/end1,1356 visible calls callback with authored boolean pairs preserved,6011 native frames committed; frame totals vary normally per capture. First reader assumed absent errors field and failed; corrected to inspect actual error events, failure preserved, baseline capture reused with old CLI exit null. Both harness runtime12 and Linux build pass; all2223 raw/crossplatform pins/logs/helper e067360d verified. What If first corrected native capture running, original complete archive retained; no acceptance criteria altered, one later repair maximum. Circles first retained-capture repair remains live. Koi/Rite reporting restored, Koi final2 verified live; no replay restarted. New actual Tower Power Pokey failure traced to missing general Actor.tween API, with numeric0 Linear and native Bezier4/8 forms; source diagnosis saved, zero repair attempts spent, retained native capture. Young Dumb And Broke capture timed out900s with native movie playback log retained; pending. Global original sweep helper711a5230 unchanged, helper56714 and newc25 remain private to diagnosed repairs. All501 original simfile bytes unchanged; missing coverage separate; oversized files remain ignored/local; active incomplete sweep.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "4b07d505988e43dabb14441f0a3c6696d0e06009",
+      "deadsync": "9ebd2b7c2d652aa28347ef23d166ad5ce038040d",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -142,18 +142,18 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "Toho Mathematics (LADIES CHECK THIS OUT)/thischartsucks.ssc",
-      "position": 443,
+      "current": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
+      "position": 451,
       "phase": "replay",
-      "pid": 1194252,
+      "pid": 1760474,
       "process_matches": true,
-      "passed": 38,
+      "passed": 39,
       "pending": 64,
-      "processed": 102,
+      "processed": 103,
       "last_log_lines": [
-        "[5303.9s] replaying every native gameplay frame: frame 98710/107886 (91.5%)",
-        "[5305.9s] replaying every native gameplay frame: frame 98748/107886 (91.5%)",
-        "[5307.9s] replaying every native gameplay frame: frame 98787/107886 (91.6%)"
+        "[148.0s] replaying every native gameplay frame: frame 7913/66155 (12.0%)",
+        "[150.0s] replaying every native gameplay frame: frame 8023/66155 (12.1%)",
+        "[152.0s] replaying every native gameplay frame: frame 8134/66155 (12.3%)"
       ],
       "supervisor_running": true
     },
@@ -1942,6 +1942,13 @@
         "record": "sweep-2026-10-15-pop-player-position-first-repair-v1.json",
         "fix_commit": "4b07d505988e43dabb14441f0a3c6696d0e06009",
         "finish_status": "bounded first selected-player-position repair complete; original complete native capture reused"
+      },
+      {
+        "name": "what-if-dynamic-command-first-repair-v1",
+        "remote": "/home/parity/jobs/what-if-dynamic-command-first-repair-v1",
+        "record": "sweep-2026-10-15-what-if-dynamic-command-first-repair-v1.json",
+        "fix_commit": "4b07d505988e43dabb14441f0a3c6696d0e06009 / harness f90b49d",
+        "finish_status": "bounded first dynamic native command observer repair complete; original complete capture retained"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -1949,32 +1956,74 @@
     "other_jobs_live_observation": {
       "initial_sweep": {
         "status": "running",
-        "current": "Toho Mathematics (LADIES CHECK THIS OUT)/thischartsucks.ssc",
-        "position": 443,
+        "current": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
+        "position": 451,
         "phase": "replay",
-        "pid": 1194252,
+        "pid": 1760474,
         "process_matches": true,
-        "passed": 38,
+        "passed": 39,
         "pending": 64,
-        "processed": 102,
+        "processed": 103,
         "last_log_lines": [
-          "[5303.9s] replaying every native gameplay frame: frame 98710/107886 (91.5%)",
-          "[5305.9s] replaying every native gameplay frame: frame 98748/107886 (91.5%)",
-          "[5307.9s] replaying every native gameplay frame: frame 98787/107886 (91.6%)"
+          "[148.0s] replaying every native gameplay frame: frame 7913/66155 (12.0%)",
+          "[150.0s] replaying every native gameplay frame: frame 8023/66155 (12.1%)",
+          "[152.0s] replaying every native gameplay frame: frame 8134/66155 (12.3%)"
         ],
         "supervisor_running": true
       },
       "jobs": [
         {
-          "job": "illness-lilin-entry-clock-first-repair-v1",
+          "job": "what-if-dynamic-command-first-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "capture",
+          "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+          "child_running": true,
+          "position": 472
+        },
+        {
+          "job": "koi-ssc-message-coverage-final-repair-v1",
           "complete": false,
           "supervisor_running": true,
           "passed": 0,
           "pending": 0,
           "processed": 0,
           "last_phase": "replay",
-          "source_simfile": "iLLness LiLin/iLLness LiLin.ssc",
+          "source_simfile": "Koi [UPS2016]/koi.ssc",
           "child_running": true
+        },
+        {
+          "job": "rite-ssc-message-coverage-first-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0
+        },
+        {
+          "job": "pop-player-position-first-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "Pop/Pop.ssc",
+          "child_running": true
+        },
+        {
+          "job": "illness-lilin-entry-clock-first-repair-v1",
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
+          "pending": 0,
+          "processed": 1,
+          "last_phase": "pack",
+          "source_simfile": "iLLness LiLin/iLLness LiLin.ssc",
+          "child_running": false
         },
         {
           "job": "circles-entry-clock-first-repair-v1",
@@ -2101,13 +2150,13 @@
           "job": "chart-sweep-parallel-v5-3",
           "complete": false,
           "supervisor_running": true,
-          "passed": 8,
+          "passed": 9,
           "pending": 9,
-          "processed": 17,
+          "processed": 18,
           "last_phase": "replay",
-          "source_simfile": "[12] Ascendanz/Ascendanz.ssc",
+          "source_simfile": "Lots of Spices - [tari]/spices.ssc",
           "child_running": true,
-          "position": 486
+          "position": 494
         },
         {
           "job": "chart-sweep-parallel-v5-4",
@@ -2126,12 +2175,12 @@
           "complete": false,
           "supervisor_running": true,
           "passed": 9,
-          "pending": 7,
-          "processed": 16,
-          "last_phase": "capture",
-          "source_simfile": "Young Dumb And Broke/YDB.sm",
+          "pending": 8,
+          "processed": 17,
+          "last_phase": "replay",
+          "source_simfile": "Collaboration with Paul J Kim/Something.sm",
           "child_running": true,
-          "position": 480
+          "position": 488
         },
         {
           "job": "chart-sweep-parallel-v5-6",
@@ -2990,14 +3039,14 @@
         },
         {
           "job": "chart-sweep-parallel-v4-1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 39,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 40,
           "pending": 41,
-          "processed": 80,
-          "last_phase": "replay",
+          "processed": 81,
+          "last_phase": "pack",
           "source_simfile": "Rayc Fire 2/Rayc Fire 2.ssc",
-          "child_running": true,
+          "child_running": false,
           "position": 500
         },
         {
@@ -3005,12 +3054,12 @@
           "complete": false,
           "supervisor_running": true,
           "passed": 27,
-          "pending": 32,
-          "processed": 59,
-          "last_phase": "replay",
-          "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
+          "pending": 33,
+          "processed": 60,
+          "last_phase": "candidate",
+          "source_simfile": "Ultimate taste/Ultimate taste.ssc",
           "child_running": true,
-          "position": 445
+          "position": 453
         },
         {
           "job": "definition-concat-repair-v1",
@@ -3136,7 +3185,7 @@
     "selected_replay_binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 132,
+    "publisher_stream_count": 133,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -3516,27 +3565,39 @@
       "original_complete_native_captures_reused": true,
       "helper_sha256": "56714f6f0061d2bee125fc7b36a0889bedcc9e7f018e66bdd36be9ff9d12cda5",
       "circles_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-circles-entry-clock-first-repair-launch.json",
-      "illness_lilin_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-illness-lilin-entry-clock-first-repair-v1-launch.json"
+      "illness_lilin_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-illness-lilin-entry-clock-first-repair-v1-launch.json",
+      "illness_lilin_status": "passed",
+      "illness_lilin_passing_chart_closed": true,
+      "illness_lilin_further_replay_allowed": false,
+      "illness_lilin_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-illness-lilin-fixture-verification.json"
     },
     "pop_player_clock": {
       "diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-pop-player-position-diagnosis.json",
-      "full_repairs_spent": 0,
-      "regression_builds_running": true,
-      "production_helper_selected": false,
+      "full_repairs_spent": 1,
+      "regression_builds_running": false,
+      "production_helper_selected": true,
       "fix_commit": "4b07d505988e43dabb14441f0a3c6696d0e06009",
       "both_platform_red_verified": true,
       "both_platform_target_control_passed": true,
       "both_platform_parser_controls_passed": 10,
       "both_platform_live_controls_passed": 70,
-      "remaining_validation_running": true,
-      "first_full_repair_queued": true,
+      "remaining_validation_running": false,
+      "first_full_repair_queued": false,
       "requires_both_platform_complete_six_checks": true,
       "requires_all_1175_raw_and_normalized_source_pins": true,
       "queue_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-player-song-position-pop-queue-launch.json",
       "windows_validator_pid": 29504,
       "windows_proof_uploader_pid": 48796,
       "linux_validation_waiter_pid": 1651648,
-      "pop_validation_waiter_pid": 1693905
+      "pop_validation_waiter_pid": 1693905,
+      "all_six_checks_both_hosts_passed": true,
+      "all_1175_raw_and_normalized_source_pins_verified": true,
+      "helper_private_to_diagnosed_repairs": true,
+      "binary_sha256": "c25c88cc0b02b3e8fe7466d39632080821972ee363cbfc66aa9b8e139063e4d1",
+      "first_full_repair_running": true,
+      "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-player-song-position-linux-validation.json",
+      "windows_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-player-song-position-windows-validation.json",
+      "first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-pop-player-position-first-repair-launch.json"
     },
     "who_edgar_closed": {
       "status": "passed",
@@ -3545,14 +3606,43 @@
       "passing_chart_closed": true,
       "further_replay_allowed": false,
       "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-who-edgar-fixture-verification.json"
-    }
+    },
+    "new_original_passes_closed": {
+      "ascendanz_12": {
+        "native_frames": 80260,
+        "verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-ascendanz-12-fixture-verification.json"
+      },
+      "rayc_fire2_ssc": {
+        "native_frames": 103991,
+        "verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-rayc-fire2-ssc-fixture-verification.json"
+      },
+      "toho_mathematics": {
+        "native_frames": 107886,
+        "verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-toho-mathematics-fixture-verification.json"
+      }
+    },
+    "dynamic_command_observer": {
+      "harness_fix_commit": "f90b49d48d023977b5e67196700c027d6752484f",
+      "harness_sha256": "e067360d8120ee0a174b0848832856325ef62b709287fb48976441a277b26563",
+      "all_2223_raw_and_normalized_pins_verified": true,
+      "both_host_runtime_controls_passed": 12,
+      "linux_build_passed": true,
+      "actual_complete_native_baseline_and_fixed_controls_verified": true,
+      "validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-dynamic-command-observer-validation.json",
+      "what_if_first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-what-if-dynamic-command-first-repair-launch.json",
+      "what_if_full_repairs_spent": 1,
+      "what_if_one_later_repair_maximum": true,
+      "original_complete_capture_retained": true,
+      "original_global_capture_selection_unchanged": true
+    },
+    "tower_generic_tween_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-tower-pokey-generic-tween-diagnosis.json"
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 212,
-    "new_pending_charts": 107,
-    "new_processed_sources": 319,
+    "new_passed_fixtures": 216,
+    "new_pending_charts": 108,
+    "new_processed_sources": 324,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 34,
+    "unprocessed_sources": 29,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -4438,57 +4528,6 @@
               "Fooze"
             ],
             "params_error": "broadcast function trace remains pending"
-          }
-        }
-      ]
-    },
-    {
-      "source_simfile": "iLLness LiLin/iLLness LiLin.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 8,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "args": [],
-            "beat": 4.450479900697246e-05,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 288,
-              "source": "song:/bg/_script.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0003",
-            "detail": {
-              "results": [
-                4.450479900697246e-05
-              ]
-            },
-            "kind": "query",
-            "line": 288,
-            "operation": "GameState.GetSongBeat",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 0.3738095164299011,
-            "seq": 79,
-            "source": "song:/bg/_script.lua",
-            "results": [
-              4.450479900697246e-05
-            ]
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "command",
-            "operation": "command.begin",
-            "command": "OnCommand",
-            "source": "song:/lua/_script.lua",
-            "line": 136,
-            "beat": 4.450479900697246e-05,
-            "seconds": 0.3738095164299011,
-            "args": null
           }
         }
       ]
@@ -5667,6 +5706,22 @@
       ]
     },
     {
+      "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [
+        "OnCommand failed for Sprite 'EYES': runtime error: native actor method tween has no semantic implementation\nstack traceback:\n\t[C]: in function 'Actor.tween'\n\t[string \"/tmp/.tmpavgaKS/song/lua/EYES.lua\"]:14: in function <[string \"/tmp/.tmpavgaKS/song/lua/EYES.lua\"]:12>\n"
+      ],
+      "mismatch_count": 2,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 14,
+          "deadsync": 10
+        }
+      ]
+    },
+    {
       "source_simfile": "Trancing Pulse (Random)/Trancing Pulse (Random).ssc",
       "repair_attempts": 0,
       "failure": null,
@@ -5834,6 +5889,14 @@
       "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
       "repair_attempts": 0,
       "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Wobbpotato': error converting Lua nil to function; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Wobbpotato' from '/tmp/.tmpbZSdUN/song/lua/default.lua': error converting Lua nil to function\n\nthread 'main' (1384391) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Young Dumb And Broke/YDB.sm",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1650259-1792024376649881908-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1650259-1792024376649881908-0\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []

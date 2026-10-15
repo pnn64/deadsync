@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T00:40:55Z",
+  "updated_utc": "2026-10-15T00:53:26Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 359,
-    "pending": 108,
-    "unprocessed": 34
+    "passed": 363,
+    "pending": 109,
+    "unprocessed": 29
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2093,9 +2093,9 @@
       "position": 241,
       "source_simfile": "iLLness LiLin/iLLness LiLin.ssc",
       "simfile_sha256": "50e01c6d0a8ca3a3f7486011b5f5e093ea96fd6018385805e021cd459157a32d",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-illness-lilin-entry-clock-first-repair-v1.json"
     },
     {
       "position": 242,
@@ -3699,7 +3699,9 @@
       "position": 443,
       "source_simfile": "Toho Mathematics (LADIES CHECK THIS OUT)/thischartsucks.ssc",
       "simfile_sha256": "5effc07169fdd5a5246331d3b08fe26cfbaf83ff59db11aed2401e076c18b5de",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 444,
@@ -3713,7 +3715,9 @@
       "position": 445,
       "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
       "simfile_sha256": "3d43975664a8d1b0cdb6e9a5192126af61b447b10da2f94f1d9d4a1d9ba22645",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 446,
@@ -3965,7 +3969,9 @@
       "position": 480,
       "source_simfile": "Young Dumb And Broke/YDB.sm",
       "simfile_sha256": "1addc2202817def4719e4b62fb85ade39e8450cfe01a19ed3adc3370efce6cd0",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 481,
@@ -4007,7 +4013,9 @@
       "position": 486,
       "source_simfile": "[12] Ascendanz/Ascendanz.ssc",
       "simfile_sha256": "cddb4aa7377dd0f3f0ce3d45ec5806bc8879cc2159c4bf643bf89b9c72b0bcd0",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 487,
@@ -4101,7 +4109,9 @@
       "position": 500,
       "source_simfile": "Rayc Fire 2/Rayc Fire 2.ssc",
       "simfile_sha256": "7163714252068f63b817c7eed2127d3d312941bed6f9969b6d317e6f998930e0",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 501,
