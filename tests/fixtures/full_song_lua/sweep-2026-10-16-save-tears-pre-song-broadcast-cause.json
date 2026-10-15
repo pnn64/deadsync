@@ -1,0 +1,162 @@
+{
+  "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
+  "report_sha256": "e81ce27d074e87b2d91553bc7ef98f8837779a34405209b0c58362777aafdf5b",
+  "full_frames_completed": 80179,
+  "full_repairs_spent": 1,
+  "callback_errors": [],
+  "mismatch_fields": {
+    "source_broadcast_count": 1,
+    "source_broadcast": 17
+  },
+  "extra_pre_song_broadcasts": [
+    {
+      "seconds": 0.0,
+      "beat": 0.0,
+      "name": "PeakNPSUpdated",
+      "args": [
+        "PeakNPSUpdated"
+      ],
+      "params_error": null
+    },
+    {
+      "seconds": 0.0,
+      "beat": 0.0,
+      "name": "PeakNPSUpdated",
+      "args": [
+        "PeakNPSUpdated"
+      ],
+      "params_error": null
+    }
+  ],
+  "remaining_17_broadcasts_match_existing_args_and_clock_comparisons_exactly_within_unchanged_tolerance": [
+    {
+      "index": 0,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 1,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 2,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 3,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 4,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 5,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 6,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 7,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 8,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 9,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 10,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 11,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 12,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 13,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 14,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 15,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    },
+    {
+      "index": 16,
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0,
+      "params_error": null
+    }
+  ],
+  "scene_counts": {
+    "startup": 1,
+    "replayed": 2
+  },
+  "native_probe": "/home/parity/workspace/snapshots-v1/itgmania-harness/probe_theme/SongLuaTrace.lua",
+  "native_probe_sha256": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f",
+  "native_histogram_source": "/home/parity/native/source-v1/Themes/Harness Simply Love/Scripts/SL-Histogram.lua",
+  "native_histogram_sha256": "65facaf03c71edd46644d7e8021c430483f8df09aa7038ca703cd082b2c4f326",
+  "no_report_or_acceptance_changes": true,
+  "proposed_cause": "Theme construction temporarily suspends LiveBroadcasts but leaves LiveSourceBroadcasts recording; Histogram CurrentSongChanged generates PeakNPSUpdated before authored Foreground is loaded. Native probe emits only active authored/song-source contexts."
+}
