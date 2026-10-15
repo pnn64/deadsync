@@ -1,0 +1,15 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "pending_capture_preserved": true,
+  "accepted_fixture": false,
+  "full_repairs_spent": 0,
+  "compressed": "/home/parity/jobs/hope-complete-lua-namespace-diagnostic-v1/private-namespace-candidate.tar.zst",
+  "compressed_sha256": "dba998ce762304a6994791cb4693f427de56aaf38a493736787f3e5f5c55683c",
+  "uncompressed_sha256": "3e6bb65b474d86cd14f4354e2cbb8e65a3f4896b527137fa82e2325a3691e6b0",
+  "raw_bytes": 731858432,
+  "compressed_bytes": 16300538,
+  "all_uncompressed_bytes_verified_before_raw_copy_removal": true,
+  "live_process_uses_raw_copy": false,
+  "disk_free_before": 4105531392,
+  "disk_free_after": 4813180928
+}
