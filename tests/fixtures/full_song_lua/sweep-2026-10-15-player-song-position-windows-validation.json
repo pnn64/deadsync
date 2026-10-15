@@ -1,0 +1,63 @@
+{
+  "status": "all six Windows checks passed; Linux remaining validation running",
+  "source_pin_count": 1175,
+  "all_1175_normalized_source_pins_verified": true,
+  "all_six_log_hashes_verified": true,
+  "source_change": "Live PlayerState SongPosition owns independent selected Steps timing at the shared native music timestamp; global Song position remains independent.",
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 302.28659560000233,
+      "log_sha256": "66fa33641b1c70486f30c6de95f493304fb119c89143abb1ca59d6f7601caaa1",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 607 filtered out; finished in 0.26s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 6.767345700005535,
+      "log_sha256": "46ee476e2a02a1acd2fd6e918461700d4a0206069d5ed22b14af32093d857a2b",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 598 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 37.20283919999201,
+      "log_sha256": "7975d1d08f597b1784bd269f0a0bedd9f3fc4f912ea2956c44d766dbfd081247",
+      "results": [
+        "test result: ok. 70 passed; 0 failed; 0 ignored; 0 measured; 538 filtered out; finished in 35.77s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 80.3532039999991,
+      "log_sha256": "62d56a1db13c35cad40d01310a3f3bb18b312932968c9277ea1e549e758ddc72",
+      "results": [
+        "test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.24s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 1.4989097000070615,
+      "log_sha256": "d581e8d3d40ff31502a0c485413793008921aa47c7e173a5f2ed921cff85438b",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 607 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 24.61127919999126,
+      "log_sha256": "44669208cec14b4b44e0a6a0d28cf06bd1ea69e79136c032aa6894466b8bdad0",
+      "results": []
+    }
+  ],
+  "full_proof_sha256": "f47efb438cb32d9c866b8957815d3782538a0b819a4be534037254da5d5dda6b",
+  "fix_commit": "4b07d505988e43dabb14441f0a3c6696d0e06009"
+}
