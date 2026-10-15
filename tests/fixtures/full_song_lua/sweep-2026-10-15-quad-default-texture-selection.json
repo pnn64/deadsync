@@ -1,0 +1,13 @@
+{
+  "fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
+  "binary_sha256": "8e605364e123b4ed0bd7214368066ed4c09c2b7ff0ffe8da01c50175e3637515",
+  "source_root": "/home/parity/workspace/quad-default-texture-green-v1/deadsync",
+  "build_proof": "/home/parity/jobs/quad-default-texture-linux-green-v1/proof.json",
+  "all_sixteen_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "native Quad constructor default RageTexture with empty resource filename and 1x1 metadata; explicit unload and retained texture rebinding; actual HOPE nil GetTexture mismatch",
+  "native_capture_reused": true,
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
