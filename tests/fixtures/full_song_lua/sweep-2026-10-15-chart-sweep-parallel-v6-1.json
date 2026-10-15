@@ -603,6 +603,56 @@
         }
       ],
       "report_sha256": "ad592475cd2cdc3e32b55c7e7a13d6a14af6d1c47531cb40c7458d488da9eab5"
+    },
+    {
+      "position": 461,
+      "source_simfile": "Void Virus/Void_Virus.ssc",
+      "simfile_sha256": "ed7242ed2ca8c6ec3fd2cb8a8bb405a301123969126b01e795d6881c5222e563",
+      "retained_original_archive": "27d1085d9a79ed144ebfb645489e1acf7ea33ccadec51930644bd7a380f4b2b2.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 177.50445698198746,
+      "trace_sha256": "5be3f40e91f0fbc729a982ad3ce9294bccecbc0942ffb8e6b74a152a1cf1c42b",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v6-1/chart-461/candidates/87db8241ab0fa360829a1c7cee3dac1f504d740bbc94e48d83927f8ad019ce8c.tar",
+      "replay_exit": 0,
+      "replay_seconds": 889.9216430310044,
+      "candidate_sha256": "87db8241ab0fa360829a1c7cee3dac1f504d740bbc94e48d83927f8ad019ce8c",
+      "native_frames": 26515,
+      "replayed_frames": 26515,
+      "compared_stage_fields": 1518,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "35853d18254224514f5bda2882fd2fa594707ee0482c2e78dbc5b268cd35ef8f",
+      "archive": "3679cfc0f434ab3d26695726e90b9e73cacd3d1d8e7bb6f77feb5f8de82cbe50.tar.zst",
+      "archive_sha256": "3679cfc0f434ab3d26695726e90b9e73cacd3d1d8e7bb6f77feb5f8de82cbe50",
+      "compressed_bytes": 10027114,
+      "pack_seconds": 10.959270862018457,
+      "harness_version": "0.1.80",
+      "title": "Void Virus",
+      "retained_original_entry": {
+        "title": "Void Virus",
+        "source_simfile": "Void Virus/Void_Virus.ssc",
+        "harness_version": "0.1.0",
+        "archive": "27d1085d9a79ed144ebfb645489e1acf7ea33ccadec51930644bd7a380f4b2b2.tar.zst",
+        "sha256": "27d1085d9a79ed144ebfb645489e1acf7ea33ccadec51930644bd7a380f4b2b2",
+        "compressed_bytes": 85636,
+        "uncompressed_sha256": "3b3a6ef64ab45cd6950b9a9d4f25732db6c4a42cbb317c8a3fa74f21036e3b3a",
+        "compression_level": 22,
+        "aliases": [
+          "9e8f081a0e95adb938e90e5c7f5bedec5cb927bd2fc52b55195a2bc4703c21d9.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -613,7 +663,7 @@
   },
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 2,
+  "passed_fixtures": 3,
   "pending_charts": 1,
-  "processed_charts": 3
+  "processed_charts": 4
 }

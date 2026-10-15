@@ -5322,15 +5322,12 @@
     {
       "title": "Void Virus",
       "source_simfile": "Void Virus/Void_Virus.ssc",
-      "harness_version": "0.1.0",
-      "archive": "27d1085d9a79ed144ebfb645489e1acf7ea33ccadec51930644bd7a380f4b2b2.tar.zst",
-      "sha256": "27d1085d9a79ed144ebfb645489e1acf7ea33ccadec51930644bd7a380f4b2b2",
-      "compressed_bytes": 85636,
-      "uncompressed_sha256": "3b3a6ef64ab45cd6950b9a9d4f25732db6c4a42cbb317c8a3fa74f21036e3b3a",
-      "compression_level": 22,
-      "aliases": [
-        "9e8f081a0e95adb938e90e5c7f5bedec5cb927bd2fc52b55195a2bc4703c21d9.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "3679cfc0f434ab3d26695726e90b9e73cacd3d1d8e7bb6f77feb5f8de82cbe50.tar.zst",
+      "sha256": "3679cfc0f434ab3d26695726e90b9e73cacd3d1d8e7bb6f77feb5f8de82cbe50",
+      "compressed_bytes": 10027114,
+      "uncompressed_sha256": "87db8241ab0fa360829a1c7cee3dac1f504d740bbc94e48d83927f8ad019ce8c",
+      "aliases": []
     },
     {
       "title": "VTuber死なない",
