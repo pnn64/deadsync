@@ -1,0 +1,25 @@
+{
+  "position": 445,
+  "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
+  "repair_attempts": 0,
+  "native_frames": 105094,
+  "replayed_frames": 105094,
+  "errors": [
+    "OnCommand failed for Sprite 'EYES': runtime error: native actor method tween has no semantic implementation\nstack traceback:\n\t[C]: in function 'Actor.tween'\n\t[string \"/tmp/.tmpavgaKS/song/lua/EYES.lua\"]:14: in function <[string \"/tmp/.tmpavgaKS/song/lua/EYES.lua\"]:12>\n"
+  ],
+  "mismatch_count": 2,
+  "candidate_sha256": "86ca2d782bd0150fa4f0aa8b66e4a6c01ec1307cb724e1ee780df108589bfe82",
+  "trace_sha256": "fe1689a623805000a2358fd580725c8ef2d29c69869f6bca1b41c4d794a7b733",
+  "simfile_sha256": "3d43975664a8d1b0cdb6e9a5192126af61b447b10da2f94f1d9d4a1d9ba22645",
+  "report_sha256": "6030e76ef01598efbce14536440935e1005c191de3d96922313c5d5a77d0cd87",
+  "actual_cause": "Actor.tween has no semantic implementation. EYES OnCommand calls tween(5,0,0), tween(12.923,0,0), then hurrytweening(0.7), and tween(2,0,0). Native Actor::tween reads duration and TweenType; numeric0 is Linear, and extra third scalar is unused for this type.",
+  "native_api_scope": "ITween::CreateFromStack supports numeric or TweenType enum Linear/Accelerate/Decelerate/Spring plus Bezier with4 scalar or8 two-dimensional control coordinates. Implement the actual API over owned tween queues; preserve native duration validation and hurry semantics. Do not alias all types to Linear or feed captured tween durations.",
+  "full_repairs_spent": 0,
+  "next_action": "Implement general Actor.tween and meaningful native controls before first full repair. Existing complete native capture retained.",
+  "acceptance_comparisons_changed": false,
+  "primary_source_sha256": {
+    "..\\itgmania-harness\\vendor\\itgmania\\src\\Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "..\\itgmania-harness\\vendor\\itgmania\\src\\Tween.cpp": "ae2bcbe0c6e69eaea571467508f8379dd2b8b53b076a9310d300a0c5d9f6d429",
+    "..\\rework\\lua-songs\\Tower Power Pokey  Battle\\lua\\EYES.lua": "d2dea5aad779c63269b45093cbff2495e02ac947001b9b7295335577f539e8db"
+  }
+}

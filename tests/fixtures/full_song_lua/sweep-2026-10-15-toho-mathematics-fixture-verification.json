@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Toho Mathematics (LADIES CHECK THIS OUT)/thischartsucks.ssc",
+  "native_frames": 107886,
+  "replayed_frames": 107886,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "0c936b75ff4e34510b739ac580295491c73633fe247edea1e5898c4f9825e5c5.tar.zst",
+  "compressed_sha256": "0c936b75ff4e34510b739ac580295491c73633fe247edea1e5898c4f9825e5c5",
+  "uncompressed_sha256": "9590969e0e87bf5d84b9938dbae40a6da9e9ead94b2f632890b1a01aebce2676",
+  "compressed_bytes": 6670962,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
