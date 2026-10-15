@@ -2253,8 +2253,12 @@ pub fn actor_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     mt.set("__songlua_child_names", order.clone())?;
     mt.set(
         "__newindex",
-        lua.create_function(move |_, (registry, key, value): (Table, Value, Value)| {
+        lua.create_function(|_, (registry, key, value): (Table, Value, Value)| {
             if !value.is_nil() {
+                // Keep the order table owned by Lua. Capturing it in Rust
+                // retains an auxiliary stack slot for every child registry.
+                let order = registry.metatable().expect("owned child registry metatable")
+                    .raw_get::<Table>("__songlua_child_names")?;
                 order.raw_set(order.raw_len() + 1, key.clone())?;
             }
             registry.raw_set(key, value)
@@ -21136,6 +21140,41 @@ pub fn method_arg_offset(args: &MultiValue) -> usize {
 #[cfg(test)]
 mod snapshot_tests {
     use super::*;
+
+    #[test]
+    fn recursive_begin_handles_large_actor_tree_in_order() {
+        let lua = Lua::new();
+        let root = lua.create_table().expect("actor tree");
+        let calls = lua.create_table().expect("Begin observations");
+        lua.globals().set("BEGIN_CALLS", calls.clone()).unwrap();
+        let begin = lua.load("return function(self) BEGIN_CALLS[#BEGIN_CALLS + 1] = self.ordinal end")
+            .eval::<Function>().expect("authored Begin command");
+        for ordinal in 1..=2800 {
+            let child = lua.create_table().expect("child actor");
+            child.raw_set("ordinal", ordinal).unwrap();
+            child.raw_set("BeginCommand", begin.clone()).unwrap();
+            root.raw_set(ordinal, child).unwrap();
+        }
+        // Scene preparation keeps initial actor states while Begin traverses
+        // the same tree. Those independent handles must remain usable.
+        let initial_actors = root.sequence_values::<Table>()
+            .collect::<mlua::Result<Vec<_>>>().expect("initial actor states");
+        // Named-child queries can initialize every actor's child registry
+        // before the screen broadcasts Begin, as authored scene scanners do.
+        for actor in &initial_actors {
+            let children = actor_named_children(&lua, actor).expect("initial child lookup");
+            assert_eq!(children.raw_len(), 0);
+        }
+        run_named_command_on_children_recursively(&lua, &root, "BeginCommand", None)
+            .expect("Begin must traverse a large actor tree within the native Lua stack limit");
+        assert_eq!(calls.raw_len(), 2800);
+        for (index, actor) in initial_actors.iter().enumerate() {
+            let ordinal = index + 1;
+            assert_eq!(actor.raw_get::<usize>("ordinal").unwrap(), ordinal);
+            assert_eq!(calls.raw_get::<usize>(ordinal).unwrap(), ordinal,
+                "Begin runs once per actor in child order");
+        }
+    }
 
     #[test]
     fn large_snapshot_restores_aliases_and_cells() {
