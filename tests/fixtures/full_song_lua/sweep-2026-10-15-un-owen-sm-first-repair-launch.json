@@ -1,0 +1,12 @@
+{
+  "pid": 1966700,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_un_owen_sm_late_command_first_repair_v1.py"
+  ],
+  "repair_attempt": 1,
+  "maximum_full_repairs": 2,
+  "old_complete_capture_retained": true,
+  "observer_fix": "ca0b435",
+  "reason": "Actual13 mismatches show missing late-assigned root OnCommand span; same authored Lua and native-control-proven defect as closed SSC variant."
+}
