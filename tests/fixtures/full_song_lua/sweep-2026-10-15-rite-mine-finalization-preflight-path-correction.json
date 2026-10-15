@@ -1,0 +1,12 @@
+{
+  "source_simfile": "rite of spring/rite.ssc",
+  "failure": "retained archive lives directly in prior chart folder; launcher assumed original-sweep candidates subfolder, then attempted nonexistent compressed fallback",
+  "failed_stage_preserved": "/home/parity/jobs/rite-mine-finalization-final-repair-preflight-path-v1",
+  "no_attempt_start_or_replay_child_created": true,
+  "full_repairs_spent_before_and_after": 1,
+  "corrected_retained_archive": "/home/parity/jobs/rite-ssc-message-coverage-first-repair-v1/chart-378/fa30207b35448ca133d0e13bf2377c07ba2037f042e00f19a5d9fb4bf03287c3.tar",
+  "candidate_uncompressed_sha256_verified": "fa30207b35448ca133d0e13bf2377c07ba2037f042e00f19a5d9fb4bf03287c3",
+  "frozen_source_and_binary_changed": false,
+  "new_full_repair_attempt_number": 2,
+  "no_third_full_repair": true
+}

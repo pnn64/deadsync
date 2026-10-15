@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T06:24:30Z",
-  "previous_goal_turn": "Progress: Watermelon first repair passed all35146 frames, WOP retained original replay passed all97282 frames, and Wah-leven first repair passed all67913 frames; each has zero callback errors and mismatches, a saved compressed fixture, and a committed local decompressed-byte receipt. These charts are closed. Original-tail handoff v7 retained the same WOP child, collected its actual kernel status after completion, and moved untouched485,493,501 onto a verified worker without signaling or restarting a live replay. ArrowQuest native capture timed out at901 seconds; Lesson by DJ native capture found no dance-single Challenge. Sequential Dreambox completed its native capture and is replaying235675 frames. The exact Rite retained-capture domain experiment proved premature natural-end final mine accounting suppresses the last AvoidMine callback. The production fix defers that accounting to the actual evaluation handoff while preserving ordinary immediate completion and hold-to-exit accounting. The new live-outro regression reproduced red on both hosts; all13 corrected validation groups passed on Windows, and Linux validation is running against its private frozen source root. The second and final Rite repair is queued behind both-host source, log and binary verification plus a committed selection; no third repair is allowed. Mawaru6 final and Mawaru8 first repairs remain live without restart. I Really Like You SSC remains pending on5080 countdown broadcasts after its first complete209028-frame repair; no second launched. Coverage remains separate from existing acceptance. All501 original simfile hashes remain unchanged and the sweep remains active and incomplete.",
+  "updated_utc": "2026-10-15T06:28:30Z",
+  "previous_goal_turn": "Progress: Watermelon first repair passed all35146 frames, WOP retained original replay passed all97282 frames, and Wah-leven first repair passed all67913 frames; each has zero callback errors and mismatches, a saved compressed fixture, and a committed local decompressed-byte receipt. These charts are closed. Original-tail handoff v7 retained the same WOP child, collected its actual kernel status after completion, and moved untouched485,493,501 onto a verified worker without signaling or restarting a live replay. ArrowQuest native capture timed out at901 seconds; Lesson by DJ native capture found no dance-single Challenge. Sequential Dreambox completed its native capture and is replaying235675 frames. The exact Rite retained-capture domain experiment proved premature natural-end final mine accounting suppresses the last AvoidMine callback. The production fix defers that accounting to the actual evaluation handoff while preserving ordinary immediate completion and hold-to-exit accounting. The new live-outro regression reproduced red on both hosts; all13 corrected validation groups passed on both hosts, with all1175 raw Linux and normalized cross-platform red/green source pins, logs and the private helper verified. Committed production fix40afbf0b9 and helper selection8bc6998a. Corrected a launcher-only retained-archive path error before any replay child or attempt-start existed, preserving that failed startup without spending another repair. Rite second and final repair is now live against the unchanged104414-frame capture; no third repair is allowed. Mawaru6 final and Mawaru8 first repairs remain live without restart. I Really Like You SSC remains pending on5080 countdown broadcasts after its first complete209028-frame repair; no second launched. Coverage remains separate from existing acceptance. All501 original simfile hashes remain unchanged and the sweep remains active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "fc8924412d58acacb437ce01208964e2d99f099e",
+      "deadsync": "3449e2abda9dbd43e092ac234108ad7ed97ee519",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -2080,6 +2080,13 @@
         "record": "sweep-2026-10-15-chart-sweep-parallel-v7-1.json",
         "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
         "finish_status": "original tail queue complete; three untouched originals; full acceptance unchanged"
+      },
+      {
+        "name": "rite-mine-finalization-final-repair-v1",
+        "remote": "/home/parity/jobs/rite-mine-finalization-final-repair-v1",
+        "record": "sweep-2026-10-15-rite-mine-finalization-final-repair-v1.json",
+        "fix_commit": "40afbf0b9633de3c9efeb89339d6166dad3b28c3",
+        "finish_status": "final second natural-outro mine finalization repair complete; original full capture reused; no third full repair"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -2101,6 +2108,17 @@
         "supervisor_running": false
       },
       "jobs": [
+        {
+          "job": "rite-mine-finalization-final-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "rite of spring/rite.ssc",
+          "child_running": true
+        },
         {
           "job": "chart-sweep-parallel-v7-1",
           "complete": false,
@@ -3519,7 +3537,7 @@
     "selected_replay_binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 152,
+    "publisher_stream_count": 153,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -4448,7 +4466,7 @@
     },
     "rite_ssc_first_followup": {
       "status": "pending",
-      "full_repairs_spent": 1,
+      "full_repairs_spent": 2,
       "remaining_full_repairs_maximum": 1,
       "callback_errors": 0,
       "mismatches": 121,
@@ -4458,7 +4476,7 @@
       "owned_command_count": 17472,
       "followup": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-ssc-first-repair-followup.json",
       "remaining_judgment_counts": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-ssc-remaining-judgment-counts.json",
-      "second_full_repair_started": false,
+      "second_full_repair_started": true,
       "domain_diagnostic": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-domain-last-mine-diagnostic.json",
       "final_mine_state_changes": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-final-mine-state-changes.json",
       "domain_native_frames": 104414,
@@ -4477,12 +4495,19 @@
       "production_patch_scope": "defer forced natural-end mine accounting to evaluation handoff; continue normal Judgment dispatch through live outro",
       "windows_thirteen_groups_passed": true,
       "windows_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-mine-finalization-boundary-windows-validation.json",
-      "linux_thirteen_groups_complete": false,
+      "linux_thirteen_groups_complete": true,
       "source_root": "/home/parity/workspace/mine-finalization-boundary-v2/deadsync",
       "no_third_full_repair": true,
       "native_capture_reused": true,
       "global_original_helper_unchanged": true,
-      "acceptance_comparisons_unchanged": true
+      "acceptance_comparisons_unchanged": true,
+      "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+      "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-mine-finalization-boundary-linux-validation.json",
+      "binary_sha256": "8bc6998ad067729087f992a1158d922ac0c0a24a2694fcaffc9b45bde59503a7",
+      "selection": "tests/fixtures/full_song_lua/sweep-2026-10-15-mine-finalization-boundary-selection.json",
+      "fix_commit": "40afbf0b9633de3c9efeb89339d6166dad3b28c3",
+      "second_full_repair_running": true,
+      "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-mine-finalization-final-repair-launch.json"
     },
     "sprite_cropto_alias": {
       "fix_commit": "9fa7f7732f6ecf1f1a17ff407281fba21c579556",
@@ -4723,14 +4748,21 @@
       "production_patch_scope": "defer forced natural-end mine accounting to evaluation handoff; continue normal Judgment dispatch through live outro",
       "windows_thirteen_groups_passed": true,
       "windows_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-mine-finalization-boundary-windows-validation.json",
-      "linux_thirteen_groups_complete": false,
+      "linux_thirteen_groups_complete": true,
       "source_root": "/home/parity/workspace/mine-finalization-boundary-v2/deadsync",
-      "full_repairs_spent": 1,
-      "second_full_repair_started": false,
+      "full_repairs_spent": 2,
+      "second_full_repair_started": true,
       "no_third_full_repair": true,
       "native_capture_reused": true,
       "global_original_helper_unchanged": true,
-      "acceptance_comparisons_unchanged": true
+      "acceptance_comparisons_unchanged": true,
+      "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+      "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-mine-finalization-boundary-linux-validation.json",
+      "binary_sha256": "8bc6998ad067729087f992a1158d922ac0c0a24a2694fcaffc9b45bde59503a7",
+      "selection": "tests/fixtures/full_song_lua/sweep-2026-10-15-mine-finalization-boundary-selection.json",
+      "fix_commit": "40afbf0b9633de3c9efeb89339d6166dad3b28c3",
+      "second_full_repair_running": true,
+      "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-mine-finalization-final-repair-launch.json"
     }
   },
   "counts_at_checkpoint": {

@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T06:24:30Z",
+  "updated_utc": "2026-10-15T06:28:30Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -3195,7 +3195,8 @@
       "status": "pending",
       "repair_attempts": 1,
       "evidence": "sweep-2026-10-14-rite-ssc-first-repair.json",
-      "completed_repair_attempts_at_checkpoint": 1
+      "completed_repair_attempts_at_checkpoint": 1,
+      "running_full_repair_attempt": 2
     },
     {
       "position": 379,

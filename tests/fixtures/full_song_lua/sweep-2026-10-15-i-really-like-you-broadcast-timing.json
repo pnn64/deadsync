@@ -1,0 +1,1048 @@
+{
+  "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
+  "candidate_sha256": "2e04426bca00ee39ac689d8666fef76efc5f2c5be93908151c26328282b59491",
+  "trace_sha256": "4fc0012244c7a02bc1d7060c6339ec6f1a1aaa21ddfd3dae0eac00f62811699d",
+  "report_sha256": "0086b963255946e07d6b006e3bc60069b1fa1da87d30ba7514d1a59d1d2a925a",
+  "native_count": 5375,
+  "trace_events": {
+    "counts": {
+      "3 minutes until crunch time.": 284,
+      "2 minutes until crunch time.": 418,
+      "60 seconds until crunch time.": 301,
+      "45 seconds until crunch time.": 256,
+      "30 seconds until crunch time.": 128,
+      "15 seconds until crunch time.": 310,
+      "9 seconds until crunch time.": 359,
+      "8 seconds until crunch time.": 303,
+      "7 seconds until crunch time.": 529,
+      "6 seconds until crunch time.": 473,
+      "5 seconds until crunch time.": 198,
+      "4 seconds until crunch time.": 479,
+      "3 seconds until crunch time.": 536,
+      "2 seconds until crunch time.": 472,
+      "1 seconds until crunch time.": 328,
+      "Gotta Go Fast.": 1
+    },
+    "first_by_message": [
+      {
+        "index": 29,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "3 minutes until crunch time."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 30,
+          "source": "song:/animation/default.lua"
+        }
+      },
+      {
+        "index": 4573,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "2 minutes until crunch time."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 4574,
+          "source": "song:/animation/default.lua"
+        }
+      },
+      {
+        "index": 11261,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "60 seconds until crunch time."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 11262,
+          "source": "song:/animation/default.lua"
+        }
+      },
+      {
+        "index": 16077,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "45 seconds until crunch time."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 16078,
+          "source": "song:/animation/default.lua"
+        }
+      },
+      {
+        "index": 20173,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "30 seconds until crunch time."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 20174,
+          "source": "song:/animation/default.lua"
+        }
+      },
+      {
+        "index": 22221,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "15 seconds until crunch time."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 22222,
+          "source": "song:/animation/default.lua"
+        }
+      },
+      {
+        "index": 27181,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "9 seconds until crunch time."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 27182,
+          "source": "song:/animation/default.lua"
+        }
+      },
+      {
+        "index": 32925,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "8 seconds until crunch time."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 32926,
+          "source": "song:/animation/default.lua"
+        }
+      },
+      {
+        "index": 37773,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "7 seconds until crunch time."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 37774,
+          "source": "song:/animation/default.lua"
+        }
+      },
+      {
+        "index": 46237,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "6 seconds until crunch time."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 46238,
+          "source": "song:/animation/default.lua"
+        }
+      },
+      {
+        "index": 53805,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "5 seconds until crunch time."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 53806,
+          "source": "song:/animation/default.lua"
+        }
+      },
+      {
+        "index": 56973,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "4 seconds until crunch time."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 56974,
+          "source": "song:/animation/default.lua"
+        }
+      },
+      {
+        "index": 64637,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "3 seconds until crunch time."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 64638,
+          "source": "song:/animation/default.lua"
+        }
+      },
+      {
+        "index": 73213,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "2 seconds until crunch time."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 73214,
+          "source": "song:/animation/default.lua"
+        }
+      },
+      {
+        "index": 80765,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "1 seconds until crunch time."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 80766,
+          "source": "song:/animation/default.lua"
+        }
+      },
+      {
+        "index": 86013,
+        "event": {
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "Gotta Go Fast."
+            }
+          ],
+          "beat": 0.1952783763408661,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 71,
+            "source": "@/Themes/itgmania-harness/Scripts/06 SL-Utilities.lua",
+            "tail_call": false
+          },
+          "command": "SetUpdateCommand",
+          "definition_id": "def-0004",
+          "kind": "message",
+          "line": 142,
+          "operation": "MessageManager.Broadcast",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0.1130385473370552,
+          "seq": 86014,
+          "source": "song:/animation/default.lua"
+        }
+      }
+    ],
+    "sample_keys": [
+      "args",
+      "beat",
+      "caller",
+      "detail",
+      "kind",
+      "line",
+      "operation",
+      "phase",
+      "scene",
+      "seconds",
+      "seq",
+      "source"
+    ]
+  },
+  "native_report_broadcasts": {
+    "counts": {
+      "3 minutes until crunch time.": 284,
+      "2 minutes until crunch time.": 418,
+      "60 seconds until crunch time.": 301,
+      "45 seconds until crunch time.": 256,
+      "30 seconds until crunch time.": 128,
+      "15 seconds until crunch time.": 310,
+      "9 seconds until crunch time.": 359,
+      "8 seconds until crunch time.": 303,
+      "7 seconds until crunch time.": 529,
+      "6 seconds until crunch time.": 473,
+      "5 seconds until crunch time.": 198,
+      "4 seconds until crunch time.": 479,
+      "3 seconds until crunch time.": 536,
+      "2 seconds until crunch time.": 472,
+      "1 seconds until crunch time.": 328,
+      "Gotta Go Fast.": 1
+    },
+    "first_by_message": [
+      {
+        "index": 0,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "3 minutes until crunch time."
+            }
+          ]
+        }
+      },
+      {
+        "index": 284,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "2 minutes until crunch time."
+            }
+          ]
+        }
+      },
+      {
+        "index": 702,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "60 seconds until crunch time."
+            }
+          ]
+        }
+      },
+      {
+        "index": 1003,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "45 seconds until crunch time."
+            }
+          ]
+        }
+      },
+      {
+        "index": 1259,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "30 seconds until crunch time."
+            }
+          ]
+        }
+      },
+      {
+        "index": 1387,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "15 seconds until crunch time."
+            }
+          ]
+        }
+      },
+      {
+        "index": 1697,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "9 seconds until crunch time."
+            }
+          ]
+        }
+      },
+      {
+        "index": 2056,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "8 seconds until crunch time."
+            }
+          ]
+        }
+      },
+      {
+        "index": 2359,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "7 seconds until crunch time."
+            }
+          ]
+        }
+      },
+      {
+        "index": 2888,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "6 seconds until crunch time."
+            }
+          ]
+        }
+      },
+      {
+        "index": 3361,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "5 seconds until crunch time."
+            }
+          ]
+        }
+      },
+      {
+        "index": 3559,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "4 seconds until crunch time."
+            }
+          ]
+        }
+      },
+      {
+        "index": 4038,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "3 seconds until crunch time."
+            }
+          ]
+        }
+      },
+      {
+        "index": 4574,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "2 seconds until crunch time."
+            }
+          ]
+        }
+      },
+      {
+        "index": 5046,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "1 seconds until crunch time."
+            }
+          ]
+        }
+      },
+      {
+        "index": 5374,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "Gotta Go Fast."
+            }
+          ]
+        }
+      }
+    ],
+    "sample_keys": [
+      "seconds",
+      "beat",
+      "name",
+      "args"
+    ]
+  },
+  "owned_report_broadcasts": {
+    "counts": {
+      "3 minutes until crunch time.": 690,
+      "2 minutes until crunch time.": 988,
+      "60 seconds until crunch time.": 1117,
+      "45 seconds until crunch time.": 1133,
+      "30 seconds until crunch time.": 622,
+      "15 seconds until crunch time.": 1138,
+      "9 seconds until crunch time.": 1150,
+      "8 seconds until crunch time.": 1117,
+      "7 seconds until crunch time.": 353,
+      "6 seconds until crunch time.": 310,
+      "5 seconds until crunch time.": 529,
+      "4 seconds until crunch time.": 472,
+      "3 seconds until crunch time.": 193,
+      "2 seconds until crunch time.": 484,
+      "1 seconds until crunch time.": 537,
+      "Gotta Go Fast.": 1
+    },
+    "first_by_message": [
+      {
+        "index": 0,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "3 minutes until crunch time."
+            }
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "index": 690,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "2 minutes until crunch time."
+            }
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "index": 1678,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "60 seconds until crunch time."
+            }
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "index": 2795,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "45 seconds until crunch time."
+            }
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "index": 3928,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "30 seconds until crunch time."
+            }
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "index": 4550,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "15 seconds until crunch time."
+            }
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "index": 5688,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "9 seconds until crunch time."
+            }
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "index": 6838,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "8 seconds until crunch time."
+            }
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "index": 7955,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "7 seconds until crunch time."
+            }
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "index": 8308,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "6 seconds until crunch time."
+            }
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "index": 8618,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "5 seconds until crunch time."
+            }
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "index": 9147,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "4 seconds until crunch time."
+            }
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "index": 9619,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "3 seconds until crunch time."
+            }
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "index": 9812,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "2 seconds until crunch time."
+            }
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "index": 10296,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "1 seconds until crunch time."
+            }
+          ],
+          "params_error": null
+        }
+      },
+      {
+        "index": 10833,
+        "event": {
+          "seconds": 0.1130385473370552,
+          "beat": 0.1952783763408661,
+          "name": "SystemMessage",
+          "args": [
+            "SystemMessage",
+            {
+              "Message": "Gotta Go Fast."
+            }
+          ],
+          "params_error": null
+        }
+      }
+    ],
+    "sample_keys": [
+      "seconds",
+      "beat",
+      "name",
+      "args",
+      "params_error"
+    ]
+  },
+  "first_mismatches": [
+    {
+      "field": "source_broadcast_count",
+      "native": 5375,
+      "deadsync": 10834
+    },
+    {
+      "field": "source_broadcast",
+      "native": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "2 minutes until crunch time."
+          }
+        ]
+      },
+      "deadsync": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "3 minutes until crunch time."
+          }
+        ],
+        "params_error": null
+      }
+    }
+  ],
+  "full_repairs_spent": 1,
+  "new_full_repair_started": false,
+  "expected_values_used_as_engine_inputs": false
+}

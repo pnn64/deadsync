@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T06:24:40Z",
+  "updated_utc": "2026-10-15T06:28:33Z",
   "counts": {
     "passed": 394,
     "pending": 106,
@@ -17927,7 +17927,8 @@
       "replayed_frames": 104414,
       "capture_errors": null,
       "completion": null,
-      "no_third_full_repair": false
+      "no_third_full_repair": false,
+      "running_full_repair_attempt": 2
     },
     {
       "position": 381,
