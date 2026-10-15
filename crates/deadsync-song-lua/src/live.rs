@@ -3762,7 +3762,7 @@ return Def.Actor { OnCommand = function()
     OUT = SCREENMAN:GetTopScreen():GetChild('Out')
     assert(OUT:GetNumChildren() == 1)
     OUT_QUAD = OUT:GetChildren()['']
-    assert(tostring(OUT_QUAD):find('Quad', 1, true),
+    assert(tostring(OUT_QUAD):find('Sprite', 1, true),
         'Out must load its native Quad directly without an extra ActorFrame')
     assert(OUT_QUAD:GetParent() == OUT and OUT_QUAD:GetName() == '')
     assert(OUT_QUAD.GetNumChildren == nil)
