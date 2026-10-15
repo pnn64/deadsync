@@ -1,0 +1,11 @@
+{
+  "actual_pinned_acceptance_function_executed": true,
+  "source_sha256": "53e22806e8ea21c285ab5a5b21953687d5f28e493bac0cd1791eeb68a74086ba",
+  "source": "use serde_json::Value;\nmod existing { use serde_json::Value; #[derive(PartialEq,Eq)] pub enum Scope {Full,Entry}\npub(super) fn archive_passes(scope: Scope, report: &Value) -> bool {\n    scope == Scope::Full\n        && report[\"native_frames\"].as_u64().is_some_and(|frames|\n            frames > 0 && report[\"replayed_frames\"].as_u64() == Some(frames))\n        && report[\"mismatches\"].as_array().is_some_and(Vec::is_empty)\n        && report[\"errors\"].as_array().is_some_and(Vec::is_empty)\n}\n}\nfn main(){let report:Value=serde_json::from_reader(std::fs::File::open(std::env::args().nth(1).unwrap()).unwrap()).unwrap(); assert!(existing::archive_passes(existing::Scope::Full,&report));assert!(!existing::archive_passes(existing::Scope::Entry,&report)); for key in [\"errors\",\"mismatches\"] {let mut wrong=report.clone();wrong[key]=serde_json::json!([{}]);assert!(!existing::archive_passes(existing::Scope::Full,&wrong));} let mut partial=report.clone();partial[\"replayed_frames\"]=serde_json::json!(0);assert!(!existing::archive_passes(existing::Scope::Full,&partial));println!(\"pinned existing acceptance code accepts the retained complete comparison counts; partial, diagnostic, error and mismatch cases rejected\");}\n",
+  "original_acceptance_source_sha256": "909acd9a559b0feaf0044d840add0f63c5f835e7474df131e4a00599c840febb",
+  "summary_sha256": "48fe2aa0f0a05f525b401f8de508d0d803a0fb2aaced8a836773594533cf15b7",
+  "exit_code": 0,
+  "output": "pinned existing acceptance code accepts the retained complete comparison counts; partial, diagnostic, error and mismatch cases rejected\n",
+  "full_replay_repeated": false,
+  "new_acceptance_criteria_added": false
+}

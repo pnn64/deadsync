@@ -1,0 +1,20 @@
+{
+  "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
+  "diagnostic_exit": 2,
+  "seconds": 319.70664600702,
+  "native_frames": 14728,
+  "replayed_frames": 3853,
+  "errors": [],
+  "mismatch_count": 0,
+  "first_mismatches": [],
+  "report_sha256": "4db26d2c7dd582110c73589e243d4db78d65a8f94e87a319de0f9d1dc71635cf",
+  "candidate_sha256": "fc6374ff0559eb18cef7f6d068fd68607827c40134a87b939dd10704e9cae095",
+  "trace_sha256": "703601abd9aaa6d037c653ad94984d787f5f25c1846bf35fb67cd4fe0b614d7f",
+  "simfile_sha256": "45d9d5f8655020c9086fbeef5ad48616f82fb351961223046e68d95bed94e0bf",
+  "binary_sha256": "56714f6f0061d2bee125fc7b36a0889bedcc9e7f018e66bdd36be9ff9d12cda5",
+  "all_1175_raw_and_normalized_source_pins_verified": true,
+  "native_capture_reused": true,
+  "full_repairs_spent": 1,
+  "final_full_repair_started": false,
+  "ready_for_final_repair": true
+}

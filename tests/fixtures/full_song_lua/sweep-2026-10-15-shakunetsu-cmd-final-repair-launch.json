@@ -1,0 +1,13 @@
+{
+  "pid": 1503346,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_shakunetsu_native_cmd_final_repair_v1.py"
+  ],
+  "repair_attempt": 2,
+  "no_third_full_repair": true,
+  "native_capture_reused": true,
+  "diagnostic_frames": 3853,
+  "diagnostic_errors": 0,
+  "diagnostic_mismatches": 0
+}

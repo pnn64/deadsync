@@ -1,0 +1,65 @@
+{
+  "all_1175_raw_and_crossplatform_source_pins_verified": true,
+  "all_six_checks_and_logs_verified": true,
+  "binary_sha256": "56714f6f0061d2bee125fc7b36a0889bedcc9e7f018e66bdd36be9ff9d12cda5",
+  "source_root": "/home/parity/workspace/native-cmd-arguments-v1/deadsync",
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 314.72303734798334,
+      "log_sha256": "99177922d37441b79d434ff3f866d5cd977f6acbdf2e51f16338014f21b3083a",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 604 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.004571533005219,
+      "log_sha256": "a15747552381f8c44b00d024359664d5462050bff288fd11287c51aaeb4af397",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 595 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 40.924937137024244,
+      "log_sha256": "5daee6510bc64a3b520e272523930b39e7117eed0cf671e8d0dbde1e0668d187",
+      "results": [
+        "test result: ok. 69 passed; 0 failed; 0 ignored; 0 measured; 536 filtered out; finished in 39.91s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 259.1335546759947,
+      "log_sha256": "274efdf600c9700fc08c05f1a05e5e78920548b8e8a18988b6c6383e30e58fbb",
+      "results": [
+        "test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.09s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 1.1056546850013547,
+      "log_sha256": "6f82b76d4872356bc28fa563431a4973ecb8b49a4ec3a0f6613735f33747e41e",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 604 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 51.27837866201298,
+      "log_sha256": "9a2cf18f907c253cd847f44fd82935c7e580b32936a56e289d2e78ac1de27bce",
+      "results": []
+    }
+  ],
+  "fix_commit": "5e44aa8e7",
+  "helper_private_to_diagnosed_repair": true,
+  "global_original_sweep_selection_unchanged": true,
+  "full_repair_attempts_spent": 1,
+  "shakunetsu_final_full_repair_not_started": true
+}
