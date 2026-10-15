@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "Mawaru8 full124734-frame comparisons accepted; progress-reporter shutdown failure recovered from unchanged detailed report; fixture saved without another replay; passing chart closed",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "b29bff67c / player-stats-identity-linux-green-v1",
