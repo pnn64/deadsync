@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T08:58:09Z",
+  "updated_utc": "2026-10-15T09:14:32Z",
   "counts": {
     "passed": 397,
     "pending": 104,
@@ -24454,8 +24454,13 @@
       "private_canonical_entry_frames": 1628,
       "private_canonical_entry_errors": 0,
       "private_canonical_entry_mismatches": 0,
-      "production_canonical_handle_fix_added": false,
-      "remaining_production_scene_preparation_failure": true
+      "production_canonical_handle_fix_added": true,
+      "remaining_production_scene_preparation_failure": null,
+      "production_canonical_handle_fix_commit": "dca9ac1926ac34426a31964e94d1ca37692c0065",
+      "all_seventeen_groups_both_hosts_passed": true,
+      "registered_2800_actor_regression_entire_function_identical_red_green": true,
+      "production_preparation_failure_cleared_in_registered_2800_actor_regression": true,
+      "production_native_entry_result_not_yet_claimed": true
     },
     {
       "position": 496,
