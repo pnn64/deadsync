@@ -5405,15 +5405,12 @@
     {
       "title": "Watermelon",
       "source_simfile": "Watermelon/Watermelon.ssc",
-      "harness_version": "0.1.0",
-      "archive": "7ce3c1cbcbf4dfead26e5463a1058e5312909c977aa284463e986a9a570455af.tar.zst",
-      "sha256": "7ce3c1cbcbf4dfead26e5463a1058e5312909c977aa284463e986a9a570455af",
-      "compressed_bytes": 6753125,
-      "uncompressed_sha256": "c5fe3a9e21d68eea4769847cdada0ac5a59d49106675b4244a023352625740c6",
-      "compression_level": 22,
-      "aliases": [
-        "2cb17d443a2658df613ce363629c08608c16da9489e069595d5db38531b07212.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "97f3faf740806904d89d02cbcd7fef19f8b318ae6789dfa2b0ad8393dc634a02.tar.zst",
+      "sha256": "97f3faf740806904d89d02cbcd7fef19f8b318ae6789dfa2b0ad8393dc634a02",
+      "compressed_bytes": 15404851,
+      "uncompressed_sha256": "64c79042b9532976cb37879a1be59d7e441e96351930ef2729793a15d11970b7",
+      "aliases": []
     },
     {
       "title": "We're Finally Landing",

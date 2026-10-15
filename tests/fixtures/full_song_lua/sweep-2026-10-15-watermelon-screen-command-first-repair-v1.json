@@ -1,0 +1,69 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "80e6fbaf79be4163ea08dc1ba2f9f31d5dc827ca",
+  "results": [
+    {
+      "position": 469,
+      "source_simfile": "Watermelon/Watermelon.ssc",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "64c79042b9532976cb37879a1be59d7e441e96351930ef2729793a15d11970b7",
+      "trace_sha256": "9be4aecc0604ef2c253c1d4d7fb6a2db25122e4590eb229a378b2ac4bc37e8b2",
+      "simfile_sha256": "89898223233445c8fbe6523d106fa1109a531f94c111fd6a2cdf508e1890964e",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "9ea0ce465da2fca0a9ee3928e6968b4fda9843b792a278c15f5d510a44ad069b",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/screen-command-propagation-linux-green-v2/proof.json",
+      "fix_commit": "80e6fbaf79be4163ea08dc1ba2f9f31d5dc827ca",
+      "previous_failure": null,
+      "previous_errors": [],
+      "native_frames_before_repair": 35146,
+      "resolved_by_source_fix_commit": "80e6fbaf79be4163ea08dc1ba2f9f31d5dc827ca",
+      "original_capture_harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "one_later_full_repair_maximum": true,
+      "replay_exit": 0,
+      "replay_seconds": 1336.0370575400011,
+      "native_frames": 35146,
+      "replayed_frames": 35146,
+      "compared_stage_fields": 1111,
+      "pending_coverage": [
+        "uncompared song operations: Actor.smooth, Actor.z, ActorFrame.GetChildren, ActorFrame.SetDrawByZPosition, GameState.GetHumanPlayers, PlayerOptions.Dark",
+        "native drawable state/resources: Sprite"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "3bcacfad70a49178bfc27602140e5291e0835cf381cb3e4957489313999b50b1",
+      "archive": "97f3faf740806904d89d02cbcd7fef19f8b318ae6789dfa2b0ad8393dc634a02.tar.zst",
+      "archive_sha256": "97f3faf740806904d89d02cbcd7fef19f8b318ae6789dfa2b0ad8393dc634a02",
+      "compressed_bytes": 15404851,
+      "harness_version": "0.1.80",
+      "title": "Watermelon",
+      "pack_seconds": 4.38751335098641,
+      "retained_original_entry": {
+        "title": "Watermelon",
+        "source_simfile": "Watermelon/Watermelon.ssc",
+        "harness_version": "0.1.0",
+        "archive": "7ce3c1cbcbf4dfead26e5463a1058e5312909c977aa284463e986a9a570455af.tar.zst",
+        "sha256": "7ce3c1cbcbf4dfead26e5463a1058e5312909c977aa284463e986a9a570455af",
+        "compressed_bytes": 6753125,
+        "uncompressed_sha256": "c5fe3a9e21d68eea4769847cdada0ac5a59d49106675b4244a023352625740c6",
+        "compression_level": 22,
+        "aliases": [
+          "2cb17d443a2658df613ce363629c08608c16da9489e069595d5db38531b07212.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "9ea0ce465da2fca0a9ee3928e6968b4fda9843b792a278c15f5d510a44ad069b",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first repair: forward Screen direct and queued commands to nested song actors through native ActorFrame semantics; native control and live nested-child regression prove immediate parameter identity, delayed parent queue, traversal and single delivery; existing full comparisons unchanged; original complete35146-frame capture reused",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
