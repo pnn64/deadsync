@@ -1,6 +1,6 @@
 {
   "scope": "latest recorded coverage observations for original source simfiles",
-  "updated_utc": "2026-10-15T23:42:27Z",
+  "updated_utc": "2026-10-15T23:50:06Z",
   "coverage_is_separate_from_existing_full_replay_acceptance": true,
   "passing_charts_replayed_or_investigated": false,
   "rows": [
@@ -3039,6 +3039,15 @@
         "Aggregate source-broadcast history across compiler startup reloads is unvalidated; retained scene and legacy output streams have different history contracts. No fixture acceptance changes or passing chart investigation."
       ],
       "evidence": "sweep-2026-10-16-compiler-startup-source-history-coverage.json"
+    },
+    {
+      "position": 229,
+      "source_simfile": "HOPE/HOPE.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "Native ActorFrame FinishTweening propagates to child actors; owned method currently finishes only the receiver. Observed in unit-fixture setup, not attributed to a full chart failure. No acceptance changes."
+      ],
+      "evidence": "sweep-2026-10-16-actor-frame-finish-propagation-coverage.json"
     }
   ]
 }

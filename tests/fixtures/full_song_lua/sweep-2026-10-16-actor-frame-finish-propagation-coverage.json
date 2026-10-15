@@ -1,0 +1,16 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "status": "known host coverage gap; no fixture acceptance change",
+  "discovery": "Native NoteField regression qualification: isolated queue fixtures called finishtweening on the parent container; actual DisplayMods child retained its5.5second queue. Direct child finish is used only to set up those unit fixtures.",
+  "primary_source": "ITGmania/src/ActorFrame.cpp:PropagateActorFrameCommand(FinishTweening)",
+  "primary_source_sha256": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+  "frozen_VM_native_source_hash_matches_local": true,
+  "native_behavior": "ActorFrame::FinishTweening calls Actor::FinishTweening then recursively invokes each sub-actor.",
+  "owned_behavior": "lua_util.rs:make_actor_finish_tweening_method clears/finishes only the receiver. No ActorFrame child propagation is currently installed by that method.",
+  "observed_qualification_log": "/home/parity/jobs/note-field-container-linux-green-v3/live-controls.log",
+  "full_fixture_failure_attributed": false,
+  "passing_charts_reopened": false,
+  "production_fix_added": false,
+  "new_acceptance_operations_keys_or_tolerances_added": false,
+  "full_HOPE_repairs_spent": 0
+}
