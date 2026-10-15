@@ -1,0 +1,31 @@
+{
+  "regression": "live_step_statistics_owns_native_resources_and_updates_real_data",
+  "meaningful_missing_three_child_hierarchy_red_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 326.9580098000006,
+      "log_sha256": "b97a5b43be7f2a883139b6a06d7d06d819c1c439501f130d4e813af64903f6b9",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 637 filtered out; finished in 0.26s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 250.61264089000179,
+      "log_sha256": "a902bc83dd28b4f42b2e282acdb315b46e6886e501a234c1b138fd470190f646",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 635 filtered out; finished in 0.23s"
+      ]
+    }
+  ],
+  "initial_profile_selection_plumbed_before_red": true,
+  "original_native_lua_resource_files": 9,
+  "source_cause": "sweep-2026-10-15-hope-step-statistics-source-cause.json",
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

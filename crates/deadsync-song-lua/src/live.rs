@@ -3788,6 +3788,88 @@ return Def.Actor { OnCommand = function(self) self:sleep(9999) end }
     }
 
     #[test]
+    fn live_step_statistics_owns_native_resources_and_updates_real_data() {
+        use deadsync_rules::timing::{TimingData, TimingSegments};
+        for (name, width, height, enabled, centered, selected) in [
+            ("p1",854.0,480.0,[true,false],false,true),
+            ("p2-centered",854.0,480.0,[false,true],true,true),
+            ("ultrawide",2560.0,720.0,[true,true],false,true),
+            ("narrow",640.0,480.0,[true,false],true,true),
+            ("disabled",854.0,480.0,[true,false],false,false)] {
+            let mut compiled = compile_with_context(&format!("native-step-statistics-{name}"),
+                "return Def.ActorFrame {}", |context| {
+                    context.screen_width=width; context.screen_height=height;
+                    for player in 0..2 {
+                        context.players[player].enabled=enabled[player];
+                        context.players[player].screen_x=if centered {width/2.0} else {320.0};
+                        context.players[player].step_statistics_enabled=selected;
+                        context.players[player].background_filter_percent=75;
+                    }
+                    context.player_step_indices=[Some(0),Some(0)];
+                    context.song_steps=vec![crate::SongLuaStep { steps_type:"StepsType_Dance_Single".into(),
+                        difficulty:SongLuaDifficulty::Hard,description:String::new(),chart_name:String::new(),
+                        credit:String::new(),meter:12,music_file:String::new(),possible_grade_points:100 }];
+                    let timing=TimingData::from_segments(0.0,0.0,&TimingSegments {
+                        bpms:vec![(0.0,120.0)],..Default::default()},&[]);
+                    context.song_step_timing=vec![timing.clone()];
+                    context.player_timing=[Some(timing.clone()),Some(timing)];
+                    context.song_step_notes=vec![std::sync::Arc::from(&b"1000\n0100\n2000\n3000\nM000\n4000\n3000\n1000\n"[..])];
+                    context.song_step_row_beats=vec![std::sync::Arc::from(&[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0][..])];
+                });
+            let mut scene=compiled.live_scene.take().unwrap();
+            scene.lua.globals().set("EXPECT_PANE",selected && width>640.0).unwrap();
+            scene.lua.load(r#"
+PANES={}
+local underlay=SCREENMAN:GetTopScreen():GetChild('Underlay')
+for p=1,2 do
+    local pane=underlay:GetChild('StepStatsPaneP'..p)
+    if GAMESTATE:IsPlayerEnabled('PlayerNumber_P'..p) and EXPECT_PANE then
+        assert(pane and pane:GetNumChildren()==3, 'StepStatistics must own its real three native children')
+        assert(pane:GetParent()==underlay)
+        local data=pane:GetChild('BannerAndData')
+        assert(data and data:GetNumChildren()==4)
+        assert(data:GetChild('TapNoteJudgments'):GetNumChildren()==10)
+        assert(data:GetChild('HoldsMinesRolls'):GetChild('Holds_Values'):GetText()=='000/001')
+        assert(data:GetChild('HoldsMinesRolls'):GetChild('Mines_Values'):GetText()=='000/001')
+        local loose=data:GetChild('')
+        local banner, timer=loose[1],loose[2]
+        assert(tostring(banner):find('Banner',1,true) and timer:GetNumChildren()==4)
+        local time=timer:GetChild('')
+        assert(time[1]:GetText()=='1:00' and time[3]:GetText()=='1:00')
+        local parts=pane:GetChild('')
+        local dark, graph=parts[1],parts[2]
+        assert(tostring(dark):find('Sprite',1,true) and dark:GetTexture())
+        assert(graph:GetNumChildren()==3)
+        local graph_parts=graph:GetChild('')
+        local plot=graph_parts[3]
+        assert(plot:GetNumChildren()==2 and plot:GetChild('LifeLine_AMV'))
+        assert(GAMESTATE:Env()['P'..p..'PeakNPS']==1.5)
+        PANES[#PANES+1]={pane=pane, timer=time[1], count=data:GetChild('TapNoteJudgments'):GetChild('')[1],
+            life=plot:GetChild('LifeLine_AMV'), histogram=plot:GetChild(''), player='PlayerNumber_P'..p}
+    else assert(pane==nil) end
+end
+"#).exec().unwrap();
+            if !selected || width<=640.0 { continue; }
+            let output=scene.advance(SongLuaLiveFrame { screen_seconds:0.01,delta_seconds:0.01,
+                music_seconds:2.0,beat:4.0,..Default::default() }).unwrap();
+            assert!(output.errors.is_empty(),"{:?}",output.errors);
+            scene.lua.load(r#"
+for _,v in ipairs(PANES) do
+    assert(v.timer:GetText()=='0:58')
+    assert(v.histogram:GetNumVertices()>0 and v.life:GetNumVertices()>0)
+    MESSAGEMAN:Broadcast('Judgment',{Player=v.player,TapNoteScore='TapNoteScore_W1'})
+    assert(v.count:GetText()=='0001')
+    MESSAGEMAN:Broadcast('HealthStateChanged',{PlayerNumber=v.player,HealthState='HealthState_Dead'})
+end
+"#).exec().unwrap();
+            let output=scene.advance(SongLuaLiveFrame { screen_seconds:0.3,delta_seconds:0.29,
+                music_seconds:3.0,beat:6.0,..Default::default() }).unwrap();
+            assert!(output.errors.is_empty(),"{:?}",output.errors);
+            scene.lua.load("for _,v in ipairs(PANES) do assert(v.timer:GetText()=='0:58') end").exec().unwrap();
+        }
+    }
+
+    #[test]
     fn live_steps_density_uses_real_note_rows_and_chart_timing() {
         use deadsync_rules::timing::{TimingData, TimingSegments, FakeSegment, StopSegment, TimeSignatureSegment};
         let mut compiled = compile_with_context("steps-native-density", "return Def.ActorFrame {}", |context| {

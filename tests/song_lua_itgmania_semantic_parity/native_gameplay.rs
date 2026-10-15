@@ -749,6 +749,18 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn native_step_statistics_uses_initial_selection_only() {
+        let mut trace = serde_json::json!({"input":{"gameplay_preferences":{"default_modifiers":"",
+            "players":[{"theme_modifiers":{"DataVisualizations":"None"}},
+                {"theme_modifiers":{"DataVisualizations":"Step Statistics"}}]}}});
+        let profiles = super::native_profile_inputs(&trace).unwrap();
+        assert!(profiles[0].step_statistics.is_empty());
+        assert!(!profiles[1].step_statistics.is_empty());
+        trace["input"]["gameplay_preferences"]["players"][0]["theme_modifiers"]["DataVisualizations"] = serde_json::json!(false);
+        assert!(super::native_profile_inputs(&trace).is_err());
+    }
+
+    #[test]
     fn native_bpm_layout_uses_initial_upper_nps_option() {
         let mut trace = serde_json::json!({"input":{"gameplay_preferences":{"default_modifiers":"",
             "players":[{"theme_modifiers":{"NPSGraphAtTop":true}}, {"theme_modifiers":{"NPSGraphAtTop":false}}]}}});
@@ -2856,6 +2868,10 @@ fn native_profile_inputs(trace: &Value) -> Result<[deadsync_profile::Profile; 2]
             .and_then(Value::as_array).and_then(|players| players.get(player));
         if let Some(value) = initial.and_then(|p| p.pointer("/theme_modifiers/HideLifebar")) {
             profile.hide_lifebar = value.as_bool().ok_or("initial HideLifebar must be boolean")?;
+        }
+        if let Some(value) = initial.and_then(|p| p.pointer("/theme_modifiers/DataVisualizations")) {
+            profile.step_statistics = value.as_str().ok_or("initial DataVisualizations must be named")?
+                .parse().map_err(|error| format!("invalid initial DataVisualizations: {error}"))?;
         }
         if let Some(value) = initial.and_then(|p| p.pointer("/theme_modifiers/NPSGraphAtTop")) {
             profile.nps_graph_at_top = value.as_bool().ok_or("initial NPSGraphAtTop must be boolean")?;

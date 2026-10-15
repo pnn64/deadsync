@@ -164,7 +164,7 @@ fn create_sl_player_mods(lua: &Lua, player: &SongLuaPlayerContext) -> mlua::Resu
     let table = lua.create_table()?;
     let (speed_type, speed_value) = song_lua_speedmod_parts(player.speedmod);
     // SL_Init.lua initializes an unmodified profile with Step Statistics.
-    table.set("DataVisualizations", "Step Statistics")?;
+    table.set("DataVisualizations", if player.step_statistics_enabled { "Step Statistics" } else { "None" })?;
     table.set("ShowFaPlusWindow", false)?;
     table.set("ShowExScore", false)?;
     table.set("ShowHardEXScore", false)?;

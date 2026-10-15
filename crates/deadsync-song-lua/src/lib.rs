@@ -688,6 +688,8 @@ pub struct SongLuaPlayerContext {
     pub life_meter_type: String,
     /// Initial profile layout choice used by the shared BPM owner.
     pub nps_graph_at_top: bool,
+    /// Actual profile selection for the native StepStatistics pane.
+    pub step_statistics_enabled: bool,
     pub screen_x: f32,
     pub screen_y: f32,
 }
@@ -715,6 +717,7 @@ impl Default for SongLuaPlayerContext {
             hide_lifebar: false,
             life_meter_type: "Standard".into(),
             nps_graph_at_top: false,
+            step_statistics_enabled: true,
             screen_x: 320.0,
             screen_y: 240.0,
         }
