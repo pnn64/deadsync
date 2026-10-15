@@ -2890,6 +2890,57 @@
         }
       ],
       "report_sha256": "be7b038337b64726abd9bca49ffb10fe6e39dd678a45cf4e43bc20b527f0c30d"
+    },
+    {
+      "position": 470,
+      "source_simfile": "We're Finally Landing/landing.ssc",
+      "simfile_sha256": "96e9de49c793c05cf830d88912859eaf70e531cf832de3da8ef0027895c89af1",
+      "retained_original_archive": "797bb0d03a4d30b771310852cdd4dc8e2a8b79094496b3b9213a02ca16145a34.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 148.61550562200136,
+      "trace_sha256": "e2e0f9db1b1c4914565ee7a5f99257456b43a547fe643807db70135fdb563c11",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-3/chart-470/candidates/dcfeb4e2f995d4863e1c1d41f904a1af9c2cb3d5984879538ae0f5dc72fea7ba.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1672.36431364101,
+      "candidate_sha256": "dcfeb4e2f995d4863e1c1d41f904a1af9c2cb3d5984879538ae0f5dc72fea7ba",
+      "native_frames": 66681,
+      "replayed_frames": 66681,
+      "compared_stage_fields": 1364,
+      "pending_coverage": [
+        "uncompared song operations: Actor.smooth, ActorFrame.GetChildren",
+        "native drawable state/resources: ActorProxy, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "aab2d1bb688e39b9fa5cc918bb61b8249b1987c8cd566bd21e38240c4d22d31d",
+      "archive": "25b9aa17a3f15af0a6276f0460b6d08cce0522cb911a4ce895647dad5579348e.tar.zst",
+      "archive_sha256": "25b9aa17a3f15af0a6276f0460b6d08cce0522cb911a4ce895647dad5579348e",
+      "compressed_bytes": 22382071,
+      "pack_seconds": 8.5705262410047,
+      "harness_version": "0.1.80",
+      "title": "We're Finally Landing",
+      "retained_original_entry": {
+        "title": "We're Finally Landing",
+        "source_simfile": "We're Finally Landing/landing.ssc",
+        "harness_version": "0.1.0",
+        "archive": "797bb0d03a4d30b771310852cdd4dc8e2a8b79094496b3b9213a02ca16145a34.tar.zst",
+        "sha256": "797bb0d03a4d30b771310852cdd4dc8e2a8b79094496b3b9213a02ca16145a34",
+        "compressed_bytes": 488549,
+        "uncompressed_sha256": "b0516fe3f015af38570fbbdbe7791ca6fdc1003b3ccca3549963c2dd0b509452",
+        "compression_level": 22,
+        "aliases": [
+          "6863c79920346f0458e91ed61c910a6528839e9245015c7ff2f5b3dabb1305ed.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -2900,7 +2951,7 @@
   },
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 6,
+  "passed_fixtures": 7,
   "pending_charts": 9,
-  "processed_charts": 15
+  "processed_charts": 16
 }

@@ -5499,15 +5499,12 @@
     {
       "title": "We're Finally Landing",
       "source_simfile": "We're Finally Landing/landing.ssc",
-      "harness_version": "0.1.0",
-      "archive": "797bb0d03a4d30b771310852cdd4dc8e2a8b79094496b3b9213a02ca16145a34.tar.zst",
-      "sha256": "797bb0d03a4d30b771310852cdd4dc8e2a8b79094496b3b9213a02ca16145a34",
-      "compressed_bytes": 488549,
-      "uncompressed_sha256": "b0516fe3f015af38570fbbdbe7791ca6fdc1003b3ccca3549963c2dd0b509452",
-      "compression_level": 22,
-      "aliases": [
-        "6863c79920346f0458e91ed61c910a6528839e9245015c7ff2f5b3dabb1305ed.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "25b9aa17a3f15af0a6276f0460b6d08cce0522cb911a4ce895647dad5579348e.tar.zst",
+      "sha256": "25b9aa17a3f15af0a6276f0460b6d08cce0522cb911a4ce895647dad5579348e",
+      "compressed_bytes": 22382071,
+      "uncompressed_sha256": "dcfeb4e2f995d4863e1c1d41f904a1af9c2cb3d5984879538ae0f5dc72fea7ba",
+      "aliases": []
     },
     {
       "title": "What a Wonderful World",
