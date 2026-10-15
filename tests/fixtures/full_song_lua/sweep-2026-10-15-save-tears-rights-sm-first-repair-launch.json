@@ -1,0 +1,85 @@
+{
+  "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
+  "position": 385,
+  "status": "running",
+  "repair_attempt": 1,
+  "previous_full_repairs": 0,
+  "native_frames": 80179,
+  "unchanged_original_candidate_uncompressed_bytes": 386946048,
+  "unchanged_original_candidate_sha256": "ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182",
+  "original_trace_sha256": "6f8c03926c8d6f630eb9204f132507574943a4a61cb1f30d83ab40fad493bf0b",
+  "original_simfile_sha256": "8fe26f5a104dc99f0cea900b336f5404b18f0048a758829f1f4c09c00f99d5c4",
+  "attempt_start": {
+    "position": 385,
+    "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
+    "status": "pending",
+    "repair_attempts": 1,
+    "candidate_sha256": "ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182",
+    "trace_sha256": "6f8c03926c8d6f630eb9204f132507574943a4a61cb1f30d83ab40fad493bf0b",
+    "simfile_sha256": "8fe26f5a104dc99f0cea900b336f5404b18f0048a758829f1f4c09c00f99d5c4",
+    "native_capture_reused": true,
+    "all_candidate_manifest_members_byte_verified": true,
+    "binary_sha256": "6a2dfe1c2e802c83bf102deac4f4476c86ab3ba93652f9a8817f99420b844162",
+    "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "build_proof": "/home/parity/jobs/timing-window-labels-linux-green-v1/proof.json",
+    "fix_commit": "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd",
+    "previous_failure": null,
+    "previous_errors": [],
+    "qualified_existing_song_end_fixes": [
+      "3d314ba64cfadf2dbdb8ac761bbaf34890c84127",
+      "b97bcedd8f8d8d88dac55531a7d287cb7bbccd69",
+      "461434bacf9449ddba8a8e3a9dc980f8e05ef3c1"
+    ],
+    "no_query_outputs_used_as_inputs": true,
+    "original_full_failure": "only command_query_count: final eight GetSongBeat queries absent",
+    "full_acceptance_criteria_unchanged": true,
+    "capture_repeated": false,
+    "mawaru9_remains_deferred": true
+  },
+  "actual_running_observation": {
+    "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
+    "attempt_started": 1,
+    "pid": 1621878,
+    "actual_command": [
+      "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182.tar",
+      "--report",
+      "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/report.json"
+    ],
+    "recorded_command": [
+      "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182.tar",
+      "--report",
+      "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/report.json"
+    ],
+    "actual_command_matches_record": true,
+    "running": true,
+    "phase": "replay",
+    "result_exists": false,
+    "terminal_result": null,
+    "checked_utc": "2026-10-15T21:18:57.945362+00:00"
+  },
+  "old_full_replay_binary_sha256": "dde531bd61c48d752748b8343e61715839944afdde5c5c7b028bb9308de85a15",
+  "old_source_root": "/home/parity/workspace/player-stats-identity-v1/deadsync",
+  "old_source_bytes_verified_against_original_build_pins": [
+    {
+      "path": "crates/deadsync-gameplay/src/runtime_update.rs",
+      "original_raw_sha256": "0effc19a4567a830b6057d4f9652ca315dfab0c6eb5ae61b74bc65b7686ad856",
+      "current_lf_sha256": "be6c0aeaaf80e56ff6ab8019a192bafb2e17633b70b0a52251866b79b28c03ab"
+    },
+    {
+      "path": "crates/deadsync-theme-simply-love/src/screens/gameplay.rs",
+      "original_raw_sha256": "090ee7ef08a554972b5bba9fb72d2bb51d065cd5e324427a9a256e417735c10d",
+      "current_lf_sha256": "009815ffecf3d5e96a3aa33b3ec3c94b9a427f521dd82525c30f8fc55ba1e4fa"
+    }
+  ],
+  "original_helper_missing_current_qualified_whole_song_pack_sync_music_fade_and_out_lifecycle_fixes": true,
+  "source_based_retry_reason": "The original helper uses the pre-fix whole-song bound and music-fade handling. Current qualified code preserves the real pack-sync-adjusted bound and native music-fade/Out lifecycle. Related Save Your Tears variants already passed these existing source fixes. The prior missing-eight-tail-query failure is still unaccepted until this bounded full result.",
+  "tail_query_evidence": "sweep-2026-10-15-save-your-tears-tail-query-observation.json",
+  "no_capture_repeated": true,
+  "no_expected_queries_used_as_inputs": true,
+  "no_acceptance_changes": true,
+  "mawaru9_remains_deferred": true
+}

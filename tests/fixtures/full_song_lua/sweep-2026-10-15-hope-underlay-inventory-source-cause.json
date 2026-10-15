@@ -317,7 +317,7 @@
   "underlay_header_fix_commit": "0b3b12b7b6fb83b93b1661c4395b8d2151253cba",
   "step_statistics_fix_commit": "135dcdfd107e0b2cf527c010b827593139433102",
   "amv_texture_fix_commit": "22e67e7f2a9085661a52bfd8edbdd7762ee966fd",
-  "latest_source_cause": null,
+  "latest_source_cause": "sweep-2026-10-15-hope-danger-quad-source-cause.json",
   "latest_observed_failure": {
     "field": "command_query_event",
     "native": {

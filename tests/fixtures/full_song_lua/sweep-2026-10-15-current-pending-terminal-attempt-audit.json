@@ -1,6 +1,6 @@
 {
-  "generated_utc": "2026-10-15T21:16:32.709276+00:00",
-  "concrete_ledger_sha256": "66f82fb9ed80716d4fc112891c3f93f143a6e858b8c72a883fd087eb7c0ea2cc",
+  "generated_utc": "2026-10-15T21:19:01.147491+00:00",
+  "concrete_ledger_sha256": "c221a8d9c82080f1c84aa41e55e2f97e650b096a75c17c4192a0a06578cfa92f",
   "counts": {
     "passed": 398,
     "pending": 103,
@@ -14,7 +14,31 @@
   "pending_sources": 103,
   "terminal_attempts_exceed_two": [],
   "differences": [],
-  "running_repair_not_counted_as_terminal": null,
+  "running_repair_not_counted_as_terminal": {
+    "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
+    "attempt_started": 1,
+    "pid": 1621878,
+    "actual_command": [
+      "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182.tar",
+      "--report",
+      "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/report.json"
+    ],
+    "recorded_command": [
+      "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182.tar",
+      "--report",
+      "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/report.json"
+    ],
+    "actual_command_matches_record": true,
+    "running": true,
+    "phase": "replay",
+    "result_exists": false,
+    "terminal_result": null,
+    "checked_utc": "2026-10-15T21:19:02.812787+00:00"
+  },
   "mawaru9_deferred_at_user_request": {
     "started_attempt": 1,
     "completed_full_replay": false,

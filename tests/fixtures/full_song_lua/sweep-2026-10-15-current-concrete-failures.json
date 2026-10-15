@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T21:16:32Z",
+  "updated_utc": "2026-10-15T21:19:00Z",
   "counts": {
     "passed": 398,
     "pending": 103,
@@ -8170,8 +8170,8 @@
       "original_terminal_full_result_preserved": true,
       "new_full_repair_started": false,
       "cancel_child_missing_failure_fixed_by": "c71cc5f319cd5b950b6ce107ec23f65772062260",
-      "remaining_source_cause": null,
-      "current_diagnostic_failure": "actual retained-entry result after native initial timing-window label repair; inspect first remaining error or mismatch before claiming its cause",
+      "remaining_source_cause": "sweep-2026-10-15-hope-danger-quad-source-cause.json",
+      "current_diagnostic_failure": "first remaining seq965: actual native Danger.lua Quad has RageTexture versus owned unloaded plain Sprite nil; timing-window label seq773 is fixed",
       "diagnostic_only_not_full_acceptance": true,
       "quad_default_texture_fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
       "quad_texture_all_sixteen_groups_both_hosts_passed": true,
@@ -18384,9 +18384,35 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-15-save-your-tears-tail-query-observation.json",
-      "current_diagnostic_failure": "complete original80179-frame replay has only eight missing final GameState.GetSongBeat queries at scene2 line222 across four final foreground updates; uncompressed report hash verified; source cause not yet claimed",
-      "new_full_repair_started": false
+      "followup": "sweep-2026-10-15-save-tears-rights-sm-first-repair-launch.json",
+      "current_diagnostic_failure": "prior complete replay lacks final eight GetSongBeat queries; first bounded full repair now uses already qualified pack-sync/music-fade/Out lifecycle fixes absent from original helper; awaiting full acceptance",
+      "new_full_repair_started": true,
+      "started_full_repairs": 1,
+      "actual_running_observation": {
+        "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
+        "attempt_started": 1,
+        "pid": 1621878,
+        "actual_command": [
+          "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+          "--archive",
+          "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182.tar",
+          "--report",
+          "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/report.json"
+        ],
+        "recorded_command": [
+          "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua",
+          "--archive",
+          "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182.tar",
+          "--report",
+          "/home/parity/jobs/save-tears-rights-sm-first-repair-v1/chart-385/report.json"
+        ],
+        "actual_command_matches_record": true,
+        "running": true,
+        "phase": "replay",
+        "result_exists": false,
+        "terminal_result": null,
+        "checked_utc": "2026-10-15T21:19:02.107722+00:00"
+      }
     },
     {
       "position": 395,
