@@ -653,6 +653,43 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 469,
+      "source_simfile": "Watermelon/Watermelon.ssc",
+      "simfile_sha256": "89898223233445c8fbe6523d106fa1109a531f94c111fd6a2cdf508e1890964e",
+      "retained_original_archive": "7ce3c1cbcbf4dfead26e5463a1058e5312909c977aa284463e986a9a570455af.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 117.81699286698131,
+      "trace_sha256": "9be4aecc0604ef2c253c1d4d7fb6a2db25122e4590eb229a378b2ac4bc37e8b2",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v6-1/chart-469/candidates/64c79042b9532976cb37879a1be59d7e441e96351930ef2729793a15d11970b7.tar",
+      "replay_exit": 2,
+      "replay_seconds": 1843.8058517729805,
+      "candidate_sha256": "64c79042b9532976cb37879a1be59d7e441e96351930ef2729793a15d11970b7",
+      "native_frames": 35146,
+      "replayed_frames": 35146,
+      "compared_stage_fields": 1111,
+      "pending_coverage": [
+        "uncompared song operations: Actor.smooth, Actor.z, ActorFrame.GetChildren, ActorFrame.SetDrawByZPosition, GameState.GetHumanPlayers, PlayerOptions.Dark",
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 1,
+      "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 61217,
+          "deadsync": 61213
+        }
+      ],
+      "report_sha256": "aa62775ab26c4e0e69f8ff28df41a1096d6173c1c75fbf445c8cc02524626845"
     }
   ],
   "scope": {
@@ -664,6 +701,6 @@
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 3,
-  "pending_charts": 1,
-  "processed_charts": 4
+  "pending_charts": 2,
+  "processed_charts": 5
 }
