@@ -1,0 +1,119 @@
+{
+  "closed_passes_only": true,
+  "lossless_uncompressed_hashes_verified": true,
+  "no_replays_or_frozen_sources_changed": true,
+  "files": [
+    {
+      "raw": "/home/parity/jobs/trinity-cropto-alias-first-repair-v1/chart-447/report.json",
+      "compressed": "/home/parity/jobs/trinity-cropto-alias-first-repair-v1/chart-447/report.json.zst",
+      "uncompressed_sha256": "eab5ba382cefefb7718005613718476f896013f3fefddeb96e43ae01ceef816a",
+      "raw_bytes": 117898720,
+      "compressed_bytes": 1640350
+    },
+    {
+      "raw": "/home/parity/jobs/trinity-cropto-alias-first-repair-v1/chart-447/fbf84818890ab578f9be4bea370d4ccb5e515c911630965ddd9375233567abc8.tar",
+      "compressed": "/home/parity/jobs/trinity-cropto-alias-first-repair-v1/chart-447/accepted/5f62106f51929b4ae3362f065d71df6b7e2f0114ec42125cd4c0669201dbd8bd.tar.zst",
+      "uncompressed_sha256": "fbf84818890ab578f9be4bea370d4ccb5e515c911630965ddd9375233567abc8",
+      "raw_bytes": 261703680,
+      "compressed_bytes": 9848272
+    },
+    {
+      "raw": "/home/parity/jobs/gone-source-path-first-repair-v1/chart-216/report.json",
+      "compressed": "/home/parity/jobs/gone-source-path-first-repair-v1/chart-216/report.json.zst",
+      "uncompressed_sha256": "15eb7bd7f247e7fef7a0fb6ded832f4549afc6099cdfd8cbf875b9f7718c0252",
+      "raw_bytes": 117582,
+      "compressed_bytes": 5950
+    },
+    {
+      "raw": "/home/parity/jobs/gone-source-path-first-repair-v1/chart-216/4377ee34a2e0e1eccd975b25eff17964fecfa2ef39e74a2cc9fb39891769e502.tar",
+      "compressed": "/home/parity/jobs/gone-source-path-first-repair-v1/chart-216/accepted/fb1696ac05718ab2de6a2884b9ee6effa9df50c66f5679feb3530c9e1cf6d1a6.tar.zst",
+      "uncompressed_sha256": "4377ee34a2e0e1eccd975b25eff17964fecfa2ef39e74a2cc9fb39891769e502",
+      "raw_bytes": 26911232,
+      "compressed_bytes": 4904490
+    },
+    {
+      "raw": "/home/parity/jobs/freaky-deaky-sm-screen-children-first-repair-v1/chart-198/report.json",
+      "compressed": "/home/parity/jobs/freaky-deaky-sm-screen-children-first-repair-v1/chart-198/report.json.zst",
+      "uncompressed_sha256": "7da7c9f8a6cd32daf32a1a94cbd53cb84251479e06554a83aa29ee32f3282658",
+      "raw_bytes": 264110445,
+      "compressed_bytes": 6021111
+    },
+    {
+      "raw": "/home/parity/jobs/freaky-deaky-sm-screen-children-first-repair-v1/chart-198/fb8496a61b29e92fba6a1de962fcd61a5e7bd2ff00aa587b946e79b84fb3e46b.tar",
+      "compressed": "/home/parity/jobs/freaky-deaky-sm-screen-children-first-repair-v1/chart-198/accepted/4d8e1ddbd0222c253d30f53f9cdebf114d5540be446b8a86e7ff6add42d6e895.tar.zst",
+      "uncompressed_sha256": "fb8496a61b29e92fba6a1de962fcd61a5e7bd2ff00aa587b946e79b84fb3e46b",
+      "raw_bytes": 342095360,
+      "compressed_bytes": 11401800
+    },
+    {
+      "raw": "/home/parity/jobs/freaky-deaky-ssc-screen-children-first-repair-v1/chart-199/report.json",
+      "compressed": "/home/parity/jobs/freaky-deaky-ssc-screen-children-first-repair-v1/chart-199/report.json.zst",
+      "uncompressed_sha256": "87c3c39811e9f81fcb6d5cf7cde3d7a6004cd68a58bd9618d8a8b068ebe6893e",
+      "raw_bytes": 227904425,
+      "compressed_bytes": 5191306
+    },
+    {
+      "raw": "/home/parity/jobs/freaky-deaky-ssc-screen-children-first-repair-v1/chart-199/151419920e60050f03cd22090fc7b414d9425b624be97d669ea5cd227d5fd9c9.tar",
+      "compressed": "/home/parity/jobs/freaky-deaky-ssc-screen-children-first-repair-v1/chart-199/accepted/7877aeae9f55324f811c58d880d3353b5139773fd47af86379b8d683ca79f613.tar.zst",
+      "uncompressed_sha256": "151419920e60050f03cd22090fc7b414d9425b624be97d669ea5cd227d5fd9c9",
+      "raw_bytes": 296102912,
+      "compressed_bytes": 10405094
+    },
+    {
+      "raw": "/home/parity/jobs/wobbpotato-untyped-actor-first-repair-v1/chart-475/report.json",
+      "compressed": "/home/parity/jobs/wobbpotato-untyped-actor-first-repair-v1/chart-475/report.json.zst",
+      "uncompressed_sha256": "1dcc2a3a1fcccd724b9fe6d36befbacc0b6e4322f976352360673bc440f7e1d4",
+      "raw_bytes": 63490,
+      "compressed_bytes": 4708
+    },
+    {
+      "raw": "/home/parity/jobs/wobbpotato-untyped-actor-first-repair-v1/chart-475/de708ddff7e43c0c9c1c7cddb57bb58184ce5eef2b3ba6907380bc2aa0d0eb4a.tar",
+      "compressed": "/home/parity/jobs/wobbpotato-untyped-actor-first-repair-v1/chart-475/accepted/55cf71fcd51c4548413dd8cbe9f62d47be38b8c6d85d691d45f6191b4732fbe2.tar.zst",
+      "uncompressed_sha256": "de708ddff7e43c0c9c1c7cddb57bb58184ce5eef2b3ba6907380bc2aa0d0eb4a",
+      "raw_bytes": 17236480,
+      "compressed_bytes": 4249668
+    },
+    {
+      "raw": "/home/parity/jobs/wobbpotato-egg-carton-untyped-actor-first-repair-v1/chart-476/report.json",
+      "compressed": "/home/parity/jobs/wobbpotato-egg-carton-untyped-actor-first-repair-v1/chart-476/report.json.zst",
+      "uncompressed_sha256": "bd9396476a1573f4f1fb4b77b66c351ca0c19f1911fb33311513a9f31e5ee6cb",
+      "raw_bytes": 63490,
+      "compressed_bytes": 4656
+    },
+    {
+      "raw": "/home/parity/jobs/wobbpotato-egg-carton-untyped-actor-first-repair-v1/chart-476/8988758df161a64fe92831476b38d15d6208ed2ca080032f20cb8b538cfb8c69.tar",
+      "compressed": "/home/parity/jobs/wobbpotato-egg-carton-untyped-actor-first-repair-v1/chart-476/accepted/07341d3d29285f3066284d00fcf4956eec0ae486ab01bf0b317be91edbda7c1b.tar.zst",
+      "uncompressed_sha256": "8988758df161a64fe92831476b38d15d6208ed2ca080032f20cb8b538cfb8c69",
+      "raw_bytes": 18047488,
+      "compressed_bytes": 4334607
+    },
+    {
+      "raw": "/home/parity/jobs/minefield-overlay-stage-first-repair-v1/chart-315/report.json",
+      "compressed": "/home/parity/jobs/minefield-overlay-stage-first-repair-v1/chart-315/report.json.zst",
+      "uncompressed_sha256": "6fd63f5457bf2db6f1e69a4ff71c0f8ccccb44eead3027e57bdbe23422060c9c",
+      "raw_bytes": 90643,
+      "compressed_bytes": 6016
+    },
+    {
+      "raw": "/home/parity/jobs/minefield-overlay-stage-first-repair-v1/chart-315/18a897c673dd1a149bebb3b5550fa4e0b566dcfb056d31d57b0204baf640b44b.tar",
+      "compressed": "/home/parity/jobs/minefield-overlay-stage-first-repair-v1/chart-315/accepted/11a1ea8b6d992ce379ce7ad59cd28d0e670c37ab02e4de7f7b98a2a75744bce3.tar.zst",
+      "uncompressed_sha256": "18a897c673dd1a149bebb3b5550fa4e0b566dcfb056d31d57b0204baf640b44b",
+      "raw_bytes": 25572352,
+      "compressed_bytes": 7141723
+    },
+    {
+      "raw": "/home/parity/jobs/what-if-command-observer-final-repair-v1/chart-472/report.json",
+      "compressed": "/home/parity/jobs/what-if-command-observer-final-repair-v1/chart-472/report.json.zst",
+      "uncompressed_sha256": "2e56b458578ae2af7a4fc17e431c528256d73e51226948240388dd6c54f2a685",
+      "raw_bytes": 267903503,
+      "compressed_bytes": 4975217
+    },
+    {
+      "raw": "/home/parity/jobs/what-if-command-observer-final-repair-v1/chart-472/570a1c7187c0bccc4bde87f2649980c600b3b34377701d9d90d0b402e78153b9.tar",
+      "compressed": "/home/parity/jobs/what-if-command-observer-final-repair-v1/chart-472/accepted/cf9c08bd681e27edebd0cf7754106cd6bebe800295c8a184e377d7397a411c25.tar.zst",
+      "uncompressed_sha256": "570a1c7187c0bccc4bde87f2649980c600b3b34377701d9d90d0b402e78153b9",
+      "raw_bytes": 374824448,
+      "compressed_bytes": 11045498
+    }
+  ]
+}
