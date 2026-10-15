@@ -1,0 +1,57 @@
+{
+  "source_root": "/home/parity/workspace/underlay-standard-life-green-v4/deadsync",
+  "binary_sha256": "b769253fd0fc3990c7cdd71ac1ed144a16a4f47b05d899a4d98ff35eb379d820",
+  "all_five_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "regression_source_diff_limited_to_documented_fixture_inputs": true,
+  "song_command_observer_begins_after_theme_construction": true,
+  "native_bitmap_asset_log_and_binary_hashes_verified": true,
+  "red_missing_standard_life_reproduced_both_hosts": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 265.5926396449795,
+      "log_sha256": "280fa6d5ff762bbc11bad13388d44e49d3ffdb54b9657f020736350bf6f45bdf",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 630 filtered out; finished in 0.87s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 34.97670725104399,
+      "log_sha256": "c531f4a2b63f56e54380d9cd9b25808923ef25ee05b70e31b5b6885705bc9b25",
+      "results": [
+        "test result: ok. 94 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 34.28s"
+      ]
+    },
+    {
+      "label": "profile-input-control",
+      "exit_code": 0,
+      "seconds": 80.62359229294816,
+      "log_sha256": "6ee71d9403268aed296c009df6a025111ce4986004f73fa75a143b88743f2a5e",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 239.63090037199436,
+      "log_sha256": "14e06bab0867558ee6785778cfafc839644a8da8066474dae628842abe62f659",
+      "results": [
+        "test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 21.72s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 36.457867779012304,
+      "log_sha256": "b25db3ab9ee362c1e8b952ad3c794f58acb2bf2cf4ed05a377311b15a0e3f300",
+      "results": []
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

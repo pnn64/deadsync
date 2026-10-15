@@ -1,0 +1,63 @@
+{
+  "all_five_groups_passed": true,
+  "all_1175_normalized_source_pins_asset_and_log_hashes_verified": true,
+  "red_missing_standard_life_reproduced": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 322.0087099000084,
+      "log_sha256": "2854b628125752d5a984edfcce2cc03b59a5fc176daf9e5f9c56fcb93b90cc80",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 632 filtered out; finished in 1.02s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 60.684748299987405,
+      "log_sha256": "46d5a3b7dd1242caf801b1598b71f4d043b2aff2222522e2821036dab1a67abc",
+      "results": [
+        "test result: ok. 94 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 58.65s"
+      ]
+    },
+    {
+      "label": "profile-input-control",
+      "exit_code": 0,
+      "seconds": 71.85864029999357,
+      "log_sha256": "73a32e46bddbb807ec92eeef259c6f4e18fbc5576aaadd2bacdbdf7e32fe595e",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 142.55674169999838,
+      "log_sha256": "54d57907697897d5d87a7c6e3c6c02f82481b14d4ac12e1e6cf2438a34b8e990",
+      "results": [
+        "test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 24.54s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 24.655327000000398,
+      "log_sha256": "5fea922e0a56d08b65f7ec655cf6d32279b66d55248bed6c4bc558b3e6dee3eb",
+      "results": []
+    }
+  ],
+  "red_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 326.14793410000857,
+      "log_sha256": "db2bdc29d6eb541d506ffda2f5a7bbeb401c5eb52957e19fc93c931761b059f1",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 632 filtered out; finished in 0.22s"
+      ]
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

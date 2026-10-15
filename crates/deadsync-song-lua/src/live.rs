@@ -67,9 +67,16 @@ pub(crate) fn active(lua: &Lua) -> bool {
     lua.app_data_ref::<LiveMode>().is_some()
 }
 
+// The song observer starts after screen/theme construction, including when
+// a retained VM replaces its screen. Keep the actual native callbacks running.
+fn query_trace_ready(lua: &Lua) -> bool {
+    let Some(scene) = lua.app_data_ref::<LiveMode>().map(|mode| mode.0) else { return false; };
+    lua.app_data_ref::<QueryTrace>().is_some_and(|trace| trace.scene == scene)
+}
+
 // Trace logging observes the live VM without replacing callbacks or query results.
 pub(crate) fn trace_command(lua: &Lua, command: &Function, name: &str, phase: &str) {
-    if !active(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return; }
+    if !query_trace_ready(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return; }
     callback_phase(lua, phase == "begin");
     let info = command.info();
     let Some(source) = info.source else { return; };
@@ -117,7 +124,7 @@ pub(crate) fn trace_actor_call(lua: &Lua, actor: &Table, operation: &str, arg: O
 }
 
 fn trace_method(lua: &Lua, kind: &str, operation: &str, details: impl FnOnce() -> serde_json::Value) {
-    if !active(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return; }
+    if !query_trace_ready(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return; }
     if lua.app_data_ref::<QueryTrace>().is_some_and(|trace| trace.depth != 0) { return; }
     // Actor class dispatch adds a C adapter frame before the authored Lua
     // caller. Inspect the first Lua frame instead of attributing it to C.
@@ -145,6 +152,7 @@ fn trace_method(lua: &Lua, kind: &str, operation: &str, details: impl FnOnce() -
 // original host bindings across screen reloads; no tracing work runs by default.
 #[derive(Default)]
 struct QueryTrace {
+    scene: u64,
     objects: Vec<(Table, serde_json::Value)>,
     hooks: Vec<(Table, &'static str)>,
     depth: usize,
@@ -313,7 +321,8 @@ pub(crate) fn query_phase(lua: &Lua, entering: bool) {
 pub(crate) fn install_query_trace(lua: &Lua) -> mlua::Result<()> {
     if !active(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return Ok(()); }
     if lua.app_data_ref::<QueryTrace>().is_none() { lua.set_app_data(QueryTrace::default()); }
-    if let Some(mut trace) = lua.app_data_mut::<QueryTrace>() { trace.depth += 1; }
+    let scene = lua.app_data_ref::<LiveMode>().map_or(0, |mode| mode.0);
+    if let Some(mut trace) = lua.app_data_mut::<QueryTrace>() { trace.scene = scene; trace.depth += 1; }
     let install = || -> mlua::Result<()> {
         use serde_json::json;
         let globals = lua.globals();
@@ -2656,14 +2665,16 @@ return Def.ActorFrame {
 
     #[test]
     fn live_empty_callback_slots_preserve_single_update_detection() {
-        let mut compiled = compile("callback-slots", r#"
+        let mut compiled = compile_with_context("callback-slots", r#"
 return Def.ActorFrame {
     Def.ActorFrame { Name = 'Update',
         InitCommand = function(self) self:SetUpdateFunction(function() end) end,
         Def.Quad {},
     },
 }
-"#);
+"#, |context| {
+            for player in &mut context.players { player.hide_lifebar = true; }
+        });
         let scene = compiled.live_scene.take().expect("scene");
         assert!(crate::lua_util::actor_tree_update_only(&scene.lua, &scene.root, "Update")
             .expect("only the current update callback counts"));
@@ -2686,6 +2697,7 @@ return Def.ActorFrame {
             let mut compiled = compile_with_context(&format!("density-{name}"),
                 "return Def.ActorFrame { OnCommand = function(self) self:sleep(10) end }", |context| {
                     context.defer_initial_live_update = true;
+                    for player in &mut context.players { player.hide_lifebar = true; }
                     context.screen_width = 854.0;
                     context.players[0].screen_x = 213.5;
                     context.players[1].enabled = false;
@@ -2725,6 +2737,7 @@ return Def.ActorFrame {
         for (name, width, style) in [("narrow-centered", 640.0, "single"), ("versus", 854.0, "versus")] {
             let mut compiled = compile_with_context(&format!("density-excluded-{name}"), "return Def.ActorFrame {}", |context| {
                 context.defer_initial_live_update = true;
+                    for player in &mut context.players { player.hide_lifebar = true; }
                 context.screen_width = width;
                 context.style_name = style.into();
             });

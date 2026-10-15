@@ -14708,6 +14708,171 @@ return {
     Ok(frame)
 }
 
+fn load_native_standard_life_swoosh() -> mlua::Result<String> {
+    static PREPARED: OnceLock<Result<String, String>> = OnceLock::new();
+    PREPARED.get_or_init(|| {
+        let bytes = include_bytes!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/LifeMeter/swoosh.png");
+        let decoded = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)
+            .map_err(|error| error.to_string())?;
+        let mut image = decoded.into_rgba8();
+        let source_size = [image.width(), image.height()];
+        let hints = deadlib_assets::parse_texture_hints("swoosh.png");
+        deadlib_assets::apply_texture_hints(&mut image, &hints);
+        deadlib_assets::fix_hidden_alpha(&mut image);
+        let path = format!("{}B/ScreenGameplay underlay/PerPlayer/LifeMeter/swoosh.png", crate::SONG_LUA_THEME_PATH_PREFIX);
+        deadlib_assets::register_prepared_generated_texture(&path, image, source_size, hints.sampler_desc());
+        Ok(path)
+    }).as_ref().cloned().map_err(|error| mlua::Error::external(error.clone()))
+}
+
+fn create_underlay_standard_life_meter(
+    lua: &Lua, underlay: &Table, player: usize,
+    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+) -> mlua::Result<Option<Table>> {
+    // LifeMeter/default.lua selects the actual per-player variant. Other
+    // variants retain their missing implementation; never stand in for them.
+    let sl = lua.globals().get::<Table>("SL")?;
+    let mods = sl.get::<Table>(format!("P{}", player + 1))?.get::<Table>("ActiveModifiers")?;
+    if mods.get::<bool>("HideLifebar")?
+        || sl.get::<Table>("Global")?.get::<String>("GameMode")? != "ITG"
+        || mods.get::<String>("LifeMeterType")? != "Standard" { return Ok(None); }
+    let game = lua.globals().get::<Table>("GAMESTATE")?;
+    let state = game.get::<Function>("GetPlayerState")?.call::<Table>((game, player_number_name(player)))?;
+    let position = state.get::<Function>("GetSongPosition")?.call::<Table>(state)?;
+    let commands = lua.load(r#"
+local player = ...
+
+local w = 136
+local h = 18
+local _x = _screen.cx + (player==PLAYER_1 and -1 or 1) * SL_WideScale(238, 288)
+
+-- get SongPosition specific to this player so that
+-- split BPMs are handled if there are any
+local songposition = select(2, ...)
+local swoosh, velocity
+
+local Update = function(self)
+	if not swoosh then return end
+	velocity = -(songposition:GetCurBPS() * 0.5)
+	if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
+	swoosh:texcoordvelocity(velocity,0)
+end
+
+local meter = {
+
+	InitCommand=function(self) self:y(20):SetUpdateFunction(Update):visible(false) end,
+	OnCommand=function(self) self:visible(true) end,
+
+	-- frame
+	{ InitCommand=function(self) self:x(_x):zoomto(w+4, h+4) end },
+	{ InitCommand=function(self) self:x(_x):zoomto(w, h):diffuse(0,0,0,1) end },
+
+	-- the Quad that changes width/color depending on current Life
+	{
+		Name="MeterFill",
+		InitCommand=function(self) self:zoomto(0,h):diffuse(PlayerColor(player,true)):horizalign(left) end,
+		OnCommand=function(self) self:x( _x - w/2 ) end,
+
+		-- check whether the player's LifeMeter is "Hot"
+		-- in LifeMeterBar.cpp, the engine says a LifeMeter is Hot if the current
+		-- LifePercentage is greater than or equal to the HOT_VALUE, which is
+		-- defined in Metrics.ini under [LifeMeterBar] like HotValue=1.0
+		HealthStateChangedMessageCommand=function(self,params)
+			if params.PlayerNumber == player then
+				if params.HealthState == 'HealthState_Hot' then
+					self:diffuse(1,1,1,1)
+				else
+					-- ~~man's~~ lifebar's not hot
+					self:diffuse( PlayerColor(player,true) )
+				end
+			end
+		end,
+
+		-- when the engine broadcasts that the player's LifeMeter value has changed
+		-- change the width of this MeterFill Quad to accommodate
+		LifeChangedMessageCommand=function(self,params)
+			if params.Player == player then
+				local life = params.LifeMeter:GetLife() * w
+				self:finishtweening()
+				self:bouncebegin(0.1):zoomx( life )
+			end
+		end,
+	},
+
+	-- a simple scrolling gradient texture applied on top of MeterFill
+	{
+		Name="MeterSwoosh",
+		InitCommand=function(self)
+			swoosh = self
+
+			self:zoomto(w,h)
+				 :diffusealpha(0.2)
+				 :horizalign( left )
+		end,
+		OnCommand=function(self)
+			self:x(_x - w/2)
+			self:customtexturerect(0,0,1,1)
+			--texcoordvelocity is handled by the Update function below
+		end,
+		HealthStateChangedMessageCommand=function(self,params)
+			if(params.PlayerNumber == player) then
+				if(params.HealthState == 'HealthState_Hot') then
+					self:diffusealpha(1)
+				else
+					self:diffusealpha(0.2)
+				end
+			end
+		end,
+
+		-- life-changing
+		-- adjective
+		--  /ˈlaɪfˌtʃeɪn.dʒɪŋ/
+		-- having an effect that is strong enough to change someone's life
+		-- synonyms: compelling, life-altering, puissant, blazing
+		LifeChangedMessageCommand=function(self,params)
+			if params.Player == player then
+				local life = params.LifeMeter:GetLife() * w
+				self:finishtweening()
+				self:bouncebegin(0.1):zoomto( life, h )
+			end
+		end
+	}
+}
+
+return meter
+
+-- copyright 2008-2012 AJ Kelly/freem.
+-- do not use this code in your own themes without my permission."#).set_name("@theme:/BGAnimations/ScreenGameplay underlay/PerPlayer/LifeMeter/Standard.lua")
+        .call::<Table>((player_number_name(player), position))?;
+    let meter = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
+    meter.raw_set("__songlua_parent", underlay.clone())?;
+    for command in ["InitCommand", "OnCommand"] {
+        meter.raw_set(command, commands.raw_get::<Function>(command)?)?;
+    }
+    commands.raw_get::<Function>("InitCommand")?.call::<()>(meter.clone())?;
+    let unnamed = create_actor_child_group(lua)?;
+    for (index, kind, name) in [(1, "Quad", ""), (2, "Quad", ""),
+        (3, "Quad", "MeterFill"), (4, "Sprite", "MeterSwoosh")] {
+        let actor = create_named_actor(lua, kind, name, create_dummy_actor)?;
+        actor.raw_set("__songlua_parent", meter.clone())?;
+        if kind == "Sprite" { set_actor_texture_from_path(&actor, &load_native_standard_life_swoosh()?)?; }
+        let definition = commands.raw_get::<Table>(index)?;
+        for command in ["InitCommand", "OnCommand", "LifeChangedMessageCommand", "HealthStateChangedMessageCommand"] {
+            if let Some(callback) = definition.raw_get::<Option<Function>>(command)? {
+                actor.raw_set(command, callback)?;
+            }
+        }
+        definition.raw_get::<Function>("InitCommand")?.call::<()>(actor.clone())?;
+        if let Some(on) = definition.raw_get::<Option<Function>>("OnCommand")? { on.call::<()>(actor.clone())?; }
+        push_sequence_child_once(&meter, actor.clone())?;
+        if name.is_empty() { unnamed.raw_set(unnamed.raw_len() + 1, actor)?; }
+        else { actor_children(lua, &meter)?.raw_set(name, actor)?; }
+    }
+    actor_children(lua, &meter)?.raw_set("", unnamed)?;
+    commands.raw_get::<Function>("OnCommand")?.call::<()>(meter.clone())?;
+    Ok(Some(meter))
+}
+
 pub fn install_underlay_theme_children(
     lua: &Lua,
     underlay: &Table,
@@ -14746,6 +14911,10 @@ pub fn install_underlay_theme_children(
             let meter = create_underlay_difficulty_meter(lua, underlay, player, create_dummy_actor)?;
             push_sequence_child_once(underlay, meter.clone())?;
             unnamed.raw_set(unnamed.raw_len() + 1, meter)?;
+            if let Some(life) = create_underlay_standard_life_meter(lua, underlay, player, create_dummy_actor)? {
+                push_sequence_child_once(underlay, life.clone())?;
+                unnamed.raw_set(unnamed.raw_len() + 1, life)?;
+            }
         }
     }
     match unnamed.raw_len() {
@@ -15045,6 +15214,24 @@ pub fn create_top_screen_table(
         }
     }
     install_top_screen_theme_children(lua, &top_screen, &players, create_named_child_actor)?;
+    // ScreenWithMenuElements::Init loads the Underlay before ScreenGameplay
+    // loads engine LifeMeters. LifeMeterBar::Load calls AfterLifeChanged before
+    // any song Foreground exists, so only already-loaded theme listeners hear it.
+    // These messages precede song construction, so dispatch them to the loaded
+    // theme without adding pre-song events to the song's startup output.
+    let song_output = lua.remove_app_data::<LiveBroadcasts>();
+    let loaded_life = (|| -> mlua::Result<()> {
+        for (player, life_meter) in life_meters.iter().enumerate() {
+            if !players[player].enabled { continue; }
+            let params = lua.create_table()?;
+            params.raw_set("Player", player_number_name(player))?;
+            params.raw_set("LifeMeter", life_meter.clone())?;
+            broadcast_native_song_lua_message(lua, "LifeChanged", Some(Value::Table(params)))?;
+        }
+        Ok(())
+    })();
+    if let Some(song_output) = song_output { lua.set_app_data(song_output); }
+    loaded_life?;
     // ScreenGameplay.h declares all five unnamed owners as Transition.
     // Keep the duplicate-name group as lookup aliases of the same actor tree.
     let unnamed = create_actor_child_group(lua)?;
