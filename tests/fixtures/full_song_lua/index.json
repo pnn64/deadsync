@@ -4626,17 +4626,14 @@
       "aliases": []
     },
     {
-      "title": "Shakunetsu pt. II",
+      "title": "Shakunetsu pt. II Long Train Running",
       "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
-      "harness_version": "0.1.0",
-      "archive": "34598587c55a3b9452d7ac65dbfd4228cbd7c77a1b8ab83ef5ba32e78bf410fd.tar.zst",
-      "sha256": "34598587c55a3b9452d7ac65dbfd4228cbd7c77a1b8ab83ef5ba32e78bf410fd",
-      "compressed_bytes": 1119227,
-      "uncompressed_sha256": "dddcd4bbfd30c16f1d42d9083de458d4e33a4d1b53ca1f94aca871a05dcd8f31",
-      "compression_level": 22,
-      "aliases": [
-        "ff2a46a698118c2050326e0b8629fe1aa736a3dfb04a9f41a926b81c61403195.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "0dc546840178dd4c14500f8030954dc916dd511be43d4e1b5b73e2a8afa026f7.tar.zst",
+      "sha256": "0dc546840178dd4c14500f8030954dc916dd511be43d4e1b5b73e2a8afa026f7",
+      "compressed_bytes": 15000653,
+      "uncompressed_sha256": "fc6374ff0559eb18cef7f6d068fd68607827c40134a87b939dd10704e9cae095",
+      "aliases": []
     },
     {
       "title": "Sharkmode",
