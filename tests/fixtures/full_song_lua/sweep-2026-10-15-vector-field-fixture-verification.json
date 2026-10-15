@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Vector Field/Vector Field.ssc",
+  "native_frames": 68688,
+  "replayed_frames": 68688,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "8b5db7036e4976eb7312a99547ceb0df494a3cf5416da3540332c38837a3e6ab.tar.zst",
+  "compressed_sha256": "8b5db7036e4976eb7312a99547ceb0df494a3cf5416da3540332c38837a3e6ab",
+  "uncompressed_sha256": "4d6b24865ce3c440585c21373a54a65da59203bdf60bcb603285d7f73ca8876f",
+  "compressed_bytes": 8669782,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

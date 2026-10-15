@@ -1,0 +1,37 @@
+{
+  "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+  "simfile_sha256": "3d4d8467ebbbd92076d67f661822eead8387f4c7e05fd5fb4bdf5ec3b3d5db4e",
+  "old_candidate": "/home/parity/jobs/what-if-dynamic-command-first-repair-v1/chart-472/candidates/5b7032e9a8bfd40d3c4a1ce410fd8c7a50a3d9f09b04d0ab395c76166fe9ebe5.tar",
+  "old_candidate_sha256": "5b7032e9a8bfd40d3c4a1ce410fd8c7a50a3d9f09b04d0ab395c76166fe9ebe5",
+  "candidate": "/home/parity/jobs/what-if-command-observer-candidate-v1/candidates/570a1c7187c0bccc4bde87f2649980c600b3b34377701d9d90d0b402e78153b9.tar",
+  "candidate_sha256": "570a1c7187c0bccc4bde87f2649980c600b3b34377701d9d90d0b402e78153b9",
+  "trace_sha256": "ba4837520fb6435bf6d3e8f21487bfc06c27d3eba6322dd9b6bbe9ca92656847",
+  "native_frames": 47002,
+  "capture_binary_sha256": "e067360d8120ee0a174b0848832856325ef62b709287fb48976441a277b26563",
+  "archiver_binary_sha256": "15bfe62bbb7917b45e1f3ddc8401cffca5d5296366ea4e0c5ccd0879880bb290",
+  "changed_manifest_fields": [
+    "runtime.command_observer"
+  ],
+  "all_nonmanifest_members_unchanged": true,
+  "member_sha256": {
+    "song/What If The Whole World Turned Their Swag On.ogg": "feeab204beb16b724b64e6458676b2833997ec4538ddffcfc5e0e879aece37c8",
+    "song/What If The Whole World Turned Their Swag On.ssc": "3d4d8467ebbbd92076d67f661822eead8387f4c7e05fd5fb4bdf5ec3b3d5db4e",
+    "song/lua/layout.lua": "c5b2e5781df784eea98ed77c9a0924b77baa6e4571da631e74b17e23a71227ca",
+    "song/lua/mods.lua": "da99256db2040895296d7d30b1df94fbf0852b79ac7f67b615438e37bf06a900",
+    "song/template/compat.lua": "9a6922124e2ace5d55201aea193928998afbcf521dd6b8568894cf15e65adf92",
+    "song/template/ease.lua": "d11af6c38cb17e84b14f775efb680d367c1a2ec543632325709d96e1c713e8ec",
+    "song/template/main.lua": "e9b73d62218cc10c392457729f4d9815c514356b0d6555d12a0225910f4a4c1e",
+    "song/template/sort.lua": "dcd34ebf61a85da3a4e009509e543710e805c61c6821fd6553a7b61f28a1c2a6",
+    "song/template/std.lua": "3412e9f3525df8e735bf619ea5f21b4ced074611af8341a909d6dc5761e1d8a5",
+    "song/template/template.lua": "d318e6080fd865c4508eed136d6c506b379540f15902b8297657a70274d5d754",
+    "trace/semantic.json": "ba4837520fb6435bf6d3e8f21487bfc06c27d3eba6322dd9b6bbe9ca92656847"
+  },
+  "native_capture_reused": true,
+  "full_repairs_spent": 1,
+  "full_replay_started": false,
+  "acceptance_comparator_changed": false,
+  "trace_bytes_changed": false,
+  "source_bytes_changed": false,
+  "final_full_repair_not_started": true,
+  "one_final_full_repair_remaining": true
+}
