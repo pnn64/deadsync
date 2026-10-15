@@ -4494,17 +4494,14 @@
       "aliases": []
     },
     {
-      "title": "Save Your Tears",
+      "title": "Save Your Tears Episode 01",
       "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
-      "harness_version": "0.1.0",
-      "archive": "3b8ed87a2b0f138bd6e27055ecaace396a575b07ba51146cdc61879176c95521.tar.zst",
-      "sha256": "3b8ed87a2b0f138bd6e27055ecaace396a575b07ba51146cdc61879176c95521",
-      "compressed_bytes": 4603370,
-      "uncompressed_sha256": "131632ac4e433a517a090e9d9c1cf3d391f1d2f329956037bf61a169923dedf1",
-      "compression_level": 22,
-      "aliases": [
-        "a614deb96a722b286526ce51cd9e0e7b83c257d8c2a73c7765095addae044fc0.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "273f4228e454a8361f63a073e2f34019241c8f886bf69569f3b03b0abbc15f4d.tar.zst",
+      "sha256": "273f4228e454a8361f63a073e2f34019241c8f886bf69569f3b03b0abbc15f4d",
+      "compressed_bytes": 23287239,
+      "uncompressed_sha256": "ecebe0ff412718b0efa1a8ba456701421f2f674434a82c7f9f7646109e00b182",
+      "aliases": []
     },
     {
       "title": "Save Your Tears Episode 01",
