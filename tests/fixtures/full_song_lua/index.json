@@ -5427,15 +5427,12 @@
     {
       "title": "Watching",
       "source_simfile": "Watching/watching-fakemines.sm",
-      "harness_version": "0.1.0",
-      "archive": "d3bf325b6bbc9fc71c6ef35a53d1d52219fd2c32962da8be72c5a7d50c1da741.tar.zst",
-      "sha256": "d3bf325b6bbc9fc71c6ef35a53d1d52219fd2c32962da8be72c5a7d50c1da741",
-      "compressed_bytes": 113582,
-      "uncompressed_sha256": "4f2fff4f5030177fec6761cab8c5f94e4c119b8d610f166546e9e9bdddd9c9ee",
-      "compression_level": 22,
-      "aliases": [
-        "18277eb7daa8aeba645b0ca0849539e05af18060af6369d99443c58184451a85.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "034b312917c680893a63384b8a04cb3b685c305666662465648c2f47e662955c.tar.zst",
+      "sha256": "034b312917c680893a63384b8a04cb3b685c305666662465648c2f47e662955c",
+      "compressed_bytes": 13121969,
+      "uncompressed_sha256": "9e66329fbf7deeaa3e11cb80ada830e6295f45e04992b156e6ec31c08e741aca",
+      "aliases": []
     },
     {
       "title": "Watching",

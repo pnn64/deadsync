@@ -14413,6 +14413,56 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 467,
+      "source_simfile": "Watching/watching-fakemines.sm",
+      "simfile_sha256": "1c7dfef2fa28adb1f74b7e4ba7f84542e8d5c9b2dd4095bdf3f9d0ad853e4a19",
+      "retained_original_archive": "d3bf325b6bbc9fc71c6ef35a53d1d52219fd2c32962da8be72c5a7d50c1da741.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 176.86328772001434,
+      "trace_sha256": "83095391da47d61bbb7afa67912bef5b3e0ec5270deb2bd3d38e876b32392835",
+      "candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-467/candidates/9e66329fbf7deeaa3e11cb80ada830e6295f45e04992b156e6ec31c08e741aca.tar",
+      "replay_exit": 0,
+      "replay_seconds": 965.6429442279914,
+      "candidate_sha256": "9e66329fbf7deeaa3e11cb80ada830e6295f45e04992b156e6ec31c08e741aca",
+      "native_frames": 39501,
+      "replayed_frames": 39501,
+      "compared_stage_fields": 1485,
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetCurMusicSeconds, PlayerOptions.FromString, PlayerOptions.Mini"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "4f22e26a4243b0bbeb7c0a336ba5157d870f0b348ca482c08ba2c3c75a119f08",
+      "archive": "034b312917c680893a63384b8a04cb3b685c305666662465648c2f47e662955c.tar.zst",
+      "archive_sha256": "034b312917c680893a63384b8a04cb3b685c305666662465648c2f47e662955c",
+      "compressed_bytes": 13121969,
+      "pack_seconds": 16.756002770009218,
+      "harness_version": "0.1.80",
+      "title": "Watching",
+      "retained_original_entry": {
+        "title": "Watching",
+        "source_simfile": "Watching/watching-fakemines.sm",
+        "harness_version": "0.1.0",
+        "archive": "d3bf325b6bbc9fc71c6ef35a53d1d52219fd2c32962da8be72c5a7d50c1da741.tar.zst",
+        "sha256": "d3bf325b6bbc9fc71c6ef35a53d1d52219fd2c32962da8be72c5a7d50c1da741",
+        "compressed_bytes": 113582,
+        "uncompressed_sha256": "4f2fff4f5030177fec6761cab8c5f94e4c119b8d610f166546e9e9bdddd9c9ee",
+        "compression_level": 22,
+        "aliases": [
+          "18277eb7daa8aeba645b0ca0849539e05af18060af6369d99443c58184451a85.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "historical_pending": [
@@ -14438,7 +14488,7 @@
   },
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 40,
+  "passed_fixtures": 41,
   "pending_charts": 65,
-  "processed_charts": 105
+  "processed_charts": 106
 }
