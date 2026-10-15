@@ -1,0 +1,128 @@
+{
+  "reason": "Recover space before the corrected In bitmap build; preserve the failed test binary/log and losslessly compress terminal HOPE diagnostic reports.",
+  "cargo_command": [
+    "/home/parity/.cargo/bin/cargo",
+    "clean",
+    "--locked",
+    "--target-dir",
+    "/home/parity/build/deadsync-v1",
+    "-p",
+    "deadsync",
+    "-p",
+    "deadsync-song-lua",
+    "--profile",
+    "dev"
+  ],
+  "cargo_exit": 0,
+  "failed_test_binary": "/home/parity/jobs/in-transition-bitmaps-linux-green-v2/failed-target-tests",
+  "failed_test_binary_sha256": "5f9f2a02683337e4f16f51345947c0b3600ad35db17199a9a858ae0a4b469934",
+  "cargo_bytes_freed": 43966464,
+  "compressed_reports": [
+    {
+      "raw_path": "/home/parity/jobs/hope-cancel-child-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62266707,
+      "raw_sha256": "c2f466ec49e09ead46c271c2ec095aac2480250ffdc1371ae88195369cf64792",
+      "compressed_path": "/home/parity/jobs/hope-cancel-child-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 989706,
+      "compressed_sha256": "3bd5cf2ae8111accab62a7c68a2b16ceb10c2dc8f07612410c933b977f533da5",
+      "decompressed_bytes_verified": true,
+      "two_actual_process_reference_checks_clear": true
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-combo-font-resources-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62217847,
+      "raw_sha256": "aed654b66e059b3f6deb4d69598d760398c6b2c31ecf11dadd4580a1d42772de",
+      "compressed_path": "/home/parity/jobs/hope-combo-font-resources-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 990096,
+      "compressed_sha256": "31f8a16eaa427360f8e2c03a7f26104f02b61d50ee1e3c0afdd90abf91fc7bbb",
+      "decompressed_bytes_verified": true,
+      "two_actual_process_reference_checks_clear": true
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-lyric-display-construction-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62236718,
+      "raw_sha256": "858231a769bd71e46f082ee4c7a594ee526c314a68877057812c9a38a61f74a1",
+      "compressed_path": "/home/parity/jobs/hope-lyric-display-construction-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 978092,
+      "compressed_sha256": "9fb6e63d314d5e0513419ae2750f29fe621fcdb9512e7a1776587b5073a7ebab",
+      "decompressed_bytes_verified": true,
+      "two_actual_process_reference_checks_clear": true
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-note-field-board-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62228781,
+      "raw_sha256": "d9a5c8c049a468b6da9e39c97039bd5826f6620abbdb89c798f84535b3f768df",
+      "compressed_path": "/home/parity/jobs/hope-note-field-board-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 946061,
+      "compressed_sha256": "5b7e1a66d513705645b4cd89b4b9d4a74a4979e0ef9683abfc68554b8d18382d",
+      "decompressed_bytes_verified": true,
+      "two_actual_process_reference_checks_clear": true
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-oni-game-over-bitmap-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62230928,
+      "raw_sha256": "357e80fe90c527fab65ccf29322a60f9cb9111737ba7b20d7309e22e17fc6019",
+      "compressed_path": "/home/parity/jobs/hope-oni-game-over-bitmap-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 943092,
+      "compressed_sha256": "fa31499cb3b69397b3a6542da717e2b0b230bcdc4e9e9b285ae6d0d70530432b",
+      "decompressed_bytes_verified": true,
+      "two_actual_process_reference_checks_clear": true
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-out-transition-quad-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62203682,
+      "raw_sha256": "0010348beae025fffe9fbf75a4fbce252f14a9305c12006e404169a40d195aa4",
+      "compressed_path": "/home/parity/jobs/hope-out-transition-quad-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 970573,
+      "compressed_sha256": "f2ba9ed28e9674d1a1edcbc4a8e9445b31613466f4e67646ea3bcb7a99907270",
+      "decompressed_bytes_verified": true,
+      "two_actual_process_reference_checks_clear": true
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-percentage-display-inheritance-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62224622,
+      "raw_sha256": "f8526530a91c14862844cd5dabdaf072c363951acdac4ade2569b58af11d6762",
+      "compressed_path": "/home/parity/jobs/hope-percentage-display-inheritance-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 881244,
+      "compressed_sha256": "25c4d82e9b070b2caa9b250b3b34719d3e97f2bd87bc691d1aebc57835ee9b59",
+      "decompressed_bytes_verified": true,
+      "two_actual_process_reference_checks_clear": true
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-player-attack-display-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62223001,
+      "raw_sha256": "ebae2435d94a96cef5268266cfcdc10c3d0902e4fd35328663c49a4d85026041",
+      "compressed_path": "/home/parity/jobs/hope-player-attack-display-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 959785,
+      "compressed_sha256": "19566528ca14c24eaf07740194729206de77791f5a6b436755f8400afb0e67a7",
+      "decompressed_bytes_verified": true,
+      "two_actual_process_reference_checks_clear": true
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-quad-default-texture-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62233922,
+      "raw_sha256": "27178e43afa44df68d32acba58393bc84c367b311c0141dbfe28fc6c20b12362",
+      "compressed_path": "/home/parity/jobs/hope-quad-default-texture-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 966626,
+      "compressed_sha256": "b045aa075042185e9186ab9f85cd1996c17f849f32c0fe7acb8a6c90177bebb5",
+      "decompressed_bytes_verified": true,
+      "two_actual_process_reference_checks_clear": true
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-score-display-frame-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62229790,
+      "raw_sha256": "113bb20fb5d738cf3356e5f8ddcb0c866f41de441464474d77c9ca3fb83e03de",
+      "compressed_path": "/home/parity/jobs/hope-score-display-frame-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 971573,
+      "compressed_sha256": "fa62bbd8dc9205ed9db061d48173c111ba42041294e56adebbd1957757694f84",
+      "decompressed_bytes_verified": true,
+      "two_actual_process_reference_checks_clear": true
+    }
+  ],
+  "free_before": 681287680,
+  "free_after": 1337929728,
+  "mawaru9_helper_hash_unchanged": true,
+  "all_1175_frozen_source_pins_and_24_assets_unchanged": true,
+  "captures_replayed_or_removed": false,
+  "chart_processes_stopped_or_restarted": false
+}
