@@ -1,0 +1,10 @@
+{
+  "pid": 2299526,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_wobbpotato_egg_carton_untyped_actor_first_repair_v1.py"
+  ],
+  "first_full_attempt_started": true,
+  "full_repairs_spent_on_start": 1,
+  "one_later_full_repair_maximum": true
+}

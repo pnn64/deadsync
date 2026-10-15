@@ -1,0 +1,86 @@
+{
+  "fix_commit": "e8daaa0862dfde8af1096b62e92246b175d30f10",
+  "source_root": "/home/parity/workspace/untyped-actor-v1/deadsync",
+  "binary_sha256": "60a12cf2dec73902df89171b680e24ffbc9301bccc2147dae35a7fb0aab1ecbb",
+  "all_eight_checks_both_platforms_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_source_pins_verified": true,
+  "all_linux_log_and_binary_hashes_verified": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 283.409796441003,
+      "log_sha256": "aa72cf45ee7abd3fd16e748ec2500b6bc8a38d406c9d7d9cfd70f5a25ba8555d",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 608 filtered out; finished in 0.23s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 1.1099393199838232,
+      "log_sha256": "670d555e4e14124c40b4585b745b5aedfd54282417c197bdf08b6ae8e5b34df9",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 609 filtered out; finished in 0.20s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 0.6301120510033797,
+      "log_sha256": "7b41acb570cb17a854c7ad6a7b95c8fec964d56f4c6b7b8c6d697dc5be60651e",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 0.8882676940120291,
+      "log_sha256": "4f37afc47ea337eeda395f485480dc3b039deea1f27df3d4bbee43e2262d6b6a",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 600 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 37.35630356101319,
+      "log_sha256": "9d476c8843c54f9dfc52d02d9b1d8b6ac153e2f1b58fec3c38641a90736c6fa1",
+      "results": [
+        "test result: ok. 74 passed; 0 failed; 0 ignored; 0 measured; 536 filtered out; finished in 36.47s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 245.89618910400895,
+      "log_sha256": "10a0f9066c47d2e711f3ee0cd651fbd7b39d4fa5927a8161598cf2bf5f7c859c",
+      "results": [
+        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.14s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 0.9112858109874651,
+      "log_sha256": "5a5596e1aaa453217379bebba1510902c63b6cd87263b8b310deaf457d4fdbbd",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 609 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 46.78566748701269,
+      "log_sha256": "47770e1afba2890a46b3c486d2dd70d87c2a9f9b8cf7df622b87ab07815d36ec",
+      "results": []
+    }
+  ],
+  "windows_validation": "sweep-2026-10-15-untyped-actor-windows-validation.json",
+  "native_missing_class_fallback_verified": true,
+  "untyped_fields_commands_and_children_discarded": true,
+  "native_control": "sweep-2026-10-15-untyped-actor-native-control.json",
+  "full_acceptance_comparators_unchanged": true,
+  "global_original_helper_unchanged": true
+}

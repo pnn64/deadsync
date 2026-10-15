@@ -1,0 +1,13 @@
+{
+  "fix_commit": "e8daaa0862dfde8af1096b62e92246b175d30f10",
+  "harness_fix_commit": "c283a8a",
+  "build_proof": "/home/parity/jobs/untyped-actor-linux-green-v1/proof.json",
+  "binary_sha256": "60a12cf2dec73902df89171b680e24ffbc9301bccc2147dae35a7fb0aab1ecbb",
+  "both_hosts_eight_checks_passed": true,
+  "all_1175_raw_linux_and_cross_platform_normalized_source_pins_verified": true,
+  "full_repair_limit_per_chart": 2,
+  "first_attempt": 1,
+  "native_capture_reused": true,
+  "comparison_keys_and_acceptance_unchanged": true,
+  "global_original_selection_unchanged": true
+}
