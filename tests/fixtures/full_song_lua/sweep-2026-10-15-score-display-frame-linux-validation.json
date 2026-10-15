@@ -1,0 +1,47 @@
+{
+  "source_root": "/home/parity/workspace/score-display-frame-green-v1/deadsync",
+  "binary_sha256": "59262da08e15da68844c9c37b3a4e04999a8022911f87576e07b777532b3f285",
+  "all_four_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "entire_regression_source_identical_red_green": true,
+  "native_bitmap_asset_log_and_binary_hashes_verified": true,
+  "red_missing_score_frame_reproduced_both_hosts": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 287.2936192830093,
+      "log_sha256": "e17a76239598fae0e3a7b0f1a540933f0e6644a5dea9ea99c200be29927ca24c",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 620 filtered out; finished in 0.18s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 35.462356911972165,
+      "log_sha256": "5c3456b85d177e21fc70e2ed88563a29cd9cc52f5bcf80f7ff23fd4b7f74298d",
+      "results": [
+        "test result: ok. 84 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 34.80s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 278.3417889329721,
+      "log_sha256": "84cb583b4f277971638e361e44fb7f945d28b60012c063a9ee35a2b1add314df",
+      "results": [
+        "test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 20.52s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 36.78686664998531,
+      "log_sha256": "458045581366aad17323e4de1a6275cd7bdfc0e627e7137d99086eba1a479643",
+      "results": []
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

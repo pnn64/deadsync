@@ -3451,6 +3451,34 @@ assert(FLASH:GetParent():GetParent() == CUES and CUES:GetParent() == CONTAINER)
     }
 
     #[test]
+    fn live_score_display_loads_unnamed_blank_frame_before_percent() {
+        compile("score-display-frame", r#"
+return Def.ActorFrame {
+    OnCommand = function()
+        local screen = SCREENMAN:GetTopScreen()
+        for _, player in ipairs{'P1', 'P2'} do
+            local score = screen:GetChild('Score' .. player)
+            assert(score:GetNumChildren() == 2, 'ScoreDisplayPercentage must include its blank frame')
+            local frame = assert(score:GetChild(''))
+            local percent = assert(score:GetChild('ScoreDisplayPercentage Percent'))
+            assert(frame:GetName() == '' and frame:GetParent() == score)
+            assert(percent:GetParent() == score)
+            assert(score:GetChild('') == frame and score:GetChildren()[''] == frame)
+            local texture = assert(frame:GetTexture(), 'score frame must load its inherited bitmap')
+            assert(texture:GetPath() == 'Themes/_fallback/Graphics/_blank.png')
+            assert(texture:GetSourceWidth() == 4 and texture:GetSourceHeight() == 2)
+            assert(texture:GetImageWidth() == 8 and texture:GetImageHeight() == 8)
+            assert(texture:GetTextureWidth() == 8 and texture:GetTextureHeight() == 8)
+            assert(texture:GetNumFrames() == 1)
+            assert(frame:GetWidth() == 4 and frame:GetHeight() == 2)
+            assert(percent:GetChild('Percent' .. player):GetParent() == percent)
+        end
+    end,
+}
+"#);
+    }
+
+    #[test]
     fn live_oni_game_over_loads_inherited_blank_bitmap() {
         compile("oni-game-over-bitmap", r#"
 local sprite

@@ -14150,6 +14150,11 @@ pub fn create_top_screen_score_actor(
 ) -> mlua::Result<Table> {
     let actor = create_dummy_actor(lua, "ActorFrame")?;
     actor.set("Name", top_screen_score_name(player_index))?;
+    // ScoreDisplayPercentage loads its unnamed frame before the percentage child.
+    let frame = create_dummy_actor(lua, "Sprite")?;
+    set_actor_texture_from_path(&frame, load_native_blank_texture()?)?;
+    frame.set("__songlua_parent", actor.clone())?;
+    actor_children(lua, &actor)?.set("", frame)?;
     let percent = create_score_display_percent_actor(lua, player_index, create_dummy_actor)?;
     percent.set("__songlua_parent", actor.clone())?;
     actor_children(lua, &actor)?.set("ScoreDisplayPercentage Percent", percent)?;
