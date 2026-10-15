@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T00:53:26Z",
+  "updated_utc": "2026-10-15T01:29:09Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 363,
+    "passed": 367,
     "pending": 109,
-    "unprocessed": 29
+    "unprocessed": 25
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -1357,9 +1357,9 @@
       "position": 149,
       "source_simfile": "Circles/Circles.ssc",
       "simfile_sha256": "ebc1974ab7c0c83af9e0255566396f6c5a3c73f4c10590f990acb1035f30b15d",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-circles-entry-clock-first-repair-v1.json"
     },
     {
       "position": 150,
@@ -3029,9 +3029,9 @@
       "position": 358,
       "source_simfile": "Pop/Pop.ssc",
       "simfile_sha256": "1d74d7d3fea33b0ac6eb7c4e19b3035f1aa65b7feefb86c16fb5229a3b728ff7",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-pop-player-position-first-repair-v1.json"
     },
     {
       "position": 359,
@@ -3761,7 +3761,9 @@
       "position": 451,
       "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
       "simfile_sha256": "67cfeadc69cdbd54c042acf83a94c9d6ecc0b973c66d4658f3ead831395b2901",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 452,
@@ -3912,8 +3914,8 @@
       "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
       "simfile_sha256": "3d4d8467ebbbd92076d67f661822eead8387f4c7e05fd5fb4bdf5ec3b3d5db4e",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-what-if-dynamic-command-first-repair-v1.json"
     },
     {
       "position": 473,
@@ -4027,7 +4029,9 @@
       "position": 488,
       "source_simfile": "Collaboration with Paul J Kim/Something.sm",
       "simfile_sha256": "6dbe100f3f622fb59e684b7f0953f4fe7b448deec1821630c68235437d326fb3",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 489,
@@ -4069,7 +4073,9 @@
       "position": 494,
       "source_simfile": "Lots of Spices - [tari]/spices.ssc",
       "simfile_sha256": "2fb744ee8811e3a6080df50173756ef648d02ae9aee46a52b6e514bf2d4544f9",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 495,
@@ -4081,7 +4087,9 @@
       "position": 496,
       "source_simfile": "Metronogik/Song.ssc",
       "simfile_sha256": "b47ec860275040252ac437d921d2c8b04338a126a65f0fd84fee2494781d4808",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 497,

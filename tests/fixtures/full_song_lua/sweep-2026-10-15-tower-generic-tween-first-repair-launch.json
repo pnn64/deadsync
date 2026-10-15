@@ -1,0 +1,12 @@
+{
+  "pid": 1976773,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_tower_generic_tween_first_repair_v1.py"
+  ],
+  "repair_attempt": 1,
+  "maximum_full_repairs": 2,
+  "native_capture_reused": true,
+  "binary_sha256": "3e7c6a5edbb2df015cb15f6deaa2a8c73d729123e8a30e8a9105a07d501a04eb",
+  "fix_commit": "db721070909353b343cdf3a2b85ba90da700a99f"
+}

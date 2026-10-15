@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T00:53:26Z",
-  "previous_goal_turn": "Progress: iLLness LiLin first repair passes43,546 frames; Ascendanz original passes80,260; Rayc Fire2 SSC original passes103,991; Toho Mathematics original passes107,886. All zero errors/mismatches under unchanged full acceptance, compressed fixtures saved, decompressed bytes verified and committed; charts closed. Original partition1 complete and other original supervisors continue. Player clock fix4b07d505988e43dabb14441f0a3c6696d0e06009 now passes all six checks on Windows/Linux target1/parser10/live70/replay33/identity1/both builds; all1,175 raw/crossplatform source pins and six log hashes verified. Private helperc25c88cc selected for diagnosed Pop first full repair, original complete capture reused; replay live, one later maximum. Native dynamic addcommand observer f90b49d48d023977b5e67196700c027d6752484f fixes actual What If208,244 query mismatches: Init installs On/Ready via Actor.addcommand; old observer does not retain dispatch context, so later SetUpdateFunction loses callback phase. Complete native baseline reused: Ready begin/end0,1324 visible calls construction, native5946 frames committed. Fixed complete native control: Ready begin/end1,1356 visible calls callback with authored boolean pairs preserved,6011 native frames committed; frame totals vary normally per capture. First reader assumed absent errors field and failed; corrected to inspect actual error events, failure preserved, baseline capture reused with old CLI exit null. Both harness runtime12 and Linux build pass; all2223 raw/crossplatform pins/logs/helper e067360d verified. What If first corrected native capture running, original complete archive retained; no acceptance criteria altered, one later repair maximum. Circles first retained-capture repair remains live. Koi/Rite reporting restored, Koi final2 verified live; no replay restarted. New actual Tower Power Pokey failure traced to missing general Actor.tween API, with numeric0 Linear and native Bezier4/8 forms; source diagnosis saved, zero repair attempts spent, retained native capture. Young Dumb And Broke capture timed out900s with native movie playback log retained; pending. Global original sweep helper711a5230 unchanged, helper56714 and newc25 remain private to diagnosed repairs. All501 original simfile bytes unchanged; missing coverage separate; oversized files remain ignored/local; active incomplete sweep.",
+  "updated_utc": "2026-10-15T01:29:09Z",
+  "previous_goal_turn": "Progress: Pop first selected-player-clock repair passes81,313 frames; Circles first entry-clock repair passes112,467; Lots of Spices original passes72,251; Collaboration with Paul J Kim original passes35,222. Full errors/mismatches zero, compressed fixtures saved and local decompressed bytes verified/committed, charts closed. Actor.tween actual Tower failure reproduced by two meaningful regressions on Windows/Linux; native compiled Actor/ITween argument controls and6 curve probes independently verified, including scalar4 and2D8 Bezier controls with nonstandard endpoints/overshoot. First implementation passed curve regression but hurry contract failed both hosts, exposing legacy reciprocal scale and missing live queue update. Native Actor::HurryTweening and Lua assertions prove duration/remaining multiply by factor, zero collapses, negative errors, hibernation unchanged; ActorFrame source propagates to children. Fixdb721070909353b343cdf3a2b85ba90da700a99f implements general native tween and correct hurry over owned live/compile/spin queues/children; wrong legacy capture-unit expected values corrected to native multiplication. Both hosts now pass all8 checks target2/hurry-capture1/gameplay-easing1/parser10/live72/replay33/identity1/both builds. All1,175 raw/crossplatform source pins and8 log hashes verified; private helper3e7c6a5e selected and Tower first full repair launched on retained original complete capture; one later maximum. No full acceptance comparator changed. Losslessly reclaimed2,540,158,976 allocated bytes from6 closed passing candidate/report duplicates only, accepted archive/report decompressed SHA verified, no chart replayed. What If first dynamic observer repair completes47,002 frames errors0,216,192 query mismatches; native216209 versus owned216205 events. Actual source run_guarded_actor_command deliberately suppresses dynamic On/Ready trace boundaries for older observer compatibility; corrected native observer now emits4 spans and owned initial queries still phaseconstruction. Exact source/first failures recorded, final2 not started; reuse completed corrected capture and fix observation profile without injecting expected events or changing comparison keys. Original U.N. Owen SM has13 missing late-assigned root On mismatches, same authored Lua/source and proven late-assignment defect as closed SSC; first SM corrected-observer capture launched on validated c25 helper/ca0 harness, old complete capture retained. Original workers continue, global original helper711a5230 unchanged. All501 original simfile bytes unchanged; missing coverage separate, oversized archives ignored/local, sweep active/incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "9ebd2b7c2d652aa28347ef23d166ad5ce038040d",
+      "deadsync": "3c68a33eb5cf068a04389266ee0f94843e6fc612",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -142,18 +142,18 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
-      "position": 451,
+      "current": "Vector Field/Vector Field.ssc",
+      "position": 459,
       "phase": "replay",
-      "pid": 1760474,
+      "pid": 1898852,
       "process_matches": true,
       "passed": 39,
-      "pending": 64,
-      "processed": 103,
+      "pending": 65,
+      "processed": 104,
       "last_log_lines": [
-        "[148.0s] replaying every native gameplay frame: frame 7913/66155 (12.0%)",
-        "[150.0s] replaying every native gameplay frame: frame 8023/66155 (12.1%)",
-        "[152.0s] replaying every native gameplay frame: frame 8134/66155 (12.3%)"
+        "[890.3s] replaying every native gameplay frame: frame 46235/68688 (67.3%)",
+        "[892.3s] replaying every native gameplay frame: frame 46337/68688 (67.5%)",
+        "[894.3s] replaying every native gameplay frame: frame 46439/68688 (67.6%)"
       ],
       "supervisor_running": true
     },
@@ -1949,6 +1949,20 @@
         "record": "sweep-2026-10-15-what-if-dynamic-command-first-repair-v1.json",
         "fix_commit": "4b07d505988e43dabb14441f0a3c6696d0e06009 / harness f90b49d",
         "finish_status": "bounded first dynamic native command observer repair complete; original complete capture retained"
+      },
+      {
+        "name": "tower-generic-tween-first-repair-v1",
+        "remote": "/home/parity/jobs/tower-generic-tween-first-repair-v1",
+        "record": "sweep-2026-10-15-tower-generic-tween-first-repair-v1.json",
+        "fix_commit": "db721070909353b343cdf3a2b85ba90da700a99f",
+        "finish_status": "bounded first native generic tween/hurry repair complete; original complete capture reused"
+      },
+      {
+        "name": "un-owen-sm-late-command-first-repair-v1",
+        "remote": "/home/parity/jobs/un-owen-sm-late-command-first-repair-v1",
+        "record": "sweep-2026-10-15-un-owen-sm-late-command-first-repair-v1.json",
+        "fix_commit": "4b07d505988e43dabb14441f0a3c6696d0e06009 / harness ca0b435",
+        "finish_status": "bounded first late-assigned native command observer repair complete; original complete capture retained"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -1956,32 +1970,55 @@
     "other_jobs_live_observation": {
       "initial_sweep": {
         "status": "running",
-        "current": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
-        "position": 451,
+        "current": "Vector Field/Vector Field.ssc",
+        "position": 459,
         "phase": "replay",
-        "pid": 1760474,
+        "pid": 1898852,
         "process_matches": true,
         "passed": 39,
-        "pending": 64,
-        "processed": 103,
+        "pending": 65,
+        "processed": 104,
         "last_log_lines": [
-          "[148.0s] replaying every native gameplay frame: frame 7913/66155 (12.0%)",
-          "[150.0s] replaying every native gameplay frame: frame 8023/66155 (12.1%)",
-          "[152.0s] replaying every native gameplay frame: frame 8134/66155 (12.3%)"
+          "[890.3s] replaying every native gameplay frame: frame 46235/68688 (67.3%)",
+          "[892.3s] replaying every native gameplay frame: frame 46337/68688 (67.5%)",
+          "[894.3s] replaying every native gameplay frame: frame 46439/68688 (67.6%)"
         ],
         "supervisor_running": true
       },
       "jobs": [
         {
-          "job": "what-if-dynamic-command-first-repair-v1",
+          "job": "un-owen-sm-late-command-first-repair-v1",
           "complete": false,
           "supervisor_running": true,
           "passed": 0,
           "pending": 0,
           "processed": 0,
-          "last_phase": "capture",
-          "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+          "last_phase": "replay",
+          "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
           "child_running": true,
+          "position": 451
+        },
+        {
+          "job": "tower-generic-tween-first-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
+          "child_running": true
+        },
+        {
+          "job": "what-if-dynamic-command-first-repair-v1",
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 0,
+          "pending": 1,
+          "processed": 1,
+          "last_phase": "replay",
+          "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+          "child_running": false,
           "position": 472
         },
         {
@@ -2005,14 +2042,14 @@
         },
         {
           "job": "pop-player-position-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "Pop/Pop.ssc",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "illness-lilin-entry-clock-first-repair-v1",
@@ -2027,14 +2064,14 @@
         },
         {
           "job": "circles-entry-clock-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "Circles/Circles.ssc",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "retrospective-background-effect-first-repair-v1",
@@ -2148,14 +2185,14 @@
         },
         {
           "job": "chart-sweep-parallel-v5-3",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 9,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 10,
           "pending": 9,
-          "processed": 18,
-          "last_phase": "replay",
+          "processed": 19,
+          "last_phase": "pack",
           "source_simfile": "Lots of Spices - [tari]/spices.ssc",
-          "child_running": true,
+          "child_running": false,
           "position": 494
         },
         {
@@ -2172,15 +2209,15 @@
         },
         {
           "job": "chart-sweep-parallel-v5-5",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 9,
-          "pending": 8,
-          "processed": 17,
-          "last_phase": "replay",
-          "source_simfile": "Collaboration with Paul J Kim/Something.sm",
-          "child_running": true,
-          "position": 488
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 10,
+          "pending": 9,
+          "processed": 19,
+          "last_phase": "capture",
+          "source_simfile": "Metronogik/Song.ssc",
+          "child_running": false,
+          "position": 496
         },
         {
           "job": "chart-sweep-parallel-v5-6",
@@ -3056,7 +3093,7 @@
           "passed": 27,
           "pending": 33,
           "processed": 60,
-          "last_phase": "candidate",
+          "last_phase": "replay",
           "source_simfile": "Ultimate taste/Ultimate taste.ssc",
           "child_running": true,
           "position": 453
@@ -3185,7 +3222,7 @@
     "selected_replay_binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 133,
+    "publisher_stream_count": 135,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -3569,7 +3606,11 @@
       "illness_lilin_status": "passed",
       "illness_lilin_passing_chart_closed": true,
       "illness_lilin_further_replay_allowed": false,
-      "illness_lilin_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-illness-lilin-fixture-verification.json"
+      "illness_lilin_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-illness-lilin-fixture-verification.json",
+      "circles_status": "passed",
+      "circles_passing_chart_closed": true,
+      "circles_further_replay_allowed": false,
+      "circles_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-circles-fixture-verification.json"
     },
     "pop_player_clock": {
       "diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-pop-player-position-diagnosis.json",
@@ -3594,10 +3635,14 @@
       "all_1175_raw_and_normalized_source_pins_verified": true,
       "helper_private_to_diagnosed_repairs": true,
       "binary_sha256": "c25c88cc0b02b3e8fe7466d39632080821972ee363cbfc66aa9b8e139063e4d1",
-      "first_full_repair_running": true,
+      "first_full_repair_running": false,
       "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-player-song-position-linux-validation.json",
       "windows_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-player-song-position-windows-validation.json",
-      "first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-pop-player-position-first-repair-launch.json"
+      "first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-pop-player-position-first-repair-launch.json",
+      "status": "passed",
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-pop-fixture-verification.json"
     },
     "who_edgar_closed": {
       "status": "passed",
@@ -3633,16 +3678,58 @@
       "what_if_full_repairs_spent": 1,
       "what_if_one_later_repair_maximum": true,
       "original_complete_capture_retained": true,
-      "original_global_capture_selection_unchanged": true
+      "original_global_capture_selection_unchanged": true,
+      "what_if_first_repair_status": "pending",
+      "what_if_final_attempt_not_started": true,
+      "what_if_followup": "tests/fixtures/full_song_lua/sweep-2026-10-15-what-if-first-repair-followup.json"
     },
-    "tower_generic_tween_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-tower-pokey-generic-tween-diagnosis.json"
+    "tower_generic_tween_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-tower-pokey-generic-tween-diagnosis.json",
+    "additional_original_passes_closed": {
+      "lots_spices": {
+        "native_frames": 72251,
+        "verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-lots-spices-fixture-verification.json"
+      },
+      "paul_j_kim": {
+        "native_frames": 35222,
+        "verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-paul-j-kim-fixture-verification.json"
+      }
+    },
+    "generic_tween_work": {
+      "fix_commit": "db721070909353b343cdf3a2b85ba90da700a99f",
+      "both_host_eight_checks_passed": true,
+      "all_1175_raw_and_normalized_source_pins_verified": true,
+      "binary_sha256": "3e7c6a5edbb2df015cb15f6deaa2a8c73d729123e8a30e8a9105a07d501a04eb",
+      "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-generic-tween-linux-validation.json",
+      "windows_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-generic-tween-windows-validation.json",
+      "native_controls": "tests/fixtures/full_song_lua/sweep-2026-10-15-generic-tween-native-controls.json",
+      "native_hurry_followup": "tests/fixtures/full_song_lua/sweep-2026-10-15-native-hurry-followup.json",
+      "tower_first_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-tower-generic-tween-first-repair-launch.json",
+      "tower_full_repairs_spent": 1,
+      "tower_one_later_full_repair_maximum": true,
+      "native_capture_reused": true,
+      "global_original_sweep_selection_unchanged": true
+    },
+    "closed_fixture_storage_v2": {
+      "receipt": "tests/fixtures/full_song_lua/sweep-2026-10-15-closed-fixture-storage-v2.json",
+      "closed_charts": 6,
+      "reclaimed_allocated_bytes": 2540158976,
+      "all_decompressed_bytes_verified": true,
+      "passing_charts_replayed": false
+    },
+    "un_owen_sm_first_repair": {
+      "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-un-owen-sm-first-repair-launch.json",
+      "full_repairs_spent": 1,
+      "one_later_full_repair_maximum": true,
+      "old_complete_capture_retained": true,
+      "new_capture_required_by_proven_observer_gap": true
+    }
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 216,
+    "new_passed_fixtures": 220,
     "new_pending_charts": 108,
-    "new_processed_sources": 324,
+    "new_processed_sources": 328,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 29,
+    "unprocessed_sources": 25,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -3658,65 +3745,6 @@
   ],
   "additional_source_binding": "tests/fixtures/full_song_lua/sweep-2026-10-12-addition-source-binding.json",
   "pending_replay_failures": [
-    {
-      "source_simfile": "Circles/Circles.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 1,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "external-0033",
-            "args": [
-              false
-            ],
-            "beat": 0.0009795725345611572,
-            "caller": {
-              "line": 112,
-              "source": "song:/lua/default.lua",
-              "tail_call": false
-            },
-            "command": "OnCommand",
-            "definition_id": "def-0018",
-            "detail": {
-              "native_tween_time_left": 6.409533977508545
-            },
-            "kind": "call",
-            "line": 112,
-            "operation": "Actor.visible",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 0.13448978960514069,
-            "seq": 25,
-            "source": "song:/lua/default.lua",
-            "tween_time_left": 6.409533977508545
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.visible",
-            "source": "song:/lua/default.lua",
-            "line": 112,
-            "phase": "callback",
-            "beat": 0.0009795725345611572,
-            "seconds": 0.13448978960514069,
-            "args": [
-              false
-            ],
-            "results": [
-              {
-                "actor": "0x620589e108a0",
-                "name": "Underlay",
-                "path": "ScreenGameplay/Underlay"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        }
-      ]
-    },
     {
       "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
       "repair_attempts": 0,
@@ -5034,20 +5062,6 @@
       "first_mismatch": []
     },
     {
-      "source_simfile": "Pop/Pop.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 2,
-      "first_mismatch": [
-        {
-          "field": "command_query_count",
-          "native": 10,
-          "deadsync": 7
-        }
-      ]
-    },
-    {
       "source_simfile": "Quarantine/Quarantine.sm",
       "repair_attempts": 0,
       "failure": null,
@@ -5797,6 +5811,20 @@
       ]
     },
     {
+      "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 13,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 12,
+          "deadsync": 14
+        }
+      ]
+    },
+    {
       "source_simfile": "Velvet LEFTS 1/chart.ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-1256551-1792020219622826275-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1256551-1792020219622826275-0\n",
@@ -5822,58 +5850,15 @@
     },
     {
       "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
-      "repair_attempts": 0,
+      "repair_attempts": 1,
       "failure": null,
       "errors": [],
-      "mismatch_count": 208244,
+      "mismatch_count": 216192,
       "first_mismatch": [
         {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0001",
-            "args": [
-              false
-            ],
-            "beat": -4.430908203125,
-            "caller": {
-              "line": 1126,
-              "source": "song:/template/template.lua",
-              "tail_call": false
-            },
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 1126,
-            "operation": "Actor.visible",
-            "phase": "construction",
-            "scene": 1,
-            "seconds": -1.9012925624847412,
-            "seq": 57,
-            "source": "song:/template/template.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.visible",
-            "source": "song:/template/template.lua",
-            "line": 1126,
-            "phase": "callback",
-            "beat": -4.430908203125,
-            "seconds": -1.9012925624847412,
-            "args": [
-              false
-            ],
-            "results": [
-              {
-                "actor": "0x6213d5ac70a0",
-                "name": "",
-                "path": "ScreenGameplay/SongForeground/template/main.lua"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
+          "field": "command_query_count",
+          "native": 216209,
+          "deadsync": 216205
         }
       ]
     },
@@ -5996,6 +5981,14 @@
       "source_simfile": "james/james.ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1468866-1792022466740688095-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1468866-1792022466740688095-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Metronogik/Song.ssc",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1861772-1792026485413807569-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1861772-1792026485413807569-0\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
