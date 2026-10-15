@@ -1,0 +1,35 @@
+{
+  "initial_green_v1_failed_both_hosts": true,
+  "cause": "Regression incorrectly searched tostring(Quad) for Quad. Native Quad inherits Sprite and uses the public Sprite Lua class. The production direct Quad correctly rejected this test assumption.",
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 331.8431691000005,
+      "log_sha256": "acff8f1d9ca3c5b64af8dfab1caa2017c37e5a41e552e9013e9beaea141fefdf",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 628 filtered out; finished in 0.22s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 254.1693494860083,
+      "log_sha256": "dbee92efa9b910d8a254a3db90af8fc264e25acaf1ad741a1d6febc671d9c70a",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 626 filtered out; finished in 0.15s"
+      ]
+    }
+  ],
+  "primary_native_source": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Quad.h",
+  "primary_native_source_sha256": "d583a565dcaa30859dad1f04805d50d8b36338fb768544f6837fc9d6499eed84",
+  "owned_public_class_mapping": "actor_classes.rs: Sprite | Quad => Sprite",
+  "corrected_regression_change": "Only the expected public Lua class changed from Quad to Sprite; all hierarchy, identity, dimensions, color, command and lifecycle assertions are retained.",
+  "production_lua_util_and_compat_bytes_identical_green_v1_v2": true,
+  "corrected_red_v2_required_both_hosts_before_claiming_green": true,
+  "existing_transition_and_replay_controls_changed": false,
+  "full_chart_repairs_spent": 0,
+  "native_captures_changed": false
+}
