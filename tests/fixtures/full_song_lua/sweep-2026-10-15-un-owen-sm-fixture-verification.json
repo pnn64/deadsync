@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
+  "native_frames": 67636,
+  "replayed_frames": 67636,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "7ef4e282788a8cbe9f7f6d7214e036a1c1e23f72aa84da1b913853f304ee9531.tar.zst",
+  "compressed_sha256": "7ef4e282788a8cbe9f7f6d7214e036a1c1e23f72aa84da1b913853f304ee9531",
+  "uncompressed_sha256": "2c4ff29756413b1b84c66ba3c92372ba5abd86a08bfdf96f4ee8c8ed1cd0b956",
+  "compressed_bytes": 4716546,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
