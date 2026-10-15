@@ -5523,15 +5523,12 @@
     {
       "title": "Wobbpotato",
       "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
-      "harness_version": "0.1.0",
-      "archive": "f4249fbbe615707be08caf70a3937635a22a24800cf7c29e7968fa62cc7f7b9d.tar.zst",
-      "sha256": "f4249fbbe615707be08caf70a3937635a22a24800cf7c29e7968fa62cc7f7b9d",
-      "compressed_bytes": 38119,
-      "uncompressed_sha256": "a89db4c370f921e4bb9799d4204f6c426e10006741b14b90cf59ec9ddd6986e0",
-      "compression_level": 22,
-      "aliases": [
-        "aaade10bfdc3f5052899bcf0e291fe04851d57c3829a2dbfbc7559ae6923a290.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "07341d3d29285f3066284d00fcf4956eec0ae486ab01bf0b317be91edbda7c1b.tar.zst",
+      "sha256": "07341d3d29285f3066284d00fcf4956eec0ae486ab01bf0b317be91edbda7c1b",
+      "compressed_bytes": 4334607,
+      "uncompressed_sha256": "8988758df161a64fe92831476b38d15d6208ed2ca080032f20cb8b538cfb8c69",
+      "aliases": []
     },
     {
       "title": "Wop",
