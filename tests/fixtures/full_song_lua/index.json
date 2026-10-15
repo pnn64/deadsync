@@ -2488,17 +2488,14 @@
       ]
     },
     {
-      "title": "Episode 14",
+      "title": "Episode 14 Freaky Deaky",
       "source_simfile": "Freaky Deaky/Freaky Deaky.ssc",
-      "harness_version": "0.1.0",
-      "archive": "466bea20b3ff26443e8589d23769d2f9feacb6644f9de541c90f372cc5c3e4f5.tar.zst",
-      "sha256": "466bea20b3ff26443e8589d23769d2f9feacb6644f9de541c90f372cc5c3e4f5",
-      "compressed_bytes": 68732,
-      "uncompressed_sha256": "b4d3a757850bca267d86d361a1a200e73a1ff89e1b9115726babd8bff681b622",
-      "compression_level": 22,
-      "aliases": [
-        "18148b2c24857ba1d94790177b17d909afcfe441af3c03529ddf6d5e167d6ba1.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "7877aeae9f55324f811c58d880d3353b5139773fd47af86379b8d683ca79f613.tar.zst",
+      "sha256": "7877aeae9f55324f811c58d880d3353b5139773fd47af86379b8d683ca79f613",
+      "compressed_bytes": 10405094,
+      "uncompressed_sha256": "151419920e60050f03cd22090fc7b414d9425b624be97d669ea5cd227d5fd9c9",
+      "aliases": []
     },
     {
       "title": "freg.",
