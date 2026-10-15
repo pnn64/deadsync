@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T02:24:54Z",
-  "previous_goal_turn": "Progress: Tower Power Pokey Battle first generic-tween repair passes105,094 complete native frames with0callback errors/0mismatches. Fixture compressed, saved, decompressed SHA verified and committed; passing chart closed. Ztar Trek original full replay passes69,378 frames with0errors/0mismatches, saved/decompressed SHA verified/committed and closed; original queue continues to james. What If final second observation-profile repair passes47,002 frames with0errors/0mismatches on byte-identical retained capture; compressed saved fixture and verified local decompressed bytes, chart closed with2attempts and no further replay; Circles SM first repair and original queues remain live without restart. Wobbpotato Blue Shift original fails preparation after complete74,561-frame capture: Challenge difficulty bypasses Edit-only mods and returns an untyped table. Owned root had no visible method; local ActorUtil::LoadFromNode returns new Actor without loading properties, commands or children. Independently captured native control completes7,069 frames, proves dummy foreground/child fallback, discarded fields/commands/children, preserved construction side effects;0Lua errors and final assertion marker observed. Two meaningful red regressions reproduce missing visible and erroneously executed child on both hosts; all1175raw Linux and normalized cross-platform red source pins verified. Fixe8daaa0862dfde8af1096b62e92246b175d30f10 materializes native dummy Actor for classless live declarations; targeted tests pass2 on both hosts, all eight checks pass on both hosts; source/log/binary hashes verified. Egg Carton Wobbpotato has the same actual failure, byte-identical default.lua and native Challenge branch; complete78,636-frame capture verified and separate first repair queued. Both Wobbpotato first full repairs launched after all8checks on both hosts, all1175raw/normalized pins and immutable binary/log verification; original candidate/trace/simfile bytes verified and reused,1full repair spent each, one later maximum each. No comparison key/tolerance/acceptance changed. Global original helper711a5230 unchanged. All501 original simfile bytes unchanged, coverage separate, oversized fixtures ignored/local, sweep active/incomplete.",
+  "updated_utc": "2026-10-15T02:42:40Z",
+  "previous_goal_turn": "Progress: Gone and both Freaky Deaky original failures diagnosed against native Foreground::LoadFromSong and ActorFrame::PushChildrenTable plus already-committed fixes469d6157b (raw authored foreground chunk source spelling) and7960c8a1e (native gameplay screen child inventory/traversal). Current immutable helper60a12cf2 has all8checks passed on both hosts and all1175raw/normalized source pins verified. Complete original captures reused unchanged; clean diagnostics: Gone5,805/125,586 frames, Freaky SM2,833/126,098, SSC2,674/109,088, all0errors/0mismatches. Diagnostic CLI exits2 because partial scopes cannot accept archives; queuev1 incorrectly expected0, failures preserved, v2 guards corrected without altering CLI/comparators and no full attempts spent by failed queues. All3 first full repairs launched on exact original captures,1attempt each, one later maximum. Seventeen untouched original charts queued behind long Spectrum and Ultimate taste replays transferred to2additional workers. Exact original replay PIDs139882/1776250, start ticks, argv, cwd, candidate/member bytes retained; live children never signaled or restarted. Only old parent supervisors stopped; v6 collectors retain kernel exit-status collection and terminate those stopped parents after children complete. New collectors2394974/2394975 supervise existing runs; new original workers2395452/2395456 already captured Stay Alive415 and Tacos423 and are replaying them, remaining17future positions uniquely assigned. All21previous unprocessed positions accounted for, original global helper711a5230/source/harness selection unchanged, new assignment/source digest and pre-handoff metadata saved. James SM original capture times out after900sec, no complete native trace, recorded pending without a full repair. Other live repairs continue without restart. All501original simfile bytes unchanged, pending coverage separate, oversized fixtures ignored/local, sweep active/incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "8968fe0305a8f7054f0bd331057f77c428243b25",
+      "deadsync": "964f7a6e516748f5570821a362442ecbad6ee0aa",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -142,15 +142,19 @@
     "job": "/home/parity/jobs/chart-sweep-20261012-v2",
     "live_observation": {
       "status": "running",
-      "current": "james/james.sm",
-      "position": 491,
-      "phase": "capture",
-      "pid": 2322339,
+      "current": "Rayc Fire 2/Rayc Fire 2.sm",
+      "position": 499,
+      "phase": "replay",
+      "pid": 2405749,
       "process_matches": true,
       "passed": 42,
-      "pending": 66,
-      "processed": 108,
-      "last_log_lines": [],
+      "pending": 67,
+      "processed": 109,
+      "last_log_lines": [
+        "[112.2s] replaying every native gameplay frame: frame 5362/76482 (7.0%)",
+        "[114.2s] replaying every native gameplay frame: frame 5436/76482 (7.1%)",
+        "[116.2s] replaying every native gameplay frame: frame 5498/76482 (7.2%)"
+      ],
       "supervisor_running": true
     },
     "poll_command": "ssh parity@192.168.1.33 python3 /home/parity/jobs/poll_chart_sweep_v1.py",
@@ -1987,6 +1991,41 @@
         "record": "sweep-2026-10-15-wobbpotato-egg-carton-untyped-actor-first-repair-v1.json",
         "fix_commit": "e8daaa0862dfde8af1096b62e92246b175d30f10",
         "finish_status": "bounded first native dummy Actor fallback repair complete; original Egg Carton capture reused; one later full repair maximum"
+      },
+      {
+        "name": "gone-source-path-first-repair-v1",
+        "remote": "/home/parity/jobs/gone-source-path-first-repair-v1",
+        "record": "sweep-2026-10-15-gone-source-path-first-repair-v1.json",
+        "fix_commit": "e8daaa0862dfde8af1096b62e92246b175d30f10; source-specific fix pinned in result",
+        "finish_status": "bounded first repair complete; original full native capture reused and one later full repair maximum"
+      },
+      {
+        "name": "freaky-deaky-sm-screen-children-first-repair-v1",
+        "remote": "/home/parity/jobs/freaky-deaky-sm-screen-children-first-repair-v1",
+        "record": "sweep-2026-10-15-freaky-deaky-sm-screen-children-first-repair-v1.json",
+        "fix_commit": "e8daaa0862dfde8af1096b62e92246b175d30f10; source-specific fix pinned in result",
+        "finish_status": "bounded first repair complete; original full native capture reused and one later full repair maximum"
+      },
+      {
+        "name": "freaky-deaky-ssc-screen-children-first-repair-v1",
+        "remote": "/home/parity/jobs/freaky-deaky-ssc-screen-children-first-repair-v1",
+        "record": "sweep-2026-10-15-freaky-deaky-ssc-screen-children-first-repair-v1.json",
+        "fix_commit": "e8daaa0862dfde8af1096b62e92246b175d30f10; source-specific fix pinned in result",
+        "finish_status": "bounded first repair complete; original full native capture reused and one later full repair maximum"
+      },
+      {
+        "name": "chart-sweep-parallel-v6-1",
+        "remote": "/home/parity/jobs/chart-sweep-parallel-v6-1",
+        "record": "sweep-2026-10-15-chart-sweep-parallel-v6-1.json",
+        "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+        "finish_status": "original queued chart transfer v6 complete; full acceptance unchanged; original long replays retained"
+      },
+      {
+        "name": "chart-sweep-parallel-v6-2",
+        "remote": "/home/parity/jobs/chart-sweep-parallel-v6-2",
+        "record": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json",
+        "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+        "finish_status": "original queued chart transfer v6 complete; full acceptance unchanged; original long replays retained"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -1994,18 +2033,79 @@
     "other_jobs_live_observation": {
       "initial_sweep": {
         "status": "running",
-        "current": "james/james.sm",
-        "position": 491,
-        "phase": "capture",
-        "pid": 2322339,
+        "current": "Rayc Fire 2/Rayc Fire 2.sm",
+        "position": 499,
+        "phase": "replay",
+        "pid": 2405749,
         "process_matches": true,
         "passed": 42,
-        "pending": 66,
-        "processed": 108,
-        "last_log_lines": [],
+        "pending": 67,
+        "processed": 109,
+        "last_log_lines": [
+          "[112.2s] replaying every native gameplay frame: frame 5362/76482 (7.0%)",
+          "[114.2s] replaying every native gameplay frame: frame 5436/76482 (7.1%)",
+          "[116.2s] replaying every native gameplay frame: frame 5498/76482 (7.2%)"
+        ],
         "supervisor_running": true
       },
       "jobs": [
+        {
+          "job": "chart-sweep-parallel-v6-1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "Stay Alive/Stay Alive.ssc",
+          "child_running": true,
+          "position": 415
+        },
+        {
+          "job": "chart-sweep-parallel-v6-2",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "Tacos/Tacos.ssc",
+          "child_running": true,
+          "position": 423
+        },
+        {
+          "job": "gone-source-path-first-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "gone_KidFresino/song.ssc",
+          "child_running": true
+        },
+        {
+          "job": "freaky-deaky-sm-screen-children-first-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "Freaky Deaky/Freaky Deaky.sm",
+          "child_running": true
+        },
+        {
+          "job": "freaky-deaky-ssc-screen-children-first-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "Freaky Deaky/Freaky Deaky.ssc",
+          "child_running": true
+        },
         {
           "job": "wobbpotato-egg-carton-untyped-actor-first-repair-v1",
           "complete": false,
@@ -3286,7 +3386,7 @@
     "selected_replay_binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 139,
+    "publisher_stream_count": 144,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -3908,14 +4008,65 @@
       "passing_chart_closed": true,
       "further_replay_allowed": false,
       "full_repairs_spent": 0
+    },
+    "existing_native_fixes_first_repairs": {
+      "diagnostics": "tests/fixtures/full_song_lua/sweep-2026-10-15-gone-freaky-retained-capture-diagnostics.json",
+      "binary_sha256": "60a12cf2dec73902df89171b680e24ffbc9301bccc2147dae35a7fb0aab1ecbb",
+      "both_host_existing_eight_checks_and_1175_source_pins_verified": true,
+      "native_captures_reused": true,
+      "full_acceptance_unchanged": true,
+      "gone": {
+        "source_fix_commit": "469d6157bac4a8f5f1c519cadeeb53450608ec07",
+        "full_repairs_spent": 1,
+        "one_later_full_repair_maximum": true,
+        "first_repair_running": true,
+        "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-gone-source-path-first-repair-v1-launch.json"
+      },
+      "freaky_sm": {
+        "source_fix_commit": "7960c8a1eb9f06e1626d636229daede097ab6b5c",
+        "full_repairs_spent": 1,
+        "one_later_full_repair_maximum": true,
+        "first_repair_running": true,
+        "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-freaky-deaky-sm-screen-children-first-repair-v1-launch.json"
+      },
+      "freaky_ssc": {
+        "source_fix_commit": "7960c8a1eb9f06e1626d636229daede097ab6b5c",
+        "full_repairs_spent": 1,
+        "one_later_full_repair_maximum": true,
+        "first_repair_running": true,
+        "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-freaky-deaky-ssc-screen-children-first-repair-v1-launch.json"
+      }
+    },
+    "original_queue_transfer_v6": {
+      "evidence": "tests/fixtures/full_song_lua/sweep-2026-10-15-original-queue-handoff-v6.json",
+      "plan": "tests/fixtures/full_song_lua/sweep-2026-10-15-original-queue-transfer-v6-plan.json",
+      "untouched_originals_transferred": 17,
+      "additional_original_workers": 2,
+      "retained_original_replay_pids": [
+        139882,
+        1776250
+      ],
+      "retained_original_supervisor_pids": [
+        2394974,
+        2394975
+      ],
+      "new_original_worker_pids": [
+        2395452,
+        2395456
+      ],
+      "live_replay_processes_signaled": false,
+      "live_replays_restarted": false,
+      "all_21_original_unprocessed_positions_accounted_for_at_handoff": true,
+      "selected_global_helper_unchanged": true,
+      "original_source_bytes_unchanged": true
     }
   },
   "counts_at_checkpoint": {
     "new_passed_fixtures": 226,
-    "new_pending_charts": 106,
-    "new_processed_sources": 332,
+    "new_pending_charts": 107,
+    "new_processed_sources": 333,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 21,
+    "unprocessed_sources": 20,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -6123,6 +6274,14 @@
       "source_simfile": "Dongo Bongo/dongobongo2.ssc",
       "repair_attempts": 0,
       "failure": "replaying every native gameplay frame: 0 checks completed, 0 failed\n[1896.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1898.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1900.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1902.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1904.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1906.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1908.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1910.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1912.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1914.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1916.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1918.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1920.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1922.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1924.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1926.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1928.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1930.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1932.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1934.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1936.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1938.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1940.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1942.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1944.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1946.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1948.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1950.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1952.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1954.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1956.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1958.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1960.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1962.7s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1964.8s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1966.8s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1968.9s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1971.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1973.2s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1975.3s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1977.3s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1979.5s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1981.6s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[1983.8s] replaying every native gameplay frame: 0 checks completed, 0 failed\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "james/james.sm",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-2322339-1792030986222993216-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-2322339-1792030986222993216-0\n",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []

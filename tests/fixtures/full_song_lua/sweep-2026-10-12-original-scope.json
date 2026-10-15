@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T02:24:54Z",
+  "updated_utc": "2026-10-15T02:42:40Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -14,8 +14,8 @@
   ],
   "counts": {
     "passed": 373,
-    "pending": 107,
-    "unprocessed": 21
+    "pending": 108,
+    "unprocessed": 20
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -4061,7 +4061,9 @@
       "position": 491,
       "source_simfile": "james/james.sm",
       "simfile_sha256": "90aa95cea1b414042d77e510e78aa77392ffb72cad525a7116df2f17b7b31aaa",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-results.json"
     },
     {
       "position": 492,
