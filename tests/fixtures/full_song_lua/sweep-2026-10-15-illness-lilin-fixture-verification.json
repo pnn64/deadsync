@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "iLLness LiLin/iLLness LiLin.ssc",
+  "native_frames": 43546,
+  "replayed_frames": 43546,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "1b00bc9e88f70761ada1c12dfd37581ab79bc146b0ee774a8683a9d1de9b2669.tar.zst",
+  "compressed_sha256": "1b00bc9e88f70761ada1c12dfd37581ab79bc146b0ee774a8683a9d1de9b2669",
+  "uncompressed_sha256": "a431032570bbe464640d8e9a248df755d90222ce9a06efb4df1a7e19f72eb8cc",
+  "compressed_bytes": 11508795,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
