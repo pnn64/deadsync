@@ -213,7 +213,12 @@ impl AssetManager {
                     == matches!(image, TextureUploadImage::Yuv420(_))
             {
                 match update_upload_texture(backend, texture, image) {
-                    Ok(()) => continue,
+                    Ok(()) => {
+                        if let Some(source_size) = upload.source_size {
+                            self.texture_store.set_source_dims(handle, source_size);
+                        }
+                        continue;
+                    },
                     Err(error) => warn!(
                         "Failed to update queued GPU texture for key '{}': {error}",
                         self.texture_store.texture_key(handle)
@@ -229,6 +234,9 @@ impl AssetManager {
                         image.height(),
                     ) {
                         backend.retire_texture(old);
+                    }
+                    if let Some(source_size) = upload.source_size {
+                        self.texture_store.set_source_dims(handle, source_size);
                     }
                 }
                 Err(error) => warn!(
@@ -310,16 +318,18 @@ impl AssetManager {
         let Some(generated) = generated_texture(key) else {
             return Ok(false);
         };
+        let source_size = generated.source_size;
         let image = generated.image;
         let texture = backend.create_texture(&image, sampler.unwrap_or(generated.sampler))?;
-        // The generated registry already owns the source dimensions.
-        self.set_texture_for_key(
+        // Preserve original sizing independently of the prepared upload.
+        let handle = self.set_texture_for_key(
             backend,
             key.to_owned(),
             texture,
             image.width(),
             image.height(),
         );
+        self.texture_store.set_source_dims(handle, source_size);
         Ok(true)
     }
 }
@@ -482,6 +492,19 @@ mod tests {
         let dims = assets.texture_context().bind_texture(key).expect("startup binding").dimensions.expect("source");
         assert_eq!((dims.w, dims.h), (3, 2));
         assert_eq!(software_image(&assets, key).as_raw(), &std::fs::read(root.join("tiny.rgba")).expect("native pixels"));
+
+        let key = "prepared-generated-native-blank.png";
+        crate::register_prepared_generated_texture(key, blank_rgba(8, 8), [4, 2], SamplerDesc::default());
+        assert!(assets.load_generated_texture(&mut backend, key, None).expect("prepared memory bitmap"));
+        let dims = assets.texture_context().bind_texture(key).unwrap().dimensions.unwrap();
+        assert_eq!((dims.w, dims.h), (4, 2));
+        assert_eq!(software_image(&assets, key).dimensions(), (8, 8));
+        crate::register_prepared_generated_texture(key, blank_rgba(16, 8), [3, 2], SamplerDesc::default());
+        assets.queue_pending_generated_textures();
+        assets.drain_texture_uploads(&mut backend, TextureUploadBudget { max_uploads: usize::MAX, max_bytes: usize::MAX });
+        let dims = assets.texture_context().bind_texture(key).unwrap().dimensions.unwrap();
+        assert_eq!((dims.w, dims.h), (3, 2));
+        assert_eq!(software_image(&assets, key).dimensions(), (16, 8));
 
         let budget = TextureUploadBudget {
             max_uploads: 1,

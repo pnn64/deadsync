@@ -1,0 +1,265 @@
+{
+  "all_twenty_three_checks_passed": true,
+  "all_1175_normalized_source_pins_and_all_log_hashes_verified": true,
+  "red_missing_oni_game_over_bitmap_reproduced": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 325.8115456000087,
+      "log_sha256": "2ff71852e37f43b0313699885ad13f1c72ebc929eb26c140e9b723ea8bffd117",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 621 filtered out; finished in 0.23s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\target-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "canonical-handles-control",
+      "exit_code": 0,
+      "seconds": 49.521650700000464,
+      "log_sha256": "1ac15253c419b2a4e651349eb94a33ba61d23e525ba5a0d46326c5a79f4b343b",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 621 filtered out; finished in 47.98s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\canonical-handles-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "quad-texture-control",
+      "exit_code": 0,
+      "seconds": 1.9621176999935415,
+      "log_sha256": "0e19a10f9edc4d235d8fc2a7b1e8ffdff9b6ef4d92baff02721e28f191de3c31",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 621 filtered out; finished in 0.45s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\quad-texture-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "cancel-child-control",
+      "exit_code": 0,
+      "seconds": 1.701876999999513,
+      "log_sha256": "510fe147d0823d30c9811b574fbc91607badffd11a52e26973edc6a12b19d008",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 621 filtered out; finished in 0.30s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\cancel-child-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "registry-handles-control",
+      "exit_code": 0,
+      "seconds": 1.5062440000037896,
+      "log_sha256": "b326caec08fbacaa35cee2e857621ad2f0e840f35a109886ed869edb0355849a",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 621 filtered out; finished in 0.07s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\registry-handles-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "mine-boundary-control",
+      "exit_code": 0,
+      "seconds": 144.65228050001315,
+      "log_sha256": "5fff1728a279b8a3dc453637212264a013a93c7062c14dc7c5efd3ea98afee9b",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 336 filtered out; finished in 21.33s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\mine-boundary-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 1.8513307999965036,
+      "log_sha256": "8a0392ca77c579b0a86757dc94b52d0b050eab87d92c554c70aafa57d26fad20",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 621 filtered out; finished in 0.22s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\hurry-capture-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 1.1068919000099413,
+      "log_sha256": "e318e0662b47be7337e4dd3bc29cb85e2dad1965b5dab8e378b21fcad781f4a2",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\gameplay-easing-controls.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.4356877999962308,
+      "log_sha256": "13c562a27933b7279bbd57ac2053009a83b3adab0da5ee17742974d8d4d8a202",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 612 filtered out; finished in 0.00s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\parser-controls.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 61.27478849999898,
+      "log_sha256": "ff02a3350661fd6bc0987d894dcd90079c7f6cab9d26db3ec6a58eb8e57d81bc",
+      "results": [
+        "test result: ok. 83 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 59.82s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\live-controls.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 50.35136449999118,
+      "log_sha256": "4e7951a785521142787703beac676e84833c1454305b0cdb980c72fbd251b709",
+      "results": [
+        "test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 22.72s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\replay-controls.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "sm-compatibility-control",
+      "exit_code": 0,
+      "seconds": 3.3600442000024486,
+      "log_sha256": "e1ddc7283c473a7dd53885715ac959826ecfc493274d8b86598b19f3bb109886",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 621 filtered out; finished in 0.19s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\sm-compatibility-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "crop-compatibility-control",
+      "exit_code": 0,
+      "seconds": 1.6246009999886155,
+      "log_sha256": "746f8ed1a3046b361a7a8c5b29ac94505f15986d725503140703dc2cd71b3879",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 621 filtered out; finished in 0.22s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\crop-compatibility-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "model-controls",
+      "exit_code": 0,
+      "seconds": 2.776808800001163,
+      "log_sha256": "2f905251b2a3f120a36d9e2ab3fb0e943e9dce61ee18696bd69d1ef39b2383ad",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 276 filtered out; finished in 0.07s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\model-controls.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "model-differential-control",
+      "exit_code": 0,
+      "seconds": 1.2961304000054952,
+      "log_sha256": "f4b8ac901aef48fef61deaf70de228b3b0267d586eeaf7015686542c3300e237",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 287 filtered out; finished in 0.27s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\model-differential-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "completion-controls",
+      "exit_code": 0,
+      "seconds": 1.8796387000038521,
+      "log_sha256": "075676be0b0bed090430738484c6a63ce9e3fbe2caac429eb634b9979d77551d",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 815 filtered out; finished in 0.00s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\completion-controls.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 1.4867952000058722,
+      "log_sha256": "5f08e637aa4912c5d5b36a487d361361c5413b6affd9623a6d1c973d079cddf5",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 621 filtered out; finished in 0.00s"
+      ],
+      "reused_from": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\oni-game-over-bitmap-windows-green-v2\\identity-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "asset-upload-controls",
+      "exit_code": 0,
+      "seconds": 18.19188289999147,
+      "log_sha256": "ac2a51188b5254debd9080a8edec5d4824eeabf908d7c68968f2b06a6d4d9249",
+      "results": [
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "asset-store-controls",
+      "exit_code": 0,
+      "seconds": 1.317640699999174,
+      "log_sha256": "e00078d5b51375fca4e41ad675383cc801ad7c5a437c5d07eeade8d0f2b2e32f",
+      "results": [
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 78 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "asset-registry-controls",
+      "exit_code": 0,
+      "seconds": 1.4105740999948466,
+      "log_sha256": "5471c60123c22e5227c0cd5c7d50a32360a29a048921637f6182d8546be87d20",
+      "results": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 79 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "asset-manager-controls",
+      "exit_code": 0,
+      "seconds": 1.4059362999978475,
+      "log_sha256": "c48a7ecfe7cb24c2809f7a854f4375399f5d26b79de641de4b9e146fec9a8993",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 82 filtered out; finished in 0.08s"
+      ]
+    },
+    {
+      "label": "asset-decode-differential-control",
+      "exit_code": 0,
+      "seconds": 1.3960408999992069,
+      "log_sha256": "f10a66837e3ff8125fbd7d5015f926fd8ce664e29ab33b9cc4970a76524198b7",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 83 filtered out; finished in 0.10s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 50.444943800001056,
+      "log_sha256": "5c97dead4571c08f552d5f406166b49af46246339e954df5d5d04a2efb633e2e",
+      "results": []
+    }
+  ],
+  "red_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 309.37703010000405,
+      "log_sha256": "0bcf58499f2769e4dd5d189bc33ec83a592775b35e24be358230b721af57c26c",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 621 filtered out; finished in 0.20s"
+      ]
+    }
+  ],
+  "native_source_cause": "sweep-2026-10-15-hope-oni-game-over-source-cause.json",
+  "asset_sha256": {
+    "crates/deadsync-song-lua/assets/itgmania/_blank.png": "1bc6840fdf516b59b9439951834326ca1643f014ed0767d6bb3da3ae39768868"
+  },
+  "unaffected_successful_checks_reused": 17,
+  "test_only_source_correction": "crates/deadlib-assets/src/decode_perf.rs",
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

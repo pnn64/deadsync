@@ -16,6 +16,8 @@ pub struct TexMeta {
 #[derive(Clone)]
 pub struct GeneratedTexture {
     pub image: Arc<RgbaImage>,
+    /// Original bitmap dimensions, before resize for upload.
+    pub source_size: [u32; 2],
     pub sampler: SamplerDesc,
 }
 
@@ -264,16 +266,25 @@ pub fn sprite_sheet_dims(key: &str) -> (u32, u32) {
 ///
 /// Panics if an internal synchronization lock is poisoned.
 pub fn register_generated_texture(key: &str, image: RgbaImage, sampler: SamplerDesc) {
-    let (w, h) = (image.width(), image.height());
+    let source_size = [image.width(), image.height()];
+    register_prepared_generated_texture(key, image, source_size, sampler);
+}
+
+/// Register prepared pixels with their original bitmap dimensions.
+/// Source dimensions remain independent of the GPU upload dimensions.
+pub fn register_prepared_generated_texture(
+    key: &str, image: RgbaImage, source_size: [u32; 2], sampler: SamplerDesc,
+) {
     GENERATED_TEXTURES.write().unwrap().register(
         key,
         GeneratedTexture {
             image: Arc::new(image),
+            source_size,
             sampler,
         },
     );
     GENERATED_TEXTURES_PENDING.store(true, Ordering::Release);
-    register_texture_dims(key, w, h);
+    register_texture_dims(key, source_size[0], source_size[1]);
 }
 
 /// # Panics

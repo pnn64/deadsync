@@ -3451,6 +3451,50 @@ assert(FLASH:GetParent():GetParent() == CUES and CUES:GetParent() == CONTAINER)
     }
 
     #[test]
+    fn live_oni_game_over_loads_inherited_blank_bitmap() {
+        compile("oni-game-over-bitmap", r#"
+local sprite
+local function check(texture)
+    assert(texture, 'OniGameOver must load the inherited blank bitmap')
+    assert(texture:GetPath() == 'Themes/_fallback/Graphics/_blank.png')
+    assert(texture:GetSourceWidth() == 4 and texture:GetSourceHeight() == 2)
+    assert(texture:GetImageWidth() == 8 and texture:GetImageHeight() == 8)
+    assert(texture:GetTextureWidth() == 8 and texture:GetTextureHeight() == 8)
+    assert(texture:GetNumFrames() == 1)
+end
+return Def.ActorFrame {
+    OnCommand = function()
+        local screen = SCREENMAN:GetTopScreen()
+        local first = screen:GetChild('OniGameOverP1')
+        local second = screen:GetChild('OniGameOverP2')
+        assert(first:GetName() == 'OniGameOverP1' and first:GetParent() == screen)
+        first:zoomto(320, 180)
+        local retained = first:GetTexture()
+        check(retained)
+        check(second:GetTexture())
+        assert(sprite:GetTexture() == nil, 'an unloaded Sprite must remain unloaded')
+        sprite:SetTexture(retained)
+        check(sprite:GetTexture())
+        assert(sprite:GetWidth() == 4 and sprite:GetHeight() == 2)
+        sprite:Load(nil)
+        assert(sprite:GetTexture() == nil)
+        second:Load(nil)
+        assert(second:GetTexture() == nil)
+        second:SetTexture(retained)
+        check(second:GetTexture())
+    end,
+    Def.Sprite { InitCommand = function(self) sprite = self end },
+}
+"#);
+        let key = "Themes/_fallback/Graphics/_blank.png";
+        let bitmap = deadlib_assets::generated_texture(key).expect("actual prepared blank bitmap");
+        assert_eq!(bitmap.image.dimensions(), (8, 8));
+        assert!(bitmap.image.pixels().all(|pixel| pixel.0 == [0, 0, 0, 0]));
+        let source = deadlib_assets::texture_dims(key).expect("native bitmap source dimensions");
+        assert_eq!((source.w, source.h), (4, 2));
+    }
+
+    #[test]
     fn live_large_scene_preserves_actor_identity_and_update_order() {
         let mut compiled = compile("canonical-large-scene", "return Def.ActorFrame {}");
         let base = compiled.live_scene.take().expect("base live scene");

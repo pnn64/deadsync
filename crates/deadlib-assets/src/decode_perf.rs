@@ -45,7 +45,7 @@ fn batching_matches_original_pixels_errors_and_cancellation() {
                 output.push((
                     result.key,
                     result.sampler,
-                    result.image.map_err(|e| e.to_string()),
+                    result.decoded.map(|decoded| (decoded.source_size, decoded.image)).map_err(|e| e.to_string()),
                 ));
                 Ok(())
             };
@@ -80,7 +80,7 @@ fn benchmark_texture_worker_batches() {
             let input = jobs(&path, count);
             let (_, counts) = crate::perf::measure(|| {
                 let consume = |decoded: TextureDecodeResult| {
-                    black_box(decoded.image.unwrap());
+                    black_box(decoded.decoded.unwrap().image);
                     Ok::<_, ()>(())
                 };
                 if current {
@@ -107,7 +107,7 @@ fn benchmark_texture_worker_batches() {
             || jobs(&path, count),
             |jobs, current| {
                 let consume = |decoded: TextureDecodeResult| {
-                    black_box(decoded.image.unwrap());
+                    black_box(decoded.decoded.unwrap().image);
                     Ok::<_, ()>(())
                 };
                 if current {

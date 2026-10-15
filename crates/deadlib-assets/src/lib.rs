@@ -43,7 +43,7 @@ pub use manager::AssetManager;
 pub use present_dsl::SpriteBuilder;
 pub use registry::{
     GeneratedTexture, TexMeta, generated_texture, generated_texture_shared_key,
-    register_generated_texture, register_texture_dims, sprite_sheet_dims, texture_dims,
+    register_generated_texture, register_prepared_generated_texture, register_texture_dims, sprite_sheet_dims, texture_dims,
     texture_registry_generation,
 };
 pub use texture_store::{BoundTexture, TextureStore};

@@ -1547,6 +1547,9 @@ pub fn load_actor_path(
     args: MultiValue,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
 ) -> mlua::Result<Value> {
+    if deadlib_assets::generated_texture_shared_key(path).is_some() {
+        return create_media_actor(lua, "Sprite", Path::new(path), create_dummy_actor).map(Value::Table);
+    }
     if let Some(actor) = create_theme_path_actor(lua, path, create_dummy_actor)? {
         return Ok(Value::Table(actor));
     }
@@ -5475,6 +5478,11 @@ pub fn actor_base_size(actor: &Table) -> mlua::Result<(f32, f32)> {
 
 pub fn actor_image_texture_size(actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
     if let Some(path) = actor_texture_path(actor)?
+        && let Some(texture) = deadlib_assets::generated_texture(&path.to_string_lossy())
+    {
+        return Ok(Some((texture.source_size[0] as f32, texture.source_size[1] as f32)));
+    }
+    if let Some(path) = actor_texture_path(actor)?
         && is_song_lua_image_path(&path)
         && let Ok((width, height)) = deadlib_assets::texture_source_size(&path)
     {
@@ -5544,7 +5552,11 @@ fn image_source_size(path: &Path) -> Option<(f32, f32)> {
     if !is_song_lua_image_path(path) {
         return None;
     }
-    let (width, height) = deadlib_assets::texture_source_size(path).ok()?;
+    let (width, height) = if let Some(texture) = deadlib_assets::generated_texture(&path.to_string_lossy()) {
+        (texture.source_size[0], texture.source_size[1])
+    } else {
+        deadlib_assets::texture_source_size(path).ok()?
+    };
     // RageBitmapTexture applies the res override before halving doubleres.
     let (width, height) = deadlib_assets::texture_source_dims_from_real(
         path.to_string_lossy().as_ref(),
@@ -13687,6 +13699,35 @@ pub fn create_named_child_actor(
     Ok(child)
 }
 
+const NATIVE_BLANK_TEXTURE_PATH: &str = "Themes/_fallback/Graphics/_blank.png";
+
+fn load_native_blank_texture() -> mlua::Result<&'static str> {
+    // Bundled native bitmap, decoded/prepared once at screen construction.
+    // The generated registry carries real pixels to ordinary renderer prewarm.
+    static PREPARED: OnceLock<Result<(), String>> = OnceLock::new();
+    PREPARED.get_or_init(|| {
+        let decoded = image::load_from_memory_with_format(
+            include_bytes!("../assets/itgmania/_blank.png"), image::ImageFormat::Png,
+        ).map_err(|error| error.to_string())?;
+        let mut bitmap = decoded.into_rgba8();
+        let source_size = [bitmap.width(), bitmap.height()];
+        let hints = deadlib_assets::TextureHints {
+            min_size: Some(8), max_size: Some(2048), ..Default::default()
+        };
+        let upload = deadlib_assets::texture_image_size(source_size, &hints)
+            .map_err(|error| error.to_string())?;
+        if upload != source_size {
+            bitmap = image::imageops::resize(&bitmap, upload[0], upload[1], image::imageops::FilterType::Triangle);
+        }
+        deadlib_assets::fix_hidden_alpha(&mut bitmap);
+        deadlib_assets::register_prepared_generated_texture(
+            NATIVE_BLANK_TEXTURE_PATH, bitmap, source_size, hints.sampler_desc(),
+        );
+        Ok(())
+    }).as_ref().map(|_| NATIVE_BLANK_TEXTURE_PATH)
+        .map_err(|error| mlua::Error::external(error.clone()))
+}
+
 pub fn create_top_screen_theme_actor(
     lua: &Lua,
     parent: &Table,
@@ -13845,8 +13886,10 @@ return {
         return Ok(Some(actor));
     }
     if name.starts_with("OniGameOver") {
-        // The inherited oni-gameover redirection resolves to Graphics/_blank.png.
-        return Ok(Some(create_named_actor(lua, "Sprite", name, create_dummy_actor)?));
+        // ScreenGameplay loads the inherited oni-gameover bitmap resource.
+        let actor = create_named_actor(lua, "Sprite", name, create_dummy_actor)?;
+        set_actor_texture_from_path(&actor, load_native_blank_texture()?)?;
+        return Ok(Some(actor));
     }
     if name.eq_ignore_ascii_case("SongBackground")
         || name.eq_ignore_ascii_case("SongForeground")
@@ -20150,6 +20193,9 @@ pub fn actor_texture_path(actor: &Table) -> mlua::Result<Option<PathBuf>> {
         return Ok(None);
     }
     let raw = Path::new(texture);
+    if deadlib_assets::generated_texture_shared_key(texture).is_some() {
+        return Ok(Some(raw.to_path_buf()));
+    }
     if raw.is_absolute() && raw.exists() {
         return Ok(Some(raw.to_path_buf()));
     }
@@ -20227,6 +20273,9 @@ pub fn read_proxy_target_kind(actor: &Table) -> Result<Option<SongLuaProxyTarget
 
 pub fn resolve_actor_asset_path(actor: &Table, raw: &str) -> Result<PathBuf, String> {
     let raw_path = Path::new(raw.trim());
+    if deadlib_assets::generated_texture_shared_key(raw.trim()).is_some() {
+        return Ok(raw_path.to_path_buf());
+    }
     if raw_path.is_absolute() && raw_path.is_file() {
         return Ok(raw_path.to_path_buf());
     }

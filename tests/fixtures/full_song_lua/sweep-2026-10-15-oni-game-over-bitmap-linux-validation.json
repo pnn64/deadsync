@@ -1,0 +1,267 @@
+{
+  "source_root": "/home/parity/workspace/oni-game-over-bitmap-green-v2/deadsync",
+  "binary_sha256": "7f19b47e05d7c20f911a83920ed84b1b950d03c307a19ea8024d1d702ef0ab4b",
+  "asset_sha256": {
+    "crates/deadsync-song-lua/assets/itgmania/_blank.png": "1bc6840fdf516b59b9439951834326ca1643f014ed0767d6bb3da3ae39768868"
+  },
+  "unaffected_successful_checks_reused": 17,
+  "test_only_source_correction": "crates/deadlib-assets/src/decode_perf.rs",
+  "all_twenty_three_checks_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "all_linux_log_and_binary_hashes_verified": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 248.24697468796512,
+      "log_sha256": "585269b83c6623b9013904cab30c2d456871bef043db5dc4c84bfb5fa1604386",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 619 filtered out; finished in 0.18s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/target-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "canonical-handles-control",
+      "exit_code": 0,
+      "seconds": 33.61544764100108,
+      "log_sha256": "c6b78e73281ef643309cbabcbcb9f5f66fb414a74af7c91075c2dce5d1383008",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 619 filtered out; finished in 32.92s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/canonical-handles-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "quad-texture-control",
+      "exit_code": 0,
+      "seconds": 1.0050433080177754,
+      "log_sha256": "1e6423c26919feae33b27e638647e45dd350c85f76f526abdafbc9dbda870ddf",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 619 filtered out; finished in 0.31s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/quad-texture-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "cancel-child-control",
+      "exit_code": 0,
+      "seconds": 0.8976971230003983,
+      "log_sha256": "ae01ab972840f7fe7a3020803120b57708b41957b1141e9005d43bf18b589ab2",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 619 filtered out; finished in 0.21s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/cancel-child-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "registry-handles-control",
+      "exit_code": 0,
+      "seconds": 0.7239964850014076,
+      "log_sha256": "5ce1ae28b9e8e195d27ab431d1099c941276f966693559f95d6f7c19cbe48888",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 619 filtered out; finished in 0.06s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/registry-handles-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "mine-boundary-control",
+      "exit_code": 0,
+      "seconds": 242.12271504703676,
+      "log_sha256": "ce99297d08400dabf29721174bad0ee222f53738c9e3d575819bf1f795f0f5fc",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 336 filtered out; finished in 19.00s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/mine-boundary-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 0.8755264689680189,
+      "log_sha256": "10ce5fea1591e1cdd1264b5797712e7376f67fa07e0665017be4dc9735970db0",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 619 filtered out; finished in 0.16s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/hurry-capture-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 44.166255674965214,
+      "log_sha256": "f8fbdc69fe79d198e90e3caf945d3d2a0f250c48ba868b1c8867a492bd924544",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/gameplay-easing-controls.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.246046795975417,
+      "log_sha256": "46a3418011bc680867a0c6013f13574a8ead7c7899efc5748c9b6aa1a15e5a19",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 610 filtered out; finished in 0.00s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/parser-controls.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 35.82446329301456,
+      "log_sha256": "91aeccd02d2ff72f2ef9aad89dccdcf32c56a9b28f5894dce7c6ab8e9b41070f",
+      "results": [
+        "test result: ok. 83 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 34.45s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/live-controls.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 21.17226204497274,
+      "log_sha256": "5a9627b8e67abc8e7fb74f32a5bca48716c9c62cea72b73ee7beb41f862e8955",
+      "results": [
+        "test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 20.32s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/replay-controls.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "sm-compatibility-control",
+      "exit_code": 0,
+      "seconds": 0.7988131249439903,
+      "log_sha256": "83b9d84c4650ab2de384394b371ad5e2ca88f7fe2f6911db5c1593bb907126b7",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 619 filtered out; finished in 0.14s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/sm-compatibility-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "crop-compatibility-control",
+      "exit_code": 0,
+      "seconds": 0.8190573549945839,
+      "log_sha256": "52171815f291babc6475f9e0721f5e94807a92d7ebdcd73b14faaa40b4cb6464",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 619 filtered out; finished in 0.14s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/crop-compatibility-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "model-controls",
+      "exit_code": 0,
+      "seconds": 17.301716262998525,
+      "log_sha256": "f7f7a876d407d650e22c57894764be858db68f9cd8cf4eede423f238f54065fc",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 276 filtered out; finished in 0.01s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/model-controls.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "model-differential-control",
+      "exit_code": 0,
+      "seconds": 0.5266567220096476,
+      "log_sha256": "035c15e373a1b1381e5b2c61c7321ebdd6fb39244e7b1999721c768c51c74d00",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 287 filtered out; finished in 0.09s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/model-differential-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "completion-controls",
+      "exit_code": 0,
+      "seconds": 0.44567177299177274,
+      "log_sha256": "ce1cd40224bb0120a49c978cb81490d2c40dab51bd73e99d13b023fc2bef0f30",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 815 filtered out; finished in 0.00s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/completion-controls.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 0.6436821579700336,
+      "log_sha256": "849c720e8fc88d93981c3865dd249b7b874af9b9de7668254ce55dc9e04a48dc",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 619 filtered out; finished in 0.00s"
+      ],
+      "reused_from": "/home/parity/jobs/oni-game-over-bitmap-linux-green-v1/identity-control.log",
+      "uncompiled_test_fixture_only_changed": "crates/deadlib-assets/src/decode_perf.rs"
+    },
+    {
+      "label": "asset-upload-controls",
+      "exit_code": 0,
+      "seconds": 11.135753345966805,
+      "log_sha256": "f56e3d46a4230247a87b7304f95b2e84e917439978114dbcbc8ad260a1344413",
+      "results": [
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 76 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "asset-store-controls",
+      "exit_code": 0,
+      "seconds": 0.6110706569743343,
+      "log_sha256": "511d3db28eba5b74b4d57e73ce5f4f0b0ea96ec5f972e5b64772a6194f53e1f6",
+      "results": [
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "asset-registry-controls",
+      "exit_code": 0,
+      "seconds": 0.6088814559625462,
+      "log_sha256": "803ec9f87c9b3a8079aabb99935404ed18f4d84951e25dae5936f18e0e93a249",
+      "results": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 78 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "asset-manager-controls",
+      "exit_code": 0,
+      "seconds": 0.6077435640036128,
+      "log_sha256": "24b814762cefaae21947cc060d56bb41f4e87abe6c8370a5b2b7e11adb7692b1",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 82 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "asset-decode-differential-control",
+      "exit_code": 0,
+      "seconds": 0.6674317580182105,
+      "log_sha256": "c354606b8f2a4c94ae7fa7fcac05175d22f8f93506e237e0ec1c93fe38386939",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 82 filtered out; finished in 0.07s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 244.43955700600054,
+      "log_sha256": "4d37d1d2829024c81b9bf79c2520b20c479b7c0b0955b3dc30040f4c92a67a97",
+      "results": []
+    }
+  ],
+  "red_missing_oni_game_over_bitmap_reproduced_both_hosts": true,
+  "regression": "live_oni_game_over_loads_inherited_blank_bitmap",
+  "source_cause": "sweep-2026-10-15-hope-oni-game-over-source-cause.json",
+  "native_bitmap_source_dimensions": [
+    4,
+    2
+  ],
+  "native_bitmap_prepared_dimensions": [
+    8,
+    8
+  ],
+  "full_chart_repairs_spent": 0,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true,
+  "global_original_helper_unchanged": true
+}

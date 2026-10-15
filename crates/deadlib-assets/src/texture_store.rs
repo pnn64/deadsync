@@ -428,19 +428,18 @@ impl<T> TextureStore<T> {
     }
 
     pub fn queue_pending_generated_textures(&mut self) {
-        drain_pending_generated_textures(|key, GeneratedTexture { image, sampler }| {
+        drain_pending_generated_textures(|key, GeneratedTexture { image, source_size, sampler }| {
             let (width, height) = (image.width(), image.height());
             let handle = if let Some(&handle) = self.texture_handles.get(key.as_ref()) {
                 if !self.upload_dims_match(handle, width, height) {
                     self.revision.set(next_texture_revision());
-                    register_texture_dims(&key, width, height);
                 }
                 handle
             } else {
-                register_texture_dims_shared(Arc::clone(&key), width, height);
                 self.reserve_new_texture_handle(key)
             };
-            self.pending_texture_uploads.push(handle, image, sampler);
+            self.set_source_dims(handle, source_size);
+            self.pending_texture_uploads.push_prepared(handle, image, sampler, source_size);
         });
     }
 
