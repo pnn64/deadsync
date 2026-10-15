@@ -1,0 +1,30 @@
+{
+  "source_simfile": "mawaru9/mawaru9.sm",
+  "position": 495,
+  "current_completed_full_repairs": 0,
+  "conditional_full_repair_attempt": 1,
+  "full_repair_started_not_yet_claimed": true,
+  "prerequisite_entry_job": "/home/parity/jobs/mawaru9-canonical-handles-production-entry-v1",
+  "prerequisite": "terminal detailed production entry report: all1628 frames, zero mismatches, zero callback errors; otherwise record concrete entry failures and launch no full replay",
+  "helper_fix_commit": "dca9ac1926ac34426a31964e94d1ca37692c0065",
+  "helper_binary_sha256": "d52e92dbdab0eb79f09965d26a3d91e7f795838778dda2d9826ff03b090ebd12",
+  "build_proof": "/home/parity/jobs/canonical-live-actor-handles-linux-green-v6/proof.json",
+  "source_pin_count": 1175,
+  "validation_groups_both_hosts": 17,
+  "candidate_uncompressed_sha256": "7b631569cbc05b52490fced196166794926f6eadbd4590f37af5bf19ee395be5",
+  "trace_sha256": "d4f0fb33d5bbc3c69a2488fb992e1d1caf086dbfe7f12672667d5a9b6b5c2be1",
+  "simfile_sha256": "0012dd2fa9cef58ae543bd88b3ab84e25d0b390fcea2827c97c3dd1ac7d5a624",
+  "full_job": "/home/parity/jobs/mawaru9-canonical-handles-first-repair-v1",
+  "launcher_sha256": "0e889db3509c4f46aeb81d7ea15f804772c7cfc20d4840b4c136ee4a1886e025",
+  "publisher_stream_registered": true,
+  "local_storage_only_closer_pid": 3604,
+  "checks_before_launch": [
+    "verify original simfile and every uncompressed candidate member",
+    "verify source1175 pins,17 successful groups/logs and selected binary",
+    "verify no prior full repair result or attempt-start exists",
+    "preserve native capture and use full --archive --report scope"
+  ],
+  "comparisons_or_acceptance_changed": false,
+  "live_replay_restarted": false,
+  "automatic_second_full_repair_authorized_or_started": false
+}
