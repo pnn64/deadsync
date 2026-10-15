@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T15:33:57Z",
+  "updated_utc": "2026-10-15T16:19:42Z",
   "counts": {
     "passed": 398,
     "pending": 103,
@@ -8160,18 +8160,18 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-15-hope-underlay-difficulty-meter-entry-diagnostic.json",
+      "followup": "sweep-2026-10-15-hope-underlay-standard-life-entry-diagnostic.json",
       "source_cause": "sweep-2026-10-15-hope-cancel-source-cause.json",
       "entry_diagnostic_frames": 1688,
       "entry_diagnostic_errors": 0,
-      "entry_diagnostic_mismatches": 20437,
+      "entry_diagnostic_mismatches": 20447,
       "archive_namespace_startup_error_cleared_in_diagnostic": true,
       "native_trace_and_all_original_member_bytes_unchanged": true,
       "original_terminal_full_result_preserved": true,
       "new_full_repair_started": false,
       "cancel_child_missing_failure_fixed_by": "c71cc5f319cd5b950b6ce107ec23f65772062260",
-      "remaining_source_cause": "sweep-2026-10-15-hope-underlay-inventory-source-cause.json",
-      "current_diagnostic_failure": "native Underlay10 children versus owned9 after real filter and DifficultyMeter construction; native Standard LifeMeter external-0109 has4 children at sequence567; shared BPM ownership also remains pending",
+      "remaining_source_cause": null,
+      "current_diagnostic_failure": "actual remaining entry comparisons after Standard LifeMeter construction; source cause not yet claimed",
       "diagnostic_only_not_full_acceptance": true,
       "quad_default_texture_fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
       "quad_texture_all_sixteen_groups_both_hosts_passed": true,
@@ -8185,7 +8185,8 @@
       "out_transition_quad_fix_commit": "461434bacf9449ddba8a8e3a9dc980f8e05ef3c1",
       "in_transition_bitmaps_fix_commit": "89441b1030309f76fba0b5098df2c364af5a7525",
       "underlay_background_filter_fix_commit": "b0a9976b938ef94c390b1f9db8e0cca479eb599d",
-      "underlay_difficulty_meter_fix_commit": "194a47d0bce78275d98fd954f38fbb09004ec366"
+      "underlay_difficulty_meter_fix_commit": "194a47d0bce78275d98fd954f38fbb09004ec366",
+      "underlay_standard_life_fix_commit": "1d24d8cc2001d05f2350d3b2b88d161d818ea3fb"
     },
     {
       "position": 230,
