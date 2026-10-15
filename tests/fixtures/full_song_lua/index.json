@@ -2663,15 +2663,12 @@
     {
       "title": "行つてしまつた",
       "source_simfile": "gone_KidFresino/song.ssc",
-      "harness_version": "0.1.0",
-      "archive": "d6dcba2555850935818756d42ccc9f1e6f3cb17b2a00b68f951f60382d6ab244.tar.zst",
-      "sha256": "d6dcba2555850935818756d42ccc9f1e6f3cb17b2a00b68f951f60382d6ab244",
-      "compressed_bytes": 42873,
-      "uncompressed_sha256": "075e856f15972c055f81452360bba21fadc2b210ea946ddfab74d93a8bd27522",
-      "compression_level": 22,
-      "aliases": [
-        "a95b5bf80a9767671a1feb9e3e6ef13957e711bff474417b8bbc3756f4c25355.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "fb1696ac05718ab2de6a2884b9ee6effa9df50c66f5679feb3530c9e1cf6d1a6.tar.zst",
+      "sha256": "fb1696ac05718ab2de6a2884b9ee6effa9df50c66f5679feb3530c9e1cf6d1a6",
+      "compressed_bytes": 4904490,
+      "uncompressed_sha256": "4377ee34a2e0e1eccd975b25eff17964fecfa2ef39e74a2cc9fb39891769e502",
+      "aliases": []
     },
     {
       "title": "Goodbye",
