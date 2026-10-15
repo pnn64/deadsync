@@ -3451,6 +3451,62 @@ assert(FLASH:GetParent():GetParent() == CUES and CUES:GetParent() == CONTAINER)
     }
 
     #[test]
+    fn live_lyric_display_loads_text_layers_font_and_changed_commands() {
+        let compiled = compile("lyric-display-construction", r#"
+return Def.ActorFrame {
+    OnCommand = function()
+        local screen = SCREENMAN:GetTopScreen()
+        local lyrics = screen:GetChild('LyricDisplay')
+        assert(lyrics:GetNumChildren() == 2, 'LyricDisplay must load both native text layers')
+        LYRIC_DISPLAY = lyrics
+        local back, front = lyrics:GetChild('LyricBack'), lyrics:GetChild('LyricFront')
+        assert(back:GetParent() == lyrics and front:GetParent() == lyrics)
+        assert(lyrics:GetParent() == screen)
+        assert(back:GetName() == 'LyricBack' and front:GetName() == 'LyricFront')
+        assert(back:GetText() == '' and front:GetText() == '')
+        assert(lyrics:GetX() == SCREEN_CENTER_X and lyrics:GetY() == SCREEN_CENTER_Y + 160)
+        for _, position in ipairs{{'SetReverse', -140}, {'SetOneReverse', -205}, {'SetNoReverse', 160}} do
+            lyrics:playcommand(position[1])
+            assert(lyrics:GetX() == SCREEN_CENTER_X and lyrics:GetY() == SCREEN_CENTER_Y + position[2])
+        end
+        local original_var = Var
+        Var = function(name)
+            if name == 'LyricText' then return 'fixture lyric' end
+            if name == 'LyricDuration' then return 4 end
+            if name == 'LyricColor' then return {0.8, 0.6, 0.4, 1} end
+            return original_var(name)
+        end
+        for index, text in ipairs{back, front} do
+            text:playcommand('Changed')
+            assert(text:GetText() == 'fixture lyric')
+            assert(math.abs(text:GetTweenTimeLeft() - 4.4) < 0.00001)
+            local factor = index == 1 and 0.5 or 0.9
+            local color = text:GetDiffuse()
+            for channel, value in ipairs{0.8, 0.6, 0.4} do
+                assert(math.abs(color[channel] - value * factor) < 0.00001)
+            end
+            text:playcommand('Changed')
+            assert(math.abs(text:GetTweenTimeLeft() - 4.4) < 0.00001,
+                'a changed lyric must replace the previous lyric tween')
+        end
+        Var = original_var
+    end,
+}
+"#);
+        let scene = compiled.live_scene.expect("lyric scene");
+        let lyrics = scene.lua.globals().get::<Table>("LYRIC_DISPLAY").unwrap();
+        let children = crate::lua_util::actor_direct_children(&scene.lua, &lyrics).unwrap();
+        assert_eq!(children.iter().map(|child| crate::lua_util::actor_name(child).unwrap())
+            .collect::<Vec<_>>(), ["LyricBack", "LyricFront"]);
+        for child in children {
+            let (font, path) = crate::lua_util::read_bitmap_font(&child).unwrap()
+                .expect("inherited LyricDisplay text font");
+            assert_eq!(font, "miso");
+            assert!(path.ends_with("assets/fonts/miso/_miso light.ini"));
+        }
+    }
+
+    #[test]
     fn live_percentage_display_inherits_actor_frame_class_methods() {
         compile("percentage-display-inheritance", r#"
 return Def.ActorFrame {

@@ -13728,6 +13728,49 @@ fn load_native_blank_texture() -> mlua::Result<&'static str> {
         .map_err(|error| mlua::Error::external(error.clone()))
 }
 
+fn create_lyric_display_actor(
+    lua: &Lua,
+    name: &str,
+    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+) -> mlua::Result<Table> {
+    let actor = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
+    // LyricDisplay.cpp loads the inherited font and Changed command for each
+    // text layer before Init clears both strings. ScreenGameplay owns position.
+    let commands: Table = lua.load(r#"
+return {
+    Back = function(self) self:LyricCommand('Back') end,
+    Front = function(self) self:LyricCommand('Front') end,
+    SetNoReverseCommand = function(self) self:x(SCREEN_CENTER_X):y(SCREEN_CENTER_Y + 160) end,
+    SetReverseCommand = function(self) self:x(SCREEN_CENTER_X):y(SCREEN_CENTER_Y - 140) end,
+    SetOneReverseCommand = function(self) self:x(SCREEN_CENTER_X):y(SCREEN_CENTER_Y - 205) end,
+}
+"#).set_name("@theme:/metrics.ini:LyricDisplay").eval()?;
+    for (name, side) in [("LyricBack", "Back"), ("LyricFront", "Front")] {
+        let text = create_named_text_actor(lua, "BitmapText", name, String::new(), create_dummy_actor)?;
+        text.raw_set("Font", "Common Normal")?;
+        text.raw_set("ChangedCommand", commands.raw_get::<Function>(side)?)?;
+        text.raw_set("__songlua_parent", actor.clone())?;
+        push_sequence_child_once(&actor, text.clone())?;
+        actor_children(lua, &actor)?.set(name, text)?;
+    }
+    for name in ["SetNoReverseCommand", "SetReverseCommand", "SetOneReverseCommand"] {
+        actor.raw_set(name, commands.raw_get::<Function>(name)?)?;
+    }
+    let initial: String = lua.load(r#"
+local allReverse, anyReverse = true, false
+for _, player in ipairs(GAMESTATE:GetEnabledPlayers()) do
+    local reverse = GAMESTATE:GetPlayerState(player):GetPlayerOptions('ModsLevel_Current'):Reverse() == 1
+    allReverse = allReverse and reverse
+    anyReverse = anyReverse or reverse
+end
+return allReverse and 'SetReverse' or anyReverse and 'SetOneReverse' or 'SetNoReverse'
+"#).set_name("@theme:/ScreenGameplay:LyricDisplayPosition").eval()?;
+    // This is ScreenGameplay's constructor initialization, before authored
+    // command capture. Calling the public dispatcher would emit song events.
+    commands.raw_get::<Function>(format!("{initial}Command"))?.call::<()>(actor.clone())?;
+    Ok(actor)
+}
+
 pub fn create_top_screen_theme_actor(
     lua: &Lua,
     parent: &Table,
@@ -13735,6 +13778,9 @@ pub fn create_top_screen_theme_actor(
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
 ) -> mlua::Result<Option<Table>> {
+    if name.eq_ignore_ascii_case("LyricDisplay") {
+        return create_lyric_display_actor(lua, name, create_dummy_actor).map(Some);
+    }
     if ["In", "Out", "Cancel"].iter().any(|known| name.eq_ignore_ascii_case(known)) {
         let actor = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
         actor.raw_set("__songlua_transition_state", 0_u8)?;
@@ -13826,7 +13872,6 @@ pub fn create_top_screen_theme_actor(
         || name.eq_ignore_ascii_case("Cancel")
         || name.eq_ignore_ascii_case("Header")
         || name.eq_ignore_ascii_case("Footer")
-        || name.eq_ignore_ascii_case("LyricDisplay")
     {
         let actor = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
         if name.eq_ignore_ascii_case("Underlay") {

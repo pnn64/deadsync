@@ -362,7 +362,6 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         "MaskDest",
         "thump",
         "heartbeat",
-        "LyricCommand",
         "SetSize",
         "hidden",
     ] {
@@ -390,7 +389,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         .exec()?;
     // _fallback/Scripts/02 Actor.lua defines these in native actor primitives.
     lua.load(
-        r#"
+        r##"
 function BitmapText:PixelFont()
     self:SetTextureFiltering(false)
     return self
@@ -412,7 +411,57 @@ function BitmapText:DiffuseAndStroke(diffuseC, strokeC)
     self:strokecolor(strokeC)
     return self
 end
-"#,
+
+-- _fallback/Scripts/02 Actor.lua owns this inherited lyric helper.
+function Actor:LyricCommand(side)
+	self:settext( Var "LyricText" )
+	self:draworder(102)
+
+	self:stoptweening()
+	self:shadowlengthx(0)
+	self:shadowlengthy(5)
+	self:strokecolor(color("#000000"))
+
+	local Zoom = SCREEN_WIDTH / (self:GetZoomedWidth()+1)
+	if( Zoom > 1 ) then
+		Zoom = 1
+	end
+	self:zoomx( Zoom )
+
+	local lyricColor = Var "LyricColor"
+	local Factor = 1
+	if side == "Back" then
+		Factor = 0.5
+	elseif side == "Front" then
+		Factor = 0.9
+	end
+	self:diffuse( {
+		lyricColor[1] * Factor,
+		lyricColor[2] * Factor,
+		lyricColor[3] * Factor,
+		lyricColor[4] * Factor } )
+
+	if side == "Front" then
+		self:cropright(1)
+	else
+		self:cropleft(0)
+	end
+
+	self:diffusealpha(0)
+	self:linear(0.2)
+	self:diffusealpha(0.75)
+	self:linear( Var "LyricDuration" * 0.75)
+	if side == "Front" then
+		self:cropright(0)
+	else
+		self:cropleft(1)
+	end
+	self:sleep( Var "LyricDuration" * 0.25 )
+	self:linear(0.2)
+	self:diffusealpha(0)
+	return self
+end
+"##,
     )
     .exec()?;
     Ok(())

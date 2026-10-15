@@ -1,0 +1,54 @@
+{
+  "all_four_groups_passed": true,
+  "all_1175_normalized_source_pins_asset_and_log_hashes_verified": true,
+  "red_missing_lyric_layers_reproduced": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 323.7351925000112,
+      "log_sha256": "4fdde6876eb823feffc293de3573e45a5d04ef341c58d9be231da3afb20045f2",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 624 filtered out; finished in 0.23s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 59.485218200003146,
+      "log_sha256": "a7a7594f6a03d64e06cd478e3f9ca1bad9433e6a36e6b81ccdb07c8dbfda27b7",
+      "results": [
+        "test result: ok. 86 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 57.97s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 143.44114769999578,
+      "log_sha256": "4fd75d0514628aa813bbc65d689452e5d32b8be1adccfc402b65d36dcdf4e594",
+      "results": [
+        "test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 23.08s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 25.243822399992496,
+      "log_sha256": "33765fe9c2e43c1fb153487aad66e315afda41496423e2c3e2edda2e23945cfd",
+      "results": []
+    }
+  ],
+  "red_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 332.47055280000495,
+      "log_sha256": "4b45d93454c574a0b48e7b117d493f4a0596c70e1168f6379661ec6fca889cd7",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 624 filtered out; finished in 0.21s"
+      ]
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
