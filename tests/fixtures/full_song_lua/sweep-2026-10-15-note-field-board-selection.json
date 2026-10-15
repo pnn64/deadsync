@@ -1,0 +1,12 @@
+{
+  "fix_commit": "b5594d9bb0e4f66e34f32e22cca38a86fd7db574",
+  "source_root": "/home/parity/workspace/note-field-board-green-v1/deadsync",
+  "binary_sha256": "1650d967d552686f44c2c78e96579ef0536db602b606bd500313b9e6ddcf60d8",
+  "build_proof": "/home/parity/jobs/note-field-board-linux-green-v1/proof.json",
+  "all_four_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "construct the named NoteField Board Sprite with the actual inherited blank bitmap; keep columns in their separate vector",
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
