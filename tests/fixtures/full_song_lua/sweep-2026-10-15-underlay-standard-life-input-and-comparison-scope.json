@@ -65,5 +65,85 @@
   "first_green_controls_failed": [
     "live_background_starts_at_change_beat",
     "live_empty_callback_slots_preserve_single_update_detection"
-  ]
+  ],
+  "second_green_checks": {
+    "windows": [
+      {
+        "label": "target-control",
+        "exit_code": 0,
+        "seconds": 324.07382060000964,
+        "log_sha256": "9f01ed269907e616ccb60725521de085ee3a272766aafe82e23f4f706469d003",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 632 filtered out; finished in 1.10s"
+        ]
+      },
+      {
+        "label": "live-controls",
+        "exit_code": 0,
+        "seconds": 62.81276089999301,
+        "log_sha256": "09380743c0fd783aa5929763c935608ad4a405a8eda296ab5e9b12b9109b8e77",
+        "results": [
+          "test result: ok. 94 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 61.28s"
+        ]
+      },
+      {
+        "label": "profile-input-control",
+        "exit_code": 0,
+        "seconds": 69.38505170001008,
+        "log_sha256": "34c350295d1c1150072b59d23bb55d79a578059e1fecc4b770b39184d8421f28",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+        ]
+      },
+      {
+        "label": "replay-controls",
+        "exit_code": 101,
+        "seconds": 135.8638687000057,
+        "log_sha256": "9a8ca4e247ebc2ab780cf5a7244ec3f43aed8e71342cd41c770bbb059dd253c4",
+        "results": [
+          "test result: FAILED. 36 passed; 1 failed; 0 ignored; 0 measured; 302 filtered out; finished in 22.55s"
+        ]
+      }
+    ],
+    "linux": [
+      {
+        "label": "target-control",
+        "exit_code": 0,
+        "seconds": 255.71853379695676,
+        "log_sha256": "d5bcdde9ea98eb0dbef724eea63a80c2f280551d545ea54c12b16b97b968f56a",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 630 filtered out; finished in 0.77s"
+        ]
+      },
+      {
+        "label": "live-controls",
+        "exit_code": 0,
+        "seconds": 38.34117385704303,
+        "log_sha256": "d2f6de3a3befc5ca8c29572c3a7e8a741606d7b1aeb923aef1b34c60ca83d53e",
+        "results": [
+          "test result: ok. 94 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 37.68s"
+        ]
+      },
+      {
+        "label": "profile-input-control",
+        "exit_code": 0,
+        "seconds": 83.12840712303296,
+        "log_sha256": "7e0a0955849a970b40a9d90fff4aebb943d55f2495210d6cc3c8043b5918733f",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+        ]
+      },
+      {
+        "label": "replay-controls",
+        "exit_code": 101,
+        "seconds": 221.49025289301062,
+        "log_sha256": "ff54d2831d28711da3ac7a37d159430e998e068105d1550a8097464cf2d753e7",
+        "results": [
+          "test result: FAILED. 36 passed; 1 failed; 0 ignored; 0 measured; 302 filtered out; finished in 22.54s"
+        ]
+      }
+    ]
+  },
+  "second_green_control_failure": "option_trace_keeps_native_returns_and_strings recorded eight theme command begin/end pairs before the song observer was initialized",
+  "observer_boundary_correction": "QueryTrace records the loaded scene. Command and method observation starts only after install_query_trace has initialized that scene, including retained-VM screen replacement. Actual callbacks still execute and all original operation/result assertions remain unchanged."
 }
