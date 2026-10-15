@@ -1,0 +1,13 @@
+{
+  "fix_commit": "c60b35d44ee7f0fc39d8dae8a074fd8d8289e635",
+  "binary_sha256": "e0d91485e524beb2d5a8020c1e9e759409531415e26216b526a7d3da709fa497",
+  "source_root": "/home/parity/workspace/child-registry-handles-green-v3/deadsync",
+  "build_proof": "/home/parity/jobs/child-registry-handles-linux-green-v3/proof.json",
+  "all_fourteen_groups_both_hosts_passed": true,
+  "all_1175_raw_and_normalized_red_green_source_pins_verified": true,
+  "scope": "release redundant Rust child-registry order handles while preserving Lua ownership, child queries and Begin order",
+  "global_original_helper_unchanged": true,
+  "mawaru9_full_repairs_spent": 0,
+  "mawaru9_later_preparation_stack_error_remains": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
