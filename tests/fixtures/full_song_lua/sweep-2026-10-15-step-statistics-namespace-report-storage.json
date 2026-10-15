@@ -1,0 +1,16 @@
+{
+  "reason": "Store a completed superseded HOPE entry diagnostic losslessly before removing its duplicate raw report. The reused capture and its candidate-storage/proof metadata are preserved.",
+  "raw_path": "/home/parity/jobs/hope-complete-lua-namespace-diagnostic-v1/report.json",
+  "raw_bytes": 62268650,
+  "raw_sha256": "5dd710913b355f727f2a09b8e1963ed1acd989fa9761751e03119672b6410800",
+  "compressed_path": "/home/parity/jobs/hope-complete-lua-namespace-diagnostic-v1/report.json.zst",
+  "compressed_bytes": 922745,
+  "compressed_sha256": "7eff836039c5bed0fad9e55cad834490bdca64bca78cea25a4dd5a08e998f34d",
+  "proof_sha256": "90c3a9d1a2c22c309b25ba194efca3bdeb5391234133bbd7bd760a4fd0aed8bb",
+  "terminal_report_parsed_and_matches_original_proof": true,
+  "decompressed_bytes_equal_raw_report": true,
+  "two_actual_argv_and_open_file_reference_checks_clear": true,
+  "captures_sources_or_live_replay_inputs_removed": false,
+  "free_before": 280555520,
+  "free_after": 337027072
+}
