@@ -1,0 +1,24 @@
+{
+  "kind": "acceptance summary derived from completed comparison log; original detailed report unavailable",
+  "original_result": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-416/result.json",
+  "original_replay_exit": 1,
+  "original_failure": "Expecting value: line 1 column 1 (char 0)",
+  "original_log": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-416/replay.log",
+  "original_log_sha256": "572d6f088dd95648c8d9db689db37fe98faf786114fc3c64853067fd70e12e53",
+  "native_gameplay_source_sha256": "909acd9a559b0feaf0044d840add0f63c5f835e7474df131e4a00599c840febb",
+  "pinned_build_proof": "/home/parity/jobs/song-selector-observations-linux-green-v1/proof.json",
+  "exact_acceptance_function": "pub(super) fn archive_passes(scope: Scope, report: &Value) -> bool {\n    scope == Scope::Full\n        && report[\"native_frames\"].as_u64().is_some_and(|frames|\n            frames > 0 && report[\"replayed_frames\"].as_u64() == Some(frames))\n        && report[\"mismatches\"].as_array().is_some_and(Vec::is_empty)\n        && report[\"errors\"].as_array().is_some_and(Vec::is_empty)\n}",
+  "acceptance_computed_before_summary_log_and_report_serialization": true,
+  "original_supervisor_source_sha256": "f4bdda59df0c90159f0fa8d4ee7552b6517f713dcf369532851b70dba6538d66",
+  "original_supervisor_scope": "bare --archive --report selects Full",
+  "comparison_counts_verbatim_from_log": [
+    "152631",
+    "224",
+    "0",
+    "0"
+  ],
+  "native_capture_reused": true,
+  "full_replay_repeated": false,
+  "native_expectations_or_gameplay_values_injected": false,
+  "retained_comparison_log_tail": "[17195.4s] replaying every native gameplay frame: frame 152509/152631 (99.9%)\n[17197.4s] replaying every native gameplay frame: frame 152526/152631 (99.9%)\n[17199.4s] replaying every native gameplay frame: frame 152539/152631 (99.9%)\n[17201.4s] replaying every native gameplay frame: frame 152552/152631 (99.9%)\n[17203.4s] replaying every native gameplay frame: frame 152565/152631 (100.0%)\n[17205.4s] replaying every native gameplay frame: frame 152578/152631 (100.0%)\n[17207.4s] replaying every native gameplay frame: frame 152591/152631 (100.0%)\n[17209.4s] replaying every native gameplay frame: frame 152604/152631 (100.0%)\n[17211.4s] replaying every native gameplay frame: frame 152617/152631 (100.0%)\n[17213.4s] replaying every native gameplay frame: 0 checks completed, 0 failed\nreplayed 152631 actual frames; 224 stage samples; 0 mismatches; 0 callback errors\n\nthread 'main' (3487918) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1480:56:\nserialize native report: Error(\"No space left on device (os error 28)\", line: 0, column: 0)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+}

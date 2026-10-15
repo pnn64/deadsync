@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "We're Finally Landing/landing.ssc",
+  "native_frames": 66681,
+  "replayed_frames": 66681,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "25b9aa17a3f15af0a6276f0460b6d08cce0522cb911a4ce895647dad5579348e.tar.zst",
+  "compressed_sha256": "25b9aa17a3f15af0a6276f0460b6d08cce0522cb911a4ce895647dad5579348e",
+  "uncompressed_sha256": "dcfeb4e2f995d4863e1c1d41f904a1af9c2cb3d5984879538ae0f5dc72fea7ba",
+  "compressed_bytes": 22382071,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

@@ -1,0 +1,20 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Stella Glow/Stella Glow.ssc",
+  "native_frames": 152631,
+  "replayed_frames": 152631,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "8732befea87703379dae60c0cd744c7a722eae462775d30442fdcdcd2a3981df.tar.zst",
+  "compressed_sha256": "8732befea87703379dae60c0cd744c7a722eae462775d30442fdcdcd2a3981df",
+  "uncompressed_sha256": "3915e33e35d9673760c8cc9dfc88495631aaa4cf5e0886cdd03309b6f4ba762b",
+  "compressed_bytes": 15767550,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false,
+  "original_replay_exit": 1,
+  "detailed_original_report_available": false,
+  "recovered_acceptance_summary": true,
+  "full_replay_repeated": false,
+  "comparison_counts_and_existing_acceptance_code_verified": true
+}

@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "My Exes Bestfriend/ExBestFriend.sm",
+  "native_frames": 66182,
+  "replayed_frames": 66182,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "02b258ba4d45574ab51f7c8cd3eb6df4fa942bd18218dbd4b44a9e7473b88b09.tar.zst",
+  "compressed_sha256": "02b258ba4d45574ab51f7c8cd3eb6df4fa942bd18218dbd4b44a9e7473b88b09",
+  "uncompressed_sha256": "5d63dfb239e0b987f5806460a53499a93ffd5d1bf4a3329354664a32e38ce225",
+  "compressed_bytes": 84720928,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

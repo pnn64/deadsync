@@ -1,0 +1,15 @@
+{
+  "pid": 1500867,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_who_edgar_storage_first_repair_v1.py"
+  ],
+  "first_full_repair_only": true,
+  "one_later_attempt_maximum": true,
+  "native_capture_reused": true,
+  "original_log_and_report_empty_not_accepted": true,
+  "publisher_stream_count": 129,
+  "build_proof": "/home/parity/jobs/native-cmd-arguments-linux-green-v1/proof.json",
+  "source_pin_count": 1175,
+  "acceptance_changed": false
+}
