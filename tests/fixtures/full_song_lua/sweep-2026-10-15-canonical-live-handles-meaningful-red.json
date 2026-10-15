@@ -1,0 +1,43 @@
+{
+  "regression": "live_large_scene_preserves_actor_identity_and_update_order",
+  "actor_count": 2800,
+  "red_failure_phase": "SongLuaLiveScene::new: construct large live scene",
+  "red_underlying_error": "CallbackError with cause StackError",
+  "both_hosts_zero_passed_one_failed": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 323.2738707999961,
+      "log_sha256": "29fc285b59a21fa3b7610ede1be23e841ddd6145b08e45e942e40490ea434f60",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 620 filtered out; finished in 5.33s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 264.8828324250062,
+      "log_sha256": "a18bc681af76cdb449f6a623d3cc6e480321994abb6eacbed8ab0d390ab444d5",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 618 filtered out; finished in 3.93s"
+      ]
+    }
+  ],
+  "windows_all_1175_normalized_source_pins_reverified_against_preserved_red_sources": true,
+  "linux_all_1175_raw_source_pins_reverified_by_recovery": true,
+  "windows_proof_sha256": "e2177c7697f6f20f3fe8fe27176085dfd3f39d25c8a2d5375563ee163fbf01de",
+  "linux_proof_sha256": "25b842379f57336d84a3fdd8770363830ea6c7fcd3a278a071c13b32cfa85fea",
+  "red_original_logs_reused_without_rerun": true,
+  "regression_assertions_changed": false,
+  "orchestration_display_string_recovery": "Control correctly failed during large live scene construction with StackError wrapped as CallbackError. The orchestration guessed an unwrapped display string; preserve the exact original failure and verify both phase and underlying cause without rerunning or changing assertions.",
+  "production_patch_added": true,
+  "production_patch_committed": false,
+  "all_seventeen_green_groups_not_yet_terminal": true,
+  "native_entry_after_validated_production_fix_queued": true,
+  "full_repairs_spent": 0,
+  "resource_limits_increased": false,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
