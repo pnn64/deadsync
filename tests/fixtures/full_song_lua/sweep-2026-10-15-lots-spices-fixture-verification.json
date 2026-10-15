@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Lots of Spices - [tari]/spices.ssc",
+  "native_frames": 72251,
+  "replayed_frames": 72251,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "a344bb807f975e0d9de295a7512ec7962acfc09d74671f11f0817eec4eb855a0.tar.zst",
+  "compressed_sha256": "a344bb807f975e0d9de295a7512ec7962acfc09d74671f11f0817eec4eb855a0",
+  "uncompressed_sha256": "d9c28af198df059cc1b7bc8ea12962ea89a3c72856f88b44f80a1cc9c52c311d",
+  "compressed_bytes": 4998462,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
