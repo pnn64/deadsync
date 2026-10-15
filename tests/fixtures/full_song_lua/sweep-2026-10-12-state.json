@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T06:28:30Z",
-  "previous_goal_turn": "Progress: Watermelon first repair passed all35146 frames, WOP retained original replay passed all97282 frames, and Wah-leven first repair passed all67913 frames; each has zero callback errors and mismatches, a saved compressed fixture, and a committed local decompressed-byte receipt. These charts are closed. Original-tail handoff v7 retained the same WOP child, collected its actual kernel status after completion, and moved untouched485,493,501 onto a verified worker without signaling or restarting a live replay. ArrowQuest native capture timed out at901 seconds; Lesson by DJ native capture found no dance-single Challenge. Sequential Dreambox completed its native capture and is replaying235675 frames. The exact Rite retained-capture domain experiment proved premature natural-end final mine accounting suppresses the last AvoidMine callback. The production fix defers that accounting to the actual evaluation handoff while preserving ordinary immediate completion and hold-to-exit accounting. The new live-outro regression reproduced red on both hosts; all13 corrected validation groups passed on both hosts, with all1175 raw Linux and normalized cross-platform red/green source pins, logs and the private helper verified. Committed production fix40afbf0b9 and helper selection8bc6998a. Corrected a launcher-only retained-archive path error before any replay child or attempt-start existed, preserving that failed startup without spending another repair. Rite second and final repair is now live against the unchanged104414-frame capture; no third repair is allowed. Mawaru6 final and Mawaru8 first repairs remain live without restart. I Really Like You SSC remains pending on5080 countdown broadcasts after its first complete209028-frame repair; no second launched. Coverage remains separate from existing acceptance. All501 original simfile hashes remain unchanged and the sweep remains active and incomplete.",
+  "updated_utc": "2026-10-15T06:48:17Z",
+  "previous_goal_turn": "Progress: All four retained full replay children remain verified live: Rite final2, Sequential Dreambox original501, Mawaru6 final2, and Mawaru8 first1. No live job was restarted. Three recent closed passes retained their lossless archives while four redundant raw/report files were removed only after uncompressed hash verification, with storage receipt committed. A single local result closer now watches these four live results and will byte-verify and commit each complete passing fixture after the publisher stores it. An exact-source private Mawaru9 entry diagnostic reproduced its startup stack failure during recursive Begin traversal with2453 initialized actors. A single private counterfactual stopped each child registry from retaining a Rust auxiliary Lua handle and completed Begin, On and initial Update with unchanged limits and dispatch order; it then reached a second stack failure after actor startup. The evidence is committed, no chart full repair was spent, and error-only instrumentation is locating the later failure. A meaningful2800-actor regression initially passed without preexisting child lookups; its corrected setup now queries child names before Begin to model authored scanners, while preserving all once-only order expectations. Both-host red checks are running before any production resource fix. HOPE actual startup named missing eases.lua. The already tested complete-Lua archive fix79bb77d rebuilt its candidate using the unchanged complete20574-frame trace and simfile; all old member bytes match and exactly two added Lua modules match the original physical sources. Entry diagnostic1688 frames cleared startup with zero callback errors but20514 command/query mismatches, first native Cancel child count1 versus owned0. HOPE remains pending with zero full repairs spent and no full repair launched. Its original compressed capture is preserved; two temporary raw copies were removed only after byte verification. Current acceptance comparisons, separate coverage ledger, two-repair cap and original501 simfile bytes remain unchanged. Sweep remains active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "3449e2abda9dbd43e092ac234108ad7ed97ee519",
+      "deadsync": "3536879b96db7886e37717cd98382b6287cd9bb6",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -4763,6 +4763,47 @@
       "fix_commit": "40afbf0b9633de3c9efeb89339d6166dad3b28c3",
       "second_full_repair_running": true,
       "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-mine-finalization-final-repair-launch.json"
+    },
+    "closed_pass_storage_recovery_v4": "tests/fixtures/full_song_lua/sweep-2026-10-15-closed-pass-storage-v4.json",
+    "four_live_result_closer": {
+      "pid": 55284,
+      "source": "../itgmania-harness/target/server-parity/close_four_live_replay_results_v1.py",
+      "storage_byte_verification_only": true,
+      "passing_charts_replayed": false
+    },
+    "mawaru9_startup_resource_diagnosis": {
+      "full_repairs_spent": 0,
+      "production_resource_fix_applied": false,
+      "meaningful_regression_added": true,
+      "first_regression_setup_passed_without_preexisting_child_queries": true,
+      "revised_regression_models_child_name_queries_before_begin": true,
+      "diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-mawaru9-startup-context-diagnostic.json",
+      "private_counterfactual": "tests/fixtures/full_song_lua/sweep-2026-10-15-mawaru9-registry-handle-experiment.json",
+      "initial_actor_states": 2453,
+      "counterfactual_begin_on_and_initial_update_completed": true,
+      "counterfactual_later_preparation_stack_error_remains": true,
+      "resource_limits_increased": false,
+      "command_dispatch_order_changed": false,
+      "frozen_original_source_changed": false,
+      "both_host_revised_red_checks_pending": true,
+      "next_private_error_context_job": "/home/parity/jobs/mawaru9-post-startup-context-v3"
+    },
+    "hope_namespace_followup": {
+      "full_repairs_spent": 0,
+      "full_repair_started": false,
+      "native_frames": 20574,
+      "diagnostic_frames": 1688,
+      "callback_errors": 0,
+      "command_query_mismatches": 20514,
+      "native_first_cancel_children": 1,
+      "owned_first_cancel_children": 0,
+      "native_capture_bytes_unchanged": true,
+      "all_original_member_bytes_unchanged": true,
+      "added_physical_lua_inputs": 2,
+      "evidence": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-complete-lua-namespace-diagnostic.json",
+      "storage": "tests/fixtures/full_song_lua/sweep-2026-10-15-hope-preflight-storage.json",
+      "source_archive_fix": "79bb77d",
+      "status": "pending: startup cleared but actual command/query mismatches remain"
     }
   },
   "counts_at_checkpoint": {
@@ -6886,7 +6927,10 @@
     "Finish both-host thirteen-group mine-finalization validation and committed source selection, then collect Rite second and final repair using its unchanged104414-frame capture.",
     "Continue Mawaru6 final and Mawaru8 first full repairs without restarting live processes.",
     "Keep I Really Like You SSC pending on observed countdown broadcast mismatches; inspect initialization-clock inputs before its one remaining full repair.",
-    "Record concrete pending failures separately from missing coverage and preserve every existing comparison and the two-full-repair cap."
+    "Record concrete pending failures separately from missing coverage and preserve every existing comparison and the two-full-repair cap.",
+    "Locate Mawaru9 second stack failure after its proven registry-handle Begin issue; keep native limits unchanged and spend no full chart repair while preparation still fails.",
+    "Collect both-host revised child-name-query/Begin regression checks; only apply and commit a faithful production resource fix after meaningful controls.",
+    "Keep HOPE pending on actual Cancel child-tree command/query mismatches after archive namespace repair; no full repair while known entry mismatches remain."
   ],
   "previous_goal_turn_classification": "progress",
   "resolved_historical_concrete_failures": [
