@@ -1,0 +1,14 @@
+{
+  "local_compressed_backup": "C:\\GitHub\\itgmania-harness\\target\\server-parity\\mawaru9-user-deferred-capture-v2.tar.zst",
+  "compressed_sha256": "960f1b94150ecbd3eff3270ffed0506c5e0c4ef795025e93046704ed412a6811",
+  "compressed_bytes": 53858831,
+  "original_uncompressed_sha256": "7b631569cbc05b52490fced196166794926f6eadbd4590f37af5bf19ee395be5",
+  "local_decompressed_sha256": "7b631569cbc05b52490fced196166794926f6eadbd4590f37af5bf19ee395be5",
+  "local_zstd_decode_exit": 0,
+  "streaming_compression_exit": 0,
+  "no_chart_replay_or_new_attempt": true,
+  "remote_compressed_copy": "/home/parity/jobs/mawaru9-canonical-handles-first-repair-v1/chart-495/960f1b94150ecbd3eff3270ffed0506c5e0c4ef795025e93046704ed412a6811.tar.zst",
+  "remote_compressed_sha256_verified": true,
+  "raw_aliases_removed_after_local_lossless_verification": true,
+  "capture_preserved_in_two_compressed_locations": true
+}

@@ -22,5 +22,7 @@
   "utc": "2026-10-15T19:10:41.305468+00:00",
   "stopped_process_no_longer_running": true,
   "result_sha256": "c49e669a41692a1691e36860c031b5db385b039ebfd3c1f1ecb62890f717e1b6",
-  "replay_log_sha256": "10478986bdda76a3fc0f0db86532cb880695197af5b94df510a9ec71148b650e"
+  "replay_log_sha256": "10478986bdda76a3fc0f0db86532cb880695197af5b94df510a9ec71148b650e",
+  "capture_storage": "sweep-2026-10-15-mawaru9-deferred-capture-storage.json",
+  "capture_preserved_in_two_compressed_locations": true
 }

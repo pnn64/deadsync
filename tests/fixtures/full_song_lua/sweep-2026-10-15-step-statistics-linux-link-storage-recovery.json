@@ -1,0 +1,52 @@
+{
+  "failed_validation_stage": "/home/parity/jobs/step-statistics-linux-green-v6",
+  "failed_checks_preserved": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 244.45948228501948,
+      "log_sha256": "1118c1f5f78f50159c63c5927d9e1a0be6c9254f785c8cfb7f50e07cb733ccc5",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 635 filtered out; finished in 1.28s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 36.8966229740181,
+      "log_sha256": "7886ff2e8928d60946db2f7f7c02486bde05bd2c330304ab6cdd2a0482a4c0d4",
+      "results": [
+        "test result: ok. 99 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 36.21s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 80.40408217901131,
+      "log_sha256": "7ccceff0bc32db9ebe080dec2006adc69bf3d76edc16790299a6fe3b426485bd",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 101,
+      "seconds": 188.9466758549679,
+      "log_sha256": "8ad568da5dc7f025c79da0157b992f46417af80e980c138debfbea4cc44f7648",
+      "results": []
+    }
+  ],
+  "failure": "The semantic replay-control binary link failed with ld signal7 while the server filesystem was exhausted. No test result was produced for that group. Prior target,99 live controls and production input control passed.",
+  "failed_link_temporary_output_path": "/home/parity/build/deadsync-v1/debug/deps/song_lua_itgmania_semantic_parity-455b2f98583f9179.tmp0e4e217",
+  "failed_link_output_removed_after_actual_compiler_argv_and_open_file_reference_checks": true,
+  "partial_compression_also_failed_due_to_space": true,
+  "storage_resolution": "Stream the explicitly deferred Mawaru9 capture losslessly to Windows, verify decompressed SHA256 against the complete original raw capture, remove the two inactive raw hardlinks after two actual argv/open-file checks, then copy and verify compressed storage back on the server. Both computers retain the full compressed capture and all replay logs remain.",
+  "capture_storage": "sweep-2026-10-15-mawaru9-deferred-capture-storage.json",
+  "raw_storage_removal": "sweep-2026-10-15-mawaru9-deferred-raw-storage.json",
+  "recovery_stage": "/home/parity/jobs/step-statistics-linux-green-v7",
+  "same_frozen_source_root": "/home/parity/workspace/step-statistics-green-v6/deadsync",
+  "source_or_test_changes_for_storage_recovery": false,
+  "passed_groups_reused_with_hash_verified_log_copies": 3,
+  "only_remaining_groups_retried": true,
+  "chart_replay_restarted_or_new_repair_attempt": false
+}
