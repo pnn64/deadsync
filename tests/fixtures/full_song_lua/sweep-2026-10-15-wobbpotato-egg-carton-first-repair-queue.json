@@ -1,0 +1,19 @@
+{
+  "status": "first full repair queued behind validated common helper selection",
+  "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
+  "fix_commit": "e8daaa0862dfde8af1096b62e92246b175d30f10",
+  "queue_pid": 2288567,
+  "full_repairs_spent": 0,
+  "full_attempt_on_launch": 1,
+  "one_later_full_repair_maximum": true,
+  "complete_original_native_capture_reused": true,
+  "native_frames": 78636,
+  "candidate_sha256": "8988758df161a64fe92831476b38d15d6208ed2ca080032f20cb8b538cfb8c69",
+  "trace_sha256": "c844e0976dd12d9bc42c8c48910febb84842133b96eaddd04fbf488d2726c0b1",
+  "authored_default_lua_byte_identical_to_blue_shift": true,
+  "native_selected_difficulty": "Difficulty_Challenge",
+  "requires_both_hosts_eight_checks_and_all_1175_source_pins": true,
+  "acceptance_comparators_unchanged": true,
+  "passing_chart_reopened": false,
+  "publisher_stream_count": 139
+}

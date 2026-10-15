@@ -1,0 +1,198 @@
+{
+  "retained_candidate": "/home/parity/jobs/wobbpotato-egg-carton-untyped-actor-candidate-v1/8988758df161a64fe92831476b38d15d6208ed2ca080032f20cb8b538cfb8c69.tar",
+  "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
+  "simfile_sha256": "b401ffe8880d652b2da8c5347cbf8db01be52038899e6c19b80ab748e93ae5aa",
+  "candidate_sha256": "8988758df161a64fe92831476b38d15d6208ed2ca080032f20cb8b538cfb8c69",
+  "trace_sha256": "c844e0976dd12d9bc42c8c48910febb84842133b96eaddd04fbf488d2726c0b1",
+  "native_frames": 78636,
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "first_native_events": [
+    {
+      "args": [
+        0
+      ],
+      "beat": 0,
+      "caller": {
+        "line": 0,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "detail": {
+        "results": [
+          {
+            "description": "No Tech",
+            "difficulty": "Difficulty_Challenge",
+            "index": 5,
+            "meter": 10,
+            "song_dir": "song:/",
+            "steps_type": "StepsType_Dance_Single",
+            "type": "Steps"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 0,
+      "operation": "GameState.GetCurrentSteps",
+      "phase": "construction",
+      "scene": 1,
+      "seconds": 0,
+      "seq": 1,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "args": [
+        0
+      ],
+      "beat": 0,
+      "caller": {
+        "line": 0,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "detail": {
+        "results": [
+          {
+            "description": "No Tech",
+            "difficulty": "Difficulty_Challenge",
+            "index": 5,
+            "meter": 10,
+            "song_dir": "song:/",
+            "steps_type": "StepsType_Dance_Single",
+            "type": "Steps"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 0,
+      "operation": "GameState.GetCurrentSteps",
+      "phase": "construction",
+      "scene": 1,
+      "seconds": 0,
+      "seq": 2,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "args": [],
+      "beat": 0,
+      "caller": {
+        "line": 0,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "detail": {
+        "results": [
+          "Difficulty_Challenge"
+        ]
+      },
+      "kind": "query",
+      "line": 0,
+      "operation": "Steps.GetDifficulty",
+      "phase": "construction",
+      "scene": 1,
+      "seconds": 0,
+      "seq": 3,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "args": [
+        1
+      ],
+      "beat": 0,
+      "caller": {
+        "line": 0,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "detail": {
+        "results": [
+          {
+            "description": "No Tech",
+            "difficulty": "Difficulty_Challenge",
+            "index": 5,
+            "meter": 10,
+            "song_dir": "song:/",
+            "steps_type": "StepsType_Dance_Single",
+            "type": "Steps"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 0,
+      "operation": "GameState.GetCurrentSteps",
+      "phase": "construction",
+      "scene": 1,
+      "seconds": 0,
+      "seq": 4,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "args": [
+        1
+      ],
+      "beat": 0,
+      "caller": {
+        "line": 0,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "detail": {
+        "results": [
+          {
+            "description": "No Tech",
+            "difficulty": "Difficulty_Challenge",
+            "index": 5,
+            "meter": 10,
+            "song_dir": "song:/",
+            "steps_type": "StepsType_Dance_Single",
+            "type": "Steps"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 0,
+      "operation": "GameState.GetCurrentSteps",
+      "phase": "construction",
+      "scene": 1,
+      "seconds": 0,
+      "seq": 5,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "args": [],
+      "beat": 0,
+      "caller": {
+        "line": 0,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "detail": {
+        "results": [
+          "Difficulty_Challenge"
+        ]
+      },
+      "kind": "query",
+      "line": 0,
+      "operation": "Steps.GetDifficulty",
+      "phase": "construction",
+      "scene": 1,
+      "seconds": 0,
+      "seq": 6,
+      "source": "song:/lua/default.lua"
+    }
+  ],
+  "failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Wobbpotato': error converting Lua nil to function; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Wobbpotato' from '/tmp/.tmpbZSdUN/song/lua/default.lua': error converting Lua nil to function\n\nthread 'main' (1384391) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+  "full_repairs_spent": 0,
+  "native_capture_reusable": true,
+  "native_source": "vendor/itgmania/src/ActorUtil.cpp:177-244; Foreground.cpp:29-61",
+  "owned_source": "crates/deadsync-song-lua/src/lua_util.rs:own_actor_root; compile.rs:foreground visible call",
+  "diagnosis": "Selected Challenge difficulty disables the Edit-only mod branch, returns an untyped table. Native uses new Actor without loading fields; owned root remains an uninitialized table and visible is nil.",
+  "authored_default_lua_byte_identical_to_blue_shift": true,
+  "authored_default_lua_sha256": "1db1ebfb95c9291b9d447e11dd328aa72cb7d76ccdd0f80a0f3872e2900481a9",
+  "passing_chart_reopened": false
+}
