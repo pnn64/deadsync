@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "You are Goomba Play ITG/You are Gooma Play ITG.ssc",
+  "native_frames": 32845,
+  "replayed_frames": 32845,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "9e0bccfcf823e9a38b0a06e9263821c2c5042e4d2477174c724d99476e5ce2f4.tar.zst",
+  "compressed_sha256": "9e0bccfcf823e9a38b0a06e9263821c2c5042e4d2477174c724d99476e5ce2f4",
+  "uncompressed_sha256": "ec8b6bf1ea8b8235a2d7d921dc3967a2167ff592b763090d64c19727f5f9360c",
+  "compressed_bytes": 6578819,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
