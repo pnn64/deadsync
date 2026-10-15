@@ -1,0 +1,20 @@
+{
+  "status": "first full repair queued behind all eight checks on both hosts",
+  "source_simfile": "Wobbpotato [Blue Shift Phase 1]/wobbpotato.ssc",
+  "fix_commit": "e8daaa0862dfde8af1096b62e92246b175d30f10",
+  "windows_validator_pid": 53976,
+  "windows_proof_uploader_pid": 51204,
+  "linux_green_validator_pid": 2236961,
+  "queue_pid": 2238826,
+  "full_repairs_spent": 0,
+  "full_attempt_on_launch": 1,
+  "one_later_full_repair_maximum": true,
+  "complete_original_native_capture_reused": true,
+  "native_frames": 74561,
+  "candidate_sha256": "de708ddff7e43c0c9c1c7cddb57bb58184ce5eef2b3ba6907380bc2aa0d0eb4a",
+  "trace_sha256": "4a11f5433fe8ea858d51ed294eaa2a91cb984689ab7a2f18e6002542a0e7d8f4",
+  "requires_all_1175_raw_linux_and_normalized_cross_platform_source_pins": true,
+  "acceptance_comparators_unchanged": true,
+  "passing_charts_reopened": false,
+  "publisher_stream_count": 138
+}
