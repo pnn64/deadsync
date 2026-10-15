@@ -1,0 +1,77 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "4b07d505988e43dabb14441f0a3c6696d0e06009 / harness ca0b435",
+  "results": [
+    {
+      "position": 451,
+      "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
+      "simfile_sha256": "67cfeadc69cdbd54c042acf83a94c9d6ecc0b973c66d4658f3ead831395b2901",
+      "style": "single",
+      "difficulty": "Challenge",
+      "previous_failure": "13 command/query mismatches; missing root OnCommand boundaries for post-constructor assignment; complete native control proves observer gap",
+      "full_repairs_previously_spent": 0,
+      "original_candidate_sha256": "c6ad28102ec956841aee0e7f7c5296ab9a6fdbb064909c956864eca5f6d91d26",
+      "original_trace_sha256": "d00ddcf23aa301ae9a29efbe2205cc8a559a84f6220850d25ce0325c5e93e39c",
+      "status": "passed",
+      "repair_attempts": 1,
+      "binary_sha256": "c25c88cc0b02b3e8fe7466d39632080821972ee363cbfc66aa9b8e139063e4d1",
+      "harness_sha256": "2f2ef99fc977f900bae2f65fc96e550418720d3abb03b045a25e2ea35b7f5e3f",
+      "build_proof": "/home/parity/jobs/player-song-position-linux-green-v1/proof.json",
+      "fix_commit": "4b07d505988e43dabb14441f0a3c6696d0e06009",
+      "harness_fix_commit": "ca0b435",
+      "native_capture_reused": false,
+      "recapture_reason": "native observer omitted late-added OnCommand boundaries; complete old capture preserved, real native control proves corrected capture",
+      "capture_seconds": 82.25649789001909,
+      "trace_sha256": "71ece4d3e33b3f1a66767a6941035d1f3af61afbf11dd3c193a8c03eedd76927",
+      "candidate": "/home/parity/jobs/un-owen-sm-late-command-first-repair-v1/chart-451/candidates/2c4ff29756413b1b84c66ba3c92372ba5abd86a08bfdf96f4ee8c8ed1cd0b956.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1462.7011454820167,
+      "candidate_sha256": "2c4ff29756413b1b84c66ba3c92372ba5abd86a08bfdf96f4ee8c8ed1cd0b956",
+      "native_frames": 67636,
+      "replayed_frames": 67636,
+      "compared_stage_fields": 891,
+      "pending_coverage": [
+        "native drawable state/resources: Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "64b42396b2e017cb5cfa75bd8c62959f4e744b6ddcd91747f9681583755fbd20",
+      "archive": "7ef4e282788a8cbe9f7f6d7214e036a1c1e23f72aa84da1b913853f304ee9531.tar.zst",
+      "archive_sha256": "7ef4e282788a8cbe9f7f6d7214e036a1c1e23f72aa84da1b913853f304ee9531",
+      "compressed_bytes": 4716546,
+      "pack_seconds": 1.9178193289844785,
+      "harness_version": "0.1.80",
+      "title": "U.N. Owen Was Who?",
+      "retained_original_entry": {
+        "title": "U.N. Owen Was Who?",
+        "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
+        "harness_version": "0.1.0",
+        "archive": "22f4b7e93b07b2db7ae57fa01aaca5fa248e9d488e66039d6bbdceedb6751522.tar.zst",
+        "sha256": "22f4b7e93b07b2db7ae57fa01aaca5fa248e9d488e66039d6bbdceedb6751522",
+        "compressed_bytes": 176823,
+        "uncompressed_sha256": "85b5c3e759264810cb48d03b8e386affa1f1d9a0a3edfab0da7c42d03505e352",
+        "compression_level": 22,
+        "aliases": [
+          "23aae9ce07eabee739c688e6dcb5af5c76985eade98440c1821ea5bb83f49947.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "scope": {
+    "original_simfiles": 501,
+    "charts": 1,
+    "original_scope_preserved": true
+  },
+  "binary_sha256": "c25c88cc0b02b3e8fe7466d39632080821972ee363cbfc66aa9b8e139063e4d1",
+  "harness_sha256": "2f2ef99fc977f900bae2f65fc96e550418720d3abb03b045a25e2ea35b7f5e3f",
+  "repair": "first full repair: native observer captures OnCommand assigned after declaration constructor; complete native baseline control proves old observer gap",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}

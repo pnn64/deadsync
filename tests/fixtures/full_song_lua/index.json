@@ -5249,15 +5249,12 @@
     {
       "title": "U.N. Owen Was Who?",
       "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
-      "harness_version": "0.1.0",
-      "archive": "22f4b7e93b07b2db7ae57fa01aaca5fa248e9d488e66039d6bbdceedb6751522.tar.zst",
-      "sha256": "22f4b7e93b07b2db7ae57fa01aaca5fa248e9d488e66039d6bbdceedb6751522",
-      "compressed_bytes": 176823,
-      "uncompressed_sha256": "85b5c3e759264810cb48d03b8e386affa1f1d9a0a3edfab0da7c42d03505e352",
-      "compression_level": 22,
-      "aliases": [
-        "23aae9ce07eabee739c688e6dcb5af5c76985eade98440c1821ea5bb83f49947.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "7ef4e282788a8cbe9f7f6d7214e036a1c1e23f72aa84da1b913853f304ee9531.tar.zst",
+      "sha256": "7ef4e282788a8cbe9f7f6d7214e036a1c1e23f72aa84da1b913853f304ee9531",
+      "compressed_bytes": 4716546,
+      "uncompressed_sha256": "2c4ff29756413b1b84c66ba3c92372ba5abd86a08bfdf96f4ee8c8ed1cd0b956",
+      "aliases": []
     },
     {
       "title": "U.N. Owen Was Who?",
