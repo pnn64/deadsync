@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T06:48:20Z",
+  "updated_utc": "2026-10-15T07:08:09Z",
   "counts": {
     "passed": 394,
     "pending": 106,
@@ -8159,7 +8159,18 @@
       "replayed_frames": null,
       "capture_errors": null,
       "completion": null,
-      "no_third_full_repair": false
+      "no_third_full_repair": false,
+      "followup": "sweep-2026-10-15-hope-complete-lua-namespace-diagnostic.json",
+      "source_cause": "sweep-2026-10-15-hope-cancel-source-cause.json",
+      "entry_diagnostic_frames": 1688,
+      "entry_diagnostic_errors": 0,
+      "entry_diagnostic_mismatches": 20514,
+      "first_native_cancel_children": 1,
+      "first_owned_cancel_children": 0,
+      "archive_namespace_startup_error_cleared_in_diagnostic": true,
+      "native_trace_and_all_original_member_bytes_unchanged": true,
+      "original_terminal_full_result_preserved": true,
+      "new_full_repair_started": false
     },
     {
       "position": 230,
@@ -25016,7 +25027,17 @@
       "replayed_frames": null,
       "capture_errors": null,
       "completion": null,
-      "no_third_full_repair": false
+      "no_third_full_repair": false,
+      "followup": "sweep-2026-10-15-mawaru9-startup-context-diagnostic.json",
+      "registry_handle_counterfactual": "sweep-2026-10-15-mawaru9-registry-handle-experiment.json",
+      "post_startup_context": "sweep-2026-10-15-mawaru9-post-startup-context.json",
+      "registry_reuse_experiment": "sweep-2026-10-15-mawaru9-shared-registry-experiment.json",
+      "initial_actor_states": 2453,
+      "private_counterfactual_begin_on_initial_update_completed": true,
+      "remaining_private_preparation_failure": "prepare_live_updates in SongLuaLiveScene::new",
+      "native_limits_increased": false,
+      "original_terminal_full_result_preserved": true,
+      "new_full_repair_started": false
     },
     {
       "position": 496,
