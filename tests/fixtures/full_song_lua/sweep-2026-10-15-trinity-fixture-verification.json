@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Trinity Field/Trinity Field.ssc",
+  "native_frames": 46907,
+  "replayed_frames": 46907,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "5f62106f51929b4ae3362f065d71df6b7e2f0114ec42125cd4c0669201dbd8bd.tar.zst",
+  "compressed_sha256": "5f62106f51929b4ae3362f065d71df6b7e2f0114ec42125cd4c0669201dbd8bd",
+  "uncompressed_sha256": "fbf84818890ab578f9be4bea370d4ccb5e515c911630965ddd9375233567abc8",
+  "compressed_bytes": 9848272,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
