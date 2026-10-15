@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.sm",
+  "native_frames": 49757,
+  "replayed_frames": 49757,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "264ade0910f528488c33ce029ee5713128acb1fd46cfd06bf760c44f4125f165.tar.zst",
+  "compressed_sha256": "264ade0910f528488c33ce029ee5713128acb1fd46cfd06bf760c44f4125f165",
+  "uncompressed_sha256": "6a3fcca8002a831ee11a7c222a75dc2305f2277b29b52e14e2139d5fb5b3f5f8",
+  "compressed_bytes": 6113193,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
