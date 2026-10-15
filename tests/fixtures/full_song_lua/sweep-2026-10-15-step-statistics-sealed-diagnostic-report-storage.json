@@ -1,0 +1,63 @@
+{
+  "reason": "Free duplicate raw reports already preserved losslessly as compressed terminal diagnostics; no captures, fixture archives, source files or live inputs are removed.",
+  "reports": [
+    {
+      "raw_path": "/home/parity/jobs/igaku-function-metadata-diagnostic-v1/chart-240/report.json",
+      "raw_bytes": 77584032,
+      "raw_sha256": "d0cec7ff908b4209a98d5919d4002746e879d7d23b45d1232fe31643fa2067af",
+      "compressed_path": "/home/parity/jobs/igaku-function-metadata-diagnostic-v1/chart-240/report.json.zst",
+      "compressed_bytes": 1392493,
+      "compressed_sha256": "1c08e679c0e451a633050d8f364574c1a5dc354c1b1262b7c44341d7afe87777",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "753d850a4fddfc7a8a985b148fda1ba4a8edb00fdb145ba119950df20b9eed05",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/spectrum-function-metadata-diagnostic-v1/chart-407/report.json",
+      "raw_bytes": 17830162,
+      "raw_sha256": "690c5c4031b8d3a1f97220c77cad419c94415d57fa8c1065c8868389c50c338b",
+      "compressed_path": "/home/parity/jobs/spectrum-function-metadata-diagnostic-v1/chart-407/report.json.zst",
+      "compressed_bytes": 372849,
+      "compressed_sha256": "932a509efa727f4388950ec961723d6335d50c22166ac9887efb09f999ea1219",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "5c1912f9058d2748abe4f259c3dbc84e644c6ed90f92071aeb08fdefa132ad05",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/shakunetsu-native-cmd-entry-diagnostic-v1/report.json",
+      "raw_bytes": 33385339,
+      "raw_sha256": "4db26d2c7dd582110c73589e243d4db78d65a8f94e87a319de0f9d1dc71635cf",
+      "compressed_path": "/home/parity/jobs/shakunetsu-native-cmd-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 527517,
+      "compressed_sha256": "53bc497a03bc1d9715f61709168e16018f7f0d7fa6c0ed9954b1d89854b21fbe",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "2bbe39fdb826667351eb30e9ddbc4dc62a74785689e330c16715579c2258c78a",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/hope-underlay-header-entry-diagnostic-v1/report.json",
+      "raw_bytes": 62234599,
+      "raw_sha256": "095ac722d1303bb4a76d7a16898a403e5efb5c033ed6cc4a3e883949c0aa0fb2",
+      "compressed_path": "/home/parity/jobs/hope-underlay-header-entry-diagnostic-v1/report.json.zst",
+      "compressed_bytes": 945466,
+      "compressed_sha256": "f140397de518cbfcb6e3104304b6802735478315b74337598d8314057aa4d291",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "2071a2396992e5a79b54eba1d0bbb0a7c340a3316cfb30774e36c26f04a065b2",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    }
+  ],
+  "raw_report_bytes_removed": 191034132,
+  "free_before": 175013888,
+  "free_after": 362790912,
+  "mawaru9_helper_hash_unchanged": true,
+  "chart_replays_or_compilers_stopped": false,
+  "acceptance_or_attempt_counts_changed": false
+}
