@@ -1660,6 +1660,56 @@
       "capture_exit": 1,
       "capture_seconds": 900.274729272991,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1650259-1792024376649881908-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1650259-1792024376649881908-0\n"
+    },
+    {
+      "position": 488,
+      "source_simfile": "Collaboration with Paul J Kim/Something.sm",
+      "simfile_sha256": "6dbe100f3f622fb59e684b7f0953f4fe7b448deec1821630c68235437d326fb3",
+      "historical_failure": {
+        "simfile": "Collaboration with Paul J Kim/Something.sm",
+        "status": "partial",
+        "category": "source_error",
+        "reason": "corpus:/Collaboration with Paul J Kim/Nothing/default.lua:6: attempt to index global 'SREENMAN' (a nil value)",
+        "diagnostics": "target/song-lua-repair/phase2/5c63f1e940a14e50",
+        "dropped_events": 0,
+        "end_position": {
+          "beat": 339,
+          "seconds": 131.35581970214844
+        },
+        "target_beat": 339.0
+      },
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 210.77572033400065,
+      "trace_sha256": "83d8ab1df94aaef846be55dd3388c8a71c26570651cf340118579a5a68dcceb2",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-488/candidates/4035f791a6fd887df63b0dfdd67c9c9efa8a97f7cabbc5b5dbae73d4bc196890.tar",
+      "replay_exit": 0,
+      "replay_seconds": 833.5327305999817,
+      "candidate_sha256": "4035f791a6fd887df63b0dfdd67c9c9efa8a97f7cabbc5b5dbae73d4bc196890",
+      "native_frames": 35222,
+      "replayed_frames": 35222,
+      "compared_stage_fields": 1529,
+      "pending_coverage": [
+        "uncompared song operations: Actor.xy",
+        "native drawable state/resources: Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "3acfabc426fad44f73b2a48e96fb58e1a15cd0468220d995c593cb5423f17283",
+      "archive": "2b5fde5e50abf1b7b754d9c5d6897ab325225dae40793a565fe303f4a888cc4d.tar.zst",
+      "archive_sha256": "2b5fde5e50abf1b7b754d9c5d6897ab325225dae40793a565fe303f4a888cc4d",
+      "compressed_bytes": 18757504,
+      "pack_seconds": 37.816735953994794,
+      "harness_version": "0.1.80",
+      "title": "Miitopia Event Battle",
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -1670,7 +1720,7 @@
   },
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 9,
+  "passed_fixtures": 10,
   "pending_charts": 8,
-  "processed_charts": 17
+  "processed_charts": 18
 }
