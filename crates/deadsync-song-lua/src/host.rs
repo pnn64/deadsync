@@ -124,6 +124,7 @@ pub(crate) fn replace_gameplay_screen(
     // LoadNextSong calls ResetMusicStatistics before loading authored actors.
     // End callbacks still observe the outgoing clock; constructors start at 0.
     crate::set_compile_song_runtime_values(lua, 0.0, 0.0)?;
+    crate::lua_util::install_native_step_statistics(lua, None)?;
     Ok(())
 }
 
@@ -163,6 +164,7 @@ pub fn install_compile_host(
         install_actor_methods,
     )?;
     install_file_loader_globals(lua, context.song_dir.clone(), create_dummy_actor)?;
+    crate::lua_util::install_native_step_statistics(lua, Some(install_actor_methods))?;
     Ok(())
 }
 

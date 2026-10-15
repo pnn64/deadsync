@@ -1837,12 +1837,12 @@ fn make_actor_ctor(
             Ok(merged)
         })?)?;
         let factory: Function = lua.load(r#"
-return function(class, mt)
+return function(class, mt, getinfo)
     return function(t)
         t.Class = class
         local level = t._Level and t._Level + 1 or 2
         repeat
-            local info = debug.getinfo(level, 'Sl')
+            local info = getinfo(level, 'Sl')
             if not info then break end
             t._Source = info.source
             t._Line = info.currentline
@@ -1856,7 +1856,19 @@ return function(class, mt)
     end
 end
 "#).eval()?;
-        return factory.call((actor_type, mt));
+        // Native ActorDef walks real frames, including theme loading before
+        // any authored song path exists. Never use the compatibility debug table
+        // for this constructor: it cannot signal the end of the Lua stack.
+        let getinfo = lua.create_function(|lua, (level, _what): (usize, String)| {
+            lua.inspect_stack(level, |frame| {
+                let source = frame.source();
+                let info = lua.create_table()?;
+                info.raw_set("source", source.source.as_deref().unwrap_or("=[C]"))?;
+                info.raw_set("currentline", frame.current_line().map_or(-1_i64, |line| line as i64))?;
+                Ok(Value::Table(info))
+            }).unwrap_or(Ok(Value::Nil))
+        })?;
+        return factory.call((actor_type, mt, getinfo));
     }
     lua.create_function(move |lua, value: Value| {
         let table = match value {
@@ -2430,7 +2442,6 @@ pub fn can_create_named_child_actor(parent: &Table, name: &str) -> mlua::Result<
         }
         return Ok(underlay_score_index(name).is_some()
             || name.eq_ignore_ascii_case("SongMeter")
-            || top_screen_step_stats_pane_index(name).is_some()
             || top_screen_danger_index(name).is_some()
             || name.eq_ignore_ascii_case("Header"));
     }
@@ -14172,37 +14183,6 @@ pub fn create_underlay_theme_actor(
         actor_children(lua, &actor)?.set("SongTitle", title)?;
         return Ok(Some(actor));
     }
-    if let Some(player) = top_screen_step_stats_pane_index(name) {
-        let pane = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
-        if simply_love_step_stats_enabled(lua, player)? {
-            // DensityGraph.lua's outer, unnamed ActorFrame owns a real sleep
-            // queue. Its descendants draw the graph but do not own tweens.
-            let graph = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
-            graph.raw_set("__songlua_parent", pane.clone())?;
-            let game: Table = lua.globals().get("GAMESTATE")?;
-            let song: Table = game.get::<Function>("GetCurrentSong")?.call(game)?;
-            let timing: Table = song.get::<Function>("GetTimingData")?.call(song)?;
-            let changes = timing.get::<Function>("HasBPMChanges")?.call::<bool>(timing.clone())?;
-            let bpms: Table = timing.get::<Function>("GetBPMs")?.call(timing)?;
-            let bpm = bpms.raw_get::<f64>(1)?;
-            // CurrentSongChanged quantizes to global Song eighth notes, using
-            // Lua doubles. Actor::Sleep converts the duration to a float.
-            let interval = if !changes && bpm >= 60.0 {
-                let eighth = (60.0 / bpm) / 2.0;
-                eighth * (0.25 / eighth).ceil()
-            } else { 0.25 };
-            graph.raw_set("UpdateCommand", lua.create_function(move |_, actor: Table| {
-                actor.get::<Function>("sleep")?.call::<()>((actor.clone(), interval))?;
-                actor.get::<Function>("queuecommand")?.call::<()>((actor, "Update"))
-            })?)?;
-            // Native Init queues the first Update at time zero; it runs on
-            // the first positive actor delta, retaining that frame's remainder.
-            graph.get::<Function>("queuecommand")?.call::<()>((graph.clone(), "Update"))?;
-            push_sequence_child_once(&pane, graph.clone())?;
-            actor_children(lua, &pane)?.raw_set("", graph)?;
-        }
-        return Ok(Some(pane));
-    }
     if name.eq_ignore_ascii_case("Header") {
         let actor = create_named_actor(lua, "Quad", "Header", create_dummy_actor)?;
         actor.raw_set("__songlua_parent", parent.clone())?;
@@ -14324,39 +14304,6 @@ return {
     }
     root.get::<Function>("queuecommand")?.call::<()>((root.clone(), "SetUpdate"))?;
     Ok(root)
-}
-
-fn simply_love_step_stats_enabled(lua: &Lua, player: usize) -> mlua::Result<bool> {
-    // StepStatistics/default.lua excludes these layouts before loading the
-    // DensityGraph. Use the host's actual layout and profile values.
-    let globals = lua.globals();
-    let sl: Table = globals.get("SL")?;
-    let mods: Table = sl.get::<Table>(if player == 0 { "P1" } else { "P2" })?.get("ActiveModifiers")?;
-    if mods.get::<String>("DataVisualizations")? != "Step Statistics"
-        || sl.get::<Table>("Global")?.get::<String>("GameMode")? == "Casual" {
-        return Ok(false);
-    }
-    let game: Table = globals.get("GAMESTATE")?;
-    let style: Table = game.get::<Function>("GetCurrentStyle")?.call(game)?;
-    let style = style.get::<Function>("GetName")?.call::<String>(style)?;
-    let width = globals.get::<f32>("SCREEN_WIDTH")?;
-    let height = globals.get::<f32>("SCREEN_HEIGHT")?;
-    let ultra_wide = width / height > 21.0 / 9.0;
-    let field_width = globals.get::<Function>("GetNotefieldWidth")?.call::<f32>(())?;
-    let field_x = globals.get::<Function>("GetNotefieldX")?
-        .call::<f32>(format!("PlayerNumber_P{}", player + 1))?;
-    let wide = globals.get::<Function>("IsUsingWideScreen")?.call::<bool>(())?;
-    let pref = |name: &str| -> mlua::Result<Value> {
-        if let Some(prefs) = globals.get::<Option<Table>>("ThemePrefs")? {
-            prefs.get::<Function>("Get")?.call(name)
-        } else { crate::theme_pref_default(lua, name) }
-    };
-    Ok(!((!ultra_wide && style == "versus")
-        || (truthy(&pref("EnableTournamentMode")?) && read_string(pref("StepStats")?).as_deref() == Some("Hide"))
-        || (field_width > width / 2.0 && style != "double")
-        || (field_x == width / 2.0 && !wide)
-        || (!ultra_wide && style != "single" && style != "double")
-        || (ultra_wide && style != "single" && style != "versus")))
 }
 
 pub fn create_screen_timer_actor(
@@ -14833,7 +14780,7 @@ local meter = {
 
 		-- life-changing
 		-- adjective
-		--  /ˈlaɪfˌtʃeɪn.dʒɪŋ/
+		--  /ËˆlaÉªfËŒtÊƒeÉªn.dÊ’ÉªÅ‹/
 		-- having an effect that is strong enough to change someone's life
 		-- synonyms: compelling, life-altering, puissant, blazing
 		LifeChangedMessageCommand=function(self,params)
@@ -15118,29 +15065,34 @@ pub fn install_underlay_theme_children(
                 continue;
             }
         }
+        if let Some(player) = top_screen_step_stats_pane_index(name) {
+            if let Some(filter) = create_underlay_background_filter(lua, underlay, player, create_dummy_actor)? {
+                filter.raw_set("__songlua_underlay_role", format!("filter{player}"))?;
+                push_sequence_child_once(underlay, filter.clone())?;
+                unnamed.raw_set(unnamed.raw_len() + 1, filter)?;
+            }
+            continue; // Native StepStatistics is loaded after its host services exist.
+        }
         let child = create_named_child_actor(lua, underlay, name)?;
-        if top_screen_step_stats_pane_index(name).is_some() || name.starts_with("NoteFieldContainerP") {
+        if name.starts_with("NoteFieldContainerP") {
             // Named lookup and screen Update share the same pane owner.
             push_sequence_child_once(underlay, child.clone())?;
         }
         children.set(name, child)?;
-        if let Some(player) = top_screen_step_stats_pane_index(name)
-            && let Some(filter) = create_underlay_background_filter(lua, underlay, player, create_dummy_actor)?
-        {
-            push_sequence_child_once(underlay, filter.clone())?;
-            unnamed.raw_set(unnamed.raw_len() + 1, filter)?;
-        }
         if let Some(player) = underlay_score_index(name) {
             let meter = create_underlay_difficulty_meter(lua, underlay, player, create_dummy_actor)?;
+            meter.raw_set("__songlua_underlay_role", format!("difficulty{player}"))?;
             push_sequence_child_once(underlay, meter.clone())?;
             unnamed.raw_set(unnamed.raw_len() + 1, meter)?;
             if let Some(life) = create_underlay_standard_life_meter(lua, underlay, player, create_dummy_actor)? {
+                life.raw_set("__songlua_underlay_role", format!("life{player}"))?;
                 push_sequence_child_once(underlay, life.clone())?;
                 unnamed.raw_set(unnamed.raw_len() + 1, life)?;
             }
         }
     }
     let bpm = create_underlay_shared_bpm(lua, underlay, create_dummy_actor)?;
+    bpm.raw_set("__songlua_underlay_role", "bpm")?;
     push_sequence_child_once(underlay, bpm.clone())?;
     unnamed.raw_set(unnamed.raw_len() + 1, bpm)?;
     match unnamed.raw_len() {
@@ -22170,4 +22122,119 @@ return {mutate, verify}
         restore_function_action_tables(&lua, snapshot).expect("restore saved locals");
         verify.call::<()>(()).expect("restore identities, values, aliases and replaced upvalue cells");
     }
+}
+
+
+fn load_native_step_statistics(lua: &Lua, environment: &Table, path: &str, args: MultiValue) -> mlua::Result<Value> {
+    let name = path.strip_prefix("./").unwrap_or(path);
+    let source = match name {
+        "default.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua"),
+        "Banner.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/Banner.lua"),
+        "DarkBackground.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DarkBackground.lua"),
+        "DensityGraph.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"),
+        "HoldsMinesRolls.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/HoldsMinesRolls.lua"),
+        "Scorebox.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/Scorebox.lua"),
+        "TapNoteJudgments.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/TapNoteJudgments.lua"),
+        "Time.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/Time.lua"),
+        _ => return Err(mlua::Error::runtime(format!("unknown native StepStatistics resource {path}"))),
+    };
+    lua.load(source).set_environment(environment.clone())
+        .set_name(format!("@theme:/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/{name}"))
+        .call(args)
+}
+
+fn native_step_statistics_environment(lua: &Lua) -> mlua::Result<Table> {
+    let globals = lua.globals();
+    if let Some(environment) = globals.raw_get::<Option<Table>>("__songlua_step_statistics_environment")? {
+        return Ok(environment);
+    }
+    let environment = lua.create_table()?;
+    let mt = lua.create_table()?;
+    mt.raw_set("__index", globals.clone())?;
+    mt.raw_set("__newindex", globals.clone())?;
+    environment.set_metatable(Some(mt))?;
+    globals.raw_set("__songlua_step_statistics_environment", environment.clone())?;
+    environment.raw_set("LoadActor", lua.create_function(|lua, args: MultiValue| {
+        let path = args.front().cloned().and_then(read_string)
+            .ok_or_else(|| mlua::Error::runtime("native LoadActor requires a path"))?;
+        let environment = lua.globals().raw_get::<Table>("__songlua_step_statistics_environment")?;
+        load_native_step_statistics(lua, &environment, &path,
+            MultiValue::from_vec(args.into_iter().skip(1).collect()))
+    })?)?;
+    lua.load(include_str!("../assets/simply-love/Scripts/SL-Histogram.lua"))
+        .set_environment(environment.clone()).set_name("@theme:/Scripts/SL-Histogram.lua").exec()?;
+    Ok(environment)
+}
+
+fn native_step_statistics_command(lua: &Lua, actor: &Table, command: &str) -> mlua::Result<()> {
+    if let Some(callback) = actor.raw_get::<Option<Function>>(command)? { callback.call::<()>(actor.clone())?; }
+    for child in actor_direct_children(lua, actor)? {
+        native_step_statistics_command(lua, &child, command)?;
+    }
+    Ok(())
+}
+
+fn native_step_statistics_lookup(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if actor_type_is(actor, "ActorFrame")? { actor.raw_set("__songlua_owned_child_lookup", true)?; }
+    for child in actor_direct_children(lua, actor)? { native_step_statistics_lookup(lua, &child)?; }
+    Ok(())
+}
+
+pub(crate) fn install_native_step_statistics(
+    lua: &Lua, install_methods: Option<fn(&Lua, &Table) -> mlua::Result<()>>,
+) -> mlua::Result<()> {
+    // The native theme loads before song Foreground and query observation.
+    // SCREENMAN, message services, late helpers and Def must already exist.
+    let environment = native_step_statistics_environment(lua)?;
+    let install_methods = install_methods.or_else(|| lua.app_data_ref::<ActorDefinitionHost>()
+        .map(|host| host.install_methods))
+        .ok_or_else(|| mlua::Error::runtime("StepStatistics requires its actor host"))?;
+    let screen = lua.globals().raw_get::<Table>("__songlua_top_screen")?;
+    let underlay = actor_children(lua, &screen)?.raw_get::<Table>("Underlay")?;
+    let game = lua.globals().get::<Table>("GAMESTATE")?;
+    let players = game.get::<Function>("GetHumanPlayers")?.call::<Table>(game)?;
+    // Native QueueCommand appends a tween; theme Init and song-change queues
+    // wait for the screen update along with the later authored startup queues.
+    if lua.app_data_ref::<SongLuaStartupQueues>().is_none() {
+        lua.set_app_data(SongLuaStartupQueues(Vec::new()));
+    }
+    let song_output = lua.remove_app_data::<LiveBroadcasts>();
+    let result = (|| -> mlua::Result<()> {
+        let mut panes = Vec::new();
+        for player in players.sequence_values::<Value>() {
+            let definition = load_native_step_statistics(lua, &environment, "default.lua",
+                MultiValue::from_vec(vec![player?]))?;
+            if definition.is_nil() { continue; }
+            let pane = own_actor_root(lua, definition, install_methods)?;
+            let Value::Table(pane) = pane else { return Err(mlua::Error::runtime("native StepStatistics must load an actor")); };
+            pane.raw_set("__songlua_parent", underlay.clone())?;
+            run_actor_init_commands_for_table(lua, &pane)?;
+            native_step_statistics_lookup(lua, &pane)?;
+            let name = actor_name(&pane)?;
+            actor_children(lua, &underlay)?.raw_set(name, pane.clone())?;
+            push_sequence_child_once(&underlay, pane.clone())?;
+            panes.push(pane);
+        }
+        // Reproduce default.lua's adoption order so duplicate-name groups are
+        // fresh tables constructed from the actual native sequence.
+        let mut children = actor_direct_children(lua, &underlay)?;
+        children.sort_by_key(|actor| {
+            let name = actor_name(actor).unwrap_or_default();
+            let role = actor.raw_get::<Option<String>>("__songlua_underlay_role").ok().flatten().unwrap_or(name);
+            ["DangerP1","StepStatsPaneP1","filter0","DangerP2","StepStatsPaneP2","filter1",
+                "Header","SongMeter","P1Score","difficulty0","life0","NoteFieldContainerP1",
+                "P2Score","difficulty1","life1","NoteFieldContainerP2","bpm"]
+                .iter().position(|&name| name == role).unwrap_or(99)
+        });
+        for (index, child) in children.into_iter().enumerate() { underlay.raw_set(index + 1, child)?; }
+        underlay.raw_set("__songlua_owned_child_lookup", true)?;
+        for pane in &panes { native_step_statistics_command(lua, pane, "BeginCommand")?; }
+        for pane in &panes { native_step_statistics_command(lua, pane, "OnCommand")?; }
+        // LoadNextSong sets m_pCurSong before authored Foreground is loaded.
+        // Theme handlers use real Steps/timing and retain their normal messages.
+        broadcast_native_song_lua_message(lua, "CurrentSongChanged", None)?;
+        Ok(())
+    })();
+    if let Some(song_output) = song_output { lua.set_app_data(song_output); }
+    result
 }

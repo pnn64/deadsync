@@ -2829,6 +2829,26 @@ fn install_step_measure_density(
             |timing| timing.measure_index_at_beat(beat));
         let last = parsed.iter().map(|note| note.tail_row_index.unwrap_or(note.row_index))
             .max().map(&beat).transpose()?.unwrap_or(0.0);
+        let mut radar = [0_u32;4];
+        for note in &parsed {
+            let beat = beat(note.row_index)?;
+            if timing_model.is_some_and(|timing| !timing.is_judgable_at_beat(beat)) { continue; }
+            match note.note_type {
+                NoteType::Tap | NoteType::Lift => radar[0] += 1,
+                NoteType::Hold => { radar[0] += 1; radar[1] += 1; },
+                NoteType::Roll => { radar[0] += 1; radar[3] += 1; },
+                NoteType::Mine => radar[2] += 1,
+                _ => (),
+            }
+        }
+        let values = lua.create_table()?;
+        values.set("GetValue", lua.create_function(move |_, args: MultiValue| {
+            let name = method_arg(&args, 0).cloned().and_then(read_string).unwrap_or_default();
+            Ok(match name.strip_prefix("RadarCategory_").unwrap_or(&name) {
+                "Notes" => radar[0], "Holds" => radar[1], "Mines" => radar[2], "Rolls" => radar[3], _ => 0,
+            })
+        })?)?;
+        steps.set("GetRadarValues", lua.create_function(move |_, _: MultiValue| Ok(values.clone()))?)?;
         let measure_count = measure(last) + 1;
         let mut rows = std::collections::BTreeMap::<usize, bool>::new();
         for note in &parsed {

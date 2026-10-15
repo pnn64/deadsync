@@ -77,7 +77,8 @@ fn null_renderer_reaches_song_lua_unchanged() {
     assert!(context.players[0].hide_lifebar && context.players[1].hide_lifebar);
     assert_eq!(context.players[0].life_meter_type, "Vertical");
     assert!(context.players[0].nps_graph_at_top && !context.players[1].nps_graph_at_top);
-    assert!(!context.players[0].step_statistics_enabled && context.players[1].step_statistics_enabled);
+    assert!(!context.players[0].step_statistics_enabled);
+    assert_eq!(context.players[1].step_statistics_enabled, context.players[1].enabled);
     assert_eq!(context.video_renderers, "null");
     assert!(!context.render_to_texture);
 }

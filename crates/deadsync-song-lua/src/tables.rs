@@ -2525,10 +2525,10 @@ pub fn create_background_filter_values(lua: &Lua) -> mlua::Result<Table> {
     table.set("Dark", 50)?;
     table.set("Darker", 75)?;
     table.set("Darkest", 95)?;
-    table.raw_set(0, 0)?;
-    table.raw_set(50, 50)?;
-    table.raw_set(75, 75)?;
-    table.raw_set(95, 95)?;
+    // Production profiles also permit percentages between the native named choices.
+    for percent in 0..=100 {
+        table.raw_set(percent, percent)?;
+    }
     Ok(table)
 }
 

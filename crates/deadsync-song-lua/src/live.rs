@@ -3798,6 +3798,7 @@ return Def.Actor { OnCommand = function(self) self:sleep(9999) end }
             ("disabled",854.0,480.0,[true,false],false,false)] {
             let mut compiled = compile_with_context(&format!("native-step-statistics-{name}"),
                 "return Def.ActorFrame {}", |context| {
+                    context.defer_initial_live_update=true;
                     context.screen_width=width; context.screen_height=height;
                     for player in 0..2 {
                         context.players[player].enabled=enabled[player];
@@ -3835,7 +3836,7 @@ for p=1,2 do
         local banner, timer=loose[1],loose[2]
         assert(tostring(banner):find('Banner',1,true) and timer:GetNumChildren()==4)
         local time=timer:GetChild('')
-        assert(time[1]:GetText()=='1:00' and time[3]:GetText()=='1:00')
+        assert(time[1]:GetText()=='' and time[3]:GetText()=='1:00', 'native pre-update timer: '..time[1]:GetText()..' / '..time[3]:GetText())
         local parts=pane:GetChild('')
         local dark, graph=parts[1],parts[2]
         assert(tostring(dark):find('Sprite',1,true) and dark:GetTexture())
@@ -3857,7 +3858,17 @@ end
 for _,v in ipairs(PANES) do
     assert(v.timer:GetText()=='0:58')
     assert(v.histogram:GetNumVertices()>0 and v.life:GetNumVertices()>0)
-    MESSAGEMAN:Broadcast('Judgment',{Player=v.player,TapNoteScore='TapNoteScore_W1'})
+end
+"#).exec().unwrap();
+            let panes=scene.lua.globals().get::<Table>("PANES").unwrap();
+            for pane in panes.sequence_values::<Table>() {
+                let params=scene.lua.create_table().unwrap();
+                params.raw_set("Player",pane.unwrap().raw_get::<String>("player").unwrap()).unwrap();
+                params.raw_set("TapNoteScore","TapNoteScore_W1").unwrap();
+                crate::lua_util::broadcast_native_song_lua_message(&scene.lua,"Judgment",Some(Value::Table(params))).unwrap();
+            }
+            scene.lua.load(r#"
+for _,v in ipairs(PANES) do
     assert(v.count:GetText()=='0001')
     MESSAGEMAN:Broadcast('HealthStateChanged',{PlayerNumber=v.player,HealthState='HealthState_Dead'})
 end

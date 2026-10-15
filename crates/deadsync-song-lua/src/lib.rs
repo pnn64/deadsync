@@ -20057,6 +20057,7 @@ return Def.ActorFrame{
 "#).unwrap();
         for enabled in [[true, false], [false, true], [true, true]] {
             let mut context = SongLuaCompileContext::new(&song_dir, "enabled underlay players");
+            context.screen_width = 854.0;
             for (player, enabled) in context.players.iter_mut().zip(enabled) {
                 player.enabled = enabled;
             }
