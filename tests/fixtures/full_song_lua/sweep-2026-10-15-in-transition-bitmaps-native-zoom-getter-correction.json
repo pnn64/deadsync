@@ -1,0 +1,37 @@
+{
+  "green_v2_runtime_failure_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 325.3454882000078,
+      "log_sha256": "63d76c8afc5359cd956e3f5ebfeeb3ec43211f20ef798b832deb5c8e580146a1",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 629 filtered out; finished in 0.24s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 250.08243667602073,
+      "log_sha256": "41b34bf430c1fe14ebe98c4711db1933a120dec8ad99d8eb6495f22b6f86e722",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 627 filtered out; finished in 0.21s"
+      ]
+    }
+  ],
+  "cause": "The regression incorrectly expected GetZoomX/Y to expose current rendered scale. Native Actor.h reads DestTweenState().scale, so these getters expose the queued On destination.",
+  "primary_native_source": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\Actor.h",
+  "primary_native_source_sha256": "76ff31b0dad5cc1198d01dbe735fed769aac40d309017fbb501bcdcef958219b",
+  "correction": "Check native destinations1.1,1.3,0.9 with Lua getters, and separately assert that current rendered X/Y scale starts at0.",
+  "production_source_bytes_identical_green_v2_v3": true,
+  "missing_bitmap_red_failure_prefix_unchanged": true,
+  "red_captures_remain_valid_for_earlier_missing_texture_assertion": true,
+  "entire_regression_source_identical_red_green": false,
+  "final_verifier_allows_only_the_exact_native_getter_correction_and_added_rendered_pose_checks": true,
+  "existing_acceptance_and_replay_control_sources_changed": false,
+  "full_chart_repairs_spent": 0,
+  "native_capture_changed": false
+}
