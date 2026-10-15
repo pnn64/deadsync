@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Ztar Trek/steps.sm",
+  "native_frames": 69378,
+  "replayed_frames": 69378,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "54e314619e1ca14d0d32f4acd2b6670d5029aa6958093a98e686b8989bfd1405.tar.zst",
+  "compressed_sha256": "54e314619e1ca14d0d32f4acd2b6670d5029aa6958093a98e686b8989bfd1405",
+  "uncompressed_sha256": "bcedb012b58a42c1cd378c8c83c29dcc5d36933171ceef26dda7846e7128380b",
+  "compressed_bytes": 3841496,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
