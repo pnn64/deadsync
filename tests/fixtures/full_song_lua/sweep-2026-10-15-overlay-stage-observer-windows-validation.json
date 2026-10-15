@@ -1,0 +1,81 @@
+{
+  "fix_commit": "4c9ae9ef093b2cc8d35f6266920ab6763b4385d9",
+  "all_eight_checks_passed": true,
+  "all_1175_source_pins_verified": true,
+  "all_log_hashes_verified": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 302.9628866999992,
+      "log_sha256": "9afcd2c28e71e36040f20be08ae9fe6d1968592f3609655e44cefd51094891b0",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 612 filtered out; finished in 0.18s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 1.5785048000107054,
+      "log_sha256": "1b82b979bbdd64ee86d0acc404abdaa20ba3b97564be010e4c42b1c1201d0074",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 612 filtered out; finished in 0.19s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 0.7691466999967815,
+      "log_sha256": "c379c48e8dcf7ece541b4e33a8f6e5919b0c5845b6ac1ebfde88368c01942546",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.3440699000057066,
+      "log_sha256": "606148165b3b9af656b4c4f20daed1fb8cc8b01911d9c97b00ff47bfc848f63d",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 33.87647659999493,
+      "log_sha256": "aab34a4f4025943381fc1faded3fe555e071e681328be3fd4453b9bb6ce88252",
+      "results": [
+        "test result: ok. 75 passed; 0 failed; 0 ignored; 0 measured; 538 filtered out; finished in 32.53s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 117.7136862000043,
+      "log_sha256": "6d378d55a59029967f49c364333e476207391783eb97e2135ffeca195e8a1075",
+      "results": [
+        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.12s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 1.3870413999975426,
+      "log_sha256": "d8b3bffa944c55c6e110f540859c965f98e7b6ad77108e8ca3d5e87d8796fa8b",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 612 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 24.759312100009993,
+      "log_sha256": "9a8596bb07ef79ee6b4a5793522da0f39440e2a4ac220fe4c36bd3e975362053",
+      "results": []
+    }
+  ],
+  "stage_observation": "owned Overlay update before foreground callbacks; scores/selection copied from owned live state",
+  "full_comparison_keys_tolerances_and_acceptance_unchanged": true,
+  "expected_native_values_enter_gameplay": false
+}
