@@ -1,0 +1,37 @@
+{
+  "reason": "Free duplicate raw reports already preserved losslessly as compressed terminal diagnostics; no captures, fixture archives, source files or live inputs are removed.",
+  "reports": [
+    {
+      "raw_path": "/home/parity/jobs/get-into-it-ssc-frames-repair-v1/chart-211/report.json",
+      "raw_bytes": 521813230,
+      "raw_sha256": "f9c41eceec933dbbca8f91a973cfd9006e190229c00611eceb4b1f6840e2785b",
+      "compressed_path": "/home/parity/jobs/get-into-it-ssc-frames-repair-v1/chart-211/report.json.zst",
+      "compressed_bytes": 7062025,
+      "compressed_sha256": "8156eb86d449cd05dc41ec75fb8af68caa08cf9c2fc04195a32f7fc85d6b0cf2",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "1e6ba2fc728b1608b36f8b7ab6f1fec6fba340f5ff761f609658220d1362f81e",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/steve-ssc-loader-multi-return-first-repair-v1/chart-420/report.json",
+      "raw_bytes": 486035155,
+      "raw_sha256": "129b629d6a64873e6cb3bea18a2eb0ba1415265dbb1e53af7b2e3a51e07f55b8",
+      "compressed_path": "/home/parity/jobs/steve-ssc-loader-multi-return-first-repair-v1/chart-420/report.json.zst",
+      "compressed_bytes": 10668413,
+      "compressed_sha256": "6f1a9fdf2374bf249ab7ebd01746749e97bd1f4fd08a78303a4ec3e9e1d61b49",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "02973ed663c05d973141279bb16ccc0de92582941ebd57c99d013017ab778175",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    }
+  ],
+  "raw_report_bytes_removed": 1007848385,
+  "free_before": 561528832,
+  "free_after": 1544511488,
+  "mawaru9_helper_hash_unchanged": true,
+  "chart_replays_or_compilers_stopped": false,
+  "acceptance_or_attempt_counts_changed": false
+}
