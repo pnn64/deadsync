@@ -3756,6 +3756,112 @@ return Def.Actor { OnCommand = function(self) self:sleep(9999) end }
     }
 
     #[test]
+    fn live_underlay_standard_life_meter_uses_real_children_and_life_events() {
+        use deadsync_rules::timing::{DelaySegment, StopSegment, TimingData, TimingSegments};
+        for (width, enabled, hidden, expected) in [
+            (640.0, [true, false], [false, false], 1),
+            (854.0, [true, true], [false, false], 2),
+            (854.0, [false, true], [false, false], 1),
+            (640.0, [true, false], [true, false], 0),
+        ] {
+            let source = r#"
+LIFE_METERS = {}
+return Def.Actor { OnCommand = function()
+    local underlay = SCREENMAN:GetTopScreen():GetChild('Underlay')
+    local owners = underlay:GetChildren()['']
+    if owners and tostring(owners):find('ActorFrame', 1, true) then owners = {owners} end
+    for _, owner in ipairs(owners or {}) do
+        if owner.GetChild and owner:GetChild('MeterFill') and owner:GetChild('MeterSwoosh') then
+            assert(owner:GetParent() == underlay and owner:GetName() == '')
+            assert(owner:GetNumChildren() == 4)
+            assert(owner:GetVisible() and owner:GetY() == 20)
+            LIFE_METERS[#LIFE_METERS + 1] = owner
+        end
+    end
+    assert(#LIFE_METERS == $COUNT, 'Underlay must load the selected native Standard LifeMeter')
+end }
+"#.replace("$COUNT", &expected.to_string());
+            let mut compiled = compile_with_context(&format!("standard-life-{width}-{enabled:?}-{hidden:?}"), &source, |context| {
+                context.screen_width = width;
+                for player in 0..LUA_PLAYERS {
+                    context.players[player].enabled = enabled[player];
+                    context.players[player].hide_lifebar = hidden[player];
+                }
+                context.player_timing = [
+                    Some(TimingData::from_segments(0.0, 0.0, &TimingSegments {
+                        bpms: vec![(0.0, 120.0)], stops: vec![StopSegment { beat: 1.0, duration: 0.5 }],
+                        ..Default::default() }, &[])),
+                    Some(TimingData::from_segments(0.0, 0.0, &TimingSegments {
+                        bpms: vec![(0.0, 240.0)], delays: vec![DelaySegment { beat: 1.0, duration: 0.5 }],
+                        ..Default::default() }, &[])),
+                ];
+            });
+            let mut scene = compiled.live_scene.take().expect("real Standard life meters");
+            let meters = scene.lua.globals().get::<Table>("LIFE_METERS").unwrap()
+                .sequence_values::<Table>().map(Result::unwrap).collect::<Vec<_>>();
+            let visible = (0..LUA_PLAYERS).filter(|p| enabled[*p] && !hidden[*p]).collect::<Vec<_>>();
+            assert_eq!(meters.len(), expected);
+            for (meter, player) in meters.iter().zip(&visible) {
+                let parts = crate::lua_util::actor_direct_children(&scene.lua, meter).unwrap();
+                assert_eq!(parts.len(), 4);
+                let x = width * 0.5 + if *player == 0 { -1.0 } else { 1.0 }
+                    * if width == 640.0 { 238.0 } else { 288.0 };
+                for (index, width) in [(0, 140.0), (1, 136.0)] {
+                    assert_eq!(parts[index].get::<Function>("GetX").unwrap().call::<f32>(parts[index].clone()).unwrap(), x);
+                    assert_eq!(parts[index].get::<Function>("GetZoomedWidth").unwrap().call::<f32>(parts[index].clone()).unwrap(), width);
+                }
+                assert_eq!(read_state(&scene.lua, &parts[1]).unwrap().diffuse, [0.0, 0.0, 0.0, 1.0]);
+                assert_eq!(read_state(&scene.lua, &parts[2]).unwrap().zoom_x, 0.0,
+                    "native initial LifeMeter::Load message starts from zero fill width");
+                assert!((crate::actor_tween_time_left(&scene.lua, meter).unwrap() - 0.1).abs() < 1e-6);
+                for part in &parts[2..] {
+                    assert_eq!(part.get::<Function>("GetX").unwrap().call::<f32>(part.clone()).unwrap(), x - 68.0);
+                    assert!((part.get::<Function>("GetZoomedWidth").unwrap().call::<f32>(part.clone()).unwrap() - 68.0).abs() < 1e-5);
+                    assert!(part.raw_get::<Option<Function>>("LifeChangedMessageCommand").unwrap().is_some());
+                    assert!(part.raw_get::<Option<Function>>("HealthStateChangedMessageCommand").unwrap().is_some());
+                }
+                let texture = parts[3].get::<Function>("GetTexture").unwrap().call::<Table>(parts[3].clone()).unwrap();
+                assert_eq!(texture.get::<Function>("GetSourceWidth").unwrap().call::<u32>(texture.clone()).unwrap(), 128);
+                assert_eq!(texture.get::<Function>("GetSourceHeight").unwrap().call::<u32>(texture).unwrap(), 16);
+                let path = crate::actor_texture_path(&parts[3]).unwrap().unwrap();
+                let bitmap = deadlib_assets::generated_texture(&path.to_string_lossy()).unwrap();
+                assert!(bitmap.image.pixels().any(|pixel| pixel[3] != 0));
+                assert!((read_state(&scene.lua, &parts[3]).unwrap().diffuse[3] - 0.2).abs() < 1e-6);
+            }
+            for (seconds, delta) in [(0.1, 0.1), (0.6, 0.5), (1.4, 0.8)] {
+                let output = scene.advance(SongLuaLiveFrame { screen_seconds: seconds, music_seconds: seconds,
+                    delta_seconds: delta, ..Default::default() }).unwrap();
+                assert!(output.errors.is_empty(), "{:?}", output.errors);
+                for (meter, player) in meters.iter().zip(&visible) {
+                    let parts = crate::lua_util::actor_direct_children(&scene.lua, meter).unwrap();
+                    assert!((read_state(&scene.lua, &parts[2]).unwrap().zoom_x - 68.0).abs() < 1e-5);
+                    let pose = read_state(&scene.lua, &parts[3]).unwrap();
+                    assert!((pose.zoom * pose.zoom_x * 128.0 - 68.0).abs() < 1e-5);
+                    assert_eq!(pose.texcoord_velocity.unwrap()[0], if seconds == 0.6 { 0.0 } else { -(*player as f32 + 1.0) });
+                }
+            }
+            if enabled[0] && !hidden[0] {
+                scene.lua.load("SCREENMAN:GetTopScreen():GetChild('PlayerP1'):SetLife(1)").exec().unwrap();
+                let fill = crate::lua_util::actor_direct_children(&scene.lua, &meters[0]).unwrap()[2].clone();
+                assert!((fill.get::<Function>("GetZoomedWidth").unwrap().call::<f32>(fill.clone()).unwrap() - 136.0).abs() < 1e-5);
+                let mut frame = SongLuaLiveFrame { screen_seconds: 1.5, music_seconds: 1.5,
+                    delta_seconds: 0.1, ..Default::default() };
+                frame.players[0].life = 1.0;
+                let output = scene.advance(frame).unwrap();
+                assert!(output.errors.is_empty(), "{:?}", output.errors);
+                let parts = crate::lua_util::actor_direct_children(&scene.lua, &meters[0]).unwrap();
+                assert_eq!(read_state(&scene.lua, &parts[2]).unwrap().diffuse, [1.0; 4]);
+                assert_eq!(read_state(&scene.lua, &parts[3]).unwrap().diffuse[3], 1.0);
+                if meters.len() == 2 {
+                    let other = crate::lua_util::actor_direct_children(&scene.lua, &meters[1]).unwrap();
+                    assert!((read_state(&scene.lua, &other[2]).unwrap().zoom_x - 68.0).abs() < 1e-5);
+                    assert!((read_state(&scene.lua, &other[3]).unwrap().diffuse[3] - 0.2).abs() < 1e-6);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn live_underlay_difficulty_meter_owns_native_quad_and_text() {
         for (width, enabled_p1, enabled_p2) in [(640.0, true, false), (854.0, true, true), (854.0, false, true)] {
             let source = r#"

@@ -1,0 +1,30 @@
+{
+  "regression": "live_underlay_standard_life_meter_uses_real_children_and_life_events",
+  "meaningful_missing_standard_life_red_both_hosts": true,
+  "initial_profile_input_plumbing_staged_before_runtime_red": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 326.14793410000857,
+      "log_sha256": "db2bdc29d6eb541d506ffda2f5a7bbeb401c5eb52957e19fc93c931761b059f1",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 632 filtered out; finished in 0.22s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 251.0992528939969,
+      "log_sha256": "27c7f7bdf7a30e63276ef2fd62cb2236af38af1a8b4dddf5ab4e74dfb5277e78",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 630 filtered out; finished in 0.18s"
+      ]
+    }
+  ],
+  "source_cause": "sweep-2026-10-15-hope-underlay-inventory-source-cause.json",
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

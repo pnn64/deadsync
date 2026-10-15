@@ -181,7 +181,7 @@ fn create_sl_player_mods(lua: &Lua, player: &SongLuaPlayerContext) -> mlua::Resu
     table.set("HideTargets", false)?;
     table.set("HideSongBG", false)?;
     table.set("HideCombo", false)?;
-    table.set("HideLifebar", false)?;
+    table.set("HideLifebar", player.hide_lifebar)?;
     table.set("HideScore", false)?;
     table.set("HideDanger", false)?;
     table.set("HideComboExplosions", false)?;
@@ -196,7 +196,7 @@ fn create_sl_player_mods(lua: &Lua, player: &SongLuaPlayerContext) -> mlua::Resu
     table.set("TargetScoreNumber", 100)?;
     table.set("ActionOnMissedTarget", "Nothing")?;
     table.set("Pacemaker", false)?;
-    table.set("LifeMeterType", "Standard")?;
+    table.set("LifeMeterType", player.life_meter_type.as_str())?;
     table.set("NPSGraphAtTop", false)?;
     table.set("JudgmentTilt", false)?;
     table.set("TiltMultiplier", 1)?;

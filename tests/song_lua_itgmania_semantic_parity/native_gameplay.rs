@@ -749,6 +749,22 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn native_life_meter_uses_initial_theme_options_only() {
+        let mut trace = serde_json::json!({"input":{"gameplay_preferences":{"default_modifiers":"",
+            "players":[{"theme_modifiers":{"HideLifebar":true,"LifeMeterType":"Vertical"}},
+                       {"theme_modifiers":{"HideLifebar":false,"LifeMeterType":"Standard"}}]}}});
+        let profiles = super::native_profile_inputs(&trace).unwrap();
+        assert!(profiles[0].hide_lifebar && !profiles[1].hide_lifebar);
+        assert_eq!(profiles[0].lifemeter_type, deadsync_profile::LifeMeterType::Vertical);
+        assert_eq!(profiles[1].lifemeter_type, deadsync_profile::LifeMeterType::Standard);
+        trace["input"]["gameplay_preferences"]["players"][0]["theme_modifiers"]["LifeMeterType"] = serde_json::json!("unknown");
+        assert!(super::native_profile_inputs(&trace).is_err());
+        trace["input"]["gameplay_preferences"]["players"][0]["theme_modifiers"]["LifeMeterType"] = serde_json::json!("Standard");
+        trace["input"]["gameplay_preferences"]["players"][0]["theme_modifiers"]["HideLifebar"] = serde_json::json!("true");
+        assert!(super::native_profile_inputs(&trace).is_err());
+    }
+
+    #[test]
     fn native_background_filter_uses_initial_theme_options_only() {
         let mut trace = serde_json::json!({"input":{"gameplay_preferences":{
             "default_modifiers":"", "players":[
@@ -2802,6 +2818,15 @@ fn native_profile_inputs(trace: &Value) -> Result<[deadsync_profile::Profile; 2]
             let text = value.as_str().ok_or("initial BackgroundFilter must be a named percentage")?;
             profile.background_filter = text.parse()
                 .map_err(|error| format!("invalid initial BackgroundFilter: {error}"))?;
+        }
+        let initial = trace.pointer("/input/gameplay_preferences/players")
+            .and_then(Value::as_array).and_then(|players| players.get(player));
+        if let Some(value) = initial.and_then(|p| p.pointer("/theme_modifiers/HideLifebar")) {
+            profile.hide_lifebar = value.as_bool().ok_or("initial HideLifebar must be boolean")?;
+        }
+        if let Some(value) = initial.and_then(|p| p.pointer("/theme_modifiers/LifeMeterType")) {
+            profile.lifemeter_type = value.as_str().ok_or("initial LifeMeterType must be named")?
+                .parse().map_err(|error| format!("invalid initial LifeMeterType: {error}"))?;
         }
     }
     Ok(profiles)

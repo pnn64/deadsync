@@ -56,6 +56,8 @@ fn null_renderer_reaches_song_lua_unchanged() {
     let timing = TimingData::default();
     let mut profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
     profiles[0].background_filter = deadsync_profile::BackgroundFilter::from_percent(37);
+    profiles[0].hide_lifebar = true;
+    profiles[0].lifemeter_type = deadsync_profile::LifeMeterType::Vertical;
     let context = super::song_lua_play_context(
         &song, &charts, [&timing; 2],
         &profiles,
@@ -70,6 +72,8 @@ fn null_renderer_reaches_song_lua_unchanged() {
     assert_eq!(context.players[1].autoplay, 0.0);
     assert_eq!(context.players[0].background_filter_percent, 37);
     assert_eq!(context.players[1].background_filter_percent, 0);
+    assert!(context.players[0].hide_lifebar && context.players[1].hide_lifebar);
+    assert_eq!(context.players[0].life_meter_type, "Vertical");
     assert_eq!(context.video_renderers, "null");
     assert!(!context.render_to_texture);
 }

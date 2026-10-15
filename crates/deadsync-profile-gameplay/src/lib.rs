@@ -547,6 +547,8 @@ pub fn song_lua_compile_context(
         background_filter_percent: if player < num_players {
             player_profiles[player].background_filter.percent()
         } else { 0 },
+        hide_lifebar: player >= num_players || player_profiles[player].hide_lifebar,
+        life_meter_type: player_profiles[player].lifemeter_type.to_string(),
     });
     context
 }

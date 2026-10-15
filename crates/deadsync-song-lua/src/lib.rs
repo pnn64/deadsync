@@ -683,6 +683,9 @@ pub struct SongLuaPlayerContext {
     pub column_cues: bool,
     /// Initial profile filter opacity. Zero disables the theme's filter Quad.
     pub background_filter_percent: u8,
+    /// Initial profile selection for Simply Love's Lua-owned life meter.
+    pub hide_lifebar: bool,
+    pub life_meter_type: String,
     pub screen_x: f32,
     pub screen_y: f32,
 }
@@ -707,6 +710,8 @@ impl Default for SongLuaPlayerContext {
             judgment_texture: None,
             column_cues: false,
             background_filter_percent: 0,
+            hide_lifebar: false,
+            life_meter_type: "Standard".into(),
             screen_x: 320.0,
             screen_y: 240.0,
         }
