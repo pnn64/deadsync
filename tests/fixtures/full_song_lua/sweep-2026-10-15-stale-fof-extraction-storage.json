@@ -1,0 +1,226 @@
+{
+  "source_simfile": "fof_guys/fof.ssc",
+  "removed_only_inactive_duplicate_extraction": "/tmp/.tmp4pR7vl",
+  "all_extracted_payload_bytes_equal_preserved_compressed_capture": true,
+  "two_actual_process_argv_cwd_and_open_file_checks_clear": true,
+  "capture": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-196/private-candidate.tar.zst",
+  "compressed_sha256": "f41eb510ace313033c65033df6df08dd0017e4cbbca5433ef3617d54f91d5246",
+  "uncompressed_sha256": "756b2e53aa3fbe0d7c26f686475280fbca81789d88c58ba1e63b93a9ba6a017d",
+  "decoded_original_capture_hash_verified": true,
+  "files": [
+    {
+      "path": "manifest.json",
+      "bytes": 15869,
+      "sha256": "948dcca349c711f5140cbd6b82f33ee2c9ff495188795d16c3e8a9aa5a7e54a3"
+    },
+    {
+      "path": "song/fof.ogg",
+      "bytes": 20204,
+      "sha256": "87448d85dde0c884fa20bcd2bffe32e021f3fdd34affc1168ee5e17bb7d74217"
+    },
+    {
+      "path": "song/fof.ssc",
+      "bytes": 26259,
+      "sha256": "a40dbf6a805eb74a544ba1fb6179d15d18c6df1ba2220218e3937e25a82a5fe6"
+    },
+    {
+      "path": "song/fof/Audio.lua",
+      "bytes": 809,
+      "sha256": "2afb5932953314b1757dac854329edc0076ab25b4dbc0db82e9b2e7e596db443"
+    },
+    {
+      "path": "song/fof/BounceAudioSystem.lua",
+      "bytes": 604,
+      "sha256": "dc53fdb8cd68021f99221c54da579fdeeea4c6f6dc532195c1c133b457948e94"
+    },
+    {
+      "path": "song/fof/Bruh.lua",
+      "bytes": 395,
+      "sha256": "546ae9b31133088faa8a33e5ddd33395df5b4491c088bd471c40c508dec62a75"
+    },
+    {
+      "path": "song/fof/CheckpointSystem.lua",
+      "bytes": 1503,
+      "sha256": "52dfeedda27d8a5125d5ebf6b2248d605e6d2747a8cd8be13840e4ecd00281aa"
+    },
+    {
+      "path": "song/fof/ECS.lua",
+      "bytes": 1200,
+      "sha256": "0ef4fcf0d43962f8125e7c142abdd7853f1112eafa5bbeed992cafc33a23c19d"
+    },
+    {
+      "path": "song/fof/FofGuys.lua",
+      "bytes": 2766,
+      "sha256": "9cacd8abd119b22bfc83c88e4aeda5f0ba18e9c3594312d8bc838e75fd218753"
+    },
+    {
+      "path": "song/fof/FollowSystem.lua",
+      "bytes": 1041,
+      "sha256": "ae09361f88ef1ba7281950a9a6b635118df914dc24da7ac65431a74111926d6f"
+    },
+    {
+      "path": "song/fof/GoalSystem.lua",
+      "bytes": 1148,
+      "sha256": "f0361c95e6164d4ace44c3d0fc66d604bd343b5d19d5e29c0548e86bbd245d51"
+    },
+    {
+      "path": "song/fof/InputSystem.lua",
+      "bytes": 2242,
+      "sha256": "da8d1f5a001a392e5be8670534a7b0d161d078bf828b3aca98c9e4b27eed8e30"
+    },
+    {
+      "path": "song/fof/JoinScreen.lua",
+      "bytes": 2841,
+      "sha256": "53f0c863d6ab1f09453b628ee3fbdaaf0a10c14d905c7e8d1f1fc3ce266608ae"
+    },
+    {
+      "path": "song/fof/LimitChartDuration.lua",
+      "bytes": 1566,
+      "sha256": "92cbf064f744dcd4a4a6c978a58b44d994f39c8430986d44565de6ab8f5bb921"
+    },
+    {
+      "path": "song/fof/Math3D.lua",
+      "bytes": 1436,
+      "sha256": "1d211d4a8de415c5c563b3e892d2fdd36266218505bbb7ac593d467cc0f71b51"
+    },
+    {
+      "path": "song/fof/MoveSystem.lua",
+      "bytes": 658,
+      "sha256": "20f3d4448045bbf62a8ff728449f034ffb7469badf00504ef03499b93e659340"
+    },
+    {
+      "path": "song/fof/PhysicsSystem.lua",
+      "bytes": 5175,
+      "sha256": "2b73e06c8cc762bc5c89da76267bf84e83a553c3ccc02b52b6b22210a41e8819"
+    },
+    {
+      "path": "song/fof/RenderSystem.lua",
+      "bytes": 7850,
+      "sha256": "53eab84a3d5e0d1b0763c98617ca18bb49582756c4b937e1ed2b07b7bcc48cb9"
+    },
+    {
+      "path": "song/fof/SpinSystem.lua",
+      "bytes": 386,
+      "sha256": "6bef1d766294d6d8efa727957e00ae663f1034e2afe532791f887b967c869783"
+    },
+    {
+      "path": "song/fof/audio/bruh.ogg",
+      "bytes": 87459,
+      "sha256": "40c2c4dc095dbcd8f72525ff4bf952986702a412aa6ca6ee4c35ece73ce0300f"
+    },
+    {
+      "path": "song/fof/audio/checkpoint.ogg",
+      "bytes": 28768,
+      "sha256": "aca476e5cac7b301634ea74f850bef5243d206761d6bfdbc43b212ba0771ce3d"
+    },
+    {
+      "path": "song/fof/audio/goal.ogg",
+      "bytes": 75183,
+      "sha256": "d05f2d5da12c6d2da9a41605554add3d4f637bfde9dc178fc28c9be3b1cd302c"
+    },
+    {
+      "path": "song/fof/audio/join.ogg",
+      "bytes": 256489,
+      "sha256": "d5c5af7fbddc78e8d60b1558e8364fc3acdf34b7a33bd57fa7181ab4d409c5d7"
+    },
+    {
+      "path": "song/fof/audio/jump1.ogg",
+      "bytes": 5834,
+      "sha256": "6a59774897ec0d28d8fe442e58464cfaaddeb107e1f03f6dd69e818fee982482"
+    },
+    {
+      "path": "song/fof/audio/jump2.ogg",
+      "bytes": 5895,
+      "sha256": "a066b40248ef8691c2763ef7f5c1cb6815a68b9323304f2a23a2ddb040006e8d"
+    },
+    {
+      "path": "song/fof/audio/jump3.ogg",
+      "bytes": 6588,
+      "sha256": "97a85999f67ba9d9b79325d95ed1c1dca7b4b00da2bed0636556d1cc1896445c"
+    },
+    {
+      "path": "song/fof/fof.lua",
+      "bytes": 1500,
+      "sha256": "055a16625f532506e8c0bc29239c3ba5874f2486d81843a53699840f0f5c60c6"
+    },
+    {
+      "path": "song/fof/img/ball.png",
+      "bytes": 2175,
+      "sha256": "60ffb33f103b2dedda4f8f35325733de15c19ce1df0c989da88f69ffa1b19d18"
+    },
+    {
+      "path": "song/fof/img/bg.png",
+      "bytes": 4275,
+      "sha256": "54719f3017f1a1048c0d9154e9146c8b67525cfad11f169eea9d6b022ee76896"
+    },
+    {
+      "path": "song/fof/img/bg2.png",
+      "bytes": 161,
+      "sha256": "da6898e78e8933e1f9ac947f45df75a8554d724e644a3f828f871cf657c8117e"
+    },
+    {
+      "path": "song/fof/img/box.png",
+      "bytes": 2185,
+      "sha256": "3bb04e8a7f86549233ffb07ee058d1ddd572075cf2c739d76f828c5a0febf821"
+    },
+    {
+      "path": "song/fof/img/floor.png",
+      "bytes": 4771,
+      "sha256": "7da3e02db69992ea3eb9e26dc30edbf09d2c1a3f409ccfe83eceefc3916c7948"
+    },
+    {
+      "path": "song/fof/img/wall_dunk.png",
+      "bytes": 42219,
+      "sha256": "ea608c6aa211976e26b49c35403a51048b2abf1eb9a5458d22d877449af7728a"
+    },
+    {
+      "path": "song/fof/img/wall_finish.png",
+      "bytes": 35251,
+      "sha256": "b14a1ad9e0be59ac1099ba0fd18d898c0dff765b945148abbda417bf53725ffc"
+    },
+    {
+      "path": "song/fof/img/wall_fof.png",
+      "bytes": 100212,
+      "sha256": "96feebfe4afe92550fc0bc821e9d02b753996797d2058c2dd9189b0ab44fca98"
+    },
+    {
+      "path": "song/fof/img/wall_haha.png",
+      "bytes": 48560,
+      "sha256": "46e5d2e36dc9486cc7f5ffa7d3cafa33d5ac8f1e9866d934b80de3c4c2454d89"
+    },
+    {
+      "path": "song/fof/img/wall_loam.png",
+      "bytes": 53159,
+      "sha256": "0519a6bba709022dccd690eadf5fcbc763f31b3fca5c6bd04ad67f648e6b915a"
+    },
+    {
+      "path": "song/fof/img/wall_sal.png",
+      "bytes": 104099,
+      "sha256": "face0ec5df839fd43e0eb8fc4c1304c07c0c2b55839e20ffc8366bcea60cc7fa"
+    },
+    {
+      "path": "song/fof/levels/GateCrashLevel.lua",
+      "bytes": 29915,
+      "sha256": "362668a9aae60f77b22ce06b629b6e36da02e9fcc9e2dfeb095a804fed3533a6"
+    },
+    {
+      "path": "song/music.ogg",
+      "bytes": 3269957,
+      "sha256": "608ffd75c27faf46d3fb74c0ecec25449956853fd25791ec18cf7f0e59b485ca"
+    },
+    {
+      "path": "trace/semantic.json",
+      "bytes": 9924642224,
+      "sha256": "b8fbb68f3cf04dabe5f802e7fcc257fc85e536c0e79b63261eaef892f00a07c3"
+    }
+  ],
+  "payload_bytes_reclaimed": 9928900831,
+  "free_before": 470331392,
+  "free_after": 10399358976,
+  "live_save_tears_and_deferred_mawaru9_helpers_unchanged": {
+    "/home/parity/jobs/timing-window-labels-linux-green-v1/full-song-lua": "6a2dfe1c2e802c83bf102deac4f4476c86ab3ba93652f9a8817f99420b844162",
+    "/home/parity/jobs/canonical-live-actor-handles-linux-green-v6/full-song-lua": "d52e92dbdab0eb79f09965d26a3d91e7f795838778dda2d9826ff03b090ebd12"
+  },
+  "chart_replay_started_stopped_or_restarted": false,
+  "original_capture_and_logs_preserved": true
+}
