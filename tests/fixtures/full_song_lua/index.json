@@ -5513,15 +5513,12 @@
     {
       "title": "[10] Wobbpotato",
       "source_simfile": "Wobbpotato [Blue Shift Phase 1]/wobbpotato.ssc",
-      "harness_version": "0.1.0",
-      "archive": "36dba1040aa04ac6edc04d62e8839394103411a24f572e3e166101abb5d1e5fd.tar.zst",
-      "sha256": "36dba1040aa04ac6edc04d62e8839394103411a24f572e3e166101abb5d1e5fd",
-      "compressed_bytes": 36892,
-      "uncompressed_sha256": "43c8b3ae8e5d4a48e5347bd1fac866ba419d10ad5f7bdd4ad3f96aba09f0a054",
-      "compression_level": 22,
-      "aliases": [
-        "e71d235a9ed3fa67307b5fcb246df2f45cbce1497a2725584018c0ffe34d9230.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "55cf71fcd51c4548413dd8cbe9f62d47be38b8c6d85d691d45f6191b4732fbe2.tar.zst",
+      "sha256": "55cf71fcd51c4548413dd8cbe9f62d47be38b8c6d85d691d45f6191b4732fbe2",
+      "compressed_bytes": 4249668,
+      "uncompressed_sha256": "de708ddff7e43c0c9c1c7cddb57bb58184ce5eef2b3ba6907380bc2aa0d0eb4a",
+      "aliases": []
     },
     {
       "title": "Wobbpotato",

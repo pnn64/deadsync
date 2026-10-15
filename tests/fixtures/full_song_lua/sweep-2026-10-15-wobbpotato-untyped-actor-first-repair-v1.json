@@ -1,0 +1,66 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "native dummy Actor fallback; commit is pinned in result",
+  "results": [
+    {
+      "position": 475,
+      "source_simfile": "Wobbpotato [Blue Shift Phase 1]/wobbpotato.ssc",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "de708ddff7e43c0c9c1c7cddb57bb58184ce5eef2b3ba6907380bc2aa0d0eb4a",
+      "trace_sha256": "4a11f5433fe8ea858d51ed294eaa2a91cb984689ab7a2f18e6002542a0e7d8f4",
+      "simfile_sha256": "85652fc5fe5dbdfd1bf7fba6a8e531504013a373d1835b568abd297270489888",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "60a12cf2dec73902df89171b680e24ffbc9301bccc2147dae35a7fb0aab1ecbb",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/untyped-actor-linux-green-v1/proof.json",
+      "fix_commit": "e8daaa0862dfde8af1096b62e92246b175d30f10",
+      "previous_failure": "[0.3s] replaying every native gameplay frame\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for '[10] Wobbpotato': error converting Lua nil to function; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for '[10] Wobbpotato' from '/tmp/.tmpUDxZTi/song/lua/default.lua': error converting Lua nil to function\n\nthread 'main' (2173123) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "previous_errors": [],
+      "native_frames_before_repair": 74561,
+      "one_later_full_repair_maximum": true,
+      "replay_exit": 0,
+      "replay_seconds": 1702.4971008379944,
+      "native_frames": 74561,
+      "replayed_frames": 74561,
+      "compared_stage_fields": 1210,
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "1dcc2a3a1fcccd724b9fe6d36befbacc0b6e4322f976352360673bc440f7e1d4",
+      "archive": "55cf71fcd51c4548413dd8cbe9f62d47be38b8c6d85d691d45f6191b4732fbe2.tar.zst",
+      "archive_sha256": "55cf71fcd51c4548413dd8cbe9f62d47be38b8c6d85d691d45f6191b4732fbe2",
+      "compressed_bytes": 4249668,
+      "harness_version": "0.1.80",
+      "title": "[10] Wobbpotato",
+      "pack_seconds": 3.480319668975426,
+      "retained_original_entry": {
+        "title": "[10] Wobbpotato",
+        "source_simfile": "Wobbpotato [Blue Shift Phase 1]/wobbpotato.ssc",
+        "harness_version": "0.1.0",
+        "archive": "36dba1040aa04ac6edc04d62e8839394103411a24f572e3e166101abb5d1e5fd.tar.zst",
+        "sha256": "36dba1040aa04ac6edc04d62e8839394103411a24f572e3e166101abb5d1e5fd",
+        "compressed_bytes": 36892,
+        "uncompressed_sha256": "43c8b3ae8e5d4a48e5347bd1fac866ba419d10ad5f7bdd4ad3f96aba09f0a054",
+        "compression_level": 22,
+        "aliases": [
+          "e71d235a9ed3fa67307b5fcb246df2f45cbce1497a2725584018c0ffe34d9230.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "60a12cf2dec73902df89171b680e24ffbc9301bccc2147dae35a7fb0aab1ecbb",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first repair: native missing-class fallback constructs an empty Actor and discards untyped table fields, commands and children; complete original native capture reused; full comparisons unchanged",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
