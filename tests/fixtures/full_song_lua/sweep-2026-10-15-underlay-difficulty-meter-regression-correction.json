@@ -24,5 +24,16 @@
       ]
     }
   ],
-  "failed_normalization": "if unnamed and rawget(unnamed, 1) == nil then unnamed = {unnamed} end"
+  "failed_normalization": "if unnamed and rawget(unnamed, 1) == nil then unnamed = {unnamed} end",
+  "first_green_linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 247.93956037203316,
+      "log_sha256": "7e60c583dbf722d34b7df0fc8fb000f20fd22ec6a1f278d06ad7e47f246c67ca",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 629 filtered out; finished in 0.19s"
+      ]
+    }
+  ]
 }

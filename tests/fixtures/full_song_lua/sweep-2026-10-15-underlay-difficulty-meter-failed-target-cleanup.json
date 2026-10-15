@@ -1,0 +1,26 @@
+{
+  "failed_stage": "/home/parity/jobs/underlay-difficulty-meter-linux-green-v2",
+  "failure": "launcher accidentally used deadsync-v2 target; dependency build exhausted space",
+  "removed_only_failed_build_target": "/home/parity/build/deadsync-v2",
+  "apparent_bytes": 1197853390,
+  "free_before": 995328,
+  "free_after": 1159716864,
+  "freed_bytes": 1158721536,
+  "actual_argv_and_open_fd_reference_checks": [
+    [],
+    []
+  ],
+  "mawaru9_helper_hash_unchanged": true,
+  "frozen_sources_and_replay_inputs_untouched": true,
+  "failed_log_sha256": "41fcf36781bd7cf2200ed26e2294adc839fb1c5b988078ca20379e18286d7c53",
+  "progress": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 81.4148972829571,
+      "log_sha256": "41fcf36781bd7cf2200ed26e2294adc839fb1c5b988078ca20379e18286d7c53",
+      "results": []
+    }
+  ],
+  "chart_replays_restarted": false
+}
