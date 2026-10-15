@@ -1,0 +1,11 @@
+{
+  "initial_collector_stopped_before_fix_commit_or_helper_selection": true,
+  "initial_collector_error_log_sha256": "c0db3c99c308013749250b4f18e277da13e3278744ab8dde7be15f416315d543",
+  "cause": "The collector compared the red pre-fix lua_util.rs pin against the already corrected worktree because its red-proposal directory only preserved the new regression file.",
+  "correction": "Verify the exact committed pre-fix lua_util.rs bytes against the original Windows red normalized source pin; Linux retains its original frozen red source root. Other source and log hashes are still verified. Resume collection of the existing successful tests without rerunning any test or chart.",
+  "pre_fix_source_commit": "fa9b72f49badac89ba2bda525cae90e28bffd636",
+  "source": "crates/deadsync-song-lua/src/lua_util.rs",
+  "verified_normalized_sha256": "3479bb3f9f193fbbd88f8974f901136d7d9474697610f5738da05dfe1854f6d8",
+  "source_test_or_chart_replayed": false,
+  "acceptance_changed": false
+}
