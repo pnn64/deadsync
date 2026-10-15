@@ -1,0 +1,328 @@
+{
+  "position": 233,
+  "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
+  "status": "pending",
+  "repair_attempts": 1,
+  "candidate_sha256": "2e04426bca00ee39ac689d8666fef76efc5f2c5be93908151c26328282b59491",
+  "trace_sha256": "4fc0012244c7a02bc1d7060c6339ec6f1a1aaa21ddfd3dae0eac00f62811699d",
+  "simfile_sha256": "6438069708d9f60a9df6ba4e35b63b2717a0981e50d35963b773b1cc32d35b4e",
+  "native_capture_reused": true,
+  "all_candidate_manifest_members_byte_verified": true,
+  "binary_sha256": "50a1cb7dca074bdabaab43a80242af57c2dd0bb192058b3d1b85b149f25696a3",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "build_proof": "/home/parity/jobs/simply-love-sm-linux-green-v1/proof.json",
+  "fix_commit": "3601bca9d7e56c93ddcfc93bdeade059a13235e8",
+  "previous_failure": null,
+  "previous_errors": [],
+  "native_frames_before_repair": 209028,
+  "resolved_by_source_fix_commit": "3601bca9d7e56c93ddcfc93bdeade059a13235e8",
+  "original_capture_harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+  "one_later_full_repair_maximum": true,
+  "replay_exit": 2,
+  "replay_seconds": 5150.91155725898,
+  "native_frames": 209028,
+  "replayed_frames": 209028,
+  "compared_stage_fields": 1430,
+  "pending_coverage": [
+    "uncompared song operations: Actor.playcommand, Screen.AddInputCallback, ScreenGameplay.PauseGame",
+    "native drawable state/resources: BitmapText, Quad",
+    "owned gameplay overlay observation phase is unavailable"
+  ],
+  "archive_accepted": false,
+  "errors": [],
+  "mismatch_count": 5080,
+  "concrete_failures": [
+    {
+      "field": "source_broadcast_count",
+      "native": 5375,
+      "deadsync": 10834
+    },
+    {
+      "field": "source_broadcast",
+      "native": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "2 minutes until crunch time."
+          }
+        ]
+      },
+      "deadsync": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "3 minutes until crunch time."
+          }
+        ],
+        "params_error": null
+      }
+    },
+    {
+      "field": "source_broadcast",
+      "native": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "2 minutes until crunch time."
+          }
+        ]
+      },
+      "deadsync": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "3 minutes until crunch time."
+          }
+        ],
+        "params_error": null
+      }
+    },
+    {
+      "field": "source_broadcast",
+      "native": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "2 minutes until crunch time."
+          }
+        ]
+      },
+      "deadsync": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "3 minutes until crunch time."
+          }
+        ],
+        "params_error": null
+      }
+    },
+    {
+      "field": "source_broadcast",
+      "native": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "2 minutes until crunch time."
+          }
+        ]
+      },
+      "deadsync": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "3 minutes until crunch time."
+          }
+        ],
+        "params_error": null
+      }
+    },
+    {
+      "field": "source_broadcast",
+      "native": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "2 minutes until crunch time."
+          }
+        ]
+      },
+      "deadsync": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "3 minutes until crunch time."
+          }
+        ],
+        "params_error": null
+      }
+    },
+    {
+      "field": "source_broadcast",
+      "native": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "2 minutes until crunch time."
+          }
+        ]
+      },
+      "deadsync": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "3 minutes until crunch time."
+          }
+        ],
+        "params_error": null
+      }
+    },
+    {
+      "field": "source_broadcast",
+      "native": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "2 minutes until crunch time."
+          }
+        ]
+      },
+      "deadsync": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "3 minutes until crunch time."
+          }
+        ],
+        "params_error": null
+      }
+    },
+    {
+      "field": "source_broadcast",
+      "native": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "2 minutes until crunch time."
+          }
+        ]
+      },
+      "deadsync": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "3 minutes until crunch time."
+          }
+        ],
+        "params_error": null
+      }
+    },
+    {
+      "field": "source_broadcast",
+      "native": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "2 minutes until crunch time."
+          }
+        ]
+      },
+      "deadsync": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "3 minutes until crunch time."
+          }
+        ],
+        "params_error": null
+      }
+    },
+    {
+      "field": "source_broadcast",
+      "native": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "2 minutes until crunch time."
+          }
+        ]
+      },
+      "deadsync": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "3 minutes until crunch time."
+          }
+        ],
+        "params_error": null
+      }
+    },
+    {
+      "field": "source_broadcast",
+      "native": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "2 minutes until crunch time."
+          }
+        ]
+      },
+      "deadsync": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "3 minutes until crunch time."
+          }
+        ],
+        "params_error": null
+      }
+    }
+  ],
+  "report_sha256": "0086b963255946e07d6b006e3bc60069b1fa1da87d30ba7514d1a59d1d2a925a"
+}

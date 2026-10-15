@@ -1,0 +1,149 @@
+{
+  "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
+  "candidate_sha256": "2e04426bca00ee39ac689d8666fef76efc5f2c5be93908151c26328282b59491",
+  "trace_sha256": "4fc0012244c7a02bc1d7060c6339ec6f1a1aaa21ddfd3dae0eac00f62811699d",
+  "native_frames": 209028,
+  "top_level_keys": [
+    "actor_creation_inputs",
+    "actor_definitions",
+    "actor_identity_inputs",
+    "capabilities",
+    "capture_limits",
+    "completion",
+    "description",
+    "difficulty",
+    "display",
+    "draw_orders",
+    "dropped_events",
+    "dropped_random_reseeds",
+    "dropped_stage_samples",
+    "dropped_update_frames",
+    "end_position",
+    "events",
+    "game",
+    "game_mode",
+    "harness_version",
+    "input",
+    "itgmania_version",
+    "oracle",
+    "random_reseeds",
+    "random_seed",
+    "roots",
+    "runtime_actors",
+    "schema_version",
+    "scoring_weights",
+    "semantic_derivation",
+    "simfile",
+    "source_simfile",
+    "stage_samples",
+    "steps_type",
+    "style",
+    "theme",
+    "title",
+    "trace_until_beat",
+    "tween_queue_controls",
+    "tween_segments",
+    "update_frame_phase",
+    "update_frames"
+  ],
+  "input_keys": [
+    "autoplay",
+    "gameplay_preferences",
+    "injected_inputs",
+    "preferences",
+    "requested_difficulty",
+    "style"
+  ],
+  "clock_input_metadata": {},
+  "first_frames": [
+    {
+      "beat": -4.101187229156494,
+      "delta": 0,
+      "scene": 1,
+      "seconds": -1.9999773502349854,
+      "sequence": 1,
+      "wall_seconds": 1.995877
+    },
+    {
+      "beat": -4.096419334411621,
+      "delta": 0.0026920000091195107,
+      "scene": 1,
+      "seconds": -1.997632384300232,
+      "sequence": 2,
+      "wall_seconds": 1.998423
+    },
+    {
+      "beat": -4.087435722351074,
+      "delta": 0.00445100013166666,
+      "scene": 1,
+      "seconds": -1.9932143688201904,
+      "sequence": 3,
+      "wall_seconds": 2.001867
+    }
+  ],
+  "first_nonnegative_music_frame": {
+    "beat": -0.03336787596344948,
+    "delta": 0.0009679999784566462,
+    "scene": 1,
+    "seconds": 0.0005895691574551165,
+    "sequence": 2102,
+    "wall_seconds": 4.08984
+  },
+  "last_frames": [
+    {
+      "beat": 229.58663940429688,
+      "delta": 0.0014410000294446945,
+      "scene": 1,
+      "seconds": 124.3707046508789,
+      "sequence": 209027,
+      "wall_seconds": 234.227345
+    },
+    {
+      "beat": 229.59103393554688,
+      "delta": 0.0012420000275596976,
+      "scene": 1,
+      "seconds": 124.37285614013672,
+      "sequence": 209028,
+      "wall_seconds": 234.228495
+    }
+  ],
+  "initial_clock_query_observations": [],
+  "clock_queries_are_diagnosis_only_not_engine_inputs": true,
+  "full_repairs_spent": 1,
+  "new_full_repair_started": false,
+  "original_capture_harness_sha256": "34a97821422a1d377f1095af54bc2a80d7a60496c2206d3c384d4ff1a5d3e410",
+  "mismatch_count": 5080,
+  "first_mismatch": [
+    {
+      "field": "source_broadcast_count",
+      "native": 5375,
+      "deadsync": 10834
+    },
+    {
+      "field": "source_broadcast",
+      "native": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "2 minutes until crunch time."
+          }
+        ]
+      },
+      "deadsync": {
+        "seconds": 0.1130385473370552,
+        "beat": 0.1952783763408661,
+        "name": "SystemMessage",
+        "args": [
+          "SystemMessage",
+          {
+            "Message": "3 minutes until crunch time."
+          }
+        ],
+        "params_error": null
+      }
+    }
+  ]
+}

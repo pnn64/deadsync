@@ -1,0 +1,358 @@
+{
+  "status": "complete",
+  "domain_only_diagnostic": true,
+  "full_lua_replay": false,
+  "no_fixture_acceptance": true,
+  "full_repairs_spent_before_and_after": 1,
+  "source_simfile": "rite of spring/rite.ssc",
+  "candidate_sha256": "fa30207b35448ca133d0e13bf2377c07ba2037f042e00f19a5d9fb4bf03287c3",
+  "trace_sha256": "f25daa8bbea570fec79713a278558b8336e3ee879d935c3e6ba006ee30241567",
+  "simfile_sha256": "7ce2cf7cfa441b16842c6577e922df25f8c49258da2b1cd49358f0f1a428c0fc",
+  "all_original_domain_parser_rules_source_hashes_match_repaired_Rite_helper": true,
+  "matching_source_count": 110,
+  "diagnostic_original_source_sha256": "e90d0c52983d2d5a1bacb5ac9e3abf06ab2203f106f5f0b1af39ec96cfe8577c",
+  "diagnostic_source_sha256": "4885fcebdfa3798a54a51f0671354c30099f47c34d91839f156138ca02ba27af",
+  "input_sha256": "5355cf91ccc66d932f0116cd35ad0e2f888d3b3216bd690d8b426dae8b5aac84",
+  "log_sha256": "a5c940e09cc20e8cccedfcb0600a1c1d20c4503ff755843515c035d4e4c219c8",
+  "observation_sha256": "1d29750e1ad22091c2aeeb2c0c901ad33f33f439806f3ed230cf33ee667ed9fb",
+  "observation": {
+    "diagnostic_only": true,
+    "lua_scene_retained": false,
+    "archive_accepted": false,
+    "all_original_clock_inputs_reused": true,
+    "native_frames": 104414,
+    "callback_count": 478,
+    "last_callbacks": [
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 146.4642791748047
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 146.2767333984375
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 146.08924865722656
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 145.9012908935547
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 145.48939514160156
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 145.30322265625
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 145.17800903320312
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 144.96426391601562
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 144.7769317626953
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 144.58958435058594
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 144.4051513671875
+      },
+      {
+        "player": 0,
+        "column": 1,
+        "seconds": 144.21453857421875
+      }
+    ],
+    "tap_callback_count": 191,
+    "last_tap_callbacks": [
+      {
+        "player": 0,
+        "row": 190,
+        "grade": "Fantastic",
+        "seconds": 145.31484985351562
+      },
+      {
+        "player": 0,
+        "row": 189,
+        "grade": "Fantastic",
+        "seconds": 139.95263671875
+      },
+      {
+        "player": 0,
+        "row": 188,
+        "grade": "Fantastic",
+        "seconds": 139.51473999023438
+      },
+      {
+        "player": 0,
+        "row": 187,
+        "grade": "Fantastic",
+        "seconds": 139.3025665283203
+      },
+      {
+        "player": 0,
+        "row": 186,
+        "grade": "Fantastic",
+        "seconds": 139.13519287109375
+      },
+      {
+        "player": 0,
+        "row": 185,
+        "grade": "Fantastic",
+        "seconds": 138.87060546875
+      },
+      {
+        "player": 0,
+        "row": 184,
+        "grade": "Fantastic",
+        "seconds": 138.44607543945312
+      },
+      {
+        "player": 0,
+        "row": 183,
+        "grade": "Fantastic",
+        "seconds": 138.02700805664062
+      },
+      {
+        "player": 0,
+        "row": 182,
+        "grade": "Fantastic",
+        "seconds": 137.5956268310547
+      },
+      {
+        "player": 0,
+        "row": 181,
+        "grade": "Fantastic",
+        "seconds": 137.38963317871094
+      },
+      {
+        "player": 0,
+        "row": 180,
+        "grade": "Fantastic",
+        "seconds": 137.1775665283203
+      },
+      {
+        "player": 0,
+        "row": 179,
+        "grade": "Fantastic",
+        "seconds": 136.75840759277344
+      }
+    ],
+    "late_snapshots": [
+      {
+        "seconds": 146.40020751953125,
+        "domain_seconds": 146.40020751953125,
+        "mine_count": 479,
+        "mines_avoided": 477,
+        "callback_count": 477,
+        "last_mines": [
+          {
+            "index": 669,
+            "row_index": 14496,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "None",
+            "time_ns": 146295497934
+          },
+          {
+            "index": 668,
+            "row_index": 14466,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "None",
+            "time_ns": 146107997934
+          },
+          {
+            "index": 667,
+            "row_index": 14436,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "Some(Avoided)",
+            "time_ns": 145920497934
+          },
+          {
+            "index": 666,
+            "row_index": 14406,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "Some(Avoided)",
+            "time_ns": 145732997934
+          }
+        ],
+        "mine_cursor": 477,
+        "row_to_beat_len": 14514,
+        "pending_mine_callbacks": 0,
+        "song_completed_naturally": false,
+        "notes_end_time_ns": 146646997939,
+        "music_end_time_ns": 146647003174,
+        "callback_installed": true
+      },
+      {
+        "seconds": 146.46334838867188,
+        "domain_seconds": 146.46334838867188,
+        "mine_count": 479,
+        "mines_avoided": 478,
+        "callback_count": 477,
+        "last_mines": [
+          {
+            "index": 669,
+            "row_index": 14496,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "None",
+            "time_ns": 146295497934
+          },
+          {
+            "index": 668,
+            "row_index": 14466,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "Some(Avoided)",
+            "time_ns": 146107997934
+          },
+          {
+            "index": 667,
+            "row_index": 14436,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "Some(Avoided)",
+            "time_ns": 145920497934
+          },
+          {
+            "index": 666,
+            "row_index": 14406,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "Some(Avoided)",
+            "time_ns": 145732997934
+          }
+        ],
+        "mine_cursor": 478,
+        "row_to_beat_len": 14514,
+        "pending_mine_callbacks": 1,
+        "song_completed_naturally": false,
+        "notes_end_time_ns": 146646997939,
+        "music_end_time_ns": 146647003174,
+        "callback_installed": true
+      },
+      {
+        "seconds": 146.4642791748047,
+        "domain_seconds": 146.4642791748047,
+        "mine_count": 479,
+        "mines_avoided": 478,
+        "callback_count": 478,
+        "last_mines": [
+          {
+            "index": 669,
+            "row_index": 14496,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "None",
+            "time_ns": 146295497934
+          },
+          {
+            "index": 668,
+            "row_index": 14466,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "Some(Avoided)",
+            "time_ns": 146107997934
+          },
+          {
+            "index": 667,
+            "row_index": 14436,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "Some(Avoided)",
+            "time_ns": 145920497934
+          },
+          {
+            "index": 666,
+            "row_index": 14406,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "Some(Avoided)",
+            "time_ns": 145732997934
+          }
+        ],
+        "mine_cursor": 478,
+        "row_to_beat_len": 14514,
+        "pending_mine_callbacks": 0,
+        "song_completed_naturally": false,
+        "notes_end_time_ns": 146646997939,
+        "music_end_time_ns": 146647003174,
+        "callback_installed": true
+      },
+      {
+        "seconds": 146.647705078125,
+        "domain_seconds": 146.647705078125,
+        "mine_count": 479,
+        "mines_avoided": 479,
+        "callback_count": 478,
+        "last_mines": [
+          {
+            "index": 669,
+            "row_index": 14496,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "Some(Avoided)",
+            "time_ns": 146295497934
+          },
+          {
+            "index": 668,
+            "row_index": 14466,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "Some(Avoided)",
+            "time_ns": 146107997934
+          },
+          {
+            "index": 667,
+            "row_index": 14436,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "Some(Avoided)",
+            "time_ns": 145920497934
+          },
+          {
+            "index": 666,
+            "row_index": 14406,
+            "column": 1,
+            "can_be_judged": true,
+            "mine_result": "Some(Avoided)",
+            "time_ns": 145732997934
+          }
+        ],
+        "mine_cursor": 478,
+        "row_to_beat_len": 14514,
+        "pending_mine_callbacks": 0,
+        "song_completed_naturally": true,
+        "notes_end_time_ns": 146646997939,
+        "music_end_time_ns": 146647003174,
+        "callback_installed": true
+      }
+    ],
+    "full_repairs_spent_before_and_after": 1
+  }
+}
