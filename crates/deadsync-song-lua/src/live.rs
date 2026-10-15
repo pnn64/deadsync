@@ -3788,6 +3788,58 @@ return Def.Actor { OnCommand = function(self) self:sleep(9999) end }
     }
 
     #[test]
+    fn live_steps_density_uses_real_note_rows_and_chart_timing() {
+        use deadsync_rules::timing::{TimingData, TimingSegments, FakeSegment, StopSegment, TimeSignatureSegment};
+        let mut compiled = compile_with_context("steps-native-density", "return Def.ActorFrame {}", |context| {
+            let timings = [TimingData::from_segments(0.0, 0.0, &TimingSegments {
+                bpms: vec![(0.0, 120.0), (4.0, 240.0)],
+                stops: vec![StopSegment { beat: 6.0, duration: 0.5 }],
+                fakes: vec![FakeSegment { beat: 1.0, length: 1.0 }], ..Default::default()
+            }, &[]), TimingData::from_segments(0.0, 0.0, &TimingSegments {
+                bpms: vec![(0.0, 120.0)], time_signatures: vec![
+                    TimeSignatureSegment { beat: 0.0, numerator: 3, denominator: 4 }], ..Default::default()
+            }, &[])];
+            context.player_step_indices = [Some(0), Some(1)];
+            context.song_steps = (0..2).map(|index| crate::SongLuaStep {
+                steps_type: "StepsType_Dance_Single".into(), difficulty: SongLuaDifficulty::Hard,
+                description: format!("density{index}"), chart_name: String::new(), credit: String::new(),
+                meter: 12, music_file: String::new(), possible_grade_points: 100 }).collect();
+            context.song_step_timing = timings.to_vec();
+            context.player_timing = [Some(timings[0].clone()), Some(timings[1].clone())];
+            context.song_step_notes = vec![std::sync::Arc::from(&b"1100\n1000\n2000\n3000\nM000\n4000\n3000\nL000\nF000\n1000\n"[..]),
+                std::sync::Arc::from(&b"1000\n0100\n1000\n0100\n1000\n0100\n"[..])];
+            context.song_step_row_beats = vec![std::sync::Arc::from(&[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0][..]),
+                std::sync::Arc::from(&[0.0,2.0,3.0,5.0,6.0,8.0][..])];
+        });
+        let scene = compiled.live_scene.take().unwrap();
+        scene.lua.load(r#"
+local charts = GAMESTATE:GetCurrentSong():GetAllSteps()
+local a, b = charts[1], charts[2]
+assert(type(a.GetNotesPerMeasure) == 'function' and type(a.GetNpsPerMeasure) == 'function'
+    and type(a.GetPeakNps) == 'function', 'Steps must expose real cached measure density')
+local count, nps = a:GetNotesPerMeasure(), a:GetNpsPerMeasure()
+assert(#count == 3 and count[1] == 2 and count[2] == 1 and count[3] == 1)
+assert(nps[1] == 1 and math.abs(nps[2] - 2/3) < 0.000001 and nps[3] == 1)
+assert(a:GetPeakNps() == 1 and a:GetPeakNps(PLAYER_2) == 1)
+count[1], nps[1] = 999, 999
+assert(a:GetNotesPerMeasure()[1] == 2 and a:GetNpsPerMeasure()[1] == 1)
+local other = b:GetNotesPerMeasure()
+assert(#other == 3 and other[1] == 2 and other[2] == 2 and other[3] == 2)
+assert(b:GetPeakNps() == 1)
+ParseChartInfo(a, 'P1')
+ParseChartInfo(b, 'P2')
+assert(SL.P1.Streams.PeakNPS == 1 and SL.P1.Streams.NotesPerMeasure[1] == 2)
+assert(SL.P2.Streams.PeakNPS == 1 and SL.P2.Streams.NotesPerMeasure[2] == 2)
+SL.P1.Streams.NotesPerMeasure[1] = 999
+assert(a:GetNotesPerMeasure()[1] == 2)
+GAMESTATE:GetSongOptionsObject('ModsLevel_Song'):MusicRate(2)
+assert(a:GetNpsPerMeasure()[1] == 1, 'cached density is independent of playback rate')
+local ok = pcall(function() a:GetPeakNps('not a player') end)
+assert(not ok)
+"#).exec().unwrap();
+    }
+
+    #[test]
     fn live_underlay_header_uses_native_quad_texture_and_init() {
         for (width, height, enabled) in [(640.0, 480.0, [true, false]),
             (854.0, 480.0, [true, true]), (1280.0, 720.0, [false, true])] {

@@ -1,0 +1,29 @@
+{
+  "regression": "live_steps_density_uses_real_note_rows_and_chart_timing",
+  "meaningful_missing_cached_density_red_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 339.09493120000116,
+      "log_sha256": "97d48b64dd83b60fafad92e661c24fb9dd6a308824358a225417f599d3ac00dc",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 636 filtered out; finished in 0.34s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 256.0186135910335,
+      "log_sha256": "d15ae5ffeae19bff63db9b9c8f6ee8b7340815a310d17374507b7d612e856799",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 634 filtered out; finished in 0.25s"
+      ]
+    }
+  ],
+  "source_cause": "sweep-2026-10-15-hope-step-statistics-source-cause.json",
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
