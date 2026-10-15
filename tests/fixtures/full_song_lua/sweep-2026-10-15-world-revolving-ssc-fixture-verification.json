@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.ssc",
+  "native_frames": 14360,
+  "replayed_frames": 14360,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "640c48d2df81663e1a2271544a3119d4b0f6694e7476e23ce170cd68669fc8dd.tar.zst",
+  "compressed_sha256": "640c48d2df81663e1a2271544a3119d4b0f6694e7476e23ce170cd68669fc8dd",
+  "uncompressed_sha256": "d49cc7417a0d73c262b8404fe240f7307cfc611ad352f6b997c908050bb399d4",
+  "compressed_bytes": 10635473,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
