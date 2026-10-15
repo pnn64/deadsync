@@ -1,10 +1,10 @@
 {
   "source_simfile": "HOPE/HOPE.ssc",
-  "entry_evidence": "sweep-2026-10-15-hope-underlay-standard-life-entry-diagnostic.json",
+  "entry_evidence": "sweep-2026-10-15-hope-standard-life-child-enumeration-entry-diagnostic.json",
   "entry_frames": 1688,
   "entry_errors": 0,
-  "entry_mismatches": 20447,
-  "first_remaining_native_seq": 600,
+  "entry_mismatches": 20445,
+  "first_remaining_native_seq": 617,
   "native_underlay_child_count": 10,
   "owned_underlay_child_count": 10,
   "native_direct_children": [
@@ -69,7 +69,7 @@
     "P1Score",
     "SongMeter"
   ],
-  "source_cause": "The real filter, DifficultyMeter and Standard LifeMeter give owned ten direct children, matching native count. Ownership still differs: native has four unnamed owners and six named children; owned has three unnamed owners and seven named children including direct BPMDisplay. First remaining comparison is Standard meter child-table traversal at sequence600, now documented separately. Native shared BPM outer frame and inner frame remain missing at sequences617/619.",
+  "source_cause": "Real Underlay child counts are10/10. Native still has four unnamed owners and six named children while owned has three unnamed owners and seven named children including direct BPMDisplay. LifeMeter child enumeration is fixed. First remaining event617 is the missing shared BPM outer frame (two children); event619 is its missing inner frame (one BitmapText child).",
   "owned_direct_unnamed_children": 3,
   "background_filter_fix_commit": "b0a9976b938ef94c390b1f9db8e0cca479eb599d",
   "background_filter_qualified_and_loaded": true,
@@ -300,7 +300,7 @@
   "original_capture_reused": true,
   "expected_query_results_used_as_engine_inputs": false,
   "acceptance_comparisons_changed": false,
-  "next_action": "Reproduce native child-table insertion/traversal from primary C++ algorithm in a nonempty control; make the real Standard owner expose its actual sequence and exact identities through GetChildren, then run unchanged controls on both hosts. Shared BPM hierarchy still remains missing at native sequences617/619.",
+  "next_action": "Build the real shared BPM hierarchy and native current-player BPS/rate updates from primary Lua source, including source-selected one/two-player timing behavior and exact named lookup levels. Preserve existing comparison logic and use actual initial profile/timing inputs. Validate runtime structure, changing BPM/rate behavior and unchanged controls on both hosts before retained entry; no full repair while known entry failures remain.",
   "difficulty_meter_fix_commit": "194a47d0bce78275d98fd954f38fbb09004ec366",
   "difficulty_meter_qualified_and_loaded": true,
   "remaining_native_theme_source_hashes_verified_against_local_vendor": {
@@ -311,5 +311,6 @@
   "remaining_inventory_production_fix_added": false,
   "standard_life_fix_commit": "1d24d8cc2001d05f2350d3b2b88d161d818ea3fb",
   "standard_life_qualified_and_loaded": true,
-  "remaining_enumeration_cause": "sweep-2026-10-15-hope-standard-life-child-enumeration-source-cause.json"
+  "standard_life_child_enumeration_fix_commit": "206677f0f46938082a7605b76db4dd787e79733e",
+  "remaining_source_cause": "sweep-2026-10-15-hope-shared-bpm-hierarchy-source-cause.json"
 }

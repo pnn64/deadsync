@@ -1,7 +1,6 @@
 {
   "source_simfile": "HOPE/HOPE.ssc",
   "entry_evidence": "sweep-2026-10-15-hope-underlay-standard-life-entry-diagnostic.json",
-  "first_remaining_native_seq": 600,
   "native_actor": "external-0124",
   "operation": "Actor.GetName",
   "native_result": "MeterSwoosh",
@@ -31,5 +30,10 @@
   "full_repairs_spent": 0,
   "expected_query_results_used_as_engine_inputs": false,
   "comparison_logic_changed": false,
-  "production_fix_for_this_enumeration_failure_added": false
+  "production_fix_for_this_enumeration_failure_added": true,
+  "original_failure_native_seq": 600,
+  "fix_commit": "206677f0f46938082a7605b76db4dd787e79733e",
+  "followup_entry": "sweep-2026-10-15-hope-standard-life-child-enumeration-entry-diagnostic.json",
+  "first_remaining_native_seq_after_fix": 617,
+  "status": "resolved by actual sequence-owned child table construction; shared BPM hierarchy remains pending"
 }
