@@ -1,0 +1,71 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "6a2fcdd49 / harness 79005e1",
+  "results": [
+    {
+      "position": 472,
+      "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+      "status": "passed",
+      "repair_attempts": 2,
+      "candidate_sha256": "570a1c7187c0bccc4bde87f2649980c600b3b34377701d9d90d0b402e78153b9",
+      "trace_sha256": "ba4837520fb6435bf6d3e8f21487bfc06c27d3eba6322dd9b6bbe9ca92656847",
+      "simfile_sha256": "3d4d8467ebbbd92076d67f661822eead8387f4c7e05fd5fb4bdf5ec3b3d5db4e",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "fa324206ba7f62042b59f44613115cdc2e8dc928223a505f746f3a952672f650",
+      "harness_sha256": "15bfe62bbb7917b45e1f3ddc8401cffca5d5296366ea4e0c5ccd0879880bb290",
+      "build_proof": "/home/parity/jobs/dynamic-observer-profile-linux-green-v1/proof.json",
+      "fix_commit": "6a2fcdd49",
+      "previous_failure": null,
+      "previous_errors": [],
+      "full_repair_limit": 2,
+      "no_third_full_repair": true,
+      "previous_mismatch_count": 216192,
+      "capture_observer_profile": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "e067360d8120ee0a174b0848832856325ef62b709287fb48976441a277b26563"
+      },
+      "replay_exit": 0,
+      "replay_seconds": 1232.9759622410056,
+      "native_frames": 47002,
+      "replayed_frames": 47002,
+      "compared_stage_fields": 1419,
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetY, Actor.addcommand, Actor.effectclock, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.skewy, Actor.z, ActorFrame.GetChildren, GameState.GetSongPosition, PlayerOptions.FromString, RageDisplay.GetDisplayHeight, RageDisplay.GetDisplayWidth, Song.GetTimingData"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "2e56b458578ae2af7a4fc17e431c528256d73e51226948240388dd6c54f2a685",
+      "archive": "cf9c08bd681e27edebd0cf7754106cd6bebe800295c8a184e377d7397a411c25.tar.zst",
+      "archive_sha256": "cf9c08bd681e27edebd0cf7754106cd6bebe800295c8a184e377d7397a411c25",
+      "compressed_bytes": 11045498,
+      "harness_version": "0.1.80",
+      "title": "What If The Whole World Turned Their Swag On",
+      "pack_seconds": 11.32438391802134,
+      "retained_original_entry": {
+        "title": "What If The Whole World Turned Their Swag On",
+        "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+        "harness_version": "0.1.0",
+        "archive": "b661badef962c63aae3272b9fb87e3a5e147247d6b11f38541d468005387cfd2.tar.zst",
+        "sha256": "b661badef962c63aae3272b9fb87e3a5e147247d6b11f38541d468005387cfd2",
+        "compressed_bytes": 156860,
+        "uncompressed_sha256": "becde5d2d7351fa0127d9f99d02c4f7a05ce59c0a5f6a8eb1680ea6c04e5676c",
+        "compression_level": 22,
+        "aliases": [
+          "b4a40a9315fd8cd6b7d2fbf1e9abf0072c1a4ecb733917361ad8289ddfb38a61.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "fa324206ba7f62042b59f44613115cdc2e8dc928223a505f746f3a952672f650",
+  "harness_sha256": "15bfe62bbb7917b45e1f3ddc8401cffca5d5296366ea4e0c5ccd0879880bb290",
+  "repair": "final second repair: trace actual dynamic command dispatch under explicit capture observer provenance; retain complete corrected native capture and every nonmanifest member byte; full comparisons unchanged",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
