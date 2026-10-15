@@ -1,0 +1,9 @@
+{
+  "native_replay_source_changes_limited_to_initial_profile_reader_and_one_new_input_regression": true,
+  "all_existing_comparison_logic_and_existing_control_functions_byte_identical_after_lf_normalization": true,
+  "full_song_lua_acceptance_source_unchanged": true,
+  "input_provenance": "retained capture input.gameplay_preferences.players[].theme_modifiers.BackgroundFilter, mapped through production Profile and SongLuaCompileContext",
+  "native_query_results_used_as_engine_inputs": false,
+  "red_setup_includes_initial_input_plumbing_before_missing_actor_regression": true,
+  "full_chart_repairs_spent": 0
+}
