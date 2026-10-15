@@ -1,0 +1,41 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "entry_evidence": "sweep-2026-10-15-hope-score-display-frame-entry-diagnostic.json",
+  "native_actor_identity_evidence": "sweep-2026-10-15-hope-percentage-display-entry-evidence.json",
+  "entry_frames": 1688,
+  "entry_errors": 0,
+  "entry_mismatches": 20471,
+  "first_remaining_actor": "ScreenGameplay/ScoreP1/ScoreDisplayPercentage Percent",
+  "first_remaining_operation": "ActorFrame.GetNumChildren",
+  "native_result": 1,
+  "owned_behavior": "Owned traversal reaches PercentP1, but inherited PercentageDisplay GetNumChildren and GetChildren queries are missing from the recorded query sequence.",
+  "local_primary_sources": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\PercentageDisplay.h",
+      "sha256": "1a52e7c01e9a5a9204fffcc7f0a63b2ab1b755c934f3fc44922ba6c492e61ae8"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\PercentageDisplay.cpp",
+      "sha256": "0c9b257bb3e8b6e636aa6ea06ee5063a32c0a2f82f16cc0b9acc95cc49e27dce"
+    },
+    {
+      "path": "C:\\GitHub\\rework\\lua-songs\\HOPE\\sm5\\modules\\grabactors.lua",
+      "sha256": "0294e1a4e0ad38f36fbb23bd8db1f30b1993d9667f47a32e6a33def8029d56ba"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\actor_classes.rs",
+      "sha256": "90ca58f4e585355a54457864317df2b5df412e54ecab9452cc451be2d0bfa225"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\live.rs",
+      "sha256": "5cd1c3899e679b7e9ff659bd2bc69997fbd063cc1192e2231d529754997ea4c2"
+    }
+  ],
+  "source_cause": "Native PercentageDisplay inherits ActorFrame in its C++ declaration and LUA_REGISTER_DERIVED_CLASS. Owned actor_classes::is_frame omits PercentageDisplay, so class_name selects Actor and inherited frame queries fall back to instance adapters instead of the observed native ActorFrame class bindings. The actual HOPE traversal calls GetNumChildren and GetChildren on PercentageDisplay before visiting PercentP1; native records both inherited queries, while the owned sequence skips them.",
+  "production_fix_added": false,
+  "full_repairs_spent": 0,
+  "original_native_capture_reused": true,
+  "expected_query_results_used_as_engine_inputs": false,
+  "acceptance_comparisons_changed": false,
+  "next_action": "Implement faithful PercentageDisplay ActorFrame inheritance with a focused regression; validate before another retained-entry diagnostic and any full repair."
+}

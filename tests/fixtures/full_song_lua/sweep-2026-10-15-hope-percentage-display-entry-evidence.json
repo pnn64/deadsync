@@ -1,0 +1,76 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "entry_frames": 1688,
+  "entry_errors": 0,
+  "entry_mismatches": 20471,
+  "previous_entry_mismatches": 20475,
+  "native_command_queries": 21008,
+  "owned_command_queries": 20610,
+  "remaining_first_actor": "external-0069",
+  "native_trace_sha256": "88b20e678a79afd20607bb861bde142f73c817749b04504b84ae23314ceb89d6",
+  "compressed_candidate_report_and_log_hashes_verified": true,
+  "remaining_actor_metadata": [],
+  "remaining_actor_early_native_events": [
+    {
+      "actor": "external-0069",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 36,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          1
+        ]
+      },
+      "kind": "query",
+      "line": 46,
+      "operation": "ActorFrame.GetNumChildren",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 303,
+      "source": "song:/.//default.lua"
+    },
+    {
+      "actor": "external-0069",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 36,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": 0,
+        "results": [
+          {
+            "PercentP1": {
+              "actor": "external-0071",
+              "name": "PercentP1",
+              "path": "ScreenGameplay/ScoreP1/ScoreDisplayPercentage Percent/PercentP1"
+            }
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 46,
+      "operation": "ActorFrame.GetChildren",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 304,
+      "source": "song:/.//default.lua"
+    }
+  ],
+  "full_repairs_spent_before_and_after": 0,
+  "no_fixture_acceptance": true,
+  "source_cause_not_yet_claimed": true
+}
