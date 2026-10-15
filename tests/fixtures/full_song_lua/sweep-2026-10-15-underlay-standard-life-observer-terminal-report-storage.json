@@ -1,0 +1,63 @@
+{
+  "reason": "Free duplicate raw reports already preserved losslessly as compressed terminal diagnostics; no captures, fixture archives, source files or live inputs are removed.",
+  "reports": [
+    {
+      "raw_path": "/home/parity/jobs/shakunetsu2-sm-listener-first-repair-v1/chart-394/report.json",
+      "raw_bytes": 326324388,
+      "raw_sha256": "3dd4ef854520625057a86efffa21c1419562956f1f24d8720b28e35e94bacf96",
+      "compressed_path": "/home/parity/jobs/shakunetsu2-sm-listener-first-repair-v1/chart-394/report.json.zst",
+      "compressed_bytes": 3570520,
+      "compressed_sha256": "41fc6c440555dea5f6dcd2c4311e71e2ce3b310433eabe4ece54ebf9db55280b",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "17c0560cff3aa3334f750b56fa8c1ef59c6ccd680f2bdc4dae4bf09f911dc3cd",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/door-cringle-sm-screen-tree-repair-v1/chart-274/report.json",
+      "raw_bytes": 219406545,
+      "raw_sha256": "1207ee1b5d29afdf2fac45c618a16262ff9ed0d5eaf5055bff93b24898badf8c",
+      "compressed_path": "/home/parity/jobs/door-cringle-sm-screen-tree-repair-v1/chart-274/report.json.zst",
+      "compressed_bytes": 3069282,
+      "compressed_sha256": "351bfda24288d1248b36d0c7d75aeaa2daa4a2d27ca4a3200bfdb855c231ae6a",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "f0df698693204936f4986e2ce07a7832a6bf371900d035d7115572f28a3dff1a",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/my-exes-ssc-tweens-repair-v1/chart-321/report.json",
+      "raw_bytes": 125859714,
+      "raw_sha256": "646c30aea3ad358d915d585d6f62092fe717254d49a2b168a03ba2298a264a1a",
+      "compressed_path": "/home/parity/jobs/my-exes-ssc-tweens-repair-v1/chart-321/report.json.zst",
+      "compressed_bytes": 2919309,
+      "compressed_sha256": "c6147b665bb0665d651cf21add2625c485d711a24c1419353d4f1e9fa38d4792",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "6f42ce6fb1817c3f60e529a53c6503a0ee5353e2e3abc70641ec305e2e622f0d",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/mawaru6-foreground-row-repair-v1/chart-305/report.json",
+      "raw_bytes": 529032664,
+      "raw_sha256": "8d8ad7045d4c058f2b8f5ddb2a84400e6dc18d0f717cb249fc2d888c830da97b",
+      "compressed_path": "/home/parity/jobs/mawaru6-foreground-row-repair-v1/chart-305/report.json.zst",
+      "compressed_bytes": 9074979,
+      "compressed_sha256": "39516ae53b867326fe2b12e86c2ab99edc0933ede5170f480dace56c16b662e7",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "82b4aab7de51babe0bed89609ab9b4296967b08aff86331af1732def043da671",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    }
+  ],
+  "raw_report_bytes_removed": 1200623311,
+  "free_before": 330616832,
+  "free_after": 1531203584,
+  "mawaru9_helper_hash_unchanged": true,
+  "chart_replays_or_compilers_stopped": false,
+  "acceptance_or_attempt_counts_changed": false
+}
