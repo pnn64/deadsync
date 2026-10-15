@@ -3773,7 +3773,9 @@ return Def.Actor { OnCommand = function()
         assert(texture:GetNumFrames() == 1)
         assert(texture:GetPath():find('/Technique/GameplayIn ', 1, true))
         assert(sprite:GetX() == SCREEN_CENTER_X and sprite:GetY() == SCREEN_CENTER_Y)
-        assert(sprite:GetZoomX() == 0 and sprite:GetZoomY() == 0)
+        local destination = ({1.1, 1.3, 0.9})[index - 1]
+        assert(math.abs(sprite:GetZoomX() - destination) < 0.000001)
+        assert(math.abs(sprite:GetZoomY() - destination) < 0.000001)
         IN_SPRITES[#IN_SPRITES + 1] = sprite
     end
     assert(ThemePrefs.Get('VisualStyle') == 'Technique')
@@ -3794,6 +3796,9 @@ end }
         }
         for (index, sprite) in sprites.iter().enumerate() {
             assert_eq!(crate::actor_tween_time_left(&scene.lua, sprite).unwrap(), if index == 2 { 1.2 } else { 1.0 });
+            let pose = read_state(&scene.lua, sprite).unwrap();
+            assert_eq!(pose.zoom * pose.zoom_x, 0.0, "native rendered X scale starts at zero");
+            assert_eq!(pose.zoom * pose.zoom_y, 0.0, "native rendered Y scale starts at zero");
             assert_eq!(read_state(&scene.lua, sprite).unwrap().rot_z_deg, if index == 1 { -10.0 } else { 10.0 });
         }
     }

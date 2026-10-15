@@ -1264,6 +1264,7 @@ fn theme_pref_default_normalized(lua: &mlua::Lua, key: &str) -> mlua::Result<mlu
             | "editmodelastseenstyletype"
     ) {
         let value = match key {
+            "visualstyle" => "Technique",
             "themefont" => "Common",
             "defaultgamemode" => "Dance",
             "songselectbg" | "resultsbg" => "Off",

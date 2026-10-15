@@ -314,7 +314,9 @@ pub fn install_stdlib_compat(
     )?;
     globals.set(
         "IsSpooky",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.load(r#"return function()
+    return PREFSMAN:GetPreference('EasterEggs') and MonthOfYear() == 9 and ThemePrefs.Get('VisualStyle') == 'Spooky'
+end"#).set_name("@theme:/Scripts/SL-Helpers.lua:IsSpooky").eval::<Function>()?,
     )?;
     globals.set(
         "StripSpriteHints",

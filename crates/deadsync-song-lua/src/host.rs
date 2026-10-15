@@ -1474,6 +1474,7 @@ pub fn install_core_globals(
     install_manager_globals(lua, context)?;
 
     let globals = lua.globals();
+    globals.set("ThemePrefs", create_theme_prefs_table(lua)?)?;
     globals.set("NOTESKIN", noteskin)?;
     install_screen_utility_globals(lua)?;
     globals.set(
@@ -2346,7 +2347,6 @@ SM = function( arg, duration, stack )
 end"#)
         .set_name("@theme:/Scripts/06 SL-Utilities.lua")
         .exec()?;
-    globals.set("ThemePrefs", create_theme_prefs_table(lua)?)?;
     globals.set("ThemePrefsRows", create_theme_prefs_rows_table(lua)?)?;
     globals.set("SL_CustomPrefs", create_sl_custom_prefs_table(lua)?)?;
     globals.set(

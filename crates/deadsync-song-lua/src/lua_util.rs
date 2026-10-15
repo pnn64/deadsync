@@ -13709,6 +13709,69 @@ pub fn create_named_child_actor(
     Ok(child)
 }
 
+struct NativeGameplayInBitmap {
+    key: &'static str,
+    filename: &'static str,
+    bytes: &'static [u8],
+    prepared: OnceLock<Result<String, String>>,
+}
+
+static NATIVE_GAMEPLAY_IN_BITMAPS: [NativeGameplayInBitmap; 23] = [
+    NativeGameplayInBitmap { key: "_VisualStyles/Arrows/GameplayIn minisplode", filename: "_VisualStyles/Arrows/GameplayIn minisplode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Arrows/GameplayIn minisplode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Arrows/GameplayIn splode", filename: "_VisualStyles/Arrows/GameplayIn splode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Arrows/GameplayIn splode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Bears/GameplayIn minisplode", filename: "_VisualStyles/Bears/GameplayIn minisplode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Bears/GameplayIn minisplode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Bears/GameplayIn splode", filename: "_VisualStyles/Bears/GameplayIn splode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Bears/GameplayIn splode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Cats/GameplayIn minisplode", filename: "_VisualStyles/Cats/GameplayIn minisplode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Cats/GameplayIn minisplode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Cats/GameplayIn splode", filename: "_VisualStyles/Cats/GameplayIn splode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Cats/GameplayIn splode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Ducks/GameplayIn minisplode", filename: "_VisualStyles/Ducks/GameplayIn minisplode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Ducks/GameplayIn minisplode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Ducks/GameplayIn splode", filename: "_VisualStyles/Ducks/GameplayIn splode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Ducks/GameplayIn splode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Gay/GameplayIn minisplode", filename: "_VisualStyles/Gay/GameplayIn minisplode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Gay/GameplayIn minisplode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Gay/GameplayIn splode", filename: "_VisualStyles/Gay/GameplayIn splode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Gay/GameplayIn splode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Hearts/GameplayIn minisplode", filename: "_VisualStyles/Hearts/GameplayIn minisplode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Hearts/GameplayIn minisplode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Hearts/GameplayIn splode", filename: "_VisualStyles/Hearts/GameplayIn splode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Hearts/GameplayIn splode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Spooky/ExtraSpooky/Bats", filename: "_VisualStyles/Spooky/ExtraSpooky/Bats (doubleres) 2x1.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Spooky/ExtraSpooky/Bats (doubleres) 2x1.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Spooky/GameplayIn minisplode", filename: "_VisualStyles/Spooky/GameplayIn minisplode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Spooky/GameplayIn minisplode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Spooky/GameplayIn splode", filename: "_VisualStyles/Spooky/GameplayIn splode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Spooky/GameplayIn splode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/SRPG10/GameplayIn minisplode", filename: "_VisualStyles/SRPG10/GameplayIn minisplode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/SRPG10/GameplayIn minisplode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/SRPG10/GameplayIn splode", filename: "_VisualStyles/SRPG10/GameplayIn splode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/SRPG10/GameplayIn splode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Stars/GameplayIn minisplode", filename: "_VisualStyles/Stars/GameplayIn minisplode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Stars/GameplayIn minisplode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Stars/GameplayIn splode", filename: "_VisualStyles/Stars/GameplayIn splode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Stars/GameplayIn splode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Technique/GameplayIn minisplode", filename: "_VisualStyles/Technique/GameplayIn minisplode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Technique/GameplayIn minisplode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Technique/GameplayIn splode", filename: "_VisualStyles/Technique/GameplayIn splode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Technique/GameplayIn splode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Thonk/GameplayIn minisplode", filename: "_VisualStyles/Thonk/GameplayIn minisplode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Thonk/GameplayIn minisplode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Thonk/GameplayIn splode", filename: "_VisualStyles/Thonk/GameplayIn splode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Thonk/GameplayIn splode (doubleres).png"), prepared: OnceLock::new() },
+ ];
+
+pub(crate) fn native_gameplay_in_bitmap_filename(name: &str) -> Option<&'static str> {
+    NATIVE_GAMEPLAY_IN_BITMAPS.iter().find(|bitmap| bitmap.key == name || bitmap.filename == name)
+        .map(|bitmap| bitmap.filename)
+}
+
+fn load_native_gameplay_in_bitmap(name: &str) -> mlua::Result<String> {
+    let bitmap = NATIVE_GAMEPLAY_IN_BITMAPS.iter()
+        .find(|bitmap| bitmap.key == name || bitmap.filename == name)
+        .ok_or_else(|| mlua::Error::runtime(format!("missing native gameplay-in bitmap: {name}")))?;
+    bitmap.prepared.get_or_init(|| {
+        let decoded = image::load_from_memory_with_format(bitmap.bytes, image::ImageFormat::Png)
+            .map_err(|error| error.to_string())?;
+        let mut image = decoded.into_rgba8();
+        let source_size = [image.width(), image.height()];
+        let mut hints = deadlib_assets::parse_texture_hints(bitmap.filename);
+        hints.min_size = Some(8);
+        hints.max_size = Some(2048);
+        let size = deadlib_assets::texture_image_size(source_size, &hints)
+            .map_err(|error| error.to_string())?;
+        if size != source_size {
+            image = image::imageops::resize(&image, size[0], size[1], image::imageops::FilterType::Triangle);
+        }
+        deadlib_assets::apply_texture_hints(&mut image, &hints);
+        deadlib_assets::fix_hidden_alpha(&mut image);
+        let path = format!("{}G/{}", crate::SONG_LUA_THEME_PATH_PREFIX, bitmap.filename);
+        deadlib_assets::register_prepared_generated_texture(&path, image, source_size, hints.sampler_desc());
+        Ok(path)
+    }).as_ref().cloned().map_err(|error| mlua::Error::external(error.clone()))
+}
+
 const NATIVE_BLANK_TEXTURE_PATH: &str = "Themes/_fallback/Graphics/_blank.png";
 
 fn load_native_blank_texture() -> mlua::Result<&'static str> {
@@ -13817,12 +13880,50 @@ pub fn create_top_screen_theme_actor(
             if !reload {
                 visuals.get::<Function>("sleep")?.call::<()>((visuals.clone(), 2.0))?;
                 visuals.get::<Function>("queuecommand")?.call::<()>((visuals.clone(), "Hide"))?;
-                for (kind, first, last) in [("Quad", 1.4, 0.6), ("Sprite", 0.4, 0.6),
-                    ("Sprite", 0.4, 0.6), ("Sprite", 0.4, 0.8)] {
-                    let sprite = create_named_actor(lua, kind, "", create_dummy_actor)?;
+                let commands = lua.load(r#"
+return {
+    { InitCommand=function(self) self:diffuse(Color.Black):Center():FullScreen() end,
+      OnCommand=function(self) self:sleep(1.4):accelerate(0.6):diffusealpha(0) end },
+    { InitCommand=function(self) self:diffuse(GetCurrentColor(true)):Center():rotationz(10):zoom(0):diffusealpha(0.9) end,
+      OnCommand=function(self) self:sleep(0.4):linear(0.6):rotationz(0):zoom(1.1):diffusealpha(0) end },
+    { InitCommand=function(self) self:diffuse(GetCurrentColor(true)):Center():rotationy(180):rotationz(-10):zoom(0):diffusealpha(0.8) end,
+      OnCommand=function(self) self:sleep(0.4):decelerate(0.6):rotationz(0):zoom(1.3):diffusealpha(0) end },
+    { InitCommand=function(self) self:diffuse(GetCurrentColor(true)):Center():rotationz(10):zoom(0) end,
+      OnCommand=function(self) self:sleep(0.4):decelerate(0.8):rotationz(0):zoom(0.9):diffusealpha(0) end },
+}
+"#).set_name("@theme:/BGAnimations/ScreenGameplay in/default.lua").eval::<Table>()?;
+                let style = lua.globals().get::<Table>("ThemePrefs")?
+                    .get::<Function>("Get")?.call::<String>("VisualStyle")?;
+                let spooky = lua.globals().get::<Function>("IsSpooky")?.call::<bool>(())?;
+                let color = lua.globals().get::<Function>("GetCurrentColor")?.call::<Table>(true)?;
+                for index in 0..4 {
+                    let sprite = create_named_actor(lua, if index == 0 { "Quad" } else { "Sprite" }, "", create_dummy_actor)?;
                     sprite.raw_set("__songlua_parent", visuals.clone())?;
-                    sprite.get::<Function>("sleep")?.call::<()>((sprite.clone(), first))?;
-                    sprite.get::<Function>("accelerate")?.call::<()>((sprite.clone(), last))?;
+                    let handlers = commands.raw_get::<Table>(index + 1)?;
+                    for command in ["InitCommand", "OnCommand"] {
+                        sprite.raw_set(command, handlers.raw_get::<Function>(command)?)?;
+                    }
+                    sprite.get::<Function>("Center")?.call::<()>(sprite.clone())?;
+                    if index == 0 {
+                        sprite.get::<Function>("FullScreen")?.call::<()>(sprite.clone())?;
+                        sprite.get::<Function>("diffuse")?.call::<()>((sprite.clone(), 0.0, 0.0, 0.0, 1.0))?;
+                        sprite.get::<Function>("sleep")?.call::<()>((sprite.clone(), 1.4))?;
+                        sprite.get::<Function>("accelerate")?.call::<()>((sprite.clone(), 0.6))?;
+                    } else {
+                        let asset = if spooky { "_VisualStyles/Spooky/ExtraSpooky/Bats".to_string() }
+                            else { format!("_VisualStyles/{style}/GameplayIn {}", if index == 3 { "minisplode" } else { "splode" }) };
+                        set_actor_texture_from_path(&sprite, &load_native_gameplay_in_bitmap(&asset)?)?;
+                        sprite.get::<Function>("diffuse")?.call::<()>((sprite.clone(), color.clone()))?;
+                        sprite.get::<Function>("rotationz")?.call::<()>((sprite.clone(), if index == 2 { -10.0 } else { 10.0 }))?;
+                        if index == 2 { sprite.get::<Function>("rotationy")?.call::<()>((sprite.clone(), 180.0))?; }
+                        sprite.get::<Function>("zoom")?.call::<()>((sprite.clone(), 0.0))?;
+                        if index != 3 { sprite.get::<Function>("diffusealpha")?.call::<()>((sprite.clone(), if index == 1 { 0.9 } else { 0.8 }))?; }
+                        sprite.get::<Function>("sleep")?.call::<()>((sprite.clone(), 0.4))?;
+                        sprite.get::<Function>(if index == 1 { "linear" } else { "decelerate" })?
+                            .call::<()>((sprite.clone(), if index == 3 { 0.8 } else { 0.6 }))?;
+                        sprite.get::<Function>("rotationz")?.call::<()>((sprite.clone(), 0.0))?;
+                        sprite.get::<Function>("zoom")?.call::<()>((sprite.clone(), [0.0, 1.1, 1.3, 0.9][index]))?;
+                    }
                     sprite.get::<Function>("diffusealpha")?.call::<()>((sprite.clone(), 0.0))?;
                     push_sequence_child_once(&visuals, sprite)?;
                 }

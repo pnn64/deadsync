@@ -52,6 +52,9 @@ fn normalized_query_contains(target: &str, query: &str) -> bool {
 pub fn theme_path(kind: &str, group: &str, name: &str) -> String {
     let group = group.trim_matches('/');
     let name = name.trim_start_matches('/');
+    let name = if kind == "G" && group.is_empty() {
+        crate::lua_util::native_gameplay_in_bitmap_filename(name).unwrap_or(name)
+    } else { name };
     if group.is_empty() {
         format!("{}{kind}/{name}", crate::SONG_LUA_THEME_PATH_PREFIX)
     } else {

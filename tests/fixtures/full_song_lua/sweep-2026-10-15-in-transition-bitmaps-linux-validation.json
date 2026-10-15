@@ -1,0 +1,66 @@
+{
+  "source_root": "/home/parity/workspace/in-transition-bitmaps-green-v3/deadsync",
+  "binary_sha256": "a3f474ee34c4815bef043309ee2b4ae4b46fdc57ff593916ba9e37ab1a0a0967",
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "regression_red_prefix_and_all_other_controls_unchanged": true,
+  "only_native_zoom_destination_and_rendered_pose_assertions_corrected": true,
+  "native_bitmap_asset_log_and_binary_hashes_verified": true,
+  "red_missing_in_bitmaps_reproduced_both_hosts": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 251.06470710900612,
+      "log_sha256": "60715361612aced31576cab2c9cc027a075896e41cb4a8c32be90913a9a4471c",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 627 filtered out; finished in 0.22s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 37.12392609001836,
+      "log_sha256": "78067aa4a16d9839f59d033f0117177494c6474f01a9b5a75b7a498c8bd41fb3",
+      "results": [
+        "test result: ok. 91 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 36.42s"
+      ]
+    },
+    {
+      "label": "theme-preference-controls",
+      "exit_code": 0,
+      "seconds": 0.8998537519946694,
+      "log_sha256": "2be4a8fbe040f94bd4058f32215e4a79ad7ab23e0f9d46235bd5066eabc7edbd",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 626 filtered out; finished in 0.20s"
+      ]
+    },
+    {
+      "label": "theme-option-row-controls",
+      "exit_code": 0,
+      "seconds": 0.8638791780103929,
+      "log_sha256": "2578a4f268242d435f8ff744b9cf7a92e3e1bda2fa787412fb2757cb549dacc6",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 627 filtered out; finished in 0.19s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 217.24618011101848,
+      "log_sha256": "ef1e046a3864be5910bcff2eceeffc72139c621ff3a002631b56e12e3ddcfd37",
+      "results": [
+        "test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 18.85s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 35.54211291403044,
+      "log_sha256": "248b6e5428c98fd625b80436d9b01877ae90561985b6de42b7bd8927ae665e4c",
+      "results": []
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

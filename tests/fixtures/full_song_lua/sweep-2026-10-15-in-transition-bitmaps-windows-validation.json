@@ -1,0 +1,72 @@
+{
+  "all_six_groups_passed": true,
+  "all_1175_normalized_source_pins_asset_and_log_hashes_verified": true,
+  "red_missing_in_bitmaps_reproduced": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 322.57293619999837,
+      "log_sha256": "e0a437e14c9e1d7322cfe12f86bf03eb76042c73970c11166bfdfb7c07a1da74",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 629 filtered out; finished in 0.28s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 56.67887889999838,
+      "log_sha256": "a1b02360c080f5df5bac76de661579837da9966abe0be9d4d8279de8876ada31",
+      "results": [
+        "test result: ok. 91 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 55.08s"
+      ]
+    },
+    {
+      "label": "theme-preference-controls",
+      "exit_code": 0,
+      "seconds": 1.6877834999904735,
+      "log_sha256": "980a414a13b4e29f1d78d36087c278c24de4a0d5e87cfb998dfaace34deae062",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 628 filtered out; finished in 0.28s"
+      ]
+    },
+    {
+      "label": "theme-option-row-controls",
+      "exit_code": 0,
+      "seconds": 1.675821900003939,
+      "log_sha256": "a8ef546095a0a408c6a5ef1ecba1cba4324cd40e1c9e095cdc980493e4ea84ee",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 629 filtered out; finished in 0.28s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 135.46277080000436,
+      "log_sha256": "8633c53d8afe72ae1304eddb3615d30cec9d5ef6b3798dbf59385ae1b04e6c7e",
+      "results": [
+        "test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 21.63s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 24.534740700008115,
+      "log_sha256": "1dbd63d740422236404583b4081ab0d02f7fd508aa476b7727d819df1269ac17",
+      "results": []
+    }
+  ],
+  "red_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 329.37985820000176,
+      "log_sha256": "d7832dfb235e253b4338bd71b6ae122b4f1412f8c393626841d4bd7774e94bb3",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 629 filtered out; finished in 0.23s"
+      ]
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
