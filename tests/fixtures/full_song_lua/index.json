@@ -4829,15 +4829,12 @@
     {
       "title": "Stay Alive",
       "source_simfile": "Stay Alive/Stay Alive.ssc",
-      "harness_version": "0.1.0",
-      "archive": "988731d0d8989b4ed9d13fa487132cc259dd4ad2ffedb247f815955b2228144f.tar.zst",
-      "sha256": "988731d0d8989b4ed9d13fa487132cc259dd4ad2ffedb247f815955b2228144f",
-      "compressed_bytes": 61681,
-      "uncompressed_sha256": "7783e265730d4db280c486829f59717c68dc8c9c05f12266f6c66b87b2cd9300",
-      "compression_level": 22,
-      "aliases": [
-        "d1ba51e2eb2520ee91c78e70c7ad0bf664019d38fceee632d372cd61036d1eb7.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "64f69cd0aa552aaecd049ff06af907f8973590288d1920c93070804b9557b19e.tar.zst",
+      "sha256": "64f69cd0aa552aaecd049ff06af907f8973590288d1920c93070804b9557b19e",
+      "compressed_bytes": 7326275,
+      "uncompressed_sha256": "4cf3f434754cfc7338bc7e63bf0e7702063b8779e7cce4630bead9d11a913084",
+      "aliases": []
     },
     {
       "title": "Stella Glow",
