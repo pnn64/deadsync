@@ -1918,7 +1918,14 @@ fn initialize_actor_instance(
 fn materialize_actor_declaration(lua: &Lua, declaration: &Table) -> mlua::Result<Table> {
     let host = *lua.app_data_ref::<ActorDefinitionHost>()
         .ok_or_else(|| mlua::Error::runtime("actor declaration has no gameplay host"))?;
-    let class: String = declaration.raw_get("Class")?;
+    let class = declaration.raw_get::<Option<String>>("Class")?
+        .or(declaration.raw_get::<Option<String>>("Type")?)
+        .unwrap_or_default();
+    // ActorUtil::LoadFromNode returns a fresh Actor for a missing class.
+    // It does not load that declaration's properties, commands or children.
+    if class.is_empty() {
+        return (host.create_dummy_actor)(lua, "Actor");
+    }
     let kind = match class.as_str() {
         "Actor" => "Actor", "ActorFrame" => "ActorFrame", "Sprite" => "Sprite",
         "Banner" => "Banner", "ActorMultiVertex" => "ActorMultiVertex", "Sound" => "Sound",
@@ -2011,9 +2018,7 @@ fn own_actor_children(
     let (source, children) = actor_def_children(lua, actor)?;
     for (key, child) in children {
         if child.raw_get::<Option<String>>("__songlua_actor_type")?.is_none() {
-            if child.raw_get::<Option<String>>("Class")?.is_some()
-                && lua.app_data_ref::<ActorDefinitionHost>().is_some()
-            {
+            if lua.app_data_ref::<ActorDefinitionHost>().is_some() {
                 source.raw_set(key, materialize_actor_declaration(lua, &child)?)?;
             }
             continue;
@@ -2041,7 +2046,6 @@ pub(crate) fn own_actor_root(
 ) -> mlua::Result<Value> {
     let Value::Table(actor) = root else { return Ok(root) };
     if actor.raw_get::<Option<String>>("__songlua_actor_type")?.is_none()
-        && actor.raw_get::<Option<String>>("Class")?.is_some()
         && lua.app_data_ref::<ActorDefinitionHost>().is_some()
     {
         return materialize_actor_declaration(lua, &actor).map(Value::Table);

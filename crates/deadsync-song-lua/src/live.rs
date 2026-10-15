@@ -1540,6 +1540,53 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 #[cfg(test)]
 mod tests {
     #[test]
+    fn live_untyped_foreground_uses_native_dummy_actor() {
+        let mut compiled = compile_with_context("untyped-foreground", "CONSTRUCTED = true; return {}", |context| {
+            context.layer_start_beats = vec![0.0];
+            context.foreground_names = vec!["fallback".into()];
+        });
+        let mut scene = compiled.live_scene.take().expect("native dummy foreground");
+        let output = scene.advance(SongLuaLiveFrame { beat: 0.1, music_seconds: 0.1,
+            screen_seconds: 0.1, delta_seconds: 0.1, ..Default::default() }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        scene.lua.load(r#"
+assert(CONSTRUCTED, 'construction side effects survive the fallback')
+local foreground = SCREENMAN:GetTopScreen():GetChild('SongForeground'):GetChild('fallback')
+assert(foreground and foreground:GetName() == 'fallback')
+assert(foreground:GetParent():GetName() == 'SongForeground')
+foreground:visible(true)
+assert(foreground:GetVisible())
+"#).exec().expect("foreground owns a real dummy Actor");
+    }
+
+    #[test]
+    fn live_untyped_declaration_discards_fields_commands_and_children() {
+        let mut compiled = compile_with_context("untyped-declaration", r#"
+local untyped = {
+    Name = 'Ignored',
+    InitCommand = function() error('untyped Init must not run') end,
+    OnCommand = function() error('untyped On must not run') end,
+    Def.Actor { InitCommand = function() error('untyped children must not load') end },
+}
+return Def.ActorFrame {
+    InitCommand = function(self) ROOT = self end,
+    untyped,
+}
+"#, |_| {});
+        let mut scene = compiled.live_scene.take().expect("native dummy child");
+        let output = scene.advance(SongLuaLiveFrame { beat: 0.1, music_seconds: 0.1,
+            screen_seconds: 0.1, delta_seconds: 0.1, ..Default::default() }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        scene.lua.load(r#"
+assert(ROOT:GetChild('Ignored') == nil, 'invalid declarations do not load Name')
+local child = ROOT:GetChild('')
+assert(child and child:GetName() == '')
+child:visible(false)
+assert(not child:GetVisible())
+"#).exec().expect("invalid declarations load only the native dummy Actor");
+    }
+
+    #[test]
     fn live_arrow_alpha_uses_visibility_and_native_far_edge_fade() {
         let mut compiled = compile_with_context("native-arrow-alpha", "return Def.Actor {InitCommand = function(self) ALPHA_ACTOR = self end}",
             |context| context.defer_initial_live_update = true);

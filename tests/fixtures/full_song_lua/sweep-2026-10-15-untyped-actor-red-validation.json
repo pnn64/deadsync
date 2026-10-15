@@ -1,0 +1,24 @@
+{
+  "both_platform_semantic_red_verified": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_source_pins_verified": true,
+  "windows_result": "FAILED. 0 passed; 2 failed",
+  "windows_log_sha256": "1f7d9473d698696fa21d183e4c363964d3c8650984f672422c57659157612040",
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 290.77190639902255,
+      "log_sha256": "4a3e5d549dbef1a61a67557c10f02cb7e33d74d6da021de94366212e2d6269c5",
+      "results": [
+        "test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 608 filtered out; finished in 0.22s"
+      ]
+    }
+  ],
+  "native_complete_control": "sweep-2026-10-15-untyped-actor-native-control.json",
+  "regressions": [
+    "empty foreground must own a usable dummy Actor",
+    "untyped declaration must discard fields, commands and children"
+  ],
+  "chart_full_repairs_spent": 0,
+  "full_acceptance_changed": false
+}
