@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Rayc Fire 2/Rayc Fire 2.ssc",
+  "native_frames": 103991,
+  "replayed_frames": 103991,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "425142dcee67508e15a0544eb930951f1f42c8957c6b46a81be64952f72fa508.tar.zst",
+  "compressed_sha256": "425142dcee67508e15a0544eb930951f1f42c8957c6b46a81be64952f72fa508",
+  "uncompressed_sha256": "480b33f71e075d7e59942f2c966ec386b75c5fe153ec82573f7deb8c5b84ef2e",
+  "compressed_bytes": 4850245,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
