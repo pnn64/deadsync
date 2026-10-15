@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T04:51:31Z",
+  "updated_utc": "2026-10-15T05:21:01Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 388,
-    "pending": 104,
-    "unprocessed": 9
+    "passed": 390,
+    "pending": 105,
+    "unprocessed": 6
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3745,11 +3745,10 @@
       "position": 447,
       "source_simfile": "Trinity Field/Trinity Field.ssc",
       "simfile_sha256": "b8eeadc4d5aaf4a8b79eb4193308bdad7d89e50e53e6b1e55fad7993e83ecaa8",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-1.json",
-      "running_full_repair_attempt": 1,
-      "completed_repair_attempts_at_checkpoint": 0
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-trinity-cropto-alias-first-repair-v1.json",
+      "completed_repair_attempts_at_checkpoint": 1
     },
     {
       "position": 448,
@@ -3877,7 +3876,9 @@
       "simfile_sha256": "17e70b53a8af11e65045e4cbb29b3f1841914cbacefcc1b13d5b4335fa8cb4ca",
       "status": "pending",
       "repair_attempts": 0,
-      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json"
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json",
+      "completed_repair_attempts_at_checkpoint": 0,
+      "running_full_repair_attempt": 1
     },
     {
       "position": 464,
@@ -3923,7 +3924,10 @@
       "position": 469,
       "source_simfile": "Watermelon/Watermelon.ssc",
       "simfile_sha256": "89898223233445c8fbe6523d106fa1109a531f94c111fd6a2cdf508e1890964e",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-1.json",
+      "completed_repair_attempts_at_checkpoint": 0
     },
     {
       "position": 470,
@@ -3937,7 +3941,9 @@
       "position": 471,
       "source_simfile": "What A Wonderful World/WAWW.sm",
       "simfile_sha256": "44d9e8c548a43bfbf4e7b1f35229c66a5063759098784abd70c542409d7f22b5",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json"
     },
     {
       "position": 472,
@@ -3997,7 +4003,9 @@
       "position": 479,
       "source_simfile": "You are Goomba Play ITG/You are Gooma Play ITG.ssc",
       "simfile_sha256": "7fa3912f27384cb3666bde4809ed12fd393d1064c282e019ac22ff7612d346d8",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json"
     },
     {
       "position": 480,

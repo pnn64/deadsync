@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T04:51:31Z",
-  "previous_goal_turn": "Progress: Closed three complete passes: Ultra B.B.K.K.B.K.K SM, 49,757 frames; Gone first repair, 125,586 frames; and Void Virus original, 26,515 frames. All have zero errors and mismatches, committed compressed fixtures, and local decompressed SHA receipts. Passing charts remain closed. Trinity Field original failed on unsupported Sprite.cropto and 48 startup command clocks. Local fallback source proves cropto is a Lua alias for the existing CropTo method. Implemented exact public dispatch, uncoerced argument forwarding, receiver return semantics, and the original function line. Both hosts reproduced the failure and passed all ten validation groups, including 78 live controls, 34 replay controls, and existing SM/CropTo compatibility controls. All 1,175 raw Linux and normalized cross-platform red/green source pins, logs, and frozen helper were verified. A complete independent 4,616-frame ITGmania control proves wide/tall dimensions, position preservation, current method overrides, and receiver returns. The fix is committed; the unchanged capture now passes a 2,527-frame startup diagnostic with no errors or mismatches, clearing all 48 original timing mismatches. Its first full repair is running, with one later full repair maximum. Spectrum and Igaku retained-capture diagnostics completed 5,755 and 3,106 frames with no errors or remaining broadcast metadata mismatches. Their remaining command/query mismatches are 7,606 and 240 in the checked prefixes; both remain pending and neither spent a full repair. Wah-leven completed a 67,913-frame native capture but owned preparation rejected its four-mesh model with a custom comment header. Source inspection identifies the owned MilkShape signature requirement; native geometry loading skips comments and scans Meshes. The complete capture is retained, no full repair is spent, and the original worker continued. Existing bounded repairs and original workers continue without restart. The original helper remains 711a5230. All 501 original simfile hashes are unchanged; coverage stays separate, oversized archives remain ignored and local, and the sweep remains active and incomplete.",
+  "updated_utc": "2026-10-15T05:21:01Z",
+  "previous_goal_turn": "Progress: Closed Goomba original 32,845-frame pass with a committed compressed fixture and local decompressed-byte receipt. Trinity first cropto repair passed all46,907 frames with zero errors and mismatches; its compressed fixture and local decompressed-byte receipt are committed. Passing charts remain closed. Fixed wah-leven actual model preparation failure by matching RageModelGeometry parsing of optional exporter comments while preserving real mesh, normal, UV, bounds, material and bone data. Both hosts reproduced the meaningful header regression and passed all twelve validation groups; all1,175 raw Linux and normalized cross-platform red/green source pins, logs and frozen helper were verified. A complete2,443-frame native control loaded three header variants. The source fix and selection are committed. The unchanged67,913-frame wah-leven capture passed a2,588-frame startup diagnostic with no errors or mismatches and its first full repair is running, with one later full repair maximum. Watermelon completed35,146 frames with no callback errors and exactly one command-count mismatch,61,217 native versus61,213 owned. The missing four records belong to delayed HidePlayersCommand on ScreenGameplay; primary source and a complete6,160-frame native control prove that Screen commands propagate through nested song actors. A meaningful owned regression reproduced missing immediate dispatch, and isolated red/green validation is running for the narrow TopScreen command propagation fix. Watermelon has spent no full repair; a first repair is queued only after proven behavior, full cross-platform validation and a committed selection. What A Wonderful World original exited1 with an empty log and no report, despite a complete7,119-frame native capture with no dropped observations. Its retained-capture1,016-frame entry diagnostic passes with no errors or mismatches; the original full failure remains unexplained and no full repair was spent. Lossless closed-pass report/candidate cleanup recovered about5GB, preserving uncompressed hashes. The original workers and other bounded scoped repairs continue without restart. Global original helper711a5230 and all501 original simfile hashes are unchanged; coverage remains separate, oversized archives stay ignored and local, and the sweep is active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "9fa7f7732f6ecf1f1a17ff407281fba21c579556",
+      "deadsync": "eb4cbc2872bc0d47533df12a63f8fe8d0fef7916",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -2059,6 +2059,13 @@
         "record": "sweep-2026-10-15-trinity-cropto-alias-first-repair-v1.json",
         "fix_commit": "9fa7f7732f6ecf1f1a17ff407281fba21c579556",
         "finish_status": "first bounded fallback Sprite cropto alias repair complete; original full capture reused; one later full repair maximum"
+      },
+      {
+        "name": "wah-model-header-first-repair-v1",
+        "remote": "/home/parity/jobs/wah-model-header-first-repair-v1",
+        "record": "sweep-2026-10-15-wah-model-header-first-repair-v1.json",
+        "fix_commit": "6676e8417d43558d94e2dc6666c18286453c7831",
+        "finish_status": "first bounded optional model comment header repair complete; original full capture reused; one later full repair maximum"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -2081,15 +2088,26 @@
       },
       "jobs": [
         {
-          "job": "trinity-cropto-alias-first-repair-v1",
+          "job": "wah-model-header-first-repair-v1",
           "complete": false,
           "supervisor_running": true,
           "passed": 0,
           "pending": 0,
           "processed": 0,
           "last_phase": "replay",
-          "source_simfile": "Trinity Field/Trinity Field.ssc",
+          "source_simfile": "wah-leven [telperion (ddrillini remix)]/eleven.ssc",
           "child_running": true
+        },
+        {
+          "job": "trinity-cropto-alias-first-repair-v1",
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
+          "pending": 0,
+          "processed": 1,
+          "last_phase": "pack",
+          "source_simfile": "Trinity Field/Trinity Field.ssc",
+          "child_running": false
         },
         {
           "job": "i-really-like-you-ssc-sm-first-repair-v1",
@@ -2129,24 +2147,24 @@
           "complete": false,
           "supervisor_running": true,
           "passed": 3,
-          "pending": 1,
-          "processed": 4,
+          "pending": 2,
+          "processed": 5,
           "last_phase": "replay",
-          "source_simfile": "Watermelon/Watermelon.ssc",
+          "source_simfile": "WOP/WOP.ssc",
           "child_running": true,
-          "position": 469
+          "position": 477
         },
         {
           "job": "chart-sweep-parallel-v6-2",
           "complete": false,
           "supervisor_running": true,
-          "passed": 3,
-          "pending": 1,
-          "processed": 4,
-          "last_phase": "capture",
-          "source_simfile": "What A Wonderful World/WAWW.sm",
-          "child_running": false,
-          "position": 471
+          "passed": 4,
+          "pending": 2,
+          "processed": 6,
+          "last_phase": "replay",
+          "source_simfile": "Ascendanz/Ascendanz.ssc",
+          "child_running": true,
+          "position": 487
         },
         {
           "job": "gone-source-path-first-repair-v1",
@@ -3464,7 +3482,7 @@
     "selected_replay_binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 149,
+    "publisher_stream_count": 150,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -4168,24 +4186,24 @@
           "complete": false,
           "supervisor_running": true,
           "passed": 3,
-          "pending": 1,
-          "processed": 4,
+          "pending": 2,
+          "processed": 5,
           "last_phase": "replay",
-          "source_simfile": "Watermelon/Watermelon.ssc",
+          "source_simfile": "WOP/WOP.ssc",
           "child_running": true,
-          "position": 469
+          "position": 477
         },
         {
           "job": "chart-sweep-parallel-v6-2",
           "complete": false,
           "supervisor_running": true,
-          "passed": 3,
-          "pending": 1,
-          "processed": 4,
-          "last_phase": "capture",
-          "source_simfile": "What A Wonderful World/WAWW.sm",
-          "child_running": false,
-          "position": 471
+          "passed": 4,
+          "pending": 2,
+          "processed": 6,
+          "last_phase": "replay",
+          "source_simfile": "Ascendanz/Ascendanz.ssc",
+          "child_running": true,
+          "position": 487
         }
       ],
       "remaining_originals_uniquely_owned_by_two_workers": true,
@@ -4422,8 +4440,10 @@
       "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-sprite-cropto-alias-linux-validation.json",
       "selection": "tests/fixtures/full_song_lua/sweep-2026-10-15-sprite-cropto-alias-repair-selection.json",
       "trinity_queue": {
-        "status": "starting first full repair",
-        "pid": 2978735,
+        "status": "supervisor complete",
+        "exit_code": 0,
+        "full_repair_started": true,
+        "full_repairs_spent": 1,
         "diagnostic": {
           "position": 447,
           "source_simfile": "Trinity Field/Trinity Field.ssc",
@@ -4442,9 +4462,7 @@
           "first_mismatches": [],
           "report_sha256": "3bb91db7568dcec2854958288f0c8d4d8bf041e19c598fddcf5fe5df9611feeb",
           "archive_accepted": false
-        },
-        "first_full_repair": 1,
-        "one_later_full_repair_maximum": true
+        }
       },
       "native_capture_reused": true,
       "global_original_helper_unchanged": true,
@@ -4452,13 +4470,19 @@
       "full_repairs_spent": 1,
       "first_full_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-trinity-cropto-first-repair-launch.json",
       "first_replay_pid": 3018140,
-      "one_later_full_repair_maximum": true,
+      "one_later_full_repair_maximum": false,
       "diagnostic": "tests/fixtures/full_song_lua/sweep-2026-10-15-trinity-cropto-alias-diagnostic.json",
       "diagnostic_frames": 2527,
       "diagnostic_errors": 0,
       "diagnostic_mismatches": 0,
       "all_48_original_startup_clock_mismatches_cleared": true,
-      "original_callback_error_cleared": true
+      "original_callback_error_cleared": true,
+      "trinity_status": "passed",
+      "first_full_repair_running": false,
+      "trinity_passing_chart_closed": true,
+      "trinity_further_replay_allowed": false,
+      "trinity_native_frames": 46907,
+      "trinity_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-trinity-fixture-verification.json"
     },
     "ultra_bbkk_sm_closed": {
       "status": "passed",
@@ -4486,23 +4510,88 @@
     },
     "wah_leven_model_header": {
       "status": "pending",
-      "full_repairs_spent": 0,
+      "full_repairs_spent": 1,
       "native_frames": 67913,
       "replayed_frames": 0,
       "native_capture_complete_and_retained": true,
       "owned_failure": "four-mesh model with a custom header is rejected because the loader requires the standard MilkShape ASCII signature",
       "source_cause": "native geometry loading skips comments and scans Meshes without requiring that signature",
       "diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-wah-leven-model-header-diagnosis.json",
-      "no_full_repair_started": true,
-      "original_worker_continued": true
+      "no_full_repair_started": false,
+      "original_worker_continued": true,
+      "fix_commit": "6676e8417d43558d94e2dc6666c18286453c7831",
+      "binary_sha256": "74d2cd015b590d762a1611a21bff1b6caf0db7d3193d7501d7c039ff984f8f29",
+      "source_root": "/home/parity/workspace/model-comment-header-v1/deadsync",
+      "all_twelve_validation_groups_both_hosts_passed": true,
+      "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+      "all_linux_log_and_binary_hashes_verified": true,
+      "native_control_frames": 2443,
+      "native_header_variants": 3,
+      "real_geometry_preserved": true,
+      "native_control": "tests/fixtures/full_song_lua/sweep-2026-10-15-model-comment-header-native-control.json",
+      "windows_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-model-comment-header-windows-validation.json",
+      "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-model-comment-header-linux-validation.json",
+      "selection": "tests/fixtures/full_song_lua/sweep-2026-10-15-model-comment-header-selection.json",
+      "global_original_helper_unchanged": true,
+      "acceptance_keys_tolerances_predicate_unchanged": true,
+      "diagnostic": "tests/fixtures/full_song_lua/sweep-2026-10-15-wah-model-header-diagnostic.json",
+      "diagnostic_replayed_frames": 2588,
+      "diagnostic_errors": [],
+      "diagnostic_mismatches": 0,
+      "preparation_failure_cleared": true,
+      "first_full_repair_running": true,
+      "first_full_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-wah-model-header-first-repair-launch.json",
+      "first_replay_pid": 3149947,
+      "one_later_full_repair_maximum": true
+    },
+    "closed_pass_storage_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-15-closed-pass-storage-v2.json",
+    "goomba_closed": {
+      "status": "passed",
+      "native_frames": 32845,
+      "full_repairs_spent": 0,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-goomba-fixture-verification.json"
+    },
+    "watermelon_screen_command_propagation": {
+      "status": "meaningful regression and native control complete; both-platform validation running",
+      "full_repairs_spent": 0,
+      "native_frames": 35146,
+      "native_callback_errors": 0,
+      "original_mismatch_count": 1,
+      "original_native_commands": 61217,
+      "original_owned_commands": 61213,
+      "source_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-watermelon-screen-command-source-diagnosis.json",
+      "native_control": "tests/fixtures/full_song_lua/sweep-2026-10-15-screen-command-native-control.json",
+      "native_control_frames": 6160,
+      "native_direct_and_queued_nested_callbacks": 6,
+      "native_capture_reused": true,
+      "global_original_helper_unchanged": true,
+      "acceptance_keys_tolerances_predicate_unchanged": true
+    },
+    "waww_blank_full_replay": {
+      "status": "pending",
+      "native_frames": 7119,
+      "original_replay_exit": 1,
+      "original_log_bytes": 0,
+      "original_report_exists": false,
+      "original_failure_not_reproduced_in_entry_diagnostic": true,
+      "entry_diagnostic_frames": 1016,
+      "entry_diagnostic_errors": 0,
+      "entry_diagnostic_mismatches": 0,
+      "entry_diagnostic_archive_accepted": false,
+      "full_repairs_spent": 0,
+      "native_capture_reused": true,
+      "evidence": "tests/fixtures/full_song_lua/sweep-2026-10-15-waww-no-report-entry-diagnostic.json",
+      "original_full_failure_cause_unproven": true
     }
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 240,
-    "new_pending_charts": 104,
-    "new_processed_sources": 344,
+    "new_passed_fixtures": 242,
+    "new_pending_charts": 105,
+    "new_processed_sources": 347,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 9,
+    "unprocessed_sources": 6,
     "historical_pending_sources": 0,
     "historical_passed_sources": 148
   },
@@ -6364,48 +6453,6 @@
       ]
     },
     {
-      "source_simfile": "Trinity Field/Trinity Field.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [
-        "OnCommand failed for Sprite: runtime error: native actor method cropto has no semantic implementation\nstack traceback:\n\t[C]: in function 'Sprite.cropto'\n\t[string \"/tmp/.tmpNpZp04/song/background/default.lua\"]:231: in function <[string \"/tmp/.tmpNpZp04/song/background/default.lua\"]:231>\n"
-      ],
-      "mismatch_count": 48,
-      "first_mismatch": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0016",
-            "args": [],
-            "beat": 0.0052915215492248535,
-            "command": "OnCommand",
-            "definition_id": "def-0016",
-            "detail": {
-              "name": "OnCommand"
-            },
-            "kind": "command",
-            "line": 90,
-            "operation": "command.begin",
-            "scene": 1,
-            "seconds": -1.1445578336715698,
-            "seq": 131,
-            "source": "song:/lua/default.lua"
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "command",
-            "operation": "command.begin",
-            "command": "OnCommand",
-            "source": "song:/lua/default.lua",
-            "line": 90,
-            "beat": 0.02877599187195301,
-            "seconds": -1.1337188482284546,
-            "args": null
-          }
-        }
-      ]
-    },
-    {
       "source_simfile": "TRIP MACHINE -Resuscitation MIX-/TRIP MACHINE -Resuscitation MIX-.ssc",
       "repair_attempts": 0,
       "failure": null,
@@ -6475,6 +6522,28 @@
       "source_simfile": "wah-leven [telperion (ddrillini remix)]/eleven.ssc",
       "repair_attempts": 0,
       "failure": "[1.6s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: frame 0/67913 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'WAH-LEVEN (DDRIllini Remix)': model '/tmp/.tmp6eWLyC/song/lua/../assets/waluigi-model/wah-tpose.txt' did not produce any geometry; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile foreground lua layer for 'WAH-LEVEN (DDRIllini Remix)' from '/tmp/.tmp6eWLyC/song/lua/fly.lua': model '/tmp/.tmp6eWLyC/song/lua/../assets/waluigi-model/wah-tpose.txt' did not produce any geometry\n[4.0s] replaying every native gameplay frame: frame 0/67913 (0.0%)\n\nthread 'main' (2929566) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
+    },
+    {
+      "source_simfile": "Watermelon/Watermelon.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [],
+      "mismatch_count": 1,
+      "first_mismatch": [
+        {
+          "field": "command_query_count",
+          "native": 61217,
+          "deadsync": 61213
+        }
+      ]
+    },
+    {
+      "source_simfile": "What A Wonderful World/WAWW.sm",
+      "repair_attempts": 0,
+      "failure": "",
       "errors": [],
       "mismatch_count": null,
       "first_mismatch": []
@@ -6632,11 +6701,11 @@
     "note": "Earlier sweep checkpoints incorrectly carried the superseded one-mismatch replay forward as pending. The complete corrected replay and saved fixture already passed."
   },
   "next_actions": [
-    "Collect complete results from the original v6 workers; save and locally decompress-byte-verify each passing fixture, commit promptly, and continue their assigned queues.",
-    "Continue Trinity first full repair from the unchanged capture after its clean 2527-frame startup diagnostic; save and verify a complete pass, or retain concrete failures and allow at most one later full repair.",
-    "Fix wah-leven actual model-header parsing from the local native geometry source, prove the real mesh parsing behavior, and reuse its complete capture without substituting a placeholder model.",
-    "Keep I Really Like You SSC first repair and Mawaru6 final repair running without restart; record complete results and enforce the repair cap.",
-    "Keep Spectrum and Igaku pending on their remaining command/query mismatches. Their completed diagnostics cleared function broadcast metadata without spending full repairs."
+    "Collect the remaining originals from the live v6 workers; compress, save and locally verify uncompressed bytes for each complete pass, commit promptly and continue.",
+    "Collect wah-leven retained-capture startup diagnostic and bounded first repair if clean; preserve actual failures and enforce at most two full repairs.",
+    "Keep diagnosed command/query mismatches pending, record missing coverage separately, and preserve all existing acceptance comparisons.",
+    "Collect I Really Like You first repair, Mawaru6 final repair and Mawaru8 first repair without restarting live jobs.",
+    "Finish isolated Screen command propagation validation and commit the proven fix, then run Watermelon first full repair from its unchanged complete native capture; one later full repair maximum."
   ],
   "previous_goal_turn_classification": "progress",
   "resolved_historical_concrete_failures": [
