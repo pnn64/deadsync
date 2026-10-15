@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "first corrected-observer captures after verified storage recovery complete",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "cc145ab04",
