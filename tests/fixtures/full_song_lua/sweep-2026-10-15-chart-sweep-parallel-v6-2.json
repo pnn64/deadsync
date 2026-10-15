@@ -287,6 +287,31 @@
       "harness_version": "0.1.80",
       "title": "Ascendanz",
       "local_archive_verified": true
+    },
+    {
+      "position": 495,
+      "source_simfile": "mawaru9/mawaru9.sm",
+      "simfile_sha256": "0012dd2fa9cef58ae543bd88b3ab84e25d0b390fcea2827c97c3dd1ac7d5a624",
+      "historical_failure": {
+        "simfile": "mawaru9/mawaru9.sm",
+        "status": "timeout",
+        "category": "capture_timeout",
+        "reason": "native capture exceeded 900 seconds",
+        "diagnostics": "target/song-lua-repair/final/02d24424431a0192"
+      },
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 436.61469787798706,
+      "trace_sha256": "d4f0fb33d5bbc3c69a2488fb992e1d1caf086dbfe7f12672667d5a9b6b5c2be1",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v6-2/chart-495/candidates/7b631569cbc05b52490fced196166794926f6eadbd4590f37af5bf19ee395be5.tar",
+      "replay_exit": 1,
+      "replay_seconds": 68.80207513499772,
+      "candidate_sha256": "7b631569cbc05b52490fced196166794926f6eadbd4590f37af5bf19ee395be5",
+      "failure": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.0s] : 0 checks completed, 0 failed\n[16.0s] : 0 checks completed, 0 failed\n[18.0s] : 0 checks completed, 0 failed\n[18.8s] replaying every native gameplay frame\n[20.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[22.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[24.0s] replaying every native gameplay frame: frame 0/131493 (0.0%)\n[26.0s] replaying every native gameplay frame: frame 0/131493 (0.0%)\n[28.0s] replaying every native gameplay frame: frame 0/131493 (0.0%)\n[30.0s] replaying every native gameplay frame: frame 0/131493 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'MAWARU SIMULATOR 2016': failed to run actor startup commands for song lua session '/tmp/.tmpxZfAWk/song/lua/default.lua': bad argument #3: out of Lua stack, too many arguments to a Lua function or too many return values from a callback\nstack traceback:\n\t[C]: in ?\n\t[C]: in ?\n; retrying layers independently\n[32.0s] replaying every native gameplay frame: frame 0/131493 (0.0%)\n[34.0s] replaying every native gameplay frame: frame 0/131493 (0.0%)\n[36.0s] replaying every native gameplay frame: frame 0/131493 (0.0%)\n[38.0s] replaying every native gameplay frame: frame 0/131493 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'MAWARU SIMULATOR 2016' from '/tmp/.tmpxZfAWk/song/lua/default.lua': failed to run actor startup commands for song lua session '/tmp/.tmpxZfAWk/song/lua/default.lua': bad argument #3: out of Lua stack, too many arguments to a Lua function or too many return values from a callback\nstack traceback:\n\t[C]: in ?\n\t[C]: in ?\n\n\nthread 'main' (3403936) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[40.0s] replaying every native gameplay frame: frame 0/131493 (0.0%)\n[42.0s] replaying every native gameplay frame: frame 0/131493 (0.0%)\n[44.0s] replaying every native gameplay frame: frame 0/131493 (0.0%)\n[46.0s] replaying every native gameplay frame: frame 0/131493 (0.0%)\n[48.0s] replaying every native gameplay frame: frame 0/131493 (0.0%)\n"
     }
   ],
   "scope": {
@@ -298,6 +323,6 @@
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 5,
-  "pending_charts": 2,
-  "processed_charts": 7
+  "pending_charts": 3,
+  "processed_charts": 8
 }
