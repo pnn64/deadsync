@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T23:50:06Z",
+  "updated_utc": "2026-10-15T23:57:43Z",
   "counts": {
     "passed": 400,
     "pending": 101,
@@ -6270,7 +6270,14 @@
       "replayed_frames": 48353,
       "capture_errors": null,
       "completion": null,
-      "no_third_full_repair": false
+      "no_third_full_repair": false,
+      "followup": "sweep-2026-10-16-flowers-qualified-entry-diagnostic.json",
+      "remaining_source_cause": "sweep-2026-10-16-flowers-scale-operation-source-cause.json",
+      "entry_diagnostic_frames": 2211,
+      "entry_diagnostic_errors": 0,
+      "entry_diagnostic_mismatches": 1,
+      "current_diagnostic_failure": "Existing Cancel failure resolved. One actual entry mismatch remains atseq290: native SCALE multiply-before-divide yields19.912771224975586 versus owned19.912769317626953. Native math correction awaits qualification; no full repair spent.",
+      "new_full_repair_started": false
     },
     {
       "position": 196,
@@ -23533,7 +23540,7 @@
           ],
           "report_sha256": "835ddbdaa434e29c5c07469bc80c28b279f1e7e817f17f89fe45ba98f7bbf617"
         },
-        "checked_utc": "2026-10-15T23:50:07.559348+00:00"
+        "checked_utc": "2026-10-15T23:57:44.603600+00:00"
       },
       "current_diagnostic_failure": "Full first1:7119frames/0errors/4657mismatches. First command slip atseq89801 is reproduced exactly by native float versus nanosecond foreground start timing, one f32 ULP apart. Source-qualified pre-song boundary fix also required. New timing fix remains unqualified; no final2 started.",
       "full_replay_completed": true,

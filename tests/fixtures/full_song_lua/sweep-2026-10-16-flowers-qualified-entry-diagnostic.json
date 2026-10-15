@@ -1,0 +1,86 @@
+{
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "errors": [],
+  "dropped_events": 0,
+  "dropped_stage_samples": 0,
+  "dropped_update_frames": 0,
+  "dropped_random_reseeds": 0,
+  "native_frames": 48353,
+  "source_simfile": "flowers/flowers.ssc",
+  "diagnostic_exit": 2,
+  "seconds": 110.10296761395875,
+  "full_repairs_spent": 0,
+  "native_capture_reused": true,
+  "candidate_sha256": "7722e7db1464871d24771b03d01dfadd1bba1c8243f120119cd4263182940519",
+  "trace_sha256": "1f61b3db5b298042f944626704722939eff1d27bf8596f0c38a9591fd3ef46f0",
+  "simfile_sha256": "52e86ec7daeca20bdb1e49b6af119c898cd07a20a0e3c0b72703ead58af8bdba",
+  "binary_sha256": "ba75e5790ef124738a7e872bc6687d011294e40de885746f5347371e676b0c4c",
+  "fix_commit": "8510f759639bee4ed0338379e03da2243f33a07d",
+  "all_six_groups_both_hosts_and_1175_source_pins_verified": true,
+  "no_fixture_acceptance": true,
+  "replayed_frames": 2211,
+  "archive_accepted": false,
+  "mismatch_count": 1,
+  "first_mismatches": [
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0051",
+        "args": [
+          19.912771224975586
+        ],
+        "beat": 0.0007969402940943837,
+        "caller": {
+          "line": 42,
+          "source": "song:/assets/3am/3am.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0051",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 42,
+        "operation": "Actor.x",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 0.017482994124293327,
+        "seq": 290,
+        "source": "song:/assets/3am/3am.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.x",
+        "source": "song:/assets/3am/3am.lua",
+        "line": 42,
+        "phase": "callback",
+        "beat": 0.0007969418657012284,
+        "seconds": 0.017482994124293327,
+        "args": [
+          19.912769317626953
+        ],
+        "results": [
+          {
+            "actor": "0x5595849a47d0",
+            "name": "",
+            "path": "ScreenGameplay/SongForeground/fgchanges.lua/3am"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    }
+  ],
+  "report_sha256": "667a4e6c1ae017c0a4a88377406ef9258c5145181ef11094ca04e55fdd98f10d",
+  "entry_does_not_compare_source_broadcasts": true,
+  "old_Cancel_seq266_resolved": true,
+  "full_fixture_accepted": false
+}
