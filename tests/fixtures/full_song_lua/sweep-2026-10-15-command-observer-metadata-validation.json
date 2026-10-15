@@ -1,0 +1,65 @@
+{
+  "harness_fix_commit": "79005e1f7e7d403b7b7d7ffc0e2c2b98735c71c5",
+  "source_root": "/home/parity/workspace/command-observer-metadata-v1/itgmania-harness",
+  "archiver_binary_sha256": "15bfe62bbb7917b45e1f3ddc8401cffca5d5296366ea4e0c5ccd0879880bb290",
+  "all_2223_raw_linux_and_normalized_cross_platform_source_pins_verified": true,
+  "all_log_hashes_verified": true,
+  "windows_checks": [
+    {
+      "label": "runtime-tests",
+      "exit_code": 0,
+      "seconds": 10.8904337999993,
+      "log_sha256": "3daa915d216c14e90115027d491618094319ee2b405ddc0fae8b554b8d1d1500",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 191 filtered out; finished in 0.08s"
+      ]
+    },
+    {
+      "label": "archive-tests",
+      "exit_code": 0,
+      "seconds": 2.751956299995072,
+      "log_sha256": "3e715869f0c953ae0a905680c801c273e7b138c09796a65a869f45c465c0fcc0",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 191 filtered out; finished in 2.45s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 0.3035694999998668,
+      "log_sha256": "d68e787e6ca92dc6a63bcb0c384d61d18aba4954c4af48719a3aeb96e661339a",
+      "results": []
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "runtime-tests",
+      "exit_code": 0,
+      "seconds": 163.97760185800144,
+      "log_sha256": "25c6849c0a0e9baa21f095941e73cfffe76531e2cc6ad795d60a0c6b8a059d86",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "archive-tests",
+      "exit_code": 0,
+      "seconds": 0.8777647799870465,
+      "log_sha256": "f9375e2bc3043a0a1a58052438164a304c400b7670a68e5d9dbe7be84a04d8ed",
+      "results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 0.62s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 17.66241598498891,
+      "log_sha256": "039e0a1b1100a97a462e65e45c982d531784a1e3daddc24692ef6f719c1af167",
+      "results": []
+    }
+  ],
+  "change": "Preserve optional source-backed command observer metadata through the archive manifest; legacy entries omit it. Exact serialized trace member is unchanged.",
+  "native_emitter_changed": false,
+  "acceptance_comparator_changed": false,
+  "capture_producer_binary_sha256": "e067360d8120ee0a174b0848832856325ef62b709287fb48976441a277b26563"
+}
