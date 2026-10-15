@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "wah-propaganwah (habstrakt remix) (ddrillini remix)/Propaganda (Habstrakt Remix).ssc",
+  "native_frames": 105949,
+  "replayed_frames": 105949,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "18879f80885a3a21c487d78071b310065af2d602d0ea8ca9d2fd3aa326b5d151.tar.zst",
+  "compressed_sha256": "18879f80885a3a21c487d78071b310065af2d602d0ea8ca9d2fd3aa326b5d151",
+  "uncompressed_sha256": "0a03ac841965997fb7e1f26e2e5bc187c22043d9088be878784304fa2cad823b",
+  "compressed_bytes": 5760563,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
