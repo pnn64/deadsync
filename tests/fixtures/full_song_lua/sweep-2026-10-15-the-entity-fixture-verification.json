@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "The Entity/The Entity.ssc",
+  "native_frames": 35590,
+  "replayed_frames": 35590,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "443e2f2bc19e85342e68a9ee620c05106dd5a7391123a5d35b03953567b78998.tar.zst",
+  "compressed_sha256": "443e2f2bc19e85342e68a9ee620c05106dd5a7391123a5d35b03953567b78998",
+  "uncompressed_sha256": "7c5afc8a421064968465606b58b7ac9af32a07ada0cf46b6704ba667e8a71ae5",
+  "compressed_bytes": 14314621,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

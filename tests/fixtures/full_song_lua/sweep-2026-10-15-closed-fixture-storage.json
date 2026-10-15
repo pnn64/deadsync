@@ -1,0 +1,69 @@
+{
+  "closed_fixture_storage": [
+    {
+      "source_simfile": "Pokemon Gym Battle Remix/pokes.ssc",
+      "position": 498,
+      "all_decompressed_sha256_verified": true,
+      "passing_chart_replayed": false,
+      "removed_duplicate_bytes": 1063645114,
+      "preserved_bytes": [
+        {
+          "uncompressed_sha256": "5b5058060fd5a5513a96cd9aba5cb96b7aa2f07c0b0c7e3f5c0eb2eb2601e91e",
+          "retained": "/home/parity/jobs/pokemon-sparse-declaration-first-repair-v1/chart-498/accepted/422193f15fe6f4ed277022c9f3e7b08161ef9b53bde898511aa2da91c9620416.tar.zst"
+        },
+        {
+          "uncompressed_sha256": "7a4e66f21e03e75dc3d7354e7616013ebf39b41b4a248d3e40337a30d9e38bf5",
+          "retained": "/home/parity/jobs/pokemon-sparse-declaration-first-repair-v1/chart-498/report.json.zst"
+        }
+      ]
+    },
+    {
+      "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.ssc",
+      "position": 452,
+      "all_decompressed_sha256_verified": true,
+      "passing_chart_replayed": false,
+      "removed_duplicate_bytes": 14733717,
+      "preserved_bytes": [
+        {
+          "uncompressed_sha256": "3ccaa5d1cce22480fcb2d603de500ebf082ad5d5f68933564f67030a7f26d23d",
+          "retained": "/home/parity/jobs/un-owen-late-command-first-repair-v1/chart-452/accepted/a33ae65163b0e5c6bc4f784c70d2cdd6b692db99b4bd751480d9b01cf43af83d.tar.zst"
+        },
+        {
+          "uncompressed_sha256": "a14cda6dba0cc2717c77a40297e852670ce80af1054051de7092bbf320ab9d80",
+          "retained": "/home/parity/jobs/un-owen-late-command-first-repair-v1/chart-452/report.json.zst"
+        }
+      ]
+    },
+    {
+      "source_simfile": "Talk About/talkabout.sm",
+      "position": 424,
+      "all_decompressed_sha256_verified": true,
+      "passing_chart_replayed": false,
+      "removed_duplicate_bytes": 816345181,
+      "preserved_bytes": [
+        {
+          "uncompressed_sha256": "d8cab1d90070cef6f48caf61e17088ea49f0d91bd2a4e7d2d870c2a3893a78d8",
+          "retained": "/home/parity/jobs/storage-capture-first-repairs-v1/chart-424/accepted/6c0a7478230a62025bd1da9ffe03806c030d5182c7efddb4f3ecb3d66a12fbd5.tar.zst"
+        },
+        {
+          "uncompressed_sha256": "eafd8df7fd6edaadb0b564c320ce7f5d14911a1576ed11d46ddd592df24a38f6",
+          "retained": "/home/parity/jobs/storage-capture-first-repairs-v1/chart-424/report.json.zst"
+        }
+      ]
+    },
+    {
+      "source_simfile": "Stella Glow/Stella Glow.ssc",
+      "position": 416,
+      "all_decompressed_sha256_verified": true,
+      "passing_chart_replayed": false,
+      "removed_duplicate_bytes": 48756736,
+      "preserved_bytes": [
+        {
+          "uncompressed_sha256": "3915e33e35d9673760c8cc9dfc88495631aaa4cf5e0886cdd03309b6f4ba762b",
+          "retained": "/home/parity/jobs/stella-completed-comparison-recovery-v1/chart-416/accepted/8732befea87703379dae60c0cd744c7a722eae462775d30442fdcdcd2a3981df.tar.zst"
+        }
+      ]
+    }
+  ],
+  "total_duplicate_bytes_reclaimed": 1943480748
+}
