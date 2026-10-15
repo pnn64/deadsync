@@ -104,6 +104,57 @@
         ]
       },
       "local_archive_verified": true
+    },
+    {
+      "position": 455,
+      "source_simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.sm",
+      "simfile_sha256": "48984c4c5269593eae36d745ff4525211a1700f80599d118ff1410f8ba761ee3",
+      "retained_original_archive": "79bae6c946ebb4ae1f51a79cffb992be5c0bac1687a567dd5511b60419109014.tar.zst",
+      "status": "passed",
+      "repair_attempts": 0,
+      "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "e7e8ff09943ad0f024643648eede3255b5f7ccd1",
+      "build_proof": "/home/parity/jobs/loader-multi-return-linux-green-v1/proof.json",
+      "capture_seconds": 147.67530459401314,
+      "trace_sha256": "20f0ce7e987b7f1dc83e9b2b47ddc8b25948397b691cbac9fd8fe06881c02bac",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v6-2/chart-455/candidates/6a3fcca8002a831ee11a7c222a75dc2305f2277b29b52e14e2139d5fb5b3f5f8.tar",
+      "replay_exit": 0,
+      "replay_seconds": 1824.0242279689992,
+      "candidate_sha256": "6a3fcca8002a831ee11a7c222a75dc2305f2277b29b52e14e2139d5fb5b3f5f8",
+      "native_frames": 49757,
+      "replayed_frames": 49757,
+      "compared_stage_fields": 1419,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY",
+        "native drawable state/resources: ActorProxy, Quad"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "d411cdb102808a1e000af9983eadbd5a2c0b15808aa0ed9ae691944c3eb6e8db",
+      "archive": "264ade0910f528488c33ce029ee5713128acb1fd46cfd06bf760c44f4125f165.tar.zst",
+      "archive_sha256": "264ade0910f528488c33ce029ee5713128acb1fd46cfd06bf760c44f4125f165",
+      "compressed_bytes": 6113193,
+      "pack_seconds": 6.389350470999489,
+      "harness_version": "0.1.80",
+      "title": "Ultra B.B.K.K.B.K.K",
+      "retained_original_entry": {
+        "title": "Ultra B.B.K.K.B.K.K",
+        "source_simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.sm",
+        "harness_version": "0.1.0",
+        "archive": "79bae6c946ebb4ae1f51a79cffb992be5c0bac1687a567dd5511b60419109014.tar.zst",
+        "sha256": "79bae6c946ebb4ae1f51a79cffb992be5c0bac1687a567dd5511b60419109014",
+        "compressed_bytes": 43601,
+        "uncompressed_sha256": "25969c593907ba1054dbc618fc3aa05d60fbf5acf237e539f12efbd3a239e28c",
+        "compression_level": 22,
+        "aliases": [
+          "96745b1124a1079fbef184e3fbf734708cb079801a9bce873b8c1730c236d1b1.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
     }
   ],
   "scope": {
@@ -114,7 +165,7 @@
   },
   "binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
-  "passed_fixtures": 2,
+  "passed_fixtures": 3,
   "pending_charts": 0,
-  "processed_charts": 2
+  "processed_charts": 3
 }
