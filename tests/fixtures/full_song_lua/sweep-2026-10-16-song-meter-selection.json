@@ -1,0 +1,17 @@
+{
+  "fix_commit": "8510f759639bee4ed0338379e03da2243f33a07d",
+  "source_root": "/home/parity/workspace/song-meter-green-v2/deadsync",
+  "binary_sha256": "ba75e5790ef124738a7e872bc6687d011294e40de885746f5347371e676b0c4c",
+  "build_proof": "/home/parity/jobs/song-meter-linux-green-v2/proof.json",
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_source_pins_verified": true,
+  "asset_count": 36,
+  "live_controls": 104,
+  "replay_controls": 43,
+  "profile_controls": 1,
+  "legacy_namespace_controls": 1,
+  "all_prior_103_live_and_43_replay_test_sources_unchanged": true,
+  "full_HOPE_repairs_spent": 0,
+  "full_acceptance_criteria_unchanged": true,
+  "scope": "Original native shared SongInfoBar actor, four children, resources, ownership and CurrentSongChanged lifecycle"
+}
