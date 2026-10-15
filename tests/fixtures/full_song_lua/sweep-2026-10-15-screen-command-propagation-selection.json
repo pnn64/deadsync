@@ -1,0 +1,17 @@
+{
+  "fix_commit": "80e6fbaf79be4163ea08dc1ba2f9f31d5dc827ca",
+  "build_proof": "/home/parity/jobs/screen-command-propagation-linux-green-v2/proof.json",
+  "binary_sha256": "9ea0ce465da2fca0a9ee3928e6968b4fda9843b792a278c15f5d510a44ad069b",
+  "tested_source_root": "/home/parity/workspace/screen-command-propagation-v2/deadsync",
+  "all_twelve_checks_both_platforms_passed": true,
+  "all_1175_raw_linux_and_cross_platform_normalized_source_pins_verified": true,
+  "scope": "Watermelon actual missing delayed Screen command propagation; all preceding 61213 commands match",
+  "native_control_frames": 6160,
+  "native_capture_reused": true,
+  "full_repairs_spent_before_validation": 0,
+  "first_full_repair_after_native_and_meaningful_live_control_and_complete_validation": true,
+  "one_later_full_repair_maximum_after_first": true,
+  "global_original_helper_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_acceptance_predicate_unchanged": true
+}
