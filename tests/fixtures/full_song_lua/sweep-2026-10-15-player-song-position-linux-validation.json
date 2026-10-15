@@ -1,0 +1,62 @@
+{
+  "all_1175_raw_and_crossplatform_source_pins_verified": true,
+  "all_six_checks_and_logs_verified": true,
+  "binary_sha256": "c25c88cc0b02b3e8fe7466d39632080821972ee363cbfc66aa9b8e139063e4d1",
+  "source_root": "/home/parity/workspace/player-song-position-v1/deadsync",
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 283.21079241501866,
+      "log_sha256": "99e7715d92375da8bc61c1e0b1042e953f41542681aa9a8f2bcfeca387298d17",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 605 filtered out; finished in 0.28s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 2.093013833014993,
+      "log_sha256": "fd185cbc44fe7c1e49801191a8e276febf3e9fde2543ae4a80ba04d940b79cc1",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 596 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 42.144631137984106,
+      "log_sha256": "4d9e813bee0ed9dca7a60d84b4583e90aa48b9a83ebec4622a78737e1bdc430f",
+      "results": [
+        "test result: ok. 70 passed; 0 failed; 0 ignored; 0 measured; 536 filtered out; finished in 41.10s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 258.8835997300048,
+      "log_sha256": "199d40f156d489e05b8b6d7262f304435cc8fee27670384fa45400084ca1165a",
+      "results": [
+        "test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.26s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 1.02873683499638,
+      "log_sha256": "872180fcf2e6dfbfba567458c819df3f13a4ae347702e2eafa828437c83628a9",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 605 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 53.187965173012344,
+      "log_sha256": "e32787fab3e0c33fdc65fc514b9195b357e4c73892e0e85fb3635523ba39c6ff",
+      "results": []
+    }
+  ],
+  "fix_commit": "4b07d505988e43dabb14441f0a3c6696d0e06009",
+  "global_original_sweep_selection_unchanged": true
+}

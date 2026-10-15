@@ -1,0 +1,12 @@
+{
+  "pid": 1721022,
+  "command": [
+    "python3",
+    "/home/parity/jobs/run_pop_player_position_first_repair_v1.py"
+  ],
+  "repair_attempt": 1,
+  "maximum_full_repairs": 2,
+  "native_capture_reused": true,
+  "binary_sha256": "c25c88cc0b02b3e8fe7466d39632080821972ee363cbfc66aa9b8e139063e4d1",
+  "fix_commit": "4b07d505988e43dabb14441f0a3c6696d0e06009"
+}
