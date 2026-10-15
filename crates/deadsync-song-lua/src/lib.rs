@@ -690,6 +690,8 @@ pub struct SongLuaPlayerContext {
     pub nps_graph_at_top: bool,
     /// Actual profile selection for the native StepStatistics pane.
     pub step_statistics_enabled: bool,
+    /// Enabled W1 through W5 windows from the initial player profile.
+    pub timing_windows: [bool; 5],
     pub screen_x: f32,
     pub screen_y: f32,
 }
@@ -718,6 +720,7 @@ impl Default for SongLuaPlayerContext {
             life_meter_type: "Standard".into(),
             nps_graph_at_top: false,
             step_statistics_enabled: true,
+            timing_windows: [true; 5],
             screen_x: 320.0,
             screen_y: 240.0,
         }
@@ -7901,6 +7904,7 @@ return Def.ActorFrame{}
         context.screen_width = 854.0;
         context.screen_height = 480.0;
         context.players[0].speedmod = SongLuaSpeedMod::C(650.0);
+        context.players[0].timing_windows = [true, true, true, false, false];
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
 
         assert_eq!(compiled.messages.len(), 1);

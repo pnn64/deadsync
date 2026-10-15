@@ -748,6 +748,25 @@ return Def.ActorFrame{}
         assert!(super::native_profile_inputs(&trace).is_err());
     }
 
+
+    #[test]
+    fn native_theme_timing_windows_use_initial_inputs_without_query_calibration() {
+        let mut trace=serde_json::json!({"input":{"gameplay_preferences":{"players":[
+            {"theme_modifiers":{"TimingWindows":[true,true,true,true,true]}},
+            {"theme_modifiers":{"TimingWindows":[false,true,false,true,false]}}
+        ]}},"events":[{"operation":"ActorFrame.GetNumChildren","results":[999]}]});
+        assert_eq!(super::native_theme_timing_windows(&trace).unwrap(),
+            [[true;5],[false,true,false,true,false]]);
+        trace["events"][0]["results"]=serde_json::json!([1]);
+        assert_eq!(super::native_theme_timing_windows(&trace).unwrap(),
+            [[true;5],[false,true,false,true,false]]);
+        for invalid in [serde_json::json!([true,true]),serde_json::json!([true,true,true,true,1]),serde_json::json!("all")] {
+            trace["input"]["gameplay_preferences"]["players"][0]["theme_modifiers"]["TimingWindows"]=invalid;
+            assert!(super::native_theme_timing_windows(&trace).is_err());
+        }
+        assert_eq!(super::native_theme_timing_windows(&serde_json::json!({})).unwrap(),[[true;5];2]);
+    }
+
     #[test]
     fn native_step_statistics_uses_initial_selection_only() {
         let mut trace = serde_json::json!({"input":{"gameplay_preferences":{"default_modifiers":"",
@@ -2893,6 +2912,22 @@ fn native_autoplay(trace: &Value) -> Result<bool, String> {
     }
 }
 
+fn native_theme_timing_windows(trace: &Value) -> Result<[[bool; 5]; 2], String> {
+    // SL_Init.lua enables every window for a fresh profile. Retain the real
+    // initial theme mask independently of the engine's disabled-window bits.
+    let mut windows = [[true; 5]; 2];
+    for (player, enabled) in windows.iter_mut().enumerate() {
+        if let Some(value) = trace.pointer("/input/gameplay_preferences/players")
+            .and_then(Value::as_array).and_then(|players| players.get(player))
+            .and_then(|player| player.pointer("/theme_modifiers/TimingWindows"))
+        {
+            *enabled = serde_json::from_value(value.clone())
+                .map_err(|error| format!("initial TimingWindows must contain five booleans: {error}"))?;
+        }
+    }
+    Ok(windows)
+}
+
 fn native_profile_inputs(trace: &Value) -> Result<[deadsync_profile::Profile; 2], String> {
     // The isolated probe starts with a fresh native profile. GameState's
     // default player options use the inherited Common.DefaultModifiers=1x.
@@ -3178,6 +3213,9 @@ pub(crate) fn replay_with_command_observer(
         native_random_seed(trace)?,
         true,
     )?;
+    for (player, windows) in context.players.iter_mut().zip(native_theme_timing_windows(trace)?) {
+        player.timing_windows = windows;
+    }
     // Optional input comes from retained machine configuration or the native
     // input snapshot. Query observations remain expectations only.
     context.last_seen_video_driver = last_seen_video_driver

@@ -1,0 +1,70 @@
+{
+  "source_root": "/home/parity/workspace/timing-window-labels-green-v1/deadsync",
+  "binary_sha256": "6a2dfe1c2e802c83bf102deac4f4476c86ab3ba93652f9a8817f99420b844162",
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "all_34_native_assets_logs_and_helper_hashes_verified": true,
+  "meaningful_original_runtime_failure_red_both_hosts": true,
+  "input_scaffold_red_not_claimed_as_original_reader_evidence": true,
+  "new_runtime_and_input_regressions_identical_red_green": true,
+  "all_prior_live_and_replay_assertions_retained": true,
+  "two_old_test_fixtures_explicitly_keep_original_casual_mask": true,
+  "entire_prior_live_and_replay_sources_equal_after_removing_new_work_and_two_explicit_old_fixture_masks": true,
+  "full_acceptance_source_byte_identical": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 253.35604572796728,
+      "log_sha256": "3ff1d06366b09669a7b79c8d9780aa8e2f311d9a186607cb71e8bad8a9cf7c8b",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 637 filtered out; finished in 1.29s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 205.9727900570142,
+      "log_sha256": "7096a07042934f6d9982b45145b6af70b264dc565412c207bc7951a316d17ac6",
+      "results": [
+        "test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 20.45s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 35.05224872200051,
+      "log_sha256": "23674d2ba0cc7ef6e8f1eb00b4af8252418269c1ea6160ad17549f7253f34f89",
+      "results": [
+        "test result: ok. 101 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 34.34s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 69.70493387698662,
+      "log_sha256": "56da49ff98e19124a2903678677f13243469860842828a5a3daec51338dc1863",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 1.0240699030109681,
+      "log_sha256": "218538ee4f0ba5bd7d575de1f5791046fc27deae198110aa1f95a45ef627487b",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 637 filtered out; finished in 0.36s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 35.25662312901113,
+      "log_sha256": "684b1fee23bf59bf5937e20087ef576a6a8c9aa24946dbf1a820b8e277b96589",
+      "results": []
+    }
+  ],
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

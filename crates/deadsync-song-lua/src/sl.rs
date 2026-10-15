@@ -171,7 +171,7 @@ fn create_sl_player_mods(lua: &Lua, player: &SongLuaPlayerContext) -> mlua::Resu
     table.set("ShowFaPlusPane", false)?;
     table.set(
         "TimingWindows",
-        create_bool_array(lua, &[true, true, true, false, false])?,
+        create_bool_array(lua, &player.timing_windows)?,
     )?;
     table.set("SpeedModType", speed_type)?;
     table.set("SpeedMod", speed_value)?;

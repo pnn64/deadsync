@@ -3845,6 +3845,54 @@ return Def.Banner {
         }
     }
 
+
+    #[test]
+    fn live_step_statistics_judgment_labels_follow_initial_timing_windows() {
+        for (name, windows, count) in [
+            ("all", [true; 5], 12),
+            ("no-way-off", [true, true, true, true, false], 11),
+            ("casual", [true, true, true, false, false], 10),
+            ("no-top-two", [false, false, true, true, true], 10),
+        ] {
+            let mut compiled=compile_with_context(&format!("timing-window-labels-{name}"),
+                "return Def.ActorFrame {}", |context| {
+                    context.screen_width=854.0;
+                    context.defer_initial_live_update=true;
+                    context.players[0].timing_windows=windows;
+                    context.players[1].timing_windows=[true;5];
+                });
+            let scene=compiled.live_scene.take().expect("real StepStatistics scene");
+            scene.lua.globals().set("EXPECTED_COUNT",count).unwrap();
+            scene.lua.globals().set("EXPECTED_WINDOWS",scene.lua.create_sequence_from(windows).unwrap()).unwrap();
+            scene.lua.load(r#"
+local underlay=SCREENMAN:GetTopScreen():GetChild('Underlay')
+for player=1,2 do
+    local expected=player==1 and EXPECTED_WINDOWS or {true,true,true,true,true}
+    local actual=SL['P'..player].ActiveModifiers.TimingWindows
+    for i=1,5 do
+        assert(actual[i]==expected[i], 'SL must use each player initial timing-window inputs')
+    end
+    local judgments=underlay:GetChild('StepStatsPaneP'..player):GetChild('BannerAndData'):GetChild('TapNoteJudgments')
+    assert(judgments:GetNumChildren()==(player==1 and EXPECTED_COUNT or 12),
+        'real native judgment label actors must follow enabled timing windows')
+    local children=judgments:GetChild('')
+    local labels={}
+    local values=0
+    for _,child in ipairs(children) do
+        local text=child:GetText()
+        if text=='0000' then values=values+1 else labels[text]=true end
+    end
+    assert(values==6, 'all six native judgment counters remain present')
+    for i=1,5 do
+        local label=THEME:GetString('TapNoteScore','W'..i):upper()
+        assert((labels[label] or false)==expected[i], 'enabled judgment label must exist; disabled label must be absent')
+    end
+    assert(labels[THEME:GetString('TapNoteScore','Miss'):upper()], 'Miss label always exists')
+end
+"#).exec().unwrap();
+        }
+    }
+
     #[test]
     fn live_step_statistics_owns_native_resources_and_updates_real_data() {
         use deadsync_rules::timing::{TimingData, TimingSegments};
@@ -3862,6 +3910,7 @@ return Def.Banner {
                         context.players[player].enabled=enabled[player];
                         context.players[player].screen_x=if centered {width/2.0} else {320.0};
                         context.players[player].step_statistics_enabled=selected;
+                        context.players[player].timing_windows=[true,true,true,false,false];
                         context.players[player].background_filter_percent=75;
                     }
                     context.player_step_indices=[Some(0),Some(0)];

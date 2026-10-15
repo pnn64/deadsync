@@ -1,0 +1,15 @@
+{
+  "source_cause": "sweep-2026-10-15-hope-timing-window-label-source-cause.json",
+  "real_input_path": "Profile.timing_windows.disabled_windows -> enabled array -> SongLuaPlayerContext.timing_windows -> SL.ActiveModifiers.TimingWindows; captured initial theme mask is kept independently of engine timing bits",
+  "fresh_default": "SL_Init.lua enables all five windows",
+  "runtime_regression": "Actual original StepStatistics/TapNoteJudgments Lua creates12,11,10,10 children for all/WayOffs/Casual/FantasticsAndExcellents masks; both player masks and exact label presence, six counters and Miss label checked",
+  "two_prior_test_fixture_masks_explicitly_keep_old_assertions": true,
+  "new_runtime_and_input_tests_identical_red_green": true,
+  "all_prior_live_and_replay_assertions_preserved": true,
+  "all_full_acceptance_files_unchanged": true,
+  "new_acceptance_keys_or_tolerances": false,
+  "captured_query_values_used_as_inputs": false,
+  "artificial_input_reader_red_scaffold_not_counted_as_original_behavior_evidence": true,
+  "meaningful_red_is_original_live_runtime_ignoring_explicit_all_enabled_mask": true,
+  "full_chart_repairs_spent": 0
+}
