@@ -1,0 +1,26 @@
+{
+  "reason": "Reclaim completed Cargo dev artifacts after the validated helper has been copied outside the shared target. Preserve live replay helpers and all captures.",
+  "command": [
+    "/home/parity/.cargo/bin/cargo",
+    "clean",
+    "--locked",
+    "--target-dir",
+    "/home/parity/build/deadsync-v1",
+    "-p",
+    "deadsync",
+    "-p",
+    "deadsync-song-lua",
+    "--profile",
+    "dev"
+  ],
+  "exit_code": 0,
+  "free_before": 2691670016,
+  "free_after": 4020826112,
+  "free_delta_bytes": 1329156096,
+  "all_1175_source_pins_and_native_bitmap_unchanged": true,
+  "new_lyric_helper_hash_unchanged": true,
+  "mawaru9_running_helper_hash_unchanged": true,
+  "captures_or_frozen_sources_removed": false,
+  "chart_replay_stopped_or_restarted": false,
+  "log_sha256": "3befb625e4fa96b289600bbf85abaf25866965aeb322f4e3c320491ce3584a0b"
+}
