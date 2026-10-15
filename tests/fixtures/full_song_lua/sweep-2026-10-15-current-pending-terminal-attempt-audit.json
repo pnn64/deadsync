@@ -1,23 +1,24 @@
 {
-  "generated_utc": "2026-10-15T18:08:08.576953+00:00",
-  "concrete_ledger_sha256": "4d619dca98de7dc5992e1f1f6926360ab0c7ea23034a6c2fcdbf750376cb67b3",
+  "generated_utc": "2026-10-15T19:12:00.502546+00:00",
+  "concrete_ledger_sha256": "493e0bacd6e63aacbbff56ceddb0c8d6db7d799bfe60c7b7d13f6e1e25152181",
   "counts": {
     "passed": 398,
     "pending": 103,
     "unprocessed": 0
   },
   "maximum_published_terminal_attempt_histogram": {
-    "0": 82,
-    "1": 10,
+    "0": 81,
+    "1": 11,
     "2": 11
   },
   "pending_sources": 103,
   "terminal_attempts_exceed_two": [],
   "differences": [],
-  "running_repair_not_counted_as_terminal": {
-    "source_simfile": "mawaru9/mawaru9.sm",
-    "running_attempt": 1,
-    "already_authorized_no_restart": true
+  "running_repair_not_counted_as_terminal": null,
+  "mawaru9_deferred_at_user_request": {
+    "started_attempt": 1,
+    "completed_full_replay": false,
+    "restart_requires_user_resuming_chart": true
   },
   "no_chart_replays_or_source_mutations": true
 }

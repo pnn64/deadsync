@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T18:08:05Z",
+  "updated_utc": "2026-10-15T19:11:57Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -4132,10 +4132,9 @@
       "source_simfile": "mawaru9/mawaru9.sm",
       "simfile_sha256": "0012dd2fa9cef58ae543bd88b3ab84e25d0b390fcea2827c97c3dd1ac7d5a624",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json",
-      "running_full_repair_attempt": 1,
-      "completed_full_repair_attempts": 0
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-mawaru9-canonical-handles-first-repair-v1.json",
+      "completed_full_repair_attempts": 1
     },
     {
       "position": 496,
