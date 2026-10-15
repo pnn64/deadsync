@@ -1,0 +1,16 @@
+{
+  "fix_commit": "bf010199f6acec3e06f2d429c471fbe846491b48",
+  "source_root": "/home/parity/workspace/pre-song-broadcast-green-v4/deadsync",
+  "binary_sha256": "5e9ae4d9d1cfeffb5c8bfb931fb523f95e72a8d6917821a7fb6d08bddcb3992e",
+  "build_proof": "/home/parity/jobs/pre-song-broadcast-linux-green-v4/proof.json",
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_source_pins_verified": true,
+  "asset_count": 35,
+  "live_controls": 103,
+  "replay_controls": 43,
+  "profile_controls": 1,
+  "legacy_namespace_controls": 1,
+  "all_prior_102_live_and_43_replay_test_sources_unchanged": true,
+  "scope": "Native pre-song theme setup output boundary; normal authored and nested runtime broadcasts preserved",
+  "full_acceptance_criteria_unchanged": true
+}
