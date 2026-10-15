@@ -1,11 +1,11 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T05:53:42Z",
+  "updated_utc": "2026-10-15T06:24:40Z",
   "counts": {
-    "passed": 391,
+    "passed": 394,
     "pending": 106,
-    "unprocessed": 4
+    "unprocessed": 1
   },
   "report_kind": "current concrete failures; sweep still active",
   "missing_coverage_recorded_separately": "sweep-2026-10-15-current-coverage-observations.json",
@@ -24076,48 +24076,6 @@
       "no_third_full_repair": false
     },
     {
-      "position": 463,
-      "source_simfile": "wah-leven [telperion (ddrillini remix)]/eleven.ssc",
-      "completed_full_repairs": 0,
-      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json",
-      "failure_text": "[1.6s] replaying every native gameplay frame\n[2.0s] replaying every native gameplay frame: frame 0/67913 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'WAH-LEVEN (DDRIllini Remix)': model '/tmp/.tmp6eWLyC/song/lua/../assets/waluigi-model/wah-tpose.txt' did not produce any geometry; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile foreground lua layer for 'WAH-LEVEN (DDRIllini Remix)' from '/tmp/.tmp6eWLyC/song/lua/fly.lua': model '/tmp/.tmp6eWLyC/song/lua/../assets/waluigi-model/wah-tpose.txt' did not produce any geometry\n[4.0s] replaying every native gameplay frame: frame 0/67913 (0.0%)\n\nthread 'main' (2929566) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
-      "callback_errors": [],
-      "mismatch_count": null,
-      "first_concrete_mismatches": [],
-      "capture_exit": null,
-      "replay_exit": 1,
-      "native_frames": null,
-      "replayed_frames": null,
-      "capture_errors": null,
-      "completion": null,
-      "no_third_full_repair": false,
-      "running_full_repair_attempt": 1
-    },
-    {
-      "position": 469,
-      "source_simfile": "Watermelon/Watermelon.ssc",
-      "completed_full_repairs": 0,
-      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-1.json",
-      "failure_text": null,
-      "callback_errors": [],
-      "mismatch_count": 1,
-      "first_concrete_mismatches": [
-        {
-          "field": "command_query_count",
-          "native": 61217,
-          "deadsync": 61213
-        }
-      ],
-      "capture_exit": null,
-      "replay_exit": 2,
-      "native_frames": 35146,
-      "replayed_frames": 35146,
-      "capture_errors": null,
-      "completion": null,
-      "no_third_full_repair": false,
-      "running_full_repair_attempt": 1
-    },
-    {
       "position": 471,
       "source_simfile": "What A Wonderful World/WAWW.sm",
       "completed_full_repairs": 0,
@@ -24941,6 +24899,23 @@
       "no_third_full_repair": false
     },
     {
+      "position": 485,
+      "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super]/ArrowQuest.sm",
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v7-1.json",
+      "failure_text": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-3440489-1792043829552198378-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-3440489-1792043829552198378-0\n",
+      "callback_errors": [],
+      "mismatch_count": null,
+      "first_concrete_mismatches": [],
+      "capture_exit": 1,
+      "replay_exit": null,
+      "native_frames": null,
+      "replayed_frames": null,
+      "capture_errors": null,
+      "completion": null,
+      "no_third_full_repair": false
+    },
+    {
       "position": 489,
       "source_simfile": "Cursed Metamorph - [Zaia]/saved/Cursed Metamorph.ssc",
       "completed_full_repairs": 0,
@@ -24997,6 +24972,23 @@
       "completed_full_repairs": 0,
       "evidence": "sweep-2026-10-12-original-partition-1.json",
       "failure_text": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1468866-1792022466740688095-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1468866-1792022466740688095-0\n",
+      "callback_errors": [],
+      "mismatch_count": null,
+      "first_concrete_mismatches": [],
+      "capture_exit": 1,
+      "replay_exit": null,
+      "native_frames": null,
+      "replayed_frames": null,
+      "capture_errors": null,
+      "completion": null,
+      "no_third_full_repair": false
+    },
+    {
+      "position": 493,
+      "source_simfile": "Lesson by DJ/Lesson by DJ.sm",
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v7-1.json",
+      "failure_text": "error: ITGmania song Lua semantic trace failed: ITGmania probe script reported: no StepsType_Dance_Single chart matched difficulty Challenge; retained run directory /tmp/itgmania-harness-rs/song-lua-3535357-1792044731269888507-0\n",
       "callback_errors": [],
       "mismatch_count": null,
       "first_concrete_mismatches": [],

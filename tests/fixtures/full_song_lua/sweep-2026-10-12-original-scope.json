@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T05:53:39Z",
+  "updated_utc": "2026-10-15T06:24:30Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 391,
+    "passed": 394,
     "pending": 106,
-    "unprocessed": 4
+    "unprocessed": 1
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -3194,7 +3194,8 @@
       "simfile_sha256": "7ce2cf7cfa441b16842c6577e922df25f8c49258da2b1cd49358f0f1a428c0fc",
       "status": "pending",
       "repair_attempts": 1,
-      "evidence": "sweep-2026-10-14-rite-ssc-first-repair.json"
+      "evidence": "sweep-2026-10-14-rite-ssc-first-repair.json",
+      "completed_repair_attempts_at_checkpoint": 1
     },
     {
       "position": 379,
@@ -3873,11 +3874,10 @@
       "position": 463,
       "source_simfile": "wah-leven [telperion (ddrillini remix)]/eleven.ssc",
       "simfile_sha256": "17e70b53a8af11e65045e4cbb29b3f1841914cbacefcc1b13d5b4335fa8cb4ca",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json",
-      "completed_repair_attempts_at_checkpoint": 0,
-      "running_full_repair_attempt": 1
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-wah-model-header-first-repair-v1.json",
+      "completed_repair_attempts_at_checkpoint": 1
     },
     {
       "position": 464,
@@ -3923,11 +3923,10 @@
       "position": 469,
       "source_simfile": "Watermelon/Watermelon.ssc",
       "simfile_sha256": "89898223233445c8fbe6523d106fa1109a531f94c111fd6a2cdf508e1890964e",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-1.json",
-      "completed_repair_attempts_at_checkpoint": 0,
-      "running_full_repair_attempt": 1
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-watermelon-screen-command-first-repair-v1.json",
+      "completed_repair_attempts_at_checkpoint": 1
     },
     {
       "position": 470,
@@ -3989,7 +3988,9 @@
       "position": 477,
       "source_simfile": "WOP/WOP.ssc",
       "simfile_sha256": "2f2d3db0bf83de274f01f03ce9dfa337aa8dbf8496079052881a4049446726c5",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-1.json"
     },
     {
       "position": 478,
@@ -4051,7 +4052,9 @@
       "position": 485,
       "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super]/ArrowQuest.sm",
       "simfile_sha256": "fb767f349b23e62155118f76097269da54e20bf983f6bd0a71e8baba098d266e",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v7-1.json"
     },
     {
       "position": 486,
@@ -4113,7 +4116,9 @@
       "position": 493,
       "source_simfile": "Lesson by DJ/Lesson by DJ.sm",
       "simfile_sha256": "c5300bc691048803db427d58d9e76b7dbd159cfba2c9bffee3bf8b632964b840",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v7-1.json"
     },
     {
       "position": 494,

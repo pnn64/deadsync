@@ -1,0 +1,36 @@
+{
+  "status": "retained WOP replay and transferred three untouched originals",
+  "old_stage": "chart-sweep-parallel-v6-1",
+  "new_stage": "chart-sweep-parallel-v7-1",
+  "preserved_replay_pid": 3155070,
+  "preserved_replay_command": [
+    "/home/parity/jobs/loader-multi-return-linux-green-v1/full-song-lua",
+    "--archive",
+    "/home/parity/jobs/chart-sweep-parallel-v6-1/chart-477/candidates/68421b4dc0af898026ab0717d9d0200391a4293f6aa6c59fd58bffebb71b6bee.tar",
+    "--report",
+    "/home/parity/jobs/chart-sweep-parallel-v6-1/chart-477/report.json"
+  ],
+  "preserved_replay_start_ticks": 25057859,
+  "preserved_replay_cwd": "/home/parity/workspace/loader-multi-return-v1/deadsync",
+  "old_supervisor_pid": 2395452,
+  "new_retained_supervisor_pid": 3439763,
+  "new_original_worker_pid": 3440322,
+  "new_original_worker_command": [
+    "python3",
+    "/home/parity/jobs/run_chart_sweep_partition_v7.py",
+    "chart-sweep-parallel-v7-1"
+  ],
+  "transferred_positions": [
+    485,
+    493,
+    501
+  ],
+  "all_four_original_unprocessed_sources_accounted_for": true,
+  "all_retained_candidate_manifest_member_trace_simfile_bytes_verified": true,
+  "all_1175_original_helper_source_pins_verified": true,
+  "global_original_helper_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+  "global_original_selection_unchanged": true,
+  "capture_or_replay_processes_restarted_or_signaled": false,
+  "existing_full_acceptance_unchanged": true,
+  "runner_sha256": "9d136319d2df5c7a2e0fa8651b6d0b837f0bbac2405b41cf31723988f99c13e6"
+}

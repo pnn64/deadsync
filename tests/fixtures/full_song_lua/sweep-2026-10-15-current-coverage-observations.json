@@ -1,6 +1,6 @@
 {
   "scope": "latest recorded coverage observations for original source simfiles",
-  "updated_utc": "2026-10-15T05:53:42Z",
+  "updated_utc": "2026-10-15T06:24:40Z",
   "coverage_is_separate_from_existing_full_replay_acceptance": true,
   "passing_charts_replayed_or_investigated": false,
   "rows": [
@@ -2742,6 +2742,16 @@
       "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
+      "position": 463,
+      "source_simfile": "wah-leven [telperion (ddrillini remix)]/eleven.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetHeight, Actor.GetWidth, Actor.addrotationy, Actor.addrotationz, Actor.cullmode, Actor.rotationy, Actor.xy",
+        "native drawable state/resources: Model, Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-wah-model-header-first-repair-v1.json"
+    },
+    {
       "position": 464,
       "source_simfile": "wah-propaganwah (habstrakt remix) (ddrillini remix)/Propaganda (Habstrakt Remix).ssc",
       "fixture_status": "passed",
@@ -2793,12 +2803,12 @@
     {
       "position": 469,
       "source_simfile": "Watermelon/Watermelon.ssc",
-      "fixture_status": "pending",
+      "fixture_status": "passed",
       "pending_coverage": [
         "uncompared song operations: Actor.smooth, Actor.z, ActorFrame.GetChildren, ActorFrame.SetDrawByZPosition, GameState.GetHumanPlayers, PlayerOptions.Dark",
         "native drawable state/resources: Sprite"
       ],
-      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-1.json"
+      "evidence": "sweep-2026-10-15-watermelon-screen-command-first-repair-v1.json"
     },
     {
       "position": 470,
@@ -2846,6 +2856,16 @@
         "native actor definitions are missing"
       ],
       "evidence": "sweep-2026-10-15-wobbpotato-egg-carton-untyped-actor-first-repair-v1.json"
+    },
+    {
+      "position": 477,
+      "source_simfile": "WOP/WOP.ssc",
+      "fixture_status": "passed",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.bounce, Actor.effectclock, Actor.hibernate, Actor.stopeffect, ActorFrame.GetChildren, ActorSound.play, ActorSound.stop, PlayerOptions.Mini, Sprite.LinearFrames",
+        "native drawable state/resources: ActorProxy, Quad, Sound, Sprite"
+      ],
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-1.json"
     },
     {
       "position": 478,
