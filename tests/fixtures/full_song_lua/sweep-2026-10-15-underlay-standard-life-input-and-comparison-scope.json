@@ -1,0 +1,17 @@
+{
+  "baseline_fix": "194a47d0bce78275d98fd954f38fbb09004ec366",
+  "full_native_gameplay_source_outside_initial_input_reader_and_one_new_test_byte_identical": true,
+  "all_36_prior_native_replay_control_functions_and_expectations_unchanged": true,
+  "full_song_lua_acceptance_source_byte_identical": true,
+  "all_original_production_renderer_profile_control_assertions_retained": true,
+  "new_standard_life_regression_identical_red_green": true,
+  "only_existing_live_test_change": "two explicit HideLifebar inputs in density-only fixtures; all assertions retained byte-identical",
+  "native_sources_and_asset_sha256": {
+    "default.lua": "55cb4cb8962c7dd0a15fd08323b45301b3923dfde20836e4640536b50bcc3114",
+    "Standard.lua": "1114443765ad89d2ac5f0e2ec79bb13fa90cc834ce58c174aaa00623f2120e2e",
+    "swoosh.png": "58670df476ceab88cfc1a6ab30bace2eefe8aa49bbc011059cf096450f91b7d5"
+  },
+  "source_cause": "sweep-2026-10-15-hope-underlay-inventory-source-cause.json",
+  "full_repairs_spent": 0,
+  "no_passing_chart_reopened": true
+}
