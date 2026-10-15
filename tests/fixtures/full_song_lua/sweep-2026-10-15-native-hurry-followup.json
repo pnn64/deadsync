@@ -1,0 +1,12 @@
+{
+  "native_factor2_doubles_duration": true,
+  "native_factor0_zeroes_remaining_queue": true,
+  "negative_factor_raises_lua_error": true,
+  "hibernation_unscaled": true,
+  "native_lua_assertions_exit": 0,
+  "native_output_sha256": "42ad8329ed4d5a39c566f75a98b107581e47d7cbab1ac2f6bb37a1df41300c28",
+  "first_generic_green_result_both_hosts": "1 curve test passed;1 argument/hurry contract failed; existing implementation used reciprocal factor and did not scale live ActorTweenReplays",
+  "actual_fix": "Scale native duration and remaining time by factor, including live queues, compile queues, spin queues and ActorFrame owned children; leave hibernation unchanged. Correct legacy unit expectations from inverse factor to native multiplication.",
+  "legacy_unit": "compile_song_lua_hurrytweening_scales_capture_timeline",
+  "full_acceptance_comparisons_changed": false
+}

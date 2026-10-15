@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Collaboration with Paul J Kim/Something.sm",
+  "native_frames": 35222,
+  "replayed_frames": 35222,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "2b5fde5e50abf1b7b754d9c5d6897ab325225dae40793a565fe303f4a888cc4d.tar.zst",
+  "compressed_sha256": "2b5fde5e50abf1b7b754d9c5d6897ab325225dae40793a565fe303f4a888cc4d",
+  "uncompressed_sha256": "4035f791a6fd887df63b0dfdd67c9c9efa8a97f7cabbc5b5dbae73d4bc196890",
+  "compressed_bytes": 18757504,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}

@@ -1,0 +1,107 @@
+{
+  "position": 472,
+  "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+  "repair_attempts": 1,
+  "native_frames": 47002,
+  "replayed_frames": 47002,
+  "errors": [],
+  "mismatch_count": 216192,
+  "candidate_sha256": "5b7032e9a8bfd40d3c4a1ce410fd8c7a50a3d9f09b04d0ab395c76166fe9ebe5",
+  "trace_sha256": "ba4837520fb6435bf6d3e8f21487bfc06c27d3eba6322dd9b6bbe9ca92656847",
+  "simfile_sha256": "3d4d8467ebbbd92076d67f661822eead8387f4c7e05fd5fb4bdf5ec3b3d5db4e",
+  "report_sha256": "0cc2259ca84c4fb9a7a2487b4af187f21f4c6acbc57bd23f56494681854b4b9c",
+  "one_full_repair_remaining": true,
+  "final_attempt_not_started": true,
+  "actual_first_followup": "Native addcommand observer now records real On/Ready boundaries. Owned run_guarded_actor_command explicitly suppresses trace_command for callbacks stored in __songlua_dynamic_commands, preserving the older native observer limitation. Native216209 versus owned216205 command/query events differ by the four dynamic On/Ready begin/end spans; the first owned queries are consequently labeled construction. All47,002 frames replayed without callback errors. Runtime execution remains independent of native events.",
+  "primary_source": "crates/deadsync-song-lua/src/lua_util.rs:run_guarded_actor_command",
+  "primary_source_sha256_at_diagnosis": "3e8879d3d90aafc9d5b4003be6ebb33f8168314d9b99b03d253a7c4f423e6947",
+  "next_action": "Add a source-proven observer capability/profile for dynamically installed command boundaries; align owned observation of real dispatch with the corrected native observer, keeping old capture profiles compatible. Reuse this complete corrected capture for final repair; do not inject expected events or change comparison keys.",
+  "first_mismatches": [
+    {
+      "field": "command_query_count",
+      "native": 216209,
+      "deadsync": 216205
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0001",
+        "args": [],
+        "beat": -4.430908203125,
+        "command": "OnCommand",
+        "definition_id": "def-0001",
+        "detail": {
+          "name": "OnCommand"
+        },
+        "kind": "command",
+        "line": 591,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": -1.9012925624847412,
+        "seq": 22,
+        "source": "song:/template/template.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "Actor.GetName",
+        "source": "song:/template/template.lua",
+        "line": 538,
+        "phase": "construction",
+        "beat": -4.430908203125,
+        "seconds": -1.9012925624847412,
+        "args": [],
+        "results": [
+          ""
+        ]
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0001",
+        "args": [],
+        "beat": -4.430908203125,
+        "caller": {
+          "line": 538,
+          "source": "song:/template/template.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0001",
+        "detail": {
+          "native_tween_time_left": 0,
+          "results": [
+            ""
+          ]
+        },
+        "kind": "query",
+        "line": 538,
+        "operation": "Actor.GetName",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": -1.9012925624847412,
+        "seq": 25,
+        "source": "song:/template/template.lua",
+        "results": [
+          ""
+        ]
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "Actor.GetName",
+        "source": "song:/template/template.lua",
+        "line": 538,
+        "phase": "construction",
+        "beat": -4.430908203125,
+        "seconds": -1.9012925624847412,
+        "args": [],
+        "results": [
+          ""
+        ]
+      }
+    }
+  ],
+  "acceptance_comparisons_changed": false
+}
