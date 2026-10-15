@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T05:50:00Z",
+  "updated_utc": "2026-10-15T05:53:39Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -14,8 +14,8 @@
   ],
   "counts": {
     "passed": 391,
-    "pending": 105,
-    "unprocessed": 5
+    "pending": 106,
+    "unprocessed": 4
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -4127,7 +4127,9 @@
       "position": 495,
       "source_simfile": "mawaru9/mawaru9.sm",
       "simfile_sha256": "0012dd2fa9cef58ae543bd88b3ab84e25d0b390fcea2827c97c3dd1ac7d5a624",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-15-chart-sweep-parallel-v6-2.json"
     },
     {
       "position": 496,
