@@ -1,0 +1,19 @@
+{
+  "position": 241,
+  "source_simfile": "iLLness LiLin/iLLness LiLin.ssc",
+  "candidate_sha256": "a431032570bbe464640d8e9a248df755d90222ce9a06efb4df1a7e19f72eb8cc",
+  "trace_sha256": "a3193929ba58143374abcbd9f4f285e10b0c825ccc75f7fef9ababff686ea1b7",
+  "simfile_sha256": "50e01c6d0a8ca3a3f7486011b5f5e093ea96fd6018385805e021cd459157a32d",
+  "binary_sha256": "56714f6f0061d2bee125fc7b36a0889bedcc9e7f018e66bdd36be9ff9d12cda5",
+  "diagnostic_exit": 2,
+  "seconds": 106.69394275100785,
+  "full_repair_attempts_spent": 0,
+  "native_capture_reused": true,
+  "native_frames": 43546,
+  "replayed_frames": 3268,
+  "errors": [],
+  "mismatch_count": 0,
+  "first_mismatches": [],
+  "report_sha256": "6692821d74812f38e03d7ef13bc8daf0b4995e770cc7cd208a8fa94f5c77d743",
+  "archive_accepted": false
+}
