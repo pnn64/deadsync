@@ -1,0 +1,12 @@
+{
+  "fix_commit": "194a47d0bce78275d98fd954f38fbb09004ec366",
+  "source_root": "/home/parity/workspace/underlay-difficulty-meter-green-v5/deadsync",
+  "binary_sha256": "9537b0d48bf61aacfe90e7c8c44da3ebef4ff02dbc92bd56a4d3a1ab31ccca4e",
+  "build_proof": "/home/parity/jobs/underlay-difficulty-meter-linux-green-v5/proof.json",
+  "all_four_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "construct each human player unnamed DifficultyMeter owner with its real Quad and Common Bold meter text, initial selected Steps and native command lifecycle",
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
