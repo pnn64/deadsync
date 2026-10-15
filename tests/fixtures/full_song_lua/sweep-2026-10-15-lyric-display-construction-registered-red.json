@@ -1,0 +1,30 @@
+{
+  "regression": "live_lyric_display_loads_text_layers_font_and_changed_commands",
+  "meaningful_missing_lyric_layers_red_both_hosts": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 332.47055280000495,
+      "log_sha256": "4b45d93454c574a0b48e7b117d493f4a0596c70e1168f6379661ec6fca889cd7",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 624 filtered out; finished in 0.21s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 251.13316246203613,
+      "log_sha256": "360bc678aa9c28691d080a2031f4495c90c6e712008641f9452c0740638de763",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 622 filtered out; finished in 0.17s"
+      ]
+    }
+  ],
+  "source_cause": "sweep-2026-10-15-hope-lyric-display-source-cause.json",
+  "expanded_selection_evidence": "sweep-2026-10-15-lyric-display-construction-selection-evidence.json",
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}
