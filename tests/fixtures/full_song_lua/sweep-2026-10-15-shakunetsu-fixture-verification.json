@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
+  "native_frames": 14728,
+  "replayed_frames": 14728,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "0dc546840178dd4c14500f8030954dc916dd511be43d4e1b5b73e2a8afa026f7.tar.zst",
+  "compressed_sha256": "0dc546840178dd4c14500f8030954dc916dd511be43d4e1b5b73e2a8afa026f7",
+  "uncompressed_sha256": "fc6374ff0559eb18cef7f6d068fd68607827c40134a87b939dd10704e9cae095",
+  "compressed_bytes": 15000653,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
