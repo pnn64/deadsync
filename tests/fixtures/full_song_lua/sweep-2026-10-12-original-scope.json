@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-15T08:36:44Z",
+  "updated_utc": "2026-10-15T08:58:06Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,8 +13,8 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 396,
-    "pending": 105,
+    "passed": 397,
+    "pending": 104,
     "unprocessed": 0
   },
   "complete": false,
@@ -2624,9 +2624,9 @@
       "position": 307,
       "source_simfile": "mawaru8/mawaru8.sm",
       "simfile_sha256": "a0e32b54c2762591bb87110e8661cdc1b9e31b6d5d9a287e8500ced93cc5d492",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-mawaru8-post-accept-reporter-recovery-v1.json"
     },
     {
       "position": 308,

@@ -1,6 +1,6 @@
 {
   "scope": "latest recorded coverage observations for original source simfiles",
-  "updated_utc": "2026-10-15T08:19:12Z",
+  "updated_utc": "2026-10-15T08:58:09Z",
   "coverage_is_separate_from_existing_full_replay_acceptance": true,
   "passing_charts_replayed_or_investigated": false,
   "rows": [
@@ -1335,12 +1335,12 @@
     {
       "position": 307,
       "source_simfile": "mawaru8/mawaru8.sm",
-      "fixture_status": "pending",
+      "fixture_status": "passed",
       "pending_coverage": [
         "uncompared song operations: Actor.GetSecsIntoEffect, Actor.GetX, Actor.GetY, Actor.GetZoomX, Actor.accelerate, Actor.addx, Actor.addy, Actor.basezoomx, Actor.basezoomy, Actor.blend, Actor.bob, Actor.bounceend, Actor.cropleft, Actor.croptop, Actor.diffuseramp, Actor.diffuseshift, Actor.effect_hold_at_full, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.finishtweening, Actor.glow, Actor.glowshift, Actor.horizalign, Actor.playcommand, Actor.pulse, Actor.rotationy, Actor.shadowlength, Actor.skewx, Actor.stopeffect, Actor.stoptweening, Actor.vertalign, Actor.wag, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, Actor.ztest, Actor.zwrite, ActorFrame.SetDrawByZPosition, ActorFrame.fov, BitmapText.GetText, BitmapText.maxwidth, BitmapText.settext, GameState.IsHumanPlayer, GameState.PlayerIsUsingModifier, PlayerOptions.Beat, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Hallway, PlayerOptions.Mini, PlayerOptions.Stealth, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Wave, PlayerOptions.XMod, PlayerStageStats.GetPercentDancePoints, Screen.AddInputCallback, Sprite.Load, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
         "native drawable state/resources: BitmapText, Model, Quad, Sprite"
       ],
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "evidence": "sweep-2026-10-15-mawaru8-post-accept-reporter-recovery-v1.json"
     },
     {
       "position": 308,

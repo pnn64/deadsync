@@ -1,10 +1,10 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T08:19:12Z",
+  "updated_utc": "2026-10-15T08:58:09Z",
   "counts": {
-    "passed": 396,
-    "pending": 105,
+    "passed": 397,
+    "pending": 104,
     "unprocessed": 0
   },
   "report_kind": "current concrete failures; sweep still active",
@@ -13784,82 +13784,6 @@
       "replay_exit": 2,
       "native_frames": 70609,
       "replayed_frames": 70609,
-      "capture_errors": null,
-      "completion": null,
-      "no_third_full_repair": false
-    },
-    {
-      "position": 307,
-      "source_simfile": "mawaru8/mawaru8.sm",
-      "completed_full_repairs": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json",
-      "failure_text": null,
-      "callback_errors": [],
-      "mismatch_count": 1,
-      "first_concrete_mismatches": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "stage:current",
-            "args": [
-              0
-            ],
-            "beat": 703.015869140625,
-            "caller": {
-              "line": 2469,
-              "source": "song:/lua/default.lua",
-              "tail_call": false
-            },
-            "command": "FinalScoresMessageCommand",
-            "definition_id": "def-0628",
-            "detail": {
-              "results": [
-                {
-                  "path": "stage:current/player:0",
-                  "type": "PlayerStageStats"
-                }
-              ]
-            },
-            "kind": "query",
-            "line": 2469,
-            "operation": "StageStats.GetPlayerStageStats",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 264.0615539550781,
-            "seq": 994526,
-            "source": "song:/lua/default.lua",
-            "results": [
-              {
-                "path": "stage:current/player:0",
-                "type": "PlayerStageStats"
-              }
-            ]
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "query",
-            "operation": "StageStats.GetPlayerStageStats",
-            "source": "song:/lua/default.lua",
-            "line": 2469,
-            "phase": "callback",
-            "beat": 703.015869140625,
-            "seconds": 264.0615539550781,
-            "args": [
-              0
-            ],
-            "results": [
-              {
-                "type": "PlayerStageStats",
-                "path": "stage:current/player:P1"
-              }
-            ]
-          }
-        }
-      ],
-      "capture_exit": null,
-      "replay_exit": 2,
-      "native_frames": 124734,
-      "replayed_frames": 124734,
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false
