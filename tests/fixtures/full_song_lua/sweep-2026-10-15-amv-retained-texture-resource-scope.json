@@ -1,0 +1,38 @@
+{
+  "green_v2_failed_checks_preserved": {
+    "windows": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 119.52309929998592,
+        "log_sha256": "853344ff6f46600fa2c59b08c0f431bdab34aaf7dbf469de678afb4377b1ed3c",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 342 filtered out; finished in 0.33s"
+        ]
+      }
+    ],
+    "linux": [
+      {
+        "label": "target-control",
+        "exit_code": 101,
+        "seconds": 197.06471789296484,
+        "log_sha256": "27845fca6f69813cc245d6e2ae9bf7ae19595fb94f6e301f9d42e6c9299b2a1e",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 342 filtered out; finished in 0.24s"
+        ]
+      }
+    ]
+  },
+  "actual_failure": "After the native default texture fix, both hosts reached the unchanged valid-image rebinding assertion and failed at Lua line16: the new AMV GetTexture allocation width differed from the actual copied image texture. The getter rebuilt a proxy from receiving-actor geometry instead of retaining the RageTexture resource.",
+  "native_settexture_source": "void ActorMultiVertex::SetTexture(RageTexture* Texture) {\n  if (_Texture != Texture) {\n    UnloadTexture();\n    _Texture = Texture;\n  }\n}\n",
+  "native_lua_binding_copies_actual_texture_resource": true,
+  "production_change": "Retain the actual RageTexture handle when AMV SetTexture receives a valid resource and return that resource from its getter; path-based loads clear the retained handle. Native default and image-handle rebinding now preserve actual allocation metadata independently of actor dimensions.",
+  "whole_source_identical_outside_three_texture_resource_operations_relative_to_green_v2": true,
+  "observer_source_identical_to_green_v2": true,
+  "entire_registered_regression_source_and_all_assertions_identical_red_v2_green_v2_green_v3": true,
+  "all_prior_99_live_and_40_replay_controls_unchanged": true,
+  "comparison_scope_or_acceptance_changed": false,
+  "expected_trace_query_results_used_as_runtime_inputs": false,
+  "chart_repairs_spent": 0,
+  "passing_charts_reopened": false
+}

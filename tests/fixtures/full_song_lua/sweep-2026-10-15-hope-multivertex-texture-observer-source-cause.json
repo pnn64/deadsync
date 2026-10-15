@@ -82,7 +82,9 @@
   "next_action": "Correct defining-class handling in the owned GetTexture observer while preserving the existing comparison scope, runtime getter behavior, keys and tolerances. Add a meaningful runtime regression distinguishing native Sprite, ActorFrameTexture and ActorMultiVertex texture observations, retain all existing controls, qualify on both hosts, and inspect the next actual retained-entry result before a full HOPE repair.",
   "additional_source_based_runtime_cause": "Native ActorMultiVertex constructor loads the blank1x1 default texture. Owned constructor did not, yielding nil at the same concrete observed getter. Source-matched runtime initialization is included with the observer fix.",
   "native_constructor_source": "ActorMultiVertex::ActorMultiVertex() {\n  // Use blank texture by default.\n  RageTextureID ID = TEXTUREMAN->GetDefaultTextureID();\n  _Texture = TEXTUREMAN->LoadTexture(ID);\n",
-  "green_validation_stage_linux": "/home/parity/jobs/amv-texture-observer-linux-green-v2",
-  "green_validation_stage_windows": "../itgmania-harness/target/server-parity/amv-texture-observer-windows-green-v2",
-  "production_fix_in_validation": true
+  "green_validation_stage_linux": "/home/parity/jobs/amv-texture-observer-linux-green-v3",
+  "green_validation_stage_windows": "../itgmania-harness/target/server-parity/amv-texture-observer-windows-green-v3",
+  "production_fix_in_validation": true,
+  "additional_valid_resource_rebinding_cause": "After the native default texture fix, both hosts reached the unchanged valid-image rebinding assertion and failed at Lua line16: the new AMV GetTexture allocation width differed from the actual copied image texture. The getter rebuilt a proxy from receiving-actor geometry instead of retaining the RageTexture resource.",
+  "native_settexture_source": "void ActorMultiVertex::SetTexture(RageTexture* Texture) {\n  if (_Texture != Texture) {\n    UnloadTexture();\n    _Texture = Texture;\n  }\n}\n"
 }

@@ -39,5 +39,7 @@
   "expected_query_values_used_as_inputs": false,
   "comparison_scope_keys_tolerances_or_acceptance_changed": false,
   "chart_repairs_spent": 0,
-  "passing_charts_reopened": false
+  "passing_charts_reopened": false,
+  "describes_green_v2_before_texture_rebinding_failure": true,
+  "subsequent_real_resource_fix": "sweep-2026-10-15-amv-retained-texture-resource-scope.json"
 }
