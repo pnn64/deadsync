@@ -14869,6 +14869,7 @@ return meter
         else { actor_children(lua, &meter)?.raw_set(name, actor)?; }
     }
     actor_children(lua, &meter)?.raw_set("", unnamed)?;
+    meter.raw_set("__songlua_owned_child_lookup", true)?;
     commands.raw_get::<Function>("OnCommand")?.call::<()>(meter.clone())?;
     Ok(Some(meter))
 }

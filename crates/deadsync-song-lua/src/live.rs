@@ -3769,6 +3769,49 @@ return Def.Actor { OnCommand = function(self) self:sleep(9999) end }
     }
 
     #[test]
+    fn live_standard_life_children_follow_native_subactor_table_construction() {
+        let compiled = compile("standard-life-child-table", "return Def.ActorFrame {}");
+        let scene = compiled.live_scene.expect("real standard life owners");
+        let screen = scene.lua.globals().get::<Table>("__songlua_top_screen").unwrap();
+        let underlay = crate::actor_children(&scene.lua, &screen).unwrap().raw_get::<Table>("Underlay").unwrap();
+        let meters = crate::lua_util::actor_direct_children(&scene.lua, &underlay).unwrap()
+            .into_iter().filter(|actor| crate::actor_children(&scene.lua, actor).unwrap()
+                .raw_get::<Option<Table>>("MeterSwoosh").unwrap().is_some()).collect::<Vec<_>>();
+        assert_eq!(meters.len(), 2, "inspect both enabled native Standard owners");
+        for meter in meters {
+            let parts = crate::lua_util::actor_direct_children(&scene.lua, &meter).unwrap();
+            assert_eq!(parts.len(), 4);
+            let ordered = scene.lua.create_sequence_from(parts).unwrap();
+            scene.lua.globals().set("STANDARD_OWNER", meter).unwrap();
+            scene.lua.globals().set("STANDARD_SUBACTORS", ordered).unwrap();
+            scene.lua.load(r#"
+local owner, parts = STANDARD_OWNER, STANDARD_SUBACTORS
+assert(parts[1]:GetName() == '' and parts[2]:GetName() == '')
+assert(parts[3]:GetName() == 'MeterFill' and parts[4]:GetName() == 'MeterSwoosh')
+-- ActorFrame.cpp::PushChildrenTable starts empty and inserts each m_SubActor.
+-- Standard.lua supplies two empty names, then MeterFill, then MeterSwoosh.
+local expected = {}
+rawset(expected, '', parts[1])
+rawset(expected, '', {parts[1], parts[2]})
+rawset(expected, 'MeterFill', parts[3])
+rawset(expected, 'MeterSwoosh', parts[4])
+local actual, wanted, observed = owner:GetChildren(), {}, {}
+for name in pairs(expected) do wanted[#wanted + 1] = name end
+for name in pairs(actual) do observed[#observed + 1] = name end
+assert(table.concat(observed, '|') == table.concat(wanted, '|'),
+    'Standard GetChildren must follow native subactor table construction')
+assert(actual.MeterFill == parts[3] and actual.MeterSwoosh == parts[4])
+assert(actual[''][1] == parts[1] and actual[''][2] == parts[2])
+for _, part in ipairs(parts) do assert(part:GetParent() == owner) end
+actual.MeterFill = nil
+local fresh = owner:GetChildren()
+assert(fresh ~= actual and fresh.MeterFill == parts[3])
+assert(owner:GetChild('MeterFill') == parts[3] and owner:GetChild('MeterSwoosh') == parts[4])
+"#).exec().expect("native child insertion history, identities, groups and snapshot ownership");
+        }
+    }
+
+    #[test]
     fn live_underlay_standard_life_meter_uses_real_children_and_life_events() {
         use deadsync_rules::timing::{DelaySegment, StopSegment, TimingData, TimingSegments};
         for (width, enabled, hidden, expected) in [
