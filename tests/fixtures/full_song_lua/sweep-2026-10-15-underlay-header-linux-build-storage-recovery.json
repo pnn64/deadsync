@@ -1,0 +1,42 @@
+{
+  "failed_stage": "/home/parity/jobs/underlay-header-linux-green-v2",
+  "failure": "LLVM output failed with ENOSPC while compiling replay controls; target regression and all97 live controls had already passed.",
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 262.84632196999155,
+      "log_sha256": "f9233a948f4b0f30d2c10d221c1b8f98f0d7975d108801d463c3531ab7984ae8",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 633 filtered out; finished in 0.54s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 33.51885099703213,
+      "log_sha256": "117e7b257b4a4f98dc6c4347ca56d3e0a81cc563212dfde8ec33939b1b9a663b",
+      "results": [
+        "test result: ok. 97 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 32.87s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 101,
+      "seconds": 193.78396945202257,
+      "log_sha256": "846fbd5ade5b4b0c08ce4ee48c5564eee3358df4004ffa1fab5847df3119dd31",
+      "results": []
+    }
+  ],
+  "progress_sha256": "a49c24ebec5bc5479c8397e74e3133f00dcb87750cdc24c0622d2a9360471582",
+  "all_1175_frozen_source_pins_and_check_log_hashes_verified": true,
+  "source_root": "/home/parity/workspace/underlay-header-green-v2/deadsync",
+  "recovery_stage": "/home/parity/jobs/underlay-header-linux-green-v3",
+  "recovery_reuses_same_frozen_source_without_source_or_mtime_mutations": true,
+  "test_and_acceptance_code_changes_for_recovery": false,
+  "full_chart_repairs_spent": 0,
+  "storage_receipts": [
+    "underlay-header-infrastructure-report-storage-v1.json",
+    "underlay-header-unused-build-test-bins-storage-v1.json"
+  ]
+}
