@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc",
+  "native_frames": 8238,
+  "replayed_frames": 8238,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "9a539969dba52899892fbfd70243f57352ea0fe8fc3330814acac77a26b8ccd9.tar.zst",
+  "compressed_sha256": "9a539969dba52899892fbfd70243f57352ea0fe8fc3330814acac77a26b8ccd9",
+  "uncompressed_sha256": "f15ee0cddf02932b656262f9a5878f32f12a844ddd1e2d7ec5baff30df231a93",
+  "compressed_bytes": 17271799,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
