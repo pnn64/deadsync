@@ -1,0 +1,12 @@
+{
+  "fix_commit": "1d24d8cc2001d05f2350d3b2b88d161d818ea3fb",
+  "source_root": "/home/parity/workspace/underlay-standard-life-green-v4/deadsync",
+  "binary_sha256": "b769253fd0fc3990c7cdd71ac1ed144a16a4f47b05d899a4d98ff35eb379d820",
+  "build_proof": "/home/parity/jobs/underlay-standard-life-linux-green-v4/proof.json",
+  "all_five_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_green_source_pins_verified": true,
+  "scope": "construct the actual selected Standard LifeMeter with real native PNG, per-player scrolling, initial native life load and live life/health handlers",
+  "hope_full_repairs_spent": 0,
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true
+}
