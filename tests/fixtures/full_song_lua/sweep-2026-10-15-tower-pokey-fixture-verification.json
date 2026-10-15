@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
+  "native_frames": 105094,
+  "replayed_frames": 105094,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "e78ee9493b40793abb9ff8f38bde710171c9aa10e6054189db2a0d1203718394.tar.zst",
+  "compressed_sha256": "e78ee9493b40793abb9ff8f38bde710171c9aa10e6054189db2a0d1203718394",
+  "uncompressed_sha256": "86ca2d782bd0150fa4f0aa8b66e4a6c01ec1307cb724e1ee780df108589bfe82",
+  "compressed_bytes": 10033056,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
