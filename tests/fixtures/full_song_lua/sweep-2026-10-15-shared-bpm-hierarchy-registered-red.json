@@ -1,0 +1,30 @@
+{
+  "regression": "live_shared_bpm_owns_native_hierarchy_and_updates_real_timing_and_rate",
+  "meaningful_missing_bpm_hierarchy_red_both_hosts": true,
+  "initial_profile_input_plumbing_staged_before_runtime_red": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 347.5586830000102,
+      "log_sha256": "76938ff76be01cc378bcc8dfc570537eecbc81e552c86e4ba11daee3f044dc85",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 634 filtered out; finished in 0.27s"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 248.56692178698722,
+      "log_sha256": "83833b9a317a19d07910621241b8e7cc5be67b127011516aeb6086092bc87042",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 632 filtered out; finished in 0.20s"
+      ]
+    }
+  ],
+  "source_cause": "sweep-2026-10-15-hope-shared-bpm-hierarchy-source-cause.json",
+  "full_chart_repairs_spent": 0,
+  "acceptance_comparisons_changed": false
+}

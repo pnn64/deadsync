@@ -3769,6 +3769,84 @@ return Def.Actor { OnCommand = function(self) self:sleep(9999) end }
     }
 
     #[test]
+    fn live_shared_bpm_owns_native_hierarchy_and_updates_real_timing_and_rate() {
+        use deadsync_rules::timing::{TimingData, TimingSegments};
+        for (enabled, split, upper) in [([true,false],false,false), ([true,true],false,false),
+            ([true,true],true,false), ([false,true],true,true), ([true,false],false,true)] {
+            let mut compiled=compile_with_context(&format!("shared-bpm-{enabled:?}-{split}-{upper}"),
+                "return Def.ActorFrame {}", |context| {
+                    context.defer_initial_live_update=true;
+                    context.song_display_bpms=[666.0,999.0];
+                    context.player_step_indices=if split {[Some(0),Some(1)]}else{[Some(0),Some(0)]};
+                    for player in 0..LUA_PLAYERS {
+                        context.players[player].enabled=enabled[player];
+                        context.players[player].nps_graph_at_top=upper;
+                        context.players[player].screen_x=320.0;
+                        context.players[player].difficulty=SongLuaDifficulty::Hard;
+                    }
+                    let timings=[TimingData::from_segments(0.0,0.0,&TimingSegments {
+                        bpms:vec![(0.0,120.0),(2.0,150.0)],..Default::default()},&[]),
+                        TimingData::from_segments(0.0,0.0,&TimingSegments {
+                        bpms:vec![(0.0,240.0),(2.0,300.0)],..Default::default()},&[])];
+                    context.player_timing=[Some(timings[0].clone()),Some(timings[usize::from(split)].clone())];
+                    context.song_step_timing=timings.to_vec();
+                    context.song_steps=(0..2).map(|index|crate::SongLuaStep {
+                        steps_type:"StepsType_Dance_Single".into(),difficulty:SongLuaDifficulty::Hard,
+                        description:format!("chart{index}"),chart_name:String::new(),credit:String::new(),
+                        meter:12,music_file:String::new(),possible_grade_points:100}).collect();
+                });
+            let mut scene=compiled.live_scene.take().unwrap();
+            let screen=scene.lua.globals().get::<Table>("__songlua_top_screen").unwrap();
+            let underlay=crate::actor_children(&scene.lua,&screen).unwrap().raw_get::<Table>("Underlay").unwrap();
+            let outer=crate::lua_util::actor_direct_children(&scene.lua,&underlay).unwrap().into_iter()
+                .find(|owner|crate::actor_children(&scene.lua,owner).unwrap()
+                    .raw_get::<Option<Table>>("RatemodDisplay").unwrap().is_some());
+            let outer=outer.expect("Underlay must own the native shared BPM frame hierarchy");
+            let outer_parts=crate::lua_util::actor_direct_children(&scene.lua,&outer).unwrap();
+            assert_eq!(outer_parts.len(),2);
+            let rate=outer_parts[0].clone();let inner=outer_parts[1].clone();
+            assert_eq!(crate::lua_util::actor_name(&rate).unwrap(),"RatemodDisplay");
+            assert_eq!(crate::lua_util::actor_name(&inner).unwrap(),"");
+            let texts=crate::lua_util::actor_direct_children(&scene.lua,&inner).unwrap();
+            let dual=enabled==[true,true]&&split;
+            assert_eq!(texts.len(),if dual{2}else{1});
+            assert_eq!(crate::lua_util::actor_name(&texts[0]).unwrap(),if dual{"DisplayP1"}else{"BPMDisplay"});
+            let pose=read_state(&scene.lua,&outer).unwrap();
+            let master=usize::from(!enabled[0]);
+            assert_eq!(pose.x,320.0+if upper {if master==0 {192.0}else{-192.0}}else{0.0});
+            assert_eq!(pose.y,52.0);assert!((pose.zoom-1.33).abs()<1e-6);
+            assert_eq!(read_state(&scene.lua,&rate).unwrap().y,12.0);
+            assert!((read_state(&scene.lua,&rate).unwrap().zoom-0.5).abs()<1e-6);
+            for text in &texts {
+                assert_eq!(text.raw_get::<String>("Font").unwrap(),"Common Normal");
+                assert_eq!(text.get::<Function>("GetText").unwrap().call::<String>(text.clone()).unwrap(),"");
+                assert_eq!(text.get::<Function>("GetParent").unwrap().call::<Table>(text.clone()).unwrap(),inner);
+            }
+            scene.lua.globals().set("BPM_UNDERLAY",underlay).unwrap();
+            scene.lua.globals().set("BPM_OUTER",outer.clone()).unwrap();
+            scene.lua.globals().set("BPM_INNER",inner).unwrap();
+            scene.lua.load("assert(BPM_UNDERLAY:GetChild('BPMDisplay')==nil); assert(BPM_OUTER:GetChild('BPMDisplay')==nil); assert(BPM_OUTER:GetParent()==BPM_UNDERLAY); assert(BPM_INNER:GetParent()==BPM_OUTER)").exec().unwrap();
+            for (seconds,music_rate) in [(0.25,1.0),(1.5,1.5)] {
+                let game=scene.lua.globals().get::<Table>("GAMESTATE").unwrap();
+                let options=game.get::<Function>("GetSongOptionsObject").unwrap()
+                    .call::<Table>((game,"ModsLevel_Song")).unwrap();
+                options.get::<Function>("MusicRate").unwrap().call::<mlua::MultiValue>((options,music_rate)).unwrap();
+                let output=scene.advance(SongLuaLiveFrame { screen_seconds:seconds,music_seconds:seconds,
+                    delta_seconds:0.25,..Default::default() }).unwrap();
+                assert!(output.errors.is_empty(),"{:?}",output.errors);
+                for (index,text) in texts.iter().enumerate() {
+                    let player=if dual{index}else{master};let fast=player==1&&split;
+                    let bpm=if seconds==0.25 {if fast{240.0}else{120.0}}else if fast{300.0}else{150.0};
+                    let expected=format!("{:.0}",bpm*music_rate);
+                    assert_eq!(text.get::<Function>("GetText").unwrap().call::<String>(text.clone()).unwrap(),expected);
+                }
+                assert_eq!(rate.get::<Function>("GetText").unwrap().call::<String>(rate.clone()).unwrap(),
+                    if music_rate==1.0{""}else{"1.50x rate"});
+            }
+        }
+    }
+
+    #[test]
     fn live_standard_life_children_follow_native_subactor_table_construction() {
         let compiled = compile("standard-life-child-table", "return Def.ActorFrame {}");
         let scene = compiled.live_scene.expect("real standard life owners");

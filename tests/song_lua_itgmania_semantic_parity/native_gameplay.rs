@@ -749,6 +749,39 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn native_bpm_layout_uses_initial_upper_nps_option() {
+        let mut trace = serde_json::json!({"input":{"gameplay_preferences":{"default_modifiers":"",
+            "players":[{"theme_modifiers":{"NPSGraphAtTop":true}}, {"theme_modifiers":{"NPSGraphAtTop":false}}]}}});
+        let profiles = super::native_profile_inputs(&trace).unwrap();
+        assert!(profiles[0].nps_graph_at_top && !profiles[1].nps_graph_at_top);
+        trace["input"]["gameplay_preferences"]["players"][0]["theme_modifiers"]["NPSGraphAtTop"] = serde_json::json!(1);
+        assert!(super::native_profile_inputs(&trace).is_err());
+    }
+
+    #[test]
+    fn autonomous_theme_queries_stay_outside_song_trace_but_nested_calls_remain() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use std::{fs, sync::Arc};
+        super::start_call_log(2_000_000).unwrap();
+        let dir=std::env::temp_dir().join(format!("deadsync-theme-call-scope-{}",std::process::id()));
+        fs::create_dir_all(&dir).unwrap();let entry=dir.join("scope.lua");
+        fs::write(&entry,r#"
+local nested=assert(loadstring("return function() return GAMESTATE:GetSongOptionsObject('ModsLevel_Song'):MusicRate() end", '@theme:/nested-rate-control.lua'))()
+return Def.ActorFrame { OnCommand=function(self) assert(nested()==1) end }
+"#).unwrap();
+        let mut context=SongLuaCompileContext::new(&dir,"theme call scope");context.live=true;
+        let compiled=compile_song_lua_with_default_host::<(),(),_>(&entry,&context,SongLuaNoteskinResolver::default(),
+            |_,_,_|Ok(Arc::<[()]>::from([])), |_|None, |_,_|None).unwrap();
+        assert!(compiled.live_scene.is_some());
+        let events=super::CALL_EVENTS.with_borrow(|capture|capture.events.clone());
+        let nested=events.iter().filter(|event|event["source"]=="@theme:/nested-rate-control.lua").collect::<Vec<_>>();
+        assert_eq!(nested.len(),2,"song-triggered nested theme calls remain observed");
+        assert!(nested.iter().all(|event|event["phase"]=="callback"));
+        assert!(!events.iter().any(|event|event["source"].as_str().is_some_and(|source|
+            source.contains("Shared/BPMDisplay.lua"))),"autonomous native theme updater has no song command context");
+    }
+
+    #[test]
     fn native_life_meter_uses_initial_theme_options_only() {
         let mut trace = serde_json::json!({"input":{"gameplay_preferences":{"default_modifiers":"",
             "players":[{"theme_modifiers":{"HideLifebar":true,"LifeMeterType":"Vertical"}},
@@ -2823,6 +2856,9 @@ fn native_profile_inputs(trace: &Value) -> Result<[deadsync_profile::Profile; 2]
             .and_then(Value::as_array).and_then(|players| players.get(player));
         if let Some(value) = initial.and_then(|p| p.pointer("/theme_modifiers/HideLifebar")) {
             profile.hide_lifebar = value.as_bool().ok_or("initial HideLifebar must be boolean")?;
+        }
+        if let Some(value) = initial.and_then(|p| p.pointer("/theme_modifiers/NPSGraphAtTop")) {
+            profile.nps_graph_at_top = value.as_bool().ok_or("initial NPSGraphAtTop must be boolean")?;
         }
         if let Some(value) = initial.and_then(|p| p.pointer("/theme_modifiers/LifeMeterType")) {
             profile.lifemeter_type = value.as_str().ok_or("initial LifeMeterType must be named")?

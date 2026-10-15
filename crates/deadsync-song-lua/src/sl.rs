@@ -197,7 +197,7 @@ fn create_sl_player_mods(lua: &Lua, player: &SongLuaPlayerContext) -> mlua::Resu
     table.set("ActionOnMissedTarget", "Nothing")?;
     table.set("Pacemaker", false)?;
     table.set("LifeMeterType", player.life_meter_type.as_str())?;
-    table.set("NPSGraphAtTop", false)?;
+    table.set("NPSGraphAtTop", player.nps_graph_at_top)?;
     table.set("JudgmentTilt", false)?;
     table.set("TiltMultiplier", 1)?;
     table.set("ColumnCues", player.column_cues)?;

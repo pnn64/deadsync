@@ -686,6 +686,8 @@ pub struct SongLuaPlayerContext {
     /// Initial profile selection for Simply Love's Lua-owned life meter.
     pub hide_lifebar: bool,
     pub life_meter_type: String,
+    /// Initial profile layout choice used by the shared BPM owner.
+    pub nps_graph_at_top: bool,
     pub screen_x: f32,
     pub screen_y: f32,
 }
@@ -712,6 +714,7 @@ impl Default for SongLuaPlayerContext {
             background_filter_percent: 0,
             hide_lifebar: false,
             life_meter_type: "Standard".into(),
+            nps_graph_at_top: false,
             screen_x: 320.0,
             screen_y: 240.0,
         }

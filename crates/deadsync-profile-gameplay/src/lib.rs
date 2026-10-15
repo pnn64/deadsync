@@ -549,6 +549,7 @@ pub fn song_lua_compile_context(
         } else { 0 },
         hide_lifebar: player >= num_players || player_profiles[player].hide_lifebar,
         life_meter_type: player_profiles[player].lifemeter_type.to_string(),
+        nps_graph_at_top: player < num_players && player_profiles[player].nps_graph_at_top,
     });
     context
 }
