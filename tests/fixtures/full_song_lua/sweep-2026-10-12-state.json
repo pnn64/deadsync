@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-15T03:53:00Z",
-  "previous_goal_turn": "Progress: Closed three full passes: Freaky Deaky SSC, 109,088 frames; Freaky Deaky SM, 126,098 frames; and The Entity SM, 25,109 frames. Each has zero errors and mismatches, a committed compressed fixture, and a locally verified decompressed SHA. Passing charts remain closed. The original worker advanced to Trinity Field while THE WORLD REVOLVING SSC continues; all remaining originals are uniquely assigned to two workers. Added read-only function metadata serialization for original Lua and C closures in broadcast parameters. Both hosts reproduced the original failure and passed all eight validation groups, including 76 live controls and 34 replay controls. All 1,175 raw Linux and normalized cross-platform red/green source pins, logs, and the frozen helper were verified. An independent complete 3,779-frame ITGmania control verifies metadata, original function identity, and call results. Retained-capture diagnostics check Spectrum and Igaku SSC after the function fix. Their original full reports also contain separate command/query mismatches; no full repair attempt or native recapture was spent on this fix, and comparison keys, tolerances, and acceptance criteria remain unchanged. Mawaru 6 has a short retained-capture diagnostic using the existing validated subscriber dispatch fix. Its second and final full repair is queued only after a clean diagnostic; the full count remains one until that replay starts. A failed initial diagnostic path lookup ran no replay and is preserved. Existing Minefield, Gone, Rite SSC, and Mawaru 8 repairs continue without restart. The original helper remains 711a5230. All 501 original simfiles retain their hashes; coverage remains separate, oversized archives remain ignored and local, and the sweep is active and incomplete.",
+  "updated_utc": "2026-10-15T04:23:08Z",
+  "previous_goal_turn": "Progress: Closed two more complete passes: THE WORLD REVOLVING SSC, 14,360 frames, and Minefield, 100,704 frames. Both have zero errors and mismatches; their compressed fixtures and local decompressed SHA receipts are committed. Passing charts remain closed. Trinity Field original replay completed pending on 48 command-trace mismatches and an unsupported Sprite.cropto callback; no full repairs spent. Both original workers continue their assigned queues. The retained I Really Like You SSC capture proves its sole previous full-replay failure consists of 5,375 SystemMessage broadcasts from Simply Love SM(). Implemented the actual local primary TableToString and SM helpers, preserving formatting, cycle handling, public formatter overrides, nil/zero/false parameters, synchronous dispatch, and Trace ordering. Both hosts reproduced the old failure and passed all nine validation groups, including 77 live controls, 34 replay controls, and the existing SM compatibility control. All 1,175 raw Linux and normalized cross-platform red/green source pins, logs, and the frozen helper were verified. An independent complete 5,935-frame native control verifies seven helper calls. Its initial reader counted later theme Trace calls through an intentional override; the original capture was reused with an explicit callback scope and the failed reader is preserved. A launcher filename error ran no tests or chart replay and was corrected. The SM fix is committed and I Really Like You SSC first full repair reuses the complete original 209,028-frame capture. Mawaru6 diagnostic passes 6,073 frames with zero errors and mismatches; its second and final full repair is running from the same original capture, with no third allowed. Rite SSC first repair completes 104,414 frames with no callback errors but remains pending on 121 command/query mismatches: native has four additional Judgment listener boundary events near 146.65 seconds. Its final repair is not started. Spectrum and Igaku diagnostics continue separately. The original helper remains 711a5230; all 501 original simfile hashes are unchanged, coverage remains separate, oversized archives remain ignored and local, and the sweep remains active and incomplete.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "3eb9c8bf3cff63a110acf0ca8e39f95548696b73",
+      "deadsync": "af162a880968f66e16bd0ca7ffa6041424c0f040",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -2045,6 +2045,13 @@
         "record": "sweep-2026-10-15-mawaru6-message-coverage-final-repair-v1.json",
         "fix_commit": "4c9ae9ef093b2cc8d35f6266920ab6763b4385d9; subscriber dispatch fix d69f0a20fd7a8b9a00fef1680365364522a51706",
         "finish_status": "final bounded message subscriber coverage repair complete; original full capture reused; no third full repair"
+      },
+      {
+        "name": "i-really-like-you-ssc-sm-first-repair-v1",
+        "remote": "/home/parity/jobs/i-really-like-you-ssc-sm-first-repair-v1",
+        "record": "sweep-2026-10-15-i-really-like-you-ssc-sm-first-repair-v1.json",
+        "fix_commit": "3601bca9d7e56c93ddcfc93bdeade059a13235e8",
+        "finish_status": "first bounded Simply Love SM helper repair complete; original full capture reused; one later full repair maximum"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -2067,47 +2074,61 @@
       },
       "jobs": [
         {
-          "job": "mawaru6-message-coverage-final-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
-          "pending": 0,
-          "processed": 0
-        },
-        {
-          "job": "minefield-overlay-stage-first-repair-v1",
+          "job": "i-really-like-you-ssc-sm-first-repair-v1",
           "complete": false,
           "supervisor_running": true,
           "passed": 0,
           "pending": 0,
           "processed": 0,
           "last_phase": "replay",
-          "source_simfile": "minefield surfing_1/minefield.ssc",
+          "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
           "child_running": true
+        },
+        {
+          "job": "mawaru6-message-coverage-final-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "mawaru6/mawaru6.sm",
+          "child_running": true
+        },
+        {
+          "job": "minefield-overlay-stage-first-repair-v1",
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
+          "pending": 0,
+          "processed": 1,
+          "last_phase": "pack",
+          "source_simfile": "minefield surfing_1/minefield.ssc",
+          "child_running": false
         },
         {
           "job": "chart-sweep-parallel-v6-1",
           "complete": false,
           "supervisor_running": true,
           "passed": 2,
-          "pending": 0,
-          "processed": 2,
+          "pending": 1,
+          "processed": 3,
           "last_phase": "replay",
-          "source_simfile": "Trinity Field/Trinity Field.ssc",
+          "source_simfile": "Void Virus/Void_Virus.ssc",
           "child_running": true,
-          "position": 447
+          "position": 461
         },
         {
           "job": "chart-sweep-parallel-v6-2",
           "complete": false,
           "supervisor_running": true,
-          "passed": 1,
+          "passed": 2,
           "pending": 0,
-          "processed": 1,
+          "processed": 2,
           "last_phase": "replay",
-          "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.ssc",
+          "source_simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.sm",
           "child_running": true,
-          "position": 439
+          "position": 455
         },
         {
           "job": "gone-source-path-first-repair-v1",
@@ -2224,7 +2245,7 @@
         {
           "job": "koi-ssc-message-coverage-final-repair-v1",
           "complete": true,
-          "supervisor_running": true,
+          "supervisor_running": false,
           "passed": 0,
           "pending": 1,
           "processed": 1,
@@ -2234,14 +2255,14 @@
         },
         {
           "job": "rite-ssc-message-coverage-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
+          "complete": true,
+          "supervisor_running": false,
           "passed": 0,
-          "pending": 0,
-          "processed": 0,
+          "pending": 1,
+          "processed": 1,
           "last_phase": "replay",
           "source_simfile": "rite of spring/rite.ssc",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "pop-player-position-first-repair-v1",
@@ -3425,7 +3446,7 @@
     "selected_replay_binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 147,
+    "publisher_stream_count": 148,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -4129,24 +4150,24 @@
           "complete": false,
           "supervisor_running": true,
           "passed": 2,
-          "pending": 0,
-          "processed": 2,
+          "pending": 1,
+          "processed": 3,
           "last_phase": "replay",
-          "source_simfile": "Trinity Field/Trinity Field.ssc",
+          "source_simfile": "Void Virus/Void_Virus.ssc",
           "child_running": true,
-          "position": 447
+          "position": 461
         },
         {
           "job": "chart-sweep-parallel-v6-2",
           "complete": false,
           "supervisor_running": true,
-          "passed": 1,
+          "passed": 2,
           "pending": 0,
-          "processed": 1,
+          "processed": 2,
           "last_phase": "replay",
-          "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.ssc",
+          "source_simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.sm",
           "child_running": true,
-          "position": 439
+          "position": 455
         }
       ],
       "remaining_originals_uniquely_owned_by_two_workers": true,
@@ -4192,13 +4213,16 @@
       "after": "tests/fixtures/full_song_lua/sweep-2026-10-15-minefield-stage-observer-after.json",
       "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-minefield-overlay-stage-first-repair-launch.json",
       "minefield_full_repairs_spent": 1,
-      "minefield_one_later_full_repair_maximum": true,
-      "minefield_first_full_repair_running": true,
+      "minefield_first_full_repair_running": false,
       "native_capture_reused_unchanged": true,
       "all_eleven_stage_fields_observed_from_owned_state": true,
       "native_expected_values_enter_gameplay": false,
       "comparison_keys_tolerances_acceptance_predicate_unchanged": true,
-      "global_original_selection_unchanged": true
+      "global_original_selection_unchanged": true,
+      "minefield_status": "passed",
+      "minefield_passing_chart_closed": true,
+      "minefield_further_replay_allowed": false,
+      "minefield_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-minefield-fixture-verification.json"
     },
     "function_broadcast_metadata": {
       "fix_commit": "3eb9c8bf3cff63a110acf0ca8e39f95548696b73",
@@ -4216,7 +4240,14 @@
       "spectrum_full_repairs_spent": 0,
       "igaku_ssc_full_repairs_spent": 0,
       "comparison_keys_tolerances_acceptance_predicate_unchanged": true,
-      "global_original_helper_unchanged": true
+      "global_original_helper_unchanged": true,
+      "spectrum_diagnostic_complete": true,
+      "spectrum_diagnostic_frames": 5755,
+      "spectrum_diagnostic_errors": 0,
+      "spectrum_diagnostic_mismatches": 7606,
+      "spectrum_diagnostic_broadcast_metadata_mismatches": 0,
+      "spectrum_diagnostic_archive_accepted": false,
+      "spectrum_diagnostic": "tests/fixtures/full_song_lua/sweep-2026-10-15-spectrum-function-metadata-diagnostic.json"
     },
     "freaky_deaky_sm_closed": {
       "status": "passed",
@@ -4244,27 +4275,123 @@
     },
     "mawaru6_message_coverage_final_queue": {
       "queue_observation": {
-        "status": "waiting for retained-capture diagnostic",
+        "status": "starting final repair 2",
         "pid": 2706879,
-        "source_simfile": "mawaru6/mawaru6.sm",
-        "full_repairs_spent": 1,
-        "remaining_full_repairs_maximum": 1,
-        "native_capture_reused": true,
-        "diagnostic_only_spends_no_full_repair": true
+        "diagnostic": {
+          "position": 305,
+          "source_simfile": "mawaru6/mawaru6.sm",
+          "candidate_sha256": "2b6ccb37e5efd1d7cb890defc11646ad20ee1da010dbb4318493efa89f69eecb",
+          "trace_sha256": "4d205ed710879e4011d75fc735b3ae9fa7e9e9b6c53eb81873b64fff35771b7f",
+          "simfile_sha256": "394d4b03ce745a22d46dfef9bf581301840ee654ebd382d2c76412260694c37c",
+          "binary_sha256": "86439e2494912eec80c902e6f1ae1bdd576a96f4f919107996b300d981701d8d",
+          "diagnostic_exit": 2,
+          "seconds": 1450.6114189610234,
+          "full_repair_attempts_spent": 0,
+          "native_capture_reused": true,
+          "native_frames": 121856,
+          "replayed_frames": 6073,
+          "errors": [],
+          "mismatch_count": 0,
+          "first_mismatches": [],
+          "report_sha256": "b436ed1ad563185c8d54d1ea2721362c67a5f474cb25bd735c40d0db0012110b",
+          "archive_accepted": false
+        },
+        "no_third_full_repair": true,
+        "native_capture_reused": true
       },
       "launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-mawaru6-message-coverage-final-queue-launch.json",
       "full_repair_limit": 2,
       "full_repair_not_spent_by_diagnostic": true,
       "native_capture_reused": true,
-      "global_original_helper_unchanged": true
+      "global_original_helper_unchanged": true,
+      "full_repairs_spent": 2,
+      "no_third_full_repair": true,
+      "diagnostic_frames": 6073,
+      "diagnostic_errors": 0,
+      "diagnostic_mismatches": 0,
+      "actual_final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-mawaru6-message-coverage-final-repair-launch.json",
+      "replay_pid": 2784760,
+      "current_job": {
+        "job": "mawaru6-message-coverage-final-repair-v1",
+        "complete": false,
+        "supervisor_running": true,
+        "passed": 0,
+        "pending": 0,
+        "processed": 0,
+        "last_phase": "replay",
+        "source_simfile": "mawaru6/mawaru6.sm",
+        "child_running": true
+      }
+    },
+    "simply_love_sm": {
+      "fix_commit": "3601bca9d7e56c93ddcfc93bdeade059a13235e8",
+      "binary_sha256": "50a1cb7dca074bdabaab43a80242af57c2dd0bb192058b3d1b85b149f25696a3",
+      "source_root": "/home/parity/workspace/simply-love-sm-v1/deadsync",
+      "both_platform_all_nine_checks_passed": true,
+      "all_1175_raw_linux_and_cross_platform_normalized_red_and_green_source_pins_verified": true,
+      "all_linux_log_and_binary_hashes_verified": true,
+      "native_control_frames": 5935,
+      "native_helper_calls_verified": 7,
+      "original_primary_helper_source_and_line_numbers_preserved": true,
+      "native_source": "tests/fixtures/full_song_lua/sweep-2026-10-15-simply-love-sm-native-source.json",
+      "native_control": "tests/fixtures/full_song_lua/sweep-2026-10-15-simply-love-sm-native-control.json",
+      "windows_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-simply-love-sm-windows-validation.json",
+      "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-simply-love-sm-linux-validation.json",
+      "really_like_ssc_source_evidence": "tests/fixtures/full_song_lua/sweep-2026-10-15-i-really-like-you-ssc-sm-source-evidence.json",
+      "first_full_repair_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-i-really-like-you-ssc-sm-first-repair-launch.json",
+      "i_really_like_you_ssc_full_repairs_spent": 1,
+      "one_later_full_repair_maximum": true,
+      "original_complete_native_capture_reused": true,
+      "global_original_helper_unchanged": true,
+      "acceptance_keys_tolerances_predicate_unchanged": true
+    },
+    "minefield_closed": {
+      "status": "passed",
+      "native_frames": 100704,
+      "full_repairs_spent": 1,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-minefield-fixture-verification.json"
+    },
+    "world_revolving_ssc_closed": {
+      "status": "passed",
+      "native_frames": 14360,
+      "full_repairs_spent": 0,
+      "passing_chart_closed": true,
+      "further_replay_allowed": false,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-world-revolving-ssc-fixture-verification.json"
+    },
+    "rite_ssc_first_followup": {
+      "status": "pending",
+      "full_repairs_spent": 1,
+      "remaining_full_repairs_maximum": 1,
+      "callback_errors": 0,
+      "mismatches": 121,
+      "native_frames": 104414,
+      "first_mismatching_seconds": 146.65133666992188,
+      "native_command_count": 17476,
+      "owned_command_count": 17472,
+      "followup": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-ssc-first-repair-followup.json",
+      "remaining_judgment_counts": "tests/fixtures/full_song_lua/sweep-2026-10-15-rite-ssc-remaining-judgment-counts.json",
+      "second_full_repair_started": false
+    },
+    "trinity_field_original_pending": {
+      "full_repairs_spent": 0,
+      "native_frames": 46907,
+      "replayed_frames": 46907,
+      "command_trace_mismatches": 48,
+      "callback_error": "native actor method Sprite.cropto has no semantic implementation",
+      "source": "background/default.lua:231",
+      "original_worker_continued": true,
+      "native_capture_complete_and_retained": true
     }
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 235,
+    "new_passed_fixtures": 237,
     "new_pending_charts": 104,
-    "new_processed_sources": 339,
+    "new_processed_sources": 341,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 14,
+    "unprocessed_sources": 12,
     "historical_pending_sources": 0,
     "historical_passed_sources": 148
   },
@@ -5385,22 +5512,6 @@
       "first_mismatch": []
     },
     {
-      "source_simfile": "minefield surfing_1/minefield.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 1,
-      "first_mismatch": [
-        {
-          "phase": "progress",
-          "seconds": -1.9999773502349854,
-          "field": "difficulty",
-          "native": "Difficulty_Challenge",
-          "deadsync": "Difficulty_Edit"
-        }
-      ]
-    },
-    {
       "source_simfile": "My Penny/My Penny.ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-2027895-1791982709619865985-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-2027895-1791982709619865985-0\n",
@@ -5652,20 +5763,15 @@
     },
     {
       "source_simfile": "rite of spring/rite.ssc",
-      "repair_attempts": 0,
+      "repair_attempts": 1,
       "failure": null,
-      "errors": [
-        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 8.960: missing captured subscriber identity for ScreenGameplay/19/1",
-        "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 9.186: missing captured subscriber identity for ScreenGameplay/19/1"
-      ],
-      "mismatch_count": 13777,
+      "errors": [],
+      "mismatch_count": 121,
       "first_mismatch": [
         {
-          "phase": "progress",
-          "seconds": 147.0004119873047,
-          "field": "failed",
-          "native": true,
-          "deadsync": false
+          "field": "command_query_count",
+          "native": 17476,
+          "deadsync": 17472
         }
       ]
     },
@@ -6187,6 +6293,48 @@
       ]
     },
     {
+      "source_simfile": "Trinity Field/Trinity Field.ssc",
+      "repair_attempts": 0,
+      "failure": null,
+      "errors": [
+        "OnCommand failed for Sprite: runtime error: native actor method cropto has no semantic implementation\nstack traceback:\n\t[C]: in function 'Sprite.cropto'\n\t[string \"/tmp/.tmpNpZp04/song/background/default.lua\"]:231: in function <[string \"/tmp/.tmpNpZp04/song/background/default.lua\"]:231>\n"
+      ],
+      "mismatch_count": 48,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0016",
+            "args": [],
+            "beat": 0.0052915215492248535,
+            "command": "OnCommand",
+            "definition_id": "def-0016",
+            "detail": {
+              "name": "OnCommand"
+            },
+            "kind": "command",
+            "line": 90,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": -1.1445578336715698,
+            "seq": 131,
+            "source": "song:/lua/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "OnCommand",
+            "source": "song:/lua/default.lua",
+            "line": 90,
+            "beat": 0.02877599187195301,
+            "seconds": -1.1337188482284546,
+            "args": null
+          }
+        }
+      ]
+    },
+    {
       "source_simfile": "TRIP MACHINE -Resuscitation MIX-/TRIP MACHINE -Resuscitation MIX-.ssc",
       "repair_attempts": 0,
       "failure": null,
@@ -6405,10 +6553,10 @@
     "note": "Earlier sweep checkpoints incorrectly carried the superseded one-mismatch replay forward as pending. The complete corrected replay and saved fixture already passed."
   },
   "next_actions": [
-    "Collect complete results from both original v6 workers; promptly save, locally decompress-byte-verify and commit each passing fixture, then continue their original queues.",
-    "Keep existing scoped full repairs running without restart; close complete passes, retain concrete mismatches and enforce at most two full repairs per chart.",
-    "Keep Spectrum and Igaku SSC pending on remaining concrete command/query mismatches after function metadata diagnostics; neither has spent a full repair on this fix.",
-    "Mawaru6 final repair starts only after its retained-capture diagnostic is clean; full count remains1 until launch and must never exceed2."
+    "Collect complete results from both original v6 workers; save, locally decompress-byte-verify and commit each passing fixture promptly, then continue their assigned original queues.",
+    "Keep the scoped full repairs running; Mawaru6 is on final attempt2, I Really Like You SSC is on first attempt1. Preserve all concrete mismatches and never exceed two full repairs per chart.",
+    "Complete Spectrum and Igaku retained-capture diagnostics without starting full chart repairs while other concrete mismatches remain.",
+    "Rite SSC remains pending after first repair: callback errors are gone, but two Judgment listener calls are absent near 146.65 seconds. Identify the source cause before using its one remaining full repair."
   ],
   "previous_goal_turn_classification": "progress",
   "resolved_historical_concrete_failures": [

@@ -1,0 +1,34 @@
+{
+  "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+  "status": "pending after retained-capture diagnostic; full repair not started",
+  "fix_commit": "3eb9c8bf3cff63a110acf0ca8e39f95548696b73",
+  "binary_sha256": "2f634c0b6929141c5f3848da71d984d34c1ed26b9df24bd8bbd57a87fed39906",
+  "candidate_sha256": "3acf5805c3838749c446ffc8277eef7b74c76f5715c43c35e5ba0a1ab4f082e9",
+  "trace_sha256": "0cd45eb83d74d4075152e6b67b24cdd67c7a01932309512f20cc51390c08963c",
+  "simfile_sha256": "029596d9d093479e06f71010fdda42b381856414c3bc8678f62ddf4aa70025ee",
+  "native_frames": 112654,
+  "diagnostic_replayed_frames": 5755,
+  "diagnostic_through_second": 5,
+  "diagnostic_exit": 2,
+  "archive_accepted": false,
+  "errors": [],
+  "original_full_mismatch_counts": {
+    "source_broadcast_params_unsupported": 19,
+    "source_broadcast": 19,
+    "command_query_count": 1,
+    "command_query_event": 99175
+  },
+  "diagnostic_mismatch_counts": {
+    "command_query_count": 1,
+    "command_query_event": 7605
+  },
+  "function_broadcast_metadata_mismatches_in_diagnostic": 0,
+  "remaining_command_counts": {"native": 8603, "owned": 8783},
+  "remaining_first_mismatch": "Owned ActorFrameTexture.GetTexture observation precedes native Actor.GetParent in spectrum/default.lua InitCommand at line559; command observation scope remains unresolved.",
+  "original_report_sha256": "42cd141ec6b1579727169f3eaa3c67b3af01ee196d317c2202684654fc3a162e",
+  "diagnostic_report_sha256": "690c5c4031b8d3a1f97220c77cad419c94415d57fa8c1065c8868389c50c338b",
+  "both_uncompressed_report_hashes_verified": true,
+  "all_candidate_members_and_original_native_capture_reused_byte_identically": true,
+  "full_repair_attempts_spent": 0,
+  "comparison_keys_tolerances_acceptance_predicate_unchanged": true
+}

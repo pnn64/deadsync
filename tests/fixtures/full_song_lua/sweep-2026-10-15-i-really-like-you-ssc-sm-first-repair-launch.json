@@ -1,0 +1,42 @@
+{
+  "status": "full replay running, exact child verified",
+  "supervisor_stage": "/home/parity/jobs/i-really-like-you-ssc-sm-first-repair-v1",
+  "replay_pid": 2865097,
+  "command": [
+    "/home/parity/jobs/simply-love-sm-linux-green-v1/full-song-lua",
+    "--archive",
+    "/home/parity/jobs/i-really-like-you-ssc-sm-first-repair-v1/chart-233/2e04426bca00ee39ac689d8666fef76efc5f2c5be93908151c26328282b59491.tar",
+    "--report",
+    "/home/parity/jobs/i-really-like-you-ssc-sm-first-repair-v1/chart-233/report.json"
+  ],
+  "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
+  "position": 233,
+  "full_repairs_spent": 1,
+  "no_third_full_repair": false,
+  "native_capture_reused": true,
+  "all_candidate_member_trace_simfile_uncompressed_bytes_verified": true,
+  "candidate_sha256": "2e04426bca00ee39ac689d8666fef76efc5f2c5be93908151c26328282b59491",
+  "trace_sha256": "4fc0012244c7a02bc1d7060c6339ec6f1a1aaa21ddfd3dae0eac00f62811699d",
+  "simfile_sha256": "6438069708d9f60a9df6ba4e35b63b2717a0981e50d35963b773b1cc32d35b4e",
+  "binary_sha256": "50a1cb7dca074bdabaab43a80242af57c2dd0bb192058b3d1b85b149f25696a3",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "fix_commit": "3601bca9d7e56c93ddcfc93bdeade059a13235e8",
+  "resolved_by_source_fix_commit": "3601bca9d7e56c93ddcfc93bdeade059a13235e8",
+  "build_proof": "/home/parity/jobs/simply-love-sm-linux-green-v1/proof.json",
+  "all_validation_groups_both_platforms_passed": 9,
+  "all_1175_raw_linux_and_cross_platform_normalized_source_pins_verified": true,
+  "all_linux_log_and_binary_hashes_verified": true,
+  "acceptance_keys_tolerances_predicate_unchanged": true,
+  "one_later_full_repair_maximum": true,
+  "previous_complete_native_frames": 209028,
+  "previous_callback_errors": 0,
+  "previous_mismatch_count": 1,
+  "previous_source_broadcast_count": {
+    "native": 5375,
+    "deadsync": 0
+  },
+  "native_helper_control_frames": 5935,
+  "native_helper_control": "sweep-2026-10-15-simply-love-sm-native-control.json",
+  "original_source_evidence": "sweep-2026-10-15-i-really-like-you-ssc-sm-source-evidence.json",
+  "publisher_stream_count": 148
+}

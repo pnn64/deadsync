@@ -1,0 +1,19 @@
+{
+  "fix_commit": "3601bca9d7e56c93ddcfc93bdeade059a13235e8",
+  "build_proof": "/home/parity/jobs/simply-love-sm-linux-green-v1/proof.json",
+  "binary_sha256": "50a1cb7dca074bdabaab43a80242af57c2dd0bb192058b3d1b85b149f25696a3",
+  "tested_source_root": "/home/parity/workspace/simply-love-sm-v1/deadsync",
+  "all_nine_checks_both_platforms_passed": true,
+  "all_1175_raw_linux_and_cross_platform_normalized_source_pins_verified": true,
+  "scope": "first full repair for I Really Like You SSC actual missing Simply Love SM SystemMessage broadcasts",
+  "full_repair_attempt": 1,
+  "one_later_full_repair_maximum": true,
+  "complete_original_native_frames": 209028,
+  "original_candidate_sha256": "2e04426bca00ee39ac689d8666fef76efc5f2c5be93908151c26328282b59491",
+  "original_captures_reused_byte_identically": true,
+  "native_control_frames": 5935,
+  "native_helper_calls_verified": 7,
+  "global_original_helper_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
+  "global_original_helper_unchanged": true,
+  "comparison_keys_tolerances_acceptance_predicate_unchanged": true
+}
