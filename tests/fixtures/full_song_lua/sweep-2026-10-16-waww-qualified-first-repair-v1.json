@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "WAWW first bounded full repair completed on retained original capture; comparisons unchanged; no automatic second attempt",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd",
