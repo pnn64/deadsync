@@ -997,6 +997,24 @@ impl SongLuaLiveScene {
         } else {
             runtime.set(crate::SONG_LUA_RUNTIME_BPS_KEY, crate::song_bps_at_beat(beat as f32, &self.context))?;
         }
+        // GameState::UpdateSongPosition updates each enabled PlayerState
+        // using its selected Steps timing at the same music timestamp.
+        let positions: Table = runtime.raw_get(crate::runtime::PLAYER_SONG_POSITIONS_KEY)?;
+        for player in 0..LUA_PLAYERS {
+            if !self.context.players[player].enabled { continue; }
+            let owned: Table = positions.raw_get(player + 1)?;
+            let position = self.context.player_timing[player].as_ref()
+                .or(self.context.song_timing.as_ref())
+                .map(|timing| timing.get_song_position(frame.music_seconds as f32));
+            owned.raw_set(crate::SONG_LUA_RUNTIME_SECONDS_KEY, frame.music_seconds as f32)?;
+            owned.raw_set(crate::SONG_LUA_RUNTIME_BEAT_KEY,
+                position.as_ref().map_or(frame.beat as f32, |position| position.beat))?;
+            owned.raw_set(crate::SONG_LUA_RUNTIME_BPS_KEY, position.as_ref()
+                .map_or(runtime.raw_get::<f32>(crate::SONG_LUA_RUNTIME_BPS_KEY)?,
+                    |position| position.bpm / 60.0))?;
+            owned.raw_set("__songlua_freeze", position.as_ref().is_some_and(|position| position.is_in_freeze))?;
+            owned.raw_set("__songlua_delay", position.as_ref().is_some_and(|position| position.is_in_delay))?;
+        }
         crate::set_compile_song_runtime_delta_values(&self.lua,
             (beat - self.last_beat) as f32, frame.delta_seconds as f32)?;
         self.last_beat = beat;
@@ -4005,6 +4023,58 @@ end }
             }
             assert!((values.get::<f64>(3).expect("music seconds") - seconds).abs() < 1e-5);
             for index in [4, 5] { assert_eq!(values.get::<f64>(index).expect("current BPS"), bps); }
+        }
+    }
+
+    #[test]
+    fn live_player_song_positions_use_selected_chart_timing() {
+        use deadsync_rules::timing::{DelaySegment, StopSegment, TimingData, TimingSegments, WarpSegment};
+        let mut compiled = compile_with_context("player-song-positions", r#"
+return Def.ActorFrame { OnCommand = function(self)
+    self:SetUpdateFunction(function()
+        POSITIONS = {}
+        for _, player in ipairs({PLAYER_1, PLAYER_2}) do
+            local position = GAMESTATE:GetPlayerState(player):GetSongPosition()
+            POSITIONS[#POSITIONS+1] = {position:GetSongBeat(), position:GetCurBPS(),
+                position:GetMusicSeconds(), position:GetFreeze(), position:GetDelay()}
+        end
+        GLOBAL_BEAT = GAMESTATE:GetSongPosition():GetSongBeat()
+    end)
+end }
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.players[1].enabled = true;
+            context.song_timing = Some(TimingData::from_segments(0.0, 0.0,
+                &TimingSegments { bpms: vec![(0.0, 60.0)], ..Default::default() }, &[]));
+            context.player_timing = [
+                Some(TimingData::from_segments(0.0, 0.0,
+                    &TimingSegments { bpms: vec![(0.0, 120.0)],
+                        warps: vec![WarpSegment { beat: 4.0, length: 20.0 }],
+                        ..Default::default() }, &[])),
+                Some(TimingData::from_segments(0.0, 0.0,
+                    &TimingSegments { bpms: vec![(0.0, 60.0)],
+                        stops: vec![StopSegment { beat: 1.0, duration: 1.0 }],
+                        delays: vec![DelaySegment { beat: 3.0, duration: 0.5 }], ..Default::default() }, &[])),
+            ];
+        });
+        let mut scene = compiled.live_scene.take().expect("live scene");
+        for seconds in [1.5_f32, 2.5, 4.25] {
+            let output = scene.advance(SongLuaLiveFrame { music_seconds: seconds.into(),
+                screen_seconds: seconds.into(), delta_seconds: 0.1,
+                ..Default::default() }).expect("live frame");
+            assert!(output.errors.is_empty());
+            let positions = scene.lua.globals().get::<Table>("POSITIONS").unwrap();
+            for player in 0..LUA_PLAYERS {
+                let expected = scene.context.player_timing[player].as_ref().unwrap()
+                    .get_song_position(seconds);
+                let actual = positions.get::<Table>(player + 1).unwrap();
+                assert_eq!(actual.get::<f32>(1).unwrap(), expected.beat, "player {player}");
+                assert_eq!(actual.get::<f32>(2).unwrap(), expected.bpm / 60.0);
+                assert_eq!(actual.get::<f32>(3).unwrap(), seconds);
+                assert_eq!(actual.get::<bool>(4).unwrap(), expected.is_in_freeze);
+                assert_eq!(actual.get::<bool>(5).unwrap(), expected.is_in_delay);
+            }
+            assert_eq!(scene.lua.globals().get::<f32>("GLOBAL_BEAT").unwrap(), seconds);
         }
     }
 

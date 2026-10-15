@@ -8,6 +8,7 @@ use crate::{
 };
 
 pub(crate) struct SongLuaClock(pub deadsync_rules::timing::TimingData);
+pub(crate) const PLAYER_SONG_POSITIONS_KEY: &str = "__songlua_player_positions";
 
 pub fn create_song_runtime_table(
     lua: &Lua,
@@ -29,6 +30,21 @@ pub fn create_song_runtime_table(
     table.set(SONG_LUA_RUNTIME_RATE_KEY, song_music_rate(context))?;
     table.set("__songlua_freeze", false)?;
     table.set("__songlua_delay", false)?;
+    if context.live {
+        // PlayerState owns a reset SongPosition before the first gameplay
+        // update. Keep each player's position separate from GameState's.
+        let positions = lua.create_table()?;
+        for index in 1..=crate::LUA_PLAYERS {
+            let position = lua.create_table()?;
+            for key in [SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_SECONDS_KEY,
+                SONG_LUA_RUNTIME_BPS_KEY, SONG_LUA_RUNTIME_RATE_KEY,
+                "__songlua_freeze", "__songlua_delay"] {
+                position.raw_set(key, table.raw_get::<Value>(key)?)?;
+            }
+            positions.raw_set(index, position)?;
+        }
+        table.raw_set(PLAYER_SONG_POSITIONS_KEY, positions)?;
+    }
     let bpms = lua.create_table()?;
     for (index, &(beat, bpm)) in context.song_timing_bpms.iter().enumerate() {
         let segment = lua.create_table()?;

@@ -587,9 +587,15 @@ pub fn create_player_tables(
     song_runtime: &Table,
     song: &Table,
 ) -> mlua::Result<PlayerLuaTables> {
+    let positions = if context.live {
+        let positions: Table = song_runtime.raw_get(crate::runtime::PLAYER_SONG_POSITIONS_KEY)?;
+        [positions.raw_get::<Table>(1)?, positions.raw_get::<Table>(2)?]
+    } else {
+        [song_runtime.clone(), song_runtime.clone()]
+    };
     let players = [
-        create_player_state_table(lua, context.players[0].clone(), 0, song_runtime)?,
-        create_player_state_table(lua, context.players[1].clone(), 1, song_runtime)?,
+        create_player_state_table(lua, context.players[0].clone(), 0, &positions[0])?,
+        create_player_state_table(lua, context.players[1].clone(), 1, &positions[1])?,
     ];
     let all_steps: Table = song.raw_get("__songlua_steps")?;
     let mut steps = Vec::with_capacity(LUA_PLAYERS);

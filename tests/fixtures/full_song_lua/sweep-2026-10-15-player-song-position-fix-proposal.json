@@ -1,0 +1,45 @@
+{
+  "status": "target regression1, parser10 and live70 pass on Windows/Linux; replay33/identity/build checks running, helper not selected",
+  "changed_sources": [
+    "crates/deadsync-song-lua/src/runtime.rs",
+    "crates/deadsync-song-lua/src/song_tables.rs",
+    "crates/deadsync-song-lua/src/live.rs"
+  ],
+  "source_change": "Own reset SongPosition runtime for each player in live scenes. Update enabled players from selected Steps TimingData at shared music timestamp before authored callbacks. Keep global song position independent.",
+  "windows_source_pin_count": 1175,
+  "all_windows_normalized_source_pins_verified": true,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 302.28659560000233,
+      "log_sha256": "66fa33641b1c70486f30c6de95f493304fb119c89143abb1ca59d6f7601caaa1",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 607 filtered out; finished in 0.26s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 6.767345700005535,
+      "log_sha256": "46ee476e2a02a1acd2fd6e918461700d4a0206069d5ed22b14af32093d857a2b",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 598 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 37.20283919999201,
+      "log_sha256": "7975d1d08f597b1784bd269f0a0bedd9f3fc4f912ea2956c44d766dbfd081247",
+      "results": [
+        "test result: ok. 70 passed; 0 failed; 0 ignored; 0 measured; 538 filtered out; finished in 35.77s"
+      ]
+    }
+  ],
+  "linux_progress_proof": "/home/parity/jobs/player-song-position-linux-green-v1/progress.json",
+  "red_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-player-song-position-red-validation.json",
+  "full_pop_repairs_spent": 0,
+  "acceptance_comparisons_changed": false,
+  "active_original_sweep_sources_modified": false
+}
