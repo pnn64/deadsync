@@ -1,0 +1,2090 @@
+{
+  "deferred_chart": "mawaru9/mawaru9.sm",
+  "user_requested_skip_preserved": true,
+  "replay_started": false,
+  "removed_only_inactive_duplicate_extraction": "/tmp/.tmpM4a8ED",
+  "all_extracted_payload_bytes_equal_preserved_compressed_capture": true,
+  "two_process_argv_cwd_and_open_file_checks_clear": true,
+  "capture_path": "/home/parity/jobs/mawaru9-canonical-handles-first-repair-v1/chart-495/960f1b94150ecbd3eff3270ffed0506c5e0c4ef795025e93046704ed412a6811.tar.zst",
+  "capture_sha256": "960f1b94150ecbd3eff3270ffed0506c5e0c4ef795025e93046704ed412a6811",
+  "files": [
+    {
+      "path": "manifest.json",
+      "bytes": 203964,
+      "sha256": "440147f16772263fc6c19052003a78e2bd1caee972ec4dd3e6d1dae66e4c0bc1"
+    },
+    {
+      "path": "song/Effect 4/default.lua",
+      "bytes": 5432,
+      "sha256": "ea81c174ca4d30e551f081fe711b927e067586c3ada2c4cfb20194b52a32ce94"
+    },
+    {
+      "path": "song/Effect 4/peace.png",
+      "bytes": 418195,
+      "sha256": "8e76771d6e4ae367d5c5b2ac25ce55baf7477496dc344e8a1ba103ccf0d04af3"
+    },
+    {
+      "path": "song/bg5.png",
+      "bytes": 128381,
+      "sha256": "fbede97c58fbd2aa17d1500ef2ff1b50c7fd5b3434993d2a7b3abbfc59b93ab8"
+    },
+    {
+      "path": "song/bg5/bmt 2x2.png",
+      "bytes": 911600,
+      "sha256": "f9e16f1101ac09a0d50af30e10947c4605c48850241d7e8fa956bc4c560bbe06"
+    },
+    {
+      "path": "song/bg5/default.lua",
+      "bytes": 1004,
+      "sha256": "448e79a9147b30973eecccfc6a523e185b7fdf163b391ed04fc3e428bd733552"
+    },
+    {
+      "path": "song/bg8.png",
+      "bytes": 511202,
+      "sha256": "f5e622a34776ef6ebd87a25787e497159e6ec5a0dab6c182a682cece241a5161"
+    },
+    {
+      "path": "song/lua/_aya_run 3x2.png",
+      "bytes": 92732,
+      "sha256": "f407ec4b18641cd046f9a64636693553db3e43b99dfdebd37ff906fc5ea9b653"
+    },
+    {
+      "path": "song/lua/_explosion 5x5.png",
+      "bytes": 102497,
+      "sha256": "ae5c874e5b2b922af30ab4b46c735fa2c951b13dc901c22f636e4d7391d99b46"
+    },
+    {
+      "path": "song/lua/_pulse 4x4.png",
+      "bytes": 46846,
+      "sha256": "65eaa2194e03addfd24d1f8518d1dff525f5c847406e7e213a147ca385018bd1"
+    },
+    {
+      "path": "song/lua/_static 4x1.png",
+      "bytes": 1029278,
+      "sha256": "8500b1d8ac859a7e47bb119251cc0441c469efeba5f54ef6b9aa17d4c4a64f7b"
+    },
+    {
+      "path": "song/lua/anders/_dead 2x2.png",
+      "bytes": 35639,
+      "sha256": "796a0fd126de09a6c90003aa8325bf153768b1b5475d95f4b3bc57a7d63ff5d2"
+    },
+    {
+      "path": "song/lua/anders/anders 6x5.png",
+      "bytes": 375893,
+      "sha256": "ced4e56890d88a2648273669fb24fe37f321f59992b536135424aaa1dbe1ef7c"
+    },
+    {
+      "path": "song/lua/anders/andersbar.png",
+      "bytes": 448,
+      "sha256": "c284d8afe479dfae210414d7ca1c2f797891961ed2cc924c9173d62ec1d48ffb"
+    },
+    {
+      "path": "song/lua/anders/bg.png",
+      "bytes": 51892,
+      "sha256": "4568795cab0a3cecc2593823509e63f2a7a4f06574dc630643b418f90ea268ad"
+    },
+    {
+      "path": "song/lua/anders/default.lua",
+      "bytes": 11267,
+      "sha256": "41a0374c171a26db57a3c8b5ffd4f1738523479d225c7cf7cb9e817bab6fc32f"
+    },
+    {
+      "path": "song/lua/anders/front_bar.png",
+      "bytes": 5825,
+      "sha256": "8d6db76f9d22dc12462f6ecc18d8e13327ca4e39705c3be242bf0720aaa7c6ee"
+    },
+    {
+      "path": "song/lua/anders/pad.png",
+      "bytes": 20990,
+      "sha256": "71fc7b76be1b8815ef470a42e31dfaf9a4e1e5d0950ef9cd687461ebd8f56a5e"
+    },
+    {
+      "path": "song/lua/anders/pointer.png",
+      "bytes": 664,
+      "sha256": "3040d4e4cf84812a338ca90d726559916da86cbc2343a7d10219abdae86146e0"
+    },
+    {
+      "path": "song/lua/anders/response 1x2.png",
+      "bytes": 6184,
+      "sha256": "f81744945b82acbafc8c0a3cdea653b2d19b88f4d01d79e437230056c71a5bbf"
+    },
+    {
+      "path": "song/lua/anders/rob.png",
+      "bytes": 7306,
+      "sha256": "e94efb6957c6ea60caad9f2c428d2606e8f99b10a0729ecf2fac82834fc396b7"
+    },
+    {
+      "path": "song/lua/anders/uok 1x2.png",
+      "bytes": 4342,
+      "sha256": "ea2c168aabd05428ef56c3c307157df45aa9785ec36ff58895377665e841c032"
+    },
+    {
+      "path": "song/lua/ashe_bode.png",
+      "bytes": 8546,
+      "sha256": "1efa1287592fc20cb87d0cbee5543586ee37663c78091b36e80527e0e3598248"
+    },
+    {
+      "path": "song/lua/ashe_head 3x1.png",
+      "bytes": 12132,
+      "sha256": "08069a2cddc0b328cac48b2a6a23a4978d560181e3ac3f86a21fa03eb7e365aa"
+    },
+    {
+      "path": "song/lua/aya_stand.png",
+      "bytes": 17364,
+      "sha256": "74aca03b43a480842e59da20d31289e96a09035e80f57db19eb2a84e374eb250"
+    },
+    {
+      "path": "song/lua/bee/bee.mpg",
+      "bytes": 467124,
+      "sha256": "2544f83c730a1ac9ccad51a979432af9147b27c61745ed6bf1ad3389ddbf0dfb"
+    },
+    {
+      "path": "song/lua/bee/default.lua",
+      "bytes": 306,
+      "sha256": "c2656bc53cbdfb3b1981df8fde7f367e476c8fc3d719c9a914977e8ffff8e767"
+    },
+    {
+      "path": "song/lua/bg.png",
+      "bytes": 147108,
+      "sha256": "1963792f9a096214093523df9a9281067061a21cf8ca3e33c3e9a1bb8e43556f"
+    },
+    {
+      "path": "song/lua/blomby/cars 4x2.png",
+      "bytes": 53910,
+      "sha256": "9eac904571a311d90d37a7d6c035b2841f59d6939999cc84d56c23b90b9f7f1b"
+    },
+    {
+      "path": "song/lua/blomby/default.lua",
+      "bytes": 32257,
+      "sha256": "b859745373900f1c4328107c6c1a4c7ce471a80a60f7bf18834428dbec6c2de0"
+    },
+    {
+      "path": "song/lua/blomby/road.png",
+      "bytes": 123985,
+      "sha256": "a6959e2503b3a866281e581e837703746ce694ce825259e552d1d24342aaff7b"
+    },
+    {
+      "path": "song/lua/blomby/triangle.png",
+      "bytes": 551,
+      "sha256": "30289e81e2b2317ef43f590edf56b57be00d55f229d50ec285fb61b541b6e620"
+    },
+    {
+      "path": "song/lua/body/_static 4x1.png",
+      "bytes": 1029278,
+      "sha256": "8500b1d8ac859a7e47bb119251cc0441c469efeba5f54ef6b9aa17d4c4a64f7b"
+    },
+    {
+      "path": "song/lua/body/bg.lua",
+      "bytes": 520,
+      "sha256": "6012002e84630f6004bf5fddc8660429e897fde1ff3b7f83cb06cdd2322d6b62"
+    },
+    {
+      "path": "song/lua/body/bgbig.png",
+      "bytes": 98765,
+      "sha256": "fcd6899774129d12dff287be7de0d5dec124665899c938628483de786622c2a6"
+    },
+    {
+      "path": "song/lua/body/checkpoint.png",
+      "bytes": 302,
+      "sha256": "48f32efec11fcc8eced890e4d4ee4423460045ccf4047ff42ab6101f6cc59228"
+    },
+    {
+      "path": "song/lua/body/cp2/_char 6x2.png",
+      "bytes": 68900,
+      "sha256": "9659d79dc0e550d6ace7f67a468c785f85f8a9007e1f8c7aaabda5e55a388022"
+    },
+    {
+      "path": "song/lua/body/default.lua",
+      "bytes": 141560,
+      "sha256": "7705c932417cf66a30d32441bdc6e7feeaeb560edaf074ce34dcaabf5d080b2e"
+    },
+    {
+      "path": "song/lua/body/ending_gray.png",
+      "bytes": 131274,
+      "sha256": "424a7b27a31f708f6d904f151a9207b17cfdcd5442ac686fe9b73abaff7b6db2"
+    },
+    {
+      "path": "song/lua/body/ending_normal.png",
+      "bytes": 160454,
+      "sha256": "e4567a181a540808ab350dd700f535fca4986a7dc2338808c8499e3c25afa5cd"
+    },
+    {
+      "path": "song/lua/body/glitch 2x2.png",
+      "bytes": 1118357,
+      "sha256": "b5074c5d5e68635c1f89761bde818eb1ada2103b3ae8e018edb518fa3d6cdd28"
+    },
+    {
+      "path": "song/lua/body/p1/_char 6x2.png",
+      "bytes": 81019,
+      "sha256": "05b4266e7fd18ab90c00dc21c312bef3111150167b9836f4fb443eb996ffc440"
+    },
+    {
+      "path": "song/lua/body/p2/_char 6x2.png",
+      "bytes": 70081,
+      "sha256": "bc283f0dd317df6adc6a8e16125503ae88033d4274cc00527361548b5dd9a565"
+    },
+    {
+      "path": "song/lua/body/pulse2 1x4.png",
+      "bytes": 23140,
+      "sha256": "2d81a3bbc336fcbde16d92c9ee3e3acf6ab2a364b74eb0b80ddc8faeff358cac"
+    },
+    {
+      "path": "song/lua/body/roadTexG1.png",
+      "bytes": 142090,
+      "sha256": "b6f7ac5156d72c4d51114686b4b04322c79190430e8df8d409497c5ec55f171d"
+    },
+    {
+      "path": "song/lua/body/roadTexG2.png",
+      "bytes": 129205,
+      "sha256": "dc23bb1b64340ba75de3b4d9578ec0c9a8ba033d3f20863a15d6c43588eb693f"
+    },
+    {
+      "path": "song/lua/body/roadTexG3.png",
+      "bytes": 141979,
+      "sha256": "6ddc8bb358ee96a2c79bd979a398d632ec180d2ac36e65afa0755cdd42b74d68"
+    },
+    {
+      "path": "song/lua/body/roadTexInv.png",
+      "bytes": 880,
+      "sha256": "63003ef78c03d9569c1b92a72f1fbff35b39bfd9d87308ea64539d02d6cfc85e"
+    },
+    {
+      "path": "song/lua/body/shiny.png",
+      "bytes": 26859,
+      "sha256": "6bac4050fa4342407df8f6ddd3851b43bb4eab81bdf83f27f00f27f4370e8f91"
+    },
+    {
+      "path": "song/lua/body/shinyInv.png",
+      "bytes": 15178,
+      "sha256": "9b6915c99af96b426ec9247aa24b91def0cf1f973d31ea494791cd89bf8719f6"
+    },
+    {
+      "path": "song/lua/body/star.png",
+      "bytes": 317,
+      "sha256": "b2bec32e14e4397fba11ab54198d8b48fd0846481aae62597373e32099665096"
+    },
+    {
+      "path": "song/lua/body/trail.png",
+      "bytes": 2720,
+      "sha256": "bda9fc2de628e2d9cd4a2b61395866fc24fb24199ac9f8a631af46dc19306afd"
+    },
+    {
+      "path": "song/lua/body/wall.txt",
+      "bytes": 3390,
+      "sha256": "73bebb627d3ef1eabb5e1a81c9ffb3dc79bf6fe4dc97bddba2ecc9816dcee48a"
+    },
+    {
+      "path": "song/lua/body/wallTexF.png",
+      "bytes": 10957,
+      "sha256": "fe74bba692f3cb87019579d3e7950e4d9c8d8241109ee8fe6e1bd6e423308028"
+    },
+    {
+      "path": "song/lua/body/wallTexS.png",
+      "bytes": 602,
+      "sha256": "def241c6442f55e09958a0a835b60a022ec30539e1a392156bb6e142fe996c5c"
+    },
+    {
+      "path": "song/lua/bomb.png",
+      "bytes": 6118,
+      "sha256": "64baf0f1abfe4bcc61a81336718c3ee47ffb66ce8b380b56d771fea6fcbaa0ef"
+    },
+    {
+      "path": "song/lua/bulb 2x1.png",
+      "bytes": 3758,
+      "sha256": "627cebabbb171ad4c7ec84a8714db3b9213ab9a32dd7f81008fd06704b2292de"
+    },
+    {
+      "path": "song/lua/chan_bode.png",
+      "bytes": 8295,
+      "sha256": "1653f2d5f5b9425ae2702d4350afadfc36762ec4837858e42dd3b5657a6528f2"
+    },
+    {
+      "path": "song/lua/chan_head 3x1.png",
+      "bytes": 5729,
+      "sha256": "2d747f9b733786b95d0edb2a20fd1cc6dda76759bdc0aceab31aa692752f3fc9"
+    },
+    {
+      "path": "song/lua/chancetime.png",
+      "bytes": 15808,
+      "sha256": "85512f1fa38d8b2955cd5114b747dad8cda416b36fa583171403b0fddd68eac3"
+    },
+    {
+      "path": "song/lua/chike/bar.png",
+      "bytes": 23065,
+      "sha256": "9b5c2dd97ac9b77a3be9a5ec053029ca4d9ac303ca253e8d4f227c2d7383f99b"
+    },
+    {
+      "path": "song/lua/chike/bg.png",
+      "bytes": 12426,
+      "sha256": "297ecf7d7262a1b1ca0edc39b27fcb96cf8bae89ed360cf401112bd766d75f10"
+    },
+    {
+      "path": "song/lua/chike/default.lua",
+      "bytes": 7015,
+      "sha256": "ba650e4e603c657adb5a08d1c14b785fcaca57912549a0d0531d7947478cbfe2"
+    },
+    {
+      "path": "song/lua/chike/frame 1x2.png",
+      "bytes": 4954,
+      "sha256": "dfb5280481544877e8e83ef880ba7867b783ef2096b27a60f6b703296bfc9e51"
+    },
+    {
+      "path": "song/lua/chike/gameover1.png",
+      "bytes": 7078,
+      "sha256": "9d69b04c955419a84aafa0f3cd0f1e1f172f2c496d92ecb32528b67ba1dc68f2"
+    },
+    {
+      "path": "song/lua/chike/gameover2.png",
+      "bytes": 2794,
+      "sha256": "1e6916891f20a8ceda3cc8693eb5fd6ae1a2b81d748470ac0b4675826aaa6a17"
+    },
+    {
+      "path": "song/lua/curtainl.png",
+      "bytes": 71335,
+      "sha256": "45d389e1c8d111778258cfcc56d94d7e23557f32260a13007ac8c3c259be8e0a"
+    },
+    {
+      "path": "song/lua/curtainr.png",
+      "bytes": 75569,
+      "sha256": "6e4e0a37ca7e97e8b5f835db6cc8a2cdec8ec4e74f006cc76525d20efd5dfff0"
+    },
+    {
+      "path": "song/lua/curtaintop.png",
+      "bytes": 48264,
+      "sha256": "a0fbf080874521a20b379eb03f016888e67cf759f4f89ccf76a7b380a0c01163"
+    },
+    {
+      "path": "song/lua/darren 3x1.png",
+      "bytes": 36259,
+      "sha256": "85f6b3fbf458d7cbb435858b517ad325979bc59393f94dc87c0bdd09daf68b14"
+    },
+    {
+      "path": "song/lua/default.lua",
+      "bytes": 132936,
+      "sha256": "18de209dc15b3f6dcbc128c80255de296d537c4f4ee5942d2d1b5c49009af589"
+    },
+    {
+      "path": "song/lua/finale/_ashe 3x2.png",
+      "bytes": 55507,
+      "sha256": "cf7d8917405b270099b5cd698b6752dd2107c94503418fef088f4731bb4f60bf"
+    },
+    {
+      "path": "song/lua/finale/_chan 3x2.png",
+      "bytes": 51824,
+      "sha256": "739021fc36c773ed8afc9d104f0274aa12fedc1de6bfaee9bf307af1c8c3272d"
+    },
+    {
+      "path": "song/lua/finale/airbox.png",
+      "bytes": 8496,
+      "sha256": "6eb210e0f404ebe9bb53691c96a121652512df1964554753fa4d77112d057eea"
+    },
+    {
+      "path": "song/lua/finale/asheslide.png",
+      "bytes": 12405,
+      "sha256": "4a5c1c8b68e1a8296d926fdefe343dd66387412b7e5337ae1e3815d403e118b3"
+    },
+    {
+      "path": "song/lua/finale/ashesplat.png",
+      "bytes": 7612,
+      "sha256": "3b98eb07c2ce0fa03e287bc2875260710cf11fadbc625003fc1a12dc0a03d015"
+    },
+    {
+      "path": "song/lua/finale/ayaze 2x1.png",
+      "bytes": 22888,
+      "sha256": "c60489f00d0cd595e5bee76c53dbc63051f5dbdd7062cbd1bf02c7433c44a5c8"
+    },
+    {
+      "path": "song/lua/finale/chanslide.png",
+      "bytes": 12808,
+      "sha256": "c29bac21d5872dfa7643744d36dcfa2d38245fcc4441ec223e124dcd000fc7af"
+    },
+    {
+      "path": "song/lua/finale/chansplat.png",
+      "bytes": 7991,
+      "sha256": "d514dfd5909351ba0aeb42a9faf34572da358afb494842eeb707b7988f4b454b"
+    },
+    {
+      "path": "song/lua/finale/default.lua",
+      "bytes": 44268,
+      "sha256": "6a88f1ba4ea5041ca5bc78a214c83d645708a657a1e2cb97f1e92f63d939442a"
+    },
+    {
+      "path": "song/lua/finale/door.png",
+      "bytes": 548,
+      "sha256": "6cf91a6fb5c907d165c10d6114f3027fb5b7167202e699ec48193a39b914ffe0"
+    },
+    {
+      "path": "song/lua/finale/doorback.png",
+      "bytes": 276,
+      "sha256": "27270e96dcca260ad4acd067f4cbff67e52e30395dddfe33e7382fbf60ed439c"
+    },
+    {
+      "path": "song/lua/finale/doormodel.txt",
+      "bytes": 3394,
+      "sha256": "2a610dcf278ea500b26aff6ee08c08879fe161c98c31eb8330b75930011d65ac"
+    },
+    {
+      "path": "song/lua/finale/floor.png",
+      "bytes": 990,
+      "sha256": "83d7254014c3bca40a728d66d7c0b72ba340329329310b2f4242ad75cb7e8c65"
+    },
+    {
+      "path": "song/lua/finale/floortexside.png",
+      "bytes": 269,
+      "sha256": "95403f91ab8a91c1e0b1b0b8296ae0bb96c17d074e1650b0fbce6a3f30ca39ab"
+    },
+    {
+      "path": "song/lua/finale/inst.png",
+      "bytes": 7229,
+      "sha256": "71c98921f055017be2f14d720d44d6bc806652771757d2a22bb0c26db8c65a73"
+    },
+    {
+      "path": "song/lua/finale/jon 13x1.png",
+      "bytes": 31913,
+      "sha256": "ef934917893ba095535b08c17a81ce9faa3264050e9325b7122ccbfc17bcc13b"
+    },
+    {
+      "path": "song/lua/finale/smallbox.png",
+      "bytes": 4868,
+      "sha256": "2410cb54661bdff979b25cc238cad4357961fae87e74c4117c379d805c516e9a"
+    },
+    {
+      "path": "song/lua/finale/wall.png",
+      "bytes": 4603,
+      "sha256": "dadd8b231ce3312c46ad8e7ffce066070e6e953cb5c14d8c59480bfc34dfe979"
+    },
+    {
+      "path": "song/lua/flame 2x1.png",
+      "bytes": 1849,
+      "sha256": "abf67794a2b056ea914dc9e8fee5bb590284aff3764fe80c02e8fac442b281eb"
+    },
+    {
+      "path": "song/lua/fuse 1x10.png",
+      "bytes": 21294,
+      "sha256": "825caf3df82badd47fe86ac2343374d520a3ef45ac72536e030679c5c65fd3db"
+    },
+    {
+      "path": "song/lua/glados/16th/16arrowmesh.txt",
+      "bytes": 16812,
+      "sha256": "a895b774add83c68d9cf38d9f45370de629ebdeadde990f25728e53c8814eb73"
+    },
+    {
+      "path": "song/lua/glados/16th/16tex.ini",
+      "bytes": 82,
+      "sha256": "e933410cfe034b96159d1b9d22d9380c456b1c1223fb29c3d6b71a0c0e47dcaa"
+    },
+    {
+      "path": "song/lua/glados/16th/16th.txt",
+      "bytes": 412,
+      "sha256": "271198a8900d9d92fded7edcbe91fab7e23aea3df37499227233d89d7d277ebf"
+    },
+    {
+      "path": "song/lua/glados/16th/_16ths.png",
+      "bytes": 314,
+      "sha256": "5ccc104f54a8c938d51d63ba5abfe25599111edcbfa3ca3e28c69685cdf1ee55"
+    },
+    {
+      "path": "song/lua/glados/16th/shell.png",
+      "bytes": 7452,
+      "sha256": "dd42b7bf285a80759f9d4aad09ccabb80b74ba9994f9f3b88803d8788f5ab0cb"
+    },
+    {
+      "path": "song/lua/glados/4th/4arrowmesh.txt",
+      "bytes": 16811,
+      "sha256": "526d0cc24d4079d77ce5ae23bb4d2499fc39a6f7e554da12c025a30121eb44da"
+    },
+    {
+      "path": "song/lua/glados/4th/4tex.ini",
+      "bytes": 81,
+      "sha256": "d0a8a8ecdb605b4c0ff7b54983b216dab3162f014aac6d601bbb6764c751afa4"
+    },
+    {
+      "path": "song/lua/glados/4th/4th.txt",
+      "bytes": 411,
+      "sha256": "cb5955171a996e8c011d8ac6ad2913eb764ccdf1d5defa65b09a86f50284851a"
+    },
+    {
+      "path": "song/lua/glados/4th/_4ths.png",
+      "bytes": 308,
+      "sha256": "968f3ec4db127f7fae4c682a81c401aac502e88ef732a36492d7ded7210957ba"
+    },
+    {
+      "path": "song/lua/glados/4th/shell.png",
+      "bytes": 7452,
+      "sha256": "dd42b7bf285a80759f9d4aad09ccabb80b74ba9994f9f3b88803d8788f5ab0cb"
+    },
+    {
+      "path": "song/lua/glados/8th/8arrowmesh.txt",
+      "bytes": 16811,
+      "sha256": "5fba1f81bb6797d16882ce59f89a641153ec2967559e81655b0089b3b51673be"
+    },
+    {
+      "path": "song/lua/glados/8th/8tex.ini",
+      "bytes": 81,
+      "sha256": "72a2b93af1e53d9e5f0b96d6224d61bb35a0513403bedb33da2f7208e2f58852"
+    },
+    {
+      "path": "song/lua/glados/8th/8th.txt",
+      "bytes": 411,
+      "sha256": "34e69df9b3aa270c0631a9ef80997367b2599ee562f1c3eabb92733a4da1aed5"
+    },
+    {
+      "path": "song/lua/glados/8th/_8ths.png",
+      "bytes": 227,
+      "sha256": "9845033b056754afe20ba0aa6eb72dbbb5efe847fc31e2387152fcaf3563b63a"
+    },
+    {
+      "path": "song/lua/glados/8th/shell.png",
+      "bytes": 7452,
+      "sha256": "dd42b7bf285a80759f9d4aad09ccabb80b74ba9994f9f3b88803d8788f5ab0cb"
+    },
+    {
+      "path": "song/lua/glados/Portal 4x1.png",
+      "bytes": 57959,
+      "sha256": "c011c239202e0e8219ae91a00418fb1b64aa0d7c01c0df522abfe73f93b49938"
+    },
+    {
+      "path": "song/lua/glados/default.lua",
+      "bytes": 74524,
+      "sha256": "01de8cd087db21cdcb03a124ae170fae02e6b4f285d76ca0f905dbbe1255ba72"
+    },
+    {
+      "path": "song/lua/glados/pad/black paint sphere add.png",
+      "bytes": 1087,
+      "sha256": "d605b01dc157964c036250f0115c2c7741142f63b698b2f42c8046f1b92de0ae"
+    },
+    {
+      "path": "song/lua/glados/pad/black paint.png",
+      "bytes": 1317,
+      "sha256": "15a98251198f6021690c1e7be0c957655f8f3977ef968d2e78758108562ca78a"
+    },
+    {
+      "path": "song/lua/glados/pad/blue panel.png",
+      "bytes": 7015,
+      "sha256": "7ac0340d92d5a56e32efa95fc1a7d2db9960f0aa1ab4af0143123754b57c12a1"
+    },
+    {
+      "path": "song/lua/glados/pad/corner sticker (nomipmaps).png",
+      "bytes": 6513,
+      "sha256": "eedd56783f73ffc3dae1852d3e6b261ad27872fc4546b559f50018ec5379fec8"
+    },
+    {
+      "path": "song/lua/glados/pad/feet sphere add.png",
+      "bytes": 1155,
+      "sha256": "78beb3838a7448cd8c1571a91a3eeecf78fd478c68154e6a6e6b083cfaf868ec"
+    },
+    {
+      "path": "song/lua/glados/pad/feet.png",
+      "bytes": 4350,
+      "sha256": "384fa17713f7841a9f093dff63341aa67f8d8fcbf9c6ed7f750fd539d56e658e"
+    },
+    {
+      "path": "song/lua/glados/pad/large sticker (nomipmaps).png",
+      "bytes": 13755,
+      "sha256": "aed272e392ce16b7b4d0b2e75be0e22b7bf5c00ae93a182dd1f85cc11e567588"
+    },
+    {
+      "path": "song/lua/glados/pad/leather sphere add.png",
+      "bytes": 1052,
+      "sha256": "0f01f414d3e90fdf68b9ca616a447c5a7235de949a01298918a53162b7d8c554"
+    },
+    {
+      "path": "song/lua/glados/pad/leather.png",
+      "bytes": 27369,
+      "sha256": "43600222cc4aafbfb8700656cf2662eb724c7423603a4fcf7410af8751917754"
+    },
+    {
+      "path": "song/lua/glados/pad/panel sphere add.png",
+      "bytes": 22438,
+      "sha256": "68482bbad6f9b9f1525acab8db0be7be620e2eee1686c087ffc2bb7c7657a008"
+    },
+    {
+      "path": "song/lua/glados/pad/platform bones.txt",
+      "bytes": 9,
+      "sha256": "1e06b5f8f4efc8f57b6dc8bbc1fe0304f7597d1b458cb3b9e7e76acd081539db"
+    },
+    {
+      "path": "song/lua/glados/pad/platform materials.txt",
+      "bytes": 2764,
+      "sha256": "ab479cd0da3720f02197365a139d162aed60e91d572b0becb63e805a476c80a7"
+    },
+    {
+      "path": "song/lua/glados/pad/platform meshes.txt",
+      "bytes": 228378,
+      "sha256": "70d2d7cf5791d2f02fd668abaebd6500c8d2484aa1f47c9c72545cbc665b4314"
+    },
+    {
+      "path": "song/lua/glados/pad/polished metal sphere add.png",
+      "bytes": 10378,
+      "sha256": "29b072d66b875dabbaa15e67194dd3b122a5128eb772f4b9cee8ec6ad8d79700"
+    },
+    {
+      "path": "song/lua/glados/pad/polished metal2.png",
+      "bytes": 5916,
+      "sha256": "d1598c6385bcc3741e38c1ba1c80f0c74c59774589d60f321f252c296674b8ef"
+    },
+    {
+      "path": "song/lua/glados/pad/red paint sphere add.png",
+      "bytes": 2012,
+      "sha256": "5b8f4c653712a2214f8fc5d941e9993ad4f4ac0031eabdac70e9e6b5f2aa7efa"
+    },
+    {
+      "path": "song/lua/glados/pad/red paint.png",
+      "bytes": 3018,
+      "sha256": "c925ae83834424824d8d471b7901f29aed048de4b5c9c5e36d041d747c99091f"
+    },
+    {
+      "path": "song/lua/glados/pad/red panel.png",
+      "bytes": 6489,
+      "sha256": "9d663583571c99e58df7cd1a0ea35d330099020b09589b2ac060cbf4abc3398f"
+    },
+    {
+      "path": "song/lua/glados/pad/sticker sphere add.png",
+      "bytes": 1087,
+      "sha256": "d605b01dc157964c036250f0115c2c7741142f63b698b2f42c8046f1b92de0ae"
+    },
+    {
+      "path": "song/lua/glados/pad/white paint sphere add.png",
+      "bytes": 854,
+      "sha256": "26b5a30404ead2808228e8591f42aec03bb1c0fe4ebc0f2f4ad62b9d0757c89d"
+    },
+    {
+      "path": "song/lua/glados/pad/white paint.png",
+      "bytes": 5046,
+      "sha256": "eadedc81ebde2cd5056ba765283e002710e4f2d6963717c14750acf7ea1323ae"
+    },
+    {
+      "path": "song/lua/glados/wall.jpg",
+      "bytes": 49506,
+      "sha256": "4425a4ac51d10ab08a283c7b1f34bcb8a1d84f5d17ad81e2a6bf8cad98c3ba56"
+    },
+    {
+      "path": "song/lua/grade 2x1.png",
+      "bytes": 5376,
+      "sha256": "3863de3406a4493e516e6089e45dd0f59f08471a81ad381bab50e702bfc11434"
+    },
+    {
+      "path": "song/lua/hospital.png",
+      "bytes": 15105,
+      "sha256": "9912f72e5ed559cdf0f1bcaf64ec0cd9ba156a65e261dc5fdbb8390e0fb51b99"
+    },
+    {
+      "path": "song/lua/hrm.png",
+      "bytes": 7030,
+      "sha256": "6ec8e915e7362b8f686eef42b19466e45fbf7d2fd1497550e2c01eaee423de47"
+    },
+    {
+      "path": "song/lua/hrm_mask.png",
+      "bytes": 830,
+      "sha256": "f5b1c3f2b68058e40156355036efc7f3a3f245cf7da9e34e9c433dd39a9cc076"
+    },
+    {
+      "path": "song/lua/intro_hrm.png",
+      "bytes": 8476,
+      "sha256": "8561052b32e56e15161ee62424df233c0c7d2728ed25df73592a05bda80be17b"
+    },
+    {
+      "path": "song/lua/introbg.png",
+      "bytes": 251470,
+      "sha256": "b34cca5a472b5de3fb93d31c1adf1804c8eea555dc6f666fe6263543036d147a"
+    },
+    {
+      "path": "song/lua/jud/itg 2x6.png",
+      "bytes": 42008,
+      "sha256": "3bbc870bef92cf0803727ff3a3e81de1ad56fefb38768fe4b55a84dfc1748f71"
+    },
+    {
+      "path": "song/lua/jud/meu 1x6.png",
+      "bytes": 26065,
+      "sha256": "c5a2be5ef34e67520b9559e5b34bc2171efd3f6e275f2501f2a3e51acb40667c"
+    },
+    {
+      "path": "song/lua/laer 3x1.png",
+      "bytes": 40333,
+      "sha256": "a0a1c229171e441329ec81dafe8cce8a259b218051862588012370c63307d8a9"
+    },
+    {
+      "path": "song/lua/limit/ans 2x4.png",
+      "bytes": 40474,
+      "sha256": "42633c073f4cb31d0bf1c9ca037261f1e9ac9c983fa665bb011189a51aa22f1a"
+    },
+    {
+      "path": "song/lua/limit/arrow1.png",
+      "bytes": 2540,
+      "sha256": "53e5be5a0ea3ce91db9b50e14b952c26392440d342a245d44b92e7ddf3c8677f"
+    },
+    {
+      "path": "song/lua/limit/arrow2.png",
+      "bytes": 2995,
+      "sha256": "1c4a2633633f4f528f5701cb6af06d660c0e4b85f6cc1423bee7ad072e0c65cb"
+    },
+    {
+      "path": "song/lua/limit/bg.png",
+      "bytes": 112592,
+      "sha256": "f2f87f49f2d35ab85289cfcb5a62f24b1eefa8ef1a67aac873389b70a9c1d238"
+    },
+    {
+      "path": "song/lua/limit/default.lua",
+      "bytes": 8577,
+      "sha256": "401971456bf0780c6d727ea387c4d638286826866d1da4fac6e22f1a07688a22"
+    },
+    {
+      "path": "song/lua/limit/grade 2x1.png",
+      "bytes": 5376,
+      "sha256": "3863de3406a4493e516e6089e45dd0f59f08471a81ad381bab50e702bfc11434"
+    },
+    {
+      "path": "song/lua/limit/inst1.png",
+      "bytes": 8475,
+      "sha256": "e950f4358a8c5454da09b302c68f7391fe65eac43903d445b176e5845ee4c9b6"
+    },
+    {
+      "path": "song/lua/limit/inst2.png",
+      "bytes": 7496,
+      "sha256": "28e789b7d0988f63194ed18a988728d0b0fc90f6bfaba41051d55c0107b42f86"
+    },
+    {
+      "path": "song/lua/limit/p1 2x1.png",
+      "bytes": 33636,
+      "sha256": "b16583505a98755dcb681788409c954651885487c53c51cc90db966bccd5c6c3"
+    },
+    {
+      "path": "song/lua/limit/p2 2x1.png",
+      "bytes": 60536,
+      "sha256": "a22f2c65826d8ca518e34bc942a515c93b164e45ab8f4c4cc8f663a361e6baad"
+    },
+    {
+      "path": "song/lua/lineac/arrow1.png",
+      "bytes": 3007,
+      "sha256": "affc4484f71ac6032ace624aff8de89ed9b2a0e0a54cb5057f4f1e58c88d2330"
+    },
+    {
+      "path": "song/lua/lineac/bg.png",
+      "bytes": 159236,
+      "sha256": "4d9a26b76287c172242fac4382aaaba03a0e1b64408309b75f5622b5611bca38"
+    },
+    {
+      "path": "song/lua/lineac/default.lua",
+      "bytes": 22681,
+      "sha256": "2e4fea7763efbaccc89e581740c2084f6fd827c10c7c0f1631bbdda330593c3d"
+    },
+    {
+      "path": "song/lua/lineac/energite 3x2.png",
+      "bytes": 125487,
+      "sha256": "1770919f82e73c3dd3217fb686374cbe273f2ca17304213f6912b1eda54c6dcb"
+    },
+    {
+      "path": "song/lua/lineac/laser.png",
+      "bytes": 255,
+      "sha256": "c66c1518c1e4f388e019ebe14d423256b25a88925c755af9e9dbbb1ee2a94b22"
+    },
+    {
+      "path": "song/lua/lineac/left 1x4.png",
+      "bytes": 2203,
+      "sha256": "5af3943450f2f42d2f99b91fd5c4f8ef190b8781e7dacc8420f2b0d5fac278ef"
+    },
+    {
+      "path": "song/lua/lineac/organ.png",
+      "bytes": 32050,
+      "sha256": "b5854fda664dd63cc23217b826aa8220a753ed25ed0aa7f52c5253bf39eb6add"
+    },
+    {
+      "path": "song/lua/lineac/ring.png",
+      "bytes": 20375,
+      "sha256": "abec09ee43b6cc9e67c31732e458d84cb3c09f0bad9b7983b88d5b10b833a4de"
+    },
+    {
+      "path": "song/lua/lineac/shotsleft.png",
+      "bytes": 1331,
+      "sha256": "ddf1bbee7084490da9dd7ccf152e3e5865e35c954f6c3999e6377e767f383913"
+    },
+    {
+      "path": "song/lua/lisa/_barrel 3x2.png",
+      "bytes": 1421,
+      "sha256": "611d46563db2c4bedd2ffa9abfc771dd787484be88b9f302b21870ef04c69c2b"
+    },
+    {
+      "path": "song/lua/lisa/_climb 2x1.png",
+      "bytes": 716,
+      "sha256": "4fbb2fe69c1ea8fb44277d892e7e988d93901568283762e6aff9d9da2c8fe97e"
+    },
+    {
+      "path": "song/lua/lisa/_fall 2x1.png",
+      "bytes": 1828,
+      "sha256": "debb285cc9f8d032add9f156791c9c55626b5b913f50c08e93a43106d86f31d0"
+    },
+    {
+      "path": "song/lua/lisa/_run 3x1.png",
+      "bytes": 762,
+      "sha256": "185d5b6c55e5e24ba38271c7073faef53b9c69534eb96ae0a23e124aba07c756"
+    },
+    {
+      "path": "song/lua/lisa/bg.png",
+      "bytes": 8238,
+      "sha256": "47e436383bb14044e24052974028cbce4b0307b37862905a17ba2ec6349482e1"
+    },
+    {
+      "path": "song/lua/lisa/default.lua",
+      "bytes": 26684,
+      "sha256": "f10fb142f4595b1ab66a0c0857ddaadfe47b8f6d85a22e8c452ef8525a0ff811"
+    },
+    {
+      "path": "song/lua/lisa/inst.png",
+      "bytes": 5978,
+      "sha256": "4d84d921ea7255783b6c554bd814d79d919fd538453e5989a74cdb7925d0cb5f"
+    },
+    {
+      "path": "song/lua/memes/meme 2x4.png",
+      "bytes": 176906,
+      "sha256": "f228e732d167b2221aca9fbe3b64a8c2adc170ebdf8d4d6dacb1b2fa1d84ba93"
+    },
+    {
+      "path": "song/lua/mmm/arrow1.png",
+      "bytes": 3007,
+      "sha256": "affc4484f71ac6032ace624aff8de89ed9b2a0e0a54cb5057f4f1e58c88d2330"
+    },
+    {
+      "path": "song/lua/mmm/arrow2.png",
+      "bytes": 2540,
+      "sha256": "53e5be5a0ea3ce91db9b50e14b952c26392440d342a245d44b92e7ddf3c8677f"
+    },
+    {
+      "path": "song/lua/mmm/ball.png",
+      "bytes": 1832,
+      "sha256": "979a577852651713f9c71fc44397e8f012f830c762d9577ac5d215194993a4b8"
+    },
+    {
+      "path": "song/lua/mmm/bluebg.png",
+      "bytes": 237,
+      "sha256": "d1e98e8294c2edb62e22c38cc849b0c34d7bc4417994d49497e8678420ddb467"
+    },
+    {
+      "path": "song/lua/mmm/box.png",
+      "bytes": 1437,
+      "sha256": "1d6c9fa3c12ebbd4456e7b52d96f1a163dbc1c181c3ae1c43b54ac6580b53cef"
+    },
+    {
+      "path": "song/lua/mmm/default.lua",
+      "bytes": 12911,
+      "sha256": "fc727303f0292af5bd1a11591d199e013650f389e9b05a6b42f413c3ed792a7a"
+    },
+    {
+      "path": "song/lua/mmm/plat.png",
+      "bytes": 2668,
+      "sha256": "cce5a0d6b729833d7da17b16a17acde490723b56f0b68eb50b8c3e1c4453b7f9"
+    },
+    {
+      "path": "song/lua/mmm/redbg.png",
+      "bytes": 228,
+      "sha256": "b0357861e0688b4228deb90612d3f71628259372e3e09e810c941d1f58e94861"
+    },
+    {
+      "path": "song/lua/mmm/steph.png",
+      "bytes": 23715,
+      "sha256": "1c5015143cbb7067c07b6485e2ef0320ff248bee7e90e73ba9212122bee25096"
+    },
+    {
+      "path": "song/lua/mmm/taro.png",
+      "bytes": 18802,
+      "sha256": "cb0526fd444fe72eb9cf9476b6eed59cd318a6aa53d20cbfb7472232f697b2a5"
+    },
+    {
+      "path": "song/lua/mods-taro.lua",
+      "bytes": 7393,
+      "sha256": "5c90478c73627bdf530659eda6ff29fca933cf438bcbde170d60feb02f2aebca"
+    },
+    {
+      "path": "song/lua/nayoto/default.lua",
+      "bytes": 658,
+      "sha256": "b0ba32393b5fc79bafdacc01dd5a2394918df9f400b15ec27dfa50e07f733367"
+    },
+    {
+      "path": "song/lua/nayoto/kaede.png",
+      "bytes": 23430,
+      "sha256": "77e6dc8b6defac4ffc3577e9cb4d216d047be9f31e39034297180ab3531f4add"
+    },
+    {
+      "path": "song/lua/nayoto/random 3x6.png",
+      "bytes": 2646541,
+      "sha256": "94401d4a25aa13075d9713f8e00be19212aa3faeba7b404a92d8d8a5d96ecd08"
+    },
+    {
+      "path": "song/lua/neko/default.lua",
+      "bytes": 7025,
+      "sha256": "df35c3772e4ba6e135f367c7eb328d187efd7c33fefd617a9f0d9075cfd256a8"
+    },
+    {
+      "path": "song/lua/neko/nya1.png",
+      "bytes": 434077,
+      "sha256": "b31d2e91c248a5524d9cc3abe160ccaf7e72a7c5352fcc160f310ad4cec58833"
+    },
+    {
+      "path": "song/lua/neko/peace.png",
+      "bytes": 418195,
+      "sha256": "8e76771d6e4ae367d5c5b2ac25ce55baf7477496dc344e8a1ba103ccf0d04af3"
+    },
+    {
+      "path": "song/lua/neutral.png",
+      "bytes": 10374,
+      "sha256": "7ecc1646e1469518bce8455d466b64301ff5e072689a1ffb0eb131be08b8acc9"
+    },
+    {
+      "path": "song/lua/nobar.png",
+      "bytes": 280041,
+      "sha256": "eb6e05a9978c90eb8a55c77d4c7ae31cb4a505e4cdc59f6a11cdc949cd94d52b"
+    },
+    {
+      "path": "song/lua/nue/arrows/12th/16arrowmesh.txt",
+      "bytes": 16812,
+      "sha256": "a895b774add83c68d9cf38d9f45370de629ebdeadde990f25728e53c8814eb73"
+    },
+    {
+      "path": "song/lua/nue/arrows/12th/16tex.ini",
+      "bytes": 82,
+      "sha256": "d59718898ac65bfde2716f67bb0557f35708d0a55acee4a94754831b1b768409"
+    },
+    {
+      "path": "song/lua/nue/arrows/12th/16th.txt",
+      "bytes": 412,
+      "sha256": "271198a8900d9d92fded7edcbe91fab7e23aea3df37499227233d89d7d277ebf"
+    },
+    {
+      "path": "song/lua/nue/arrows/12th/_12ths.png",
+      "bytes": 307,
+      "sha256": "b87c2359e95a8418e8215d57407ad240ebfee4214b0fb2012bc7e834cdad0372"
+    },
+    {
+      "path": "song/lua/nue/arrows/12th/_16ths.png",
+      "bytes": 314,
+      "sha256": "5ccc104f54a8c938d51d63ba5abfe25599111edcbfa3ca3e28c69685cdf1ee55"
+    },
+    {
+      "path": "song/lua/nue/arrows/12th/shell.png",
+      "bytes": 7452,
+      "sha256": "dd42b7bf285a80759f9d4aad09ccabb80b74ba9994f9f3b88803d8788f5ab0cb"
+    },
+    {
+      "path": "song/lua/nue/arrows/4th/4arrowmesh.txt",
+      "bytes": 16811,
+      "sha256": "526d0cc24d4079d77ce5ae23bb4d2499fc39a6f7e554da12c025a30121eb44da"
+    },
+    {
+      "path": "song/lua/nue/arrows/4th/4tex.ini",
+      "bytes": 81,
+      "sha256": "d0a8a8ecdb605b4c0ff7b54983b216dab3162f014aac6d601bbb6764c751afa4"
+    },
+    {
+      "path": "song/lua/nue/arrows/4th/4th.txt",
+      "bytes": 411,
+      "sha256": "cb5955171a996e8c011d8ac6ad2913eb764ccdf1d5defa65b09a86f50284851a"
+    },
+    {
+      "path": "song/lua/nue/arrows/4th/_4ths.png",
+      "bytes": 308,
+      "sha256": "968f3ec4db127f7fae4c682a81c401aac502e88ef732a36492d7ded7210957ba"
+    },
+    {
+      "path": "song/lua/nue/arrows/4th/shell.png",
+      "bytes": 7452,
+      "sha256": "dd42b7bf285a80759f9d4aad09ccabb80b74ba9994f9f3b88803d8788f5ab0cb"
+    },
+    {
+      "path": "song/lua/nue/arrows/8th/8arrowmesh.txt",
+      "bytes": 16811,
+      "sha256": "5fba1f81bb6797d16882ce59f89a641153ec2967559e81655b0089b3b51673be"
+    },
+    {
+      "path": "song/lua/nue/arrows/8th/8tex.ini",
+      "bytes": 81,
+      "sha256": "72a2b93af1e53d9e5f0b96d6224d61bb35a0513403bedb33da2f7208e2f58852"
+    },
+    {
+      "path": "song/lua/nue/arrows/8th/8th.txt",
+      "bytes": 411,
+      "sha256": "34e69df9b3aa270c0631a9ef80997367b2599ee562f1c3eabb92733a4da1aed5"
+    },
+    {
+      "path": "song/lua/nue/arrows/8th/_8ths.png",
+      "bytes": 227,
+      "sha256": "9845033b056754afe20ba0aa6eb72dbbb5efe847fc31e2387152fcaf3563b63a"
+    },
+    {
+      "path": "song/lua/nue/arrows/8th/shell.png",
+      "bytes": 7452,
+      "sha256": "dd42b7bf285a80759f9d4aad09ccabb80b74ba9994f9f3b88803d8788f5ab0cb"
+    },
+    {
+      "path": "song/lua/nue/default.lua",
+      "bytes": 35869,
+      "sha256": "91aa31fcf24c2956db3c1b51f4c6761b6714342182890dc3aae4dd714673220a"
+    },
+    {
+      "path": "song/lua/nue/nue 4x1.png",
+      "bytes": 13095,
+      "sha256": "1954cdffc196900c1baaba483e59694daf8c51e29394031c28b04370bcf4f447"
+    },
+    {
+      "path": "song/lua/nue/receptor 4x1.png",
+      "bytes": 6895,
+      "sha256": "3f635454b496bd1df783e172fd271b1348ccc4a50ad79498b4ec47fa667280be"
+    },
+    {
+      "path": "song/lua/operation/bg.png",
+      "bytes": 135203,
+      "sha256": "016b074d69194eac7f9334fb74ff5330e8bc0c7b96adc26906683d7c4323bb4b"
+    },
+    {
+      "path": "song/lua/operation/cut_0.png",
+      "bytes": 1607,
+      "sha256": "034a0f099cf2129b037452b9e0806f54d3585cfd4629ce697418ea376dd281e3"
+    },
+    {
+      "path": "song/lua/operation/cut_1.png",
+      "bytes": 1871,
+      "sha256": "31e6838c933d900b18681a6216a3e1d6fd592e3493a78b5ba48c5aa5412f0b5d"
+    },
+    {
+      "path": "song/lua/operation/cut_2.png",
+      "bytes": 2584,
+      "sha256": "f0947070a66da90a6660f591e449f04b37b3f60dd1179f46a75d3fa6656a552f"
+    },
+    {
+      "path": "song/lua/operation/default.lua",
+      "bytes": 71272,
+      "sha256": "6f8e63d583d99bafd9a7a11d886ac0a50a1e710772b8a3f1955cd74752a0e9df"
+    },
+    {
+      "path": "song/lua/operation/scalpel.png",
+      "bytes": 2479,
+      "sha256": "8a186cdc9b3ff8b24aa68bbff7c5300b1c9ca2f364ecc047482e1580ac287ff5"
+    },
+    {
+      "path": "song/lua/operation/wound 3x1.png",
+      "bytes": 441,
+      "sha256": "7fab0cc9e369eb9e1e62796172fff8b10967b67deedc4d8744e7a893032000b6"
+    },
+    {
+      "path": "song/lua/outerbg.png",
+      "bytes": 9936,
+      "sha256": "b8c6dc5449f927f19a40f72c8d53a3b11896b76f02e348e066b9c16ff9728e94"
+    },
+    {
+      "path": "song/lua/outerfg.png",
+      "bytes": 4084,
+      "sha256": "087d92c94a86cc718869f29c9b749133e87e36f22aec3b9b6ff69b653063a0f1"
+    },
+    {
+      "path": "song/lua/outersky.png",
+      "bytes": 13418,
+      "sha256": "41f0e2897859ae246b73f94e519b7a2adb962d5098d1cac7f7c4d4ca34191fa3"
+    },
+    {
+      "path": "song/lua/patients/_dance 6x3.png",
+      "bytes": 150647,
+      "sha256": "ebd76d10e781da5d477557752062f5d7322db53d3076a48b72f25709c17761d8"
+    },
+    {
+      "path": "song/lua/patients/_misc 6x4.png",
+      "bytes": 133649,
+      "sha256": "2833ca8cd5a61458f3349feb24a70318086d78c85e88ba232682f92b51584312"
+    },
+    {
+      "path": "song/lua/patients/sheet.png",
+      "bytes": 2824,
+      "sha256": "a0f1d0f9780d7553d8be80fdbc79f2c8e90245dcd0d192fbb1f05d5bda80be66"
+    },
+    {
+      "path": "song/lua/reisen/arrows/ddr/4th 4x4.png",
+      "bytes": 5429,
+      "sha256": "b68a54c7706de45de618affd3ec822620d0d4f8fbf48586a7e3cb739f32a3cd2"
+    },
+    {
+      "path": "song/lua/reisen/arrows/ddr/8th 4x4.png",
+      "bytes": 5463,
+      "sha256": "76974b91050abf01b5558c0deabbde61bde4314820386d236c48aa8a2a35f195"
+    },
+    {
+      "path": "song/lua/reisen/arrows/neon/down 4x4.png",
+      "bytes": 37561,
+      "sha256": "2a6081ce83a5f362f5e4aa6ee470017ad35a6b1aaeca2f9a6c384923f40556d9"
+    },
+    {
+      "path": "song/lua/reisen/arrows/neon/left 4x4.png",
+      "bytes": 43835,
+      "sha256": "28d8e8775a815b13b009bb97644e113855b93ed42f5109a5c2d013564252138e"
+    },
+    {
+      "path": "song/lua/reisen/arrows/neon/right 4x4.png",
+      "bytes": 38947,
+      "sha256": "7ad7ca44ae75a7b6f27678bd0b0ebd2d96fd51ba7c6f51dcf9220cda26ed35a9"
+    },
+    {
+      "path": "song/lua/reisen/arrows/neon/up 4x4.png",
+      "bytes": 41910,
+      "sha256": "4ccfa79dc02f7b874f83a21f258a768957016f0af497b599309a9123924fbfcc"
+    },
+    {
+      "path": "song/lua/reisen/arrows/pump/_DownLeft Ready Receptor 1x2.png",
+      "bytes": 8968,
+      "sha256": "5c7c9dd0e89c005821903f5a47162ae37f4d12ae31c006c1faf2c048492c568c"
+    },
+    {
+      "path": "song/lua/reisen/arrows/pump/_DownRight Ready Receptor 1x2.png",
+      "bytes": 8795,
+      "sha256": "251537eb09e099a1eb1a68fd9942133be1a3fcce80c6fa6ea0395a9d7fff8566"
+    },
+    {
+      "path": "song/lua/reisen/arrows/pump/_UpLeft Ready Receptor 1x2.png",
+      "bytes": 8951,
+      "sha256": "1c1f86081b9af81d02416601a24aee802f6a24e47b8dd803c99a68028ca76afb"
+    },
+    {
+      "path": "song/lua/reisen/arrows/pump/_UpRight Ready Receptor 1x2.png",
+      "bytes": 8868,
+      "sha256": "61899ff8ec4d273a54a74d635fd87e45798bbc0ec2d5a21165b9264cf9db99ac"
+    },
+    {
+      "path": "song/lua/reisen/arrows/pump/down 6x1.png",
+      "bytes": 18244,
+      "sha256": "a24766a5826a4673b5ca65eee77e18f5cbc195f26f1800c854afbbf9e924c115"
+    },
+    {
+      "path": "song/lua/reisen/arrows/pump/left 6x1.png",
+      "bytes": 19124,
+      "sha256": "69aeb83c1b9e0a69dc994792601fb30806a6dca85809a5d23ab2bc3af69656a3"
+    },
+    {
+      "path": "song/lua/reisen/arrows/pump/right 6x1.png",
+      "bytes": 19196,
+      "sha256": "32d3ac6f58ea1cf1d0a4ed87bdf42760427f9a832040c846a288048e2a6d0fb8"
+    },
+    {
+      "path": "song/lua/reisen/arrows/pump/up 6x1.png",
+      "bytes": 18519,
+      "sha256": "9bf40bb347b6d37fdd30d1f663856395d214b4fcf11a5f5b587650c739fbe204"
+    },
+    {
+      "path": "song/lua/reisen/arrows/techno/_receptor-cardinal 2x1.png",
+      "bytes": 2839,
+      "sha256": "00beb5a8abced23239dbbdfd378b283643a539f14617c3d2ffd05cc9dd517af7"
+    },
+    {
+      "path": "song/lua/reisen/arrows/techno/_receptor-diagonal 2x1.png",
+      "bytes": 3006,
+      "sha256": "bae63fc7f6ae35498bf84b5f5614b639892d06e6c655aa98ac56a7a86ad2eb43"
+    },
+    {
+      "path": "song/lua/reisen/arrows/techno/down 3x2.png",
+      "bytes": 3411,
+      "sha256": "3b2783bccd2d9950000820524e3d56055c1f34150b8c61391d92950af8b6f447"
+    },
+    {
+      "path": "song/lua/reisen/arrows/techno/left 3x2.png",
+      "bytes": 3655,
+      "sha256": "399552b03381369c3440c38906f3366a10012c63804a0cb633d0925ac7c3be02"
+    },
+    {
+      "path": "song/lua/reisen/arrows/techno/right 3x2.png",
+      "bytes": 3489,
+      "sha256": "a5651a0719a3461b97106e92dec8c69c03137a13730547fd93783d368c3930e3"
+    },
+    {
+      "path": "song/lua/reisen/arrows/techno/up 3x2.png",
+      "bytes": 3621,
+      "sha256": "86fbbd1ca6584aca0e653861e6ecf34626edfa324c022e2491a1a803bf16b74a"
+    },
+    {
+      "path": "song/lua/reisen/default.lua",
+      "bytes": 174374,
+      "sha256": "4205f79d94ee48d5cdd5fc4e011216b22725be506216e913ee7304ab8183e738"
+    },
+    {
+      "path": "song/lua/reisen/reisen 2x1.png",
+      "bytes": 8935,
+      "sha256": "dabb7efe488cff0a8cf824f46bad4179f5814e23584795fad09a65f2b30c215c"
+    },
+    {
+      "path": "song/lua/sans/bone.png",
+      "bytes": 447,
+      "sha256": "e31709dc6e75407bc859f3ffefbd8b943157cd016732ccb3cd9d39406c64db55"
+    },
+    {
+      "path": "song/lua/sans/chara/casting.png",
+      "bytes": 4946,
+      "sha256": "53fbcdf9f82c076337d1dfc0dffdab1b47bf1b6448644a695ec30873bea8834c"
+    },
+    {
+      "path": "song/lua/sans/chara/default.lua",
+      "bytes": 23667,
+      "sha256": "4ca6fc16d3aff5a886b42bee8c174ed4bc985f3a641e05eb7347d2d7a09d812b"
+    },
+    {
+      "path": "song/lua/sans/chara/sans/body 4x3.png",
+      "bytes": 21407,
+      "sha256": "f165bce63a4873853ab6e399b8127e5abceb3ea0839bc096adaeeea1bba6d1d1"
+    },
+    {
+      "path": "song/lua/sans/chara/sans/cast.ogg",
+      "bytes": 54562,
+      "sha256": "3e0c2febeee2d44b9afea22434471751c8ca5eadeebf3fa104f557f7591fd434"
+    },
+    {
+      "path": "song/lua/sans/chara/sans/fatal.ogg",
+      "bytes": 27462,
+      "sha256": "0a1e5f0c754d6be3031557cdcec6ab1b15547075e58d66bc79078c2ab98d6277"
+    },
+    {
+      "path": "song/lua/sans/chara/sans/gaster 2x1.png",
+      "bytes": 2812,
+      "sha256": "f6b0847b9ce245006ae40886ca54ca9fcb5bd2ad44e0197e78684bc9461b841e"
+    },
+    {
+      "path": "song/lua/sans/chara/sans/gaster_fire.ogg",
+      "bytes": 109259,
+      "sha256": "9ac5fa8ec0fb1580889ac6c6a966e48d9fd6611c60ab9573e7a2e66ecd313830"
+    },
+    {
+      "path": "song/lua/sans/chara/sans/gaster_spawn.ogg",
+      "bytes": 63878,
+      "sha256": "c3e1aafa6afc5ec269e574b80b92a58433646b7ee4650945d1254a359e30a015"
+    },
+    {
+      "path": "song/lua/sans/chara/sans/head 3x3.png",
+      "bytes": 5311,
+      "sha256": "0c439df90d88614ee30739385a47cc732247db22512cf72bfbf23062b503ffd1"
+    },
+    {
+      "path": "song/lua/sans/chara/sans/legs 2x1.png",
+      "bytes": 5766,
+      "sha256": "4356c7c75fb44aa25bb0378ef43d301218964967185ede7b07638832adb5b091"
+    },
+    {
+      "path": "song/lua/sans/chara/sans/pause.ogg",
+      "bytes": 8319,
+      "sha256": "f11cf9ad5550ba3cd5154b298e0173ad83211556a12012cc752e0205c7825288"
+    },
+    {
+      "path": "song/lua/sans/chara/sans/sweat.png",
+      "bytes": 314,
+      "sha256": "f595e359f75f71ea0c52b8ce87766784831bd3de50b6cbd989dac0c144440b66"
+    },
+    {
+      "path": "song/lua/sans/chara/sans/talk.ogg",
+      "bytes": 25373,
+      "sha256": "94a47340c3f97c1cf20bf2529a5155c1443eb90820247f2a71b4000ff292ade8"
+    },
+    {
+      "path": "song/lua/sans/default.lua",
+      "bytes": 25123,
+      "sha256": "038599f09b77b80e936b74f0acb580acde32863ee3e63c6c3e61e7bea67dd679"
+    },
+    {
+      "path": "song/lua/sans/heartred 2x2.png",
+      "bytes": 953,
+      "sha256": "c2d25ef9d02aa510b074af8941c2ab4441f6e4b0bdce9cd7b16de3657adf1567"
+    },
+    {
+      "path": "song/lua/sbahj/_trampo 2x2.png",
+      "bytes": 16426,
+      "sha256": "e9729b0974f46aafa3d8852585257d504f878d614df77cc4ca8712926857963f"
+    },
+    {
+      "path": "song/lua/sbahj/bg1.png",
+      "bytes": 6655,
+      "sha256": "385d657d8bc2d4a82ed400c6c2b92dc40f94a1e9cbc673f7a1c9ea398b83326a"
+    },
+    {
+      "path": "song/lua/sbahj/bg2.png",
+      "bytes": 6605,
+      "sha256": "eccd32913e985c38a35ccd05de4c5f59d2a4ebfa0eba159a996d92f5cdc9a096"
+    },
+    {
+      "path": "song/lua/sbahj/bro 2x1.png",
+      "bytes": 54793,
+      "sha256": "0c535aaf54ae57d17cd37a43f5177cdfdf45c08ecb5556568a94d2dfd02292d7"
+    },
+    {
+      "path": "song/lua/sbahj/default.lua",
+      "bytes": 10406,
+      "sha256": "a473a403dc8c01e2f81c86d01d6f1eb368103e36e07fc7d1f6e2b7f96fc850a7"
+    },
+    {
+      "path": "song/lua/sf/arrowgray.png",
+      "bytes": 5915,
+      "sha256": "679c14831dff48097bb61b29c32597b1bf72e9c17393af40d370c591192aab4e"
+    },
+    {
+      "path": "song/lua/sf/arrowlit.png",
+      "bytes": 6772,
+      "sha256": "4d38cf2e2845f91888574fdabe369ebeeb2381ba6148aaf42cffce0eba63ff46"
+    },
+    {
+      "path": "song/lua/sf/bg.png",
+      "bytes": 148100,
+      "sha256": "643f467c2f362892e773d4375a425645b4fe7a7e6e4464d06dbf403bdd2831ff"
+    },
+    {
+      "path": "song/lua/sf/chan_idle 3x2.png",
+      "bytes": 77784,
+      "sha256": "1748b642b118b8d7fa3f02daee986b614ea28f5f80954e27f62344f6c9c0fd2a"
+    },
+    {
+      "path": "song/lua/sf/chan_moves 6x4.png",
+      "bytes": 303017,
+      "sha256": "210b97b66ea1a1e922a866f4d159b82ec6c00592718e38d427b7fa03648e2b97"
+    },
+    {
+      "path": "song/lua/sf/default.lua",
+      "bytes": 31001,
+      "sha256": "4fcd93bb718f822a9db08487967f14bcaa8a72fa467ba77ae6c104f371eea05e"
+    },
+    {
+      "path": "song/lua/sf/fball.png",
+      "bytes": 3184,
+      "sha256": "5cf1878b0a0c50fce4e9a5bdf9da3ba802d6394a264074594ba4de4872260ade"
+    },
+    {
+      "path": "song/lua/sf/inst.png",
+      "bytes": 5602,
+      "sha256": "e40aca89be518f25a7d8c7a3d73d2b7c708afefa35028a91feffb36a5b353e24"
+    },
+    {
+      "path": "song/lua/sounds/PESKY BEE.ogg",
+      "bytes": 110424,
+      "sha256": "98a1de4ce363d9e84fa05288c3201f0c28333faecdae2d960a8ccadb65442e99"
+    },
+    {
+      "path": "song/lua/sounds/ambulance.ogg",
+      "bytes": 24696,
+      "sha256": "4ce75e449fc0760f34ca5d0bc75c9fcb3a79f78bb49483a982cf35f83899fa85"
+    },
+    {
+      "path": "song/lua/sounds/bad_voice_1.ogg",
+      "bytes": 43031,
+      "sha256": "2886db97b5baca9e158222457a748320f5d59bd69bac10a08204f0b9a0413264"
+    },
+    {
+      "path": "song/lua/sounds/bad_voice_2.ogg",
+      "bytes": 33933,
+      "sha256": "36f12bbd3ede01ca26db35fb2d7d7bc9ba25dcd9e9557877fffc046e6d641b43"
+    },
+    {
+      "path": "song/lua/sounds/bad_voice_3.ogg",
+      "bytes": 54554,
+      "sha256": "62d0067522e24fcc873e35895216ecf337d5b471172fb6d4df4f677057be2ab7"
+    },
+    {
+      "path": "song/lua/sounds/banana_slip.ogg",
+      "bytes": 20367,
+      "sha256": "70f01e80038a6224e2452f9055f40650b1b5a1cb46a511e0b2ffb41f41bf56ef"
+    },
+    {
+      "path": "song/lua/sounds/bonk.ogg",
+      "bytes": 7470,
+      "sha256": "0f39c17d72ef1c4038dbd47b4b2066c1ba24dec3cca43db2d89db2e00cdda255"
+    },
+    {
+      "path": "song/lua/sounds/bonk2.ogg",
+      "bytes": 31467,
+      "sha256": "8ef49b8d7ea0df03edaad472cc0ff029d9f28518564047ca8de9464633b0b6fb"
+    },
+    {
+      "path": "song/lua/sounds/boost.ogg",
+      "bytes": 13461,
+      "sha256": "3beed5b740283beafa7efbdef25c9d4b3177bb9fe5a9c3445a5c3666f0d06f75"
+    },
+    {
+      "path": "song/lua/sounds/bounce.ogg",
+      "bytes": 6941,
+      "sha256": "9c2fdb1ed0c27c47d09dacc9fa0cf03963beff01a805a5fe4fa1478420d45ec4"
+    },
+    {
+      "path": "song/lua/sounds/bumble.ogg",
+      "bytes": 35663,
+      "sha256": "9a97d4b73bb19aac680d1dd86515d0f22b5b53e4e6ac650687125210a0ac76ed"
+    },
+    {
+      "path": "song/lua/sounds/chancetime.ogg",
+      "bytes": 65486,
+      "sha256": "c5b901fe02115a09f4af945e2b8d11d181049573a84612dcb23c980cefd187af"
+    },
+    {
+      "path": "song/lua/sounds/chomp.ogg",
+      "bytes": 24559,
+      "sha256": "49766fd5ffe651edb3d144aeb35d2672b7b92f9c01a1498f66c6cfea08cdf021"
+    },
+    {
+      "path": "song/lua/sounds/comealongchildren.ogg",
+      "bytes": 158785,
+      "sha256": "656576157968c6dccbcd382390e70abce89e91c23a1ffa38771ad63933fb3411"
+    },
+    {
+      "path": "song/lua/sounds/conk1.ogg",
+      "bytes": 21768,
+      "sha256": "fc29cd7d64d17ab0c2ccda0c95940d2643edd581f63d369d19d657571b4af8a9"
+    },
+    {
+      "path": "song/lua/sounds/conk2.ogg",
+      "bytes": 22093,
+      "sha256": "e260e373006602d95937b6fc966fd11c037a4f7ebc4203843a465dccb0b1f848"
+    },
+    {
+      "path": "song/lua/sounds/conk3.ogg",
+      "bytes": 25614,
+      "sha256": "f9c9180880fcb7ab7fe87c3aa1132c994e4d1c94c7604e8a7cf55121d382f706"
+    },
+    {
+      "path": "song/lua/sounds/ddrfail.ogg",
+      "bytes": 41898,
+      "sha256": "d5a18b19f540d74afefcd1e27678f0a8f0c7e4e373d2f3bbd214a003b6e1f6b9"
+    },
+    {
+      "path": "song/lua/sounds/ddrsuck.ogg",
+      "bytes": 9884,
+      "sha256": "d9ff0018c74af7c96d7fef926a4740e26042decde7f20129e555c57a516ffc5e"
+    },
+    {
+      "path": "song/lua/sounds/dontlikeit.ogg",
+      "bytes": 52104,
+      "sha256": "b74efa3afb425fed93f94dab4449f428d29592bf647767e85b2cad4cd1751050"
+    },
+    {
+      "path": "song/lua/sounds/dontunderstandwhatsgoingonhere.ogg",
+      "bytes": 54679,
+      "sha256": "0471dc7d34c055d873735f0e2b63fe0195361bceffd114fc048978acf2c0536a"
+    },
+    {
+      "path": "song/lua/sounds/failure.ogg",
+      "bytes": 73287,
+      "sha256": "74f8704251951b7eb05272dc4cb0ee4d49c2e797b901237b6cf597ef58fa9b2f"
+    },
+    {
+      "path": "song/lua/sounds/gaster_fire.ogg",
+      "bytes": 109259,
+      "sha256": "9ac5fa8ec0fb1580889ac6c6a966e48d9fd6611c60ab9573e7a2e66ecd313830"
+    },
+    {
+      "path": "song/lua/sounds/gaster_spawn.ogg",
+      "bytes": 63878,
+      "sha256": "c3e1aafa6afc5ec269e574b80b92a58433646b7ee4650945d1254a359e30a015"
+    },
+    {
+      "path": "song/lua/sounds/get1.ogg",
+      "bytes": 14767,
+      "sha256": "30092452a38d9572c3574daf2a856d64a9e822c32398a42fde5ece8a6fb35405"
+    },
+    {
+      "path": "song/lua/sounds/get2.ogg",
+      "bytes": 14252,
+      "sha256": "2d03b22d88c661391573918c3c4f5ad922f57317877d9f69b573e19544b6f85e"
+    },
+    {
+      "path": "song/lua/sounds/get3.ogg",
+      "bytes": 14959,
+      "sha256": "f4a4b334b8fe0e74b3853da235ab89a2ec921d12bbf6c151fa8cf32f6556b3ab"
+    },
+    {
+      "path": "song/lua/sounds/good.ogg",
+      "bytes": 11576,
+      "sha256": "e0348c52c6ac376eda9953a9717788d955881c247f6052f5347d02ae5f48bee1"
+    },
+    {
+      "path": "song/lua/sounds/hadoken.ogg",
+      "bytes": 21240,
+      "sha256": "1206c2058e48daee14c511b9312494acae5065d7457bd049cc998d26c0aa719c"
+    },
+    {
+      "path": "song/lua/sounds/heal.ogg",
+      "bytes": 18048,
+      "sha256": "7703f65aad6e3cd813b7e0f5854fcf0edfcf4d92cbef9f29b23d7d1750869545"
+    },
+    {
+      "path": "song/lua/sounds/heartdie.ogg",
+      "bytes": 8596,
+      "sha256": "da7619481e2beaf27885508c884cb0984322dcc1ed520e9c53c6cfb81b2d16a4"
+    },
+    {
+      "path": "song/lua/sounds/heavyfall.ogg",
+      "bytes": 45618,
+      "sha256": "a0d3b02b903f144ddf4699c2112019993b27086a84b8186223163434c54b6b3c"
+    },
+    {
+      "path": "song/lua/sounds/hit_wacky.ogg",
+      "bytes": 48426,
+      "sha256": "b0fbb23df30d2aa13d199e0705dc9481e87b74f428c30429fbea0844a680771a"
+    },
+    {
+      "path": "song/lua/sounds/impact.ogg",
+      "bytes": 28837,
+      "sha256": "e1a44313eb93872c402beec836b0431dee7539cdc5dfa613d6cf6eadd94e83b8"
+    },
+    {
+      "path": "song/lua/sounds/impact_big.ogg",
+      "bytes": 13788,
+      "sha256": "e6b090f75d5e5f2bf9cdd8c58e53eabdbc8df18cb2dc77a7159a1866e5fb3942"
+    },
+    {
+      "path": "song/lua/sounds/laser.ogg",
+      "bytes": 11413,
+      "sha256": "a721f1fd746bcf3433cb372cd2ac26931b81adb61be3c2d68c53b338a0e0eeb8"
+    },
+    {
+      "path": "song/lua/sounds/laserfail.ogg",
+      "bytes": 5321,
+      "sha256": "93fb250f9238c90d4dcf1f49eb3caa5f28b55110bca08cfa6532f1e7d01c8804"
+    },
+    {
+      "path": "song/lua/sounds/lisafall.ogg",
+      "bytes": 12675,
+      "sha256": "bd98ddbc0b90613a07912de711aed4b156e27e3ff23b8fe2f35ea77b040c18a8"
+    },
+    {
+      "path": "song/lua/sounds/lisahit.ogg",
+      "bytes": 9544,
+      "sha256": "3f3d4718f99e97aa3031722f61f101172a79e9d895a21f1149ebe532bab72298"
+    },
+    {
+      "path": "song/lua/sounds/magic.ogg",
+      "bytes": 66675,
+      "sha256": "63ef2e19ba64e9a5f1e4593fbf9000edf0ed051d550ddd87cf72e4cb921057c2"
+    },
+    {
+      "path": "song/lua/sounds/opendoor.ogg",
+      "bytes": 33914,
+      "sha256": "cac6bc3f1bfdfd1d65f5cab4290a12a92eae054526a82dc967db5d7e9ba760c5"
+    },
+    {
+      "path": "song/lua/sounds/oww.ogg",
+      "bytes": 12456,
+      "sha256": "439c6c5910a8b13a0db1ecb31784997b2c468032795a6048e156207f19e5579b"
+    },
+    {
+      "path": "song/lua/sounds/patientdie.ogg",
+      "bytes": 99675,
+      "sha256": "a9643ffef8065f52822158f2453bbbb6e2ba5313bf70b1ac5a209e18ebb7026c"
+    },
+    {
+      "path": "song/lua/sounds/poppycock.ogg",
+      "bytes": 59105,
+      "sha256": "2067be713ef01d7cfe128bf90aa5cd15cd49b7e9c6bc179ec1a25f65ef610fce"
+    },
+    {
+      "path": "song/lua/sounds/ricochet1.ogg",
+      "bytes": 50544,
+      "sha256": "12ab1eda5c3399fde1ad040b669bd1ad38aa8ff107a16af25490b6fec922e63a"
+    },
+    {
+      "path": "song/lua/sounds/ricochet2.ogg",
+      "bytes": 45838,
+      "sha256": "e2e6d954744bbfe810fd8a6b1eb261f10f3ee4e3d927a7d8a78946e4c0e16cc4"
+    },
+    {
+      "path": "song/lua/sounds/ricochet3.ogg",
+      "bytes": 44857,
+      "sha256": "79f2ff9612be53bb78afd7a23d345d623dc0aa6dcf07ba0e03cd53bb7500f5b8"
+    },
+    {
+      "path": "song/lua/sounds/ricochet4.ogg",
+      "bytes": 24347,
+      "sha256": "ca0a31281a6d9837b30a443b8feef6e8495268e884ccf04dae90bf430759c0ac"
+    },
+    {
+      "path": "song/lua/sounds/shake.ogg",
+      "bytes": 51319,
+      "sha256": "e87137840438d13c3b5c701dd21882046c585ddfdf22db033ced31b191656dd4"
+    },
+    {
+      "path": "song/lua/sounds/shame_appears.ogg",
+      "bytes": 104923,
+      "sha256": "567fb0ef6626df06c54613dbfce197e3d365b708a0a72b762f48d8d112ffad19"
+    },
+    {
+      "path": "song/lua/sounds/skill2.ogg",
+      "bytes": 34410,
+      "sha256": "66e0017e4cd8c4fc523f23312fd22cddf450fbb15307e29c9b421621f490d0e8"
+    },
+    {
+      "path": "song/lua/sounds/squish.ogg",
+      "bytes": 11660,
+      "sha256": "06b88e89ab91150e3b40efccb8201a330d71ef95de570576b8ea99a1244f0db2"
+    },
+    {
+      "path": "song/lua/sounds/succ.ogg",
+      "bytes": 76640,
+      "sha256": "85b27cdb634b077d5f5cdcb7728d70221e9fb72bd2e530d82c3005be32a5dfa4"
+    },
+    {
+      "path": "song/lua/sounds/suddendeath.ogg",
+      "bytes": 80206,
+      "sha256": "812b99fe44ab3e86bd95667e51880a1c07a5c13b4248c32e590a976df0478883"
+    },
+    {
+      "path": "song/lua/sounds/swing1.ogg",
+      "bytes": 5487,
+      "sha256": "827362be5b691523e32b2d9575ad9d3208016916fdf3c37f433b8583ac36a56c"
+    },
+    {
+      "path": "song/lua/sounds/swing2.ogg",
+      "bytes": 6408,
+      "sha256": "73633654fa4c9c110864d9a1432ca792e8f367522f26cc08a531a17cd7a31677"
+    },
+    {
+      "path": "song/lua/sounds/tadaaa.ogg",
+      "bytes": 44330,
+      "sha256": "d49cd7cf3d8f6a074a29d434cf70050b0549471492777bf93fc33fe62a12ddaf"
+    },
+    {
+      "path": "song/lua/sounds/thlaugh.ogg",
+      "bytes": 114686,
+      "sha256": "ebfde4fd25f63bb1cc6392e12d12bf3d32ae576ef19b6734d7e68ae1933b89e7"
+    },
+    {
+      "path": "song/lua/sounds/toosoft.ogg",
+      "bytes": 75374,
+      "sha256": "04bd2e757c6c1febff964276915f1b0c8624ea8db2e1791c87a129df1c5dc14d"
+    },
+    {
+      "path": "song/lua/sounds/uea.ogg",
+      "bytes": 24320,
+      "sha256": "19fc79c60e3d9cb3fa4e9c40a78c4c5de0d2ca8a5c1ced8da74be59c71f2a7f6"
+    },
+    {
+      "path": "song/lua/sounds/verynicethankyou.ogg",
+      "bytes": 54677,
+      "sha256": "0562dfa60739216d630fde0a233e17a97c06e46efa12c1d7c55487f83c9ca67f"
+    },
+    {
+      "path": "song/lua/sounds/violinlow.ogg",
+      "bytes": 28882,
+      "sha256": "62fc46ab5e73089d6cd1b59f7c11584a780a8830999953553e37a3eb875e8f59"
+    },
+    {
+      "path": "song/lua/sounds/virus.ogg",
+      "bytes": 11100,
+      "sha256": "d0c30af2a8f682f648ebab758a086322f9d143bb1dd1eb554644efdedc01d0ab"
+    },
+    {
+      "path": "song/lua/sounds/wallhit.ogg",
+      "bytes": 12535,
+      "sha256": "b8b63f5a9d5e39c066b799c13ce290c3dde6dfd3ef542280c00a3a177a35979e"
+    },
+    {
+      "path": "song/lua/sounds/warning.ogg",
+      "bytes": 25406,
+      "sha256": "e541bc5c5a211233a1c44a2748ccd17d905768c5ffc8c686560fb637458bc950"
+    },
+    {
+      "path": "song/lua/sounds/wawa.ogg",
+      "bytes": 106565,
+      "sha256": "009adedb068b8645d4bb569b2174cd843effab61ec6eaced5eb3c2fc41e8b9b6"
+    },
+    {
+      "path": "song/lua/sounds/wew.ogg",
+      "bytes": 24195,
+      "sha256": "dc65e54287ac25d58d2bb8b4b7b6744e284812a1e3b8fa0dd66c8a836f652698"
+    },
+    {
+      "path": "song/lua/sounds/what.ogg",
+      "bytes": 43366,
+      "sha256": "b3c184d7fcde31bcb3f9f635de3918c968f3f05608a9e4f706c5aaf757f319cd"
+    },
+    {
+      "path": "song/lua/sounds/whoa.ogg",
+      "bytes": 23275,
+      "sha256": "70b2ffb55b067dfe335ead53e6142fae0efb03ac5df4e88a29a5e9344c1c67ca"
+    },
+    {
+      "path": "song/lua/sounds/whoope.ogg",
+      "bytes": 9639,
+      "sha256": "9df7264be65423825c48f0fd05231002f7120cc2d8f4f8ba95fa34104639b586"
+    },
+    {
+      "path": "song/lua/sounds/wilhelm.ogg",
+      "bytes": 28199,
+      "sha256": "619e1598a2153b4b1791dd8de105b8adcb545ad4928ab818f6a10e628a48e310"
+    },
+    {
+      "path": "song/lua/sounds/woahhh.ogg",
+      "bytes": 72101,
+      "sha256": "262bee119a426e7109c81cd71ac9148268da0d16ff6d8c032d44a3ee231803b0"
+    },
+    {
+      "path": "song/lua/sounds/wrong.ogg",
+      "bytes": 10670,
+      "sha256": "4ca306e9d4f6d82ad20df8c50a569a197943a63f9a16efc2d539d7e45a11be8c"
+    },
+    {
+      "path": "song/lua/sounds/wrongbad.ogg",
+      "bytes": 60277,
+      "sha256": "ca3fbacfb7bde8dbe75e1dc7e58faf0c7cb954b87b0bb1c7de14682d7aff4434"
+    },
+    {
+      "path": "song/lua/sounds/wurtz/good1.ogg",
+      "bytes": 68438,
+      "sha256": "5116791593eb4a50a241de078d7242d6107648fd293ea1b39c440dfd6d0867a6"
+    },
+    {
+      "path": "song/lua/sounds/wurtz/good2.ogg",
+      "bytes": 49578,
+      "sha256": "dd28860cd6167848fe5249d1bf3774f40f8c6cf070386e814bb304f1ec6f4d8c"
+    },
+    {
+      "path": "song/lua/sounds/wurtz/good3.ogg",
+      "bytes": 29364,
+      "sha256": "3f848a0a1fef1dfda2ab73ee22fc44c81e2edae9a9f0495205aa3263e81c5f1a"
+    },
+    {
+      "path": "song/lua/sounds/wurtz/good4.ogg",
+      "bytes": 54834,
+      "sha256": "4ca73fa848b197a2974965f6e5f818429e2128aa8f46fb0b6e69b2fa6e7ec0b4"
+    },
+    {
+      "path": "song/lua/sounds/wurtz/good5.ogg",
+      "bytes": 52345,
+      "sha256": "5fd9d6a249ee3e9cb7e185c5f4cd486e8822c5c4ebf76b9c5aa08ba10421933e"
+    },
+    {
+      "path": "song/lua/sounds/yougonnadigthis.ogg",
+      "bytes": 89630,
+      "sha256": "b18b7c13aa1c830f0667e78a96dc2c2bf8a038eaf384823c8bcee2eb13234aab"
+    },
+    {
+      "path": "song/lua/sounds/zap.ogg",
+      "bytes": 32573,
+      "sha256": "e250fece32f7be4f18efff21a44e327bbbe4fb0620367a5832ecedfb12001281"
+    },
+    {
+      "path": "song/lua/spot_tex1.png",
+      "bytes": 7381,
+      "sha256": "4fcc5050f77f4e50de52a1ec0f88de34b1fb5c98672ff4db9b8e23433a2a2657"
+    },
+    {
+      "path": "song/lua/stretcher 1x2.png",
+      "bytes": 9853,
+      "sha256": "4f036578e44ee6fc17b44cdf7a9370d9defc314baf3bfbeb0b3ee73174439e98"
+    },
+    {
+      "path": "song/lua/stretcher_bar.png",
+      "bytes": 700,
+      "sha256": "93cc66c340bbcaa1228a20a8570bbb42a14e22f24cf041f8ae96e815391c6c62"
+    },
+    {
+      "path": "song/lua/suddendeath.png",
+      "bytes": 21869,
+      "sha256": "63f6591289de631f14104e735648e7dacc948abc22e27d45f7d13b1872361c44"
+    },
+    {
+      "path": "song/lua/text/2016.png",
+      "bytes": 6359,
+      "sha256": "3abc56137e5002b33c4e0b8c7272790e5219252e990a89977002fd5237c82d3f"
+    },
+    {
+      "path": "song/lua/text/_dance 17x11.png",
+      "bytes": 303900,
+      "sha256": "c13c95c5f504212ae90e32384a3bf19b5c51e08b1cbe65bbe4325059ed6c7077"
+    },
+    {
+      "path": "song/lua/text/boss1.png",
+      "bytes": 12045,
+      "sha256": "aee4632fea2063aa0c15b66597be49798d275dbc895662d4d134e6b491a51c8c"
+    },
+    {
+      "path": "song/lua/text/boss2.png",
+      "bytes": 10850,
+      "sha256": "6fca7cd7bc78f5b34f2c2ca0eac7a3faeb477763f70ba2dadc2450e1b3b2aa5d"
+    },
+    {
+      "path": "song/lua/text/chekpoint.png",
+      "bytes": 1906,
+      "sha256": "4cd4da44036b9b965489b32edce3637989ca3c2d9a557b3aced59c6c896fe00a"
+    },
+    {
+      "path": "song/lua/text/hit 2x1.png",
+      "bytes": 10213,
+      "sha256": "d374d61b6cdcc2d04cf83c3d97cee8bc48366a0a9d79b8b9a3283e12da6638ab"
+    },
+    {
+      "path": "song/lua/text/letters 4x3.png",
+      "bytes": 12228,
+      "sha256": "bead8c5f97361ff6e208a3e47d5eb400ce6a58f24cace3d55572b883e3d7f67a"
+    },
+    {
+      "path": "song/lua/text/sub0069.png",
+      "bytes": 34968,
+      "sha256": "fb8b85a9f03b909fd39cfc6756792cf9c438636c155276012f419bd79faf13fb"
+    },
+    {
+      "path": "song/lua/text/sub0079.png",
+      "bytes": 3779,
+      "sha256": "e57c8f5e8532ffb79a650f5ca5304c22563b8a6114e3f04a154a0f9c6e96a34c"
+    },
+    {
+      "path": "song/lua/text/text1.png",
+      "bytes": 7919,
+      "sha256": "f89b6c048da62cda61392212d7d04d7cdf7a7fe09fb4f2dfb8ca108ffb008198"
+    },
+    {
+      "path": "song/lua/text/text10.png",
+      "bytes": 6804,
+      "sha256": "0ad4c76f769c4c44d15aaa238a92cb426e10cb82548d0f6c63d8f12bb232ba31"
+    },
+    {
+      "path": "song/lua/text/text11.png",
+      "bytes": 9672,
+      "sha256": "d0e085d47c663ca40c4798952d820578ac26915761bd2961beb9f435a584b33d"
+    },
+    {
+      "path": "song/lua/text/text12a.png",
+      "bytes": 16538,
+      "sha256": "fd87a7231ab4f87b6aadaad1f68fca413db938df11ee50993aaade3d4170f2dd"
+    },
+    {
+      "path": "song/lua/text/text12b.png",
+      "bytes": 9048,
+      "sha256": "b0e17d413f0ea42198b3c2f250951e62397e07f9a8542e15553db8ec3281b8b6"
+    },
+    {
+      "path": "song/lua/text/text12c.png",
+      "bytes": 13542,
+      "sha256": "e821b36d45a3ede9d322473d365e3739ca277fd2d481beabc0adee02277f8a5d"
+    },
+    {
+      "path": "song/lua/text/text13.png",
+      "bytes": 8699,
+      "sha256": "95f51952e7b07353d10d376f5977712b7ebf008e90168b6bc9039951dea00acd"
+    },
+    {
+      "path": "song/lua/text/text14.png",
+      "bytes": 5524,
+      "sha256": "ecf68dfcffa6521d14edd4b3b95c1cbc089c148a2355605e7cf73be3f87fb11a"
+    },
+    {
+      "path": "song/lua/text/text15.png",
+      "bytes": 7396,
+      "sha256": "b26f4e457c4bb07975df1de8cf58b62473c2b68f29a3b5b0d9665d327f48f67b"
+    },
+    {
+      "path": "song/lua/text/text16.png",
+      "bytes": 8570,
+      "sha256": "b00136b53dd751c1b6ff3700ef50e2ae0867cc93eeea417006971099c5716588"
+    },
+    {
+      "path": "song/lua/text/text16b.png",
+      "bytes": 6749,
+      "sha256": "dc5103489f1552b7420fb4b59aa683531c66ef86ce17c18c3a3aa498a52e05ad"
+    },
+    {
+      "path": "song/lua/text/text17.png",
+      "bytes": 5978,
+      "sha256": "4d84d921ea7255783b6c554bd814d79d919fd538453e5989a74cdb7925d0cb5f"
+    },
+    {
+      "path": "song/lua/text/text18.png",
+      "bytes": 5602,
+      "sha256": "e40aca89be518f25a7d8c7a3d73d2b7c708afefa35028a91feffb36a5b353e24"
+    },
+    {
+      "path": "song/lua/text/text19.png",
+      "bytes": 6800,
+      "sha256": "f793248bd13d632cd28ca9268ef89b51bb824646edce36cadff9ac0d5f50fdff"
+    },
+    {
+      "path": "song/lua/text/text2.png",
+      "bytes": 13855,
+      "sha256": "90cae4f9322f020e9a35473b6c9ede619ed550c26d0c12a89a3550eb93929789"
+    },
+    {
+      "path": "song/lua/text/text20.png",
+      "bytes": 8475,
+      "sha256": "e950f4358a8c5454da09b302c68f7391fe65eac43903d445b176e5845ee4c9b6"
+    },
+    {
+      "path": "song/lua/text/text21.png",
+      "bytes": 7496,
+      "sha256": "28e789b7d0988f63194ed18a988728d0b0fc90f6bfaba41051d55c0107b42f86"
+    },
+    {
+      "path": "song/lua/text/text3.png",
+      "bytes": 6675,
+      "sha256": "0ac62b162cbdc03044a1ad78447d42779bb31b5e23a6a957a00eab02d3af6291"
+    },
+    {
+      "path": "song/lua/text/text4.png",
+      "bytes": 11723,
+      "sha256": "40bcbc3906a01da988c00ce28eeebe8358241c025003adfe1fdb4cbb3aa97358"
+    },
+    {
+      "path": "song/lua/text/text5.png",
+      "bytes": 6831,
+      "sha256": "e8b7b8e0548b6f76f0c71b0c42d23f6211f3b37516a6662ca6cf1e7f9289e80d"
+    },
+    {
+      "path": "song/lua/text/text6.png",
+      "bytes": 7768,
+      "sha256": "e11a853d492ae78749f3d0bcd94491ddd07eeea292562805916aaadfdc1901c7"
+    },
+    {
+      "path": "song/lua/text/text7.png",
+      "bytes": 14046,
+      "sha256": "267d7087c09f6042276fe3181388f2cac4b3e55beb4a51375e950159139b29d3"
+    },
+    {
+      "path": "song/lua/text/text8.png",
+      "bytes": 10371,
+      "sha256": "9cc57ef53b24ed4ac91d2cb9451043cef9d6610f54d74fe44fa07c2b771b0e42"
+    },
+    {
+      "path": "song/lua/text/text9.png",
+      "bytes": 11363,
+      "sha256": "e65f0fa292c622ae0fcdf40f2b38bd2fe900ceccb4e2c971cec1f7c79eca7b31"
+    },
+    {
+      "path": "song/lua/tv.png",
+      "bytes": 33135,
+      "sha256": "b12a2f06054b3e5bc5c9d80369637cea5a3b1434161a7b932c0b0f10fe18da1a"
+    },
+    {
+      "path": "song/lua/ui_operation.png",
+      "bytes": 7387,
+      "sha256": "c24457d524a666c5f4f42115c9ba42a0c5f0e1cae3eb4282985d1b92d8cf741d"
+    },
+    {
+      "path": "song/mawaru9.ogg",
+      "bytes": 15686204,
+      "sha256": "6a6859ab2633959e0d410459cb8e5960f840536ad7a6edc963bb930e0cc1ea5d"
+    },
+    {
+      "path": "song/mawaru9.sm",
+      "bytes": 69368,
+      "sha256": "0012dd2fa9cef58ae543bd88b3ab84e25d0b390fcea2827c97c3dd1ac7d5a624"
+    },
+    {
+      "path": "song/mawaru_finale_ch0.lua",
+      "bytes": 205,
+      "sha256": "38d8bd974acb3e0bc8fe99951073faa0a104d479c30f0035e3ac8f9e11113a59"
+    },
+    {
+      "path": "song/mawaru_finale_ch1.lua",
+      "bytes": 307,
+      "sha256": "1cd75141f586f4d14706c4614d04f8c84f66c1216ce805abd08e2bfb339d83bb"
+    },
+    {
+      "path": "song/mawaru_finale_ch2.lua",
+      "bytes": 355,
+      "sha256": "d768ac98aed96576105d90221b9ca01e24fd111a0daac009df71a5f5667bb674"
+    },
+    {
+      "path": "song/mawaru_finale_ch3.lua",
+      "bytes": 587,
+      "sha256": "d2008827355fc7da3949048c9efe34e358bf30e9d40e9c341e22ced1568aa3f5"
+    },
+    {
+      "path": "song/mawaru_finale_ch4.lua",
+      "bytes": 621,
+      "sha256": "c5a898c0e853507dc57b02a410a806d81a10a4e1c22d1f69f3d4072c124dea1f"
+    },
+    {
+      "path": "song/mawaru_finale_ch5.lua",
+      "bytes": 933,
+      "sha256": "8f33fc7270998bc8d2684d008987104564cd9a248f54be90dfa76b5a04002c00"
+    },
+    {
+      "path": "song/mawaru_glados_ch0.lua",
+      "bytes": 139,
+      "sha256": "16d392a6f9d8e61b5dbf6beb9b1d4956a710cad9389881cba777e24e8440a0d7"
+    },
+    {
+      "path": "song/mawaru_glados_ch1.lua",
+      "bytes": 267,
+      "sha256": "68d5d308054639b50a151d491e4dc7e9a79678e103fe6eebcaf4919c845de95c"
+    },
+    {
+      "path": "song/mawaru_glados_ch2.lua",
+      "bytes": 395,
+      "sha256": "623f2943c3c569e449459b1777f6472e57723e03f805b1d353364baea2869e42"
+    },
+    {
+      "path": "song/mawaru_glados_ch3.lua",
+      "bytes": 587,
+      "sha256": "b29f6a11dc5f049458430d3b3ab5e3e99067235efedef45f16581ad54b64eff1"
+    },
+    {
+      "path": "song/mawaru_glados_ch4.lua",
+      "bytes": 619,
+      "sha256": "2955ca9a0fd859ce1edf8eabc274bffd95be65170e62c381c205afc63bd9ac63"
+    },
+    {
+      "path": "song/mawaru_glados_ch5.lua",
+      "bytes": 907,
+      "sha256": "650a458611b67672628b9dbb750250428e32460ff875b2efbfe16465185d82c6"
+    },
+    {
+      "path": "song/mawaru_nue_ch0.lua",
+      "bytes": 131,
+      "sha256": "58793c1f9ae56e16dfe1a1a63b851f28ab0ce2f854cc54d25de5e4901c65d1d6"
+    },
+    {
+      "path": "song/mawaru_nue_ch1.lua",
+      "bytes": 251,
+      "sha256": "b9da7d4b2ca72459e640ae16da24d6a917b3629d7e54ebe626eff6b94f3f89a4"
+    },
+    {
+      "path": "song/mawaru_nue_ch2.lua",
+      "bytes": 371,
+      "sha256": "298c10792b0c5ad38fcdb1f38209fbfdb202492df78e10483b44005bcc82f514"
+    },
+    {
+      "path": "song/mawaru_nue_ch3.lua",
+      "bytes": 506,
+      "sha256": "31d21db6c5baeb6620ea5be7f25c26e59a0bd51b007c6cf11258aaf0638814e6"
+    },
+    {
+      "path": "song/mawaru_nue_ch4.lua",
+      "bytes": 506,
+      "sha256": "3c9f12f9a6f47f7e8730434d77b91bb857bffe7e4dbd5a94ebf9fc7ef1ca64bb"
+    },
+    {
+      "path": "song/mawaru_nue_ch5.lua",
+      "bytes": 671,
+      "sha256": "efe0d679536389fae520d479021e0e0893698c6489d9cc57fb9c18029783e8b7"
+    },
+    {
+      "path": "song/mawaru_reisen_ch0.lua",
+      "bytes": 111,
+      "sha256": "1fd644d6aa42d435c9138c8232fbd85e2fb530d4ea32a0d8b29a3436defe1d78"
+    },
+    {
+      "path": "song/mawaru_reisen_ch1.lua",
+      "bytes": 291,
+      "sha256": "16f9a704c960eb81b860bcf52db45f68e24c8ae5e49e4376ce426572e648c0ea"
+    },
+    {
+      "path": "song/mawaru_reisen_ch2.lua",
+      "bytes": 415,
+      "sha256": "74f460c7b1de0b9f34c216eeeecb0b98f08dbf68e460c46ff72daf55c0c014d2"
+    },
+    {
+      "path": "song/mawaru_reisen_ch3.lua",
+      "bytes": 1139,
+      "sha256": "016f95a3b3bf7105783a5f30bc47c7f71ef22bff5bf88cd20fdfabb193b54781"
+    },
+    {
+      "path": "song/mawaru_reisen_ch4.lua",
+      "bytes": 1133,
+      "sha256": "44e7b61fd139bf43f4574f23f57443132b1d386a4c8fb0368345d63f5dca376c"
+    },
+    {
+      "path": "song/mawaru_reisen_ch5.lua",
+      "bytes": 1579,
+      "sha256": "2c49ea2b8332ae95a0b71a54d0600e4d5828bd04d39d0e6ed2af05e6c8710c48"
+    },
+    {
+      "path": "trace/semantic.json",
+      "bytes": 797333377,
+      "sha256": "d4f0fb33d5bbc3c69a2488fb992e1d1caf086dbfe7f12672667d5a9b6b5c2be1"
+    }
+  ],
+  "free_before": 684027904,
+  "free_after": 1519292416,
+  "capture_and_original_logs_preserved": true
+}
