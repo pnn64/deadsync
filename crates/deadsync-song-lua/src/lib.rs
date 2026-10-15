@@ -681,6 +681,8 @@ pub struct SongLuaPlayerContext {
     pub judgment_texture: Option<PathBuf>,
     /// Profile option used by Simply Love's Lua-owned cue actors.
     pub column_cues: bool,
+    /// Initial profile filter opacity. Zero disables the theme's filter Quad.
+    pub background_filter_percent: u8,
     pub screen_x: f32,
     pub screen_y: f32,
 }
@@ -704,6 +706,7 @@ impl Default for SongLuaPlayerContext {
             noteskin_name: SONG_LUA_DEFAULT_NOTESKIN_NAME.to_string(),
             judgment_texture: None,
             column_cues: false,
+            background_filter_percent: 0,
             screen_x: 320.0,
             screen_y: 240.0,
         }

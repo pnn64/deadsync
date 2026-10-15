@@ -169,7 +169,15 @@ fn create_sl_player_mods(lua: &Lua, player: &SongLuaPlayerContext) -> mlua::Resu
     table.set("Mini", "0%")?;
     table.set("Spacing", "0%")?;
     table.set("VisualDelay", "0ms")?;
-    table.set("BackgroundFilter", 0)?;
+    let filter = player.background_filter_percent.min(100);
+    match filter {
+        0 => table.set("BackgroundFilter", "Off")?,
+        50 => table.set("BackgroundFilter", "Dark")?,
+        75 => table.set("BackgroundFilter", "Darker")?,
+        95 => table.set("BackgroundFilter", "Darkest")?,
+        // The production profile also supports arbitrary percentages.
+        value => table.set("BackgroundFilter", value)?,
+    }
     table.set("HideTargets", false)?;
     table.set("HideSongBG", false)?;
     table.set("HideCombo", false)?;

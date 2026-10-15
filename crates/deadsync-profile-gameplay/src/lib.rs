@@ -544,6 +544,9 @@ pub fn song_lua_compile_context(
         screen_y: viewport.center_y(),
         judgment_texture: None,
         column_cues: player < num_players && player_profiles[player].column_cues,
+        background_filter_percent: if player < num_players {
+            player_profiles[player].background_filter.percent()
+        } else { 0 },
     });
     context
 }

@@ -3756,6 +3756,56 @@ return Def.Actor { OnCommand = function(self) self:sleep(9999) end }
     }
 
     #[test]
+    fn live_underlay_background_filter_uses_initial_profile_inputs() {
+        for (style, p1, p2, enabled, expected_width, expected_count) in [
+            ("single", 75, 0, false, 256, 1),
+            ("single", 50, 95, true, 256, 2),
+            ("double", 37, 0, false, 512, 1),
+            ("routine", 75, 95, true, 512, 1),
+            ("single", 0, 0, false, 256, 0),
+        ] {
+            let source = r#"
+FILTERS = {}
+return Def.Actor { OnCommand = function()
+    local underlay = SCREENMAN:GetTopScreen():GetChild('Underlay')
+    local unnamed = underlay:GetChildren()['']
+    if unnamed and tostring(unnamed):find('Sprite', 1, true) then unnamed = {unnamed} end
+    for _, child in ipairs(unnamed or {}) do
+        if tostring(child):find('Sprite', 1, true) then
+            assert(child:GetParent() == underlay and child:GetName() == '')
+            assert(child:GetZoomedWidth() == $WIDTH and child:GetZoomedHeight() == SCREEN_HEIGHT)
+            assert(child:GetTexture() ~= nil)
+            FILTERS[#FILTERS+1] = child
+        end
+    end
+    assert(#FILTERS == $COUNT, 'Underlay must load the profile-selected BackgroundFilter Quad')
+end }
+"#.replace("$WIDTH", &expected_width.to_string()).replace("$COUNT", &expected_count.to_string());
+            let compiled = compile_with_context(&format!("underlay-filter-{style}-{p1}-{p2}"), &source, |context| {
+                context.style_name = style.into();
+                context.players[0].background_filter_percent = p1;
+                context.players[1].background_filter_percent = p2;
+                context.players[1].enabled = enabled;
+                context.players[0].screen_x = 130.0;
+                context.players[1].screen_x = 510.0;
+            });
+            let scene = compiled.live_scene.expect("selected native background filters");
+            let filters = scene.lua.globals().get::<Table>("FILTERS").unwrap();
+            assert_eq!(filters.raw_len(), expected_count);
+            for (index, filter) in filters.sequence_values::<Table>().map(Result::unwrap).enumerate() {
+                let state = read_state(&scene.lua, &filter).unwrap();
+                assert_eq!(state.x, [130.0, 510.0][index]);
+                assert_eq!(state.y, scene.context.screen_height * 0.5);
+                let percent = [p1, p2][index];
+                assert!((state.diffuse[3] - f32::from(percent) / 100.0).abs() < 1e-6);
+                assert_eq!(&state.diffuse[..3], &[0.0; 3]);
+                assert!(filter.raw_get::<Option<Function>>("OffCommand").unwrap().is_some());
+                assert!(filter.raw_get::<Option<Function>>("ComboFlashCommand").unwrap().is_some());
+            }
+        }
+    }
+
+    #[test]
     fn live_in_transition_loads_native_style_bitmaps_and_poses() {
         let compiled = compile("in-transition-bitmaps", r#"
 IN_SPRITES = {}

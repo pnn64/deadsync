@@ -54,9 +54,11 @@ fn null_renderer_reaches_song_lua_unchanged() {
     ).expect("small context chart");
     let charts = std::array::from_fn(|_| Arc::new(song.charts[0].clone()));
     let timing = TimingData::default();
+    let mut profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+    profiles[0].background_filter = deadsync_profile::BackgroundFilter::from_percent(37);
     let context = super::song_lua_play_context(
         &song, &charts, [&timing; 2],
-        &std::array::from_fn(|_| deadsync_profile::Profile::default()),
+        &profiles,
         &[deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0); 2],
         1.0, deadsync_gameplay::GameplayViewport::new(854.0, 480.0), (0, 0), 16.0 / 9.0, 1.0,
         &Default::default(), &Default::default(), "null",
@@ -66,6 +68,8 @@ fn null_renderer_reaches_song_lua_unchanged() {
     assert_eq!(context.display_aspect_ratio, 16.0 / 9.0);
     assert_eq!(context.players[0].autoplay, 1.0);
     assert_eq!(context.players[1].autoplay, 0.0);
+    assert_eq!(context.players[0].background_filter_percent, 37);
+    assert_eq!(context.players[1].background_filter_percent, 0);
     assert_eq!(context.video_renderers, "null");
     assert!(!context.render_to_texture);
 }

@@ -749,6 +749,20 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn native_background_filter_uses_initial_theme_options_only() {
+        let mut trace = serde_json::json!({"input":{"gameplay_preferences":{
+            "default_modifiers":"", "players":[
+                {"theme_modifiers":{"BackgroundFilter":"Darker"}},
+                {"theme_modifiers":{"BackgroundFilter":"Off"}}
+            ]}}});
+        let profiles = super::native_profile_inputs(&trace).unwrap();
+        assert_eq!(profiles[0].background_filter.percent(), 75);
+        assert_eq!(profiles[1].background_filter.percent(), 0);
+        trace["input"]["gameplay_preferences"]["players"][0]["theme_modifiers"]["BackgroundFilter"] = serde_json::json!("unknown");
+        assert!(super::native_profile_inputs(&trace).is_err());
+    }
+
+    #[test]
     fn native_double_session_selects_double_steps_and_runs_eight_column_scene() {
         paths::init();
         let dir = std::env::temp_dir().join(format!("deadsync-double-native-session-{}", std::process::id()));
@@ -2767,7 +2781,7 @@ fn native_profile_inputs(trace: &Value) -> Result<[deadsync_profile::Profile; 2]
             "nonempty native default modifiers require complete initial option support".into(),
         );
     }
-    Ok(std::array::from_fn(|player| deadsync_profile::Profile {
+    let mut profiles = std::array::from_fn(|player| deadsync_profile::Profile {
         scroll_speed: deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0),
         // A neutral profile input, recorded before chart Lua executes. Older
         // captures use SL_Init.lua's fresh-profile default of enabled cues.
@@ -2779,7 +2793,18 @@ fn native_profile_inputs(trace: &Value) -> Result<[deadsync_profile::Profile; 2]
             .and_then(Value::as_bool)
             .unwrap_or(true),
         ..Default::default()
-    }))
+    });
+    for (player, profile) in profiles.iter_mut().enumerate() {
+        if let Some(value) = trace.pointer("/input/gameplay_preferences/players")
+            .and_then(Value::as_array).and_then(|players| players.get(player))
+            .and_then(|player| player.pointer("/theme_modifiers/BackgroundFilter"))
+        {
+            let text = value.as_str().ok_or("initial BackgroundFilter must be a named percentage")?;
+            profile.background_filter = text.parse()
+                .map_err(|error| format!("invalid initial BackgroundFilter: {error}"))?;
+        }
+    }
+    Ok(profiles)
 }
 
 fn compare_stage_sample(
