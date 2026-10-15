@@ -1,0 +1,36 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "entry_evidence": "sweep-2026-10-15-hope-oni-game-over-bitmap-entry-diagnostic.json",
+  "native_actor_identity_evidence": "sweep-2026-10-15-hope-score-frame-entry-evidence.json",
+  "entry_frames": 1688,
+  "entry_errors": 0,
+  "entry_mismatches": 20475,
+  "first_remaining_actor": "ScreenGameplay/ScoreP1",
+  "first_remaining_operation": "ActorFrame.GetNumChildren",
+  "native_result": 2,
+  "owned_result": 1,
+  "local_primary_sources": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src\\ScoreDisplayPercentage.cpp",
+      "sha256": "e9698e59d312ba932df393f2522cae5f3345754e6bcbf8d6185ccadada3c0edb"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\Graphics\\ScoreDisplayNormal frame.redir",
+      "sha256": "130ce35772ded9394bc9f89ffee75b07eff713361d0326100aa4f4157ee7480b"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\Graphics\\_blank.png",
+      "sha256": "1bc6840fdf516b59b9439951834326ca1643f014ed0767d6bb3da3ae39768868"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\crates\\deadsync-song-lua\\src\\lua_util.rs",
+      "sha256": "3479bb3f9f193fbbd88f8974f901136d7d9474697610f5738da05dfe1854f6d8"
+    }
+  ],
+  "source_cause": "ScoreDisplayPercentage constructs and adds an unnamed Sprite loaded from ScoreDisplayNormal frame before its named PercentageDisplay child. The fallback redirection resolves to the native _blank.png bitmap. Owned create_top_screen_score_actor only creates the PercentageDisplay child, omitting the frame. The retained native trace independently records the unnamed first child under ScreenGameplay/ScoreP1.",
+  "production_fix_added": false,
+  "full_repairs_spent": 0,
+  "original_native_capture_reused": true,
+  "expected_query_results_used_as_engine_inputs": false,
+  "acceptance_comparisons_changed": false
+}
