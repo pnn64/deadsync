@@ -1,0 +1,45 @@
+{
+  "source_simfile": "mawaru8/mawaru8.sm",
+  "closed_full_pass_frames": 124734,
+  "compressed_fixture_and_report_preserved": true,
+  "all_uncompressed_hashes_verified_before_unlink": true,
+  "active_process_arguments_checked_twice": true,
+  "passing_chart_reopened_or_replayed": false,
+  "pending_captures_and_frozen_source_roots_changed": false,
+  "unique_raw_inodes_freed_bytes": 1282696113,
+  "raw_paths_removed": [
+    {
+      "raw": "/home/parity/jobs/mawaru8-player-stats-identity-first-repair-v1/chart-307/6371f5c7299efa1afae969b3dc7b0f033aa78702ed72161af14fe0a068a7f91f.tar",
+      "raw_sha256": "6371f5c7299efa1afae969b3dc7b0f033aa78702ed72161af14fe0a068a7f91f",
+      "bytes": 708863488,
+      "compressed": "/home/parity/jobs/mawaru8-post-accept-reporter-recovery-v1/chart-307/accepted/ee1cd83a8822f6809cdfedef10871a04a83814aad1f667e03794539dff600942.tar.zst",
+      "compressed_sha256": "ee1cd83a8822f6809cdfedef10871a04a83814aad1f667e03794539dff600942",
+      "decompressed_sha256_verified": true
+    },
+    {
+      "raw": "/home/parity/jobs/mawaru8-post-accept-reporter-recovery-v1/chart-307/6371f5c7299efa1afae969b3dc7b0f033aa78702ed72161af14fe0a068a7f91f.tar",
+      "raw_sha256": "6371f5c7299efa1afae969b3dc7b0f033aa78702ed72161af14fe0a068a7f91f",
+      "bytes": 708863488,
+      "compressed": "/home/parity/jobs/mawaru8-post-accept-reporter-recovery-v1/chart-307/accepted/ee1cd83a8822f6809cdfedef10871a04a83814aad1f667e03794539dff600942.tar.zst",
+      "compressed_sha256": "ee1cd83a8822f6809cdfedef10871a04a83814aad1f667e03794539dff600942",
+      "decompressed_sha256_verified": true
+    },
+    {
+      "raw": "/home/parity/jobs/mawaru8-player-stats-identity-first-repair-v1/chart-307/report.json",
+      "raw_sha256": "24ccd73da8a6a8601b9ed19fb194df0186c840183ac55a859c43ce920e5648ee",
+      "bytes": 573832625,
+      "compressed": "/home/parity/jobs/mawaru8-player-stats-identity-first-repair-v1/chart-307/report.json.zst",
+      "compressed_sha256": "147a6379622ebea11ce2d150a800e91516e83fd97acf874fd59474f3743090bb",
+      "decompressed_sha256_verified": true
+    },
+    {
+      "raw": "/home/parity/jobs/mawaru8-post-accept-reporter-recovery-v1/chart-307/report.json",
+      "raw_sha256": "24ccd73da8a6a8601b9ed19fb194df0186c840183ac55a859c43ce920e5648ee",
+      "bytes": 573832625,
+      "compressed": "/home/parity/jobs/mawaru8-player-stats-identity-first-repair-v1/chart-307/report.json.zst",
+      "compressed_sha256": "147a6379622ebea11ce2d150a800e91516e83fd97acf874fd59474f3743090bb",
+      "decompressed_sha256_verified": true
+    }
+  ],
+  "original_replay_exit_preserved": 1
+}
