@@ -5174,15 +5174,12 @@
     {
       "title": "Tower Power Pokey Battle",
       "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
-      "harness_version": "0.1.0",
-      "archive": "61f5f4a0ff7fde7e802dda787495150e1537c7195c8a095aff519f8d459e4082.tar.zst",
-      "sha256": "61f5f4a0ff7fde7e802dda787495150e1537c7195c8a095aff519f8d459e4082",
-      "compressed_bytes": 79339,
-      "uncompressed_sha256": "61fd485033a0502092a5b81e9237c90100c26de37b2aa9b45b97bf9be73b8215",
-      "compression_level": 22,
-      "aliases": [
-        "2300752f63d96f21096e850a22ecf8b1a05b933782928bbaa9523dbfa0b4f3ac.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "e78ee9493b40793abb9ff8f38bde710171c9aa10e6054189db2a0d1203718394.tar.zst",
+      "sha256": "e78ee9493b40793abb9ff8f38bde710171c9aa10e6054189db2a0d1203718394",
+      "compressed_bytes": 10033056,
+      "uncompressed_sha256": "86ca2d782bd0150fa4f0aa8b66e4a6c01ec1307cb724e1ee780df108589bfe82",
+      "aliases": []
     },
     {
       "title": "Trancing Pulse",

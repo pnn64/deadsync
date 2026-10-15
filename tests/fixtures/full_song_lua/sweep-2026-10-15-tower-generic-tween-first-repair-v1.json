@@ -1,0 +1,65 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "db721070909353b343cdf3a2b85ba90da700a99f",
+  "results": [
+    {
+      "position": 445,
+      "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "86ca2d782bd0150fa4f0aa8b66e4a6c01ec1307cb724e1ee780df108589bfe82",
+      "trace_sha256": "fe1689a623805000a2358fd580725c8ef2d29c69869f6bca1b41c4d794a7b733",
+      "simfile_sha256": "3d43975664a8d1b0cdb6e9a5192126af61b447b10da2f94f1d9d4a1d9ba22645",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "binary_sha256": "3e7c6a5edbb2df015cb15f6deaa2a8c73d729123e8a30e8a9105a07d501a04eb",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "build_proof": "/home/parity/jobs/generic-tween-linux-green-v2/proof.json",
+      "fix_commit": "db721070909353b343cdf3a2b85ba90da700a99f",
+      "previous_failure": null,
+      "previous_errors": [],
+      "replay_exit": 0,
+      "replay_seconds": 2293.37371294701,
+      "native_frames": 105094,
+      "replayed_frames": 105094,
+      "compared_stage_fields": 1694,
+      "pending_coverage": [
+        "uncompared song operations: Actor.bob, Actor.fadetop, Actor.hibernate, Actor.hurrytweening, Actor.tween",
+        "native drawable state/resources: Sprite"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "2aa0af353c6a2aff0f0c8d51fdfec9b61bc9ef59b870220ea2029fe3bf21833f",
+      "archive": "e78ee9493b40793abb9ff8f38bde710171c9aa10e6054189db2a0d1203718394.tar.zst",
+      "archive_sha256": "e78ee9493b40793abb9ff8f38bde710171c9aa10e6054189db2a0d1203718394",
+      "compressed_bytes": 10033056,
+      "harness_version": "0.1.80",
+      "title": "Tower Power Pokey Battle",
+      "pack_seconds": 2.246113316999981,
+      "retained_original_entry": {
+        "title": "Tower Power Pokey Battle",
+        "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
+        "harness_version": "0.1.0",
+        "archive": "61f5f4a0ff7fde7e802dda787495150e1537c7195c8a095aff519f8d459e4082.tar.zst",
+        "sha256": "61f5f4a0ff7fde7e802dda787495150e1537c7195c8a095aff519f8d459e4082",
+        "compressed_bytes": 79339,
+        "uncompressed_sha256": "61fd485033a0502092a5b81e9237c90100c26de37b2aa9b45b97bf9be73b8215",
+        "compression_level": 22,
+        "aliases": [
+          "2300752f63d96f21096e850a22ecf8b1a05b933782928bbaa9523dbfa0b4f3ac.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "3e7c6a5edbb2df015cb15f6deaa2a8c73d729123e8a30e8a9105a07d501a04eb",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "first repair: general Actor.tween implements all native TweenType forms including scalar and 2D Bezier; original complete capture reused and full comparisons unchanged",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
