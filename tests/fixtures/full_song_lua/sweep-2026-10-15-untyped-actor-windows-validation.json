@@ -1,0 +1,82 @@
+{
+  "fix_commit": "e8daaa0862dfde8af1096b62e92246b175d30f10",
+  "all_eight_checks_passed": true,
+  "all_1175_source_pins_verified": true,
+  "all_log_hashes_verified": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 268.229631299997,
+      "log_sha256": "2b5eee54b9ace953c41f42192b84d7e6cecb39fa179f86bf1f61433a9209817b",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 610 filtered out; finished in 0.23s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 1.5557028000039281,
+      "log_sha256": "dbf0ed6dace340ce3605d4ecd0faa95b050ad3083b500e46b53541a6daed5633",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 611 filtered out; finished in 0.18s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 0.7768288999941433,
+      "log_sha256": "c379c48e8dcf7ece541b4e33a8f6e5919b0c5845b6ac1ebfde88368c01942546",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.3392469999962486,
+      "log_sha256": "fd716917af32c668af9dbfe9b68182d44031558c9cda568792b0cd5bc461ebcb",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 602 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 36.91820279999229,
+      "log_sha256": "b8c26047f23a914fad29bbac4c4d1cd99849202f720c3e9118b9ea8c07598894",
+      "results": [
+        "test result: ok. 74 passed; 0 failed; 0 ignored; 0 measured; 538 filtered out; finished in 35.55s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 84.74040599999717,
+      "log_sha256": "e7c2fe547f435bd3112195025fbca890f3cd8a5ec77e0f631654525df6ab9fa4",
+      "results": [
+        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.16s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 1.432428100000834,
+      "log_sha256": "81bcd5c1038f2213706b0921e2d0c79924fbd34cb8e38d3b477327907dbc48c0",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 611 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 20.864323299989337,
+      "log_sha256": "0da80da90dad3f011aa75d3131a94216534d34f61d2b037b5e0a257682ee37e1",
+      "results": []
+    }
+  ],
+  "native_missing_class_fallback_verified": true,
+  "construction_side_effects_preserved": true,
+  "untyped_fields_commands_children_discarded": true,
+  "full_acceptance_comparators_unchanged": true
+}
