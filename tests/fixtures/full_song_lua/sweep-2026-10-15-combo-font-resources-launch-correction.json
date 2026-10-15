@@ -1,0 +1,13 @@
+{
+  "initial_green_launch_failed_before_compilation_both_hosts": true,
+  "cause": "Coordinator retained the prior validator filename; its existing stage mkdir(exist_ok=False) rejected the launch before source or compilation steps.",
+  "windows_launch_error_sha256": "3960f91f5c7ccc89991571fbd21fc55eb99a633353f11f0d84b3b3fc01bcfb31",
+  "linux_launch_error_sha256": "6785a6fe80f3bf95c2d134709b619e4d4aeec0466a3f5d2013c2aeef86c54c46",
+  "corrected_validator": "validate_combo_font_resources_v1.py",
+  "corrected_windows_launcher_pid": 56684,
+  "corrected_logs_use_launch2_suffix": true,
+  "red_regression_already_reproduced_both_hosts": true,
+  "production_validation_failure_claimed": false,
+  "full_chart_repairs_spent": 0,
+  "capture_replayed_by_failed_launch": false
+}
