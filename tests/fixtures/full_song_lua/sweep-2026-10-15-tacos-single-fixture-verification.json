@@ -1,0 +1,15 @@
+{
+  "verification": "Storage byte integrity only; full replay acceptance remains closed.",
+  "source_simfile": "Tacos/Tacos.ssc",
+  "native_frames": 63571,
+  "replayed_frames": 63571,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "archive": "625fbf56b644ee359819b42439517240ec9079c43163df72718d6a163f466b37.tar.zst",
+  "compressed_sha256": "625fbf56b644ee359819b42439517240ec9079c43163df72718d6a163f466b37",
+  "uncompressed_sha256": "c55b09335011d6ac629686a7663f7eca0ef55f92b78c9272d19b77471d897170",
+  "compressed_bytes": 6892747,
+  "local_decompression_byte_verified": true,
+  "passing_chart_reopened": false,
+  "acceptance_gate_added": false
+}
