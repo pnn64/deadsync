@@ -1,0 +1,107 @@
+{
+  "failed_checks_preserved": {
+    "windows-v6": [
+      {
+        "label": "target-control",
+        "exit_code": 0,
+        "seconds": 350.5268924999982,
+        "log_sha256": "60892668984efb6965e8b9e5d0148196824541bcad88a1ac01de8a4d2c95a405",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 637 filtered out; finished in 1.69s"
+        ]
+      },
+      {
+        "label": "live-controls",
+        "exit_code": 0,
+        "seconds": 70.33358629999566,
+        "log_sha256": "ad5351e84d4d1adb335c55a39c2d5a3dde144d3605c9f15a0211adfc6f4bf4cb",
+        "results": [
+          "test result: ok. 99 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 62.36s"
+        ]
+      },
+      {
+        "label": "profile-control",
+        "exit_code": 0,
+        "seconds": 76.78885380001157,
+        "log_sha256": "3e2652c8a955749fd31a56e07a44e440fad4c42e155d4bedb394057eb7ac46bf",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+        ]
+      },
+      {
+        "label": "replay-controls",
+        "exit_code": 0,
+        "seconds": 146.7815985000052,
+        "log_sha256": "e1d931417e95060b6df292c8c4c627de0d6474dd6f32ad97b94cc1381895ca48",
+        "results": [
+          "test result: ok. 40 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 24.83s"
+        ]
+      },
+      {
+        "label": "legacy-enabled-players",
+        "exit_code": 101,
+        "seconds": 2.4840608999948017,
+        "log_sha256": "6966d4dd8da12ad32e58d6690e32e1688b64d9167a8ceb2b97a72229419c4b35",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 637 filtered out; finished in 0.95s"
+        ]
+      }
+    ],
+    "linux-v7": [
+      {
+        "label": "target-control",
+        "exit_code": 0,
+        "seconds": 244.45948228501948,
+        "log_sha256": "1118c1f5f78f50159c63c5927d9e1a0be6c9254f785c8cfb7f50e07cb733ccc5",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 635 filtered out; finished in 1.28s"
+        ]
+      },
+      {
+        "label": "live-controls",
+        "exit_code": 0,
+        "seconds": 36.8966229740181,
+        "log_sha256": "7886ff2e8928d60946db2f7f7c02486bde05bd2c330304ab6cdd2a0482a4c0d4",
+        "results": [
+          "test result: ok. 99 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 36.21s"
+        ]
+      },
+      {
+        "label": "profile-control",
+        "exit_code": 0,
+        "seconds": 80.40408217901131,
+        "log_sha256": "7ccceff0bc32db9ebe080dec2006adc69bf3d76edc16790299a6fe3b426485bd",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+        ]
+      },
+      {
+        "label": "replay-controls",
+        "exit_code": 0,
+        "seconds": 74.76963239500765,
+        "log_sha256": "72870843b7b38f24479d9ccbf80ed23f252ebfd78c828b354e65e16e0be48bfb",
+        "results": [
+          "test result: ok. 40 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 21.70s"
+        ]
+      },
+      {
+        "label": "legacy-enabled-players",
+        "exit_code": 101,
+        "seconds": 1.3476344110094942,
+        "log_sha256": "43edcc4158fcd74bdea7ac4bd1cc4dd5281b9718533a4b0a6a548023e8014cb7",
+        "results": [
+          "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 635 filtered out; finished in 0.67s"
+        ]
+      }
+    ]
+  },
+  "native_actor_cpp_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+  "native_queued_command_source": "void Actor::QueueCommand(const std::string& sCommandName) {\n  BeginTweening(0, TWEEN_LINEAR);\n  TweenInfo& TI = m_Tweens.back()->info;\n  TI.m_sCommandName = sCommandName;\n}\n",
+  "actual_failure": "The unchanged enabled-player ownership regression in non-live compilation eagerly drained PeakNPSUpdated -> Size during CurrentSongChanged before the second player had calculated density. Original DensityGraph.lua:90 compared the first numeric peak with the absent other-player peak. Live replay already owns native tween queues and all99 live/40 replay controls passed before this legacy failure.",
+  "source_fix": "Begin the existing SongLuaStartupQueues scope before native theme Init/Begin/On and pre-song CurrentSongChanged. Commands remain in the existing queue until the screen startup update. No native Lua function bodies or queue timings are changed.",
+  "v6_to_v8_entire_regression_sources_identical": true,
+  "runtime_change_limited_to_starting_existing_startup_queue_scope_before_theme_initialization": true,
+  "test_expectations_weakened": false,
+  "errors_suppressed_or_expected_values_seeded": false,
+  "chart_repairs_spent": 0
+}
