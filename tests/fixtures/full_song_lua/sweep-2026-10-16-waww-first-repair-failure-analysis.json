@@ -1,0 +1,417 @@
+{
+  "source_simfile": "What A Wonderful World/WAWW.sm",
+  "report_sha256": "835ddbdaa434e29c5c07469bc80c28b279f1e7e817f17f89fe45ba98f7bbf617",
+  "decoded_full_report_hash_verified": true,
+  "full_frames": 7119,
+  "full_repairs_spent": 1,
+  "errors": [],
+  "mismatch_fields": {
+    "source_broadcast_count": 1,
+    "source_broadcast": 4,
+    "command_query_event": 4652
+  },
+  "extra_pre_song_broadcast": {
+    "seconds": 0.0,
+    "beat": 0.0,
+    "name": "PeakNPSUpdated",
+    "args": [
+      "PeakNPSUpdated"
+    ],
+    "params_error": null
+  },
+  "remaining_four_broadcasts_match_unchanged_full_comparisons": [
+    {
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0
+    },
+    {
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0
+    },
+    {
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0
+    },
+    {
+      "args_equal": true,
+      "seconds_delta": 0.0,
+      "beat_delta": 0.0
+    }
+  ],
+  "first_command_query_mismatches": [
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0022",
+        "args": [
+          75
+        ],
+        "beat": 23.97637939453125,
+        "caller": {
+          "line": 31,
+          "source": "song:/roses/default.lua",
+          "tail_call": false
+        },
+        "command": "moveCommand",
+        "definition_id": "def-0022",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 31,
+        "operation": "Actor.x",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 20.379547119140625,
+        "seq": 89801,
+        "source": "song:/roses/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.x",
+        "source": "song:/roses/default.lua",
+        "line": 31,
+        "phase": "callback",
+        "beat": 23.97637939453125,
+        "seconds": 20.379547119140625,
+        "args": [
+          599
+        ],
+        "results": [
+          {
+            "actor": "0x5775ce6b44d0",
+            "name": "",
+            "path": "ScreenGameplay/SongForeground/roses"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0022",
+        "args": [
+          468
+        ],
+        "beat": 23.97637939453125,
+        "caller": {
+          "line": 31,
+          "source": "song:/roses/default.lua",
+          "tail_call": false
+        },
+        "command": "moveCommand",
+        "definition_id": "def-0022",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 31,
+        "operation": "Actor.y",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 20.379547119140625,
+        "seq": 89803,
+        "source": "song:/roses/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.y",
+        "source": "song:/roses/default.lua",
+        "line": 31,
+        "phase": "callback",
+        "beat": 23.97637939453125,
+        "seconds": 20.379547119140625,
+        "args": [
+          365
+        ],
+        "results": [
+          {
+            "actor": "0x5775ce6b44d0",
+            "name": "",
+            "path": "ScreenGameplay/SongForeground/roses"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0025",
+        "args": [
+          599
+        ],
+        "beat": 23.97637939453125,
+        "caller": {
+          "line": 31,
+          "source": "song:/roses/default.lua",
+          "tail_call": false
+        },
+        "command": "moveCommand",
+        "definition_id": "def-0025",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 31,
+        "operation": "Actor.x",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 20.379547119140625,
+        "seq": 89814,
+        "source": "song:/roses/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.x",
+        "source": "song:/roses/default.lua",
+        "line": 31,
+        "phase": "callback",
+        "beat": 23.97637939453125,
+        "seconds": 20.379547119140625,
+        "args": [
+          744
+        ],
+        "results": [
+          {
+            "actor": "0x5775ce6bb730",
+            "name": "",
+            "path": "ScreenGameplay/SongForeground/roses"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0025",
+        "args": [
+          365
+        ],
+        "beat": 23.97637939453125,
+        "caller": {
+          "line": 31,
+          "source": "song:/roses/default.lua",
+          "tail_call": false
+        },
+        "command": "moveCommand",
+        "definition_id": "def-0025",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 31,
+        "operation": "Actor.y",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 20.379547119140625,
+        "seq": 89816,
+        "source": "song:/roses/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.y",
+        "source": "song:/roses/default.lua",
+        "line": 31,
+        "phase": "callback",
+        "beat": 23.97637939453125,
+        "seconds": 20.379547119140625,
+        "args": [
+          264
+        ],
+        "results": [
+          {
+            "actor": "0x5775ce6bb730",
+            "name": "",
+            "path": "ScreenGameplay/SongForeground/roses"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0028",
+        "args": [],
+        "beat": 23.97637939453125,
+        "command": "moveCommand",
+        "definition_id": "def-0028",
+        "detail": {
+          "name": "moveCommand"
+        },
+        "kind": "command",
+        "line": 31,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": 20.379547119140625,
+        "seq": 89825,
+        "source": "song:/roses/default.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "GameState.GetSongBeat",
+        "source": "song:/lua/default.lua",
+        "line": 84,
+        "phase": "callback",
+        "beat": 23.984580993652344,
+        "seconds": 20.386371612548828,
+        "args": [],
+        "results": [
+          23.984580993652344
+        ]
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0028",
+        "args": [
+          744
+        ],
+        "beat": 23.97637939453125,
+        "caller": {
+          "line": 31,
+          "source": "song:/roses/default.lua",
+          "tail_call": false
+        },
+        "command": "moveCommand",
+        "definition_id": "def-0028",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 31,
+        "operation": "Actor.x",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 20.379547119140625,
+        "seq": 89827,
+        "source": "song:/roses/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "GameState.GetSongBeat",
+        "source": "song:/lua/default.lua",
+        "line": 84,
+        "phase": "callback",
+        "beat": 23.984580993652344,
+        "seconds": 20.386371612548828,
+        "args": [],
+        "results": [
+          23.984580993652344
+        ]
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0028",
+        "args": [
+          264
+        ],
+        "beat": 23.97637939453125,
+        "caller": {
+          "line": 31,
+          "source": "song:/roses/default.lua",
+          "tail_call": false
+        },
+        "command": "moveCommand",
+        "definition_id": "def-0028",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 31,
+        "operation": "Actor.y",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 20.379547119140625,
+        "seq": 89829,
+        "source": "song:/roses/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "command",
+        "operation": "command.begin",
+        "command": "moveCommand",
+        "source": "song:/roses/default.lua",
+        "line": 31,
+        "beat": 23.984580993652344,
+        "seconds": 20.386371612548828,
+        "args": null
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0028",
+        "args": [
+          0.007
+        ],
+        "beat": 23.97637939453125,
+        "caller": {
+          "line": 31,
+          "source": "song:/roses/default.lua",
+          "tail_call": false
+        },
+        "command": "moveCommand",
+        "definition_id": "def-0028",
+        "detail": {
+          "native_tween_time_left": 0.007000000216066837
+        },
+        "kind": "call",
+        "line": 31,
+        "operation": "Actor.sleep",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 20.379547119140625,
+        "seq": 89835,
+        "source": "song:/roses/default.lua",
+        "tween_time_left": 0.007000000216066837
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.x",
+        "source": "song:/roses/default.lua",
+        "line": 31,
+        "phase": "callback",
+        "beat": 23.984580993652344,
+        "seconds": 20.386371612548828,
+        "args": [
+          -1.5
+        ],
+        "results": [
+          {
+            "actor": "0x5775ce2f6120",
+            "name": "",
+            "path": "ScreenGameplay/SongForeground/roses"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    }
+  ],
+  "command_query_source_cause_claimed": false,
+  "source_notes": "Roses line31 moves each Sprite using its current GetX/GetY plus per-instance local velocity. First x/y results differ around20.379547; later calls shift. Inspect actual native actor/queue/foreground state before selecting final2; no random-output calibration.",
+  "no_new_full_attempt": true,
+  "pending_last_attempt_requires_real_cause_and_qualification": true
+}
