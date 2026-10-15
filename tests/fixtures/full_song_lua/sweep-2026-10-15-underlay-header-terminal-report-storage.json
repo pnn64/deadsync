@@ -1,0 +1,37 @@
+{
+  "reason": "Free duplicate raw reports already preserved losslessly as compressed terminal diagnostics; no captures, fixture archives, source files or live inputs are removed.",
+  "reports": [
+    {
+      "raw_path": "/home/parity/jobs/chart-sweep-additions-20261012-v1/chart-502/report.json",
+      "raw_bytes": 125378516,
+      "raw_sha256": "22cefd681af7820ba2fcec966d74c931f104c8427f3546025d834f04b6e160da",
+      "compressed_path": "/home/parity/jobs/chart-sweep-additions-20261012-v1/chart-502/report.json.zst",
+      "compressed_bytes": 2775700,
+      "compressed_sha256": "51aeeb17351a912f5b446876af4d1dff0e6a80d8252839b66084570615f51621",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "b82a09a062a0e5adbbb7eccc50ad16773ec914817235b83038838ce9dd4d3cbe",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    },
+    {
+      "raw_path": "/home/parity/jobs/showtime-next-screen-final-repair-v1/chart-251/report.json",
+      "raw_bytes": 41511158,
+      "raw_sha256": "748e19b8db852e18741e6cb303da9fcc7d46f38089ab0005905cefa8737693d9",
+      "compressed_path": "/home/parity/jobs/showtime-next-screen-final-repair-v1/chart-251/report.json.zst",
+      "compressed_bytes": 897243,
+      "compressed_sha256": "c7dd4fe4acac07b650ba76b59c31b7fbae630303ccdc66e69549df3465740d80",
+      "decompressed_bytes_equal_terminal_report": true,
+      "two_actual_process_and_open_file_reference_checks_clear": true,
+      "result_sha256": "6ce87b99bd97387e5da59eb58e51e93ccadba5fb9fea83a0e4642b7112f4ce28",
+      "result_replay_exit": 2,
+      "result_accepted": false
+    }
+  ],
+  "raw_report_bytes_removed": 166889674,
+  "free_before": 442732544,
+  "free_after": 606834688,
+  "mawaru9_helper_hash_unchanged": true,
+  "chart_replays_or_compilers_stopped": false,
+  "acceptance_or_attempt_counts_changed": false
+}
