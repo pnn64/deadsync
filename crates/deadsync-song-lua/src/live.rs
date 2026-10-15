@@ -4535,6 +4535,42 @@ end }
     }
 
     #[test]
+    fn live_source_function_params() {
+        let mut compiled = compile("broadcast-function-params", r#"local function transform(value)
+    CALLS=(CALLS or 0)+1
+    return value+2
+end
+ORIGINAL_TRANSFORM=transform
+return Def.ActorFrame {
+    OnCommand=function(self)
+        CALLS=0
+        MESSAGEMAN:Broadcast('FunctionSnapshot', {transform, nested={callback=transform}, native=math.abs})
+    end,
+    FunctionSnapshotMessageCommand=function(self, params)
+        assert(params[1]==ORIGINAL_TRANSFORM and params.nested.callback==ORIGINAL_TRANSFORM)
+        assert(params.native==math.abs)
+        RESULT=params[1](3)+params.nested.callback(4)+params.native(-7)
+    end,
+}"#);
+        let scene = compiled.live_scene.as_mut().expect("owned scene");
+        let output = scene.take_startup_output();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(scene.lua.globals().get::<u32>("CALLS").expect("listener function calls"), 2);
+        assert_eq!(scene.lua.globals().get::<u32>("RESULT").expect("listener result"), 18);
+        let params = output.source_broadcasts[0].params.as_ref()
+            .expect("function metadata must preserve callable broadcast parameters").as_ref().expect("params");
+        let function = &params["1"];
+        assert_eq!(function["type"], "function");
+        assert!(function["source"].as_str().expect("Lua source").ends_with("/default.lua"));
+        assert_eq!(function["line"], 1);
+        assert_eq!(function["last_line"], 4);
+        assert_eq!(&params["nested"]["callback"], function);
+        assert_eq!(params["native"], serde_json::json!({
+            "type":"function", "source":"=[C]", "line":-1, "last_line":-1
+        }));
+    }
+
+    #[test]
     fn live_source_params() {
         let mut compiled = compile("broadcast-params", r#"
             return Def.ActorFrame {

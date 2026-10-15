@@ -3227,6 +3227,14 @@ fn source_broadcast_value(value: Value, depth: usize, seen: &mut Vec<usize>) -> 
             serde_json::from_str(&value.to_string()).map_err(|error| error.to_string())?
         }
         Value::String(value) => Json::String(value.to_str().map_err(|error| error.to_string())?.replace('\\', "/")),
+        Value::Function(value) => {
+            // Like the native safe_value logger, inspect the original closure
+            // without calling or wrapping it. Dispatch retains its identity.
+            let info = value.info();
+            json!({"type":"function", "source":info.source.unwrap_or_default().replace('\\', "/"),
+                "line":info.line_defined.map_or(-1, |line| line as i64),
+                "last_line":info.last_line_defined.map_or(-1, |line| line as i64)})
+        }
         Value::Table(table) => {
             let identity = table.to_pointer() as usize;
             if depth >= 5 { return Err("broadcast table exceeds native trace depth".into()); }

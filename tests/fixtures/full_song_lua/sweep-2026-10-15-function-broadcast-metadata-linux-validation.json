@@ -1,0 +1,86 @@
+{
+  "source_root": "/home/parity/workspace/function-broadcast-metadata-v1/deadsync",
+  "binary_sha256": "2f634c0b6929141c5f3848da71d984d34c1ed26b9df24bd8bbd57a87fed39906",
+  "all_eight_checks_both_platforms_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_red_and_green_source_pins_verified": true,
+  "all_linux_log_and_binary_hashes_verified": true,
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 405.639251821005,
+      "log_sha256": "9182a979acc32c66427dbfb83ee865391a573ee737604f975b3cb3cf9c75e07b",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 611 filtered out; finished in 0.27s"
+      ]
+    },
+    {
+      "label": "hurry-capture-control",
+      "exit_code": 0,
+      "seconds": 1.1045563149964437,
+      "log_sha256": "0ad478afa72ea7018f2f3952eae23c58f50423f61e49bcba6ae54a8ae10ebe6f",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 611 filtered out; finished in 0.21s"
+      ]
+    },
+    {
+      "label": "gameplay-easing-controls",
+      "exit_code": 0,
+      "seconds": 0.6411976520030294,
+      "log_sha256": "9a4b4670176790884971564fa66392a3fc777830da304505fcf1ae4096d23992",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "parser-controls",
+      "exit_code": 0,
+      "seconds": 1.0634071090025827,
+      "log_sha256": "d007c1a00e82695da52533fe53cda5f2cbde4f4d39ae32b2a8a20d6348d90dc2",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 602 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 58.869905898027355,
+      "log_sha256": "a62ab322a2734680a898eaa41e127276a9f8c2ee5528684da9658299b79cca86",
+      "results": [
+        "test result: ok. 76 passed; 0 failed; 0 ignored; 0 measured; 536 filtered out; finished in 57.94s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 307.1047228919924,
+      "log_sha256": "ad4a054b9921b473436cadf4199c6714afdf0eb09e43dfc8f5fe1f412c8d9e54",
+      "results": [
+        "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 1.02s"
+      ]
+    },
+    {
+      "label": "identity-control",
+      "exit_code": 0,
+      "seconds": 0.9023547880060505,
+      "log_sha256": "b78b0f90dadc2b81f36abb0eaf0b1a42886465e9813d81997d21bc156dffba96",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 611 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 54.19799265800975,
+      "log_sha256": "797a4edc6c330ff3ae7262b227f0b8e18be9376876236d14da7f2ba9758b43f9",
+      "results": []
+    }
+  ],
+  "windows_validation": "sweep-2026-10-15-function-broadcast-metadata-windows-validation.json",
+  "red_expected_failure_both_platforms": true,
+  "native_control_frames": 3779,
+  "native_control": "sweep-2026-10-15-function-broadcast-metadata-native-control.json",
+  "read_only_original_closure_metadata": true,
+  "comparison_keys_tolerances_and_acceptance_predicate_unchanged": true,
+  "global_original_helper_unchanged": true
+}

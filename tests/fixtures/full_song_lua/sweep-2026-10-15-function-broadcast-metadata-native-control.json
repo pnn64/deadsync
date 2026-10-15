@@ -1,0 +1,94 @@
+{
+  "input_sha256": {
+    "control.wav": "71d93ef76e5ff6087d522277e83309f1d8d790e9b756324dec73d216ea57cc75",
+    "control.ssc": "16de4fe517cf6d5e8c5cb94c0b79ff6e1867250b3e7df72cf0a61ddd79972d1d",
+    "control.lua": "6f8b4953a1dfa56aa45acf534812bd94dca2827d776d3c0f40703e1501fa38d1"
+  },
+  "harness_sha256": "e067360d8120ee0a174b0848832856325ef62b709287fb48976441a277b26563",
+  "native_sha256": "a9d70b63dc11601634e67cb59fe1a7e7d12c57788bd525dba014f51a99d110fe",
+  "trace_sha256": "f2f350e360191c09dcf31b2a1c0438fc04833afc595168e4fe109a2d5a8740a3",
+  "capture_exit": 0,
+  "seconds": 12.643230248999316,
+  "native_frames": 3779,
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "events": [
+    {
+      "args": [
+        "FunctionSnapshot",
+        {
+          "1": {
+            "last_line": 4,
+            "line": 1,
+            "source": "song:/control.lua",
+            "type": "function"
+          },
+          "native": {
+            "last_line": -1,
+            "line": -1,
+            "source": "=[C]",
+            "type": "function"
+          },
+          "nested": {
+            "callback": {
+              "last_line": 4,
+              "line": 1,
+              "source": "song:/control.lua",
+              "type": "function"
+            }
+          }
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 8,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 8,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 5,
+      "source": "song:/control.lua"
+    },
+    {
+      "args": [
+        "FunctionResult",
+        {
+          "calls": 2,
+          "result": 18
+        }
+      ],
+      "beat": -12.033953666687012,
+      "caller": {
+        "line": 12,
+        "source": "song:/control.lua",
+        "tail_call": false
+      },
+      "command": "FunctionSnapshotMessageCommand",
+      "definition_id": "def-0001",
+      "kind": "message",
+      "line": 12,
+      "operation": "MessageManager.Broadcast",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -5.999977111816406,
+      "seq": 7,
+      "source": "song:/control.lua"
+    }
+  ],
+  "original_function_identity_and_call_results_verified": true,
+  "function_metadata_does_not_execute_functions": true,
+  "chart_full_repairs_spent": 0,
+  "acceptance_changed": false
+}
