@@ -1,0 +1,218 @@
+{
+  "status": "complete",
+  "closed_passes_only": true,
+  "lossless_uncompressed_hashes_verified": true,
+  "live_replays_and_frozen_sources_unchanged": true,
+  "no_accepted_fixture_changed": true,
+  "files": [
+    {
+      "source_simfile": "Shivers/Shivers.ssc",
+      "raw": "/home/parity/jobs/shivers-ssc-arrow-alpha-first-repair-v1/chart-399/report.json",
+      "compressed": "/home/parity/jobs/shivers-ssc-arrow-alpha-first-repair-v1/chart-399/report.json.zst",
+      "uncompressed_sha256": "20c47e2153aef493fb425904495a31c5edf98d002b45678857ad1bea4210036a",
+      "raw_bytes": 509292849,
+      "compressed_bytes": 5240362,
+      "native_frames": 8392
+    },
+    {
+      "source_simfile": "Shivers/Shivers.sm",
+      "raw": "/home/parity/jobs/shivers-sm-arrow-alpha-first-repair-v1/chart-398/report.json",
+      "compressed": "/home/parity/jobs/shivers-sm-arrow-alpha-first-repair-v1/chart-398/report.json.zst",
+      "uncompressed_sha256": "b9093785d1feb9c5c6e1b16b2777064dc51aab38a3a3c8e12202d33780df2e83",
+      "raw_bytes": 505329694,
+      "compressed_bytes": 5170301,
+      "native_frames": 8501
+    },
+    {
+      "source_simfile": "media offline/media offline.ssc",
+      "raw": "/home/parity/jobs/media-offline-single-subscriber-repair-v1/chart-311/report.json",
+      "compressed": "/home/parity/jobs/media-offline-single-subscriber-repair-v1/chart-311/report.json.zst",
+      "uncompressed_sha256": "35a4cb150096cb2192027484e7f301c955f69a07066cb525264e38bfca571ba5",
+      "raw_bytes": 497506019,
+      "compressed_bytes": 6203837,
+      "native_frames": 45745
+    },
+    {
+      "source_simfile": "Myths You Forgot/Myths You Forgot.ssc",
+      "raw": "/home/parity/jobs/myths-single-subscriber-repair-v1/chart-323/report.json",
+      "compressed": "/home/parity/jobs/myths-single-subscriber-repair-v1/chart-323/report.json.zst",
+      "uncompressed_sha256": "d3bc66c332bb7f6fec520bddea5bbe3b5a6a8e2555b2335539af6ae18ba887bd",
+      "raw_bytes": 484951401,
+      "compressed_bytes": 5593967,
+      "native_frames": 40940
+    },
+    {
+      "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
+      "raw": "/home/parity/jobs/shakunetsu-native-cmd-final-repair-v1/chart-394/report.json",
+      "compressed": "/home/parity/jobs/shakunetsu-native-cmd-final-repair-v1/chart-394/report.json.zst",
+      "uncompressed_sha256": "050216d91b4b825740b7dece06b5155eb2f2fb8a767b2a76ae92298d93500fe6",
+      "raw_bytes": 463975949,
+      "compressed_bytes": 4858462,
+      "native_frames": 14728
+    },
+    {
+      "source_simfile": "Jack The Reaper/Jack The Reaper.sm",
+      "raw": "/home/parity/jobs/jack-reaper-listener-first-repair-v1/chart-253/report.json",
+      "compressed": "/home/parity/jobs/jack-reaper-listener-first-repair-v1/chart-253/report.json.zst",
+      "uncompressed_sha256": "f9e952fd4f2e8b6cbd961e73c4ceb48c9343b18fdcecf22b82e427e5901d65a9",
+      "raw_bytes": 447816552,
+      "compressed_bytes": 5373202,
+      "native_frames": 40101
+    },
+    {
+      "source_simfile": "Lonely/Lonely.ssc",
+      "raw": "/home/parity/jobs/lonely-ssc-column-repair-v1/chart-285/report.json",
+      "compressed": "/home/parity/jobs/lonely-ssc-column-repair-v1/chart-285/report.json.zst",
+      "uncompressed_sha256": "e5ec75e89bd366ee092afdce407d25e47e669d421af4466103034e8dcebd7bdb",
+      "raw_bytes": 344801332,
+      "compressed_bytes": 4962918,
+      "native_frames": 93048
+    },
+    {
+      "source_simfile": "Lonely/Lonely.sm",
+      "raw": "/home/parity/jobs/lonely-column-final-repair-v1/chart-284/report.json",
+      "compressed": "/home/parity/jobs/lonely-column-final-repair-v1/chart-284/report.json.zst",
+      "uncompressed_sha256": "cfd3cedb316ae065bfbd68254fbacbbc77f458eb01061effadf7713b0d5667be",
+      "raw_bytes": 332029809,
+      "compressed_bytes": 4791015,
+      "native_frames": 90583
+    },
+    {
+      "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.sm",
+      "raw": "/home/parity/jobs/great-divide-sm-music-fade-first-repair-v1/chart-434/report.json",
+      "compressed": "/home/parity/jobs/great-divide-sm-music-fade-first-repair-v1/chart-434/report.json.zst",
+      "uncompressed_sha256": "2c0f0a143907054f673b71c15f1461bb5d5fcbdcd9101bca91d2bc39984b1645",
+      "raw_bytes": 329291971,
+      "compressed_bytes": 3132808,
+      "native_frames": 85375
+    },
+    {
+      "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.ssc",
+      "raw": "/home/parity/jobs/door-open-screen-tree-repair-v1/chart-277/report.json",
+      "compressed": "/home/parity/jobs/door-open-screen-tree-repair-v1/chart-277/report.json.zst",
+      "uncompressed_sha256": "d12d30294b86920950e9c01458da185ee30603219cfc614d63af7d109c6da8c5",
+      "raw_bytes": 317446410,
+      "compressed_bytes": 4468548,
+      "native_frames": 80343
+    },
+    {
+      "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.sm",
+      "raw": "/home/parity/jobs/door-rights-sm-screen-tree-repair-v1/chart-276/report.json",
+      "compressed": "/home/parity/jobs/door-rights-sm-screen-tree-repair-v1/chart-276/report.json.zst",
+      "uncompressed_sha256": "306287ee4d563d8f6765b32ab447a2d5d6fb3195b8d0c69b6f5fc93387a54168",
+      "raw_bytes": 311905104,
+      "compressed_bytes": 4409267,
+      "native_frames": 79549
+    },
+    {
+      "source_simfile": "Get Into It/GetIntoIt.sm",
+      "raw": "/home/parity/jobs/get-into-it-sm-begin-final-repair-v2/chart-210/report.json",
+      "compressed": "/home/parity/jobs/get-into-it-sm-begin-final-repair-v2/chart-210/report.json.zst",
+      "uncompressed_sha256": "fa0281713081926c8a6bbd59ce8ed3451c259ef973179124526b0569ee46d29d",
+      "raw_bytes": 308805560,
+      "compressed_bytes": 4350428,
+      "native_frames": 70013
+    },
+    {
+      "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.sm",
+      "raw": "/home/parity/jobs/save-tears-sm-pack-sync-first-repair-v1/chart-383/report.json",
+      "compressed": "/home/parity/jobs/save-tears-sm-pack-sync-first-repair-v1/chart-383/report.json.zst",
+      "uncompressed_sha256": "cd133f52b896e0712e292c2076ec5ecb4548b7519eaf0f2695b6dfc1890384f2",
+      "raw_bytes": 298220030,
+      "compressed_bytes": 4183179,
+      "native_frames": 81952
+    },
+    {
+      "source_simfile": "Get Into It/GetIntoIt.ssc",
+      "raw": "/home/parity/jobs/get-into-it-ssc-begin-final-repair-v2/chart-211/report.json",
+      "compressed": "/home/parity/jobs/get-into-it-ssc-begin-final-repair-v2/chart-211/report.json.zst",
+      "uncompressed_sha256": "5c50ee98938a00871b64bf7d3230bb157e1d072b542c467ac0da3cb61a38330b",
+      "raw_bytes": 261827826,
+      "compressed_bytes": 3683294,
+      "native_frames": 57594
+    },
+    {
+      "source_simfile": "Paradise/Paradise.ssc",
+      "raw": "/home/parity/jobs/paradise-ssc-children-repair-v1/chart-350/report.json",
+      "compressed": "/home/parity/jobs/paradise-ssc-children-repair-v1/chart-350/report.json.zst",
+      "uncompressed_sha256": "38b89bf2318043dc57563285dd1bcc24ff35302c7134139b6dc22e20c5ec50c1",
+      "raw_bytes": 256641910,
+      "compressed_bytes": 3637709,
+      "native_frames": 65346
+    },
+    {
+      "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.sm",
+      "raw": "/home/parity/jobs/paradise-children-repair-v1/chart-347/report.json",
+      "compressed": "/home/parity/jobs/paradise-children-repair-v1/chart-347/report.json.zst",
+      "uncompressed_sha256": "09a9afdb554ad0b03a36ab872f1935b4808cfac04ef3317f3c7427c2da17fd73",
+      "raw_bytes": 252106843,
+      "compressed_bytes": 3547654,
+      "native_frames": 64119
+    },
+    {
+      "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.ssc",
+      "raw": "/home/parity/jobs/save-tears-ssc-whole-song-pack-sync-first-repair-v1/chart-384/report.json",
+      "compressed": "/home/parity/jobs/save-tears-ssc-whole-song-pack-sync-first-repair-v1/chart-384/report.json.zst",
+      "uncompressed_sha256": "f0c0a8e86eb149713ae24be9ede465674cd31ae8cf20fea482e60bfe92301af3",
+      "raw_bytes": 243593493,
+      "compressed_bytes": 3463991,
+      "native_frames": 67253
+    },
+    {
+      "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.ssc",
+      "raw": "/home/parity/jobs/door-cringle-ssc-screen-tree-repair-v1/chart-275/report.json",
+      "compressed": "/home/parity/jobs/door-cringle-ssc-screen-tree-repair-v1/chart-275/report.json.zst",
+      "uncompressed_sha256": "1b6b0148e926bfc753254524b57666f8bc2a22c0afb283e4618f33b122644249",
+      "raw_bytes": 230547736,
+      "compressed_bytes": 3285328,
+      "native_frames": 59710
+    },
+    {
+      "source_simfile": "Life Cheating Game/lifecheatinggame.ssc",
+      "raw": "/home/parity/jobs/life-cheating-screen-tree-repair-v1/chart-280/report.json",
+      "compressed": "/home/parity/jobs/life-cheating-screen-tree-repair-v1/chart-280/report.json.zst",
+      "uncompressed_sha256": "5e48d084aa874a2859ce47ed2d37df827f4ef080241920f44cd757948ce28702",
+      "raw_bytes": 226729385,
+      "compressed_bytes": 3869594,
+      "native_frames": 81304
+    },
+    {
+      "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
+      "raw": "/home/parity/jobs/door-cringle-sm-attack-final-repair-v1/chart-274/report.json",
+      "compressed": "/home/parity/jobs/door-cringle-sm-attack-final-repair-v1/chart-274/report.json.zst",
+      "uncompressed_sha256": "081e03f3ff082cfa5a66e7213117977eaac7847b4ad7da79847ff10cbc6a0fdb",
+      "raw_bytes": 219400676,
+      "compressed_bytes": 3068421,
+      "native_frames": 55331
+    },
+    {
+      "source_simfile": "Ruin Our Friendship/RuinOurFriendship.ssc",
+      "raw": "/home/parity/jobs/ruin-ssc-transition-order-repair-v1/chart-380/report.json",
+      "compressed": "/home/parity/jobs/ruin-ssc-transition-order-repair-v1/chart-380/report.json.zst",
+      "uncompressed_sha256": "8eaccfc4e7a9e27d2869220b67a68e29694683942f9ecab66abd6f906d2058f8",
+      "raw_bytes": 217313019,
+      "compressed_bytes": 4945966,
+      "native_frames": 102848
+    },
+    {
+      "source_simfile": "My Exes Bestfriend/ExBestFriend.sm",
+      "raw": "/home/parity/jobs/my-exes-sm-listener-first-repair-v1/chart-320/report.json",
+      "compressed": "/home/parity/jobs/my-exes-sm-listener-first-repair-v1/chart-320/report.json.zst",
+      "uncompressed_sha256": "9c6ded086fad6016ba73db197c0ac39a4b7573fa53ede4a3a8a1edf7b0d4c147",
+      "raw_bytes": 135035341,
+      "compressed_bytes": 3111633,
+      "native_frames": 66182
+    },
+    {
+      "source_simfile": "My Exes Bestfriend/ExBestFriend.ssc",
+      "raw": "/home/parity/jobs/my-exes-row-beats-final-repair-v1/chart-321/report.json",
+      "compressed": "/home/parity/jobs/my-exes-row-beats-final-repair-v1/chart-321/report.json.zst",
+      "uncompressed_sha256": "15358b3730926f2008e48cd3bdedfc3e690d0433d937fd2ca56004e220869b70",
+      "raw_bytes": 125858412,
+      "compressed_bytes": 2919737,
+      "native_frames": 62908
+    }
+  ],
+  "disk_free_before": 2226786304,
+  "disk_free_after": 9538695168
+}
