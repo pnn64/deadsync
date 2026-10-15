@@ -1,0 +1,34 @@
+{
+  "regression": "live_player_song_positions_use_selected_chart_timing",
+  "windows_expected_failure_verified": true,
+  "linux_expected_failure_verified": true,
+  "failure": "Player0 selected120BPM clock must report beat3 at second1.5; current GetSongPosition aliases global60BPM song clock and reports1.5.",
+  "native_primary_sources": "GameState::UpdateSongPosition advances every enabled PlayerState from selected Steps TimingData; LunaPlayerState::GetSongPosition returns m_Position.",
+  "both_source_pin_counts": 1175,
+  "windows_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "log_sha256": "89f828106594e47c93ca39b5bbbc44e9b3cb7ce655c0594419b003d4430bb06d",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 607 filtered out; finished in 0.21s\r"
+      ]
+    }
+  ],
+  "linux_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 295.7483038189821,
+      "log_sha256": "e646cd6962e7596409ad6289af24d66ed18616723711a54d7d6d25317c0ee2fd",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 605 filtered out; finished in 0.25s"
+      ]
+    }
+  ],
+  "windows_full_proof_sha256": "f631196f1fe42c0735f8682727b6f5725f7626c1574ffc849b51e026fb418a06",
+  "linux_full_proof_sha256": "8a63ccec68d635b225b15c198c26603d22204254b898ee6ac5e67594593644c9",
+  "active_original_sweep_sources_modified": false,
+  "full_pop_repair_attempts_spent": 0,
+  "full_acceptance_comparisons_changed": false
+}
