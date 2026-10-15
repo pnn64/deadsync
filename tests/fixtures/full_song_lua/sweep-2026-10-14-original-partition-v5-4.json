@@ -908,6 +908,286 @@
         }
       ],
       "report_sha256": "cc367bdaad2eb11bd2d4c3e1db5822a75d53cf40d2b947015284454fe79e957a"
+    },
+    {
+      "position": 407,
+      "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+      "simfile_sha256": "029596d9d093479e06f71010fdda42b381856414c3bc8678f62ddf4aa70025ee",
+      "retained_original_archive": "dcd16b42cd90cf994dc5f7a147c0982b5105a79b243ee379a2f024e488e764d5.tar.zst",
+      "status": "pending",
+      "repair_attempts": 0,
+      "binary_sha256": "04af4ff5dfcbbf4a0290dfe81b5e1b5690fa28289a2e2fdbebb293006a88bce2",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "d69f0a20fd7a8b9a00fef1680365364522a51706",
+      "build_proof": "/home/parity/jobs/message-coverage-linux-green-v1/proof.json",
+      "candidate": "/home/parity/jobs/chart-sweep-parallel-v5-4/chart-407/candidates/3acf5805c3838749c446ffc8277eef7b74c76f5715c43c35e5ba0a1ab4f082e9.tar",
+      "trace_sha256": "0cd45eb83d74d4075152e6b67b24cdd67c7a01932309512f20cc51390c08963c",
+      "candidate_sha256": "3acf5805c3838749c446ffc8277eef7b74c76f5715c43c35e5ba0a1ab4f082e9",
+      "native_capture_reused": true,
+      "supervisor_handoff_v6": {
+        "retained_pid": 139882,
+        "replay_restarted": false,
+        "kernel_wait_status": 256,
+        "exit_status_source": "kernel zombie exit status before old-parent reap"
+      },
+      "replay_exit": 1,
+      "replay_seconds": 26525.805017593957,
+      "native_frames": 112654,
+      "replayed_frames": 112654,
+      "compared_stage_fields": 2464,
+      "pending_coverage": [
+        "uncompared song operations: Actor.Draw, Actor.GetX, Actor.GetY, Actor.SetHeight, Actor.SetWidth, Actor.blend, Actor.bob, Actor.effectclock, Actor.effectoffset, Actor.finishtweening, Actor.hibernate, Actor.smooth, Actor.texturetranslate, Actor.xy, Actor.z, ActorFrame.fov, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.GetTexture, ActorFrameTexture.SetTextureName, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetTexture, ActorMultiVertex.SetVertices, GameState.GetEnabledPlayers, GameState.GetSongBPS, GameState.IsHumanPlayer, PlayerOptions.Alternate, PlayerOptions.AttackMines, PlayerOptions.BMRize, PlayerOptions.Backwards, PlayerOptions.Beat, PlayerOptions.Big, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Boomerang, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.DrainSetting, PlayerOptions.Drunk, PlayerOptions.Echo, PlayerOptions.Expand, PlayerOptions.FailSetting, PlayerOptions.Flip, PlayerOptions.Floored, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.HoldRolls, PlayerOptions.Invert, PlayerOptions.Left, PlayerOptions.LifeSetting, PlayerOptions.Little, PlayerOptions.MaxScrollBPM, PlayerOptions.MinTNSToHideNotes, PlayerOptions.Mines, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.MuteOnError, PlayerOptions.NoAttack, PlayerOptions.NoFakes, PlayerOptions.NoHands, PlayerOptions.NoHolds, PlayerOptions.NoJumps, PlayerOptions.NoLifts, PlayerOptions.NoMines, PlayerOptions.NoQuads, PlayerOptions.NoRolls, PlayerOptions.NoStretch, PlayerOptions.NoteSkin, PlayerOptions.Passmark, PlayerOptions.Planted, PlayerOptions.PlayerAutoPlay, PlayerOptions.Quick, PlayerOptions.RandAttack, PlayerOptions.RandomSpeed, PlayerOptions.RandomVanish, PlayerOptions.Right, PlayerOptions.Roll, PlayerOptions.ScrollBPM, PlayerOptions.ScrollSpeed, PlayerOptions.Shuffle, PlayerOptions.Skew, PlayerOptions.Skippy, PlayerOptions.SoftShuffle, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Stomp, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.SuperShuffle, PlayerOptions.Tilt, PlayerOptions.TimeSpacing, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.TurnNone, PlayerOptions.Twirl, PlayerOptions.Twister, PlayerOptions.Wave, PlayerOptions.Wide, PlayerOptions.Xmode, Screen.GetScreenType, Sprite.SetTexture",
+        "native drawable state/resources: ActorFrameTexture, ActorMultiVertex, ActorProxy, Model, Quad, Sprite"
+      ],
+      "whole_song_parity_proven": false,
+      "archive_accepted": false,
+      "errors": [],
+      "mismatch_count": 99214,
+      "concrete_failures": [
+        {
+          "field": "source_broadcast_params_unsupported",
+          "deadsync": {
+            "seconds": 3.1648752689361572,
+            "beat": 8.049345016479492,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange"
+            ],
+            "params_error": "broadcast function trace remains pending"
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 3.1648752689361572,
+            "beat": 8.049345016479492,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange",
+              [
+                {
+                  "last_line": 382,
+                  "line": 368,
+                  "source": "song:/spectrum/default.lua",
+                  "type": "function"
+                }
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 3.1648752689361572,
+            "beat": 8.049345016479492,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange"
+            ],
+            "params_error": "broadcast function trace remains pending"
+          }
+        },
+        {
+          "field": "source_broadcast_params_unsupported",
+          "deadsync": {
+            "seconds": 120.83149719238281,
+            "beat": 312.03216552734375,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange"
+            ],
+            "params_error": "broadcast function trace remains pending"
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 120.83149719238281,
+            "beat": 312.03216552734375,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange",
+              [
+                {
+                  "last_line": 431,
+                  "line": 419,
+                  "source": "song:/spectrum/default.lua",
+                  "type": "function"
+                }
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 120.83149719238281,
+            "beat": 312.03216552734375,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange"
+            ],
+            "params_error": "broadcast function trace remains pending"
+          }
+        },
+        {
+          "field": "source_broadcast_params_unsupported",
+          "deadsync": {
+            "seconds": 121.01934051513672,
+            "beat": 312.6300354003906,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange"
+            ],
+            "params_error": "broadcast function trace remains pending"
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 121.01934051513672,
+            "beat": 312.6300354003906,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange",
+              [
+                {
+                  "last_line": 382,
+                  "line": 368,
+                  "source": "song:/spectrum/default.lua",
+                  "type": "function"
+                },
+                1.5
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 121.01934051513672,
+            "beat": 312.6300354003906,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange"
+            ],
+            "params_error": "broadcast function trace remains pending"
+          }
+        },
+        {
+          "field": "source_broadcast_params_unsupported",
+          "deadsync": {
+            "seconds": 121.61492156982422,
+            "beat": 314.0679016113281,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange"
+            ],
+            "params_error": "broadcast function trace remains pending"
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 121.61492156982422,
+            "beat": 314.0679016113281,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange",
+              [
+                {
+                  "last_line": 445,
+                  "line": 433,
+                  "source": "song:/spectrum/default.lua",
+                  "type": "function"
+                }
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 121.61492156982422,
+            "beat": 314.0679016113281,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange"
+            ],
+            "params_error": "broadcast function trace remains pending"
+          }
+        },
+        {
+          "field": "source_broadcast_params_unsupported",
+          "deadsync": {
+            "seconds": 121.80301666259766,
+            "beat": 314.64837646484375,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange"
+            ],
+            "params_error": "broadcast function trace remains pending"
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 121.80301666259766,
+            "beat": 314.64837646484375,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange",
+              [
+                {
+                  "last_line": 382,
+                  "line": 368,
+                  "source": "song:/spectrum/default.lua",
+                  "type": "function"
+                },
+                1.5
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 121.80301666259766,
+            "beat": 314.64837646484375,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange"
+            ],
+            "params_error": "broadcast function trace remains pending"
+          }
+        },
+        {
+          "field": "source_broadcast_params_unsupported",
+          "deadsync": {
+            "seconds": 127.02242279052734,
+            "beat": 328.0219421386719,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange"
+            ],
+            "params_error": "broadcast function trace remains pending"
+          }
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 127.02242279052734,
+            "beat": 328.0219421386719,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange",
+              [
+                {
+                  "last_line": 445,
+                  "line": 433,
+                  "source": "song:/spectrum/default.lua",
+                  "type": "function"
+                }
+              ]
+            ]
+          },
+          "deadsync": {
+            "seconds": 127.02242279052734,
+            "beat": 328.0219421386719,
+            "name": "GradientChange",
+            "args": [
+              "GradientChange"
+            ],
+            "params_error": "broadcast function trace remains pending"
+          }
+        }
+      ],
+      "report_sha256": "42cd141ec6b1579727169f3eaa3c67b3af01ee196d317c2202684654fc3a162e"
     }
   ],
   "scope": {
@@ -916,9 +1196,9 @@
     "remaining_indexed_charts": 335,
     "historical_unindexed_charts": 18
   },
-  "binary_sha256": "4e5aa6cd05d77ae42f2f58d4b9d987492bfdd272661c12b6d73c6a0f207a7188",
+  "binary_sha256": "04af4ff5dfcbbf4a0290dfe81b5e1b5690fa28289a2e2fdbebb293006a88bce2",
   "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
   "passed_fixtures": 3,
-  "pending_charts": 4,
-  "processed_charts": 7
+  "pending_charts": 5,
+  "processed_charts": 8
 }
