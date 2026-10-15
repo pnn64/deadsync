@@ -1,7 +1,7 @@
 {
   "status": "active",
-  "updated_utc": "2026-10-14T23:56:49Z",
-  "previous_goal_turn": "Progress: Talk About first storage-recovery repair passes all41,146 frames, Watching original replay passes all40,042 frames, and Pokemon first corrected-observer repair passes all42,446 frames. All three have zero mismatches/errors, saved/committed fixtures and local decompressed SHA verification; charts closed, no second Pokemon repair. Entity first replay follows Talk About in the recovered storage slot. Actual Shakunetsu background syntax error reproduced by one-test Windows and Linux regressions, both fail near pulse; primary native Lua matrix accepts13 adjacent commands with arithmetic, strings, nested functions/tables and call results. Fix5e44aa8e7 parses complete Lua argument-expression boundaries before next command Name rather than splitting on newlines or requiring semicolons; all consumed source lines retained. Initial10 parser tests green; final source passes all Windows target1/parser10/live69/replay33/identity1/both builds, all1,175 normalized pins and six log hashes verified. Isolated Linux expected-red proof valid, fixed target1/parser10/live69 pass and remaining checks running. New helper includes committed nonfatal progress reporter fix814d6cf84. Diagnostic waiter1407065 verifies both complete six-check proofs and all1,175 raw/crossplatform pins before reusing exact Shakunetsu capture through second12; final full repair2 remains held until actual diagnostic review, no third allowed. First result still19749 mismatches with char_ayaze nil caused by missing background compile; no native data or expected events injected. U.N. Owen first late-command repair, My Exes SM first, STEVE SM first, Wake first, Koi final2, Mawaru8 first and original queues continue. Global original-sweep helper711a5230 remains unchanged; parser helper private. All501 original simfile bytes unchanged, missing coverage separate, oversized fixtures ignored/local, sweep active and incomplete.",
+  "updated_utc": "2026-10-15T00:13:13Z",
+  "previous_goal_turn": "Progress: U.N. Owen first late-command observer repair passes58,499 frames; My Exes SM first captured-listener repair passes66,182 frames; Finally Landing original replay passes66,681 frames. Fixtures saved and local decompressed SHA verified, charts closed. Stella Glow original CLI completed152,631 actual frames and224 stage samples with zero mismatches/callback errors, then report serialization failed with verified ENOSPC. Frozen original helper745eee7d and all36 source pins verified; exact archive_passes function and source order prove acceptance computed before retained summary log and failed report write. Exact candidate3915e33e and every original manifest member/native trace/simfile verified; native capture confirms152,631 frames and committed gameplay exit. Recovered acceptance summary is explicitly marked derived, original detailed report unavailable, CLI exit1/log/failure preserved and missing operation coverage kept separate. Executed the exact pinned Rust acceptance function on observed counts; accepts Full and rejects diagnostic/partial/error/mismatch variants. Existing harness pack saves the exact original candidate, local decompressed bytes verified; no replay repeated, zero repair attempts spent, chart closed. Native cmd parser fix5e44aa8e7 now passes six checks on Windows/Linux target1/parser10/live69/replay33/identity1/both builds, all1,175 raw/crossplatform pins and six Linux log hashes verified; private helper56714f6f includes nonfatal progress fix. Shakunetsu retained-capture diagnostic passes3,853 frames through second12 with zero errors/mismatches, proving restored background and char initialization; final full repair2 now live, no third permitted. Who the Hell Is Edgar has no usable old comparison output (empty log/report); first full repair now live on same validated helper and original complete capture, one later maximum. Global original-sweep helper711a5230 unchanged. Entity first repair passes35,590 frames, saved/committed and decompressed bytes verified, chart closed; storage capture queue complete. STEVE SM first, Wake first, Koi final2, Mawaru8 first and original queues continue. All501 original simfile bytes unchanged, missing coverage separate, full acceptance unchanged, oversized archives ignored/local, active incomplete sweep.",
   "scope": {
     "original_simfiles": 501,
     "original_indexed_sources": 483,
@@ -14,7 +14,7 @@
   "repairs": {
     "per_chart_limit_per_sweep": 2,
     "completed_commits": {
-      "deadsync": "82ac8b88e833e773c0181191d13b121d0249db8a",
+      "deadsync": "540d918927d87b6371c46882f145385bffea99b2",
       "itgmania_harness": "c283a8a88afd4d441cefe8193be7f009396ec30d"
     }
   },
@@ -151,9 +151,9 @@
       "pending": 64,
       "processed": 102,
       "last_log_lines": [
-        "[2657.0s] replaying every native gameplay frame: frame 49944/107886 (46.3%)",
-        "[2659.0s] replaying every native gameplay frame: frame 49975/107886 (46.3%)",
-        "[2661.0s] replaying every native gameplay frame: frame 50008/107886 (46.4%)"
+        "[3641.3s] replaying every native gameplay frame: frame 67358/107886 (62.4%)",
+        "[3643.3s] replaying every native gameplay frame: frame 67391/107886 (62.5%)",
+        "[3645.3s] replaying every native gameplay frame: frame 67426/107886 (62.5%)"
       ],
       "supervisor_running": true
     },
@@ -1901,6 +1901,26 @@
         "record": "sweep-2026-10-15-un-owen-late-command-first-repair.json",
         "fix_commit": "ca0b435",
         "finish_status": "first full late-added command observer repair complete"
+      },
+      {
+        "name": "stella-completed-comparison-recovery",
+        "remote": "/home/parity/jobs/stella-completed-comparison-recovery-v1",
+        "record": "sweep-2026-10-15-stella-completed-comparison-recovery.json",
+        "finish_status": "complete passing comparison recovered after report ENOSPC; detailed report unavailable; no replay repeated"
+      },
+      {
+        "name": "who-edgar-storage-first-repair-v1",
+        "remote": "/home/parity/jobs/who-edgar-storage-first-repair-v1",
+        "record": "sweep-2026-10-15-who-edgar-storage-first-repair.json",
+        "fix_commit": "5e44aa8e7",
+        "finish_status": "bounded full replay complete; complete original capture reused"
+      },
+      {
+        "name": "shakunetsu-native-cmd-final-repair-v1",
+        "remote": "/home/parity/jobs/shakunetsu-native-cmd-final-repair-v1",
+        "record": "sweep-2026-10-15-shakunetsu-native-cmd-final-repair.json",
+        "fix_commit": "5e44aa8e7",
+        "finish_status": "bounded full replay complete; complete original capture reused"
       }
     ],
     "get_into_it_sm_final_completion": "tests/fixtures/full_song_lua/sweep-2026-10-13-get-into-it-sm-begin-final-repair-v2.json",
@@ -1917,41 +1937,63 @@
         "pending": 64,
         "processed": 102,
         "last_log_lines": [
-          "[2657.0s] replaying every native gameplay frame: frame 49944/107886 (46.3%)",
-          "[2659.0s] replaying every native gameplay frame: frame 49975/107886 (46.3%)",
-          "[2661.0s] replaying every native gameplay frame: frame 50008/107886 (46.4%)"
+          "[3641.3s] replaying every native gameplay frame: frame 67358/107886 (62.4%)",
+          "[3643.3s] replaying every native gameplay frame: frame 67391/107886 (62.5%)",
+          "[3645.3s] replaying every native gameplay frame: frame 67426/107886 (62.5%)"
         ],
         "supervisor_running": true
       },
       "jobs": [
         {
-          "job": "un-owen-late-command-first-repair-v1",
+          "job": "who-edgar-storage-first-repair-v1",
           "complete": false,
           "supervisor_running": true,
           "passed": 0,
           "pending": 0,
           "processed": 0,
           "last_phase": "replay",
+          "source_simfile": "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc",
+          "child_running": true
+        },
+        {
+          "job": "shakunetsu-native-cmd-final-repair-v1",
+          "complete": false,
+          "supervisor_running": true,
+          "passed": 0,
+          "pending": 0,
+          "processed": 0,
+          "last_phase": "replay",
+          "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
+          "child_running": true
+        },
+        {
+          "job": "un-owen-late-command-first-repair-v1",
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
+          "pending": 0,
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.ssc",
-          "child_running": true,
+          "child_running": false,
           "position": 452
         },
         {
           "job": "storage-capture-first-repairs-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 1,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 2,
           "pending": 0,
-          "processed": 1,
-          "last_phase": "replay",
+          "processed": 2,
+          "last_phase": "pack",
           "source_simfile": "The Entity/The Entity.ssc",
-          "child_running": true,
+          "child_running": false,
           "position": 432
         },
         {
           "job": "jack-reaper-listener-first-repair-v1",
           "complete": true,
-          "supervisor_running": true,
+          "supervisor_running": false,
           "passed": 1,
           "pending": 0,
           "processed": 1,
@@ -1961,14 +2003,14 @@
         },
         {
           "job": "my-exes-sm-listener-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
-          "passed": 0,
+          "complete": true,
+          "supervisor_running": false,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "My Exes Bestfriend/ExBestFriend.sm",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "pokemon-sparse-declaration-first-repair-v1",
@@ -1993,7 +2035,7 @@
         {
           "job": "steve-ssc-loader-multi-return-first-repair-v1",
           "complete": true,
-          "supervisor_running": true,
+          "supervisor_running": false,
           "passed": 0,
           "pending": 1,
           "processed": 1,
@@ -2003,14 +2045,14 @@
         },
         {
           "job": "steve-sm-loader-multi-return-first-repair-v1",
-          "complete": false,
-          "supervisor_running": true,
+          "complete": true,
+          "supervisor_running": false,
           "passed": 0,
-          "pending": 0,
-          "processed": 0,
+          "pending": 1,
+          "processed": 1,
           "last_phase": "replay",
           "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "turn-a-preferences-first-repair-v1",
@@ -2038,12 +2080,12 @@
           "job": "wake-up-ssc-listener-first-repair-v1",
           "complete": false,
           "supervisor_running": false,
-          "passed": 0,
+          "passed": 1,
           "pending": 0,
-          "processed": 0,
-          "last_phase": "replay",
+          "processed": 1,
+          "last_phase": "pack",
           "source_simfile": "Wake Up/Wake Up.ssc",
-          "child_running": true
+          "child_running": false
         },
         {
           "job": "capture-selection-first-repairs-v1",
@@ -2234,13 +2276,13 @@
           "job": "chart-sweep-parallel-v5-3",
           "complete": false,
           "supervisor_running": true,
-          "passed": 6,
+          "passed": 7,
           "pending": 9,
-          "processed": 15,
+          "processed": 16,
           "last_phase": "replay",
-          "source_simfile": "We're Finally Landing/landing.ssc",
+          "source_simfile": "You are Goomba Play ITG/You are Gooma Play ITG.sm",
           "child_running": true,
-          "position": 470
+          "position": 478
         },
         {
           "job": "chart-sweep-parallel-v5-4",
@@ -2258,13 +2300,13 @@
           "job": "chart-sweep-parallel-v5-5",
           "complete": false,
           "supervisor_running": true,
-          "passed": 8,
+          "passed": 9,
           "pending": 6,
-          "processed": 14,
-          "last_phase": "replay",
-          "source_simfile": "wah-propaganwah (habstrakt remix) (ddrillini remix)/Propaganda (Habstrakt Remix).ssc",
+          "processed": 15,
+          "last_phase": "capture",
+          "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
           "child_running": true,
-          "position": 464
+          "position": 472
         },
         {
           "job": "chart-sweep-parallel-v5-6",
@@ -3126,24 +3168,24 @@
           "complete": false,
           "supervisor_running": true,
           "passed": 39,
-          "pending": 39,
-          "processed": 78,
+          "pending": 40,
+          "processed": 79,
           "last_phase": "capture",
-          "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
+          "source_simfile": "james/james.ssc",
           "child_running": true,
-          "position": 484
+          "position": 492
         },
         {
           "job": "chart-sweep-parallel-v4-2",
           "complete": false,
           "supervisor_running": true,
           "passed": 27,
-          "pending": 31,
-          "processed": 58,
-          "last_phase": "replay",
-          "source_simfile": "The Video Boaboaboaboab/The Video Boab Oyedivuth.sm",
+          "pending": 32,
+          "processed": 59,
+          "last_phase": "capture",
+          "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
           "child_running": true,
-          "position": 437
+          "position": 445
         },
         {
           "job": "definition-concat-repair-v1",
@@ -3269,7 +3311,7 @@
     "selected_replay_binary_sha256": "711a523070e9a424917625257c8e8169fd5a1d431b64c74bfbca1d07fce6499d",
     "parallel_v5_handoff": "tests/fixtures/full_song_lua/sweep-2026-10-14-parallel-v5-handoff.json",
     "original_scope_concurrency": 8,
-    "publisher_stream_count": 126,
+    "publisher_stream_count": 129,
     "parallel_v5_exit_race_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-exit-race-recovery.json",
     "ruin_retained_outcome_recovery": "tests/fixtures/full_song_lua/sweep-2026-10-14-v5-ruin-report-recovery.json",
     "neon_nights_ssc_bytes": "tests/fixtures/full_song_lua/sweep-2026-10-14-neon-nights-ssc-fixture-verification.json",
@@ -3520,7 +3562,11 @@
       "talk_about_status": "passed",
       "talk_about_passing_chart_closed": true,
       "talk_about_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-talk-about-sm-fixture-verification.json",
-      "the_entity_first_replay_running": true
+      "the_entity_first_replay_running": false,
+      "the_entity_status": "passed",
+      "the_entity_passing_chart_closed": true,
+      "the_entity_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-the-entity-fixture-verification.json",
+      "queue_complete": true
     },
     "un_owen_late_command_diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-un-owen-late-command-observer-diagnosis.json",
     "late_added_command_observer": {
@@ -3531,15 +3577,21 @@
       "validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-late-command-observer-validation.json",
       "un_owen_first_repair": "tests/fixtures/full_song_lua/sweep-2026-10-15-un-owen-first-repair-launch.json",
       "one_later_full_repair_maximum": true,
-      "new_observer_private_to_paired_captures": true
+      "new_observer_private_to_paired_captures": true,
+      "un_owen_status": "passed",
+      "un_owen_chart_closed": true,
+      "un_owen_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-un-owen-fixture-verification.json",
+      "un_owen_further_replay_allowed": false
     },
     "steve_ssc_first_followup": "tests/fixtures/full_song_lua/sweep-2026-10-15-steve-ssc-first-repair-followup.json",
     "shakunetsu_cmd_followup": {
       "diagnosis": "tests/fixtures/full_song_lua/sweep-2026-10-15-shakunetsu-first-repair-cmd-diagnosis.json",
       "native_control": "tests/fixtures/full_song_lua/sweep-2026-10-15-shakunetsu-native-cmd-control.json",
-      "full_repairs_spent": 1,
-      "final_attempt_not_started": true,
-      "next_action": "Implement native argument expression boundaries in cmd parser; avoid newline-only split, preserve source lines and complete nested Lua expressions/functions."
+      "full_repairs_spent": 2,
+      "final_attempt_not_started": false,
+      "next_action": "Implement native argument expression boundaries in cmd parser; avoid newline-only split, preserve source lines and complete nested Lua expressions/functions.",
+      "final_attempt_running": true,
+      "no_third_full_repair": true
     },
     "jack_reaper_closed": {
       "full_repair_attempts_spent": 1,
@@ -3552,25 +3604,61 @@
       "fix_commit": "5e44aa8e7",
       "all_windows_six_checks_passed": true,
       "linux_expected_red_verified": true,
-      "linux_green_complete": false,
+      "linux_green_complete": true,
       "windows_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-native-cmd-windows-validation.json",
       "linux_red_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-native-cmd-linux-red-validation.json",
       "native_control": "tests/fixtures/full_song_lua/sweep-2026-10-15-native-cmd-argument-matrix.json",
       "diagnostic_queue": "tests/fixtures/full_song_lua/sweep-2026-10-15-shakunetsu-cmd-diagnostic-queue.json",
       "linux_green_waiter_pid": 1396316,
       "diagnostic_waiter_pid": 1407065,
-      "shakunetsu_full_repairs_spent": 1,
-      "shakunetsu_final_full_repair_not_started": true,
-      "helper_private_to_diagnosed_repair": true
+      "shakunetsu_full_repairs_spent": 2,
+      "shakunetsu_final_full_repair_not_started": false,
+      "helper_private_to_diagnosed_repair": true,
+      "binary_sha256": "56714f6f0061d2bee125fc7b36a0889bedcc9e7f018e66bdd36be9ff9d12cda5",
+      "linux_validation": "tests/fixtures/full_song_lua/sweep-2026-10-15-native-cmd-linux-validation.json",
+      "shakunetsu_diagnostic": "tests/fixtures/full_song_lua/sweep-2026-10-15-shakunetsu-cmd-entry-diagnostic.json",
+      "shakunetsu_final_full_repair_running": true,
+      "no_third_full_repair": true,
+      "final_launch": "tests/fixtures/full_song_lua/sweep-2026-10-15-shakunetsu-cmd-final-repair-launch.json"
     },
-    "watching_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-watching-fixture-verification.json"
+    "watching_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-watching-fixture-verification.json",
+    "my_exes_sm_closed": {
+      "full_repair_attempts_spent": 1,
+      "passing_chart_closed": true,
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-my-exes-sm-fixture-verification.json",
+      "native_capture_reused": true
+    },
+    "finally_landing_fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-finally-landing-fixture-verification.json",
+    "stella_comparison_recovery": {
+      "original_comparison_frames": 152631,
+      "comparison_mismatches": 0,
+      "callback_errors": 0,
+      "original_replay_exit": 1,
+      "original_detailed_report_available": false,
+      "derived_summary_explicitly_marked": true,
+      "exact_pinned_acceptance_function_executed": true,
+      "full_replay_repeated": false,
+      "full_repair_attempts_spent": 0,
+      "passing_chart_closed": true,
+      "evidence": "tests/fixtures/full_song_lua/sweep-2026-10-15-stella-comparison-recovery-evidence.json",
+      "acceptance_control": "tests/fixtures/full_song_lua/sweep-2026-10-15-stella-existing-acceptance-recovery.json",
+      "fixture_verification": "tests/fixtures/full_song_lua/sweep-2026-10-15-stella-glow-fixture-verification.json"
+    },
+    "who_edgar_first_repair": "tests/fixtures/full_song_lua/sweep-2026-10-15-who-edgar-storage-first-repair-launch.json",
+    "closed_fixture_storage": {
+      "receipt": "tests/fixtures/full_song_lua/sweep-2026-10-15-closed-fixture-storage.json",
+      "charts": 4,
+      "duplicate_bytes_reclaimed": 1943480748,
+      "all_decompressed_hashes_verified": true,
+      "passing_charts_replayed": false
+    }
   },
   "counts_at_checkpoint": {
-    "new_passed_fixtures": 202,
-    "new_pending_charts": 110,
-    "new_processed_sources": 312,
+    "new_passed_fixtures": 208,
+    "new_pending_charts": 108,
+    "new_processed_sources": 316,
     "charts_in_remaining_queue": 353,
-    "unprocessed_sources": 41,
+    "unprocessed_sources": 37,
     "historical_pending_sources": 1,
     "historical_passed_sources": 147
   },
@@ -4953,26 +5041,6 @@
       ]
     },
     {
-      "source_simfile": "My Exes Bestfriend/ExBestFriend.sm",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [
-        "JudgmentMessage for TopScreen 'ScreenGameplay' at beat 3.001: missing captured subscriber identity for ScreenGameplay/6/1",
-        "Hold JudgmentMessage for TopScreen 'ScreenGameplay' at beat 3.496: missing captured subscriber identity for ScreenGameplay/6/1",
-        "AvoidMine JudgmentMessage for TopScreen 'ScreenGameplay' at beat 67.504: missing captured subscriber identity for ScreenGameplay/6/1"
-      ],
-      "mismatch_count": 126676,
-      "first_mismatch": [
-        {
-          "phase": "progress",
-          "seconds": 140.0004119873047,
-          "field": "failed",
-          "native": true,
-          "deadsync": false
-        }
-      ]
-    },
-    {
       "source_simfile": "My Penny/My Penny.ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-2027895-1791982709619865985-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-2027895-1791982709619865985-0\n",
@@ -5380,24 +5448,16 @@
       ]
     },
     {
-      "source_simfile": "Stella Glow/Stella Glow.ssc",
-      "repair_attempts": 0,
-      "failure": "Expecting value: line 1 column 1 (char 0)",
-      "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
-    },
-    {
       "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
-      "repair_attempts": 0,
+      "repair_attempts": 1,
       "failure": null,
       "errors": [],
-      "mismatch_count": 149906,
+      "mismatch_count": 156463,
       "first_mismatch": [
         {
           "field": "command_query_count",
           "native": 163581,
-          "deadsync": 149921
+          "deadsync": 156487
         }
       ]
     },
@@ -5432,12 +5492,68 @@
       ]
     },
     {
-      "source_simfile": "The Entity/The Entity.ssc",
+      "source_simfile": "The Video Boaboaboaboab/The Video Boab Oyedivuth.sm",
       "repair_attempts": 0,
-      "failure": "error: ITGmania song Lua semantic trace failed: could not create directory /tmp/itgmania-harness-rs/song-lua-877132-1792016188607742587-0/Data: No space left on device (os error 28); retained run directory /tmp/itgmania-harness-rs/song-lua-877132-1792016188607742587-0\n",
+      "failure": null,
       "errors": [],
-      "mismatch_count": null,
-      "first_mismatch": []
+      "mismatch_count": 179162,
+      "first_mismatch": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "beat": 12.031805992126465,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "SetUpdateCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "results": [
+                {
+                  "type": "SongOptions"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 2,
+            "operation": "GameState.GetSongOptionsObject",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 4.689093112945557,
+            "seq": 9371,
+            "source": "song:/lua/default.lua",
+            "results": [
+              {
+                "type": "SongOptions"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongOptionsObject",
+            "source": "song:/lua/default.lua",
+            "line": 2,
+            "phase": "callback",
+            "beat": 12.031599044799805,
+            "seconds": 4.689093112945557,
+            "args": [
+              "ModsLevel_Song"
+            ],
+            "results": [
+              {
+                "type": "SongOptions"
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.sm",
@@ -5748,20 +5864,6 @@
       ]
     },
     {
-      "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.ssc",
-      "repair_attempts": 0,
-      "failure": null,
-      "errors": [],
-      "mismatch_count": 13,
-      "first_mismatch": [
-        {
-          "field": "command_query_count",
-          "native": 12,
-          "deadsync": 14
-        }
-      ]
-    },
-    {
       "source_simfile": "Velvet LEFTS 1/chart.ssc",
       "repair_attempts": 0,
       "failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-1256551-1792020219622826275-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1256551-1792020219622826275-0\n",
@@ -5893,6 +5995,14 @@
           }
         }
       ]
+    },
+    {
+      "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
+      "repair_attempts": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1384708-1792021564886666940-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1384708-1792021564886666940-0\n",
+      "errors": [],
+      "mismatch_count": null,
+      "first_mismatch": []
     },
     {
       "source_simfile": "Cursed Metamorph - [Zaia]/saved/Cursed Metamorph.ssc",

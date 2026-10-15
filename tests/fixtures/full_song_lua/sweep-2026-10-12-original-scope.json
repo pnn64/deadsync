@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-14T23:56:49Z",
+  "updated_utc": "2026-10-15T00:13:13Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,9 +13,9 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 349,
-    "pending": 111,
-    "unprocessed": 41
+    "passed": 355,
+    "pending": 109,
+    "unprocessed": 37
   },
   "complete": false,
   "historical_extra_archive_variants": 9,
@@ -2725,9 +2725,9 @@
       "position": 320,
       "source_simfile": "My Exes Bestfriend/ExBestFriend.sm",
       "simfile_sha256": "2314771d6ae77815b2ef52e8d5600a8f5183762f694012ba305771a0a83fbe3b",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-my-exes-sm-listener-first-repair.json"
     },
     {
       "position": 321,
@@ -3489,9 +3489,9 @@
       "position": 416,
       "source_simfile": "Stella Glow/Stella Glow.ssc",
       "simfile_sha256": "55b95249b44773d770c1700d4791173ca3a7ec04b3bd57dc39e51e349ce15edc",
-      "status": "pending",
+      "status": "passed",
       "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+      "evidence": "sweep-2026-10-15-stella-completed-comparison-recovery.json"
     },
     {
       "position": 417,
@@ -3514,8 +3514,8 @@
       "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
       "simfile_sha256": "7da60c3cba1434e6c4eb48937abb9dcb0266a9a2686196274252fa555c3af30d",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-results.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-steve-sm-loader-multi-return-first-repair.json"
     },
     {
       "position": 420,
@@ -3613,9 +3613,9 @@
       "position": 432,
       "source_simfile": "The Entity/The Entity.ssc",
       "simfile_sha256": "c4808c70ab4505fe4cd87d3e39a55be8629cb03628ca4e19aef9568d20b77eff",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-storage-capture-first-repairs.json"
     },
     {
       "position": 433,
@@ -3653,7 +3653,9 @@
       "position": 437,
       "source_simfile": "The Video Boaboaboaboab/The Video Boab Oyedivuth.sm",
       "simfile_sha256": "588089cc7c71bc6f92934e15e6bc28d9dd914254b0cceb0b68b4c0f47fc29136",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json"
     },
     {
       "position": 438,
@@ -3761,9 +3763,9 @@
       "position": 452,
       "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.ssc",
       "simfile_sha256": "6089de409f4818e67acada887c3d1e8ad147c8b080d874ebe4b05aa5aa24e4e4",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-15-un-owen-late-command-first-repair.json"
     },
     {
       "position": 453,
@@ -3847,7 +3849,9 @@
       "position": 464,
       "source_simfile": "wah-propaganwah (habstrakt remix) (ddrillini remix)/Propaganda (Habstrakt Remix).ssc",
       "simfile_sha256": "512975cf66528e0f97eb9eda05e663d90c9281280794226f18779020d3e0ed0d",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json"
     },
     {
       "position": 465,
@@ -3889,7 +3893,9 @@
       "position": 470,
       "source_simfile": "We're Finally Landing/landing.ssc",
       "simfile_sha256": "96e9de49c793c05cf830d88912859eaf70e531cf832de3da8ef0027895c89af1",
-      "status": "unprocessed"
+      "status": "passed",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json"
     },
     {
       "position": 471,
@@ -3983,7 +3989,9 @@
       "position": 484,
       "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
       "simfile_sha256": "fb767f349b23e62155118f76097269da54e20bf983f6bd0a71e8baba098d266e",
-      "status": "unprocessed"
+      "status": "pending",
+      "repair_attempts": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json"
     },
     {
       "position": 485,
