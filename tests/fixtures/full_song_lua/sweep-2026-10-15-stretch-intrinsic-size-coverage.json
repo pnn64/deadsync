@@ -1,0 +1,18 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "kind": "known missing comparison coverage; not a fixture acceptance gate",
+  "native_primary_source": "../itgmania-harness/vendor/itgmania/src/Actor.cpp:Actor::StretchTo",
+  "native_Actor_cpp_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+  "native_physical_source_hash_verified_equal_local": true,
+  "observation": "Native StretchTo keeps intrinsic dimensions and changes zoom. Owned actor_base_size_with_image treats cached stretch bounds as intrinsic dimensions. The new Danger candidate passes its default-texture/source-size/parent/visibility checks, then fails the extra intrinsic-size assertion on both hosts. GetWidth/GetHeight are outside the existing CALL_OPERATIONS.",
+  "both_host_green_v1_target_exit": 101,
+  "new_unscaled_dimension_assertion_removed_from_repair_qualification": true,
+  "all_prior_101_live_and_42_replay_tests_unchanged": true,
+  "remaining_new_regression_checks": "actual native Quad texture/source resource, zoomed visible geometry, ancestry, visibility, per-player HideDanger, health tween/fail flash and native eligibility through screen reconstruction",
+  "original_Danger_Lua_source_unchanged": true,
+  "native_getter_gap_fixed": false,
+  "full_acceptance_scope_unchanged": true,
+  "no_new_acceptance_keys_or_tolerances": true,
+  "no_full_HOPE_repair_started": true,
+  "passing_charts_reopened": false
+}
