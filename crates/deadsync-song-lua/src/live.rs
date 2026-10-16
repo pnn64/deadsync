@@ -942,6 +942,7 @@ pub struct SongLuaLiveScene {
     pub(crate) tracked: Vec<(SongLuaTrackedActorTarget, Table, SongLuaOverlayState)>,
     pub(crate) registry: Vec<Table>,
     targets: Vec<(usize, SongLuaLiveTarget)>,
+    visual_targets: rustc_hash::FxHashMap<usize, SongLuaLiveTarget>,
     context: SongLuaCompileContext,
     pub(crate) entry_paths: Vec<std::path::PathBuf>,
     pub(crate) primary_index: usize,
@@ -1065,7 +1066,7 @@ impl SongLuaLiveScene {
         for layer in &mut background_layers { layer.changes.sort_by(|a,b| a.1.start_beat.total_cmp(&b.1.start_beat)); }
         let background_order = (0..backgrounds.len()).collect();
         Ok(Self { lua, root, stage, players, actors, states, tracked, registry,
-            targets: Vec::new(), context, entry_paths, primary_index, last_beat,
+            targets: Vec::new(), visual_targets: Default::default(), context, entry_paths, primary_index, last_beat,
             last_music_seconds: -9999.0, backgrounds, background_layers, background_order, foregrounds, startup_output,
             outro_started: false, outro_options_reset: false, outro_off_pending: false, ended: false, updated: false,
             chart_attacks: std::array::from_fn(|_| LiveChartAttacks::default()) })
@@ -1570,8 +1571,29 @@ impl SongLuaLiveScene {
         if targets.iter().any(|(global, _)| *global >= self.states.len()) {
             return Err("live Lua binding index is outside its scene".into());
         }
+        self.visual_targets = targets.iter().map(|&(global, target)|
+            (self.actors[global].to_pointer() as usize, target)).collect();
         self.targets = targets;
         Ok(())
+    }
+
+    fn proxy_target(&self, owned: &Table, owner: SongLuaLiveTarget) -> Result<crate::SongLuaProxyTarget, String> {
+        let mut target = crate::lua_util::read_proxy_target_kind(owned)?
+            .unwrap_or(crate::SongLuaProxyTarget::Actor { overlay_index: usize::MAX });
+        if let crate::SongLuaProxyTarget::Actor { overlay_index } = &mut target {
+            // Lua stores actor identity; presentation uses an index within the
+            // proxy's own layer. Resolve again after live On/Update/Input calls.
+            *overlay_index = self.visual_targets.get(overlay_index).and_then(|target| {
+                match (*target, owner) {
+                    (SongLuaLiveTarget::Root(local), SongLuaLiveTarget::Root(_)) => Some(local),
+                    (SongLuaLiveTarget::Background(layer, local), SongLuaLiveTarget::Background(owner, _))
+                    | (SongLuaLiveTarget::Foreground(layer, local), SongLuaLiveTarget::Foreground(owner, _))
+                        if layer == owner => Some(local),
+                    _ => None,
+                }
+            }).unwrap_or(usize::MAX);
+        }
+        Ok(target)
     }
 
     /// Apply current local poses. The screen marks these actors dynamic in
@@ -1593,6 +1615,9 @@ impl SongLuaLiveScene {
             actor.initial_state = self.states[global];
             let owned = &self.actors[global];
             sync_visual_content(owned, &mut actor.kind)?;
+            if let crate::SongLuaOverlayKind::ActorProxy { target: proxy_target } = &mut actor.kind {
+                *proxy_target = self.proxy_target(owned, target)?;
+            }
         }
         for (target, state) in self.tracked_states() {
             use crate::SongLuaTrackedActorTarget as T;
@@ -2794,6 +2819,78 @@ return setmetatable({__songlua_actor_type='ActorFrame',Name='Declared',
 
     fn compile(name: &str, source: &str) -> Compiled {
         compile_with_context(name, source, |_| {})
+    }
+
+    #[test]
+    fn live_foreground_proxy_targets_reach_prepared_visuals() {
+        let mut compiled = compile_with_context("late-proxy-target", r#"
+return Def.ActorFrame {
+    OnCommand=function(self) self:sleep(1000) end,
+    Def.ActorFrameTexture {
+        InitCommand=function(self)
+            self:SetTextureName('ScreenTex'):SetWidth(640):SetHeight(480):Create()
+        end,
+        Def.ActorProxy {
+            Name='FieldProxy',
+            OnCommand=function(self)
+                self:SetTarget(SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField'))
+            end,
+        },
+    },
+    Def.Quad { Name='LocalTarget', InitCommand=function(self) self:visible(false) end },
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.layer_start_beats = vec![0.0];
+            context.players[0].step_statistics_enabled = false;
+            context.players[1].enabled = false;
+        });
+        let proxy = compiled.overlays.iter().position(|a| a.name.as_deref() == Some("FieldProxy")).unwrap();
+        let local = compiled.overlays.iter().position(|a| a.name.as_deref() == Some("LocalTarget")).unwrap();
+        let bindings = compiled.live_actor_indices().iter().copied().enumerate()
+            .map(|(local, global)| (global, SongLuaLiveTarget::Root(local))).collect();
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.bind_targets(bindings).unwrap();
+        let mut visuals = deadsync_gameplay::SongLuaRuntimeVisuals {
+            overlays: compiled.overlays,
+            screen_overlay_index: compiled.screen_overlay_index,
+            overlay_eases: Vec::new(), overlay_ease_ranges: Vec::new(), overlay_events: Vec::new(),
+            background_visual_layers: Vec::new(), foreground_visual_layers: Vec::new(),
+            player_actors: compiled.player_actors,
+            player_events: Default::default(), player_judgment_events: Default::default(),
+            player_combo_events: Default::default(), song_foreground: compiled.song_foreground,
+            song_foreground_events: Vec::new(), hidden_players: [false; 2],
+            screen_layers: compiled.screen_layers, screen_layer_events: Default::default(),
+            note_hides: Default::default(), column_offsets: Default::default(),
+            column_splines: Default::default(), screen_width: 640.0, screen_height: 480.0,
+        };
+        scene.write_visuals(&mut visuals).unwrap();
+        assert!(matches!(visuals.overlays[proxy].kind, SongLuaOverlayKind::ActorProxy {
+            target: crate::SongLuaProxyTarget::Actor { overlay_index: usize::MAX }
+        }), "foreground On has not run during preparation");
+        let output = scene.advance(SongLuaLiveFrame { music_seconds: 0.1, beat: 0.2,
+            screen_seconds: 0.1, delta_seconds: 0.1, ..Default::default() }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        scene.write_visuals(&mut visuals).unwrap();
+        assert!(matches!(visuals.overlays[proxy].kind, SongLuaOverlayKind::ActorProxy {
+            target: crate::SongLuaProxyTarget::NoteField { player_index: 0 }
+        }), "late foreground On must bind the actual prepared render slot");
+        let owned = &scene.actors[scene.targets.iter().find(|(_, target)|
+            matches!(target, SongLuaLiveTarget::Root(index) if *index == proxy)).unwrap().0];
+        let target_actor = &scene.actors[scene.targets.iter().find(|(_, target)|
+            matches!(target, SongLuaLiveTarget::Root(index) if *index == local)).unwrap().0];
+        owned.get::<Function>("SetTarget").unwrap().call::<()>((owned.clone(), target_actor.clone())).unwrap();
+        scene.write_visuals(&mut visuals).unwrap();
+        assert!(matches!(visuals.overlays[proxy].kind, SongLuaOverlayKind::ActorProxy {
+            target: crate::SongLuaProxyTarget::Actor { overlay_index }
+        } if overlay_index == local), "runtime retargeting resolves actor identity to the layer's visual index");
+        let underlay = scene.lua.load("return SCREENMAN:GetTopScreen():GetChild('Underlay'):visible(false)")
+            .eval::<Table>().unwrap();
+        owned.get::<Function>("SetTarget").unwrap().call::<()>((owned.clone(), underlay)).unwrap();
+        scene.write_visuals(&mut visuals).unwrap();
+        assert!(matches!(visuals.overlays[proxy].kind, SongLuaOverlayKind::ActorProxy {
+            target: crate::SongLuaProxyTarget::Underlay { hidden: true }
+        }), "retargeting also carries the source's current visibility");
     }
 
     fn compile_with_context(name: &str, source: &str, configure: impl FnOnce(&mut SongLuaCompileContext)) -> Compiled {

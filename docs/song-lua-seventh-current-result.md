@@ -1,4 +1,34 @@
-# seventh current result (0.5.1800)
+# 7th Gear live proxy playback (0.5.1872)
+
+Foreground `OnCommand` runs after the application prepares its visual slots.
+7th Gear binds its NoteField, Combo, Judgment, Underlay and Overlay proxies there.
+The retained Lua actors had the targets, but presentation kept the unbound
+startup targets, leaving only the captured background visible.
+
+Live visual writes now refresh proxy targets and resolve local actor identities
+to their own visual layer. Source visibility follows live retargeting. Screen
+entry also reserves enough direct-proxy destinations for a late whole-Player
+binding, whose three source runs can exceed an initially unbound slot.
+
+The new regression fails before the fix and passes afterward. It checks the
+actual prepared visual slot after foreground activation, then retargets it to
+a hidden local actor and a hidden screen layer. Fifteen distinct focused proxy
+and foreground checks pass.
+
+The normal Windows application reproduces the missing playfield before the fix.
+The rebuilt application shows all four receptor arrows and the HUD through
+7th Gear's three ActorFrameTexture stages. It completes 120 warmup and 120 measured
+frames on Single/Challenge, chart hash `477fed829d289df2`, with gameplay preparation
+at 1.243 seconds. A separate Single/Expert Fof Guys application check also
+completes and shows its course, ball and countdown. The installed songs, sync
+and user profiles are unchanged. Both checks use isolated data directories.
+
+Hashes, screenshots and application results are recorded in
+[`seventh-windows.json`](../tests/fixtures/interactive_song_lua/seventh-windows.json).
+These checks establish the live rendering repair; development-build performance
+and full native pixel parity are not certified.
+
+## Earlier semantic result (0.5.1800)
 
 The frozen project chart `7th Gear/7th Gear.ssc` passes **1,410,424/1,410,424** existing
 semantic and runtime-modifier checks. Pin hash `477fed829d289df2`,

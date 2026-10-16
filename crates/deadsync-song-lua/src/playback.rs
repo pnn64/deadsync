@@ -13029,6 +13029,19 @@ impl FrameScratch {
     /// may mutate, including ancestors, draw order and camera scope. The exact
     /// lists are allocated once and reused; frames do not rebuild this plan.
     pub fn enable_live_scene(&mut self) {
+        // A foreground can bind or retarget a proxy after screen preparation.
+        // Reserve the largest direct source (whole Player: three runs) for
+        // every root proxy before any of those live callbacks execute.
+        let root_proxies = std::iter::once(&self.song_lua_proxy_request_index)
+            .chain(&self.song_lua_foreground_proxy_request_indices)
+            .map(|index| index.proxy_indices.iter().filter(|&&proxy|
+                index.topology.aft_ancestors[proxy].get().is_none()).count())
+            .sum::<usize>();
+        let capacity = root_proxies.saturating_mul(3);
+        let entries = &mut self.song_lua_direct_proxies.entries;
+        if entries.capacity() < capacity {
+            entries.reserve_exact(capacity.saturating_sub(entries.len()));
+        }
         for order in std::iter::once(&mut self.song_lua_overlay_order)
             .chain(&mut self.song_lua_background_visual_layer_orders)
             .chain(&mut self.song_lua_foreground_visual_layer_orders) {

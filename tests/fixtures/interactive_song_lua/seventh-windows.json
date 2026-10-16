@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "platform": "Windows x86_64",
+  "build": {
+    "path": "target/debug/deadsync-seventh-fixed.exe",
+    "sha256": "7eaf1f1b1db9269e5e52158ac7032bc7172e562bca8573b59e2e8d3e3ad21065",
+    "bytes": 138397184
+  },
+  "problem": "Foreground On bound ActorProxy targets after preparation, but live writes transferred poses without refreshing those render-slot targets.",
+  "before": {
+    "reproduced": true,
+    "observed": "7th Gear background with no playfield or proxied HUD",
+    "screenshot": {
+      "path": "target/seventh-shipping/data/save/screenshots/2026/10-October/2026-10-16_210103__11__7th_Gear.png",
+      "sha256": "c2b7ae686623767f665de1d2052a20197aa4c88c8da7879fc7cf0421d7627435",
+      "bytes": 2029204
+    }
+  },
+  "seventh": {
+    "completed": true,
+    "play_style": "Single",
+    "difficulty": "Challenge",
+    "autoplay": true,
+    "warmup_frames": 120,
+    "measured_frames": 120,
+    "renderer": "Vulkan (wgpu)",
+    "observed": "Four receptor arrows and the proxied HUD are visible through the authored three-AFT chain.",
+    "result": {
+      "path": "target/seventh-shipping/after/result.json",
+      "sha256": "018021131e6cc87620c1f3d3a8417412fb6cd3848122b1195538a346e5050ef9",
+      "bytes": 10301
+    },
+    "screenshot": {
+      "path": "target/seventh-shipping/data/save/screenshots/2026/10-October/2026-10-16_211013__11__7th_Gear.png",
+      "sha256": "535acebb4e1f0f734803c25431299bf776b11ce29598c987059c967ee0a1e3e8",
+      "bytes": 1501037
+    },
+    "simfile_sha256": "cfd14505555c22a91da6042d964526c2636ed9cc35ea8420b4326bc3b7c58fbd",
+    "chart_hash": "477fed829d289df2",
+    "gameplay_transition_ms": 1242.897,
+    "frame_avg_us": 79393.85
+  },
+  "fof_regression": {
+    "completed": true,
+    "play_style": "Single",
+    "difficulty": "Challenge",
+    "autoplay": true,
+    "warmup_frames": 120,
+    "measured_frames": 120,
+    "renderer": "Vulkan (wgpu)",
+    "observed": "Single/Expert reaches the minigame with course, ball and countdown.",
+    "result": {
+      "path": "target/fof-seventh-regression/artifacts/result.json",
+      "sha256": "134fd2afd234cfcb877cc29d6a6354a10bbff4a92af90a4132ce6cbf676be2b0",
+      "bytes": 10336
+    },
+    "screenshot": {
+      "path": "target/fof-seventh-regression/data/save/screenshots/2026/10-October/2026-10-16_211120__1__Fof_Guys.png",
+      "sha256": "711f5965cd8becacbab6173c022068dbe76cd4ad42731bb138db1ade9a750a34",
+      "bytes": 192608
+    },
+    "simfile_sha256": "ac714db6e3c2681e394fcdeec55eeaf514d85e98f5dc9be204b16620ad9369fe",
+    "chart_hash": "29216cf8f382a21d",
+    "gameplay_transition_ms": 5549.638,
+    "frame_avg_us": 49777.35833333333
+  },
+  "focused_tests": {
+    "distinct_passed": 15,
+    "proxy_filter_passed": 8,
+    "live_foreground_filter_passed": 8,
+    "overlap": 1,
+    "new_regression_failed_before_fix": true,
+    "new_regression": "live::tests::live_foreground_proxy_targets_reach_prepared_visuals"
+  },
+  "scope": {
+    "installed_song_and_sync_edited": false,
+    "isolated_test_profiles": true,
+    "full_native_parity_revalidated": false,
+    "performance_certified": false
+  }
+}
