@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-16T02:08:16Z",
+  "updated_utc": "2026-10-16T02:08:35Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,8 +13,8 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 400,
-    "pending": 101,
+    "passed": 401,
+    "pending": 100,
     "unprocessed": 0
   },
   "complete": false,
@@ -1709,9 +1709,9 @@
       "position": 193,
       "source_simfile": "flowers/flowers.ssc",
       "simfile_sha256": "52e86ec7daeca20bdb1e49b6af119c898cd07a20a0e3c0b72703ead58af8bdba",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-16-flowers-native-float-math-first1-v1.json"
     },
     {
       "position": 194,

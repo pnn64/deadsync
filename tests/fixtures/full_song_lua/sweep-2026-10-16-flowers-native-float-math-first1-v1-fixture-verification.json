@@ -1,0 +1,15 @@
+{
+  "source_simfile": "flowers/flowers.ssc",
+  "archive": "1b5408a6706785a859db150a90ad0d41ec0001231dad19725588addba9dcd589.tar.zst",
+  "compressed_sha256": "1b5408a6706785a859db150a90ad0d41ec0001231dad19725588addba9dcd589",
+  "uncompressed_sha256": "7722e7db1464871d24771b03d01dfadd1bba1c8243f120119cd4263182940519",
+  "native_frames": 48353,
+  "replayed_frames": 48353,
+  "full_repairs_spent": 1,
+  "mismatches": 0,
+  "errors": 0,
+  "local_decompression_byte_verified": true,
+  "original_native_capture_reused": true,
+  "existing_acceptance_unchanged": true,
+  "passing_chart_closed": true
+}
