@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "complete",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "1d3b83abed5560a9bb73eae09e83a3ea13da63ee",
