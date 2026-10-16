@@ -4111,20 +4111,45 @@
     {
       "position": 223,
       "source_simfile": "Happy Now Remastered/Happy Now.ssc",
-      "completed_full_repairs": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json",
       "simfile_sha256": "d7cb2c12b9ab2e40fb30ed6c082ed12ccd4f71f2420bde2942b72ac5f6e68195",
-      "status": "pending",
-      "previous_concrete_failure": {
-        "failure_text": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1590174-1791862771070224596-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1590174-1791862771070224596-0\n",
-        "callback_errors": [],
-        "mismatch_count": null,
-        "first_concrete_mismatches": [],
-        "capture_exit": 1,
-        "replay_exit": null,
-        "concrete_terminal_outcome": null
-      },
-      "disposition": "no complete retained candidate; original native capture failure retained"
+      "status": "passed",
+      "repair_attempts": 1,
+      "local_chart": "C:/GitHub/deadsync/target/song-lua-sweep-20261016/native-recovery/chart-223",
+      "title": "Happy Now Remastered",
+      "native_capture_reused": false,
+      "previous_concrete_failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1590174-1791862771070224596-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1590174-1791862771070224596-0\n",
+      "capture_exit": 0,
+      "replay_exit": 0,
+      "candidate_sha256": "1e2ec7acd41587668c21fad7e79d2915c731456c960b22de92ab5c029efe6647",
+      "comparison_input": "uncompressed tar",
+      "native_frames": 156964,
+      "replayed_frames": 156964,
+      "compared_stage_fields": 2475,
+      "archive_accepted": true,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "22c37532999614830f61774c2a02b8e895c9a8e9bc61cab3ae32048bda6454ee",
+      "archive": "5f9232153aa3b8eb1b90650db260e28ab7fafb3196ff188edaa067386658bf11.tar.zst",
+      "archive_sha256": "5f9232153aa3b8eb1b90650db260e28ab7fafb3196ff188edaa067386658bf11",
+      "compressed_bytes": 24333255,
+      "harness_version": "0.1.80",
+      "uncompressed_bytes_verified": true,
+      "local_decompressed_bytes_verified": true,
+      "retained_previous_entry": {
+        "title": "Episode 00",
+        "source_simfile": "Happy Now Remastered/Happy Now.ssc",
+        "harness_version": "0.1.0",
+        "archive": "eef35c934b33bd6b7c85f27d08b0a06499baaea8bcb5eb6678fc209a2a937842.tar.zst",
+        "sha256": "eef35c934b33bd6b7c85f27d08b0a06499baaea8bcb5eb6678fc209a2a937842",
+        "compressed_bytes": 78066,
+        "uncompressed_sha256": "c8bd4719f98b509947c91753d9d3a171cac73ef614b5360ed57202be76e8b54f",
+        "compression_level": 22,
+        "aliases": [
+          "2bcc1079bffe5a799202a71303e44f0ee4b04f55f331327f756b8b42dcd549cd.tar.zst"
+        ]
+      }
     },
     {
       "position": 224,
@@ -19722,13 +19747,13 @@
     }
   ],
   "counts": {
-    "passed_fixtures": 417,
-    "pending_charts": 83,
+    "passed_fixtures": 418,
+    "pending_charts": 82,
     "ignored_charts": 1,
-    "new_passing_fixtures": 13,
+    "new_passing_fixtures": 14,
     "recorded_outcomes": 67
   },
-  "updated_utc": "2026-10-16T22:41:14Z",
+  "updated_utc": "2026-10-16T22:41:19Z",
   "reopened": [
     {
       "source_simfile": "7th Gear/7th Gear.ssc",

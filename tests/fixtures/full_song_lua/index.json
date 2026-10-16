@@ -2708,17 +2708,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 00",
+      "title": "Happy Now Remastered",
       "source_simfile": "Happy Now Remastered/Happy Now.ssc",
-      "harness_version": "0.1.0",
-      "archive": "eef35c934b33bd6b7c85f27d08b0a06499baaea8bcb5eb6678fc209a2a937842.tar.zst",
-      "sha256": "eef35c934b33bd6b7c85f27d08b0a06499baaea8bcb5eb6678fc209a2a937842",
-      "compressed_bytes": 78066,
-      "uncompressed_sha256": "c8bd4719f98b509947c91753d9d3a171cac73ef614b5360ed57202be76e8b54f",
-      "compression_level": 22,
-      "aliases": [
-        "2bcc1079bffe5a799202a71303e44f0ee4b04f55f331327f756b8b42dcd549cd.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "5f9232153aa3b8eb1b90650db260e28ab7fafb3196ff188edaa067386658bf11.tar.zst",
+      "compressed_bytes": 24333255,
+      "sha256": "5f9232153aa3b8eb1b90650db260e28ab7fafb3196ff188edaa067386658bf11",
+      "uncompressed_sha256": "1e2ec7acd41587668c21fad7e79d2915c731456c960b22de92ab5c029efe6647",
+      "aliases": []
     },
     {
       "title": "Happy Now",
