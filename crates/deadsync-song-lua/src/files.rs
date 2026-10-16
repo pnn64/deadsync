@@ -98,21 +98,21 @@ pub fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Resu
 // filesystem links, which native actor loading does not do.
 fn collapse_actor_path(path: &Path) -> PathBuf {
     let text = file_path_string(path);
-    let mut output = String::with_capacity(text.len());
-    for part in text.split_inclusive('/') {
-        if (part == "/" || part == "./") && !output.is_empty() {
-            continue;
-        }
-        if part == "../" && !output.is_empty() && output != "/" {
-            let previous = output[..output.len() - 1].rfind('/').map_or(0, |i| i + 1);
-            if &output[previous..] != "../" {
-                output.truncate(previous);
-                continue;
+    let mut output = PathBuf::new();
+    for component in Path::new(&text).components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                if output.file_name().is_some_and(|name| name != "..") {
+                    output.pop();
+                } else if !output.has_root() {
+                    output.push("..");
+                }
             }
+            component => output.push(component.as_os_str()),
         }
-        output.push_str(part);
     }
-    PathBuf::from(output)
+    output
 }
 
 fn resolve_script_path_with(
@@ -852,7 +852,7 @@ fn path_stem_eq(path: &Path, stem: &str) -> bool {
 #[inline(always)]
 #[must_use]
 pub fn song_dir_string(path: &Path) -> String {
-    let mut text = path.to_string_lossy().replace('\\', "/");
+    let mut text = file_path_string(path);
     if !text.ends_with('/') {
         text.push('/');
     }
@@ -862,7 +862,18 @@ pub fn song_dir_string(path: &Path) -> String {
 #[inline(always)]
 #[must_use]
 pub fn file_path_string(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    let text = path.to_string_lossy().replace('\\', "/");
+    // canonicalize() returns verbatim paths on Windows. Lua paths use forward
+    // slashes; spelling that prefix as //?/ breaks subsequent filesystem lookup.
+    if let Some(verbatim) = text.strip_prefix("//?/") {
+        if let Some(network) = verbatim.strip_prefix("UNC/") {
+            return format!("//{network}");
+        }
+        if verbatim.as_bytes().get(1) == Some(&b':') {
+            return verbatim.to_owned();
+        }
+    }
+    text
 }
 
 #[inline(always)]
@@ -1004,6 +1015,34 @@ mod tests {
         assert_eq!(
             theme_path("G", "/Banner/", "group fallback"),
             "__songlua_theme_path/G/Banner/group fallback"
+        );
+    }
+    #[test]
+    fn path_strings_preserve_windows_canonical_drive_and_network_roots() {
+        assert_eq!(
+            file_path_string(Path::new(r"\\?\C:\Songs\fof\fof.lua")),
+            "C:/Songs/fof/fof.lua"
+        );
+        assert_eq!(
+            song_dir_string(Path::new(r"\\?\C:\Songs\fof")),
+            "C:/Songs/fof/"
+        );
+        assert_eq!(
+            file_path_string(Path::new(r"\\?\UNC\server\share\fof.lua")),
+            "//server/share/fof.lua"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn actor_path_collapse_preserves_windows_roots() {
+        assert_eq!(
+            collapse_actor_path(Path::new(r"\\?\C:\Songs\fof\nested\..\FofGuys.lua")),
+            PathBuf::from("C:/Songs/fof/FofGuys.lua")
+        );
+        assert_eq!(
+            collapse_actor_path(Path::new(r"\\?\UNC\server\share\nested\..\FofGuys.lua")),
+            PathBuf::from(r"\\server\share\FofGuys.lua")
         );
     }
 }

@@ -8321,10 +8321,11 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
             move |lua, args: MultiValue| {
                 if let Some(Value::Table(vertices)) = method_arg(&args, 0).cloned() {
                     actor.set("__songlua_vertex_count", vertices.raw_len() as i64)?;
-                    actor.set(
-                        "__songlua_vertices",
-                        clone_lua_value(lua, Value::Table(vertices))?,
-                    )?;
+                    // Native AMV copies scalar vertices into its own buffer.
+                    // Deep-cloning Lua's nested tables creates thousands of VM
+                    // allocations per upload and makes catch-up frames stall.
+                    let points = read_actor_multi_vertex_upload(lua, &vertices)?;
+                    actor.set("__songlua_vertices", lua.create_any_userdata(points)?)?;
                 }
                 Ok(actor.clone())
             }
@@ -19031,6 +19032,8 @@ pub fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayComm
 }
 
 pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, String> {
+    // These fields belong to this instance. Missing render state must not
+    // invoke Lua class lookup for every default property on every frame.
     let mut state = SongLuaOverlayState::default();
     // Model::Model enables the Z buffer and texture wrapping before Lua overrides.
     state.depth_test = actor
@@ -19062,7 +19065,7 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
             .map_err(|err| err.to_string())?
             .unwrap_or(false);
     state.aux = actor
-        .get::<Option<f32>>("__songlua_state_aux")
+        .raw_get::<Option<f32>>("__songlua_state_aux")
         .map_err(|err| err.to_string())?
         .unwrap_or(0.0);
     state.sprite_texture = actor
@@ -19082,57 +19085,57 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
                     .is_some(),
         );
     if let Some(visible) = actor
-        .get::<Option<bool>>("__songlua_visible")
+        .raw_get::<Option<bool>>("__songlua_visible")
         .map_err(|err| err.to_string())?
     {
         state.visible = visible;
     }
     if let Some(diffuse) = actor
-        .get::<Option<Table>>("__songlua_state_diffuse")
+        .raw_get::<Option<Table>>("__songlua_state_diffuse")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec4(&value))
     {
         state.diffuse = diffuse;
     }
     if let Some(colors) = actor
-        .get::<Option<Table>>("__songlua_state_vertex_colors")
+        .raw_get::<Option<Table>>("__songlua_state_vertex_colors")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vertex_colors(&value))
     {
         state.vertex_colors = Some(colors);
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_x")
+        .raw_get::<Option<f32>>("__songlua_state_x")
         .map_err(|err| err.to_string())?
     {
         state.x = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_y")
+        .raw_get::<Option<f32>>("__songlua_state_y")
         .map_err(|err| err.to_string())?
     {
         state.y = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_z")
+        .raw_get::<Option<f32>>("__songlua_state_z")
         .map_err(|err| err.to_string())?
     {
         state.z = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_z_bias")
+        .raw_get::<Option<f32>>("__songlua_state_z_bias")
         .map_err(|err| err.to_string())?
     {
         state.z_bias = value;
     }
     if let Some(value) = actor
-        .get::<Option<i32>>("__songlua_state_draw_order")
+        .raw_get::<Option<i32>>("__songlua_state_draw_order")
         .map_err(|err| err.to_string())?
     {
         state.draw_order = value;
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_draw_by_z_position")
+        .raw_get::<Option<bool>>("__songlua_state_draw_by_z_position")
         .map_err(|err| err.to_string())?
     {
         state.draw_by_z_position = value;
@@ -19150,19 +19153,19 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
         state.aft_created = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_halign")
+        .raw_get::<Option<f32>>("__songlua_state_halign")
         .map_err(|err| err.to_string())?
     {
         state.halign = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_valign")
+        .raw_get::<Option<f32>>("__songlua_state_valign")
         .map_err(|err| err.to_string())?
     {
         state.valign = value;
     }
     if let Some(value) = actor
-        .get::<Option<LuaFieldText<32>>>("__songlua_state_text_align")
+        .raw_get::<Option<LuaFieldText<32>>>("__songlua_state_text_align")
         .map_err(|err| err.to_string())?
         .as_ref()
         .map(LuaFieldText::as_str)
@@ -19171,27 +19174,27 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
         state.text_align = value;
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_uppercase")
+        .raw_get::<Option<bool>>("__songlua_state_uppercase")
         .map_err(|err| err.to_string())?
     {
         state.uppercase = value;
     }
     if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_shadow_len")
+        .raw_get::<Option<Table>>("__songlua_state_shadow_len")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec2(&value))
     {
         state.shadow_len = value;
     }
     if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_shadow_color")
+        .raw_get::<Option<Table>>("__songlua_state_shadow_color")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec4(&value))
     {
         state.shadow_color = value;
     }
     if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_glow")
+        .raw_get::<Option<Table>>("__songlua_state_glow")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec4(&value))
     {
@@ -19200,185 +19203,185 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
     // ActorFrame::LoadFromNode reads FOV before commands run. A setter wins
     // over the declaration; -1 disables this frame's perspective camera.
     state.fov = actor
-        .get::<Option<f32>>("__songlua_state_fov")
+        .raw_get::<Option<f32>>("__songlua_state_fov")
         .map_err(|err| err.to_string())?
         .or(actor
             .raw_get::<Option<f32>>("FOV")
             .map_err(|err| err.to_string())?)
         .filter(|value| *value != -1.0);
     if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_vanishpoint")
+        .raw_get::<Option<Table>>("__songlua_state_vanishpoint")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec2(&value))
     {
         state.vanishpoint = Some(value);
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_cropleft")
+        .raw_get::<Option<f32>>("__songlua_state_cropleft")
         .map_err(|err| err.to_string())?
     {
         state.cropleft = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_cropright")
+        .raw_get::<Option<f32>>("__songlua_state_cropright")
         .map_err(|err| err.to_string())?
     {
         state.cropright = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_croptop")
+        .raw_get::<Option<f32>>("__songlua_state_croptop")
         .map_err(|err| err.to_string())?
     {
         state.croptop = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_cropbottom")
+        .raw_get::<Option<f32>>("__songlua_state_cropbottom")
         .map_err(|err| err.to_string())?
     {
         state.cropbottom = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_fadeleft")
+        .raw_get::<Option<f32>>("__songlua_state_fadeleft")
         .map_err(|err| err.to_string())?
     {
         state.fadeleft = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_faderight")
+        .raw_get::<Option<f32>>("__songlua_state_faderight")
         .map_err(|err| err.to_string())?
     {
         state.faderight = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_fadetop")
+        .raw_get::<Option<f32>>("__songlua_state_fadetop")
         .map_err(|err| err.to_string())?
     {
         state.fadetop = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_fadebottom")
+        .raw_get::<Option<f32>>("__songlua_state_fadebottom")
         .map_err(|err| err.to_string())?
     {
         state.fadebottom = value;
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_mask_source")
+        .raw_get::<Option<bool>>("__songlua_state_mask_source")
         .map_err(|err| err.to_string())?
     {
         state.mask_source = value;
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_mask_dest")
+        .raw_get::<Option<bool>>("__songlua_state_mask_dest")
         .map_err(|err| err.to_string())?
     {
         state.mask_dest = value;
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_depth_test")
+        .raw_get::<Option<bool>>("__songlua_state_depth_test")
         .map_err(|err| err.to_string())?
     {
         state.depth_test = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_zoom")
+        .raw_get::<Option<f32>>("__songlua_state_zoom")
         .map_err(|err| err.to_string())?
     {
         state.zoom = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_zoom_x")
+        .raw_get::<Option<f32>>("__songlua_state_zoom_x")
         .map_err(|err| err.to_string())?
     {
         state.zoom_x = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_zoom_y")
+        .raw_get::<Option<f32>>("__songlua_state_zoom_y")
         .map_err(|err| err.to_string())?
     {
         state.zoom_y = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_zoom_z")
+        .raw_get::<Option<f32>>("__songlua_state_zoom_z")
         .map_err(|err| err.to_string())?
     {
         state.zoom_z = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_basezoom")
+        .raw_get::<Option<f32>>("__songlua_state_basezoom")
         .map_err(|err| err.to_string())?
     {
         state.basezoom = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_basezoom_x")
+        .raw_get::<Option<f32>>("__songlua_state_basezoom_x")
         .map_err(|err| err.to_string())?
     {
         state.basezoom_x = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_basezoom_y")
+        .raw_get::<Option<f32>>("__songlua_state_basezoom_y")
         .map_err(|err| err.to_string())?
     {
         state.basezoom_y = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_basezoom_z")
+        .raw_get::<Option<f32>>("__songlua_state_basezoom_z")
         .map_err(|err| err.to_string())?
     {
         state.basezoom_z = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_rot_x_deg")
+        .raw_get::<Option<f32>>("__songlua_state_rot_x_deg")
         .map_err(|err| err.to_string())?
     {
         state.rot_x_deg = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_rot_y_deg")
+        .raw_get::<Option<f32>>("__songlua_state_rot_y_deg")
         .map_err(|err| err.to_string())?
     {
         state.rot_y_deg = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_rot_z_deg")
+        .raw_get::<Option<f32>>("__songlua_state_rot_z_deg")
         .map_err(|err| err.to_string())?
     {
         state.rot_z_deg = value;
     }
     if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_base_rotation")
+        .raw_get::<Option<Table>>("__songlua_state_base_rotation")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec3(&value))
     {
         state.base_rotation = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_skew_x")
+        .raw_get::<Option<f32>>("__songlua_state_skew_x")
         .map_err(|err| err.to_string())?
     {
         state.skew_x = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_skew_y")
+        .raw_get::<Option<f32>>("__songlua_state_skew_y")
         .map_err(|err| err.to_string())?
     {
         state.skew_y = value;
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_vibrate")
+        .raw_get::<Option<bool>>("__songlua_state_vibrate")
         .map_err(|err| err.to_string())?
     {
         state.vibrate = value;
     }
     if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_effect_magnitude")
+        .raw_get::<Option<Table>>("__songlua_state_effect_magnitude")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec3(&value))
     {
         state.effect_magnitude = value;
     }
     if let Some(value) = actor
-        .get::<Option<LuaFieldText<32>>>("__songlua_state_effect_clock")
+        .raw_get::<Option<LuaFieldText<32>>>("__songlua_state_effect_clock")
         .map_err(|err| err.to_string())?
         .as_ref()
         .map(LuaFieldText::as_str)
@@ -19391,64 +19394,64 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
         .map_err(|err| err.to_string())?
         .unwrap_or(true);
     if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_effect_color1")
+        .raw_get::<Option<Table>>("__songlua_state_effect_color1")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec4(&value))
     {
         state.effect_color1 = value;
     }
     if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_effect_color2")
+        .raw_get::<Option<Table>>("__songlua_state_effect_color2")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec4(&value))
     {
         state.effect_color2 = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_effect_period")
+        .raw_get::<Option<f32>>("__songlua_state_effect_period")
         .map_err(|err| err.to_string())?
     {
         state.effect_period = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_effect_offset")
+        .raw_get::<Option<f32>>("__songlua_state_effect_offset")
         .map_err(|err| err.to_string())?
     {
         state.effect_offset = value;
     }
     if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_effect_timing")
+        .raw_get::<Option<Table>>("__songlua_state_effect_timing")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec5(&value))
     {
         state.effect_timing = Some(value);
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_rainbow")
+        .raw_get::<Option<bool>>("__songlua_state_rainbow")
         .map_err(|err| err.to_string())?
     {
         state.rainbow = value;
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_rainbow_scroll")
+        .raw_get::<Option<bool>>("__songlua_state_rainbow_scroll")
         .map_err(|err| err.to_string())?
     {
         state.rainbow_scroll = value;
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_text_jitter")
+        .raw_get::<Option<bool>>("__songlua_state_text_jitter")
         .map_err(|err| err.to_string())?
     {
         state.text_jitter = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_text_distortion")
+        .raw_get::<Option<f32>>("__songlua_state_text_distortion")
         .map_err(|err| err.to_string())?
     {
         state.text_distortion = value;
     }
     if let Some(value) = actor
-        .get::<Option<LuaFieldText<32>>>("__songlua_state_text_glow_mode")
+        .raw_get::<Option<LuaFieldText<32>>>("__songlua_state_text_glow_mode")
         .map_err(|err| err.to_string())?
         .as_ref()
         .map(LuaFieldText::as_str)
@@ -19457,138 +19460,138 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
         state.text_glow_mode = value;
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_mult_attrs_with_diffuse")
+        .raw_get::<Option<bool>>("__songlua_state_mult_attrs_with_diffuse")
         .map_err(|err| err.to_string())?
     {
         state.mult_attrs_with_diffuse = value;
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_sprite_animate")
+        .raw_get::<Option<bool>>("__songlua_state_sprite_animate")
         .map_err(|err| err.to_string())?
     {
         state.sprite_animate = value;
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_sprite_loop")
+        .raw_get::<Option<bool>>("__songlua_state_sprite_loop")
         .map_err(|err| err.to_string())?
     {
         state.sprite_loop = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_sprite_playback_rate")
+        .raw_get::<Option<f32>>("__songlua_state_sprite_playback_rate")
         .map_err(|err| err.to_string())?
     {
         state.sprite_playback_rate = value;
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_sprite_state_delay")
+        .raw_get::<Option<f32>>("__songlua_state_sprite_state_delay")
         .map_err(|err| err.to_string())?
     {
         state.sprite_state_delay = value;
     }
     if let Some(value) = actor
-        .get::<Option<i32>>("__songlua_state_vert_spacing")
+        .raw_get::<Option<i32>>("__songlua_state_vert_spacing")
         .map_err(|err| err.to_string())?
     {
         state.vert_spacing = Some(value);
     }
     if let Some(value) = actor
-        .get::<Option<i32>>("__songlua_state_wrap_width_pixels")
+        .raw_get::<Option<i32>>("__songlua_state_wrap_width_pixels")
         .map_err(|err| err.to_string())?
     {
         state.wrap_width_pixels = Some(value);
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_max_width")
+        .raw_get::<Option<f32>>("__songlua_state_max_width")
         .map_err(|err| err.to_string())?
     {
         state.max_width = Some(value);
     }
     if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_max_height")
+        .raw_get::<Option<f32>>("__songlua_state_max_height")
         .map_err(|err| err.to_string())?
     {
         state.max_height = Some(value);
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_max_w_pre_zoom")
+        .raw_get::<Option<bool>>("__songlua_state_max_w_pre_zoom")
         .map_err(|err| err.to_string())?
     {
         state.max_w_pre_zoom = value;
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_max_h_pre_zoom")
+        .raw_get::<Option<bool>>("__songlua_state_max_h_pre_zoom")
         .map_err(|err| err.to_string())?
     {
         state.max_h_pre_zoom = value;
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_max_dimension_uses_zoom")
+        .raw_get::<Option<bool>>("__songlua_state_max_dimension_uses_zoom")
         .map_err(|err| err.to_string())?
     {
         state.max_dimension_uses_zoom = value;
     }
     if let Some(value) = actor
-        .get::<Option<u32>>("__songlua_state_sprite_state_index")
+        .raw_get::<Option<u32>>("__songlua_state_sprite_state_index")
         .map_err(|err| err.to_string())?
     {
         state.sprite_state_index = Some(value);
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_decode_movie")
+        .raw_get::<Option<bool>>("__songlua_state_decode_movie")
         .map_err(|err| err.to_string())?
     {
         state.decode_movie = value;
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_texture_filtering")
+        .raw_get::<Option<bool>>("__songlua_state_texture_filtering")
         .map_err(|err| err.to_string())?
     {
         state.texture_filtering = value;
     }
     if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_texture_wrapping")
+        .raw_get::<Option<bool>>("__songlua_state_texture_wrapping")
         .map_err(|err| err.to_string())?
     {
         state.texture_wrapping = value;
     }
     if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_texcoord_offset")
+        .raw_get::<Option<Table>>("__songlua_state_texcoord_offset")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec2(&value))
     {
         state.texcoord_offset = Some(value);
     }
     if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_custom_texture_rect")
+        .raw_get::<Option<Table>>("__songlua_state_custom_texture_rect")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec4(&value))
     {
         state.custom_texture_rect = Some(value);
     }
     if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_texcoord_velocity")
+        .raw_get::<Option<Table>>("__songlua_state_texcoord_velocity")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec2(&value))
     {
         state.texcoord_velocity = Some(value);
     }
     if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_size")
+        .raw_get::<Option<Table>>("__songlua_state_size")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec2(&value))
     {
         state.size = Some(value);
     }
     if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_stretch_rect")
+        .raw_get::<Option<Table>>("__songlua_state_stretch_rect")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec4(&value))
     {
         state.stretch_rect = Some(value);
     }
     if let Some(raw) = actor
-        .get::<Option<LuaFieldText<32>>>("__songlua_state_blend")
+        .raw_get::<Option<LuaFieldText<32>>>("__songlua_state_blend")
         .map_err(|err| err.to_string())?
         .as_ref()
         .map(LuaFieldText::as_str)
@@ -19597,7 +19600,7 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
         state.blend = raw;
     }
     if let Some(raw) = actor
-        .get::<Option<LuaFieldText<32>>>("__songlua_state_effect_mode")
+        .raw_get::<Option<LuaFieldText<32>>>("__songlua_state_effect_mode")
         .map_err(|err| err.to_string())?
         .as_ref()
         .map(LuaFieldText::as_str)
@@ -19989,13 +19992,21 @@ pub fn read_actor_multi_vertex_texture_path(
 pub fn read_actor_multi_vertex_mesh(
     actor: &Table,
 ) -> Result<Option<Arc<[SongLuaOverlayMeshVertex]>>, String> {
-    let Some(vertices) = actor
-        .get::<Option<Table>>("__songlua_vertices")
+    let source: Arc<[SongLuaActorMultiVertexPoint]> = match actor
+        .get::<Value>("__songlua_vertices")
         .map_err(|err| err.to_string())?
-    else {
-        return Ok(None);
+    {
+        Value::Nil => return Ok(None),
+        Value::UserData(points) => {
+            let points = points
+                .borrow::<Arc<[SongLuaActorMultiVertexPoint]>>()
+                .map_err(|err| err.to_string())?;
+            Arc::clone(&points)
+        }
+        // Retain compatibility with compiler fixtures that supply raw tables.
+        Value::Table(vertices) => read_actor_multi_vertex_points(&vertices)?.into(),
+        _ => return Err("invalid ActorMultiVertex vertex buffer".into()),
     };
-    let source = read_actor_multi_vertex_points(&vertices)?;
     let Some((start, end)) = read_actor_multi_vertex_range(actor, source.len())? else {
         return Ok(None);
     };
@@ -20802,6 +20813,134 @@ fn read_actor_multi_vertex_range(
         start.saturating_add(num as usize).min(vertex_count)
     };
     Ok((end > start).then_some((start, end)))
+}
+
+// Copy the common numeric vertex layout with one VM lock and stack frame.
+// Noncanonical inputs retain the existing conversions and defaults below.
+fn read_actor_multi_vertex_upload(
+    lua: &Lua,
+    vertices: &Table,
+) -> mlua::Result<Arc<[SongLuaActorMultiVertexPoint]>> {
+    let count = vertices.raw_len();
+    let mut points = Vec::with_capacity(count);
+    let mut complete = false;
+    // SAFETY: exec_raw locks the VM and owns a stack frame containing `vertices`
+    // at index 1. Every raw access checks its table type first. The helper pops
+    // each scalar, we reserve stack space, and no stack reference escapes.
+    unsafe {
+        lua.exec_raw::<()>(vertices, |state| {
+            if count <= c_int::MAX as usize && ffi::lua_checkstack(state, 4) != 0 {
+                for index in 1..=count {
+                    ffi::lua_settop(state, 1);
+                    ffi::lua_rawgeti(state, 1, index as _);
+                    if ffi::lua_type(state, 2) != ffi::LUA_TTABLE {
+                        break;
+                    }
+                    ffi::lua_rawgeti(state, 2, 1);
+                    let Some(position) = vertex_numeric_array::<3>(state, 3) else {
+                        break;
+                    };
+                    ffi::lua_pop(state, 1);
+                    ffi::lua_rawgeti(state, 2, 2);
+                    let Some(color) = vertex_numeric_array::<4>(state, 3) else {
+                        break;
+                    };
+                    ffi::lua_pop(state, 1);
+                    ffi::lua_rawgeti(state, 2, 3);
+                    let Some(uv) = vertex_numeric_array::<2>(state, 3) else {
+                        break;
+                    };
+                    // The general UV reader validates finite numbers; positions
+                    // deliberately retain NaNs used to hide complete primitives.
+                    if !uv.iter().all(|value| value.is_finite()) {
+                        break;
+                    }
+                    points.push(SongLuaActorMultiVertexPoint {
+                        pos: [position[0], position[1]],
+                        z: position[2],
+                        color,
+                        uv,
+                    });
+                }
+                complete = points.len() == count;
+            }
+            ffi::lua_settop(state, 0);
+        })?;
+    }
+    if complete {
+        return Ok(points.into());
+    }
+    read_actor_multi_vertex_points(vertices)
+        .map(Into::into)
+        .map_err(mlua::Error::external)
+}
+
+#[cfg(test)]
+mod vertex_upload_tests {
+    use super::*;
+
+    #[test]
+    fn packed_vertex_upload_matches_general_reader_and_restores_stack() {
+        let lua = Lua::new();
+        for expression in [
+            "{}",
+            "{{{1,2,3},{0.25,0.5,0.75,1},{0.1,0.2}}}",
+            "{{{0/0,2,-3},{1,1,1,1},{0,1}}}",
+            "{{{1,2},{1,0,0},{0,1}}}",
+            "{{{1,2,3},'#ff0000',{0/0,1}}}",
+            "{{{'1','2','3'},{'0.5',1,1,1},{'0.1','0.2'}}}",
+            "{false,{{1,2,3},{1,1,1,1},{0,1}}}",
+        ] {
+            let vertices: Table = lua.load(format!("return {expression}")).eval().unwrap();
+            let expected = read_actor_multi_vertex_points(&vertices).unwrap();
+            let actual = read_actor_multi_vertex_upload(&lua, &vertices).unwrap();
+            assert_eq!(actual.len(), expected.len(), "{expression}");
+            for (actual, expected) in actual.iter().zip(&expected) {
+                let scalars = |point: &SongLuaActorMultiVertexPoint| {
+                    [
+                        point.pos[0],
+                        point.pos[1],
+                        point.z,
+                        point.color[0],
+                        point.color[1],
+                        point.color[2],
+                        point.color[3],
+                        point.uv[0],
+                        point.uv[1],
+                    ]
+                    .map(f32::to_bits)
+                };
+                assert_eq!(scalars(actual), scalars(expected), "{expression}");
+            }
+            assert_eq!(lua.load("return 6*7").eval::<u32>().unwrap(), 42);
+        }
+    }
+}
+
+unsafe fn vertex_numeric_array<const N: usize>(
+    state: *mut ffi::lua_State,
+    table: c_int,
+) -> Option<[f32; N]> {
+    // SAFETY: the caller owns this live stack frame and reserves one scalar
+    // slot. Only numeric values are converted, and each pushed value is popped.
+    unsafe {
+        if ffi::lua_type(state, table) != ffi::LUA_TTABLE {
+            return None;
+        }
+        let mut values = [0.0; N];
+        for (index, value) in values.iter_mut().enumerate() {
+            ffi::lua_rawgeti(state, table, (index + 1) as _);
+            let numeric = ffi::lua_type(state, -1) == ffi::LUA_TNUMBER;
+            if numeric {
+                *value = ffi::lua_tonumber(state, -1) as f32;
+            }
+            ffi::lua_pop(state, 1);
+            if !numeric {
+                return None;
+            }
+        }
+        Some(values)
+    }
 }
 
 fn read_actor_multi_vertex_points(

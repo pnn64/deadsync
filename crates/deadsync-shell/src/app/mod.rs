@@ -2898,6 +2898,9 @@ impl App {
         // Releases can arrive while the replacement Lua screen is prepared.
         gs.reconcile_song_lua_held_inputs(|event| self.input.is_down(event));
         gs.queue_song_lua_inputs(self.pending_gameplay_lua_inputs.drain(..));
+        if let Some(case) = &self.live_case {
+            gs.gameplay.set_live_autoplay_enabled(case.autoplay());
+        }
         crate::gameplay_runtime::sync_initial_scores(&mut gs);
         let init_ms = finish.started.elapsed().as_secs_f64() * 1000.0;
 

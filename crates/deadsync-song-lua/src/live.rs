@@ -3924,17 +3924,101 @@ end)
     }
 
     #[test]
-    fn live_relative_nested_media_keeps_hidden_sprite_slots() {
-        let dir=std::path::PathBuf::from(format!("../../target/song-lua-relative-media-{}",std::process::id()));
+    fn live_relative_and_canonical_nested_media_keep_hidden_sprite_slots() {
+        let dir = std::path::PathBuf::from(format!(
+            "../../target/song-lua-relative-media-{}",
+            std::process::id()
+        ));
         std::fs::create_dir_all(dir.join("nested")).unwrap();
-        image::RgbaImage::from_pixel(2,2,image::Rgba([255;4])).save(dir.join("nested/ball.png")).unwrap();
+        image::RgbaImage::from_pixel(2, 2, image::Rgba([255; 4]))
+            .save(dir.join("nested/ball.png"))
+            .unwrap();
         std::fs::write(dir.join("entry.lua"), "return LoadActor('nested/actor.lua')").unwrap();
         std::fs::write(dir.join("nested/actor.lua"), "return LoadActor('ball.png') .. {Name='HiddenBall',InitCommand=function(self) self:visible(false) end}").unwrap();
-        let mut context=crate::SongLuaCompileContext::new(&dir,"relative media");
-        context.live=true;
-        let compiled: Compiled=crate::compile_song_lua_with_default_host(&dir.join("entry.lua"), &context, SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).unwrap();
-        let sprite=compiled.overlays.iter().find(|a|a.name.as_deref()==Some("HiddenBall")).expect("hidden sprite retains a visual slot");
-        assert!(matches!(&sprite.kind,SongLuaOverlayKind::Sprite{texture_path,..} if texture_path.is_absolute() && texture_path.is_file()));
+        // Windows catalog scanning canonicalizes roots to \\?\ paths. Exercise
+        // both that shipping spelling and a process-relative song root.
+        let canonical = std::fs::canonicalize(&dir).unwrap();
+        for root in [&dir, &canonical] {
+            let mut context = crate::SongLuaCompileContext::new(root, "relative media");
+            context.live = true;
+            let compiled: Compiled = crate::compile_song_lua_with_default_host(
+                &root.join("entry.lua"),
+                &context,
+                SongLuaNoteskinResolver::default(),
+                |_, _, _| Ok(Arc::<[()]>::from([])),
+                |_| None,
+                |_, _| None,
+            )
+            .unwrap();
+            let sprite = compiled
+                .overlays
+                .iter()
+                .find(|actor| actor.name.as_deref() == Some("HiddenBall"))
+                .expect("nested hidden sprite retains a visual slot");
+            assert!(matches!(&sprite.kind, SongLuaOverlayKind::Sprite { texture_path, .. }
+                if texture_path.is_absolute() && texture_path.is_file()));
+        }
+    }
+
+    #[test]
+    fn live_render_defaults_do_not_dispatch_public_class_lookups() {
+        let lua = Lua::new();
+        let actor = lua.create_table().unwrap();
+        actor.raw_set("__songlua_actor_type", "Actor").unwrap();
+        actor.raw_set("__songlua_state_x", 42.0).unwrap();
+        let metatable = lua.create_table().unwrap();
+        metatable
+            .raw_set(
+                "__index",
+                lua.create_function(|_, _: mlua::MultiValue| {
+                    Err::<Value, _>(mlua::Error::runtime(
+                        "render defaults invoked public class lookup",
+                    ))
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        actor.set_metatable(Some(metatable)).unwrap();
+        let state = crate::actor_overlay_initial_state(&actor).unwrap();
+        assert_eq!(state.x, 42.0);
+        assert!(state.visible);
+        assert_eq!(state.diffuse, [1.0; 4]);
+    }
+
+    #[test]
+    fn live_vertex_upload_copies_values_before_source_table_mutation() {
+        let compiled = compile(
+            "live-vertex-value-copy",
+            r#"
+return Def.ActorMultiVertex {
+ InitCommand=function(self)
+  local vertices = {
+   {{1,2,-3},{0.25,0.5,0.75,1},{0.1,0.2}},
+   {{4,5,-6},{1,1,1,1},{0,1}},
+   {{7,8,-9},{1,1,1,1},{1,0}},
+  }
+  self:SetDrawState{Mode='DrawMode_Triangles'}:SetVertices(vertices)
+  assert(self:GetNumVertices()==3)
+  vertices[1][1][1]=999
+  vertices[1][2][4]=0
+  vertices[1][3][1]=999
+ end,
+}
+"#,
+        );
+        let vertices = compiled
+            .overlays
+            .iter()
+            .find_map(|actor| match &actor.kind {
+                SongLuaOverlayKind::ActorMultiVertex { vertices, .. } => Some(vertices),
+                _ => None,
+            })
+            .expect("uploaded mesh remains drawable");
+        assert_eq!(vertices.len(), 3);
+        assert_eq!(vertices[0].pos, [1.0, 2.0]);
+        assert_eq!(vertices[0].z, -3.0);
+        assert_eq!(vertices[0].color, [0.25, 0.5, 0.75, 1.0]);
+        assert_eq!(vertices[0].uv, [0.1, 0.2]);
     }
 
     #[test]

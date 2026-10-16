@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "platform": "Windows x86_64",
+  "user_selection": {
+    "play_mode": "Single",
+    "difficulty_label": "Expert",
+    "resolved_chart_difficulty": "Challenge",
+    "chart_hash": "29216cf8f382a21d"
+  },
+  "reproduction": {
+    "catalog_uses_canonical_windows_paths": true,
+    "before": "Nested LoadActor FofGuys.lua failed after a verbatim Windows path became //?/C:/...; the loader substituted a native dummy Actor.",
+    "installed_simfile_sha256": "ac714db6e3c2681e394fcdeec55eeaf514d85e98f5dc9be204b16620ad9369fe",
+    "installed_song_and_sync_edited": false,
+    "test_data_isolated_from_user_profile": true
+  },
+  "production_build": {
+    "artifact": "target/debug/deadsync-fof-fixed.exe",
+    "sha256": "0529ddd02334d14ecb97544c13c5296233e2e8e480f5b4730e7fa459ef227961",
+    "bytes": 138390016,
+    "linker_environment": {
+      "_LINK_": "/DEBUG:NONE"
+    }
+  },
+  "windows_application": {
+    "completed": true,
+    "renderer": "Vulkan (wgpu)",
+    "width": 1600,
+    "height": 900,
+    "autoplay": true,
+    "warmup_frames": 300,
+    "measured_frames": 300,
+    "frame_avg_us": 41321.96333333333,
+    "frame_max_us": 72522,
+    "draw_avg_us": 2248.233333333333,
+    "audio_underruns": 0,
+    "visual_review": "Rendered course geometry, textures, player ball and countdown verified in the actual Vulkan screenshot.",
+    "performance_scope": "Functional startup smoke only. Development-build pacing remains below 60 FPS; this does not certify performance parity."
+  },
+  "gameplay_transition_timing_ms": {
+    "before_audio_optimization": {
+      "sfx_prewarm_ms": 130935.206,
+      "elapsed_ms": 131921.013
+    },
+    "after": {
+      "payload_ms": 4.585,
+      "init_ms": 435.157,
+      "sfx_prewarm_ms": 3994.33,
+      "asset_prewarm_ms": 139.753,
+      "text_prewarm_ms": 3.628,
+      "elapsed_ms": 4578.036
+    },
+    "scope": "Song selection to prepared Gameplay handoff. Excludes application/renderer/font startup."
+  },
+  "screenshots": [
+    {
+      "file": "windows-before.png",
+      "sha256": "4683262ae0bd9f30956482b6cbbdae10c90dbf9c9ed588f023dbb8683c0aa1a5"
+    },
+    {
+      "file": "windows-after.png",
+      "sha256": "b157571ccde91424a6b2d33bb37bbd87b051d042fabe4ca7cb64c914a477fea2"
+    }
+  ],
+  "focused_library_tests": {
+    "passed": 28,
+    "failed": 0,
+    "coverage": [
+      "Windows drive and UNC roots",
+      "relative and canonical nested LoadActor/media",
+      "LoadActor redirects/wildcards/varargs",
+      "live input-to-mesh and text transfer",
+      "uploaded values remain owned after source mutation",
+      "render defaults avoid class callbacks",
+      "numeric upload fast path matches general conversion and restores the Lua stack",
+      "AMV shape/UV/line strip"
+    ]
+  },
+  "fresh_native_single": {
+    "native_frames": 448,
+    "replayed_frames": 448,
+    "checked_stage_samples": 19,
+    "compared_stage_fields": 209,
+    "reported_mismatches": 0,
+    "callback_errors": 0,
+    "interactive": {
+      "input_events_replayed": 59,
+      "draw_samples_compared": 15387,
+      "submitted_vertices_compared": 699774,
+      "live_text_samples_compared": 223,
+      "draw_mismatches": 0,
+      "equivalent_offscreen_culls": 0,
+      "pixel_parity_proven": false
+    },
+    "interactive_checks_passed": true
+  },
+  "archive_accepted": false,
+  "whole_song_parity_proven": false,
+  "pixel_parity_proven": false
+}

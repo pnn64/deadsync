@@ -158,15 +158,32 @@ opt-level = 3
 [profile.dev.package.fdeflate]
 opt-level = 3
 
+# Song-Lua Sound actors can preload full-length music. Keep their decoder and
+# resampler optimized so development builds do not block loading for minutes.
+[profile.dev.package.deadlib-audio]
+opt-level = 3
+
+[profile.dev.package.deadlib-audio-decode]
+opt-level = 3
+
+[profile.dev.package.rubato]
+opt-level = 3
+
+[profile.dev.package.symphonia-core]
+opt-level = 3
+
+[profile.dev.package.symphonia-codec-vorbis]
+opt-level = 3
+
 # Full-song fixtures verify large native traces and every archive member.
 # Keep SHA-256 fast when running the default cargo test profile.
 [profile.dev.package.sha2]
 opt-level = 3
 
-# Modcharts replay their Lua update functions at 60 Hz during song loading.
-# Optimize this load-time compiler and its VM; retain debug symbols and checks.
+# Retained modcharts update dense meshes during gameplay. Keep the scene bridge
+# and its VM optimized while retaining development debug symbols and checks.
 [profile.dev.package.deadsync-song-lua]
-opt-level = 1
+opt-level = 3
 
 [profile.dev.package.mlua]
 opt-level = 3

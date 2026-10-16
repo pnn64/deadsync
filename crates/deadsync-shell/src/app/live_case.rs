@@ -7,6 +7,7 @@ use serde::Serialize;
 pub(super) struct LiveCaseRuntime {
     spec: LiveCase,
     launched: bool,
+    screenshot_requested: bool,
     warmup_frames_seen: u32,
     warmup_storage: GameplayStorageSample,
     resolved: Option<ResolvedCase>,
@@ -84,6 +85,7 @@ impl LiveCaseRuntime {
         Self {
             spec,
             launched: false,
+            screenshot_requested: false,
             warmup_frames_seen: 0,
             warmup_storage: GameplayStorageSample::default(),
             resolved: None,
@@ -94,6 +96,10 @@ impl LiveCaseRuntime {
     #[inline(always)]
     pub(super) const fn launched(&self) -> bool {
         self.launched
+    }
+
+    pub(super) const fn autoplay(&self) -> bool {
+        self.spec.autoplay
     }
 
     pub(super) fn note_warmup_frame(
@@ -252,13 +258,11 @@ impl App {
         commands.extend(self.handle_screen_entry_on_fade(prev, target));
         self.state.shell.transition = TransitionState::Idle;
         self.run_commands(commands, event_loop);
-        let gameplay = self
-            .state
-            .screens
-            .gameplay_state
-            .as_mut()
-            .ok_or_else(|| "performance case failed to construct Gameplay state".to_owned())?;
-        gameplay.gameplay.set_live_autoplay_enabled(spec.autoplay);
+        if let Some(gameplay) = self.state.screens.gameplay_state.as_mut() {
+            gameplay.gameplay.set_live_autoplay_enabled(spec.autoplay);
+        } else if self.pending_gameplay_init.is_none() {
+            return Err("performance case failed to construct Gameplay state".to_owned());
+        }
 
         runtime.resolved = Some(ResolvedCase {
             simfile: spec.simfile.display().to_string(),
@@ -285,8 +289,21 @@ impl App {
         let Some(runtime) = self.live_case.as_mut() else {
             return;
         };
-        if self.state.screens.current_screen != CurrentScreen::Gameplay || !runtime.launched() {
+        if self.state.screens.current_screen != CurrentScreen::Gameplay
+            || !runtime.launched()
+            || self.pending_gameplay_init.is_some()
+            || self.state.screens.gameplay_state.is_none()
+        {
             return;
+        }
+        if !runtime.screenshot_requested
+            && std::env::var_os("DEADSYNC_CASE_SCREENSHOT").is_some()
+            && self.state.screens.gameplay_state.as_ref().is_some_and(|state| {
+                state.current_music_time_display() >= 0.5
+            })
+        {
+            self.state.shell.screenshot.request(None);
+            runtime.screenshot_requested = true;
         }
         if !self.state.shell.gameplay_pacing_trace.capture_active()
             && let Some(warmed_storage) = runtime.note_warmup_frame(storage)

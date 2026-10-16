@@ -73,12 +73,13 @@
     }
   ],
   "build": {
-    "artifact": "target/debug/deadsync-interactive.exe",
-    "sha256": "70ad1d382590d97e1a4b450f32aeb7907f1135a01e44ac0122c3ba4957d687f0",
-    "bytes": 137449984,
+    "artifact": "target/debug/deadsync-fof-fixed.exe",
+    "sha256": "0529ddd02334d14ecb97544c13c5296233e2e8e480f5b4730e7fa459ef227961",
+    "bytes": 138390016,
     "linker_environment": {
       "_LINK_": "/DEBUG:NONE"
     },
-    "install_step": "linked production executable copied under a separate name to allow an existing game session to remain open"
-  }
+    "install_step": "normal production build copied to deadsync-fof-fixed.exe; deadsync-interactive.exe refreshed as an alias"
+  },
+  "windows_followup": "windows-startup.json"
 }

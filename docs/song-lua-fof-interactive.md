@@ -22,6 +22,45 @@ NaNs without shifting primitive boundaries. Rendering uses the native camera,
 texture translation, wrapping, and filtering. Sprite culling preserves visible
 edge slivers. Relative nested media paths are resolved before being rebound.
 
+## Windows application startup follow-up
+
+The initial replay checks missed the Windows catalog's canonical `\\?\` paths.
+Converting that prefix to forward slashes and collapsing it as ordinary path
+text broke nested `LoadActor` calls. The application substituted an empty actor,
+leaving the regular gameplay screen visible. Lua-facing paths now normalize
+canonical drive and UNC prefixes, and lexical collapse preserves filesystem
+roots. The nested-media regression exercises both relative and canonical roots.
+
+An actual application run also exposed two load/performance costs absent from
+the null replay: fully decoding Fof's long music as a Sound actor took 131 seconds
+in the development build, and deep-copying its nested Lua vertex tables on every
+upload aggravated a catch-up spiral. Development audio decoding/resampling is now
+optimized. AMV uploads copy scalar vertices into an immutable packed snapshot,
+preserving native value-copy behavior without thousands of Lua allocations.
+Numeric arrays use one locked Lua stack traversal; unusual layouts retain the
+general reader and its conversions/defaults.
+The render-state reader also reads owned fields directly; missing default
+properties no longer re-enter public Lua class lookup every frame.
+
+The application case harness now waits for asynchronous gameplay preparation
+before counting frames and applies autoplay after that handoff. Set
+`DEADSYNC_CASE_SCREENSHOT=1` with `--perf-case` to request a rendered screenshot
+once music time reaches 0.5 seconds. This opt-in capture is a visual diagnostic
+and can affect pacing. Windows startup evidence is retained in
+[`windows-startup.json`](../tests/fixtures/interactive_song_lua/windows-startup.json).
+
+The installed Single/Expert case now renders the course, ball, and countdown
+in the actual Windows application. Gameplay preparation takes about five seconds,
+excluding application and renderer startup. The isolated case completes 300
+warmup frames and 300 measured frames without an actor-load failure or audio
+underrun. Development-build pacing remains below 60 FPS; this check establishes
+the startup repair and does not certify performance parity.
+
+Twenty-eight focused library checks pass after this follow-up. The fresh native
+Single replay still compares all 448 captured frames and 699,774 vertices with
+zero mismatches and callback errors. The existing Versus and negative-control
+results below are retained from the earlier validation.
+
 ## Native evidence
 
 The sibling `itgmania-harness` now injects controls through the real native
@@ -85,10 +124,11 @@ The hardware mapping/callback/repeat/release regression, callback registry tests
 dynamic-content and relative-media tests, visible-edge culling test, input suite
 (including its allocation test), and 13 harness runtime tests pass.
 
-The broad Lua library run reports 638 passes and 15 failures. Every failing test
+The earlier broad Lua library run reported 638 passes and 15 failures. Every failing test
 also fails in the retained pre-change executable; names and its hash are recorded
 in `baseline-failures.json`. These failures are not reported as passing checks.
 
 The Windows app links successfully with PDB generation disabled. The final
-executable is delivered as `target/debug/deadsync-interactive.exe`, allowing an
-existing game session to remain open. Its hash is recorded in `results.json`.
+executable is delivered as `target/debug/deadsync-fof-fixed.exe`. Its hash is
+recorded in `results.json` and `windows-startup.json`. The older
+`deadsync-interactive.exe` name is also refreshed when not in use.
