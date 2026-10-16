@@ -1,0 +1,168 @@
+{
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "errors": [],
+  "dropped_events": 0,
+  "dropped_stage_samples": 0,
+  "dropped_update_frames": 0,
+  "dropped_random_reseeds": 0,
+  "native_frames": 7119,
+  "source_simfile": "What A Wonderful World/WAWW.sm",
+  "diagnostic_exit": 2,
+  "seconds": 701.5646364729619,
+  "full_repairs_spent": 1,
+  "native_capture_reused": true,
+  "candidate_sha256": "8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c",
+  "trace_sha256": "a68b0341299dde7797f9b55eabd8f7dc50630c93c8d8d0f4d064e69b8eedccf9",
+  "simfile_sha256": "44d9e8c548a43bfbf4e7b1f35229c66a5063759098784abd70c542409d7f22b5",
+  "binary_sha256": "84dd18feaf82c236a29df5d4c334b9c7ac7415b36c9b9161dac9a58d3c3d71dd",
+  "fix_commit": "c1ba44e729bcab98775b7c4fa04ec76d2d15397c",
+  "all_seven_groups_both_hosts_and_1175_source_pins_verified": true,
+  "no_fixture_acceptance": true,
+  "entry_does_not_compare_source_broadcasts": true,
+  "replayed_frames": 5474,
+  "archive_accepted": false,
+  "mismatch_count": 16,
+  "first_mismatches": [
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0025",
+        "args": [
+          665
+        ],
+        "beat": 24.34449005126953,
+        "caller": {
+          "line": 31,
+          "source": "song:/roses/default.lua",
+          "tail_call": false
+        },
+        "command": "moveCommand",
+        "definition_id": "def-0025",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 31,
+        "operation": "Actor.x",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 20.684467315673828,
+        "seq": 93392,
+        "source": "song:/roses/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.x",
+        "source": "song:/roses/default.lua",
+        "line": 31,
+        "phase": "callback",
+        "beat": 24.34449005126953,
+        "seconds": 20.684467315673828,
+        "args": [
+          678
+        ],
+        "results": [
+          {
+            "actor": "0x649ae448b770",
+            "name": "",
+            "path": "ScreenGameplay/SongForeground/roses"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0025",
+        "args": [
+          431
+        ],
+        "beat": 24.34449005126953,
+        "caller": {
+          "line": 31,
+          "source": "song:/roses/default.lua",
+          "tail_call": false
+        },
+        "command": "moveCommand",
+        "definition_id": "def-0025",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 31,
+        "operation": "Actor.y",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 20.684467315673828,
+        "seq": 93394,
+        "source": "song:/roses/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.y",
+        "source": "song:/roses/default.lua",
+        "line": 31,
+        "phase": "callback",
+        "beat": 24.34449005126953,
+        "seconds": 20.684467315673828,
+        "args": [
+          198
+        ],
+        "results": [
+          {
+            "actor": "0x649ae448b770",
+            "name": "",
+            "path": "ScreenGameplay/SongForeground/roses"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0028",
+        "args": [],
+        "beat": 24.34449005126953,
+        "command": "moveCommand",
+        "definition_id": "def-0028",
+        "detail": {
+          "name": "moveCommand"
+        },
+        "kind": "command",
+        "line": 31,
+        "operation": "command.begin",
+        "scene": 1,
+        "seconds": 20.684467315673828,
+        "seq": 93403,
+        "source": "song:/roses/default.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "GameState.GetSongBeat",
+        "source": "song:/lua/default.lua",
+        "line": 84,
+        "phase": "callback",
+        "beat": 24.350488662719727,
+        "seconds": 20.689434051513672,
+        "args": [],
+        "results": [
+          24.350488662719727
+        ]
+      }
+    }
+  ],
+  "report_sha256": "6700eea1c45727832ef45097e00177b73a8460f7cfb21b71216d3a85164bf246"
+}
