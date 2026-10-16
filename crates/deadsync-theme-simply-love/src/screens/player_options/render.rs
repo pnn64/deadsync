@@ -281,8 +281,8 @@ pub fn push_actors(
     /* ---------- SHARED GEOMETRY (rows aligned to help box) ---------- */
     // Help Text Box (from underlay.lua) — define this first so rows can match its width/left.
     let help_box_h = 40.0;
-    let help_box_w = widescale(614.0, 792.0);
-    let help_box_x = widescale(13.0, 30.666);
+    let help_box_w = row_frame_width();
+    let help_box_x = row_frame_left();
     let help_box_bottom_y = screen_height() - 36.0;
     let total_rows = state.pane().row_map.len();
     let row_titles = state.row_titles[state.current_pane.index()].titles.as_ref();
@@ -727,6 +727,7 @@ pub(super) fn draw_multi_select_underlines(
     choice_left_x: f32,
     x_offsets: &[f32],
     widths: &[f32],
+    clip_x: [f32; 2],
     current_row_y: f32,
     text_h: f32,
     a: f32,
@@ -751,7 +752,9 @@ pub(super) fn draw_multi_select_underlines(
         while let Some(idx) = take_active_choice(&mut mask) {
             if let Some(sel_x) = x_offsets.get(idx).map(|offset| choice_left_x + offset) {
                 let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                let underline_w = draw_w.ceil();
+                let Some([sel_x, underline_w]) = clip_span(sel_x, draw_w.ceil(), clip_x) else {
+                    continue;
+                };
                 actors.push(act!(quad:
                     align(0.0, 0.5):
                     xy(sel_x, underline_y):
@@ -775,6 +778,7 @@ pub(super) fn draw_single_select_underline(
     choice_left_x: f32,
     x_offsets: &[f32],
     widths: &[f32],
+    clip_x: [f32; 2],
     current_row_y: f32,
     text_h: f32,
     a: f32,
@@ -793,7 +797,9 @@ pub(super) fn draw_single_select_underline(
         let idx = row.selected_choice_index[player_idx].min(widths.len().saturating_sub(1));
         if let Some(sel_x) = x_offsets.get(idx).map(|offset| choice_left_x + offset) {
             let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-            let underline_w = draw_w.ceil();
+            let Some([sel_x, underline_w]) = clip_span(sel_x, draw_w.ceil(), clip_x) else {
+                continue;
+            };
             let underline_y = underline_y(player_idx);
             let mut line_color = color::decorative_rgba(player_color_index(state, player_idx));
             line_color[3] *= a;
@@ -839,6 +845,19 @@ pub(super) fn draw_cursor_ring(
     item_idx: usize,
     a: f32,
 ) {
+    draw_cursor_ring_clipped(actors, state, active, item_idx, a, None);
+}
+
+/// [`draw_cursor_ring`] limited to the horizontal span `clip_x`, for
+/// scrolled inline rows whose cursors can sit past the row frame.
+pub(super) fn draw_cursor_ring_clipped(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    active: [bool; PLAYER_SLOTS],
+    item_idx: usize,
+    a: f32,
+    clip_x: Option<[f32; 2]>,
+) {
     let border_w = selection_border_width();
     for player_idx in active_player_indices(active) {
         if state.pane().selected_row[player_idx] != item_idx {
@@ -854,34 +873,51 @@ pub(super) fn draw_cursor_ring(
         let right = ring_w.mul_add(0.5, center_x);
         let top = ring_h.mul_add(-0.5, center_y);
         let bottom = ring_h.mul_add(0.5, center_y);
+        let [clip_left, clip_right] = clip_x.unwrap_or([f32::NEG_INFINITY, f32::INFINITY]);
+        let Some([edge_x, edge_w]) = clip_span(left, ring_w, [clip_left, clip_right]) else {
+            continue;
+        };
         let mut ring_color = color::decorative_rgba(player_color_index(state, player_idx));
         ring_color[3] *= a;
 
         actors.push(act!(quad:
-            align(0.5, 0.5): xy(f32::midpoint(left, right), border_w.mul_add(0.5, top)):
-            zoomto(ring_w, border_w):
+            align(0.0, 0.5): xy(edge_x, border_w.mul_add(0.5, top)):
+            zoomto(edge_w, border_w):
             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
             z(Z_ROW_FOREGROUND)
         ));
         actors.push(act!(quad:
-            align(0.5, 0.5): xy(f32::midpoint(left, right), border_w.mul_add(-0.5, bottom)):
-            zoomto(ring_w, border_w):
+            align(0.0, 0.5): xy(edge_x, border_w.mul_add(-0.5, bottom)):
+            zoomto(edge_w, border_w):
             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
             z(Z_ROW_FOREGROUND)
         ));
-        actors.push(act!(quad:
-            align(0.5, 0.5): xy(border_w.mul_add(0.5, left), f32::midpoint(top, bottom)):
-            zoomto(border_w, ring_h):
-            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-            z(Z_ROW_FOREGROUND)
-        ));
-        actors.push(act!(quad:
-            align(0.5, 0.5): xy(border_w.mul_add(-0.5, right), f32::midpoint(top, bottom)):
-            zoomto(border_w, ring_h):
-            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-            z(Z_ROW_FOREGROUND)
-        ));
+        if left >= clip_left {
+            actors.push(act!(quad:
+                align(0.5, 0.5): xy(border_w.mul_add(0.5, left), f32::midpoint(top, bottom)):
+                zoomto(border_w, ring_h):
+                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                z(Z_ROW_FOREGROUND)
+            ));
+        }
+        if right <= clip_right {
+            actors.push(act!(quad:
+                align(0.5, 0.5): xy(border_w.mul_add(-0.5, right), f32::midpoint(top, bottom)):
+                zoomto(border_w, ring_h):
+                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                z(Z_ROW_FOREGROUND)
+            ));
+        }
     }
+}
+
+/// Intersect the span starting at `x` with width `w` against `[left, right]`,
+/// returning the visible `[x, w]` or `None` when nothing remains.
+#[inline(always)]
+pub(super) fn clip_span(x: f32, w: f32, [left, right]: [f32; 2]) -> Option<[f32; 2]> {
+    let start = x.max(left);
+    let end = (x + w).min(right);
+    (end > start).then_some([start, end - start])
 }
 
 /// Render the inline-choices block for one row: every choice laid out
@@ -908,6 +944,22 @@ pub(super) fn draw_inline_choices(
     let widths = rc.row.choice_widths.as_ref();
     let x_offsets = rc.row.choice_offsets.as_ref();
     let text_h = rc.row.choice_height;
+    // Rows wider than the frame scroll horizontally and clip at its edges.
+    let overflows = inline_row_max_scroll(rc.fc.state, rc.item_idx, rc.row) > 0.0;
+    let view_left = choice_inner_left;
+    let choice_inner_left = choice_inner_left - inline_row_scroll(rc.fc.state, rc.item_idx);
+    let text_clip_x = if overflows {
+        [
+            view_left - INLINE_SPACING * 0.5,
+            inline_choice_view_right() + INLINE_SPACING * 0.5,
+        ]
+    } else {
+        [f32::NEG_INFINITY, f32::INFINITY]
+    };
+    let ring_clip_x = overflows.then(|| {
+        let left = next_row_item.map_or(view_left, |(next_row_x, _, _)| next_row_x);
+        [left - INLINE_SPACING, rc.fc.row_left + rc.fc.row_width]
+    });
     // Draw underline under rc.fc.active options:
     // - For normal rows: underline the currently selected choice.
     // - For Scroll rc.row: underline each enabled scroll mode (multi-select).
@@ -921,6 +973,7 @@ pub(super) fn draw_inline_choices(
             choice_inner_left,
             x_offsets,
             widths,
+            text_clip_x,
             rc.current_row_y,
             text_h,
             rc.a,
@@ -934,6 +987,7 @@ pub(super) fn draw_inline_choices(
             choice_inner_left,
             x_offsets,
             widths,
+            text_clip_x,
             rc.current_row_y,
             text_h,
             rc.a,
@@ -941,7 +995,14 @@ pub(super) fn draw_inline_choices(
     }
     // Draw the 4-sided cursor ring around the selected option when this rc.row is rc.fc.active.
     if !widths.is_empty() {
-        draw_cursor_ring(actors, rc.fc.state, rc.fc.active, rc.item_idx, rc.a);
+        draw_cursor_ring_clipped(
+            actors,
+            rc.fc.state,
+            rc.fc.active,
+            rc.item_idx,
+            rc.a,
+            ring_clip_x,
+        );
     }
     // Draw each option's text (rc.fc.active rc.row: all white; inactive: #808080)
     if let Some((next_row_x, _, _)) = next_row_item {
@@ -965,16 +1026,33 @@ pub(super) fn draw_inline_choices(
         let x = x_offsets
             .get(idx)
             .map_or(choice_inner_left, |offset| choice_inner_left + offset);
+        let w = widths.get(idx).copied().unwrap_or(0.0);
+        if clip_span(x, w, text_clip_x).is_none() {
+            continue;
+        }
         let color_rgba = if rc.is_active {
             [1.0, 1.0, 1.0, rc.a]
         } else {
             rc.sl_gray
         };
-        actors.push(act!(text: font("miso"): settext(text.clone()):
+        let mut actor = act!(text: font("miso"): settext(text.clone()):
             align(0.0, 0.5): xy(x, rc.current_row_y): zoom(value_zoom):
             diffuse(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3]):
             z(Z_ROW_FOREGROUND)
-        ));
+        );
+        if overflows
+            && (x < text_clip_x[0] || x + w > text_clip_x[1])
+            && let Actor::Text { clip, .. } = &mut actor
+        {
+            let [clip_left, clip_right] = text_clip_x;
+            *clip = Some([
+                clip_left,
+                rc.current_row_y - ROW_HEIGHT * 0.5,
+                clip_right - clip_left,
+                ROW_HEIGHT,
+            ]);
+        }
+        actors.push(actor);
     }
 }
 

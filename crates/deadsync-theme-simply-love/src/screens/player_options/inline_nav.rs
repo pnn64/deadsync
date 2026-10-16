@@ -267,7 +267,15 @@ pub(super) fn move_selection_vertical(
         state.pane().selected_row[idx].min(state.pane().row_map.len().saturating_sub(1));
     if !state.pane().inline_choice_x[idx].is_finite() {
         if let Some((anchor_x, _, _, _)) = cursor_dest_for_player(state, asset_manager, idx) {
-            state.pane_mut().inline_choice_x[idx] = anchor_x;
+            // Inline anchors live in unscrolled content space.
+            let scroll = if inline_row(state, current_row).is_some()
+                && !arcade_row_focuses_next_row(state, idx, current_row)
+            {
+                inline_row_scroll_target(state, current_row)
+            } else {
+                0.0
+            };
+            state.pane_mut().inline_choice_x[idx] = anchor_x + scroll;
         } else {
             sync_inline_intent_from_row(state, idx, current_row);
         }
@@ -368,4 +376,111 @@ pub(super) fn arcade_next_row_layout(
     let [draw_w, draw_h] = arcade_next_row_size(state, asset_manager);
     let left_x = inline_choice_left_x_for_row(state, row_idx) - draw_w - arcade_next_row_gap_x();
     (left_x, draw_w, draw_h)
+}
+
+/// Right edge of the visible inline-choice area; choices past it scroll.
+#[inline(always)]
+pub(super) fn inline_choice_view_right() -> f32 {
+    row_frame_left() + row_frame_width() - INLINE_SPACING
+}
+
+/// Total laid-out width of an inline row's choices.
+pub(super) fn inline_row_content_width(row: &Row) -> f32 {
+    match (row.choice_offsets.last(), row.choice_widths.last()) {
+        (Some(&offset), Some(&width)) => offset + width,
+        _ => 0.0,
+    }
+}
+
+/// How far an inline row's choices can scroll left before the last one
+/// sits at the right edge of the row frame. Zero when everything fits.
+pub(super) fn inline_row_max_scroll(state: &State, row_idx: usize, row: &Row) -> f32 {
+    let view_w = inline_choice_view_right() - inline_choice_left_x_for_row(state, row_idx);
+    (inline_row_content_width(row) - view_w).max(0.0)
+}
+
+/// Animated scroll offset for drawing an inline row.
+#[inline(always)]
+pub(super) fn inline_row_scroll(state: &State, row_idx: usize) -> f32 {
+    state
+        .pane()
+        .row_tweens
+        .get(row_idx)
+        .map_or(0.0, RowTween::scroll)
+}
+
+/// Settled scroll offset an inline row is heading toward.
+#[inline(always)]
+pub(super) fn inline_row_scroll_target(state: &State, row_idx: usize) -> f32 {
+    state
+        .pane()
+        .row_tweens
+        .get(row_idx)
+        .map_or(0.0, |tween| tween.to_scroll)
+}
+
+/// Smallest change to `scroll` that keeps the content span `[left, right]`
+/// at least `margin` inside a `view_w`-wide window, clamped to `[0, max_scroll]`.
+pub(super) fn scroll_to_reveal(
+    scroll: f32,
+    [left, right]: [f32; 2],
+    view_w: f32,
+    margin: f32,
+    max_scroll: f32,
+) -> f32 {
+    let mut scroll = scroll;
+    if right - scroll > view_w - margin {
+        scroll = right - view_w + margin;
+    }
+    if left - scroll < margin {
+        scroll = left - margin;
+    }
+    scroll.clamp(0.0, max_scroll)
+}
+
+/// Retarget each inline row's horizontal scroll so the choices players are
+/// looking at stay on screen: the focused choice for every cursor on the
+/// row, otherwise each active player's selected choice.
+pub(super) fn retarget_inline_scroll(state: &mut State, active: [bool; PLAYER_SLOTS], snap: bool) {
+    let total_rows = state.pane().row_map.len();
+    for row_idx in 0..total_rows.min(state.pane().row_tweens.len()) {
+        let Some(row) = inline_row(state, row_idx) else {
+            continue;
+        };
+        let max_scroll = inline_row_max_scroll(state, row_idx, row);
+        let current = inline_row_scroll_target(state, row_idx);
+        let mut target = 0.0;
+        if max_scroll > 0.0 {
+            let view_w = inline_choice_view_right() - inline_choice_left_x_for_row(state, row_idx);
+            let cursor_on_row = active_player_indices(active)
+                .any(|player_idx| state.pane().selected_row[player_idx] == row_idx);
+            target = current.min(max_scroll);
+            for player_idx in active_player_indices(active) {
+                let choice_idx = if cursor_on_row {
+                    if state.pane().selected_row[player_idx] != row_idx {
+                        continue;
+                    }
+                    if arcade_row_focuses_next_row(state, player_idx, row_idx) {
+                        0
+                    } else {
+                        focused_inline_choice_index(state, player_idx, row_idx).unwrap_or(0)
+                    }
+                } else {
+                    row.selected_choice_index[player_idx]
+                };
+                let choice_idx = choice_idx.min(row.choices.len() - 1);
+                let left = row.choice_offsets[choice_idx];
+                let span = [left, left + row.choice_widths[choice_idx]];
+                target = scroll_to_reveal(target, span, view_w, INLINE_SPACING, max_scroll);
+            }
+        }
+        let tween = &mut state.pane_mut().row_tweens[row_idx];
+        if snap {
+            tween.from_scroll = target;
+            tween.to_scroll = target;
+        } else if (target - tween.to_scroll).abs() > 0.01 {
+            tween.restart_from_current();
+            tween.to_scroll = target;
+        }
+    }
 }
