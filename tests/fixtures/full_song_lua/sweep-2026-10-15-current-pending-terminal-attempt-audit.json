@@ -1,6 +1,6 @@
 {
-  "generated_utc": "2026-10-16T05:25:28.463626+00:00",
-  "concrete_ledger_sha256": "2b9bf0753194b1ad28230c7e85434bc56753a1d51e2d618db5578e81a5ea58a0",
+  "generated_utc": "2026-10-16T05:27:54.542505+00:00",
+  "concrete_ledger_sha256": "04135f4c7095272c6d4da372fa41fc54ce59023157fabf4bd7f4a50b8474d90e",
   "counts": {
     "passed": 404,
     "pending": 97,
@@ -29,7 +29,7 @@
       "started_full_repairs": 2,
       "completed_full_repairs": 1,
       "running": true,
-      "observed_utc": "2026-10-16T05:25:35.192176+00:00",
+      "observed_utc": "2026-10-16T05:27:59.462570+00:00",
       "pid": 900381,
       "command": [
         "/home/parity/jobs/native-option-frame-delta-linux-green-v1/full-song-lua",
@@ -39,7 +39,7 @@
         "/home/parity/jobs/quarantine-native-option-frame-delta-final2-v1/chart-363/report.json"
       ],
       "actual_process_command_and_cwd_verified": true,
-      "observed_replayed_frames": 3635,
+      "observed_replayed_frames": 4649,
       "native_frames": 13575
     },
     {
@@ -49,7 +49,7 @@
       "started_full_repairs": 1,
       "completed_full_repairs": 0,
       "running": true,
-      "observed_utc": "2026-10-16T05:25:35.197027+00:00",
+      "observed_utc": "2026-10-16T05:27:59.465453+00:00",
       "pid": 916661,
       "command": [
         "/home/parity/jobs/native-option-frame-delta-linux-green-v1/full-song-lua",
@@ -59,7 +59,7 @@
         "/home/parity/jobs/hallways-qualified-runtime-first1-v1/chart-220/report.json"
       ],
       "actual_process_command_and_cwd_verified": true,
-      "observed_replayed_frames": 12694,
+      "observed_replayed_frames": 16970,
       "native_frames": 26879
     }
   ]

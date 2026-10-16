@@ -1,0 +1,2399 @@
+{
+  "scope": "26 currently pending native capture failures; no passing chart inspected",
+  "read_only_retained_run_audit": true,
+  "captures_repeated": false,
+  "frozen_files_modified": false,
+  "native_error_sampling_limit": 20,
+  "routine_startup_log_warnings_not_used_as_failure_causes": true,
+  "counts": {
+    "capture_failures": 26,
+    "retained_traces": 9,
+    "retained_traces_with_native_error_events": 7,
+    "no_trace_retained": 17
+  },
+  "rows": [
+    {
+      "position": 155,
+      "source_simfile": "Crazy Crazy/Crazy Crazy.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-138502-1791837397902414281-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-138502-1791837397902414281-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "8bae0d5667f44bf32c828ee201b21172dd9b7b1354ca6a3ec06f9325eb2b2538",
+      "log_bytes": 127914,
+      "last_lines": [
+        "02:14.713: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "02:14.714: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "02:14.714: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "02:14.714: Loading /Themes/Harness Simply Love/BGAnimations/_shared background/Static.lua, type FileType_Lua",
+        "02:14.714: Loading /Themes/Harness Simply Love/BGAnimations/_shared background/Technique.lua, type FileType_Lua",
+        "/////////////////////////////////////////",
+        "02:14.811: WARNING: ActorFrameTexture: Cannot have width or height less than 1",
+        "/////////////////////////////////////////"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": true,
+      "compressed_trace_bytes": 4397558,
+      "native_trace_path": "/tmp/itgmania-harness-rs/song-lua-138502-1791837397902414281-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "native_trace_storage_sha256": "73c85b08cada96de7def97ddf310ef36016290c0a9fd71e295c252a013680eb2",
+      "native_trace_metadata": [
+        [
+          [
+            "completion",
+            "next_screen"
+          ],
+          "ScreenEvaluationStage"
+        ],
+        [
+          [
+            "completion",
+            "reason"
+          ],
+          "gameplay-exit"
+        ],
+        [
+          [
+            "completion",
+            "stage_committed"
+          ],
+          true
+        ],
+        [
+          [
+            "completion",
+            "stages_played_after"
+          ],
+          1
+        ],
+        [
+          [
+            "completion",
+            "stages_played_before"
+          ],
+          0
+        ],
+        [
+          [
+            "completion",
+            "stages_played_before"
+          ]
+        ],
+        [
+          [
+            "dropped_events"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_random_reseeds"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_stage_samples"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_update_frames"
+          ],
+          0
+        ]
+      ],
+      "error_event_limit_reached": false,
+      "native_error_events_first20": [
+        {
+          "actor": "def-0125",
+          "args": [],
+          "beat": 0.0009240856161341071,
+          "command": "UpdateCommand",
+          "definition_id": "def-0125",
+          "detail": {
+            "message": "/Songs/Harness/Probe/lua/default.lua:485: attempt to call method 'GetChild' (a nil value)",
+            "name": "UpdateCommand"
+          },
+          "kind": "error",
+          "line": 445,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 0.6793877482414246,
+          "seq": 1521,
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "diagnosis": "Native Lua error events present; original oracle capture rejected, owned runtime replay cannot prove a passing fixture from this trace.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 161,
+      "source_simfile": "Cyberpunk 2077/Cyberpunk 2077.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-208238-1791840553549479340-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-208238-1791840553549479340-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-208238-1791840553549479340-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "50fbbe914e20823e62fbd25e1013dcd8a76e2b65fc72a421c7226fc190bbefc1",
+      "log_bytes": 89325,
+      "last_lines": [
+        "00:01.992: Loading /NoteSkins/common/common/_blank.png, type FileType_Bitmap",
+        "00:01.992: Loading /NoteSkins/dance/cel/Down Hold Body Active.png, type FileType_Bitmap",
+        "00:01.992: Loading /NoteSkins/dance/cel/Down Hold BottomCap active.png, type FileType_Bitmap",
+        "00:01.993: Loading /NoteSkins/dance/cel/Down Tap Note.lua, type FileType_Lua",
+        "00:01.993: Loading /NoteSkins/common/common/_blank.png, type FileType_Bitmap",
+        "00:01.994: Loading /NoteSkins/dance/cel/Down Hold Body Inactive.png, type FileType_Bitmap",
+        "00:01.994: Loading /NoteSkins/dance/cel/Down Hold BottomCap inactive.png, type FileType_Bitmap",
+        "00:01.994: Loading /NoteSkins/dance/cel/Down Tap Note.lua, type FileType_Lua"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 221,
+      "source_simfile": "Happiness/Happiness.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-1154392-1791856557022276130-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-1154392-1791856557022276130-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "6f3904286eabe439cc5260b4d5d7dcce483d5c0dd099389c76c90fa3e0cf4d61",
+      "log_bytes": 171650,
+      "last_lines": [
+        "03:11.112: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "03:11.113: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "03:11.113: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "03:11.113: Loading /Themes/Harness Simply Love/BGAnimations/_shared background/Static.lua, type FileType_Lua",
+        "03:11.114: Loading /Themes/Harness Simply Love/BGAnimations/_shared background/Technique.lua, type FileType_Lua",
+        "/////////////////////////////////////////",
+        "03:11.221: WARNING: ActorFrameTexture: Cannot have width or height less than 1",
+        "/////////////////////////////////////////"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": true,
+      "compressed_trace_bytes": 12925972,
+      "native_trace_path": "/tmp/itgmania-harness-rs/song-lua-1154392-1791856557022276130-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "native_trace_storage_sha256": "fd9a05819b351899b5daed23c29ae99e99f773c8a212ee10e0f9d2f6c977d0ac",
+      "native_trace_metadata": [
+        [
+          [
+            "completion",
+            "next_screen"
+          ],
+          "ScreenEvaluationStage"
+        ],
+        [
+          [
+            "completion",
+            "reason"
+          ],
+          "gameplay-exit"
+        ],
+        [
+          [
+            "completion",
+            "stage_committed"
+          ],
+          true
+        ],
+        [
+          [
+            "completion",
+            "stages_played_after"
+          ],
+          1
+        ],
+        [
+          [
+            "completion",
+            "stages_played_before"
+          ],
+          0
+        ],
+        [
+          [
+            "completion",
+            "stages_played_before"
+          ]
+        ],
+        [
+          [
+            "dropped_events"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_random_reseeds"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_stage_samples"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_update_frames"
+          ],
+          0
+        ]
+      ],
+      "error_event_limit_reached": true,
+      "native_error_events_first20": [
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 360.68292236328125,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 153.2642364501953,
+          "seq": 1438168,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 362,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 153.99644470214844,
+          "seq": 1441297,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 362,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 154.16696166992188,
+          "seq": 1444941,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 362.107421875,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 154.28915405273438,
+          "seq": 1448058,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 362.3147277832031,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 154.37673950195312,
+          "seq": 1451175,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 362.6117248535156,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 154.4786376953125,
+          "seq": 1454292,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 363.0856018066406,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 154.57875061035156,
+          "seq": 1457411,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 363.6864318847656,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 154.7056884765625,
+          "seq": 1460528,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 364.1535949707031,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 154.80438232421875,
+          "seq": 1463645,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 364.62066650390625,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 154.90306091308594,
+          "seq": 1466762,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 365.0877380371094,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 155.00173950195312,
+          "seq": 1469879,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 365.4177551269531,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 155.0714569091797,
+          "seq": 1472996,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 365.96435546875,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 155.1869354248047,
+          "seq": 1476279,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 366.4022521972656,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 155.27944946289062,
+          "seq": 1479396,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 366.8765563964844,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 155.37965393066406,
+          "seq": 1482513,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 367.3519287109375,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 155.48008728027344,
+          "seq": 1485630,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 367.81402587890625,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 155.5777130126953,
+          "seq": 1488747,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 368.2669372558594,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 155.67340087890625,
+          "seq": 1492030,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 368.81591796875,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 155.7893829345703,
+          "seq": 1495147,
+          "source": "song:/diva/diva.lua"
+        },
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 369.1663513183594,
+          "command": "Loop1Command",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Songs/Harness/Probe/diva/diva.lua:1092: attempt to index local 'length' (a nil value)",
+            "name": "Loop1Command"
+          },
+          "kind": "error",
+          "line": 1088,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 155.86341857910156,
+          "seq": 1498264,
+          "source": "song:/diva/diva.lua"
+        }
+      ],
+      "diagnosis": "Native Lua error events present; original oracle capture rejected, owned runtime replay cannot prove a passing fixture from this trace.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 222,
+      "source_simfile": "Happy Now Remastered/Happy Now.sm",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1203129-1791857277402329388-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1203129-1791857277402329388-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-1203129-1791857277402329388-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "4e0c644c61e0f30ffd67bd5c18ba939379423c0ad2f34b151aa612129463c7d6",
+      "log_bytes": 191178,
+      "last_lines": [
+        "02:36.827: Mixing underruns: 3",
+        "02:36.910: Audio position mismatch: frame 6919752 outside buffered range (normal during start/stop)",
+        "02:37.830: Mixing underruns: 6",
+        "02:39.156: Mixing underruns: 83",
+        "02:39.156: Audio position mismatch: frame 7018783 outside buffered range (normal during start/stop)",
+        "02:40.381: Mixing underruns: 38",
+        "02:40.381: Audio position mismatch: frame 7072817 outside buffered range (normal during start/stop)",
+        "02:46.844: File \"/Songs/Harness/Probe/lua/blossoms3.avi\" looping"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 223,
+      "source_simfile": "Happy Now Remastered/Happy Now.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1590174-1791862771070224596-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1590174-1791862771070224596-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-1590174-1791862771070224596-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "432eae3723d260859b1a556f32dbc1456de7a799e7e9d42cc8756fc3813674ba",
+      "log_bytes": 191699,
+      "last_lines": [
+        "02:29.646: Mixing underruns: 98",
+        "02:29.647: Audio position mismatch: frame 6599433 outside buffered range (normal during start/stop)",
+        "02:30.674: Mixing underruns: 6",
+        "02:30.755: Audio position mismatch: frame 6648325 outside buffered range (normal during start/stop)",
+        "02:31.690: Mixing underruns: 1",
+        "02:31.774: File \"/Songs/Harness/Probe/lua/blossoms3.avi\" looping",
+        "02:34.828: File \"/Songs/Harness/Probe/lua/Fog.mp4\" looping",
+        "02:46.043: File \"/Songs/Harness/Probe/lua/blossoms3.avi\" looping"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 224,
+      "source_simfile": "Happy Now/Happy Now.sm",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1172515-1791856811481466840-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1172515-1791856811481466840-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-1172515-1791856811481466840-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "8c2efdefbf96a8c2a100408adcc1cf7137b24d5b498c8c7ab630ca4c760ae924",
+      "log_bytes": 191720,
+      "last_lines": [
+        "02:00.912: Mixing underruns: 61",
+        "02:00.912: Audio position mismatch: frame 5332257 outside buffered range (normal during start/stop)",
+        "02:22.158: File \"/Songs/Harness/Probe/sFog.mp4\" looping",
+        "02:22.510: Mixing underruns: 3",
+        "02:22.587: Audio position mismatch: frame 6288089 outside buffered range (normal during start/stop)",
+        "02:24.033: File \"/Songs/Harness/Probe/lua/blossoms3.avi\" looping",
+        "02:27.053: File \"/Songs/Harness/Probe/lua/Fog.mp4\" looping",
+        "02:38.285: File \"/Songs/Harness/Probe/lua/blossoms3.avi\" looping"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 225,
+      "source_simfile": "Happy Now/Happy Now.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-1269178-1791858178162342429-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1269178-1791858178162342429-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-1269178-1791858178162342429-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "8fa4b887e5f39fc4d3a11acd3c61b6ad42b8ffac3850d0f5bab067fea11d86a7",
+      "log_bytes": 184780,
+      "last_lines": [
+        "00:04.742: Loading /NoteSkins/common/common/Fallback HitMine Explosion.png, type FileType_Bitmap",
+        "00:04.748: Loading /NoteSkins/dance/cel/Fallback Explosion.lua, type FileType_Lua",
+        "00:04.749: Loading /NoteSkins/dance/cel/down hold explosion.png, type FileType_Bitmap",
+        "00:04.749: Loading /NoteSkins/dance/cel/down hold explosion.png, type FileType_Bitmap",
+        "00:04.750: Loading /NoteSkins/dance/cel/Down Tap Explosion Dim W1.png, type FileType_Bitmap",
+        "00:04.750: Loading /NoteSkins/dance/cel/Down Tap Explosion Bright W1.png, type FileType_Bitmap",
+        "00:04.750: Loading /NoteSkins/dance/cel/Down Tap Explosion Dim W2.png, type FileType_Bitmap",
+        "00:04.750: Loading /NoteSkins/dance/cel/Down Tap Explosion Dim W2.png, type FileType_Bitmap"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 226,
+      "source_simfile": "Haxo (Sharks Remix) [sorae]/haxo.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-1654183-1791863671879384563-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-1654183-1791863671879384563-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "40c49abd3ef111fad8b9b946de8cea1620bffca1b72fd442d515cc54e27e0a20",
+      "log_bytes": 132598,
+      "last_lines": [
+        "01:56.655: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "01:56.655: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "01:56.656: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "01:56.656: Loading /Themes/Harness Simply Love/BGAnimations/_shared background/Static.lua, type FileType_Lua",
+        "01:56.656: Loading /Themes/Harness Simply Love/BGAnimations/_shared background/Technique.lua, type FileType_Lua",
+        "/////////////////////////////////////////",
+        "01:56.760: WARNING: ActorFrameTexture: Cannot have width or height less than 1",
+        "/////////////////////////////////////////"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": true,
+      "compressed_trace_bytes": 2728876,
+      "native_trace_path": "/tmp/itgmania-harness-rs/song-lua-1654183-1791863671879384563-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "native_trace_storage_sha256": "afce3b4355db47fa4b3ba4dffcabc29ca58dc10d13a641d8c00aba91b8b75c49",
+      "native_trace_metadata": [
+        [
+          [
+            "completion",
+            "next_screen"
+          ],
+          "ScreenEvaluationStage"
+        ],
+        [
+          [
+            "completion",
+            "reason"
+          ],
+          "gameplay-exit"
+        ],
+        [
+          [
+            "completion",
+            "stage_committed"
+          ],
+          true
+        ],
+        [
+          [
+            "completion",
+            "stages_played_after"
+          ],
+          1
+        ],
+        [
+          [
+            "completion",
+            "stages_played_before"
+          ],
+          0
+        ],
+        [
+          [
+            "completion",
+            "stages_played_before"
+          ]
+        ],
+        [
+          [
+            "dropped_events"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_random_reseeds"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_stage_samples"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_update_frames"
+          ],
+          0
+        ]
+      ],
+      "error_event_limit_reached": false,
+      "native_error_events_first20": [
+        {
+          "actor": "def-0004",
+          "args": [],
+          "beat": 0.000521540641784668,
+          "command": "OnCommand",
+          "definition_id": "def-0004",
+          "detail": {
+            "message": "/Themes/itgmania-harness/Scripts/03 SongLuaTrace.lua:744: bad argument #3 to 'original' (number expected, got no value)",
+            "name": "OnCommand"
+          },
+          "kind": "error",
+          "line": 859,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 0.008208616636693478,
+          "seq": 33,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0006",
+          "args": [],
+          "beat": 0.000521540641784668,
+          "command": "OnCommand",
+          "definition_id": "def-0006",
+          "detail": {
+            "message": "/Themes/itgmania-harness/Scripts/03 SongLuaTrace.lua:744: bad argument #3 to 'original' (number expected, got no value)",
+            "name": "OnCommand"
+          },
+          "kind": "error",
+          "line": 871,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 0.008208616636693478,
+          "seq": 42,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0008",
+          "args": [],
+          "beat": 0.000521540641784668,
+          "command": "OnCommand",
+          "definition_id": "def-0008",
+          "detail": {
+            "message": "/Themes/itgmania-harness/Scripts/03 SongLuaTrace.lua:744: bad argument #3 to 'original' (number expected, got no value)",
+            "name": "OnCommand"
+          },
+          "kind": "error",
+          "line": 883,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 0.008208616636693478,
+          "seq": 51,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0010",
+          "args": [],
+          "beat": 0.000521540641784668,
+          "command": "OnCommand",
+          "definition_id": "def-0010",
+          "detail": {
+            "message": "/Themes/itgmania-harness/Scripts/03 SongLuaTrace.lua:744: bad argument #3 to 'original' (number expected, got no value)",
+            "name": "OnCommand"
+          },
+          "kind": "error",
+          "line": 895,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 0.008208616636693478,
+          "seq": 60,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0012",
+          "args": [],
+          "beat": 0.000521540641784668,
+          "command": "OnCommand",
+          "definition_id": "def-0012",
+          "detail": {
+            "message": "/Themes/itgmania-harness/Scripts/03 SongLuaTrace.lua:744: bad argument #3 to 'original' (number expected, got no value)",
+            "name": "OnCommand"
+          },
+          "kind": "error",
+          "line": 907,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 0.008208616636693478,
+          "seq": 69,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 0.000521540641784668,
+          "command": "OnCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Themes/itgmania-harness/Scripts/03 SongLuaTrace.lua:744: bad argument #3 to 'original' (number expected, got no value)",
+            "name": "OnCommand"
+          },
+          "kind": "error",
+          "line": 919,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 0.008208616636693478,
+          "seq": 78,
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "diagnosis": "Native Lua error events present; original oracle capture rejected, owned runtime replay cannot prove a passing fixture from this trace.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 227,
+      "source_simfile": "Hello Gordon [chairodactyl] - Cameron Wiggers/Hello Gordon.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-1235820-1791857712348590450-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-1235820-1791857712348590450-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "caf1548410bb8f5a8fb8d668f3dbaacb98a5e9b9344ddd1e05f502f469bda68b",
+      "log_bytes": 133351,
+      "last_lines": [
+        "03:09.857: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "03:09.857: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "03:09.858: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "03:09.858: Loading /Themes/Harness Simply Love/BGAnimations/_shared background/Static.lua, type FileType_Lua",
+        "03:09.858: Loading /Themes/Harness Simply Love/BGAnimations/_shared background/Technique.lua, type FileType_Lua",
+        "/////////////////////////////////////////",
+        "03:09.967: WARNING: ActorFrameTexture: Cannot have width or height less than 1",
+        "/////////////////////////////////////////"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": true,
+      "compressed_trace_bytes": 4240714,
+      "native_trace_path": "/tmp/itgmania-harness-rs/song-lua-1235820-1791857712348590450-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "native_trace_storage_sha256": "e33ce5c99a5deb4ecb103e77d2356eac7c0a4e961f724e292de54ee2b864d751",
+      "native_trace_metadata": [
+        [
+          [
+            "completion",
+            "next_screen"
+          ],
+          "ScreenEvaluationStage"
+        ],
+        [
+          [
+            "completion",
+            "reason"
+          ],
+          "gameplay-exit"
+        ],
+        [
+          [
+            "completion",
+            "stage_committed"
+          ],
+          true
+        ],
+        [
+          [
+            "completion",
+            "stages_played_after"
+          ],
+          1
+        ],
+        [
+          [
+            "completion",
+            "stages_played_before"
+          ],
+          0
+        ],
+        [
+          [
+            "completion",
+            "stages_played_before"
+          ]
+        ],
+        [
+          [
+            "dropped_events"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_random_reseeds"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_stage_samples"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_update_frames"
+          ],
+          0
+        ]
+      ],
+      "error_event_limit_reached": false,
+      "native_error_events_first20": [
+        {
+          "actor": "def-0001",
+          "args": [],
+          "beat": 0.00036506104515865445,
+          "command": "OnCommand",
+          "definition_id": "def-0001",
+          "detail": {
+            "message": "/Songs/Harness/Probe/fade in/default.lua:21: attempt to index a nil value",
+            "name": "OnCommand"
+          },
+          "kind": "error",
+          "line": 6,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 0.09115646034479141,
+          "seq": 29,
+          "source": "song:/fade in/default.lua"
+        }
+      ],
+      "diagnosis": "Native Lua error events present; original oracle capture rejected, owned runtime replay cannot prove a passing fixture from this trace.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 236,
+      "source_simfile": "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-1403153-1791860093488127063-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1403153-1791860093488127063-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-1403153-1791860093488127063-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "2e9b8737052f9d8e40cb0c8a4d6a8f2d95d3a7fbc27cac98f37df5e2eda72824",
+      "log_bytes": 88433,
+      "last_lines": [
+        "00:01.820: Loading /NoteSkins/dance/cel/Down Hold Body Active.png, type FileType_Bitmap",
+        "00:01.821: Loading /NoteSkins/dance/cel/Down Hold BottomCap active.png, type FileType_Bitmap",
+        "00:01.821: Loading /NoteSkins/dance/cel/Down Tap Note.lua, type FileType_Lua",
+        "00:01.822: Loading /NoteSkins/common/common/_blank.png, type FileType_Bitmap",
+        "00:01.822: Loading /NoteSkins/dance/cel/Down Hold Body Inactive.png, type FileType_Bitmap",
+        "00:01.822: Loading /NoteSkins/dance/cel/Down Hold BottomCap inactive.png, type FileType_Bitmap",
+        "00:01.823: Loading /NoteSkins/dance/cel/Down Tap Note.lua, type FileType_Lua",
+        "00:01.823: Loading /NoteSkins/common/common/_blank.png, type FileType_Bitmap"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 245,
+      "source_simfile": "INAZUMA (Gio)/INAZUMA.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1482682-1791861272532323397-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1482682-1791861272532323397-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-1482682-1791861272532323397-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "854d86bcf2604f33a3cec2ab96551a7d19a9e150e4c848ec07659030b75d36d6",
+      "log_bytes": 113183,
+      "last_lines": [
+        "02:10.279: Audio position mismatch: frame 5745304 outside buffered range (normal during start/stop)",
+        "02:12.553: File \"/Songs/Harness/Probe/inazuma/thunder.mp4\" looping",
+        "02:16.054: File \"/Songs/Harness/Probe/inazuma/thunder.mp4\" looping",
+        "02:19.554: File \"/Songs/Harness/Probe/inazuma/thunder.mp4\" looping",
+        "02:21.309: Mixing underruns: 15",
+        "02:21.336: Audio position mismatch: frame 6232945 outside buffered range (normal during start/stop)",
+        "02:22.574: bAllReallyFailed = 0, bStopCourseEarly = 0, bIsLastSong = 1, m_gave_up = 0, m_skipped_song = 0",
+        "02:23.072: File \"/Songs/Harness/Probe/inazuma/thunder.mp4\" looping"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 248,
+      "source_simfile": "Intro Outro/intro.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-1547895-1791862173152612546-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-1547895-1791862173152612546-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "4a2f5b4546150a59ec9b0582515a2fa6e42f3d6a665ab433068114382c2c2fd3",
+      "log_bytes": 135084,
+      "last_lines": [
+        "02:00.219: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "02:00.219: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "02:00.219: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "02:00.220: Loading /Themes/Harness Simply Love/BGAnimations/_shared background/Static.lua, type FileType_Lua",
+        "02:00.222: Loading /Themes/Harness Simply Love/BGAnimations/_shared background/Technique.lua, type FileType_Lua",
+        "/////////////////////////////////////////",
+        "02:00.352: WARNING: ActorFrameTexture: Cannot have width or height less than 1",
+        "/////////////////////////////////////////"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": true,
+      "compressed_trace_bytes": 5912350,
+      "native_trace_path": "/tmp/itgmania-harness-rs/song-lua-1547895-1791862173152612546-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "native_trace_storage_sha256": "0698a5857ebf66239028cbe94c15c5d313d582baba3c69cca0c320d9adc731f0",
+      "native_trace_metadata": [
+        [
+          [
+            "completion",
+            "next_screen"
+          ],
+          "ScreenEvaluationStage"
+        ],
+        [
+          [
+            "completion",
+            "reason"
+          ],
+          "gameplay-exit"
+        ],
+        [
+          [
+            "completion",
+            "stage_committed"
+          ],
+          true
+        ],
+        [
+          [
+            "completion",
+            "stages_played_after"
+          ],
+          1
+        ],
+        [
+          [
+            "completion",
+            "stages_played_before"
+          ],
+          0
+        ],
+        [
+          [
+            "completion",
+            "stages_played_before"
+          ]
+        ],
+        [
+          [
+            "dropped_events"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_random_reseeds"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_stage_samples"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_update_frames"
+          ],
+          0
+        ]
+      ],
+      "error_event_limit_reached": false,
+      "native_error_events_first20": [
+        {
+          "actor": "def-0043",
+          "args": [],
+          "beat": 0.0006192363216541708,
+          "command": "ShakeXMessageCommand",
+          "definition_id": "def-0043",
+          "detail": {
+            "message": "/Songs/Harness/Probe/lua/default.lua:1021: attempt to index a nil value",
+            "name": "ShakeXMessageCommand"
+          },
+          "kind": "error",
+          "line": 1016,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 0.0072562359273433685,
+          "seq": 431,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0043",
+          "args": [],
+          "beat": 4.001490592956543,
+          "command": "StopStopMessageCommand",
+          "definition_id": "def-0043",
+          "detail": {
+            "message": "/Songs/Harness/Probe/lua/default.lua:999: attempt to index a nil value",
+            "name": "StopStopMessageCommand"
+          },
+          "kind": "error",
+          "line": 997,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 1.6627891063690186,
+          "seq": 9112,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0043",
+          "args": [],
+          "beat": 32.001583099365234,
+          "command": "ActuallyBounceMessageCommand",
+          "definition_id": "def-0043",
+          "detail": {
+            "message": "/Songs/Harness/Probe/lua/default.lua:1043: attempt to index a nil value",
+            "name": "ActuallyBounceMessageCommand"
+          },
+          "kind": "error",
+          "line": 1038,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 13.24891185760498,
+          "seq": 65748,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0043",
+          "args": [],
+          "beat": 60.00688171386719,
+          "command": "StopStopMessageCommand",
+          "definition_id": "def-0043",
+          "detail": {
+            "message": "/Songs/Harness/Probe/lua/default.lua:999: attempt to index a nil value",
+            "name": "StopStopMessageCommand"
+          },
+          "kind": "error",
+          "line": 997,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 22.673015594482422,
+          "seq": 111912,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0043",
+          "args": [],
+          "beat": 63.00374984741211,
+          "command": "ActuallyBounceMessageCommand",
+          "definition_id": "def-0043",
+          "detail": {
+            "message": "/Songs/Harness/Probe/lua/default.lua:1043: attempt to index a nil value",
+            "name": "ActuallyBounceMessageCommand"
+          },
+          "kind": "error",
+          "line": 1038,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 23.681495666503906,
+          "seq": 115405,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0043",
+          "args": [],
+          "beat": 91.00202941894531,
+          "command": "ShakeXMessageCommand",
+          "definition_id": "def-0043",
+          "detail": {
+            "message": "/Songs/Harness/Probe/lua/default.lua:1021: attempt to index a nil value",
+            "name": "ShakeXMessageCommand"
+          },
+          "kind": "error",
+          "line": 1016,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 33.103240966796875,
+          "seq": 162994,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0043",
+          "args": [],
+          "beat": 92.00390625,
+          "command": "ShakeYMessageCommand",
+          "definition_id": "def-0043",
+          "detail": {
+            "message": "/Songs/Harness/Probe/lua/default.lua:1032: attempt to index a nil value",
+            "name": "ShakeYMessageCommand"
+          },
+          "kind": "error",
+          "line": 1027,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 33.44038391113281,
+          "seq": 163879,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0043",
+          "args": [],
+          "beat": 93.01509094238281,
+          "command": "ShakeXMessageCommand",
+          "definition_id": "def-0043",
+          "detail": {
+            "message": "/Songs/Harness/Probe/lua/default.lua:1021: attempt to index a nil value",
+            "name": "ShakeXMessageCommand"
+          },
+          "kind": "error",
+          "line": 1016,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 33.78065872192383,
+          "seq": 164812,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0043",
+          "args": [],
+          "beat": 94.00862121582031,
+          "command": "ShakeYMessageCommand",
+          "definition_id": "def-0043",
+          "detail": {
+            "message": "/Songs/Harness/Probe/lua/default.lua:1032: attempt to index a nil value",
+            "name": "ShakeYMessageCommand"
+          },
+          "kind": "error",
+          "line": 1027,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 34.114990234375,
+          "seq": 165721,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0043",
+          "args": [],
+          "beat": 95.01217651367188,
+          "command": "StopStopMessageCommand",
+          "definition_id": "def-0043",
+          "detail": {
+            "message": "/Songs/Harness/Probe/lua/default.lua:999: attempt to index a nil value",
+            "name": "StopStopMessageCommand"
+          },
+          "kind": "error",
+          "line": 997,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 34.45269775390625,
+          "seq": 166629,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0043",
+          "args": [],
+          "beat": 95.50440979003906,
+          "command": "ActuallyBounceMessageCommand",
+          "definition_id": "def-0043",
+          "detail": {
+            "message": "/Songs/Harness/Probe/lua/default.lua:1043: attempt to index a nil value",
+            "name": "ActuallyBounceMessageCommand"
+          },
+          "kind": "error",
+          "line": 1038,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 34.618343353271484,
+          "seq": 167090,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0043",
+          "args": [],
+          "beat": 124.0053939819336,
+          "command": "StopStopMessageCommand",
+          "definition_id": "def-0043",
+          "detail": {
+            "message": "/Songs/Harness/Probe/lua/default.lua:999: attempt to index a nil value",
+            "name": "StopStopMessageCommand"
+          },
+          "kind": "error",
+          "line": 997,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 44.209251403808594,
+          "seq": 195330,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0043",
+          "args": [],
+          "beat": 249.00205993652344,
+          "command": "VibratePlayerMessageCommand",
+          "definition_id": "def-0043",
+          "detail": {
+            "message": "/Songs/Harness/Probe/lua/default.lua:988: attempt to index a nil value",
+            "name": "VibratePlayerMessageCommand"
+          },
+          "kind": "error",
+          "line": 985,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 94.99317169189453,
+          "seq": 402730,
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "actor": "def-0043",
+          "args": [],
+          "beat": 252,
+          "command": "StopStopMessageCommand",
+          "definition_id": "def-0043",
+          "detail": {
+            "message": "/Songs/Harness/Probe/lua/default.lua:999: attempt to index a nil value",
+            "name": "StopStopMessageCommand"
+          },
+          "kind": "error",
+          "line": 997,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 95.66959381103516,
+          "seq": 406076,
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "diagnosis": "Native Lua error events present; original oracle capture rejected, owned runtime replay cannot prove a passing fixture from this trace.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 278,
+      "source_simfile": "Lesson by DJ/Lesson by DJ.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-3720042-1791891709207637875-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-3720042-1791891709207637875-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-3720042-1791891709207637875-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "4172694218cb063f3025a94831db5b40a81a26c0638b51d51dc178e9f67aee82",
+      "log_bytes": 88433,
+      "last_lines": [
+        "00:01.767: Loading /NoteSkins/dance/cel/Down Hold Body Active.png, type FileType_Bitmap",
+        "00:01.767: Loading /NoteSkins/dance/cel/Down Hold BottomCap active.png, type FileType_Bitmap",
+        "00:01.767: Loading /NoteSkins/dance/cel/Down Tap Note.lua, type FileType_Lua",
+        "00:01.768: Loading /NoteSkins/common/common/_blank.png, type FileType_Bitmap",
+        "00:01.768: Loading /NoteSkins/dance/cel/Down Hold Body Inactive.png, type FileType_Bitmap",
+        "00:01.768: Loading /NoteSkins/dance/cel/Down Hold BottomCap inactive.png, type FileType_Bitmap",
+        "00:01.768: Loading /NoteSkins/dance/cel/Down Tap Note.lua, type FileType_Lua",
+        "00:01.769: Loading /NoteSkins/common/common/_blank.png, type FileType_Bitmap"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 322,
+      "source_simfile": "My Penny/My Penny.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-2027895-1791982709619865985-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-2027895-1791982709619865985-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-2027895-1791982709619865985-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "ba003478e923e08b9b670ddd6fb32381b516ea4eab891568dbd5e311fd78278d",
+      "log_bytes": 112538,
+      "last_lines": [
+        "00:02.241: RageSound: Load \"/Themes/_fallback/Sounds/_missing.ogg\" (precache: 0)",
+        "00:02.242: Sound \"/Themes/_fallback/Sounds/_missing.ogg\" has a start time 0.000019 seconds in the past",
+        "00:02.245: Performing texture garbage collection.",
+        "00:02.248: Mixing underruns: 109",
+        "00:02.248: Zeroing this update.  Was 0.725233",
+        "00:03.250: Mixing underruns: 2",
+        "00:04.515: File \"/Songs/Harness/Probe/bn.avi\" looping",
+        "00:06.783: File \"/Songs/Harness/Probe/bn.avi\" looping"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 324,
+      "source_simfile": "negator/NEGATOR.sm",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-482689-1791964917444496479-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-482689-1791964917444496479-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "46531d53f8571ec87715da36329aed0e2e1e524209134f6cc9514274cbfd1d3e",
+      "log_bytes": 143202,
+      "last_lines": [
+        "02:15.528: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "02:15.529: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "02:15.529: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "02:15.529: Loading /Themes/Harness Simply Love/BGAnimations/_shared background/Static.lua, type FileType_Lua",
+        "02:15.530: Loading /Themes/Harness Simply Love/BGAnimations/_shared background/Technique.lua, type FileType_Lua",
+        "/////////////////////////////////////////",
+        "02:15.663: WARNING: ActorFrameTexture: Cannot have width or height less than 1",
+        "/////////////////////////////////////////"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": true,
+      "compressed_trace_bytes": 3342820,
+      "native_trace_path": "/tmp/itgmania-harness-rs/song-lua-482689-1791964917444496479-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "native_trace_storage_sha256": "476c4f2ad8b505967e2d2ee8139166c3108fcb972205a0e4b2463d664ea949b4",
+      "native_trace_metadata": [
+        [
+          [
+            "completion",
+            "next_screen"
+          ],
+          "ScreenEvaluationStage"
+        ],
+        [
+          [
+            "completion",
+            "reason"
+          ],
+          "gameplay-exit"
+        ],
+        [
+          [
+            "completion",
+            "stage_committed"
+          ],
+          true
+        ],
+        [
+          [
+            "completion",
+            "stages_played_after"
+          ],
+          1
+        ],
+        [
+          [
+            "completion",
+            "stages_played_before"
+          ],
+          0
+        ],
+        [
+          [
+            "completion",
+            "stages_played_before"
+          ]
+        ],
+        [
+          [
+            "dropped_events"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_random_reseeds"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_stage_samples"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_update_frames"
+          ],
+          0
+        ]
+      ],
+      "error_event_limit_reached": true,
+      "native_error_events_first20": [
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 126.00395965576172,
+          "command": "BlindOnMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:959: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOnMessageCommand"
+          },
+          "kind": "error",
+          "line": 953,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 60.571903228759766,
+          "seq": 164436,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 127.00618743896484,
+          "command": "BlindOffMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:971: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOffMessageCommand"
+          },
+          "kind": "error",
+          "line": 965,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 61.05297088623047,
+          "seq": 165739,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 176.0126953125,
+          "command": "BlindOnMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:959: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOnMessageCommand"
+          },
+          "kind": "error",
+          "line": 953,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 84.57610321044922,
+          "seq": 229466,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 176.05538940429688,
+          "command": "BlindOffMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:971: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOffMessageCommand"
+          },
+          "kind": "error",
+          "line": 965,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 84.59659576416016,
+          "seq": 229527,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 176.13848876953125,
+          "command": "BlindOnMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:959: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOnMessageCommand"
+          },
+          "kind": "error",
+          "line": 953,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 84.63648223876953,
+          "seq": 229642,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 176.2225341796875,
+          "command": "BlindOffMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:971: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOffMessageCommand"
+          },
+          "kind": "error",
+          "line": 965,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 84.67682647705078,
+          "seq": 229757,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 176.26307678222656,
+          "command": "BlindOnMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:959: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOnMessageCommand"
+          },
+          "kind": "error",
+          "line": 953,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 84.69628143310547,
+          "seq": 229818,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 176.34815979003906,
+          "command": "BlindOffMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:971: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOffMessageCommand"
+          },
+          "kind": "error",
+          "line": 965,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 84.73712158203125,
+          "seq": 229933,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 176.4299774169922,
+          "command": "BlindOnMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:959: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOnMessageCommand"
+          },
+          "kind": "error",
+          "line": 953,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 84.77639770507812,
+          "seq": 230048,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 176.47178649902344,
+          "command": "BlindOffMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:971: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOffMessageCommand"
+          },
+          "kind": "error",
+          "line": 965,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 84.79646301269531,
+          "seq": 230109,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 176.5575714111328,
+          "command": "BlindOnMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:959: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOnMessageCommand"
+          },
+          "kind": "error",
+          "line": 953,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 84.83763885498047,
+          "seq": 230238,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 176.64137268066406,
+          "command": "BlindOffMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:971: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOffMessageCommand"
+          },
+          "kind": "error",
+          "line": 965,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 84.87786865234375,
+          "seq": 230353,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 176.72164916992188,
+          "command": "BlindOnMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:959: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOnMessageCommand"
+          },
+          "kind": "error",
+          "line": 953,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 84.91639709472656,
+          "seq": 230468,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 176.7618865966797,
+          "command": "BlindOffMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:971: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOffMessageCommand"
+          },
+          "kind": "error",
+          "line": 965,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 84.93571472167969,
+          "seq": 230529,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 176.8463134765625,
+          "command": "BlindOnMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:959: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOnMessageCommand"
+          },
+          "kind": "error",
+          "line": 953,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 84.97623443603516,
+          "seq": 230644,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 176.92813110351562,
+          "command": "BlindOffMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:971: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOffMessageCommand"
+          },
+          "kind": "error",
+          "line": 965,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 85.01551055908203,
+          "seq": 230759,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 176.97113037109375,
+          "command": "BlindOnMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:959: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOnMessageCommand"
+          },
+          "kind": "error",
+          "line": 953,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 85.03614807128906,
+          "seq": 230820,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 177.05784606933594,
+          "command": "BlindOffMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:971: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOffMessageCommand"
+          },
+          "kind": "error",
+          "line": 965,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 85.07777404785156,
+          "seq": 230935,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 177.1368408203125,
+          "command": "BlindOnMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:959: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOnMessageCommand"
+          },
+          "kind": "error",
+          "line": 953,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 85.11569213867188,
+          "seq": 231050,
+          "source": "song:/gameplayControl/default.lua"
+        },
+        {
+          "actor": "def-0014",
+          "args": [],
+          "beat": 177.1820068359375,
+          "command": "BlindOffMessageCommand",
+          "definition_id": "def-0014",
+          "detail": {
+            "message": "/Songs/Harness/Probe/gameplayControl/default.lua:971: attempt to call method 'GetChild' (a nil value)",
+            "name": "BlindOffMessageCommand"
+          },
+          "kind": "error",
+          "line": 965,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 85.13736724853516,
+          "seq": 231111,
+          "source": "song:/gameplayControl/default.lua"
+        }
+      ],
+      "diagnosis": "Native Lua error events present; original oracle capture rejected, owned runtime replay cannot prove a passing fixture from this trace.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 460,
+      "source_simfile": "Velvet LEFTS 1/chart.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania exited with signal: 9 (SIGKILL) before writing a semantic trace; inspect /tmp/itgmania-harness-rs/song-lua-1256551-1792020219622826275-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1256551-1792020219622826275-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-1256551-1792020219622826275-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "6b055cd2e1dc06bcb301139aefea1b01129a1da46307799373907171092fa20e",
+      "log_bytes": 88559,
+      "last_lines": [
+        "00:02.246: Loading /NoteSkins/dance/cel/Down Hold BottomCap active.png, type FileType_Bitmap",
+        "00:02.247: Loading /NoteSkins/dance/cel/Down Tap Note.lua, type FileType_Lua",
+        "00:02.248: Loading /NoteSkins/common/common/_blank.png, type FileType_Bitmap",
+        "00:02.248: Loading /NoteSkins/dance/cel/Down Hold Body Inactive.png, type FileType_Bitmap",
+        "00:02.248: Loading /NoteSkins/dance/cel/Down Hold BottomCap inactive.png, type FileType_Bitmap",
+        "00:02.249: Loading /NoteSkins/dance/cel/Down Tap Note.lua, type FileType_Lua",
+        "00:02.250: Loading /NoteSkins/common/common/_blank.png, type FileType_Bitmap",
+        "00:02.250: Loading /NoteSkins/dance/cel/Down Roll Body active.lua, type FileType_Lua"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 474,
+      "source_simfile": "wndrwll/wndrwll.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: native gameplay capture contains errors or dropped observations; retained run directory /tmp/itgmania-harness-rs/song-lua-247409-1792008774508778954-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-247409-1792008774508778954-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "0089c461a6e414d6a758577d625c7f1861e62432f65becaa2efed19a818701fb",
+      "log_bytes": 130856,
+      "last_lines": [
+        "03:14.957: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "03:14.957: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "03:14.957: Loading /Themes/Harness Simply Love/Graphics/_VisualStyles/Technique/SharedBackground.png, type FileType_Bitmap",
+        "03:14.958: Loading /Themes/Harness Simply Love/BGAnimations/_shared background/Static.lua, type FileType_Lua",
+        "03:14.958: Loading /Themes/Harness Simply Love/BGAnimations/_shared background/Technique.lua, type FileType_Lua",
+        "/////////////////////////////////////////",
+        "03:15.081: WARNING: ActorFrameTexture: Cannot have width or height less than 1",
+        "/////////////////////////////////////////"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": true,
+      "compressed_trace_bytes": 7402809,
+      "native_trace_path": "/tmp/itgmania-harness-rs/song-lua-247409-1792008774508778954-0/Save/itgmania-harness/song-lua-trace.json.zst",
+      "native_trace_storage_sha256": "871c0de1da2b35c90bdf6de8780851d2eef2b6aaf4de5f465ce0847c4102037c",
+      "native_trace_metadata": [
+        [
+          [
+            "completion",
+            "next_screen"
+          ],
+          "ScreenEvaluationStage"
+        ],
+        [
+          [
+            "completion",
+            "reason"
+          ],
+          "gameplay-exit"
+        ],
+        [
+          [
+            "completion",
+            "stage_committed"
+          ],
+          true
+        ],
+        [
+          [
+            "completion",
+            "stages_played_after"
+          ],
+          1
+        ],
+        [
+          [
+            "completion",
+            "stages_played_before"
+          ],
+          0
+        ],
+        [
+          [
+            "completion",
+            "stages_played_before"
+          ]
+        ],
+        [
+          [
+            "dropped_events"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_random_reseeds"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_stage_samples"
+          ],
+          0
+        ],
+        [
+          [
+            "dropped_update_frames"
+          ],
+          0
+        ]
+      ],
+      "error_event_limit_reached": false,
+      "native_error_events_first20": [
+        {
+          "actor": "def-0002",
+          "args": [],
+          "beat": 141.50180053710938,
+          "command": "FourthSetMessageCommand",
+          "definition_id": "def-0002",
+          "detail": {
+            "message": "/Themes/itgmania-harness/Scripts/03 SongLuaTrace.lua:744: bad argument #1 to 'original' (number expected, got nil)",
+            "name": "FourthSetMessageCommand"
+          },
+          "kind": "error",
+          "line": 1075,
+          "operation": "command.error",
+          "scene": 1,
+          "seconds": 48.81063461303711,
+          "seq": 161807,
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "diagnosis": "Native Lua error events present; original oracle capture rejected, owned runtime replay cannot prove a passing fixture from this trace.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 480,
+      "source_simfile": "Young Dumb And Broke/YDB.sm",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1650259-1792024376649881908-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1650259-1792024376649881908-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-1650259-1792024376649881908-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "7455f94ef5b3461ac37347831119e554da9a1d80ef5f23b32b1849205b6b60a3",
+      "log_bytes": 111403,
+      "last_lines": [
+        "02:25.656: Mixing underruns: 6",
+        "02:25.721: Audio position mismatch: frame 6426307 outside buffered range (normal during start/stop)",
+        "02:34.964: File \"/Songs/Harness/Probe/lua/Static.mp4\" looping",
+        "02:59.072: Mixing underruns: 12",
+        "02:59.098: Audio position mismatch: frame 7898258 outside buffered range (normal during start/stop)",
+        "03:02.297: Mixing underruns: 69",
+        "03:02.298: Audio position mismatch: frame 8039342 outside buffered range (normal during start/stop)",
+        "03:05.282: File \"/Songs/Harness/Probe/lua/Static.mp4\" looping"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 481,
+      "source_simfile": "Young Dumb And Broke/YDB.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-744563-1792014784884695162-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-744563-1792014784884695162-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-744563-1792014784884695162-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "63a38938f9abe4f6a2fe7822d49c7920a940a3acf161442215f4a5e2c83f55cf",
+      "log_bytes": 111388,
+      "last_lines": [
+        "01:52.908: Audio position mismatch: frame 4979248 outside buffered range (normal during start/stop)",
+        "02:04.956: File \"/Songs/Harness/Probe/lua/Static.mp4\" looping",
+        "02:25.416: Mixing underruns: 9",
+        "02:25.464: Audio position mismatch: frame 6414960 outside buffered range (normal during start/stop)",
+        "02:34.942: File \"/Songs/Harness/Probe/lua/Static.mp4\" looping",
+        "02:52.809: Mixing underruns: 1",
+        "02:52.903: Audio position mismatch: frame 7625039 outside buffered range (normal during start/stop)",
+        "03:04.925: File \"/Songs/Harness/Probe/lua/Static.mp4\" looping"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 484,
+      "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1384708-1792021564886666940-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1384708-1792021564886666940-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-1384708-1792021564886666940-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "9f42a010a3e6a270625f84bd29c97c9a2c3280645ece2c45fc98e5b14de4f3f5",
+      "log_bytes": 119549,
+      "last_lines": [
+        "/////////////////////////////////////////",
+        "00:02.700: WARNING: #1  ... in /Themes/_fallback/Scripts/02 ActorDef.lua:30",
+        "00:02.700: WARNING: #2  (tail call)",
+        "00:02.700: WARNING: #3  ... in /Themes/itgmania-harness/Scripts/03 SongLuaTrace.lua:505",
+        "00:02.700: WARNING: #4  main in /Songs/Harness/Probe/lua/default.lua:1180",
+        "00:02.700: WARNING: ",
+        "00:02.700: WARNING: Overriding \"Name\": string with string",
+        "/////////////////////////////////////////"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 485,
+      "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super]/ArrowQuest.sm",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-3440489-1792043829552198378-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-3440489-1792043829552198378-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-3440489-1792043829552198378-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "580caeb7afe1827a8695a4a379d252f8c477e230fe977772af5977a17da5f5b2",
+      "log_bytes": 119549,
+      "last_lines": [
+        "/////////////////////////////////////////",
+        "00:02.657: WARNING: #1  ... in /Themes/_fallback/Scripts/02 ActorDef.lua:30",
+        "00:02.657: WARNING: #2  (tail call)",
+        "00:02.657: WARNING: #3  ... in /Themes/itgmania-harness/Scripts/03 SongLuaTrace.lua:505",
+        "00:02.657: WARNING: #4  main in /Songs/Harness/Probe/lua/default.lua:1180",
+        "00:02.657: WARNING: ",
+        "00:02.657: WARNING: Overriding \"Name\": string with string",
+        "/////////////////////////////////////////"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 489,
+      "source_simfile": "Cursed Metamorph - [Zaia]/saved/Cursed Metamorph.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania probe script reported: could not find staged song Harness/Probe; retained run directory /tmp/itgmania-harness-rs/song-lua-829171-1792015685793041617-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-829171-1792015685793041617-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "8be8ef40f49ced9a3f7ecd69e0a2dc8878b81e69e8974b89872e9a4b4f5b8029",
+      "log_bytes": 23342,
+      "last_lines": [
+        "/////////////////////////////////////////",
+        "00:00.460: Video renderers: 'null'",
+        "00:00.460: Null Fullscreen 0x0 0 color 32 texture 0Hz NoVsync SmoothLines",
+        "00:00.460: RageInput::RageInput()",
+        "00:00.461: LinuxEvent: Couldn't open /dev/input/event0: Permission denied.",
+        "00:00.461: LinuxEvent: Couldn't open /dev/input/event1: Permission denied.",
+        "00:00.461: LinuxEvent: Couldn't open /dev/input/event3: Permission denied.",
+        "00:00.461: LinuxEvent: Couldn't open /dev/input/event2: Permission denied."
+      ],
+      "raw_trace_exists": true,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": "/tmp/itgmania-harness-rs/song-lua-829171-1792015685793041617-0/Save/itgmania-harness/song-lua-trace.json",
+      "native_trace_storage_sha256": "2b223dacfd69cf9e72386d3846d586e76b933c1a82c33e5a4837ba50a59f8bbe",
+      "native_trace_metadata": [],
+      "error_event_limit_reached": false,
+      "native_error_events_first20": [],
+      "diagnosis": "Retained trace has no error events in the extraction; original capture rejection and completion/drop metadata retained for further source review.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 491,
+      "source_simfile": "james/james.sm",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-2322339-1792030986222993216-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-2322339-1792030986222993216-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-2322339-1792030986222993216-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "bb7be4d2fabaf84ccee616dbaf919fae82a6ea8fb5f02f425939686d433edb17",
+      "log_bytes": 88462,
+      "last_lines": [
+        "00:02.241: Loading /NoteSkins/dance/cel/Down Hold BottomCap active.png, type FileType_Bitmap",
+        "00:02.242: Loading /NoteSkins/dance/cel/Down Tap Note.lua, type FileType_Lua",
+        "00:02.243: Loading /NoteSkins/common/common/_blank.png, type FileType_Bitmap",
+        "00:02.243: Loading /NoteSkins/dance/cel/Down Hold Body Inactive.png, type FileType_Bitmap",
+        "00:02.243: Loading /NoteSkins/dance/cel/Down Hold BottomCap inactive.png, type FileType_Bitmap",
+        "00:02.244: Loading /NoteSkins/dance/cel/Down Tap Note.lua, type FileType_Lua",
+        "00:02.245: Loading /NoteSkins/common/common/_blank.png, type FileType_Bitmap",
+        "00:02.245: Loading /NoteSkins/dance/cel/Down Roll Body active.lua, type FileType_Lua"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 492,
+      "source_simfile": "james/james.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1468866-1792022466740688095-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1468866-1792022466740688095-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-1468866-1792022466740688095-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "24b9df462e9e3b279e67293ee01e38c1dcefaaca1b95eede237aab2017d30c70",
+      "log_bytes": 127846,
+      "last_lines": [
+        "09:41.572: Audio position mismatch: frame 25647347 outside buffered range (normal during start/stop)",
+        "12:08.868: Mixing underruns: 22209",
+        "12:08.868: Audio position mismatch: frame 32143101 outside buffered range (normal during start/stop)",
+        "12:33.045: Mixing underruns: 3876",
+        "12:33.045: Audio position mismatch: frame 33209301 outside buffered range (normal during start/stop)",
+        "/////////////////////////////////////////",
+        "12:33.405: WARNING: Tween overflow: \"<type 20ScreenGameplayNormal> ScreenGameplay/<type 28ActorFrameAutoDeleteChildren> Underlay/<type 10BitmapText> P1Score\"; infinitely recursing ActorCommand?",
+        "/////////////////////////////////////////"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 493,
+      "source_simfile": "Lesson by DJ/Lesson by DJ.sm",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania probe script reported: no StepsType_Dance_Single chart matched difficulty Challenge; retained run directory /tmp/itgmania-harness-rs/song-lua-3535357-1792044731269888507-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-3535357-1792044731269888507-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "7799838a2aec31d71d4baf1910b3b8dfc102e04cf7223764bdec369f07bb3c0f",
+      "log_bytes": 23073,
+      "last_lines": [
+        "/////////////////////////////////////////",
+        "00:00.302: Video renderers: 'null'",
+        "00:00.302: Null Fullscreen 0x0 0 color 32 texture 0Hz NoVsync SmoothLines",
+        "00:00.302: RageInput::RageInput()",
+        "00:00.303: LinuxEvent: Couldn't open /dev/input/event0: Permission denied.",
+        "00:00.303: LinuxEvent: Couldn't open /dev/input/event1: Permission denied.",
+        "00:00.303: LinuxEvent: Couldn't open /dev/input/event3: Permission denied.",
+        "00:00.303: LinuxEvent: Couldn't open /dev/input/event2: Permission denied."
+      ],
+      "raw_trace_exists": true,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": "/tmp/itgmania-harness-rs/song-lua-3535357-1792044731269888507-0/Save/itgmania-harness/song-lua-trace.json",
+      "native_trace_storage_sha256": "3785a366d2bbf8a2a61daac5da4797bd22636fb1ed53edf6d3e1d417a12eaea3",
+      "native_trace_metadata": [],
+      "error_event_limit_reached": false,
+      "native_error_events_first20": [],
+      "diagnosis": "Retained trace has no error events in the extraction; original capture rejection and completion/drop metadata retained for further source review.",
+      "full_repair_started_by_audit": false
+    },
+    {
+      "position": 496,
+      "source_simfile": "Metronogik/Song.ssc",
+      "original_failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-1861772-1792026485413807569-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-1861772-1792026485413807569-0\n",
+      "run_dir": "/tmp/itgmania-harness-rs/song-lua-1861772-1792026485413807569-0",
+      "run_directory_exists": true,
+      "log_exists": true,
+      "log_sha256": "d52a5cdd49ed1d5925e30a7dd3d59465967c5c944d0d9f084dd68142635bebc5",
+      "log_bytes": 110356,
+      "last_lines": [
+        "00:02.343: PushScreen: \"ScreenGameplay\"",
+        "00:02.353: RageSound: Load \"/Themes/_fallback/Sounds/_missing.ogg\" (precache: 0)",
+        "00:02.353: Sound \"/Themes/_fallback/Sounds/_missing.ogg\" has a start time 0.000008 seconds in the past",
+        "00:02.355: Performing texture garbage collection.",
+        "00:02.358: Mixing underruns: 143",
+        "00:02.358: Zeroing this update.  Was 0.829781",
+        "00:05.105: Seek to 0.000000",
+        "00:05.105: Frame 0 not decoded, total frames: 302"
+      ],
+      "raw_trace_exists": false,
+      "compressed_trace_exists": false,
+      "compressed_trace_bytes": null,
+      "native_trace_path": null,
+      "native_trace_storage_sha256": null,
+      "native_trace_metadata": null,
+      "error_event_limit_reached": null,
+      "native_error_events_first20": [],
+      "diagnosis": "No native semantic trace retained; original timeout/exit remains the concrete failure.",
+      "full_repair_started_by_audit": false
+    }
+  ]
+}
