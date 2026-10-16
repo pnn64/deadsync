@@ -1,0 +1,16 @@
+{
+  "fix_commit": "8cfac82fee6c63025458af81b696aa3e19ebf9f2",
+  "source_root": "/home/parity/workspace/native-arrow-x-green-v3/deadsync",
+  "binary_sha256": "01a49433d6ea9251c5a6b444adc3e608407d9aa410f9d04d769595e9276fbecd",
+  "build_proof": "/home/parity/jobs/native-arrow-x-linux-green-v3/proof.json",
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_sources49_assets_verified": true,
+  "native_reference_cases": 130,
+  "live_controls": 110,
+  "replay_controls": 44,
+  "full_acceptance_criteria_unchanged": true,
+  "native_expected_outputs_are_test_only": true,
+  "native_capture_reused": true,
+  "Igaku_full_repairs_spent": 0,
+  "Quarantine_full_repairs_spent": 0
+}
