@@ -687,6 +687,73 @@
           "production live mode activation"
         ]
       }
+    },
+    "Young Dumb And Broke/YDB.sm": {
+      "coverage_gaps": null,
+      "whole_song_parity_proven": false,
+      "coverage": {
+        "scope": "captured-song-lua-context",
+        "observed_song_operations": [
+          "Actor.Center",
+          "Actor.diffusealpha",
+          "Actor.hibernate",
+          "Actor.linear",
+          "Actor.queuecommand",
+          "Actor.sleep",
+          "Actor.visible",
+          "Actor.zoom",
+          "ActorFrame.GetChild",
+          "ActorFrame.GetChildren",
+          "ActorFrame.SetUpdateFunction",
+          "ActorProxy.SetTarget",
+          "GameState.GetCurrentSong",
+          "GameState.GetPlayerState",
+          "GameState.GetSongBeat",
+          "GameState.GetSongOptionsObject",
+          "MessageManager.Broadcast",
+          "PlayerState.GetPlayerOptionsString",
+          "PlayerState.SetPlayerOptions",
+          "PrefsManager.GetPreference",
+          "ScreenManager.GetTopScreen",
+          "Song.GetSongDir",
+          "SongOptions.MusicRate",
+          "Sprite.GetTexture",
+          "Sprite.loop",
+          "Sprite.rate",
+          "command.begin",
+          "command.end"
+        ],
+        "uncompared_song_operations": [
+          "Actor.hibernate",
+          "ActorFrame.GetChildren"
+        ],
+        "nested_theme_operations": [
+          "Actor.xy",
+          "GameState.GetSongPosition",
+          "Sprite.GetTexture"
+        ],
+        "pending": [
+          "uncompared song operations: Actor.hibernate, ActorFrame.GetChildren",
+          "native drawable state/resources: ActorProxy, Quad, Sprite",
+          "missing captured subscriber identity for ScreenGameplay/19/1",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1"
+        ],
+        "global_pending": [
+          "full theme stage commitment and history",
+          "unqueried score/alive-time observer fields",
+          "additional game/style/input/course contexts",
+          "production live mode activation"
+        ]
+      }
     }
   }
 }

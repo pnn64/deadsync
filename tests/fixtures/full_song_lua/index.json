@@ -5434,17 +5434,15 @@
       "aliases": []
     },
     {
-      "title": "Episode 19",
+      "title": "Young Dumb And Broke",
       "source_simfile": "Young Dumb And Broke/YDB.sm",
-      "harness_version": "0.1.0",
-      "archive": "d5a047decffc532d9ed092aa51ae20f7a7809c0abebe405190618b9cf03f6428.tar.zst",
-      "sha256": "d5a047decffc532d9ed092aa51ae20f7a7809c0abebe405190618b9cf03f6428",
-      "compressed_bytes": 318597,
-      "uncompressed_sha256": "46ee321d8bf641e4e83e08facf83cafb13b1a159acee292e3c8b170fc6f69ee4",
-      "compression_level": 22,
-      "aliases": [
-        "91c1e79c8960f1a2680490d8f06ca85336cf0c78c76493f728a699aaf06403d0.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "4e0a2477264b7c00a578002042169ab1903b9c6e57b175c4e80c493bdd402acc.tar.zst",
+      "compressed_bytes": 297707139,
+      "sha256": "4e0a2477264b7c00a578002042169ab1903b9c6e57b175c4e80c493bdd402acc",
+      "uncompressed_sha256": "2d6144239dac3ec2b7236445a9334a5e57230b2c48a59b9350287cc2f05f92bd",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Episode 19",
