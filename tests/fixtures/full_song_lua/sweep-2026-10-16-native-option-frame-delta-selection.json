@@ -11,5 +11,7 @@
   "full_acceptance_criteria_unchanged": true,
   "native_expected_outputs_are_test_only": true,
   "native_capture_reused": true,
-  "Quarantine_SSC_full_repairs_spent": 1
+  "Quarantine_SSC_full_repairs_spent": 1,
+  "native_clock_fidelity_scope": "Float approach controls with supplied deltas; no equivalence proof for absent independent native modifier-group clocks",
+  "clock_input_correction_evidence": "sweep-2026-10-16-native-mods-group-clock-input-correction.json"
 }

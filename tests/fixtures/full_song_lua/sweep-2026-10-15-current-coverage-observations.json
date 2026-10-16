@@ -1,6 +1,6 @@
 {
   "scope": "latest recorded coverage observations for original source simfiles",
-  "updated_utc": "2026-10-16T05:48:48Z",
+  "updated_utc": "2026-10-16T06:11:03Z",
   "coverage_is_separate_from_existing_full_replay_acceptance": true,
   "passing_charts_replayed_or_investigated": false,
   "rows": [
@@ -3130,6 +3130,24 @@
         "Native ActorFrame FinishTweening propagates to child actors; owned method currently finishes only the receiver. Observed in unit-fixture setup, not attributed to a full chart failure. No acceptance changes."
       ],
       "evidence": "sweep-2026-10-16-actor-frame-finish-propagation-coverage.json"
+    },
+    {
+      "position": 240,
+      "source_simfile": "Igaku/Igaku.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "Native ModsGroup replaces supplied frame delta with an independent per-group RageTimer delta. Retained frame inputs contain only general frame delta and overlay wall time. Exact numeric attribution is unproven; no getter outputs used as inputs and no acceptance changes."
+      ],
+      "evidence": "sweep-2026-10-16-native-mods-group-clock-input-correction.json"
+    },
+    {
+      "position": 363,
+      "source_simfile": "Quarantine/Quarantine.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "Native ModsGroup replaces supplied frame delta with an independent per-group RageTimer delta. Retained frame inputs contain only general frame delta and overlay wall time. Exact numeric attribution is unproven; no getter outputs used as inputs and no acceptance changes."
+      ],
+      "evidence": "sweep-2026-10-16-native-mods-group-clock-input-correction.json"
     }
   ]
 }

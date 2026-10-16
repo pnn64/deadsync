@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-16T05:48:48Z",
+  "updated_utc": "2026-10-16T06:11:03Z",
   "counts": {
     "passed": 404,
     "pending": 97,
@@ -8606,7 +8606,9 @@
         "Actor.y": 28
       },
       "current_zoom_alpha_mismatches": 0,
-      "qualified_fix": "sweep-2026-10-16-native-arrow-y-selection.json"
+      "qualified_fix": "sweep-2026-10-16-native-arrow-y-selection.json",
+      "runtime_clock_source_review": "sweep-2026-10-16-native-mods-group-clock-input-correction.json",
+      "numeric_attribution_unproven": true
     },
     {
       "position": 244,
@@ -15587,7 +15589,9 @@
       "full_replay_completed": true,
       "new_full_repair_started": false,
       "current_diagnostic_failure": "Latest bounded full replay remains pending; exact report failures retained",
-      "qualified_fix": "sweep-2026-10-16-native-option-frame-delta-selection.json"
+      "qualified_fix": "sweep-2026-10-16-native-option-frame-delta-selection.json",
+      "runtime_clock_source_review": "sweep-2026-10-16-native-mods-group-clock-input-correction.json",
+      "numeric_attribution_unproven": true
     },
     {
       "position": 364,

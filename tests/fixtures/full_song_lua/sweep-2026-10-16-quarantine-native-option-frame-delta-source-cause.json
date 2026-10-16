@@ -1,9 +1,9 @@
 {
   "source_simfile": "Quarantine/Quarantine.ssc",
   "position": 363,
-  "status": "Source-qualified direct frame delta fix; SSC final second full repair running on original capture",
-  "full_repairs_completed": 1,
-  "full_repairs_started": 1,
+  "status": "Pending after final second full replay: 10 residual X mismatches; previous native clock attribution corrected",
+  "full_repairs_completed": 2,
+  "full_repairs_started": 2,
   "second_full_repair_started": true,
   "native_frames": 13575,
   "errors": 0,
@@ -65,7 +65,10 @@
     "PlayerOptions.cpp": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
     "RageUtil.cpp": "8487049a1d4ed4c2c1c9ae8e232f4039787eb01e7b854684b85394bf6c79c012"
   },
-  "native_source_behavior": "Pinned PlayerState::Update forwards its float fDelta directly into m_PlayerOptions.Update. PlayerOptions::Approach multiplies that exact delta by rate and target approach speed before native fapproach.",
+  "native_source_behavior": {
+    "ModsGroup.h:50-55": "Update replaces its supplied fDelta with this group's m_Timer.GetDeltaTime(), then calls Current.Approach(Song, fDelta). Each group owns a separate RageTimer.",
+    "RageTimer.cpp:74-79": "GetDeltaTime constructs Now from the system microsecond clock, computes Difference(Now, previous), saves Now, and returns the difference."
+  },
   "owned_source_behavior": "LiveScene::update calls advance_option_levels with frame.screen_seconds. advance_option_levels rounds each cumulative screen time to microseconds and subtracts consecutive values. SongLuaLiveFrame::from_gameplay obtains screen_seconds from the gameplay f32 total_elapsed_in_screen, so it cannot recover the original frame delta exactly.",
   "actual_failure_timing": {
     "first_native_seconds": 105.22977447509766,
@@ -103,7 +106,7 @@
   "native_control_cases": 25,
   "native_prediction_for_0_3_approaching0_at_actual_frame_delta": 0.255026996,
   "candidate_change": "Forward the explicit f32 live frame delta into shared option approach logic; retain absolute clock validation and the legacy compile sampling path. No ArrowEffects formulas or whole-song comparisons change.",
-  "numeric_attribution_status": "Both-platform red/green component qualification complete; retained whole replay remains unproven",
+  "numeric_attribution_status": "PlayerState::Update forwarding fDelta does not prove that PlayerOptions::Approach receives it: ModsGroup::Update overwrites it. The earlier direct-frame-delta source attribution is withdrawn as an explanation of the retained full replay residuals.",
   "captured_getter_outputs_used_as_runtime_inputs": false,
   "native_capture_reused": true,
   "original_uncompressed_capture_sha256": "8a54df1b6626f5392594954ac89090c2bb7c7c36965562244975615e59af38ad",
@@ -113,5 +116,7 @@
   "all_six_groups_both_hosts_passed": true,
   "native_reference_cases": 25,
   "selection_evidence": "sweep-2026-10-16-native-option-frame-delta-selection.json",
-  "second_repair_launch_evidence": "sweep-2026-10-16-quarantine-ssc-native-frame-delta-final-repair-launch.json"
+  "second_repair_launch_evidence": "sweep-2026-10-16-quarantine-ssc-native-frame-delta-final-repair-launch.json",
+  "clock_input_correction_evidence": "sweep-2026-10-16-native-mods-group-clock-input-correction.json",
+  "second_repair_terminal_evidence": "sweep-2026-10-16-quarantine-native-option-frame-delta-final2-v1.json"
 }

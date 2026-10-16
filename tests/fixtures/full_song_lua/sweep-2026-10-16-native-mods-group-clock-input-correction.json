@@ -1,0 +1,75 @@
+{
+  "status": "Independent native option clocks are absent from retained failing capture frame inputs; exact numeric attribution remains unproven",
+  "native_source_sha256": {
+    "ModsGroup.h": "69eed3b53a0781add857158dae13e47804d287a57047a41cadf3c50dedb321a0",
+    "RageTimer.cpp": "2542029c6c12fbd560a3b65808a5bdccb14756350331bbe276ae79e2326cf553",
+    "RageTimer.h": "7468d4f18d5689c1d517e3f8ebfd7da5293421925e5e1228c00ebb8c359cb836"
+  },
+  "all_three_sources_verified_against_captured_native_engine_receipt": true,
+  "native_behavior": {
+    "ModsGroup.h:50-55": "Update replaces its supplied fDelta with this group's m_Timer.GetDeltaTime(), then calls Current.Approach(Song, fDelta). Each group owns a separate RageTimer.",
+    "RageTimer.cpp:74-79": "GetDeltaTime constructs Now from the system microsecond clock, computes Difference(Now, previous), saves Now, and returns the difference."
+  },
+  "capture_producer_sha256": "399d6c057bec50f2096acd6d9ab99a668a3c38a89894f33641d1cac6f83fcf0f",
+  "capture_producer_verified_against_retained_Hallways_native_run": true,
+  "sampled_capture_frames": [
+    {
+      "source_simfile": "Igaku/Igaku.ssc",
+      "first_update_frame": {
+        "beat": -5.714768886566162,
+        "delta": 0,
+        "scene": 1,
+        "seconds": -1.9999773502349854,
+        "sequence": 1,
+        "wall_seconds": 2.184434
+      },
+      "keys": [
+        "beat",
+        "delta",
+        "scene",
+        "seconds",
+        "sequence",
+        "wall_seconds"
+      ],
+      "independent_mods_group_timer_input_present": false
+    },
+    {
+      "source_simfile": "Quarantine/Quarantine.ssc",
+      "first_update_frame": {
+        "beat": -5.545679092407227,
+        "delta": 0,
+        "scene": 1,
+        "seconds": -1.9999773502349854,
+        "sequence": 1,
+        "wall_seconds": 2.734012
+      },
+      "keys": [
+        "beat",
+        "delta",
+        "scene",
+        "seconds",
+        "sequence",
+        "wall_seconds"
+      ],
+      "independent_mods_group_timer_input_present": false
+    }
+  ],
+  "producer_frame_fields": [
+    "beat",
+    "delta",
+    "scene",
+    "seconds",
+    "sequence",
+    "wall_seconds"
+  ],
+  "owned_runtime": "The selected owned option implementation uses the trace frame delta. Its float approach math controls pass, but those controls do not establish equality with the missing native per-group clock inputs.",
+  "correction_to_prior_evidence": "PlayerState::Update forwarding fDelta does not prove that PlayerOptions::Approach receives it: ModsGroup::Update overwrites it. The earlier direct-frame-delta source attribution is withdrawn as an explanation of the retained full replay residuals.",
+  "actual_numeric_cause_not_yet_proven": true,
+  "next_source_work": "Inspect capture support for recording independent native modifier-group clock inputs; never reconstruct them from captured getters or expected poses. Quarantine SSC has exhausted its two full repair attempts and remains pending this sweep.",
+  "chart_full_repairs_started": 0,
+  "native_captures_repeated": false,
+  "getter_or_stat_outputs_used_as_runtime_inputs": false,
+  "existing_full_replay_acceptance_unchanged": true,
+  "closed_passing_charts_replayed_or_investigated": false,
+  "mawaru9_remains_deferred": true
+}
