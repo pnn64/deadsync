@@ -1,0 +1,14 @@
+{
+  "fix_commit": "afb9500be324cedb388ef7ac853ccb65fffaa485",
+  "source_root": "/home/parity/workspace/native-offset-first-green-v1/deadsync",
+  "binary_sha256": "df8a9747b293146e8bd333fa71ef288b6c51ee42d080da1a235281ee7ff2b43f",
+  "build_proof": "/home/parity/jobs/native-offset-first-linux-green-v1/proof.json",
+  "all_seven_groups_both_hosts_passed": true,
+  "all_1175_sources_48_assets_verified": true,
+  "live_controls": 108,
+  "replay_controls": 43,
+  "captured_native_TimingData_cpp_sha256": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1",
+  "full_WAWW_repairs_spent": 1,
+  "full_acceptance_criteria_unchanged": true,
+  "foreground_capture_parity_proven": false
+}
