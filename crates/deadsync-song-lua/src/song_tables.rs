@@ -209,6 +209,22 @@ pub(crate) fn advance_option_levels(lua: &Lua, seconds: f64) -> mlua::Result<()>
     advance_option_levels_inner(lua, seconds, None)
 }
 
+pub(crate) fn live_player_fail_type(
+    lua: &Lua, player: usize, level: usize,
+) -> mlua::Result<Option<deadsync_gameplay::GameplayFailType>> {
+    let Some(levels) = lua.app_data_ref::<SongLuaOptionLevels>() else { return Ok(None); };
+    let options = levels.players[player].clone();
+    drop(levels);
+    let value = player_option_state(lua, &options[level])?.raw_get::<Option<f32>>("failsetting")?;
+    // A Current-only write is replaced by Song's default on the next
+    // PlayerState update, just like PlayerOptions::Approach's enum assignment.
+    let value = if level == 2 && value.is_none()
+        && player_option_state(lua, &options[3])?.raw_get::<Option<f32>>("failsetting")?.is_some()
+    { Some(0.0) } else { value };
+    value.map(|value| deadsync_gameplay::GameplayFailType::from_value(value)
+        .ok_or_else(|| mlua::Error::runtime("Invalid FailType"))).transpose()
+}
+
 pub(crate) fn advance_option_levels_with_frame_delta(
     lua: &Lua, seconds: f64, delta: f32,
 ) -> mlua::Result<()> {

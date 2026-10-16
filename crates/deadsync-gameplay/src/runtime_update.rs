@@ -1074,7 +1074,7 @@ where
         ) {
             self.mods.song_lua_player_transforms[player] = transform;
         }
-        let fail_type = self.mods.attacks.fail_type[player]
+        let fail_type = self.mods.song_lua_fail_types[player].or(self.mods.attacks.fail_type[player])
             .unwrap_or(self.setup.config.default_fail_type);
         let fail_type = song_fail_type(fail_type, &self.source.charts[player].difficulty, self.course_display_is_course_stage());
         let runtime = &mut self.players_runtime.players[player];

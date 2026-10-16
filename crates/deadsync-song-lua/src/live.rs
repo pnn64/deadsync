@@ -614,9 +614,11 @@ fn finish_health_update(lua: &Lua) -> mlua::Result<()> {
             else { "__songlua_player2_enabled" })? == Some(false) { continue; }
         let Some(value) = lua.app_data_ref::<LivePlayers>().and_then(|values| values.0.get(player).copied())
             else { continue; };
-        let state = if value.fail_enabled && value.life <= 0.0 { "HealthState_Dead" }
+        let fail_enabled = crate::song_tables::live_player_fail_type(lua, player, 3)?
+            .map_or(value.fail_enabled, |mode| mode != deadsync_gameplay::GameplayFailType::Off);
+        let state = if fail_enabled && value.life <= 0.0 { "HealthState_Dead" }
             else if value.life >= 1.0 { "HealthState_Hot" }
-            else if value.fail_enabled && value.life < crate::SONG_LUA_DANGER_LIFE { "HealthState_Danger" }
+            else if fail_enabled && value.life < crate::SONG_LUA_DANGER_LIFE { "HealthState_Danger" }
             else { "HealthState_Alive" };
         let old = player_health_state(lua, player).unwrap_or("HealthState_Alive");
         if let Some(mut states) = lua.app_data_mut::<HealthStates>() { states.0[player] = Some(state); }
@@ -1495,6 +1497,19 @@ impl SongLuaLiveScene {
     ) {
         let writes = self.lua.remove_app_data::<PlayerWrites>().map_or_else(Vec::new, |writes| writes.0);
         apply_player_writes(writes, game);
+    }
+
+    /// GameState updates PlayerState options before ScreenGameplay updates
+    /// players. FailType is copied immediately, without a numeric approach.
+    /// Preserve the gameplay configuration when Lua has no explicit policy.
+    pub fn prepare_gameplay_player_options<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+        &self, game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
+    ) -> mlua::Result<()> {
+        for player in 0..LUA_PLAYERS {
+            game.mods.song_lua_fail_types[player] =
+                crate::song_tables::live_player_fail_type(&self.lua, player, 2)?;
+        }
+        Ok(())
     }
 
     pub fn apply_output_player_writes<P: deadsync_gameplay::GameplayProfileData, O, C, D>(

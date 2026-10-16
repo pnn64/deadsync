@@ -1197,6 +1197,37 @@ end }
         state
     }
 
+    #[test]
+    fn gameplay_live_song_fail_setting_controls_real_navigation() {
+        use deadsync_gameplay::GameplayFailType;
+        use deadsync_theme_simply_love::SimplyLoveEffect;
+        for (name, setter, expected) in [
+            ("continue", ":FailSetting('FailType_ImmediateContinue')", GameplayFailType::ImmediateContinue),
+            ("off", ":FromString('FailOff')", GameplayFailType::Off),
+        ] {
+            let script = format!("GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song'){setter}\nreturn Def.Actor{{}}");
+            let mut state = owned_judgment_control(name, "1000\n0000\n0000\n0001\n", &script, 0.0);
+            state.gameplay.setup.config.default_fail_type = GameplayFailType::Immediate;
+            state.gameplay.players_runtime.players[0].life = 0.0;
+            for index in 0..3 {
+                let host = 1_000_000_000 + index * 2_000_000;
+                let mut effects = Vec::new();
+                gameplay::update(&mut state, 0.002, GameplayAudioSnapshot {
+                    stream_clock: GameplayStreamClockSnapshot { music_nanos: -250_000_000 + index as i64 * 2_000_000,
+                        has_music_mapping: true, valid_at_host_nanos: host, ..Default::default() },
+                    ..Default::default()
+                }, || host, &mut effects);
+                let output = state.take_song_lua_output();
+                assert!(output.errors.is_empty(), "{:?}", output.errors);
+                assert!(effects.iter().all(|effect| !matches!(effect,
+                    SimplyLoveEffect::Navigate(_) | SimplyLoveEffect::NavigateNoFade(_))),
+                    "{name}: a live Song fail policy must prevent the core's immediate failure exit");
+                assert_eq!(state.gameplay.players()[0].fail_type, expected,
+                    "{name}: attack refresh must retain the live option policy");
+            }
+        }
+    }
+
     fn update_judgment_control(state: &mut gameplay::State, nanos: i64, host: u64) -> deadsync_song_lua::SongLuaLiveOutput {
         gameplay::update(state, 0.002, GameplayAudioSnapshot {
             stream_clock: GameplayStreamClockSnapshot { music_nanos: nanos,

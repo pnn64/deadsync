@@ -5740,6 +5740,7 @@ impl GameplayAttackRuntimeState {
 pub struct GameplayModRuntimeState<OverlayActor, CapturedActor, StateDelta> {
     pub song_lua_visuals: SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta>,
     pub song_lua_player_transforms: SongLuaPlayerTransforms,
+    pub song_lua_fail_types: [Option<crate::GameplayFailType>; MAX_PLAYERS],
     pub attacks: GameplayAttackRuntimeState,
     pub expand_seconds: [f32; MAX_PLAYERS],
 }

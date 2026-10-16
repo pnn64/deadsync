@@ -2705,6 +2705,10 @@ pub fn update(
 ) {
     if state.song_lua_ended { return; }
     let effect_start = effects.len();
+    if let Some(scene) = &state.song_lua
+        && let Err(error) = scene.prepare_gameplay_player_options(&mut state.gameplay) {
+        state.song_lua_output.errors.push(error.to_string());
+    }
     let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);
     if state.song_lua.is_none() && matches!(action, GameplayAction::Navigate(GameplayExit::Complete)
         | GameplayAction::NavigateNoFade(GameplayExit::Complete)) {
