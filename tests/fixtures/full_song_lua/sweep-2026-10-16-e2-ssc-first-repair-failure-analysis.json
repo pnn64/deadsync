@@ -1,0 +1,310 @@
+{
+  "source_simfile": "E2/E.ssc",
+  "native_frames": 14142,
+  "replayed_frames": 14142,
+  "errors": [],
+  "mismatch_count": 513,
+  "original_initial_mismatch_count": 272110,
+  "report_sha256": "c065258410e6b4457cfc0ceab1ab24ac1deef68d719a1ddf34bc210c7587c0a9",
+  "preserved_report_decoded_sha256_verified": true,
+  "mismatch_field_histogram": {
+    "stage_sample_clock": 2,
+    "stage_sample_coverage": 1,
+    "command_query_event": 510
+  },
+  "first_command_query_mismatches": [
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0019",
+        "args": [
+          {
+            "type": "number",
+            "value": "nan"
+          }
+        ],
+        "beat": 127.51007080078125,
+        "callback": "SetUpdateFunction",
+        "caller": {
+          "line": 369,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0024",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 369,
+        "operation": "Actor.zoom",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 57.117008209228516,
+        "seq": 567764,
+        "source": "song:/lua/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.zoom",
+        "source": "song:/lua/default.lua",
+        "line": 369,
+        "phase": "callback",
+        "beat": 127.51007080078125,
+        "seconds": 57.117008209228516,
+        "args": [
+          0.5594219725264228
+        ],
+        "results": [
+          {
+            "actor": "0x5f29c0f9b9e0",
+            "name": "",
+            "path": "ScreenGameplay/SongForeground/lua/xtl_actor_d/ScreenPixel"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0021",
+        "args": [
+          {
+            "type": "number",
+            "value": "nan"
+          }
+        ],
+        "beat": 127.51007080078125,
+        "callback": "SetUpdateFunction",
+        "caller": {
+          "line": 369,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0024",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 369,
+        "operation": "Actor.zoom",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 57.117008209228516,
+        "seq": 567766,
+        "source": "song:/lua/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.zoom",
+        "source": "song:/lua/default.lua",
+        "line": 369,
+        "phase": "callback",
+        "beat": 127.51007080078125,
+        "seconds": 57.117008209228516,
+        "args": [
+          1.7875593900680542
+        ],
+        "results": [
+          {
+            "actor": "0x5f29c0fae2f0",
+            "name": "",
+            "path": "ScreenGameplay/SongForeground/lua/xtl_actor_d"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0019",
+        "args": [
+          {
+            "type": "number",
+            "value": "nan"
+          }
+        ],
+        "beat": 127.5311508178711,
+        "callback": "SetUpdateFunction",
+        "caller": {
+          "line": 369,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0024",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 369,
+        "operation": "Actor.zoom",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 57.12673568725586,
+        "seq": 567863,
+        "source": "song:/lua/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.zoom",
+        "source": "song:/lua/default.lua",
+        "line": 369,
+        "phase": "callback",
+        "beat": 127.5311508178711,
+        "seconds": 57.12673568725586,
+        "args": [
+          0.5594219725264228
+        ],
+        "results": [
+          {
+            "actor": "0x5f29c0f9b9e0",
+            "name": "",
+            "path": "ScreenGameplay/SongForeground/lua/xtl_actor_d/ScreenPixel"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0021",
+        "args": [
+          {
+            "type": "number",
+            "value": "nan"
+          }
+        ],
+        "beat": 127.5311508178711,
+        "callback": "SetUpdateFunction",
+        "caller": {
+          "line": 369,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0024",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 369,
+        "operation": "Actor.zoom",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 57.12673568725586,
+        "seq": 567865,
+        "source": "song:/lua/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.zoom",
+        "source": "song:/lua/default.lua",
+        "line": 369,
+        "phase": "callback",
+        "beat": 127.5311508178711,
+        "seconds": 57.12673568725586,
+        "args": [
+          1.7875593900680542
+        ],
+        "results": [
+          {
+            "actor": "0x5f29c0fae2f0",
+            "name": "",
+            "path": "ScreenGameplay/SongForeground/lua/xtl_actor_d"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0019",
+        "args": [
+          {
+            "type": "number",
+            "value": "nan"
+          }
+        ],
+        "beat": 127.54849243164062,
+        "callback": "SetUpdateFunction",
+        "caller": {
+          "line": 369,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "OnCommand",
+        "definition_id": "def-0024",
+        "detail": {
+          "native_tween_time_left": 0
+        },
+        "kind": "call",
+        "line": 369,
+        "operation": "Actor.zoom",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 57.13473892211914,
+        "seq": 567962,
+        "source": "song:/lua/default.lua",
+        "tween_time_left": 0
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.zoom",
+        "source": "song:/lua/default.lua",
+        "line": 369,
+        "phase": "callback",
+        "beat": 127.54849243164062,
+        "seconds": 57.13473892211914,
+        "args": [
+          0.5594219725264228
+        ],
+        "results": [
+          {
+            "actor": "0x5f29c0f9b9e0",
+            "name": "",
+            "path": "ScreenGameplay/SongForeground/lua/xtl_actor_d/ScreenPixel"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    }
+  ],
+  "first_clock_mismatches": [
+    {
+      "field": "stage_sample_clock",
+      "native": 96.25424194335938,
+      "deadsync": 96.28983306884766
+    },
+    {
+      "field": "stage_sample_clock",
+      "native": 96.25424194335938,
+      "deadsync": 96.28983306884766
+    },
+    {
+      "field": "stage_sample_coverage",
+      "native": 106,
+      "deadsync": 104
+    }
+  ],
+  "all_original_capture_and_manifest_member_bytes_verified": true,
+  "full_repairs_spent": 1,
+  "remaining_full_repairs": 1,
+  "remaining_source_cause": null,
+  "final_full_repair_started": false,
+  "no_recapture_or_acceptance_changes": true
+}

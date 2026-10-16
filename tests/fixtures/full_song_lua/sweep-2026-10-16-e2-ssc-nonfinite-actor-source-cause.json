@@ -1,0 +1,101 @@
+{
+  "source_simfile": "E2/E.ssc",
+  "full_result_evidence": "sweep-2026-10-16-e2-ssc-first-repair-failure-analysis.json",
+  "first_command_query_mismatch": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "def-0019",
+      "args": [
+        {
+          "type": "number",
+          "value": "nan"
+        }
+      ],
+      "beat": 127.51007080078125,
+      "callback": "SetUpdateFunction",
+      "caller": {
+        "line": 369,
+        "source": "song:/lua/default.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0024",
+      "detail": {
+        "native_tween_time_left": 0
+      },
+      "kind": "call",
+      "line": 369,
+      "operation": "Actor.zoom",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": 57.117008209228516,
+      "seq": 567764,
+      "source": "song:/lua/default.lua",
+      "tween_time_left": 0
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "call",
+      "operation": "Actor.zoom",
+      "source": "song:/lua/default.lua",
+      "line": 369,
+      "phase": "callback",
+      "beat": 127.51007080078125,
+      "seconds": 57.117008209228516,
+      "args": [
+        0.5594219725264228
+      ],
+      "results": [
+        {
+          "actor": "0x5f29c0f9b9e0",
+          "name": "",
+          "path": "ScreenGameplay/SongForeground/lua/xtl_actor_d/ScreenPixel"
+        }
+      ],
+      "tween_time_left": 0.0
+    }
+  },
+  "actual_first_native_seq": 567764,
+  "actual_first_seconds": 57.117008209228516,
+  "source_cause_for_nonfinite_coordinate_propagation": "The source calls gemini_scale:x(outCirc(beat-122.5,1,9,2.5)) until beat129. Once beat exceeds127.5, the original circular easing takes sqrt of a negative number and yields NaN; following zoom calls use gemini_scale:GetX(). Native LunaActor x/zoom pass FArg floats directly to actor setters, and Actor::GetX reads m_current.pos.x. Owned make_actor_capture_f32_method obtains numbers through read_f32, which discards nonfinite Lua Number values; the x write is ignored, retaining the last finite position. Subsequent zoom arguments therefore differ.",
+  "original_source_files": {
+    "lua/default.lua": {
+      "local_sha256": "62987b48fb232e37ba6eb9233264a131f44ac3e87aa0f76b289680f267248ffc",
+      "captured_sha256": "62987b48fb232e37ba6eb9233264a131f44ac3e87aa0f76b289680f267248ffc",
+      "raw_bytes_equal": true,
+      "LF_normalized_source_bytes_equal": true
+    },
+    "lua/easing.lua": {
+      "local_sha256": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+      "captured_sha256": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+      "raw_bytes_equal": true,
+      "LF_normalized_source_bytes_equal": true
+    }
+  },
+  "native_primary_sources": {
+    "Actor.cpp": "1dc2f98fd812fc48e6ad557391064ba21c27485682bee8eeeead918acd2781ce",
+    "Actor.h": "76ff31b0dad5cc1198d01dbe735fed769aac40d309017fbb501bcdcef958219b"
+  },
+  "native_cpp_reference": [
+    "Actor.cpp:LunaActor::x,zoom",
+    "Actor.h:Actor::SetX,GetX"
+  ],
+  "owned_references": [
+    "crates/deadsync-song-lua/src/values.rs:read_f32",
+    "crates/deadsync-song-lua/src/lua_util.rs:make_actor_capture_f32_method,actor_current_position"
+  ],
+  "numeric_argument_filter_sha256": "a42aeb6f17e7225059305991e64e744f5d4a836db26f47f7e5202ed068be6d57",
+  "mismatch_histogram": {
+    "stage_sample_clock": 2,
+    "stage_sample_coverage": 1,
+    "command_query_event": 510
+  },
+  "ending_clock_source_cause": null,
+  "ending_clock_remains_unresolved": true,
+  "production_fix_added": false,
+  "full_repairs_spent": 1,
+  "remaining_full_repairs": 1,
+  "final_full_repair_started": false,
+  "no_new_acceptance_gates_or_runtime_query_calibration": true,
+  "next_action": "Add a source-based nonfinite actor scalar regression, preserve native position/zoom NaN behavior without weakening native tween-duration validation, and investigate the independent saved ending-clock evidence before any final full repair."
+}
