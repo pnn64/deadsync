@@ -4957,16 +4957,78 @@
           "8ae83411d24c32b61e11852c5454bc65bf3aef929a5663fbe2f26501a29dd3d1.tar.zst"
         ]
       }
+    },
+    {
+      "position": 190,
+      "source_simfile": "flores sulphuris - [Zaia]/flores sulphuris.ssc",
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json",
+      "simfile_sha256": "63a03a4561753f127f2af0cced67e27d9852bf58e721f46029a74b44c4c7242b",
+      "status": "passed",
+      "previous_concrete_failure": {
+        "failure_text": null,
+        "callback_errors": [],
+        "mismatch_count": 1,
+        "first_concrete_mismatches": [
+          {
+            "phase": "progress",
+            "seconds": 177.00051879882812,
+            "field": "failed",
+            "native": false,
+            "deadsync": true
+          }
+        ],
+        "capture_exit": null,
+        "replay_exit": 2,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "355581137f178d330dc1dc8e39b6f58ffab5e7a12242674fbd350dede5987246",
+      "retained_candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-190/private-candidate.tar.zst",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 1,
+      "replay_exit": 0,
+      "replay_seconds": 287.830663754954,
+      "native_frames": 157950,
+      "replayed_frames": 157950,
+      "compared_stage_fields": 2046,
+      "archive_accepted": true,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "adbf83f9d224c33b6a752576c5450ad008458248707575379ecdc06f7f58aedb",
+      "archive": "d60d63584b92c0eb64200ef18fa847b75b72764c22d080504b924defbb610e0f.tar.zst",
+      "archive_sha256": "d60d63584b92c0eb64200ef18fa847b75b72764c22d080504b924defbb610e0f",
+      "compressed_bytes": 15166822,
+      "harness_version": "0.1.80",
+      "title": "\u273f\u1d52\u1da0\ud83d\udf0d(flores sulphuris)",
+      "complete_uncompressed_replay_passed": true,
+      "decoded_packed_bytes_verified": true,
+      "local_decompressed_bytes_verified": true,
+      "retained_previous_entry": {
+        "title": "\u273f\u1d52\u1da0\ud83d\udf0d(flores sulphuris)",
+        "source_simfile": "flores sulphuris - [Zaia]/flores sulphuris.ssc",
+        "harness_version": "0.1.0",
+        "archive": "47e951bb8e319e2cb93133f3abf44dc9f72e072b2cce5be79efeff5c6335ca5e.tar.zst",
+        "sha256": "47e951bb8e319e2cb93133f3abf44dc9f72e072b2cce5be79efeff5c6335ca5e",
+        "compressed_bytes": 95863,
+        "uncompressed_sha256": "a4a0ce204127b559d49ab9010da6a0af20acbcd9c25a0ae0370ca515b264fbbc",
+        "compression_level": 22,
+        "aliases": [
+          "2c6d51098265a927df2c1885a61a7a9b3b50f40b12f70c0e1516de26c8da76ab.tar.zst"
+        ]
+      }
     }
   ],
   "counts": {
-    "passed_fixtures": 405,
-    "pending_charts": 95,
+    "passed_fixtures": 406,
+    "pending_charts": 94,
     "ignored_charts": 1,
-    "new_passing_fixtures": 1,
-    "recorded_outcomes": 40
+    "new_passing_fixtures": 2,
+    "recorded_outcomes": 41
   },
-  "updated_utc": "2026-10-16T22:06:25Z",
+  "updated_utc": "2026-10-16T22:07:08Z",
   "reopened": [
     {
       "source_simfile": "7th Gear/7th Gear.ssc",

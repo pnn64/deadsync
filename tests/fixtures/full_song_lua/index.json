@@ -2373,15 +2373,12 @@
     {
       "title": "\u273f\u1d52\u1da0\ud83d\udf0d(flores sulphuris)",
       "source_simfile": "flores sulphuris - [Zaia]/flores sulphuris.ssc",
-      "harness_version": "0.1.0",
-      "archive": "47e951bb8e319e2cb93133f3abf44dc9f72e072b2cce5be79efeff5c6335ca5e.tar.zst",
-      "sha256": "47e951bb8e319e2cb93133f3abf44dc9f72e072b2cce5be79efeff5c6335ca5e",
-      "compressed_bytes": 95863,
-      "uncompressed_sha256": "a4a0ce204127b559d49ab9010da6a0af20acbcd9c25a0ae0370ca515b264fbbc",
-      "compression_level": 22,
-      "aliases": [
-        "2c6d51098265a927df2c1885a61a7a9b3b50f40b12f70c0e1516de26c8da76ab.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "d60d63584b92c0eb64200ef18fa847b75b72764c22d080504b924defbb610e0f.tar.zst",
+      "compressed_bytes": 15166822,
+      "sha256": "d60d63584b92c0eb64200ef18fa847b75b72764c22d080504b924defbb610e0f",
+      "uncompressed_sha256": "355581137f178d330dc1dc8e39b6f58ffab5e7a12242674fbd350dede5987246",
+      "aliases": []
     },
     {
       "title": "Episode 20",

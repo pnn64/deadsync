@@ -9,6 +9,22 @@
       "pending_coverage": [
         "native actor definitions are missing"
       ]
+    },
+    "flores sulphuris - [Zaia]/flores sulphuris.ssc": {
+      "source_simfile": "flores sulphuris - [Zaia]/flores sulphuris.ssc",
+      "pending_coverage": [
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
     }
   }
 }
