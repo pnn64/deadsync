@@ -2956,17 +2956,14 @@
       ]
     },
     {
-      "title": "INAZUMA",
+      "title": "INAZUMA (Gio)",
       "source_simfile": "INAZUMA (Gio)/INAZUMA.ssc",
-      "harness_version": "0.1.0",
-      "archive": "3ccb5707122f1a284c4c2caa010dd0cea897588e3919c265ef7d473f68754f91.tar.zst",
-      "sha256": "3ccb5707122f1a284c4c2caa010dd0cea897588e3919c265ef7d473f68754f91",
-      "compressed_bytes": 813469,
-      "uncompressed_sha256": "8b3a0f2010fce201283419cb142645910af1329325cecae1c424c765bfedebf8",
-      "compression_level": 22,
-      "aliases": [
-        "f26730e67ba5a113606a558fca917ba2f7e31555be7d155b5afb718bc85178a1.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "bf02bf5a33a96b32b7639d4d0e5eb349a9208ce4a706e48b51d0618eb77f6f8a.tar.zst",
+      "compressed_bytes": 8724110,
+      "sha256": "bf02bf5a33a96b32b7639d4d0e5eb349a9208ce4a706e48b51d0618eb77f6f8a",
+      "uncompressed_sha256": "cbe8fc27aa9e99186a22e38d510a79a4aab4c83cd1ab0703cf9d7e5dc985d6c9",
+      "aliases": []
     },
     {
       "title": "Into The Light",
