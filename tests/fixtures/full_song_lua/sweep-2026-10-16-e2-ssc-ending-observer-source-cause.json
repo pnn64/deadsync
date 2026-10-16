@@ -1,0 +1,99 @@
+{
+  "source_simfile": "E2/E.ssc",
+  "full_repairs_spent": 1,
+  "remaining_full_repairs": 1,
+  "original_native_capture_reused": true,
+  "source_observations_sha256": "b34956cbe4443d9374f9358740128e24959de3466f29461d0520ae234feb7fe3",
+  "native_frame_count": 14142,
+  "final_frames": [
+    {
+      "beat": 227.54556274414062,
+      "delta": 0.5853750109672546,
+      "scene": 1,
+      "seconds": 96.21623229980469,
+      "sequence": 14140,
+      "wall_seconds": 108.097151
+    },
+    {
+      "beat": 227.7050323486328,
+      "delta": 0.07387900352478027,
+      "scene": 1,
+      "seconds": 96.28983306884766,
+      "sequence": 14141,
+      "wall_seconds": 108.168395
+    },
+    {
+      "beat": 227.62791442871094,
+      "delta": 0.06268499791622162,
+      "scene": 1,
+      "seconds": 96.25424194335938,
+      "sequence": 14142,
+      "wall_seconds": 108.231199
+    }
+  ],
+  "ending_stage_observations": [
+    {
+      "beat": 227.62791442871094,
+      "gameplay_seconds": 105.28121185302734,
+      "phase": "screen-end",
+      "players": [
+        {
+          "actual": 0,
+          "alive_seconds": 105.28121185302734,
+          "autoplay": 1,
+          "current_max_score": 0,
+          "current_possible": 0,
+          "description": "e?",
+          "difficulty": "Difficulty_Challenge",
+          "failed": true,
+          "life_begin": 0.5,
+          "life_latest": 0.5,
+          "meter": 3,
+          "misses": 0,
+          "player": "PlayerNumber_P1",
+          "possible": 1230,
+          "score": 0,
+          "w1": 0,
+          "w2": 0
+        }
+      ],
+      "scene": 1,
+      "seconds": 96.25424194335938
+    },
+    {
+      "beat": 227.62791442871094,
+      "gameplay_seconds": 105.28121185302734,
+      "phase": "gameplay-exit",
+      "players": [
+        {
+          "actual": 0,
+          "alive_seconds": 105.28121185302734,
+          "autoplay": 1,
+          "current_max_score": 0,
+          "current_possible": 0,
+          "description": "e?",
+          "difficulty": "Difficulty_Challenge",
+          "failed": true,
+          "life_begin": 0.5,
+          "life_latest": 0.5,
+          "meter": 3,
+          "misses": 0,
+          "player": "PlayerNumber_P1",
+          "possible": 1230,
+          "score": 0,
+          "w1": 0,
+          "w2": 0
+        }
+      ],
+      "scene": 1,
+      "seconds": 96.25424194335938
+    }
+  ],
+  "source_cause": "The retained native music clock moves backward on final frame 14142: 96.28983306884766 to 96.25424194335938. Both screen-end and gameplay-exit stage samples belong to final frame 14142. The replay comparator only anchors progress observations to frame order. Its timestamp-only while loop consumes both ending samples on frame 14141, yielding two clock mismatches and the consequent two-sample coverage deficit before the matching final frame is replayed.",
+  "comparison_source": "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs:native_progress_observer_frames and replay stage sample while loop",
+  "existing_clock_tolerance": 1e-06,
+  "source_based_next_action": "Anchor ending stage observations to their recorded native frame order as progress observations already are. Preserve all stage field comparisons, clock tolerances, sample coverage requirements and whole-song acceptance. Separately qualify native nonfinite actor scalar writes before spending final2.",
+  "fix_added": false,
+  "final_full_repair_started": false,
+  "captured_stage_values_used_as_runtime_inputs": false
+}

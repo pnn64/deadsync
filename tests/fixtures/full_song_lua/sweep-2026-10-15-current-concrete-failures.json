@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-16T00:58:30Z",
+  "updated_utc": "2026-10-16T01:14:37Z",
   "counts": {
     "passed": 400,
     "pending": 101,
@@ -5014,13 +5014,13 @@
           ],
           "report_sha256": "c065258410e6b4457cfc0ceab1ab24ac1deef68d719a1ddf34bc210c7587c0a9"
         },
-        "checked_utc": "2026-10-16T00:58:31.345292+00:00"
+        "checked_utc": "2026-10-16T01:14:38.632664+00:00"
       },
-      "current_diagnostic_failure": "First1 completed14142frames/0errors/513mismatches:510 command events from57.117s reflect native NaN versus stale finite actor position after owned numeric parsing ignores nonfinite writes; two ending-clock mismatches and one sample-coverage mismatch remain unknown. One full repair remains; no final2.",
+      "current_diagnostic_failure": "First1 pending513:510 nonfinite actor scalar command mismatches; ending native music clock rewinds on final frame. Comparator consumes both ending samples at preceding overshoot because only progress observations are frame-anchored. Source cause now recorded; no final2 before both fixes are qualified.",
       "full_replay_completed": true,
       "failure_analysis": "sweep-2026-10-16-e2-ssc-first-repair-failure-analysis.json",
       "remaining_source_cause": "sweep-2026-10-16-e2-ssc-nonfinite-actor-source-cause.json",
-      "ending_clock_source_cause": null
+      "ending_clock_source_cause": "sweep-2026-10-16-e2-ssc-ending-observer-source-cause.json"
     },
     {
       "position": 190,
@@ -6579,8 +6579,10 @@
       "entry_diagnostic_frames": 2211,
       "entry_diagnostic_errors": 0,
       "entry_diagnostic_mismatches": 1,
-      "current_diagnostic_failure": "Existing Cancel failure resolved. One actual entry mismatch remains atseq290: native SCALE multiply-before-divide yields19.912771224975586 versus owned19.912769317626953. Native math correction awaits qualification; no full repair spent.",
-      "new_full_repair_started": false
+      "current_diagnostic_failure": "Flowers native SCALE ordering fix now qualified; retained1second diagnostic pending before first full repair.",
+      "new_full_repair_started": false,
+      "native_float_math_fix_commit": "c1ba44e729bcab98775b7c4fa04ec76d2d15397c",
+      "native_float_math_qualified_both_hosts": true
     },
     {
       "position": 196,
@@ -23845,12 +23847,14 @@
           ],
           "report_sha256": "835ddbdaa434e29c5c07469bc80c28b279f1e7e817f17f89fe45ba98f7bbf617"
         },
-        "checked_utc": "2026-10-16T00:58:31.780925+00:00"
+        "checked_utc": "2026-10-16T01:14:39.040982+00:00"
       },
-      "current_diagnostic_failure": "First1 remains pending4657mismatches. Foreground timing requires float event accumulation plus separate song/group offset subtraction and rate-scaled global offset. Retired green1 was not selected; corrected green3 qualification is pending. No final2 started.",
+      "current_diagnostic_failure": "WAWW first1 pending4657; separate-offset native float timing fix now qualified; retained21second diagnostic pending before final2.",
       "full_replay_completed": true,
       "failure_analysis": "sweep-2026-10-16-waww-first-repair-failure-analysis.json",
-      "remaining_source_cause": "sweep-2026-10-16-waww-separate-song-group-offset-source-cause.json"
+      "remaining_source_cause": "sweep-2026-10-16-waww-separate-song-group-offset-source-cause.json",
+      "native_float_math_fix_commit": "c1ba44e729bcab98775b7c4fa04ec76d2d15397c",
+      "native_float_math_qualified_both_hosts": true
     },
     {
       "position": 474,
