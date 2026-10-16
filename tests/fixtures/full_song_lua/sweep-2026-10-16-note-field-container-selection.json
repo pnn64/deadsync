@@ -1,0 +1,18 @@
+{
+  "fix_commit": "9b9ce0d089e584bf2094d282e5bfe838a2e19811",
+  "source_root": "/home/parity/workspace/note-field-container-green-v5/deadsync",
+  "binary_sha256": "307b9eb0f9c4fe9a58b6179670da50cd3d44d3f0d7e9e7eb79d8cfb529eccad1",
+  "build_proof": "/home/parity/jobs/note-field-container-linux-green-v5/proof.json",
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_source_pins_verified": true,
+  "asset_count": 46,
+  "live_controls": 105,
+  "replay_controls": 43,
+  "profile_controls": 1,
+  "legacy_namespace_controls": 1,
+  "all_prior_104_live_assertions_and_43_replay_test_sources_retained": true,
+  "six_prior_test_fixture_adjustments_documented": true,
+  "full_HOPE_repairs_spent": 0,
+  "full_acceptance_criteria_unchanged": true,
+  "scope": "Original full per-player NoteField container, native children and real lifecycle"
+}
