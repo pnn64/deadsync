@@ -1526,7 +1526,11 @@ fn native_final_render_state(trace: &NativeTrace, actor: &str) -> NativeFinalRen
                 }
             }
             "visible" => {
-                if let Some(visible) = args.first().and_then(Value::as_bool) {
+                // Actor.visible uses BIArg, which accepts both booleans and
+                // numeric values converted to lua_Integer (including zero).
+                if let Some(visible) = args.first().and_then(|value| {
+                    value.as_bool().or_else(|| value.as_f64().map(|number| number.trunc() != 0.0))
+                }) {
                     state.visible = visible;
                     state.wrote_visible = true;
                 }
@@ -1535,6 +1539,32 @@ fn native_final_render_state(trace: &NativeTrace, actor: &str) -> NativeFinalRen
         }
     }
     state
+}
+
+#[test]
+fn final_visibility_preserves_native_integer_boolean_setters() {
+    for (argument, visible) in [
+        (serde_json::json!(false), false),
+        (serde_json::json!(true), true),
+        (serde_json::json!(0), false),
+        (serde_json::json!(1), true),
+        (serde_json::json!(0.5), false),
+        (serde_json::json!(-2), true),
+    ] {
+        let trace: NativeTrace = serde_json::from_value(serde_json::json!({
+            "oracle": "itgmania_song_lua_headless_semantic_trace", "title": "Visibility",
+            "style": "single", "simfile": "visibility.lua", "roots": [],
+            "actor_definitions": [], "runtime_actors": [], "timeline_tracks": [], "tween_tracks": [],
+            "operation_tracks": [{"actor":"proxy", "operation":"ActorProxy.visible",
+                "samples":[[1,0,0,[argument]]]}],
+            "end_position": {"seconds": 0}, "trace_until_beat": 0,
+            "fixture_context": {"beat_step": 0.25},
+            "display": {"width":640,"height":480,"logical_width":640,"logical_height":480}
+        })).expect("visibility trace");
+        let actual = native_final_render_state(&trace, "proxy");
+        assert!(actual.wrote_visible, "setter was discarded: {argument}");
+        assert_eq!(actual.visible, visible, "native BIArg argument {argument}");
+    }
 }
 
 fn apply_compiled_delta(
