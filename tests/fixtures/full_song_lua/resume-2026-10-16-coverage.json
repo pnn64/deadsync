@@ -1,0 +1,14 @@
+{
+  "scope": "Missing coverage is recorded separately and does not alter replay acceptance",
+  "production_compilation": {
+    "fof_input_callbacks": "not lowered into Rust; historical replay acceptance retained"
+  },
+  "charts": {
+    "I Really Like You [dbk2]/I Really Like You.sm": {
+      "source_simfile": "I Really Like You [dbk2]/I Really Like You.sm",
+      "pending_coverage": [
+        "native actor definitions are missing"
+      ]
+    }
+  }
+}
