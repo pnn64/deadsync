@@ -1,0 +1,73 @@
+{
+  "all_six_groups_passed": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 360.20416079999995,
+      "log_sha256": "d74e0a914e4b60fefde9c694567277c45823466b8e877bf6ad2bb5c2594faa26",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 643 filtered out; finished in 0.87s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 67.72517690001405,
+      "log_sha256": "8bf9074f18203157d487155c404df0ac247c584ad0ed89315c05b6eaa37dc827",
+      "results": [
+        "test result: ok. 105 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 66.16s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 139.88210640000761,
+      "log_sha256": "1cbc9cd7b1820ead39a9dcc325986345a249959db9d76d60b44808c28d6d0630",
+      "results": [
+        "test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 25.63s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 69.39574049998191,
+      "log_sha256": "34c350295d1c1150072b59d23bb55d79a578059e1fecc4b770b39184d8421f28",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 1.8558660999988206,
+      "log_sha256": "d916cee2be0eeb2b0cf633105addfe8044b35132ca515f66946b50e022015a50",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 643 filtered out; finished in 0.45s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 25.20560280000791,
+      "log_sha256": "5b02ddb263eae60cd9d7257fb6e4a6df4194bd21cacb2304bec7c6acda2b4b93",
+      "results": []
+    }
+  ],
+  "red_checks": [
+    {
+      "label": "target-control",
+      "exit_code": 101,
+      "seconds": 358.2471716,
+      "log_sha256": "150c5c23122ae4e5d954e0bfd91a88b8f4231557e0b71ee724680e6c346f05f7",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 643 filtered out; finished in 0.41s"
+      ]
+    }
+  ],
+  "all_1175_normalized_source_pins_46_native_assets_and_logs_verified": true,
+  "meaningful_three_versus_one_child_count_red_observed": true,
+  "all_prior_104_live_assertions_and_43_replay_sources_unchanged_via_cross_platform_verifier": true,
+  "six_prior_test_setups_documented_with_every_prior_assertion_retained": true,
+  "full_HOPE_repairs_spent": 0
+}

@@ -14181,22 +14181,6 @@ pub fn create_underlay_theme_actor(
     name: &str,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
 ) -> mlua::Result<Option<Table>> {
-    if let Some(player) = name.strip_prefix("NoteFieldContainerP")
-        .and_then(|number| number.parse::<usize>().ok()).filter(|number| (1..=2).contains(number))
-    {
-        let container = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
-        let sl: Table = lua.globals().get("SL")?;
-        let mods: Table = sl.get::<Table>(format!("P{player}"))?.get("ActiveModifiers")?;
-        if sl.get::<Table>("Global")?.get::<String>("GameMode")? != "Casual"
-            && mods.get::<bool>("ColumnCues")?
-        {
-            let cue = create_column_cue_actor(lua, player - 1, create_dummy_actor)?;
-            cue.raw_set("__songlua_parent", container.clone())?;
-            push_sequence_child_once(&container, cue.clone())?;
-            actor_children(lua, &container)?.raw_set("", cue)?;
-        }
-        return Ok(Some(container));
-    }
     if let Some(player_index) = underlay_score_index(name) {
         return Ok(Some(create_named_text_actor(
             lua,
@@ -14224,101 +14208,6 @@ pub fn create_underlay_theme_actor(
         return Ok(Some(actor));
     }
     Ok(None)
-}
-
-fn create_column_cue_actor(
-    lua: &Lua, player: usize, create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
-) -> mlua::Result<Table> {
-    // ColumnCues.lua owns these queues. Keep actual Quad/BitmapText children
-    // so normal ActorFrame max-time traversal and screen updates see them.
-    let root = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
-    let game: Table = lua.globals().get("GAMESTATE")?;
-    let style = game.get::<Function>("GetCurrentStyle")?.call::<Table>(game)?;
-    let count = style.get::<Function>("ColumnsPerPlayer")?.call::<usize>(style.clone())?;
-    let width = style.get::<Function>("GetWidth")?.call::<f32>((style, player_number_name(player)))?;
-    let commands = lua.load(r#"
-local player, pn = ...
-local cues, mapping, state, cursor, first = {}, nil, nil, 1, false
-local text, breakTime = nil, 0
-local function reload()
-    ParseColumnCues(GAMESTATE:GetCurrentSteps(player), pn)
-    cues = SL[pn].Streams.ColumnCues
-    mapping = GetColumnMapping(player)
-    state = GAMESTATE:GetPlayerState(player)
-    cursor, first = 1, false
-end
-local function update(self, delta)
-    local screen = SCREENMAN:GetTopScreen()
-    if screen and screen.IsPaused and screen:IsPaused() then return end
-    local cue = cues[cursor]
-    if cue == nil or mapping == nil then return end
-    local now = state:GetSongPosition():GetMusicSecondsVisible()
-    local start, duration = cue.startTime, cue.duration
-    if cursor == 1 and not first and now < 0 then
-        duration, start, first = duration - now, start + now, true
-    end
-    if start <= now then
-        duration = duration / SL.Global.ActiveModifiers.MusicRate
-        if duration > 0.30 then
-            for column in ivalues(cue.columns) do
-                self:GetChild('Column' .. mapping[column.colNum]):GetChild('ColumnFlash')
-                    :playcommand('Flash', {duration=duration, isMine=column.isMine})
-            end
-        end
-        cursor = cursor + 1
-    end
-end
-return {
-    SetUpdateCommand=function(self) reload(); self:SetUpdateFunction(update) end,
-    CurrentSongChangedMessageCommand=function(self) reload() end,
-    PlayingCommand=function(self) cursor = 1 end,
-    FlashCommand=function(self, params)
-        local duration = params.duration
-        local color = params.isMine and {1,0,0,0.12} or {0.3,1,1,0.12}
-        self:stoptweening():decelerate(0.15):diffuse(color)
-            :sleep(duration - 0.30):accelerate(0.15):diffuse(0,0,0,0)
-        if duration >= 5 and text ~= nil then
-            breakTime = duration
-            text:stoptweening():x(self:GetX()):decelerate(0.15):diffuse(1,1,1,1)
-                :settext(round(duration, 1)):playcommand('UpdateBreak')
-        end
-    end,
-    UpdateBreakCommand=function(self)
-        if breakTime > 0.5 then
-            breakTime = breakTime - 0.1
-            if breakTime > 0.5 then
-                self:sleep(0.1):settext(round(breakTime)):queuecommand('UpdateBreak')
-            else self:diffuse(0,0,0,0) end
-        else self:diffuse(0,0,0,0) end
-    end,
-    SetText=function(actor) text = actor end,
-}
-"#).set_name("@theme:/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua")
-        .call::<Table>((player_number_name(player), crate::player_short_name(player)))?;
-    for name in ["SetUpdateCommand", "CurrentSongChangedMessageCommand", "PlayingCommand"] {
-        root.raw_set(name, commands.raw_get::<Function>(name)?)?;
-    }
-    for column in 1..=count {
-        let frame = create_named_actor(lua, "ActorFrame", &format!("Column{column}"), create_dummy_actor)?;
-        let flash = create_named_actor(lua, "Quad", "ColumnFlash", create_dummy_actor)?;
-        let text = create_named_text_actor(lua, "BitmapText", "ColumnText", String::new(), create_dummy_actor)?;
-        flash.raw_set("FlashCommand", commands.raw_get::<Function>("FlashCommand")?)?;
-        text.raw_set("UpdateBreakCommand", commands.raw_get::<Function>("UpdateBreakCommand")?)?;
-        for actor in [&flash, &text] {
-            actor.get::<Function>("diffuse")?.call::<()>((actor.clone(), 0, 0, 0, 0))?;
-            actor.get::<Function>("x")?.call::<()>((actor.clone(),
-                (column as f32 - (count as f32 / 2.0 + 0.5)) * (width / count as f32)))?;
-            actor.raw_set("__songlua_parent", frame.clone())?;
-            push_sequence_child_once(&frame, actor.clone())?;
-            actor_children(lua, &frame)?.raw_set(actor_name(actor)?, actor.clone())?;
-        }
-        commands.raw_get::<Function>("SetText")?.call::<()>(text)?;
-        frame.raw_set("__songlua_parent", root.clone())?;
-        actor_children(lua, &root)?.raw_set(format!("Column{column}"), frame.clone())?;
-        push_sequence_child_once(&root, frame)?;
-    }
-    root.get::<Function>("queuecommand")?.call::<()>((root.clone(), "SetUpdate"))?;
-    Ok(root)
 }
 
 pub fn create_screen_timer_actor(
@@ -15091,6 +14980,7 @@ pub fn install_underlay_theme_children(
         // Danger.lua needs GAMESTATE and Def, installed later with StepStatistics.
         if top_screen_danger_index(name).is_some() { continue; }
         if name.eq_ignore_ascii_case("SongMeter") { continue; } // Load the original shared actor after host services exist.
+        if name.starts_with("NoteFieldContainerP") { continue; } // Original per-player source loads after host services exist.
         let child = create_named_child_actor(lua, underlay, name)?;
         if name.starts_with("NoteFieldContainerP") {
             // Named lookup and screen Update share the same pane owner.
@@ -22210,6 +22100,38 @@ fn native_step_statistics_lookup(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+fn load_native_note_field(lua: &Lua, name: &str, args: MultiValue) -> mlua::Result<Value> {
+    let source = match name {
+        "ColumnCues.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"),
+        "ColumnFlashOnMiss.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnFlashOnMiss.lua"),
+        "default.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua"),
+        "DisplayMods.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"),
+        "ErrorBar/Colorful.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ErrorBar/Colorful.lua"),
+        "ErrorBar/default.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ErrorBar/default.lua"),
+        "ErrorBar/Monochrome.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ErrorBar/Monochrome.lua"),
+        "ErrorBar/Text.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ErrorBar/Text.lua"),
+        "MeasureCounter.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/MeasureCounter.lua"),
+        "SubtractiveScoring.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/SubtractiveScoring.lua"),
+        _ => return Err(mlua::Error::runtime(format!("unknown native NoteField actor {name}"))),
+    };
+    let environment = lua.create_table()?;
+    let globals = lua.globals();
+    let metatable = lua.create_table()?;
+    metatable.raw_set("__index", globals.clone())?;
+    metatable.raw_set("__newindex", globals)?;
+    environment.set_metatable(Some(metatable))?;
+    let directory = name.rsplit_once('/').map_or_else(String::new, |(parent,_)| format!("{parent}/"));
+    environment.raw_set("LoadActor", lua.create_function(move |lua, args: MultiValue| {
+        let child = args.front().cloned().and_then(read_string)
+            .ok_or_else(|| mlua::Error::runtime("native NoteField LoadActor requires a path"))?;
+        let path = format!("{}{}", directory, child.trim_start_matches("./"));
+        load_native_note_field(lua, &path, MultiValue::from_vec(args.into_iter().skip(1).collect()))
+    })?)?;
+    lua.load(source).set_environment(environment)
+        .set_name(format!("@theme:/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/{name}"))
+        .call(args)
+}
+
 pub(crate) fn install_native_gameplay_underlay(
     lua: &Lua, install_methods: Option<fn(&Lua, &Table) -> mlua::Result<()>>,
 ) -> mlua::Result<()> {
@@ -22250,17 +22172,29 @@ pub(crate) fn install_native_gameplay_underlay(
                 panes.push(danger);
             }
             let definition = load_native_step_statistics(lua, &environment, "default.lua",
-                MultiValue::from_vec(vec![player]))?;
-            if definition.is_nil() { continue; }
-            let pane = own_actor_root(lua, definition, install_methods)?;
-            let Value::Table(pane) = pane else { return Err(mlua::Error::runtime("native StepStatistics must load an actor")); };
-            pane.raw_set("__songlua_parent", underlay.clone())?;
-            run_actor_init_commands_for_table(lua, &pane)?;
-            native_step_statistics_lookup(lua, &pane)?;
-            let name = actor_name(&pane)?;
-            actor_children(lua, &underlay)?.raw_set(name, pane.clone())?;
-            push_sequence_child_once(&underlay, pane.clone())?;
-            panes.push(pane);
+                MultiValue::from_vec(vec![player.clone()]))?;
+            if !definition.is_nil() {
+                let pane = own_actor_root(lua, definition, install_methods)?;
+                let Value::Table(pane) = pane else { return Err(mlua::Error::runtime("native StepStatistics must load an actor")); };
+                pane.raw_set("__songlua_parent", underlay.clone())?;
+                run_actor_init_commands_for_table(lua, &pane)?;
+                native_step_statistics_lookup(lua, &pane)?;
+                let name = actor_name(&pane)?;
+                actor_children(lua, &underlay)?.raw_set(name, pane.clone())?;
+                push_sequence_child_once(&underlay, pane.clone())?;
+                panes.push(pane);
+            }
+            let definition = load_native_note_field(lua, "default.lua",
+                MultiValue::from_vec(vec![player.clone()]))?;
+            let Value::Table(container) = own_actor_root(lua, definition, install_methods)? else {
+                return Err(mlua::Error::runtime("native NoteField must load its container actor"));
+            };
+            container.raw_set("__songlua_parent", underlay.clone())?;
+            run_actor_init_commands_for_table(lua, &container)?;
+            native_step_statistics_lookup(lua, &container)?;
+            actor_children(lua, &underlay)?.raw_set(actor_name(&container)?, container.clone())?;
+            push_sequence_child_once(&underlay, container.clone())?;
+            panes.push(container);
         }
         let definition = lua.load(include_str!("../assets/simply-love/BGAnimations/ScreenGameplay underlay/Shared/SongInfoBar.lua"))
             .set_name("@theme:/BGAnimations/ScreenGameplay underlay/Shared/SongInfoBar.lua")

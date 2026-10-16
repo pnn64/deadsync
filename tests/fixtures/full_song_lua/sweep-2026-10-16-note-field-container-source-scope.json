@@ -1,0 +1,81 @@
+{
+  "actual_source_cause": "sweep-2026-10-16-hope-note-field-container-source-cause.json",
+  "actual_first_native_seq": 1024,
+  "native_asset_sha256": {
+    "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua": "9dc23ded0fe7e29541b383ad5a3b7dc04d9e3257ab5305a8995c228b5549642e",
+    "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnFlashOnMiss.lua": "6a853902ddf32c1e31e84f5e1a2de1cd3a3fde68e326773bf7ed9a72ad080e7c",
+    "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua": "47231e3ffed11e082b553364d53eea72c7f677e37ee2c8a9080773a58d5b86c2",
+    "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua": "0f8e26d8bedc7335feedf409ed6a3bdeabc991875a3c018a7f5bd9d355d55266",
+    "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ErrorBar/Colorful.lua": "d3837555587b17d9dc3adcd92e1979d6babb1bd32a540aea29c2f28f50faa699",
+    "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ErrorBar/default.lua": "46733d23b5df4048cababd4b39f3ea7183cd9f2f534fd9bb02aa56583673c66f",
+    "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ErrorBar/Monochrome.lua": "4b6e5ae758b8cc76f4d572d0b8532cfeb607fe89baedfcb0732c1b58bb94981a",
+    "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ErrorBar/Text.lua": "a0caf8d33cd0959d2201ffb1d3d56c5f6c9fd3eb1c3d0a2e08b86a4f4eb1dce3",
+    "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/MeasureCounter.lua": "6dbd8ac56be413f4131eec3f271483a5d54064d3834fcce8654b7affb8ce49c9",
+    "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/SubtractiveScoring.lua": "85bf8e46d683fd054853196e12dd7c9c0a4bc94ae73b4d2d087f3df5c3c778b7"
+  },
+  "all_ten_asset_bytes_match_local_and_physical_native_source": true,
+  "production_repair": "Load the full original NoteField/default.lua and native child files with per-module relative LoadActor resolution after host services exist. Use ordinary actor ownership, Init, On, CurrentSongChanged and player-option messages. Remove the old ColumnCues-only container and hand-written cue constructor.",
+  "existing_fixture_lookup_correction": {
+    "cue_lookup": {
+      "before": "CUES = CONTAINER:GetChild('')",
+      "after": "CUES = CONTAINER:GetChild('')[2] -- native duplicate-name group: ColumnFlash, ColumnCues, DisplayMods"
+    },
+    "isolated_setup": {
+      "helper": "    // These queue-focused unit fixtures finish the native NoteField intro so\n    // the asserted ancestor maximum comes only from the actor under test.\n    // The complete intro and its options lifecycle are tested separately.\n    fn finish_note_field_intro_fixture(scene: &SongLuaLiveScene) {\n        scene.lua.load(r#\"\nlocal underlay = SCREENMAN:GetTopScreen():GetChild('Underlay')\nfor _, pn in ipairs{'P1','P2'} do\n    local container = underlay:GetChild('NoteFieldContainer'..pn)\n    if container then\n        local children = container:GetChild('')\n        assert(#children >= 2, 'real ColumnFlash and DisplayMods fixture children')\n        children[#children]:finishtweening()\n    end\nend\n\"#).exec().expect(\"finish native NoteField intro in isolated queue fixture\");\n    }\n\n",
+      "changes": [
+        {
+          "test": "live_foreground_on_observes_updated_underlay",
+          "before": "let mut scene = compiled.live_scene.take().expect(\"scene\");",
+          "after": "let mut scene = compiled.live_scene.take().expect(\"scene\");\n        finish_note_field_intro_fixture(&scene);"
+        },
+        {
+          "test": "live_screen_layer_consumes_earlier_tween_before_later_message",
+          "before": "let mut scene = compiled.live_scene.take().expect(\"owned scene\");",
+          "after": "let mut scene = compiled.live_scene.take().expect(\"owned scene\");\n        finish_note_field_intro_fixture(&scene);"
+        },
+        {
+          "test": "live_column_cues_derive_owned_tweens_from_chart_notes",
+          "before": "let mut scene = compiled.live_scene.expect(\"cue scene\");",
+          "after": "let mut scene = compiled.live_scene.expect(\"cue scene\");\n        finish_note_field_intro_fixture(&scene);"
+        },
+        {
+          "test": "live_density_graph_owns_quantized_recurring_sleep",
+          "before": "let mut scene = compiled.live_scene.take().expect(\"scene\");",
+          "after": "let mut scene = compiled.live_scene.take().expect(\"scene\");\n            finish_note_field_intro_fixture(&scene);"
+        },
+        {
+          "test": "live_density_graph_owns_quantized_recurring_sleep",
+          "before": "let mut scene = compiled.live_scene.take().expect(\"excluded layout\");",
+          "after": "let mut scene = compiled.live_scene.take().expect(\"excluded layout\");\n            finish_note_field_intro_fixture(&scene);"
+        },
+        {
+          "test": "live_message_order_gaps_preserve_callback_dispatch",
+          "before": "let mut scene = compiled.live_scene.take().expect(\"retained theme observer\");",
+          "after": "let mut scene = compiled.live_scene.take().expect(\"retained theme observer\");\n        // Keep this registry-order corner case a genuinely lone subscriber.\n        // The newly loaded native ColumnFlash actors are separate unit fixtures.\n        scene.lua.load(r#\"\nlocal underlay=SCREENMAN:GetTopScreen():GetChild('Underlay')\nfor _,pn in ipairs{'P1','P2'} do\n    local container=underlay:GetChild('NoteFieldContainer'..pn)\n    if container then rawset(container:GetChild('')[1], 'JudgmentMessageCommand', nil) end\nend\n\"#).exec().expect(\"isolate original lone Judgment subscriber fixture\");"
+        },
+        {
+          "test": "live_overlay_fails_judged_autoplay_during_off_after_exit_decision",
+          "before": "params.raw_set(\"Player\", crate::player_number_name(0)).unwrap();",
+          "after": "params.raw_set(\"Player\", crate::player_number_name(0)).unwrap();\n                params.raw_set(\"TapNoteScore\", \"TapNoteScore_W1\").unwrap();"
+        },
+        {
+          "test": "live_message_order_gaps_preserve_callback_dispatch",
+          "before": "        let mut scene = compiled.live_scene.take().unwrap();\n        scene.advance(frame).unwrap();\n        let params = scene.lua.create_table().unwrap();\n        params.raw_set(\"Player\", \"PlayerNumber_P1\").unwrap();",
+          "after": "        let mut scene = compiled.live_scene.take().unwrap();\n        scene.advance(frame).unwrap();\n        let params = scene.lua.create_table().unwrap();\n        params.raw_set(\"Player\", \"PlayerNumber_P1\").unwrap();\n        params.raw_set(\"TapNoteScore\", \"TapNoteScore_W1\").unwrap();"
+        }
+      ],
+      "all_original_assertions_preserved": true,
+      "production_unchanged_from_green2": true,
+      "note": "Finish DisplayMods directly; parent FinishTweening propagation is a separate recorded host gap. Remove only the newly added ColumnFlash handlers in the lone-subscriber unit fixture; full native-container regression retains them."
+    },
+    "reason": "The full native container adds real DisplayMods startup queues and Judgment listeners. Queue-focused unit fixtures finish the intro through the normal API; the sole-listener fixture removes only the new ColumnFlash listeners; a synthetic Judgment includes its required score. Every prior assertion and the full acceptance source remain unchanged."
+  },
+  "all_prior_functional_assertions_retained": true,
+  "new_regression": "P1/P2 real three-child container, parents, four actual flash Quads, four cue columns and DisplayMods text/tween lifecycle; actual options message resets the native display.",
+  "new_positive_update_correction": "Actor::UpdateTweening dispatches queued zero-time commands only with positive delta; test uses1ms and checks5.499seconds rather than expecting On to execute on Update(0). Production unchanged between green1 and green2.",
+  "original_red_child_count_assertion_unchanged": true,
+  "no_query_outputs_used_as_inputs": true,
+  "full_acceptance_operations_inputs_keys_and_tolerances_unchanged": true,
+  "native_capture_reused": true,
+  "full_HOPE_repairs_spent": 0
+}

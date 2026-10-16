@@ -2337,6 +2337,15 @@ return Def.ActorMultiVertex {
                 context.message_actor_order = vec![("1".into(), 10)];
             });
         let mut scene = compiled.live_scene.take().expect("retained theme observer");
+        // Keep this registry-order corner case a genuinely lone subscriber.
+        // The newly loaded native ColumnFlash actors are separate unit fixtures.
+        scene.lua.load(r#"
+local underlay=SCREENMAN:GetTopScreen():GetChild('Underlay')
+for _,pn in ipairs{'P1','P2'} do
+    local container=underlay:GetChild('NoteFieldContainer'..pn)
+    if container then rawset(container:GetChild('')[1], 'JudgmentMessageCommand', nil) end
+end
+"#).exec().expect("isolate original lone Judgment subscriber fixture");
         let mut frame = SongLuaLiveFrame {
             music_seconds: 60.0, screen_seconds: 60.0, beat: 120.0,
             delta_seconds: 0.01, ..Default::default()
@@ -2428,6 +2437,7 @@ return Def.ActorFrame {
         scene.advance(frame).unwrap();
         let params = scene.lua.create_table().unwrap();
         params.raw_set("Player", "PlayerNumber_P1").unwrap();
+        params.raw_set("TapNoteScore", "TapNoteScore_W1").unwrap();
         crate::lua_util::broadcast_native_song_lua_message(
             &scene.lua, "Judgment", Some(Value::Table(params))).unwrap();
         scene.lua.load("SCREENMAN:GetTopScreen():GetChild('Overlay'):playcommand('Off')")
@@ -2622,6 +2632,23 @@ return setmetatable({__songlua_actor_type='ActorFrame',Name='Declared',
             |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).expect("live preparation")
     }
 
+    // These queue-focused unit fixtures finish the native NoteField intro so
+    // the asserted ancestor maximum comes only from the actor under test.
+    // The complete intro and its options lifecycle are tested separately.
+    fn finish_note_field_intro_fixture(scene: &SongLuaLiveScene) {
+        scene.lua.load(r#"
+local underlay = SCREENMAN:GetTopScreen():GetChild('Underlay')
+for _, pn in ipairs{'P1','P2'} do
+    local container = underlay:GetChild('NoteFieldContainer'..pn)
+    if container then
+        local children = container:GetChild('')
+        assert(#children >= 2, 'real ColumnFlash and DisplayMods fixture children')
+        children[#children]:finishtweening()
+    end
+end
+"#).exec().expect("finish native NoteField intro in isolated queue fixture");
+    }
+
     #[test]
     fn live_foreground_on_observes_updated_underlay() {
         let mut compiled = compile_with_context("foreground-underlay-order", r#"
@@ -2637,6 +2664,7 @@ return Def.ActorFrame {
             context.layer_start_beats = vec![0.0];
         });
         let mut scene = compiled.live_scene.take().expect("scene");
+        finish_note_field_intro_fixture(&scene);
         scene.advance(SongLuaLiveFrame { music_seconds: -0.5, beat: -1.0,
             screen_seconds: 0.125, delta_seconds: 0.125, ..Default::default() }).expect("dormant foreground");
         scene.advance(SongLuaLiveFrame { music_seconds: 0.0625, beat: 0.125,
@@ -2733,6 +2761,7 @@ return Def.ActorFrame {
                         }, &[]));
                 });
             let mut scene = compiled.live_scene.take().expect("scene");
+            finish_note_field_intro_fixture(&scene);
             let underlay: Table = crate::actor_children(&scene.lua,
                 &scene.lua.globals().get::<Table>("__songlua_top_screen").expect("screen"))
                 .expect("screen children").raw_get("Underlay").expect("underlay");
@@ -2766,6 +2795,7 @@ return Def.ActorFrame {
                 context.style_name = style.into();
             });
             let mut scene = compiled.live_scene.take().expect("excluded layout");
+            finish_note_field_intro_fixture(&scene);
             scene.advance(SongLuaLiveFrame { delta_seconds: 0.01, ..Default::default() }).expect("layout frame");
             let screen: Table = scene.lua.globals().get("__songlua_top_screen").expect("screen");
             let underlay: Table = crate::actor_children(&scene.lua, &screen).expect("screen children")
@@ -2796,6 +2826,7 @@ end }
             if judgment {
                 let params = scene.lua.create_table().unwrap();
                 params.raw_set("Player", crate::player_number_name(0)).unwrap();
+                params.raw_set("TapNoteScore", "TapNoteScore_W1").unwrap();
                 crate::lua_util::broadcast_native_song_lua_message(&scene.lua, "Judgment", Some(Value::Table(params))).unwrap();
             }
             // The overlay remembers actual Judgment use, even after autoplay
@@ -3352,6 +3383,7 @@ end, StatsShowMessageCommand = function(self)
 end }
 "#);
         let mut scene = compiled.live_scene.take().expect("owned scene");
+        finish_note_field_intro_fixture(&scene);
         for seconds in [0.8, 1.8, 2.8] {
             let previous = if seconds == 0.8 { 0.0 } else { seconds - 1.0 };
             let output = scene.advance(SongLuaLiveFrame { screen_seconds: seconds,
@@ -3456,6 +3488,7 @@ assert(OPTIONS:Drunk() == {drunk}, 'attack targets at {seconds}')
             context.song_step_row_beats = vec![Arc::from([0.0, 4.0, 8.0, 12.0])];
         });
         let mut scene = compiled.live_scene.expect("cue scene");
+        finish_note_field_intro_fixture(&scene);
         scene.lua.load(r#"
 local steps = GAMESTATE:GetCurrentSteps(PLAYER_1)
 local cues = steps:GetColumnCues()
@@ -3468,7 +3501,7 @@ assert(SL.P1.Streams.ColumnCues[2].columns[1].isMine)
 assert(steps:GetColumnCues()[2].columns[1].noteType == 4, 'fresh mutable query results')
 UNDERLAY = SCREENMAN:GetTopScreen():GetChild('Underlay')
 CONTAINER = UNDERLAY:GetChild('NoteFieldContainerP1')
-CUES = CONTAINER:GetChild('')
+CUES = CONTAINER:GetChild('')[2] -- native duplicate-name group: ColumnFlash, ColumnCues, DisplayMods
 FLASH = CUES:GetChild('Column1'):GetChild('ColumnFlash')
 assert(FLASH:GetParent():GetParent() == CUES and CUES:GetParent() == CONTAINER)
 "#).exec().expect("native cue getter, parser and ownership");
@@ -3846,6 +3879,57 @@ return Def.Banner {
     }
 
 
+
+    #[test]
+    fn live_note_field_container_owns_original_children_and_mod_lifecycle() {
+        for player in 0..2 {
+            let mut compiled=compile_with_context(&format!("native-note-field-container-{player}"),
+                "return Def.ActorFrame {}", |context| {
+                    context.defer_initial_live_update=true;
+                    context.screen_width=854.0;
+                    for side in 0..2 {
+                        context.players[side].enabled=side==player;
+                        context.players[side].column_cues=true;
+                    }
+                    context.song_steps=vec![crate::SongLuaStep {
+                        steps_type:"StepsType_Dance_Single".into(),difficulty:SongLuaDifficulty::Challenge,
+                        description:String::new(),chart_name:String::new(),credit:String::new(),
+                        meter:9,music_file:String::new(),possible_grade_points:0 }];
+                    context.player_step_indices=if player==0 {[Some(0),None]} else {[None,Some(0)]};
+                    context.song_step_notes=vec![Arc::from(&b"1000\n0M00\n00F0\n000L\n"[..])];
+                    context.song_step_row_beats=vec![Arc::from([0.0,4.0,8.0,12.0])];
+                });
+            let mut scene=compiled.live_scene.take().expect("native container scene");
+            scene.lua.globals().set("PN",format!("PlayerNumber_P{}",player+1)).unwrap();
+            scene.lua.globals().set("SIDE",player+1).unwrap();
+            scene.lua.load(r#"
+local underlay=SCREENMAN:GetTopScreen():GetChild('Underlay')
+local container=underlay:GetChild('NoteFieldContainerP'..SIDE)
+assert(container:GetNumChildren()==3, 'native NoteField container must own its three enabled children')
+assert(container:GetParent()==underlay)
+local children=container:GetChild('')
+assert(#children==3)
+local flash,cues,mods=children[1],children[2],children[3]
+assert(flash:GetParent()==container and flash:GetNumChildren()==4)
+assert(cues:GetParent()==container and cues:GetNumChildren()==4)
+assert(mods:GetParent()==container and mods:GetNumChildren()==1)
+assert(math.abs(mods:GetTweenTimeLeft()-5.5)<0.00001, 'real DisplayMods On queue is retained')
+for _,quad in ipairs(flash:GetChild('')) do
+    assert(quad:GetParent()==flash and quad:GetTexture())
+end
+assert(cues:GetChild('Column1'):GetChild('ColumnFlash'):GetParent():GetParent()==cues)
+MODS=mods
+MODTEXT=mods:GetChild('')
+MODTEXT:settext('stale')
+MESSAGEMAN:Broadcast('PlayerOptionsChanged',{Player=PN})
+assert(MODTEXT:GetText()~='stale', 'native options message refreshes the actual display text')
+"#).exec().unwrap();
+            let output=scene.advance(SongLuaLiveFrame { screen_seconds:0.001,delta_seconds:0.001,
+                music_seconds:0.001,beat:0.002,..Default::default() }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}",output.errors);
+            scene.lua.load("assert(math.abs(MODS:GetTweenTimeLeft()-5.499)<0.00001, 'native options message restarts On through the ordinary queue')").exec().unwrap();
+        }
+    }
 
     #[test]
     fn live_song_meter_owns_native_song_info_children_and_lifecycle() {
