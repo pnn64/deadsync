@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-16T05:46:40Z",
+  "updated_utc": "2026-10-16T05:48:48Z",
   "counts": {
     "passed": 404,
     "pending": 97,
@@ -6013,8 +6013,9 @@
       "entry_diagnostic_errors": 0,
       "entry_diagnostic_mismatches": 0,
       "new_full_repair_started": false,
-      "current_diagnostic_failure": "Latest bounded full replay remains pending; exact report failures retained",
-      "full_replay_completed": true
+      "current_diagnostic_failure": "First full26879frames/0errors/341mismatches: owned navigation22.517 vsnative25.026 despite identical authored request23.519, plus background On callback observation ownership mismatch. Review live fail-policy propagation and native observer lifecycle before final2.",
+      "full_replay_completed": true,
+      "source_review": "sweep-2026-10-16-hallways-first-repair-concrete-source-review.json"
     },
     {
       "position": 221,
@@ -8475,7 +8476,7 @@
             ],
             "results": [
               {
-                "actor": "0x610b0074e170",
+                "actor": "0x64ae60d51ad0",
                 "name": "MultitapP1_5",
                 "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_5"
               }
@@ -8526,7 +8527,7 @@
             ],
             "results": [
               {
-                "actor": "0x610b008a76d0",
+                "actor": "0x64ae60eaaf30",
                 "name": "MultitapP1_12",
                 "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_12"
               }
@@ -8539,9 +8540,9 @@
           "native": {
             "actor": "def-0035",
             "args": [
-              309.7397766113281
+              96.29771423339844
             ],
-            "beat": 220.05091857910156,
+            "beat": 220.0860595703125,
             "callback": "SetUpdateFunction",
             "caller": {
               "line": 2152,
@@ -8555,29 +8556,29 @@
             },
             "kind": "call",
             "line": 2152,
-            "operation": "Actor.y",
+            "operation": "Actor.x",
             "phase": "callback",
             "scene": 1,
-            "seconds": 77.68203735351562,
-            "seq": 520866,
+            "seconds": 77.69444274902344,
+            "seq": 521011,
             "source": "song:/lua/default.lua",
             "tween_time_left": 0
           },
           "deadsync": {
             "scene": 1,
             "kind": "call",
-            "operation": "Actor.y",
+            "operation": "Actor.x",
             "source": "song:/lua/default.lua",
             "line": 2152,
             "phase": "callback",
-            "beat": 220.05091857910156,
-            "seconds": 77.68203735351562,
+            "beat": 220.0860595703125,
+            "seconds": 77.69444274902344,
             "args": [
-              309.7412109375
+              96.29953002929688
             ],
             "results": [
               {
-                "actor": "0x610b008a76d0",
+                "actor": "0x64ae60eaaf30",
                 "name": "MultitapP1_12",
                 "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_12"
               }
@@ -8593,16 +8594,16 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-16-igaku-native-arrow-zoom-entry-diagnostic.json",
+      "followup": "sweep-2026-10-16-igaku-native-arrow-y-entry-diagnostic.json",
       "entry_diagnostic_frames": 5383,
       "entry_diagnostic_errors": 0,
-      "entry_diagnostic_mismatches": 59,
+      "entry_diagnostic_mismatches": 58,
       "first_native_X_failure_resolved_in_retained_entry": true,
       "new_full_repair_started": false,
-      "current_diagnostic_failure": "Native frame delta and Y/Wave fixes source-qualified and committed; retained original through78 diagnostic running. Previous prefix had30 X/29 Y differences; do not spend first full repair until actual entry reviewed.",
+      "current_diagnostic_failure": "Qualified Y/Wave fix resolves first Y event; retained5383frames still differ30X/28Y. Current source review required before any full repair. Captured getter/stat outputs may not provide runtime state.",
       "current_mismatch_operations": {
         "Actor.x": 30,
-        "Actor.y": 29
+        "Actor.y": 28
       },
       "current_zoom_alpha_mismatches": 0,
       "qualified_fix": "sweep-2026-10-16-native-arrow-y-selection.json"

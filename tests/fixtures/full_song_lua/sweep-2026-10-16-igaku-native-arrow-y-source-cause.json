@@ -1,7 +1,7 @@
 {
   "source_simfile": "Igaku/Igaku.ssc",
   "position": 240,
-  "status": "Source-qualified native Y/Wave implementation; retained original entry pending",
+  "status": "Qualified native Y/Wave fix resolves first original Y event; retained5383frame diagnostic still has30 X/28 Y differences; full repairs0",
   "full_repairs_spent": 0,
   "original_trace_sha256": "cbef59377be83fab2841cd2188e16a54580fa84997d30c57efbe9b3beb2b5cf5",
   "first_original_y_failure": {
@@ -112,15 +112,15 @@
   "qualified_zoom_fix_commit": "1d3b83abed5560a9bb73eae09e83a3ea13da63ee",
   "native_capture_reused": true,
   "acceptance_criteria_unchanged": true,
-  "retained_entry_evidence": "sweep-2026-10-16-igaku-native-arrow-zoom-entry-diagnostic.json",
+  "retained_entry_evidence": "sweep-2026-10-16-igaku-native-arrow-y-entry-diagnostic.json",
   "retained_entry_frames": 5383,
   "retained_entry_errors": 0,
-  "retained_entry_mismatches": 59,
+  "retained_entry_mismatches": 58,
   "retained_entry_mismatch_operations": {
     "Actor.x": 30,
-    "Actor.y": 29
+    "Actor.y": 28
   },
-  "first_actual_entry_verification_pending": true,
+  "first_actual_entry_verification_pending": false,
   "whole_song_acceptance_unproven": true,
   "candidate_added": true,
   "fix_selected": true,
@@ -153,5 +153,6 @@
   "Igaku_full_repairs_spent": 0,
   "fix_added": true,
   "all_six_groups_both_hosts_passed": true,
-  "selection_evidence": "sweep-2026-10-16-native-arrow-y-selection.json"
+  "selection_evidence": "sweep-2026-10-16-native-arrow-y-selection.json",
+  "first_original_y_failure_seq520866_resolved": true
 }

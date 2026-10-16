@@ -1,0 +1,91 @@
+{
+  "source_simfile": "Hallways/hallways.ssc",
+  "full_repairs_completed": 1,
+  "mismatches": 341,
+  "errors": [],
+  "native_frames": 26879,
+  "replayed_frames": 26879,
+  "first_domain_navigation_seconds": 22.51714324951172,
+  "lua_requests": [
+    {
+      "seconds": 23.51906967163086,
+      "operation": "StartTransitioningScreen",
+      "args": [
+        "SM_DoNextScreen"
+      ]
+    }
+  ],
+  "native_transition_requests": [
+    {
+      "seconds": 23.51906967163086,
+      "operation": "StartTransitioningScreen",
+      "args": [
+        "SM_DoNextScreen"
+      ]
+    }
+  ],
+  "first_command_mismatch": {
+    "field": "command_query_event",
+    "native": {
+      "args": [],
+      "beat": 10.000251770019531,
+      "caller": {
+        "line": 7,
+        "source": "song:/background.lua",
+        "tail_call": false
+      },
+      "detail": {
+        "results": [
+          {
+            "actor": "external-0016",
+            "name": "ScreenGameplay",
+            "path": "ScreenGameplay"
+          }
+        ]
+      },
+      "kind": "query",
+      "line": 7,
+      "operation": "ScreenManager.GetTopScreen",
+      "phase": "construction",
+      "scene": 1,
+      "seconds": 7.51718807220459,
+      "seq": 30,
+      "source": "song:/background.lua",
+      "results": [
+        {
+          "actor": 1,
+          "name": "ScreenGameplay",
+          "path": "ScreenGameplay"
+        }
+      ]
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "command",
+      "operation": "command.begin",
+      "command": "OnCommand",
+      "source": "song:/background.lua",
+      "line": 7,
+      "beat": 10.000251770019531,
+      "seconds": 7.51718807220459,
+      "args": null
+    }
+  },
+  "fields": {
+    "screen_end_navigation_clock": 1,
+    "command_query_count": 1,
+    "command_query_event": 339
+  },
+  "report_sha256": "a8ef7ab14aae6ea81531fc7d826ff421b00e7b4530f79e52a81e9a6462bb1803",
+  "status": "Actual first full failures under source review; no final repair started",
+  "source_observations": {
+    "hallways_lua": "Sets ModsLevel_Song FailType_ImmediateContinue and requests SM_DoNextScreen only when dead or ineffective; native and owned authored transition requests both occur23.51906967sec.",
+    "native_ScreenGameplay_cpp_sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+    "native_policy": "Native ScreenGameplay check for all failed explicitly waits until song end for ImmediateContinue and EndOfSong.",
+    "owned_policy_review": "The live player-write transport currently handles SetLife and Fail, while native option tables hold FailSetting separately. Verify whether prepared modifiers already propagate this mode and add a production regression before changing the live bridge.",
+    "background_observer": "First mismatch is at7.517188s: native Background On body records GetTopScreen in construction scope while owned starts an On command boundary. Preserve actual background behavior; verify native callback observation ownership before changing any observation scope."
+  },
+  "candidate_numeric_attribution_unproven": true,
+  "existing_acceptance_unchanged": true,
+  "no_captured_getter_outputs_to_be_used_as_runtime_inputs": true
+}
