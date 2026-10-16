@@ -1,0 +1,74 @@
+{
+  "source_root": "/home/parity/workspace/native-offset-first-green-v1/deadsync",
+  "binary_sha256": "df8a9747b293146e8bd333fa71ef288b6c51ee42d080da1a235281ee7ff2b43f",
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 282.90502827003365,
+      "log_sha256": "74fa90ce3cda83bd7b649794baeef4340d396411f4019bd64e83fd5e693e5519",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 644 filtered out; finished in 1.93s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 39.72543643799145,
+      "log_sha256": "247a19db29d2e06c56c76709be4465a033e39f6e2893db3e6e6f0e7df487793b",
+      "results": [
+        "test result: ok. 108 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 39.06s"
+      ]
+    },
+    {
+      "label": "timing-controls",
+      "exit_code": 0,
+      "seconds": 2.992305794963613,
+      "log_sha256": "7b073463b9ff0e9c52aff1e8290860b09a059b149cb8482bc3c320a33ddce43b",
+      "results": [
+        "test result: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 74 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 242.60473560303217,
+      "log_sha256": "925f0e8b6f0d6a1de7415a37258480bec9bf940c2d59a4813c475ef3cf70e66b",
+      "results": [
+        "test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 26.42s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 77.95654758502496,
+      "log_sha256": "5e32f2440d61c4dee01ee41c716178812630bc82c067369aa8d143949ea16567",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 1.1463680770248175,
+      "log_sha256": "e87d9bb1911ed4e09628d18aed2baf47fa5f8b51de38596764d57c4357803ea7",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 644 filtered out; finished in 0.42s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 35.19775672303513,
+      "log_sha256": "420e4d51e46c4acb652d78edd861caa4e394d15cb32b771786fee24b80fc390c",
+      "results": []
+    }
+  ],
+  "all_seven_groups_both_hosts_passed": true,
+  "all_1175_source_pins_48_assets_cross_platform_and_logs_verified": true,
+  "meaningful_red_both_hosts": true,
+  "all_other_107_live_and_43_replay_test_sources_unchanged": true,
+  "integer_timing_source_and_existing_49_timing_tests_unchanged": true,
+  "full_acceptance_criteria_unchanged": true,
+  "only_existing_float_clock_regression_reference_corrected_to_capture_pinned_source": true
+}

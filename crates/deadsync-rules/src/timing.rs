@@ -1369,12 +1369,12 @@ impl TimingData {
     }
 
     /// ITGmania's row-rounded float beat-to-song clock. Foreground activation
-    /// uses event-by-event float accumulation, then applies the song and
-    /// global offsets. The integer note-judgment clock remains independent.
+    /// initializes from the song/group offsets before float event accumulation,
+    /// then applies the rate-scaled global offset. Integer judgment timing stays independent.
     #[must_use]
     pub fn get_song_time_for_beat(&self, beat: f32, music_rate: f32) -> f32 {
         let mut start = GetBeatStarts::default();
-        let mut time = 0.0f32;
+        let mut time = -self.native_song_offset_sec - self.native_group_offset_sec;
         let mut bps = self.get_bpm_for_beat(0.0) / 60.0;
         // Load-time native float traversal: rounding each event before adding
         // the next one differs from converting an accumulated integer time.
@@ -1425,8 +1425,7 @@ impl TimingData {
             }
             start.last_row = row;
         }
-        ((time - self.native_song_offset_sec) - self.native_group_offset_sec)
-            - music_rate * self.global_offset_sec
+        time - music_rate * self.global_offset_sec
     }
 
     fn speed_start_time(&self, beat: f32) -> f32 {

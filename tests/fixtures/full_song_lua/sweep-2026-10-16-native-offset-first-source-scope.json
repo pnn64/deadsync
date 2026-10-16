@@ -1,0 +1,11 @@
+{
+  "source_cause": "sweep-2026-10-16-waww-captured-offset-placement-source-cause.json",
+  "captured_native_cpp_sha256": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1",
+  "production_change": "Initialize the foreground float event clock with separate song/group offsets before accumulation; preserve final rate-scaled global offset subtraction.",
+  "regression_reference_correction": "The previous existing float clock regression referenced newer local TimingData.cpp. Correct its independent reference to the source pinned by the native executable build receipt and include the actual later failing start21.25. Retain all scene assertions and existing comparison tolerances.",
+  "all_other_107_live_and_43_replay_tests_unchanged": true,
+  "full_acceptance_criteria_unchanged": true,
+  "full_WAWW_repairs_spent": 1,
+  "final2_started": false,
+  "query_outputs_used_as_runtime_inputs": false
+}

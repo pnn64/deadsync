@@ -1,0 +1,67 @@
+{
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 383.15249129998847,
+      "log_sha256": "07e8cd3017674e55094136d16f1078d10224312634fa47dcd0650eaff2074592",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 646 filtered out; finished in 3.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 71.05058270000154,
+      "log_sha256": "23c1b2e15d65e4dff72d04fcc386d4a19e72f28fdd64f0c5ca265d8857f5e56e",
+      "results": [
+        "test result: ok. 108 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 69.29s"
+      ]
+    },
+    {
+      "label": "timing-controls",
+      "exit_code": 0,
+      "seconds": 4.214303899992956,
+      "log_sha256": "83d6873411c13bbc424e6d55debc2a0c57eec482772034d2bc005f7ff47fe867",
+      "results": [
+        "test result: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 74 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 152.05012159998296,
+      "log_sha256": "22a0f65f43a01f4d80e8d907e91694677ea8b93cfc0c3b9306ccf3226e3ef0a7",
+      "results": [
+        "test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 27.69s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 73.13470059999963,
+      "log_sha256": "57b1d9d689402af476cdf9c0d391496f4eb6382237f868f4ae8eaf337ffc0db5",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 1.955141900019953,
+      "log_sha256": "185ce95156b562c84192dddd3c22eb77bb4cf3371abf37beff195faea88ac950",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 646 filtered out; finished in 0.46s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 23.791561099991668,
+      "log_sha256": "e858f582a77cee29182018cf4ec666cb1031065ac955693351dc3188b7359984",
+      "results": []
+    }
+  ],
+  "red_both_hosts": true,
+  "all_1175_sources_48_assets_verified": true
+}

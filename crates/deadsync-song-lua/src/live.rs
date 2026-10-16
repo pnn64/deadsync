@@ -2487,7 +2487,7 @@ return Def.Actor {
     #[test]
     fn live_native_float_foreground_activation_clock() {
         use deadsync_rules::timing::{TimingData, TimingSegments};
-        for start_beat in [17.25f32,20.5,44.75] {
+        for start_beat in [17.25f32,20.5,21.25,44.75] {
           for music_rate in [1.0f32,2.0] {
             let bpms=vec![(0.000000f32,71.697998f32),
                 (1.000000f32,71.695999f32),
@@ -2524,19 +2524,20 @@ return Def.Actor {
             let song_offset=-0.532426f32;
             let group_offset=-0.009f32;
             let global_offset=-0.008f32;
-            let mut elapsed=0.0f32;
+            let mut elapsed=-song_offset-group_offset;
             for (index,&(beat,bpm)) in bpms.iter().enumerate() {
                 let end=bpms.get(index+1).map_or(start_beat,|point|point.0.min(start_beat));
                 if end>beat {elapsed+=(end-beat)/(bpm/60.0);}
             }
-            // Song.cpp stores the default/group sync separately. The native
-            // timing wrapper subtracts both offsets and the rate-scaled global.
-            let native_start=((elapsed-song_offset)-group_offset)-music_rate*global_offset;
+            // Captured native build a9d70b63 uses TimingData.cpp e93614b8:
+            // GetElapsedTimeFromBeatNoOffset initializes last_time with the
+            // separate song/group offsets before traversing timing events.
+            let native_start=elapsed-music_rate*global_offset;
             let mut timing=TimingData::from_segments(-song_offset,global_offset,
                 &TimingSegments {bpms:bpms.clone(),..Default::default()},&[]);
             timing.shift_group_offset_seconds(group_offset);
             assert_eq!(timing.get_song_time_for_beat(start_beat,music_rate).to_bits(),native_start.to_bits(),
-                "native offset components must remain separate");
+                "captured native offsets initialize float event clock");
             let mut compiled=compile_with_context(&format!("foreground-float-clock-{start_beat}-{music_rate}"),r#"
 return Def.ActorFrame {
     Def.Actor {OnCommand=function(self) self:sleep(999) end},
