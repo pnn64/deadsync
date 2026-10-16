@@ -1,6 +1,6 @@
 {
   "source_simfile": "HOPE/HOPE.ssc",
-  "entry_evidence": "sweep-2026-10-16-hope-song-meter-entry-diagnostic.json",
+  "entry_evidence": "sweep-2026-10-16-hope-note-field-container-entry-diagnostic.json",
   "first_native_seq": 1024,
   "first_concrete_mismatch": {
     "field": "command_query_event",
@@ -100,9 +100,13 @@
     "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/SubtractiveScoring.lua": "85bf8e46d683fd054853196e12dd7c9c0a4bc94ae73b4d2d087f3df5c3c778b7"
   },
   "source_cause": "Native NoteField/default.lua adopts ColumnFlashOnMiss, conditional ErrorBar/MeasureCounter/SubtractiveScoring, ColumnCues and DisplayMods through LoadActor, and runs real container On behavior. Owned create_underlay_theme_actor builds only a container with ColumnCues, omitting the other original actors. Native captured tree explicitly identifies DisplayMods Init/On, including its5.5-second tween; owned child count is1 versus actual native3.",
-  "fix_added": false,
+  "fix_added": true,
   "full_HOPE_repairs_spent": 0,
   "full_acceptance_unchanged": true,
   "no_query_outputs_used_as_inputs": true,
-  "next_action": "Load the full original NoteField container and its native child declarations/lifecycle. Preserve all existing comparison operations and use real inputs; qualify before retained entry."
+  "next_action": "Load the full original NoteField container and its native child declarations/lifecycle. Preserve all existing comparison operations and use real inputs; qualify before retained entry.",
+  "fix_commit": "9b9ce0d089e584bf2094d282e5bfe838a2e19811",
+  "six_groups_both_hosts_passed": true,
+  "seq1024_resolved": true,
+  "first_remaining_native_seq": 1186
 }

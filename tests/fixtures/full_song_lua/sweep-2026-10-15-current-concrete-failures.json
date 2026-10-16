@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-16T00:02:56Z",
+  "updated_utc": "2026-10-16T00:15:29Z",
   "counts": {
     "passed": 400,
     "pending": 101,
@@ -7549,18 +7549,18 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-16-hope-song-meter-entry-diagnostic.json",
+      "followup": "sweep-2026-10-16-hope-note-field-container-entry-diagnostic.json",
       "source_cause": "sweep-2026-10-15-hope-cancel-source-cause.json",
       "entry_diagnostic_frames": 1688,
       "entry_diagnostic_errors": 0,
-      "entry_diagnostic_mismatches": 20493,
+      "entry_diagnostic_mismatches": 20473,
       "archive_namespace_startup_error_cleared_in_diagnostic": true,
       "native_trace_and_all_original_member_bytes_unchanged": true,
       "original_terminal_full_result_preserved": true,
       "new_full_repair_started": false,
       "cancel_child_missing_failure_fixed_by": "c71cc5f319cd5b950b6ce107ec23f65772062260",
-      "remaining_source_cause": "sweep-2026-10-16-hope-note-field-container-source-cause.json",
-      "current_diagnostic_failure": "Actual next native seq1024: NoteFieldContainerP1 GetNumChildren3/owned1. Original native NoteField container files identify omitted ColumnFlash and DisplayMods actors. Candidate qualification remains in progress; no new full repair.",
+      "remaining_source_cause": null,
+      "current_diagnostic_failure": "Retained entry after qualified full original NoteField container; inspect the actual errors and first remaining comparison before attributing another source cause.",
       "diagnostic_only_not_full_acceptance": true,
       "quad_default_texture_fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
       "quad_texture_all_sixteen_groups_both_hosts_passed": true,
@@ -7588,7 +7588,9 @@
       "timing_window_label_seq773_resolved": true,
       "danger_quad_fix_commit": "8bfa5e62fbd842efd8d7136f9137759e96c80a43",
       "danger_texture_seq965_resolved": true,
-      "song_meter_seq979_resolved": true
+      "song_meter_seq979_resolved": true,
+      "note_field_container_seq1024_resolved": true,
+      "first_remaining_native_seq": 1186
     },
     {
       "position": 230,
@@ -23540,7 +23542,7 @@
           ],
           "report_sha256": "835ddbdaa434e29c5c07469bc80c28b279f1e7e817f17f89fe45ba98f7bbf617"
         },
-        "checked_utc": "2026-10-16T00:02:58.012642+00:00"
+        "checked_utc": "2026-10-16T00:15:31.230511+00:00"
       },
       "current_diagnostic_failure": "Full first1:7119frames/0errors/4657mismatches. First command slip atseq89801 is reproduced exactly by native float versus nanosecond foreground start timing, one f32 ULP apart. Source-qualified pre-song boundary fix also required. New timing fix remains unqualified; no final2 started.",
       "full_replay_completed": true,
