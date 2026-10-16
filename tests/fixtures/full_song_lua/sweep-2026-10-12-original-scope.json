@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-16T05:32:19Z",
+  "updated_utc": "2026-10-16T05:46:30Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -3072,8 +3072,8 @@
       "source_simfile": "Quarantine/Quarantine.ssc",
       "simfile_sha256": "5c9539eaa66e70d13eee0f446f5a0f09e4095438ed0ed5d8110ec89a9cd53a51",
       "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-16-quarantine-native-arrow-x-first1-v1.json"
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-16-quarantine-native-option-frame-delta-final2-v1.json"
     },
     {
       "position": 364,
