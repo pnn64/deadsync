@@ -1,0 +1,15 @@
+{
+  "source_simfile": "What A Wonderful World/WAWW.sm",
+  "archive": "1ef17a67fbdc88116dbe889a4a05140c8737c0bd646d5e4ecd90a035cf4242f8.tar.zst",
+  "compressed_sha256": "1ef17a67fbdc88116dbe889a4a05140c8737c0bd646d5e4ecd90a035cf4242f8",
+  "uncompressed_sha256": "8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c",
+  "native_frames": 7119,
+  "replayed_frames": 7119,
+  "full_repairs_spent": 2,
+  "mismatches": 0,
+  "errors": 0,
+  "local_decompression_byte_verified": true,
+  "original_native_capture_reused": true,
+  "existing_acceptance_unchanged": true,
+  "passing_chart_closed": true
+}

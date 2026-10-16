@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-16T03:00:00Z",
+  "updated_utc": "2026-10-16T03:04:57Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,8 +13,8 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 401,
-    "pending": 100,
+    "passed": 402,
+    "pending": 99,
     "unprocessed": 0
   },
   "complete": false,
@@ -3939,9 +3939,9 @@
       "position": 471,
       "source_simfile": "What A Wonderful World/WAWW.sm",
       "simfile_sha256": "44d9e8c548a43bfbf4e7b1f35229c66a5063759098784abd70c542409d7f22b5",
-      "status": "pending",
-      "repair_attempts": 1,
-      "evidence": "sweep-2026-10-16-waww-qualified-first-repair-v1.json"
+      "status": "passed",
+      "repair_attempts": 2,
+      "evidence": "sweep-2026-10-16-waww-native-float-math-final2-v1.json"
     },
     {
       "position": 472,

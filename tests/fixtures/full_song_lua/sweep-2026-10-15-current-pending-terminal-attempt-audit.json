@@ -1,17 +1,17 @@
 {
-  "generated_utc": "2026-10-16T03:00:08.369315+00:00",
-  "concrete_ledger_sha256": "e92e13b0b8edb3a13a2260ff1554121c64857c73ee3381e40cb7ec40720a9828",
+  "generated_utc": "2026-10-16T03:05:04.065902+00:00",
+  "concrete_ledger_sha256": "a63b5ffca321791b999012d55eed946cde68c5c4d91608bf9574b4918e4a5de3",
   "counts": {
-    "passed": 401,
-    "pending": 100,
+    "passed": 402,
+    "pending": 99,
     "unprocessed": 0
   },
   "maximum_published_terminal_attempt_histogram": {
     "0": 76,
-    "1": 13,
+    "1": 12,
     "2": 11
   },
-  "pending_sources": 100,
+  "pending_sources": 99,
   "terminal_attempts_exceed_two": [],
   "differences": [],
   "running_repair_not_counted_as_terminal": null,
@@ -23,31 +23,13 @@
   "no_chart_replays_or_source_mutations": true,
   "additional_running_repairs_not_counted_as_terminal": [
     {
-      "source_simfile": "What A Wonderful World/WAWW.sm",
-      "position": 471,
-      "stage": "waww-native-float-math-final2-v1",
-      "started_full_repairs": 2,
-      "completed_full_repairs": 1,
-      "running": true,
-      "observed_utc": "2026-10-16T03:00:13.146832+00:00",
-      "pid": 3974183,
-      "command": [
-        "/home/parity/jobs/native-offset-first-linux-green-v1/full-song-lua",
-        "--archive",
-        "/home/parity/jobs/waww-native-float-math-final2-v1/chart-471/8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c.tar",
-        "--report",
-        "/home/parity/jobs/waww-native-float-math-final2-v1/chart-471/report.json"
-      ],
-      "actual_process_command_and_cwd_verified": true
-    },
-    {
       "source_simfile": "E2/E.ssc",
       "position": 181,
       "stage": "e2-ssc-nonfinite-final2-v1",
       "started_full_repairs": 2,
       "completed_full_repairs": 1,
       "running": true,
-      "observed_utc": "2026-10-16T03:00:13.149533+00:00",
+      "observed_utc": "2026-10-16T03:05:08.751363+00:00",
       "pid": 4136779,
       "command": [
         "/home/parity/jobs/e2-nonfinite-end-linux-green-v4/full-song-lua",
@@ -56,7 +38,9 @@
         "--report",
         "/home/parity/jobs/e2-ssc-nonfinite-final2-v1/chart-181/report.json"
       ],
-      "actual_process_command_and_cwd_verified": true
+      "actual_process_command_and_cwd_verified": true,
+      "observed_replayed_frames": 2801,
+      "native_frames": 14142
     }
   ]
 }
