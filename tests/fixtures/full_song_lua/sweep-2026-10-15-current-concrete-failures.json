@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-16T03:56:58Z",
+  "updated_utc": "2026-10-16T04:25:15Z",
   "counts": {
     "passed": 403,
     "pending": 98,
@@ -13672,20 +13672,20 @@
     {
       "position": 363,
       "source_simfile": "Quarantine/Quarantine.ssc",
-      "completed_full_repairs": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-6.json",
+      "completed_full_repairs": 1,
+      "evidence": "sweep-2026-10-16-quarantine-native-arrow-x-first1-v1.json",
       "failure_text": null,
       "callback_errors": [],
-      "mismatch_count": 67,
+      "mismatch_count": 10,
       "first_concrete_mismatches": [
         {
           "field": "command_query_event",
           "native": {
             "actor": "def-0086",
             "args": [
-              -92.88910675048828
+              -97.45635986328125
             ],
-            "beat": 284.39849853515625,
+            "beat": 289.2825012207031,
             "callback": "SetUpdateFunction",
             "caller": {
               "line": 998,
@@ -13702,8 +13702,8 @@
             "operation": "Actor.x",
             "phase": "callback",
             "scene": 1,
-            "seconds": 103.45344543457031,
-            "seq": 834808,
+            "seconds": 105.22977447509766,
+            "seq": 839486,
             "source": "song:/multitap/default.lua",
             "tween_time_left": 0
           },
@@ -13714,371 +13714,14 @@
             "source": "song:/multitap/default.lua",
             "line": 998,
             "phase": "callback",
-            "beat": 284.39849853515625,
-            "seconds": 103.45344543457031,
+            "beat": 289.2825012207031,
+            "seconds": 105.22977447509766,
             "args": [
-              -96
+              -97.45568084716797
             ],
             "results": [
               {
-                "actor": "0x6351c996a040",
-                "name": "MultitapP1_1",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0086",
-            "args": [
-              -93.68616485595703
-            ],
-            "beat": 285.2124938964844,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 103.74950408935547,
-            "seq": 835418,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 285.2124938964844,
-            "seconds": 103.74950408935547,
-            "args": [
-              -96
-            ],
-            "results": [
-              {
-                "actor": "0x6351c996a040",
-                "name": "MultitapP1_1",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0086",
-            "args": [
-              -93.33743286132812
-            ],
-            "beat": 285.48382568359375,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 103.84818267822266,
-            "seq": 835568,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 285.48382568359375,
-            "seconds": 103.84818267822266,
-            "args": [
-              -96
-            ],
-            "results": [
-              {
-                "actor": "0x6351c996a040",
-                "name": "MultitapP1_1",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0086",
-            "args": [
-              -91.86766815185547
-            ],
-            "beat": 286.2978515625,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 104.14424133300781,
-            "seq": 836178,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 286.2978515625,
-            "seconds": 104.14424133300781,
-            "args": [
-              -96
-            ],
-            "results": [
-              {
-                "actor": "0x6351c996a040",
-                "name": "MultitapP1_1",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0086",
-            "args": [
-              -95.98812103271484
-            ],
-            "beat": 286.4448547363281,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 104.19771575927734,
-            "seq": 836328,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 286.4448547363281,
-            "seconds": 104.19771575927734,
-            "args": [
-              -96
-            ],
-            "results": [
-              {
-                "actor": "0x6351c996a040",
-                "name": "MultitapP1_1",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0086",
-            "args": [
-              -95.19686126708984
-            ],
-            "beat": 287.07122802734375,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 104.42552947998047,
-            "seq": 837238,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 287.07122802734375,
-            "seconds": 104.42552947998047,
-            "args": [
-              -96
-            ],
-            "results": [
-              {
-                "actor": "0x6351c996a040",
-                "name": "MultitapP1_1",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0086",
-            "args": [
-              -99.93264770507812
-            ],
-            "beat": 287.3939514160156,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 104.54290008544922,
-            "seq": 837388,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 287.3939514160156,
-            "seconds": 104.54290008544922,
-            "args": [
-              -96
-            ],
-            "results": [
-              {
-                "actor": "0x6351c996a040",
-                "name": "MultitapP1_1",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0086",
-            "args": [
-              -96.18248748779297
-            ],
-            "beat": 288.0234069824219,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 104.77183532714844,
-            "seq": 838308,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 288.0234069824219,
-            "seconds": 104.77183532714844,
-            "args": [
-              -96
-            ],
-            "results": [
-              {
-                "actor": "0x6351c996a040",
+                "actor": "0x58d8a4ad6770",
                 "name": "MultitapP1_1",
                 "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
               }
@@ -14091,9 +13734,9 @@
           "native": {
             "actor": "def-0089",
             "args": [
-              -32.51476287841797
+              -29.608295440673828
             ],
-            "beat": 288.0234069824219,
+            "beat": 289.2825012207031,
             "callback": "SetUpdateFunction",
             "caller": {
               "line": 998,
@@ -14110,8 +13753,8 @@
             "operation": "Actor.x",
             "phase": "callback",
             "scene": 1,
-            "seconds": 104.77183532714844,
-            "seq": 838332,
+            "seconds": 105.22977447509766,
+            "seq": 839510,
             "source": "song:/multitap/default.lua",
             "tween_time_left": 0
           },
@@ -14122,14 +13765,14 @@
             "source": "song:/multitap/default.lua",
             "line": 998,
             "phase": "callback",
-            "beat": 288.0234069824219,
-            "seconds": 104.77183532714844,
+            "beat": 289.2825012207031,
+            "seconds": 105.22977447509766,
             "args": [
-              -32
+              -29.60940170288086
             ],
             "results": [
               {
-                "actor": "0x6351c9d143b0",
+                "actor": "0x58d8a4b21a10",
                 "name": "MultitapP1_2",
                 "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_2"
               }
@@ -14142,9 +13785,9 @@
           "native": {
             "actor": "def-0086",
             "args": [
-              -99.31805419921875
+              -96.2048110961914
             ],
-            "beat": 288.5483093261719,
+            "beat": 289.33123779296875,
             "callback": "SetUpdateFunction",
             "caller": {
               "line": 998,
@@ -14161,8 +13804,8 @@
             "operation": "Actor.x",
             "phase": "callback",
             "scene": 1,
-            "seconds": 104.9627456665039,
-            "seq": 838478,
+            "seconds": 105.24749755859375,
+            "seq": 839656,
             "source": "song:/multitap/default.lua",
             "tween_time_left": 0
           },
@@ -14173,14 +13816,14 @@
             "source": "song:/multitap/default.lua",
             "line": 998,
             "phase": "callback",
-            "beat": 288.5483093261719,
-            "seconds": 104.9627456665039,
+            "beat": 289.33123779296875,
+            "seconds": 105.24749755859375,
             "args": [
-              -96
+              -96.20465850830078
             ],
             "results": [
               {
-                "actor": "0x6351c996a040",
+                "actor": "0x58d8a4ad6770",
                 "name": "MultitapP1_1",
                 "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
               }
@@ -14193,9 +13836,9 @@
           "native": {
             "actor": "def-0089",
             "args": [
-              -26.457454681396484
+              -31.47138214111328
             ],
-            "beat": 288.5483093261719,
+            "beat": 289.33123779296875,
             "callback": "SetUpdateFunction",
             "caller": {
               "line": 998,
@@ -14212,8 +13855,8 @@
             "operation": "Actor.x",
             "phase": "callback",
             "scene": 1,
-            "seconds": 104.9627456665039,
-            "seq": 838502,
+            "seconds": 105.24749755859375,
+            "seq": 839680,
             "source": "song:/multitap/default.lua",
             "tween_time_left": 0
           },
@@ -14224,14 +13867,14 @@
             "source": "song:/multitap/default.lua",
             "line": 998,
             "phase": "callback",
-            "beat": 288.5483093261719,
-            "seconds": 104.9627456665039,
+            "beat": 289.33123779296875,
+            "seconds": 105.24749755859375,
             "args": [
-              -32
+              -31.471773147583008
             ],
             "results": [
               {
-                "actor": "0x6351c9d143b0",
+                "actor": "0x58d8a4b21a10",
                 "name": "MultitapP1_2",
                 "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_2"
               }
@@ -14244,9 +13887,9 @@
           "native": {
             "actor": "def-0086",
             "args": [
-              -96.00007629394531
+              -96.04666137695312
             ],
-            "beat": 289.2108154296875,
+            "beat": 289.34222412109375,
             "callback": "SetUpdateFunction",
             "caller": {
               "line": 998,
@@ -14263,8 +13906,8 @@
             "operation": "Actor.x",
             "phase": "callback",
             "scene": 1,
-            "seconds": 105.20369720458984,
-            "seq": 839308,
+            "seconds": 105.25149536132812,
+            "seq": 840166,
             "source": "song:/multitap/default.lua",
             "tween_time_left": 0
           },
@@ -14275,16 +13918,271 @@
             "source": "song:/multitap/default.lua",
             "line": 998,
             "phase": "callback",
-            "beat": 289.2108154296875,
-            "seconds": 105.20369720458984,
+            "beat": 289.34222412109375,
+            "seconds": 105.25149536132812,
             "args": [
-              -96
+              -96.04661560058594
             ],
             "results": [
               {
-                "actor": "0x6351c996a040",
+                "actor": "0x58d8a4ad6770",
                 "name": "MultitapP1_1",
                 "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0089",
+            "args": [
+              -31.862953186035156
+            ],
+            "beat": 289.34222412109375,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 998,
+              "source": "song:/multitap/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0132",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 998,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 105.25149536132812,
+            "seq": 840190,
+            "source": "song:/multitap/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/multitap/default.lua",
+            "line": 998,
+            "phase": "callback",
+            "beat": 289.34222412109375,
+            "seconds": 105.25149536132812,
+            "args": [
+              -31.863082885742188
+            ],
+            "results": [
+              {
+                "actor": "0x58d8a4b21a10",
+                "name": "MultitapP1_2",
+                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_2"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0122",
+            "args": [
+              -98.29939270019531
+            ],
+            "beat": 482.12982177734375,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 998,
+              "source": "song:/multitap/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0132",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 998,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 172.5738525390625,
+            "seq": 1415381,
+            "source": "song:/multitap/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/multitap/default.lua",
+            "line": 998,
+            "phase": "callback",
+            "beat": 482.12982177734375,
+            "seconds": 172.5738525390625,
+            "args": [
+              -98.29979705810547
+            ],
+            "results": [
+              {
+                "actor": "0x58d8a4e4b460",
+                "name": "MultitapP1_13",
+                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_13"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0122",
+            "args": [
+              -98.04277801513672
+            ],
+            "beat": 482.2197265625,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 998,
+              "source": "song:/multitap/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0132",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 998,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 172.6046905517578,
+            "seq": 1415549,
+            "source": "song:/multitap/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/multitap/default.lua",
+            "line": 998,
+            "phase": "callback",
+            "beat": 482.2197265625,
+            "seconds": 172.6046905517578,
+            "args": [
+              -98.04367065429688
+            ],
+            "results": [
+              {
+                "actor": "0x58d8a4e4b460",
+                "name": "MultitapP1_13",
+                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_13"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0122",
+            "args": [
+              -97.07447814941406
+            ],
+            "beat": 482.2783508300781,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 998,
+              "source": "song:/multitap/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0132",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 998,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 172.62478637695312,
+            "seq": 1415717,
+            "source": "song:/multitap/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/multitap/default.lua",
+            "line": 998,
+            "phase": "callback",
+            "beat": 482.2783508300781,
+            "seconds": 172.62478637695312,
+            "args": [
+              -97.07453918457031
+            ],
+            "results": [
+              {
+                "actor": "0x58d8a4e4b460",
+                "name": "MultitapP1_13",
+                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_13"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0122",
+            "args": [
+              -96.27088165283203
+            ],
+            "beat": 482.3365478515625,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 998,
+              "source": "song:/multitap/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0132",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 998,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 172.64474487304688,
+            "seq": 1415876,
+            "source": "song:/multitap/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/multitap/default.lua",
+            "line": 998,
+            "phase": "callback",
+            "beat": 482.3365478515625,
+            "seconds": 172.64474487304688,
+            "args": [
+              -96.27102661132812
+            ],
+            "results": [
+              {
+                "actor": "0x58d8a4e4b460",
+                "name": "MultitapP1_13",
+                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_13"
               }
             ],
             "tween_time_left": 0.0
@@ -14298,10 +14196,10 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-16-quarantine-ssc-native-arrow-x-first-repair-launch.json",
-      "full_repairs_started": 1,
-      "new_full_repair_started": true,
-      "current_diagnostic_failure": "Original67 X-position failures addressed by source-qualified native GetXPos implementation; retained shared-source entry is clean. First full repair is running on original compressed capture; full acceptance remains unproven."
+      "followup": "sweep-2026-10-16-quarantine-native-arrow-x-first1-v1.json",
+      "full_replay_completed": true,
+      "new_full_repair_started": false,
+      "current_diagnostic_failure": "Latest bounded full replay remains pending; exact report failures retained"
     },
     {
       "position": 364,

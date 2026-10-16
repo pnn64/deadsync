@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-16T03:56:50Z",
+  "updated_utc": "2026-10-16T04:25:06Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -3072,8 +3072,8 @@
       "source_simfile": "Quarantine/Quarantine.ssc",
       "simfile_sha256": "5c9539eaa66e70d13eee0f446f5a0f09e4095438ed0ed5d8110ec89a9cd53a51",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-6.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-16-quarantine-native-arrow-x-first1-v1.json"
     },
     {
       "position": 364,
