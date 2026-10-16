@@ -3510,8 +3510,8 @@ pub(crate) fn replay_with_command_observer(
         }
         if frame["scene"].as_u64() != Some(scene_count) {
             return Err(format!(
-                "native scene {} differs from independent scene {scene_count} at frame {}",
-                frame["scene"], frame["sequence"]
+                "native scene {} differs from independent scene {scene_count} at frame {}; preceding callback errors: {:?}",
+                frame["scene"], frame["sequence"], errors.iter().rev().take(5).collect::<Vec<_>>()
             ));
         }
         let seconds = number(frame, "seconds")?;
