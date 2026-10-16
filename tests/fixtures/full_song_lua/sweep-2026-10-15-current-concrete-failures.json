@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-15T23:57:43Z",
+  "updated_utc": "2026-10-16T00:02:56Z",
   "counts": {
     "passed": 400,
     "pending": 101,
@@ -23540,7 +23540,7 @@
           ],
           "report_sha256": "835ddbdaa434e29c5c07469bc80c28b279f1e7e817f17f89fe45ba98f7bbf617"
         },
-        "checked_utc": "2026-10-15T23:57:44.603600+00:00"
+        "checked_utc": "2026-10-16T00:02:58.012642+00:00"
       },
       "current_diagnostic_failure": "Full first1:7119frames/0errors/4657mismatches. First command slip atseq89801 is reproduced exactly by native float versus nanosecond foreground start timing, one f32 ULP apart. Source-qualified pre-song boundary fix also required. New timing fix remains unqualified; no final2 started.",
       "full_replay_completed": true,
