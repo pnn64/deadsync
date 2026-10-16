@@ -1,7 +1,7 @@
 {
   "source_simfile": "Igaku/Igaku.ssc",
   "position": 240,
-  "status": "Native Y/Wave candidate in both-platform component qualification on selected frame-delta baseline; no Igaku full repair started",
+  "status": "Source-qualified native Y/Wave implementation; retained original entry pending",
   "full_repairs_spent": 0,
   "original_trace_sha256": "cbef59377be83fab2841cd2188e16a54580fa84997d30c57efbe9b3beb2b5cf5",
   "first_original_y_failure": {
@@ -120,10 +120,10 @@
     "Actor.x": 30,
     "Actor.y": 29
   },
-  "first_actual_entry_verification_pending": false,
+  "first_actual_entry_verification_pending": true,
   "whole_song_acceptance_unproven": true,
   "candidate_added": true,
-  "fix_selected": false,
+  "fix_selected": true,
   "native_reference_cases": 63,
   "native_reference_source": {
     "native_ArrowEffects_cpp_sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
@@ -150,5 +150,8 @@
   "all_prior_112_live_and44_replay_assertions_unchanged": true,
   "full_acceptance_criteria_unchanged": true,
   "selected_baseline_commit": "3a8e5ab808cd2e2fd3fd509a0ab2641b4619e953",
-  "Igaku_full_repairs_spent": 0
+  "Igaku_full_repairs_spent": 0,
+  "fix_added": true,
+  "all_six_groups_both_hosts_passed": true,
+  "selection_evidence": "sweep-2026-10-16-native-arrow-y-selection.json"
 }

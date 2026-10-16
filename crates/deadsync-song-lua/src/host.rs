@@ -1031,14 +1031,16 @@ pub fn install_message_manager_globals(
     globals.set("MESSAGEMAN", messageman)
 }
 
-fn arrow_effects_player_options(args: &MultiValue) -> mlua::Result<Option<Table>> {
+fn arrow_effects_player_options(lua: &Lua, args: &MultiValue) -> mlua::Result<Option<Table>> {
     let Some(Value::Table(player_state)) = args.front() else {
         return Ok(None);
     };
     let Some(method) = player_state.get::<Option<Function>>("GetCurrentPlayerOptions")? else {
         return Ok(None);
     };
-    method.call::<Table>(player_state.clone()).map(Some)
+    let options = method.call::<Table>(player_state.clone())?;
+    lua.set_app_data(NativeArrowEffectsCurrentOptions(options.clone()));
+    Ok(Some(options))
 }
 
 fn arrow_effects_speedmod_value(options: &Table, name: &str) -> mlua::Result<Option<f32>> {
@@ -1049,8 +1051,8 @@ fn arrow_effects_speedmod_value(options: &Table, name: &str) -> mlua::Result<Opt
         .filter(|value| value.is_finite() && *value > 0.0))
 }
 
-fn arrow_effects_speed_multiplier(args: &MultiValue) -> mlua::Result<f32> {
-    let Some(options) = arrow_effects_player_options(args)? else {
+fn arrow_effects_speed_multiplier(lua: &Lua, args: &MultiValue) -> mlua::Result<f32> {
+    let Some(options) = arrow_effects_player_options(lua, args)? else {
         return Ok(1.0);
     };
     if let Some(value) = arrow_effects_speedmod_value(&options, "XMod")? {
@@ -1068,8 +1070,8 @@ fn arrow_effects_speed_multiplier(args: &MultiValue) -> mlua::Result<f32> {
     Ok(1.0)
 }
 
-fn arrow_effects_reverse_percent(args: &MultiValue) -> mlua::Result<f32> {
-    let Some(options) = arrow_effects_player_options(args)? else {
+fn arrow_effects_reverse_percent(lua: &Lua, args: &MultiValue) -> mlua::Result<f32> {
+    let Some(options) = arrow_effects_player_options(lua, args)? else {
         return Ok(0.0);
     };
     let Some(method) = options.get::<Option<Function>>("GetReversePercentForColumn")? else {
@@ -1095,10 +1097,10 @@ pub fn create_arrow_effects_table(
     table.set(
         "GetYOffset",
         lua.create_function(move |lua, args: MultiValue| {
-            let speed = arrow_effects_speed_multiplier(&args)?;
+            let speed = arrow_effects_speed_multiplier(lua, &args)?;
             let note = args.get(2).cloned().and_then(read_f32).unwrap_or(0.0);
             if timing.iter().all(Option::is_none) {
-                return Ok(64.0 * note * speed);
+                return arrow_effects_wave_offset(lua, &args, 64.0 * note, speed);
             }
             let player = if let Some(Value::Table(state)) = args.front() {
                 let method = state.get::<Function>("GetPlayerNumber")?;
@@ -1107,7 +1109,7 @@ pub fn create_arrow_effects_table(
                 0
             };
             let Some(timing) = timing.get(player).and_then(Option::as_ref) else {
-                return Ok(64.0 * note * speed);
+                return arrow_effects_wave_offset(lua, &args, 64.0 * note, speed);
             };
             let runtime = lua.globals().get::<Table>(SONG_LUA_RUNTIME_KEY)?;
             let beat = runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?;
@@ -1116,62 +1118,31 @@ pub fn create_arrow_effects_table(
             let seconds = crate::runtime::song_music_time(
                 lua, runtime.get(SONG_LUA_RUNTIME_SECONDS_KEY)?, rate,
             );
-            if let Some(options) = arrow_effects_player_options(&args)? {
+            if let Some(options) = arrow_effects_player_options(lua, &args)? {
                 if let Some(cmod) = arrow_effects_speedmod_value(&options, "CMod")? {
-                    return Ok(
-                        (timing.get_time_for_beat(note) - seconds) * cmod / 60.0 / rate * 64.0,
-                    );
+                    return arrow_effects_wave_offset(lua, &args,
+                        (timing.get_time_for_beat(note) - seconds) * cmod / 60.0 / rate * 64.0, 1.0);
                 }
                 let speed = if arrow_effects_speedmod_value(&options, "XMod")?.is_some() {
                     speed
                 } else {
                     speed / rate
                 };
-                return Ok(
+                return arrow_effects_wave_offset(lua, &args,
                     (timing.get_displayed_beat(note) - timing.get_displayed_beat(beat))
-                        * timing.get_speed_multiplier(beat, seconds)
-                        * 64.0
-                        * speed,
-                );
+                        * timing.get_speed_multiplier(beat, seconds) * 64.0, speed);
             }
-            Ok(
+            arrow_effects_wave_offset(lua, &args,
                 (timing.get_displayed_beat(note) - timing.get_displayed_beat(beat))
-                    * timing.get_speed_multiplier(beat, seconds)
-                    * 64.0,
-            )
+                    * timing.get_speed_multiplier(beat, seconds) * 64.0, 1.0)
         })?,
     )?;
-    table.set(
-        "GetYPos",
-        lua.create_function(|_, args: MultiValue| {
-            let y_offset = args.get(2).cloned().and_then(read_f32).unwrap_or(0.0_f32);
-            let reverse = arrow_effects_reverse_percent(&args)?;
-            // ArrowEffects is local to NoteField; Player places that actor at
-            // the midpoint of the two theme receptor metrics.
-            let reverse_offset = args
-                .get(3)
-                .cloned()
-                .and_then(read_f32)
-                .unwrap_or(THEME_RECEPTOR_Y_REV - THEME_RECEPTOR_Y_STD);
-            let options = arrow_effects_player_options(&args)?;
-            let option = |name| -> mlua::Result<f32> {
-                let Some(options) = &options else {
-                    return Ok(0.0);
-                };
-                let method = options.get::<Function>(name)?;
-                Ok(read_f32(method.call::<Value>(options.clone())?).unwrap_or(0.0))
-            };
-            let zoom = 1.0 - option("Mini")? * 0.5;
-            let zoom = if zoom.abs() < 0.01 { 0.01 } else { zoom };
-            let half = reverse_offset / zoom / 2.0;
-            let shift = reverse * (half + half) - half;
-            let shift = option("Centered")? * -shift + shift;
-            Ok(y_offset * (reverse * -2.0 + 1.0) + shift)
-        })?,
-    )?;
+    table.set("GetYPos", lua.create_function(move |lua, args: MultiValue|
+        arrow_effects_y_pos(lua, &args, current_style_name))?)?;
     lua.set_app_data(NativeArrowEffects {
         enabled: std::array::from_fn(|player| context.players[player].enabled),
-        beat_x: [0.0; LUA_PLAYERS], bounds: [[[0.0; 2]; 10]; LUA_PLAYERS],
+        beat_x: [0.0; LUA_PLAYERS], beat_y: [0.0; LUA_PLAYERS],
+        tipsy: [[0.0; 10]; LUA_PLAYERS], tan_tipsy: [[0.0; 10]; LUA_PLAYERS], bounds: [[[0.0; 2]; 10]; LUA_PLAYERS],
         invert: [[0.0; 10]; LUA_PLAYERS], style_name: current_style_name,
     });
     table.set("GetXPos", lua.create_function({
@@ -1181,22 +1152,32 @@ pub fn create_arrow_effects_table(
     table.set("Update", lua.create_function(|lua, _args: MultiValue| update_native_arrow_effects(lua))?)?;
     table.set(
         "GetZPos",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|lua, args: MultiValue| {
+            let _ = arrow_effects_player_options(lua, &args)?;
+            Ok(0.0_f32)
+        })?,
     )?;
     table.set(
         "GetRotationX",
-        lua.create_function(|_, args: MultiValue| {
+        lua.create_function(|lua, args: MultiValue| {
+            let _ = arrow_effects_player_options(lua, &args)?;
             let column = args.get(2).cloned().and_then(read_f32).unwrap_or(1.0) as i32;
             Ok(arrow_effects_rotation_x(column))
         })?,
     )?;
     table.set(
         "GetRotationY",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|lua, args: MultiValue| {
+            let _ = arrow_effects_player_options(lua, &args)?;
+            Ok(0.0_f32)
+        })?,
     )?;
     table.set(
         "GetRotationZ",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|lua, args: MultiValue| {
+            let _ = arrow_effects_player_options(lua, &args)?;
+            Ok(0.0_f32)
+        })?,
     )?;
     table.set("GetZoom", lua.create_function(move |lua, args: MultiValue|
         arrow_effects_zoom(lua, &args, current_style_name))?)?;
@@ -1209,16 +1190,24 @@ pub fn create_arrow_effects_table(
     )?;
     table.set(
         "GetGlow",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|lua, args: MultiValue| {
+            let _ = arrow_effects_player_options(lua, &args)?;
+            Ok(0.0_f32)
+        })?,
     )?;
     Ok(table)
 }
 
 
+struct NativeArrowEffectsCurrentOptions(Table);
+
 #[derive(Clone, Copy)]
 struct NativeArrowEffects {
     enabled: [bool; LUA_PLAYERS],
     beat_x: [f32; LUA_PLAYERS],
+    beat_y: [f32; LUA_PLAYERS],
+    tipsy: [[f32; 10]; LUA_PLAYERS],
+    tan_tipsy: [[f32; 10]; LUA_PLAYERS],
     bounds: [[[f32; 2]; 10]; LUA_PLAYERS],
     invert: [[f32; 10]; LUA_PLAYERS],
     style_name: fn(&Lua) -> String,
@@ -1245,7 +1234,7 @@ pub(crate) fn update_native_arrow_effects(lua: &Lua) -> mlua::Result<()> {
         let beat = position.as_ref().unwrap_or(&runtime).raw_get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?;
         let state = options.as_ref().map(|options| options[player]
             .raw_get::<Option<Table>>("__songlua_player_option_state")).transpose()?.flatten();
-        let option = |name| -> mlua::Result<f32> {
+        let option = |name: &str| -> mlua::Result<f32> {
             Ok(state.as_ref().map(|state| state.raw_get::<Option<f32>>(name)).transpose()?.flatten().unwrap_or(0.0))
         };
         let mut phase = (beat + 0.2 + option("beatoffset")?) * (option("beatmult")? + 1.0);
@@ -1265,7 +1254,28 @@ pub(crate) fn update_native_arrow_effects(lua: &Lua) -> mlua::Result<()> {
             }
         }
         next.beat_x[player] = factor;
+        next.beat_y[player] = arrow_effects_beat_factor(beat, option("beatyoffset")?, option("beatymult")?);
+        // Native UpdateTipsy reads timer/cosecant from the last SetCurrentOptions,
+        // while offset/speed and activation come from this player's Current.
+        let selected = lua.app_data_ref::<NativeArrowEffectsCurrentOptions>()
+            .map(|selected| selected.0.clone()).or_else(|| options.as_ref().map(|players| players[player].clone()));
+        let selected_state = selected.as_ref().map(|options|
+            options.raw_get::<Option<Table>>("__songlua_player_option_state")).transpose()?.flatten();
+        let time = arrow_effects_time(lua, selected_state.as_ref())?;
+        let cosecant = selected_state.as_ref().map(|state|
+            state.raw_get::<Option<bool>>("cosecant")).transpose()?.flatten().unwrap_or(false);
         for column in 0..style.columns {
+            for (prefix, tan) in [("tipsy", false), ("tantipsy", true)] {
+                let result = if option(prefix)? == 0.0 { 0.0 } else {
+                    let angle = time * (option(&format!("{prefix}speed"))? * 1.2 + 1.2)
+                        + column as f32 * (option(&format!("{prefix}offset"))? * 1.8 + 1.8);
+                    let wave = if tan { if cosecant { 1.0 / angle.sin() } else { angle.tan() } }
+                        else { angle.cos() };
+                    wave * (64.0 * 0.4)
+                };
+                if tan { next.tan_tipsy[player][column] = result; }
+                else { next.tipsy[player][column] = result; }
+            }
             let width = if style.columns > 4 { 2 } else { 3 };
             let range = &style.x_offsets[column.saturating_sub(width)..=(column + width).min(style.columns - 1)];
             next.bounds[player][column] = [range.iter().copied().fold(f32::MAX, f32::min),
@@ -1282,12 +1292,93 @@ pub(crate) fn update_native_arrow_effects(lua: &Lua) -> mlua::Result<()> {
     Ok(())
 }
 
+fn arrow_effects_time(lua: &Lua, state: Option<&Table>) -> mlua::Result<f32> {
+    let value = |name| -> mlua::Result<f32> {
+        Ok(state.map(|state| state.raw_get::<Option<f32>>(name)).transpose()?.flatten().unwrap_or(0.0))
+    };
+    let runtime: Table = lua.globals().raw_get(SONG_LUA_RUNTIME_KEY)?;
+    let beat = runtime.raw_get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?;
+    let seconds = runtime.raw_get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)?;
+    let uptime = runtime.raw_get::<Option<f64>>("__songlua_uptime_seconds")?.unwrap_or(f64::from(seconds));
+    let timer = state.map(|state| state.raw_get::<Option<u8>>("modtimersetting")).transpose()?.flatten().unwrap_or(3);
+    let clock = match timer { 1 => f64::from(beat), 2 => f64::from(seconds), _ => uptime };
+    Ok(((clock + f64::from(value("modtimeroffset")?)) * (1.0 + f64::from(value("modtimermult")?))) as f32)
+}
+
+fn arrow_effects_beat_factor(beat: f32, offset: f32, multiplier: f32) -> f32 {
+    let mut phase = (beat + 0.2 + offset) * (multiplier + 1.0);
+    let reverse = phase as i32 % 2 != 0;
+    if phase < 0.0 { return 0.0; }
+    phase -= phase.trunc(); phase += 1.0; phase -= phase.trunc();
+    if phase >= 0.5 { return 0.0; }
+    let mut factor = if phase < 0.2 { let value = phase / 0.2; value * value }
+        else { let value = (phase - 0.2) * -1.0 / (0.5 - 0.2) + 1.0;
+            1.0 - (1.0 - value) * (1.0 - value) };
+    if reverse { factor *= -1.0; }
+    factor * 20.0
+}
+
+fn arrow_effects_wave_offset(lua: &Lua, args: &MultiValue, mut y: f32, speed: f32) -> mlua::Result<f32> {
+    if y >= 0.0 {
+        if let Some(options) = arrow_effects_player_options(lua, args)? {
+            if let Some(state) = options.raw_get::<Option<Table>>("__songlua_player_option_state")? {
+                let wave = state.raw_get::<Option<f32>>("wave")?.unwrap_or(0.0);
+                if wave != 0.0 {
+                    let period = state.raw_get::<Option<f32>>("waveperiod")?.unwrap_or(0.0);
+                    y += wave * 20.0 * (y / (period * 38.0 + 38.0)).sin();
+                }
+            }
+        }
+    }
+    Ok(y * speed)
+}
+
+fn arrow_effects_y_pos(lua: &Lua, args: &MultiValue, current_style_name: fn(&Lua) -> String) -> mlua::Result<f32> {
+    let y_offset = args.get(2).cloned().and_then(read_f32).unwrap_or(0.0_f32);
+    let options = arrow_effects_player_options(lua, args)?;
+    let state = options.as_ref().map(|options|
+        options.raw_get::<Option<Table>>("__songlua_player_option_state")).transpose()?.flatten();
+    let option = |name| -> mlua::Result<f32> {
+        Ok(state.as_ref().map(|state| state.raw_get::<Option<f32>>(name)).transpose()?.flatten().unwrap_or(0.0))
+    };
+    let style = crate::song_lua_style_info(&current_style_name(lua));
+    let column = args.get(1).cloned().and_then(read_f32).unwrap_or(1.0) as i32 - 1;
+    let column = usize::try_from(column).ok().filter(|column| *column < style.columns)
+        .ok_or_else(|| mlua::Error::runtime("ArrowEffects.GetYPos column out of range"))?;
+    let player = options.as_ref().and_then(|options| lua.app_data_ref::<crate::song_tables::SongLuaOptionLevels>()
+        .and_then(|levels| levels.players.iter().position(|levels| levels[3].to_pointer() == options.to_pointer())))
+        .unwrap_or(0);
+    let reverse = arrow_effects_reverse_percent(lua, args)?;
+    let reverse_offset = args.get(3).cloned().and_then(read_f32)
+        .unwrap_or(THEME_RECEPTOR_Y_REV - THEME_RECEPTOR_Y_STD);
+    let zoom = 1.0 - option("mini")? * 0.5;
+    let zoom = if zoom.abs() < 0.01 { 0.01 } else { zoom };
+    let half = reverse_offset / zoom / 2.0;
+    let shift = reverse * (half + half) - half;
+    let shift = option("centered")? * -shift + shift;
+    let mut y = y_offset * (reverse * -2.0 + 1.0) + shift;
+    let cached = lua.app_data_ref::<NativeArrowEffects>().map(|state| *state);
+    y += option("tipsy")? * cached.map_or(0.0, |state| state.tipsy[player][column]);
+    y += option("tantipsy")? * cached.map_or(0.0, |state| state.tan_tipsy[player][column]);
+    if option("attenuatey")? != 0.0 {
+        y += option("attenuatey")? * (y_offset / 64.0) * (y_offset / 64.0) * (style.x_offsets[column] / 64.0);
+    }
+    if option("beaty")? != 0.0 {
+        let factor = cached.map_or(0.0, |state| state.beat_y[player]);
+        let shift = factor * (y_offset / (option("beatyperiod")? * 15.0 + 15.0)
+            + std::f32::consts::PI / 2.0).sin();
+        y += option("beaty")? * shift;
+    }
+    // Captured _fallback QuantizeArrowYPosition is false.
+    Ok(y)
+}
+
 fn arrow_effects_x_pos(
     lua: &Lua, args: &MultiValue, screen_height: f32,
     current_style_name: fn(&Lua) -> String,
 ) -> mlua::Result<f32> {
     use std::f32::consts::PI;
-    let options = arrow_effects_player_options(args)?;
+    let options = arrow_effects_player_options(lua, args)?;
     let state = options.as_ref().map(|options| options.raw_get::<Option<Table>>("__songlua_player_option_state"))
         .transpose()?.flatten();
     let value = |name| -> mlua::Result<f32> {
@@ -1409,7 +1500,7 @@ fn arrow_effects_field_zoom(style: &crate::SongLuaStyleInfo) -> f32 {
 fn arrow_effects_zoom(
     lua: &Lua, args: &MultiValue, current_style_name: fn(&Lua) -> String,
 ) -> mlua::Result<f32> {
-    let options = arrow_effects_player_options(args)?;
+    let options = arrow_effects_player_options(lua, args)?;
     let state = options.as_ref().map(|options|
         options.raw_get::<Option<Table>>("__songlua_player_option_state"))
         .transpose()?.flatten();
@@ -1460,7 +1551,7 @@ fn arrow_effects_alpha(
 ) -> mlua::Result<f32> {
     // ArrowEffects.cpp uses the owned Current options and the position without
     // reverse. Read option state directly so engine math creates no Lua queries.
-    let options = arrow_effects_player_options(args)?;
+    let options = arrow_effects_player_options(lua, args)?;
     let state = options.as_ref().map(|options|
         options.raw_get::<Option<Table>>("__songlua_player_option_state"))
         .transpose()?.flatten();

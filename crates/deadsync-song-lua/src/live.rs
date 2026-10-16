@@ -7096,4 +7096,104 @@ PS:GetPlayerOptions('ModsLevel_Song'):Beat({}, {})
                 "native option approach must use frame delta rather than rounded screen time: {} actual={actual:?} expected={expected:?}",case["id"]);
         }
     }
+
+    #[test]
+    fn live_arrow_y_matches_native_source_wave_and_cached_tipsy_phase() {
+        let reference: serde_json::Value = serde_json::from_str(include_str!(
+            "../assets/itgmania/arrow-y-native-reference-v1.json")).unwrap();
+        let cases = reference["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), 63);
+        for case in cases {
+            let y_pos = case["kind"] == "ypos";
+            let mut compiled = compile_with_context("native-arrow-y-source", "return Def.ActorFrame {}", |context| {
+                context.defer_initial_live_update = true;
+                context.screen_height = 480.0;
+                if y_pos { context.style_name = case["style"].as_str().unwrap().into(); }
+                for player in &mut context.players { player.enabled = true; }
+            });
+            let mut scene = compiled.live_scene.take().unwrap();
+            let player = case["player"].as_u64().unwrap_or(0) + 1;
+            scene.lua.load(format!("PS=GAMESTATE:GetPlayerState(PLAYER_{player})" )).exec().unwrap();
+            let current = scene.lua.load("return PS:GetCurrentPlayerOptions()").eval::<Table>().unwrap();
+            let song = scene.lua.load("return PS:GetPlayerOptions('ModsLevel_Song')").eval::<Table>().unwrap();
+            let expression;
+            if y_pos {
+                for options in [current, song] {
+                    for (name,value) in case["effects"].as_object().unwrap() {
+                        options.get::<Function>(name.as_str()).unwrap()
+                            .call::<Value>((options.clone(),value.as_f64().unwrap())).unwrap();
+                    }
+                    for (method,name) in [("Mini","mini"),("Reverse","reverse"),("Centered","centered")] {
+                        options.get::<Function>(method).unwrap()
+                            .call::<Value>((options.clone(),case[name].as_f64().unwrap())).unwrap();
+                    }
+                    options.get::<Function>("Cosecant").unwrap()
+                        .call::<Value>((options.clone(),case["cosecant"].as_bool().unwrap())).unwrap();
+                    let timer=["ModTimerType_Game","ModTimerType_Beat","ModTimerType_Song","ModTimerType_Default"]
+                        [case["timer"].as_u64().unwrap() as usize];
+                    options.get::<Function>("ModTimerSetting").unwrap().call::<Value>((options.clone(),timer)).unwrap();
+                }
+                expression=format!("return ArrowEffects.GetYPos(PS, {}, {}, 270)",case["column"],case["y"]);
+                // The native binding selects Current options before cached Update.
+                scene.lua.load(&expression).eval::<f32>().unwrap();
+                if case.get("cache_timer").is_some() {
+                    scene.lua.load(r#"
+local other=GAMESTATE:GetPlayerState(PLAYER_1)
+other:GetCurrentPlayerOptions():ModTimerSetting('ModTimerType_Song')
+other:GetPlayerOptions('ModsLevel_Song'):ModTimerSetting('ModTimerType_Song')
+ArrowEffects.GetYPos(other,1,0)
+"#).exec().unwrap();
+                }
+                let output=scene.advance(SongLuaLiveFrame {
+                    beat:case["beat"].as_f64().unwrap(),music_seconds:case["seconds"].as_f64().unwrap(),
+                    screen_seconds:0.1,delta_seconds:0.1,uptime_seconds:case["uptime"].as_f64(),
+                    ..Default::default()
+                }).unwrap();
+                assert!(output.errors.is_empty(),"{}: {:?}",case["id"],output.errors);
+            } else {
+                for options in [current,song] {
+                    for (method,name) in [("Wave","wave"),("WavePeriod","period"),("XMod","speed")] {
+                        options.get::<Function>(method).unwrap()
+                            .call::<Value>((options.clone(),case[name].as_f64().unwrap())).unwrap();
+                    }
+                }
+                expression=format!("return ArrowEffects.GetYOffset(PS,1,{})",case["note"]);
+            }
+            let actual=scene.lua.load(&expression).eval::<f32>().unwrap();
+            let expected=&case["expected"];
+            let valid=match expected.as_str() {
+                Some("nan")=>actual.is_nan(),Some("infinity")=>actual==f32::INFINITY,
+                Some("-infinity")=>actual==f32::NEG_INFINITY,
+                _=>(actual-expected.as_f64().unwrap() as f32).abs()<=0.0001,
+            };
+            assert!(valid,"native arrow Y must apply Wave and cached Y effects: {} actual={actual:?}, expected={expected}",case["id"]);
+        }
+        let mut compiled=compile_with_context("native-tipsy-update-phase",r#"
+return Def.ActorFrame {InitCommand=function(self) YROOT=self end}
+"#,|context|context.defer_initial_live_update=true);
+        let mut scene=compiled.live_scene.take().unwrap();
+        scene.lua.load(r#"
+PS=GAMESTATE:GetPlayerState(PLAYER_1)
+PS:GetCurrentPlayerOptions():Tipsy(0.5)
+PS:GetPlayerOptions('ModsLevel_Song'):Tipsy(0.5)
+BASE=ArrowEffects.GetYPos(PS,1,0)
+YROOT:SetUpdateFunction(function() DURING=ArrowEffects.GetYPos(PS,1,0) end)
+"#).exec().unwrap();
+        let frame=|time,uptime|SongLuaLiveFrame {music_seconds:time,beat:time*2.0,
+            screen_seconds:time,delta_seconds:0.1,uptime_seconds:Some(uptime),..Default::default()};
+        assert!(scene.advance(frame(0.1,2.0)).unwrap().errors.is_empty());
+        scene.lua.load(r#"
+assert(DURING==BASE,'native first callback observes the zero Tipsy cache')
+PREVIOUS=ArrowEffects.GetYPos(PS,1,0)
+assert(math.abs(PREVIOUS-BASE)>1)
+"#).exec().unwrap();
+        assert!(scene.advance(frame(0.2,2.125)).unwrap().errors.is_empty());
+        scene.lua.load(r#"
+assert(DURING==PREVIOUS,'native callbacks observe the preceding completed Tipsy update')
+assert(ArrowEffects.GetYPos(PS,1,0)~=PREVIOUS,'cache refresh happens after callbacks')
+PS:GetPlayerOptions('ModsLevel_Song'):Tipsy(0,10000)
+"#).exec().unwrap();
+        assert!(scene.advance(frame(0.3,2.25)).unwrap().errors.is_empty());
+        scene.lua.load("assert(DURING==BASE and ArrowEffects.GetYPos(PS,1,0)==BASE)").exec().unwrap();
+    }
 }

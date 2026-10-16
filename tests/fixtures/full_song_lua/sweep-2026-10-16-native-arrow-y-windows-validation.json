@@ -1,0 +1,58 @@
+{
+  "checks": [
+    {
+      "label": "target",
+      "exit_code": 0,
+      "seconds": 422.97263829997974,
+      "log_sha256": "c60c6eeb603f19f42b0cc1840c354d986123d42580dbd36e501f6d6c6f0a4047",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 651 filtered out; finished in 22.86s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 80.66422059998149,
+      "log_sha256": "8aac24900fbb81da3b72f59649b7ac8d87ec79d35b6d664495b62b73150719d7",
+      "results": [
+        "test result: ok. 113 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 79.21s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 142.61715949999052,
+      "log_sha256": "9d9d87047e5497c821e58aec7a3d286f1e8af004dff1141010d032671dab69b3",
+      "results": [
+        "test result: ok. 44 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 27.08s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 72.0261879999889,
+      "log_sha256": "73a32e46bddbb807ec92eeef259c6f4e18fbc5576aaadd2bacdbdf7e32fe595e",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 2.075192899996182,
+      "log_sha256": "cde7d0099bbd1b3bd540694b8d60f9ce290d836986c3ede71d0d0a5c45405f34",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 651 filtered out; finished in 0.53s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 40.87008349999087,
+      "log_sha256": "6eb9c9aa26c229e1e4d2eb70dabc56ebc7017165a81053cfda0315acae6b9ae5",
+      "results": []
+    }
+  ],
+  "meaningful_red_verified": true,
+  "all1175sources52assets_verified": true
+}

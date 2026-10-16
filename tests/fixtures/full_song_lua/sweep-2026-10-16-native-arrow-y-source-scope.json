@@ -1,0 +1,12 @@
+{
+  "cause": "sweep-2026-10-16-igaku-native-arrow-y-source-cause.json",
+  "production_change": "Apply native nonnegative-travel Wave before scroll speed; complete GetYPos reverse/Mini/Centered, cached Tipsy/TanTipsy, AttenuateY and BeatY. Refresh caches after actors and retain the last Current selection used by native shared effect timers.",
+  "native_reference_cases": 63,
+  "source_control": "Nine pinned native C++ functions copied verbatim; 63 controls include full native GetYOffset configured for Wave, complete GetYPos and UpdateTipsy/UpdateBeat, shared timer selection and callback/cache lifecycle.",
+  "scope_limit": "Other GetYOffset acceleration branches are not claimed implemented by this observed Igaku Wave fix.",
+  "all_prior_112_live_and44_replay_assertions_and_full_acceptance_unchanged": true,
+  "runtime_native_getter_outputs_used_as_inputs": false,
+  "Igaku_full_repairs_spent": 0,
+  "next_actual_check": "Recompare retained original capture through78 seconds; old qualified X/zoom prefix had30 X and29 Y differences.",
+  "new_full_repair_started": false
+}
