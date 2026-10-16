@@ -2157,17 +2157,14 @@
       "aliases": []
     },
     {
-      "title": "Delightful Day",
+      "title": "Delightful Day (w/ visual FX, BG video)",
       "source_simfile": "Delightful Day/Delightful Day.sm",
-      "harness_version": "0.1.0",
-      "archive": "31d3bce20ac8662f6bef4916e191a3ae14eb8d3b2f9fe2020da4f874709a0299.tar.zst",
-      "sha256": "31d3bce20ac8662f6bef4916e191a3ae14eb8d3b2f9fe2020da4f874709a0299",
-      "compressed_bytes": 11326,
-      "uncompressed_sha256": "4d6f1bf8f7214c4a86056c1cd9556ae22d5fae293daae31e1097ac4ac791782f",
-      "compression_level": 22,
-      "aliases": [
-        "7a0b52fe535893120fe0941d5313c5f6c9e1b9a4212ddfe08aec2852adb8bf61.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "0ee7948154211080042ab77ad092b3626ca0324698063f6d6e669f71fc7a3582.tar.zst",
+      "compressed_bytes": 67409486,
+      "sha256": "0ee7948154211080042ab77ad092b3626ca0324698063f6d6e669f71fc7a3582",
+      "uncompressed_sha256": "200f43c2f45fa4f42e71047e421a7fbe5f6fc84bdc0a4876bc7696ab932512cd",
+      "aliases": []
     },
     {
       "title": "Delightful Day (w/ visual FX, BG video)",
