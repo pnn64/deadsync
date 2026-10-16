@@ -1,6 +1,6 @@
 {
-  "generated_utc": "2026-10-16T04:44:48.259635+00:00",
-  "concrete_ledger_sha256": "b55ef83f4d087e2cd7fa433bfa4deb5ec1a1a192b54478f2fa9d3540342a8f3f",
+  "generated_utc": "2026-10-16T05:07:54.968675+00:00",
+  "concrete_ledger_sha256": "2ae5d34daf6e8d5e5f65b7dfb8ed1f07305007329c4af21e3fff4e2d44b38bce",
   "counts": {
     "passed": 403,
     "pending": 98,
@@ -29,7 +29,7 @@
       "started_full_repairs": 1,
       "completed_full_repairs": 0,
       "running": true,
-      "observed_utc": "2026-10-16T04:44:53.521513+00:00",
+      "observed_utc": "2026-10-16T05:08:00.417353+00:00",
       "pid": 550586,
       "command": [
         "/home/parity/jobs/native-arrow-x-linux-green-v3/full-song-lua",
@@ -39,7 +39,7 @@
         "/home/parity/jobs/quarantine-sm-native-arrow-x-first1-v1/chart-362/report.json"
       ],
       "actual_process_command_and_cwd_verified": true,
-      "observed_replayed_frames": 8552,
+      "observed_replayed_frames": 16193,
       "native_frames": 17554
     },
     {
@@ -49,7 +49,7 @@
       "started_full_repairs": 1,
       "completed_full_repairs": 0,
       "running": true,
-      "observed_utc": "2026-10-16T04:44:53.524652+00:00",
+      "observed_utc": "2026-10-16T05:08:00.420422+00:00",
       "pid": 681922,
       "command": [
         "/home/parity/jobs/native-arrow-zoom-linux-green-v1/full-song-lua",
@@ -59,7 +59,7 @@
         "/home/parity/jobs/e2-sm-qualified-runtime-first1-v1/chart-180/report.json"
       ],
       "actual_process_command_and_cwd_verified": true,
-      "observed_replayed_frames": 797,
+      "observed_replayed_frames": 11132,
       "native_frames": 14578
     }
   ]

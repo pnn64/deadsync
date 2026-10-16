@@ -1,0 +1,55 @@
+{
+  "status": "queued, no additional full repair claimed until actual attempt-start/process evidence",
+  "selected_helper": "native-option-frame-delta-selection-v1.json",
+  "fix_commit": "3a8e5ab808cd2e2fd3fd509a0ab2641b4619e953",
+  "all_six_groups_both_hosts_passed": true,
+  "qualified_source_files": 1175,
+  "qualified_assets": 51,
+  "live_controls": 112,
+  "replay_controls": 44,
+  "queue": [
+    {
+      "source_simfile": "Quarantine/Quarantine.ssc",
+      "position": 363,
+      "stage": "quarantine-native-option-frame-delta-final2-v1",
+      "repair_attempt": 2,
+      "prerequisite": "Quarantine SM first1 terminal proof releases a full replay slot",
+      "latest_full_result": {
+        "attempt": 1,
+        "native_frames": 13575,
+        "errors": 0,
+        "mismatches": 10,
+        "operations": {
+          "Actor.x": 10
+        }
+      },
+      "started": false
+    },
+    {
+      "source_simfile": "Hallways/hallways.ssc",
+      "position": 220,
+      "stage": "hallways-qualified-runtime-first1-v1",
+      "repair_attempt": 1,
+      "prerequisite": "E2 SM first1 terminal proof releases a full replay slot",
+      "entry_evidence": "sweep-2026-10-16-hallways-qualified-entry-diagnostic.json",
+      "entry_frames": 3200,
+      "entry_errors": 0,
+      "entry_mismatches": 0,
+      "native_frames": 26879,
+      "started": false
+    }
+  ],
+  "native_captures_reused": true,
+  "compressed_inputs_without_extra_raw_archives": true,
+  "full_acceptance_criteria_unchanged": true,
+  "single_active_scoped_publisher": true,
+  "Igaku_Y_candidate": {
+    "regression_native_cases": 63,
+    "red_both_hosts_observed": true,
+    "candidate_stage": "native-arrow-y-green-v2",
+    "v1_green_retired": "Compiler E0716 temporary string borrow; v2 adds explicit &str closure parameter, no behavior/assertion/reference changes",
+    "selected": false,
+    "full_repairs_spent": 0
+  },
+  "Mawaru9_deferred": true
+}
