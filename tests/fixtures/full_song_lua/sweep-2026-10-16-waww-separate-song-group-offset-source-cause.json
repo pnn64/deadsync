@@ -95,5 +95,7 @@
   "full_Flowers_repairs_spent": 0,
   "captured_query_outputs_used_as_runtime_inputs": false,
   "original_captures_preserved": true,
-  "mawaru9_remains_deferred": true
+  "mawaru9_remains_deferred": true,
+  "foreground_clock_source_reference_corrected_by": "sweep-2026-10-16-waww-captured-offset-placement-source-cause.json",
+  "source_version_correction": "Historical analysis referenced current local TimingData.cpp rather than the capture executable-pinned version; offset placement follow-up is required. Historical test results and capture bytes remain preserved."
 }

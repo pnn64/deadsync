@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-16T01:30:38Z",
+  "updated_utc": "2026-10-16T01:40:30Z",
   "counts": {
     "passed": 400,
     "pending": 101,
@@ -5014,7 +5014,7 @@
           ],
           "report_sha256": "c065258410e6b4457cfc0ceab1ab24ac1deef68d719a1ddf34bc210c7587c0a9"
         },
-        "checked_utc": "2026-10-16T01:30:38.816707+00:00"
+        "checked_utc": "2026-10-16T01:40:30.805603+00:00"
       },
       "current_diagnostic_failure": "First1 pending513:510 nonfinite actor scalar command mismatches; ending native music clock rewinds on final frame. Comparator consumes both ending samples at preceding overshoot because only progress observations are frame-anchored. Source cause now recorded; no final2 before both fixes are qualified.",
       "full_replay_completed": true,
@@ -6590,7 +6590,7 @@
         "started_full_repairs": 1,
         "completed_full_repairs": 0,
         "running": true,
-        "observed_utc": "2026-10-16T01:30:39.260452+00:00",
+        "observed_utc": "2026-10-16T01:40:31.280842+00:00",
         "pid": 3438441,
         "command": [
           "/home/parity/jobs/native-float-math-linux-green-v3/full-song-lua",
@@ -23799,12 +23799,12 @@
           ],
           "report_sha256": "835ddbdaa434e29c5c07469bc80c28b279f1e7e817f17f89fe45ba98f7bbf617"
         },
-        "checked_utc": "2026-10-16T01:30:39.697848+00:00"
+        "checked_utc": "2026-10-16T01:40:31.706780+00:00"
       },
-      "current_diagnostic_failure": "Native float timing fix removes prior20.379s failure. Retained21s diagnostic now has16 command events starting20.684467315673828: rose move/coordinate sequence differs across adjacent frames. Remaining source cause unclaimed; no final2.",
+      "current_diagnostic_failure": "Retained5474frames/0errors/16mismatches. Capture build pins offset-first TimingData.cpp e93614b8, while committed clock/regression used newer local offset-last340a5684. Independent float queue models reproduce every native and owned frame count for all6 active roses. Correct source reference/offset placement before final2.",
       "full_replay_completed": true,
       "failure_analysis": "sweep-2026-10-16-waww-first-repair-failure-analysis.json",
-      "remaining_source_cause": null,
+      "remaining_source_cause": "sweep-2026-10-16-waww-captured-offset-placement-source-cause.json",
       "native_float_math_fix_commit": "c1ba44e729bcab98775b7c4fa04ec76d2d15397c",
       "native_float_math_qualified_both_hosts": true,
       "first_remaining_native_seq": 93392

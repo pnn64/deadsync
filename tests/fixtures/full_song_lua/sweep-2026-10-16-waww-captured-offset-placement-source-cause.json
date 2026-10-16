@@ -1,0 +1,95 @@
+{
+  "source_simfile": "What A Wonderful World/WAWW.sm",
+  "entry_evidence": "sweep-2026-10-16-waww-native-float-math-entry-diagnostic.json",
+  "native_executable_sha256": "a9d70b63dc11601634e67cb59fe1a7e7d12c57788bd525dba014f51a99d110fe",
+  "captured_build_TimingData_cpp_sha256": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1",
+  "current_local_TimingData_cpp_sha256": "340a568492dd38f0522cd9979e9154ac98771b8834216f3e9aeb97b0e05829de",
+  "native_build_receipt_sha256": "4096e8f44b00f36679ce331ac2e8df9fb5d036113fed7565968c3cd6133ae61b",
+  "actual_remaining_entry_mismatches": 16,
+  "first_remaining_native_seq": 93392,
+  "first_remaining_seconds": 20.684467315673828,
+  "source_cause": "The capture executable build receipt pins TimingData.cpp e93614b8. Its GetElapsedTimeFromBeatNoOffset initializes last_time as -song_offset-group_offset, then accumulates each float event duration; only rate-scaled global offset is subtracted afterward. The newer local TimingData.cpp 340a5684 instead starts the traversal at zero and subtracts song/group offsets at the end. The previous fix and regression referenced that newer local source. These versions agree at the first four rose starts but differ by one float ULP at authored beats20.5 and21.25, moving recurring sleep(.007) command boundaries.",
+  "native_source_functions": [
+    "TimingData::GetElapsedTimeFromBeatNoOffset",
+    "TimingData::GetElapsedTimeInternal",
+    "TimingData::PrepareLookup",
+    "Foreground::Update"
+  ],
+  "read_only_source_model": {
+    "source_simfile": "What A Wonderful World/WAWW.sm",
+    "retained_frames": 5474,
+    "original_simfile_sha256": "44d9e8c548a43bfbf4e7b1f35229c66a5063759098784abd70c542409d7f22b5",
+    "actors": [
+      {
+        "native_actor": "def-0013",
+        "authored_beat": 12.5,
+        "native_offset_first_start": 10.869908332824707,
+        "owned_offset_last_start": 10.869908332824707,
+        "native_move_count": 1465,
+        "owned_move_count": 1465,
+        "model_vs_native_differences": [],
+        "model_vs_owned_differences": []
+      },
+      {
+        "native_actor": "def-0016",
+        "authored_beat": 13.25,
+        "native_offset_first_start": 11.502614974975586,
+        "owned_offset_last_start": 11.502614974975586,
+        "native_move_count": 1375,
+        "owned_move_count": 1375,
+        "model_vs_native_differences": [],
+        "model_vs_owned_differences": []
+      },
+      {
+        "native_actor": "def-0019",
+        "authored_beat": 16.5,
+        "native_offset_first_start": 14.188681602478027,
+        "owned_offset_last_start": 14.188681602478027,
+        "native_move_count": 985,
+        "owned_move_count": 985,
+        "model_vs_native_differences": [],
+        "model_vs_owned_differences": []
+      },
+      {
+        "native_actor": "def-0022",
+        "authored_beat": 17.25,
+        "native_offset_first_start": 14.804689407348633,
+        "owned_offset_last_start": 14.804689407348633,
+        "native_move_count": 889,
+        "owned_move_count": 889,
+        "model_vs_native_differences": [],
+        "model_vs_owned_differences": []
+      },
+      {
+        "native_actor": "def-0025",
+        "authored_beat": 20.5,
+        "native_offset_first_start": 17.481229782104492,
+        "owned_offset_last_start": 17.481231689453125,
+        "native_move_count": 505,
+        "owned_move_count": 505,
+        "model_vs_native_differences": [],
+        "model_vs_owned_differences": []
+      },
+      {
+        "native_actor": "def-0028",
+        "authored_beat": 21.25,
+        "native_offset_first_start": 18.108057022094727,
+        "owned_offset_last_start": 18.10805892944336,
+        "native_move_count": 415,
+        "owned_move_count": 415,
+        "model_vs_native_differences": [],
+        "model_vs_owned_differences": []
+      }
+    ],
+    "query_outputs_used_as_runtime_inputs": false,
+    "read_only_model": true
+  },
+  "all_six_active_actor_frame_move_counts_match_native_and_owned_models": true,
+  "required_change": "Initialize the native float clock with separate negative song/group offsets before event traversal. Preserve global offset rate ordering and integer judgment timing. Correct the regression reference to the executable-pinned source and include beat21.25. Qualify both hosts and recheck the retained actual failure before final2.",
+  "regression_reference_correction_required": true,
+  "full_WAWW_repairs_spent": 1,
+  "final2_started": false,
+  "query_outputs_used_as_runtime_inputs": false,
+  "captures_repeated": false,
+  "passing_charts_reopened": false
+}

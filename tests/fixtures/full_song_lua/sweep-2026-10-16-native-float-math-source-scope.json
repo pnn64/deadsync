@@ -16,5 +16,7 @@
   "native_captures_reused": true,
   "full_WAWW_repairs_spent": 1,
   "full_Flowers_repairs_spent": 0,
-  "new_full_repair_started": false
+  "new_full_repair_started": false,
+  "foreground_clock_source_reference_corrected_by": "sweep-2026-10-16-waww-captured-offset-placement-source-cause.json",
+  "source_version_correction": "Historical analysis referenced current local TimingData.cpp rather than the capture executable-pinned version; offset placement follow-up is required. Historical test results and capture bytes remain preserved."
 }
