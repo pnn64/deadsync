@@ -1,0 +1,15 @@
+{
+  "source_simfile": "E2/E.ssc",
+  "archive": "e645512a618ca10b8926b9b95948aac88a922d7c5ae3a4f3b0974a851bb8346d.tar.zst",
+  "compressed_sha256": "e645512a618ca10b8926b9b95948aac88a922d7c5ae3a4f3b0974a851bb8346d",
+  "uncompressed_sha256": "d60efe1f8247f06f3aed627bf455708ff485fb98d38899c2ceec8773ba71a9e6",
+  "native_frames": 14142,
+  "replayed_frames": 14142,
+  "full_repairs_spent": 2,
+  "mismatches": 0,
+  "errors": 0,
+  "local_decompression_byte_verified": true,
+  "original_native_capture_reused": true,
+  "existing_acceptance_unchanged": true,
+  "passing_chart_closed": true
+}

@@ -1,6 +1,6 @@
 {
   "scope": "latest recorded coverage observations for original source simfiles",
-  "updated_utc": "2026-10-16T03:05:03Z",
+  "updated_utc": "2026-10-16T03:26:57Z",
   "coverage_is_separate_from_existing_full_replay_acceptance": true,
   "passing_charts_replayed_or_investigated": false,
   "rows": [
@@ -278,7 +278,7 @@
     {
       "position": 181,
       "source_simfile": "E2/E.ssc",
-      "fixture_status": "pending",
+      "fixture_status": "passed",
       "pending_coverage": [
         "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.SetHeight, Actor.SetTextureFiltering, Actor.SetWidth, Actor.addrotationz, Actor.baserotationz, Actor.bob, Actor.bounce, Actor.effectclock, Actor.effectoffset, Actor.rotationx, Actor.rotationy, Actor.smooth, Actor.stopeffect, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.SetTextureName, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.SetStateProperties, Sprite.setstate",
         "native drawable state/resources: ActorFrameTexture, ActorProxy, Model, Quad, Sprite",
@@ -291,9 +291,10 @@
         "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
         "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
         "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
-        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6"
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
       ],
-      "evidence": "sweep-2026-10-16-e2-ssc-qualified-first-repair-v1.json"
+      "evidence": "sweep-2026-10-16-e2-ssc-nonfinite-final2-v1.json"
     },
     {
       "position": 182,

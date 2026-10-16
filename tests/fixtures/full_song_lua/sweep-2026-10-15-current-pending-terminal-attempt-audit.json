@@ -1,17 +1,17 @@
 {
-  "generated_utc": "2026-10-16T03:05:04.065902+00:00",
-  "concrete_ledger_sha256": "a63b5ffca321791b999012d55eed946cde68c5c4d91608bf9574b4918e4a5de3",
+  "generated_utc": "2026-10-16T03:26:57.460827+00:00",
+  "concrete_ledger_sha256": "5be92a0825af2f3ed0ebdacf103a2dcfcfaf560fdfdce91a03d69a19e054fbf4",
   "counts": {
-    "passed": 402,
-    "pending": 99,
+    "passed": 403,
+    "pending": 98,
     "unprocessed": 0
   },
   "maximum_published_terminal_attempt_histogram": {
     "0": 76,
-    "1": 12,
+    "1": 11,
     "2": 11
   },
-  "pending_sources": 99,
+  "pending_sources": 98,
   "terminal_attempts_exceed_two": [],
   "differences": [],
   "running_repair_not_counted_as_terminal": null,
@@ -20,27 +20,5 @@
     "completed_full_replay": false,
     "restart_requires_user_resuming_chart": true
   },
-  "no_chart_replays_or_source_mutations": true,
-  "additional_running_repairs_not_counted_as_terminal": [
-    {
-      "source_simfile": "E2/E.ssc",
-      "position": 181,
-      "stage": "e2-ssc-nonfinite-final2-v1",
-      "started_full_repairs": 2,
-      "completed_full_repairs": 1,
-      "running": true,
-      "observed_utc": "2026-10-16T03:05:08.751363+00:00",
-      "pid": 4136779,
-      "command": [
-        "/home/parity/jobs/e2-nonfinite-end-linux-green-v4/full-song-lua",
-        "--archive",
-        "/home/parity/jobs/e2-ssc-nonfinite-final2-v1/chart-181/d60efe1f8247f06f3aed627bf455708ff485fb98d38899c2ceec8773ba71a9e6.tar",
-        "--report",
-        "/home/parity/jobs/e2-ssc-nonfinite-final2-v1/chart-181/report.json"
-      ],
-      "actual_process_command_and_cwd_verified": true,
-      "observed_replayed_frames": 2801,
-      "native_frames": 14142
-    }
-  ]
+  "no_chart_replays_or_source_mutations": true
 }
