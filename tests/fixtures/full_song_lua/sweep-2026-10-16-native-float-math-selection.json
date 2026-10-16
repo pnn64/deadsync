@@ -1,0 +1,22 @@
+{
+  "fix_commit": "c1ba44e729bcab98775b7c4fa04ec76d2d15397c",
+  "source_root": "/home/parity/workspace/native-float-math-green-v3/deadsync",
+  "binary_sha256": "84dd18feaf82c236a29df5d4c334b9c7ac7415b36c9b9161dac9a58d3c3d71dd",
+  "build_proof": "/home/parity/jobs/native-float-math-linux-green-v3/proof.json",
+  "all_seven_groups_both_hosts_passed": true,
+  "all_1175_raw_linux_and_normalized_cross_platform_source_pins_verified": true,
+  "asset_count": 46,
+  "live_controls": 107,
+  "replay_controls": 43,
+  "profile_controls": 1,
+  "legacy_namespace_controls": 1,
+  "all_prior_105_live_and_43_replay_test_sources_unchanged": true,
+  "all_prior_timing_tests_unchanged": true,
+  "full_WAWW_repairs_spent": 1,
+  "full_Flowers_repairs_spent": 0,
+  "full_acceptance_criteria_unchanged": true,
+  "scope": "Native separate-offset float foreground clock and SCALE order",
+  "source_candidate": "green-v3 with meaningful red-v2",
+  "song_and_group_offsets_separate": true,
+  "current_rate_read_after_foreground_On": true
+}
