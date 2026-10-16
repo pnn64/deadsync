@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-16T00:17:46Z",
+  "updated_utc": "2026-10-16T00:38:47Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -1614,8 +1614,8 @@
       "source_simfile": "E2/E.ssc",
       "simfile_sha256": "333782934a7dc6fab316037d7ec30a59e7cc4a34b19a1a14704db27c53936c07",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-16-e2-ssc-qualified-first-repair-v1.json"
     },
     {
       "position": 182,
