@@ -1,5 +1,5 @@
 {
-  "status": "Source-qualified native X implementation; retained original entry pending",
+  "status": "Qualified native X fix; retained Igaku first-failure entry resolved; Quarantine first full repair live",
   "charts": [
     {
       "source_simfile": "Igaku/Igaku.ssc",
@@ -231,6 +231,13 @@
   "native_reference_cases": 130,
   "selection_evidence": "sweep-2026-10-16-native-arrow-x-selection.json",
   "Igaku_full_repairs_spent": 0,
-  "Quarantine_full_repairs_spent": 0,
-  "first_actual_entry_verification_pending": true
+  "Quarantine_full_repairs_spent": 1,
+  "first_actual_entry_verification_pending": false,
+  "fix_commit": "8cfac82fee6c63025458af81b696aa3e19ebf9f2",
+  "first_actual_entry_evidence": "sweep-2026-10-16-igaku-native-arrow-x-entry-diagnostic.json",
+  "entry_frames": 1944,
+  "entry_errors": 0,
+  "entry_mismatches": 0,
+  "Igaku_whole_song_acceptance_unproven": true,
+  "Quarantine_whole_song_acceptance_unproven": true
 }

@@ -1,0 +1,33 @@
+{
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "errors": [],
+  "dropped_events": 0,
+  "dropped_stage_samples": 0,
+  "dropped_update_frames": 0,
+  "dropped_random_reseeds": 0,
+  "native_frames": 8615,
+  "source_simfile": "Igaku/Igaku.ssc",
+  "diagnostic_exit": 2,
+  "seconds": 219.36706464999588,
+  "full_repairs_spent": 0,
+  "native_capture_reused": true,
+  "candidate_sha256": "8eba2affaa1472a742af43ab4208b802c12f31f6402e4c1ef6103fad0ba16183",
+  "trace_sha256": "cbef59377be83fab2841cd2188e16a54580fa84997d30c57efbe9b3beb2b5cf5",
+  "simfile_sha256": "5fa5cb72a841765d6e53ba7fd60e1c753653c64d1748543f4e4bc67f72a3a0d2",
+  "binary_sha256": "01a49433d6ea9251c5a6b444adc3e608407d9aa410f9d04d769595e9276fbecd",
+  "fix_commit": "8cfac82fee6c63025458af81b696aa3e19ebf9f2",
+  "all_six_groups_both_hosts_and_1175_sources49_assets_verified": true,
+  "no_fixture_acceptance": true,
+  "entry_does_not_compare_source_broadcasts": true,
+  "replayed_frames": 1944,
+  "archive_accepted": false,
+  "mismatch_count": 0,
+  "first_mismatches": [],
+  "report_sha256": "713536ed23e9620076708323b719b1e757405bd44fc3f4abeae114381f2fc9ad"
+}

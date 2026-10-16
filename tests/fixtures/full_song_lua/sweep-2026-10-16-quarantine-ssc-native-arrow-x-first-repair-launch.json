@@ -1,0 +1,45 @@
+{
+  "source_simfile": "Quarantine/Quarantine.ssc",
+  "position": 363,
+  "repair_attempt": 1,
+  "native_frames": 13575,
+  "previous_full_mismatches": 67,
+  "previous_full_mismatch_operations": {
+    "Actor.x": 67
+  },
+  "native_capture_reused": true,
+  "original_capture_uncompressed_sha256": "8a54df1b6626f5392594954ac89090c2bb7c7c36965562244975615e59af38ad",
+  "fix_commit": "8cfac82fee6c63025458af81b696aa3e19ebf9f2",
+  "binary_sha256": "01a49433d6ea9251c5a6b444adc3e608407d9aa410f9d04d769595e9276fbecd",
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_sources49_assets_verified": true,
+  "native_reference_cases": 130,
+  "retained_entry_evidence": "sweep-2026-10-16-igaku-native-arrow-x-entry-diagnostic.json",
+  "retained_entry_frames": 1944,
+  "retained_entry_errors": 0,
+  "retained_entry_mismatches": 0,
+  "full_acceptance_criteria_unchanged": true,
+  "no_query_outputs_used_as_runtime_inputs": true,
+  "compressed_original_replayed_without_raw_archive_duplicate": true,
+  "actual_running_observation": {
+    "source_simfile": "Quarantine/Quarantine.ssc",
+    "position": 363,
+    "stage": "quarantine-native-arrow-x-first1-v1",
+    "started_full_repairs": 1,
+    "completed_full_repairs": 0,
+    "running": true,
+    "observed_utc": "2026-10-16T03:56:52.220751+00:00",
+    "pid": 343819,
+    "command": [
+      "/home/parity/jobs/native-arrow-x-linux-green-v3/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/quarantine-native-arrow-x-first1-v1/chart-363/f62e218bca95f91c0ad6342a5d4ba8849f5aa131998e5e1a32fe7ce6e7cb732d.tar.zst",
+      "--report",
+      "/home/parity/jobs/quarantine-native-arrow-x-first1-v1/chart-363/report.json"
+    ],
+    "actual_process_command_and_cwd_verified": true,
+    "observed_replayed_frames": 506,
+    "native_frames": 13575
+  },
+  "accepted": false
+}

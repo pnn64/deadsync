@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-16T03:52:59Z",
+  "updated_utc": "2026-10-16T03:56:58Z",
   "counts": {
     "passed": 403,
     "pending": 98,
@@ -7992,7 +7992,14 @@
       "replayed_frames": 8615,
       "capture_errors": null,
       "completion": null,
-      "no_third_full_repair": false
+      "no_third_full_repair": false,
+      "followup": "sweep-2026-10-16-igaku-native-arrow-x-entry-diagnostic.json",
+      "entry_diagnostic_frames": 1944,
+      "entry_diagnostic_errors": 0,
+      "entry_diagnostic_mismatches": 0,
+      "first_native_X_failure_resolved_in_retained_entry": true,
+      "new_full_repair_started": false,
+      "current_diagnostic_failure": "Native X source fix resolves retained first-failure entry. Original later alpha/zoom/Y differences require review before an Igaku first full repair; whole acceptance remains unproven."
     },
     {
       "position": 244,
@@ -14290,7 +14297,11 @@
       "replayed_frames": 13575,
       "capture_errors": null,
       "completion": null,
-      "no_third_full_repair": false
+      "no_third_full_repair": false,
+      "followup": "sweep-2026-10-16-quarantine-ssc-native-arrow-x-first-repair-launch.json",
+      "full_repairs_started": 1,
+      "new_full_repair_started": true,
+      "current_diagnostic_failure": "Original67 X-position failures addressed by source-qualified native GetXPos implementation; retained shared-source entry is clean. First full repair is running on original compressed capture; full acceptance remains unproven."
     },
     {
       "position": 364,
