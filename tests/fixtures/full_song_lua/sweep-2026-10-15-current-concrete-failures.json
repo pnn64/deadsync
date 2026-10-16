@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-16T04:26:25Z",
+  "updated_utc": "2026-10-16T04:44:47Z",
   "counts": {
     "passed": 403,
     "pending": 98,
@@ -4256,7 +4256,11 @@
       "replayed_frames": 14578,
       "capture_errors": null,
       "completion": null,
-      "no_third_full_repair": false
+      "no_third_full_repair": false,
+      "followup": "sweep-2026-10-16-e2-sm-qualified-runtime-first-repair-launch.json",
+      "full_repairs_started": 1,
+      "new_full_repair_started": true,
+      "current_diagnostic_failure": "First full repair running on original compressed14578frame capture. All5 original Lua files match closed passing SSC; use qualified runtime fixes, retain existing full acceptance and independent original trace/timing."
     },
     {
       "position": 190,
@@ -7684,213 +7688,13 @@
       "mismatch_count": 3925,
       "first_concrete_mismatches": [
         {
-          "field": "source_broadcast_params_unsupported",
-          "deadsync": {
-            "seconds": 35.314170837402344,
-            "beat": 100.00865173339844,
-            "name": "Fooze",
-            "args": [
-              "Fooze"
-            ],
-            "params_error": "broadcast function trace remains pending"
-          }
-        },
-        {
-          "field": "source_broadcast",
-          "native": {
-            "seconds": 35.314170837402344,
-            "beat": 100.00865173339844,
-            "name": "Fooze",
-            "args": [
-              "Fooze",
-              {
-                "foozefunction": {
-                  "last_line": 692,
-                  "line": 688,
-                  "source": "song:/lua/default.lua",
-                  "type": "function"
-                }
-              }
-            ]
-          },
-          "deadsync": {
-            "seconds": 35.314170837402344,
-            "beat": 100.00865173339844,
-            "name": "Fooze",
-            "args": [
-              "Fooze"
-            ],
-            "params_error": "broadcast function trace remains pending"
-          }
-        },
-        {
-          "field": "source_broadcast_params_unsupported",
-          "deadsync": {
-            "seconds": 36.730567932128906,
-            "beat": 104.02177429199219,
-            "name": "Fooze",
-            "args": [
-              "Fooze"
-            ],
-            "params_error": "broadcast function trace remains pending"
-          }
-        },
-        {
-          "field": "source_broadcast",
-          "native": {
-            "seconds": 36.730567932128906,
-            "beat": 104.02177429199219,
-            "name": "Fooze",
-            "args": [
-              "Fooze",
-              {
-                "foozefunction": {
-                  "last_line": 692,
-                  "line": 688,
-                  "source": "song:/lua/default.lua",
-                  "type": "function"
-                }
-              }
-            ]
-          },
-          "deadsync": {
-            "seconds": 36.730567932128906,
-            "beat": 104.02177429199219,
-            "name": "Fooze",
-            "args": [
-              "Fooze"
-            ],
-            "params_error": "broadcast function trace remains pending"
-          }
-        },
-        {
-          "field": "source_broadcast_params_unsupported",
-          "deadsync": {
-            "seconds": 38.14335632324219,
-            "beat": 108.0246810913086,
-            "name": "Fooze",
-            "args": [
-              "Fooze"
-            ],
-            "params_error": "broadcast function trace remains pending"
-          }
-        },
-        {
-          "field": "source_broadcast",
-          "native": {
-            "seconds": 38.14335632324219,
-            "beat": 108.0246810913086,
-            "name": "Fooze",
-            "args": [
-              "Fooze",
-              {
-                "foozefunction": {
-                  "last_line": 692,
-                  "line": 688,
-                  "source": "song:/lua/default.lua",
-                  "type": "function"
-                }
-              }
-            ]
-          },
-          "deadsync": {
-            "seconds": 38.14335632324219,
-            "beat": 108.0246810913086,
-            "name": "Fooze",
-            "args": [
-              "Fooze"
-            ],
-            "params_error": "broadcast function trace remains pending"
-          }
-        },
-        {
-          "field": "source_broadcast_params_unsupported",
-          "deadsync": {
-            "seconds": 39.560455322265625,
-            "beat": 112.039794921875,
-            "name": "Fooze",
-            "args": [
-              "Fooze"
-            ],
-            "params_error": "broadcast function trace remains pending"
-          }
-        },
-        {
-          "field": "source_broadcast",
-          "native": {
-            "seconds": 39.560455322265625,
-            "beat": 112.039794921875,
-            "name": "Fooze",
-            "args": [
-              "Fooze",
-              {
-                "foozefunction": {
-                  "last_line": 692,
-                  "line": 688,
-                  "source": "song:/lua/default.lua",
-                  "type": "function"
-                }
-              }
-            ]
-          },
-          "deadsync": {
-            "seconds": 39.560455322265625,
-            "beat": 112.039794921875,
-            "name": "Fooze",
-            "args": [
-              "Fooze"
-            ],
-            "params_error": "broadcast function trace remains pending"
-          }
-        },
-        {
-          "field": "source_broadcast_params_unsupported",
-          "deadsync": {
-            "seconds": 46.286712646484375,
-            "beat": 131.09751892089844,
-            "name": "Fooze",
-            "args": [
-              "Fooze"
-            ],
-            "params_error": "broadcast function trace remains pending"
-          }
-        },
-        {
-          "field": "source_broadcast",
-          "native": {
-            "seconds": 46.286712646484375,
-            "beat": 131.09751892089844,
-            "name": "Fooze",
-            "args": [
-              "Fooze",
-              {
-                "foozefunction": {
-                  "last_line": 692,
-                  "line": 688,
-                  "source": "song:/lua/default.lua",
-                  "type": "function"
-                }
-              }
-            ]
-          },
-          "deadsync": {
-            "seconds": 46.286712646484375,
-            "beat": 131.09751892089844,
-            "name": "Fooze",
-            "args": [
-              "Fooze"
-            ],
-            "params_error": "broadcast function trace remains pending"
-          }
-        },
-        {
           "field": "command_query_event",
           "native": {
-            "actor": "def-0013",
+            "actor": "def-0021",
             "args": [
-              -95.51427459716797
+              -96.13861083984375
             ],
-            "beat": 27.000722885131836,
+            "beat": 92.08849334716797,
             "callback": "SetUpdateFunction",
             "caller": {
               "line": 2152,
@@ -7907,8 +7711,8 @@
             "operation": "Actor.x",
             "phase": "callback",
             "scene": 1,
-            "seconds": 9.546667098999023,
-            "seq": 54881,
+            "seconds": 32.518821716308594,
+            "seq": 193888,
             "source": "song:/lua/default.lua",
             "tween_time_left": 0
           },
@@ -7919,16 +7723,16 @@
             "source": "song:/lua/default.lua",
             "line": 2152,
             "phase": "callback",
-            "beat": 27.000722885131836,
-            "seconds": 9.546667098999023,
+            "beat": 92.08849334716797,
+            "seconds": 32.518821716308594,
             "args": [
-              -96
+              -96.13676452636719
             ],
             "results": [
               {
-                "actor": "0x64da948e91b0",
-                "name": "MultitapP1_1",
-                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_1"
+                "actor": "0x610b0074e170",
+                "name": "MultitapP1_5",
+                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_5"
               }
             ],
             "tween_time_left": 0.0
@@ -7937,11 +7741,11 @@
         {
           "field": "command_query_event",
           "native": {
-            "actor": "def-0015",
+            "actor": "def-0035",
             "args": [
-              -31.514272689819336
+              96.07836151123047
             ],
-            "beat": 27.000722885131836,
+            "beat": 220.05091857910156,
             "callback": "SetUpdateFunction",
             "caller": {
               "line": 2152,
@@ -7958,8 +7762,8 @@
             "operation": "Actor.x",
             "phase": "callback",
             "scene": 1,
-            "seconds": 9.546667098999023,
-            "seq": 54893,
+            "seconds": 77.68203735351562,
+            "seq": 520865,
             "source": "song:/lua/default.lua",
             "tween_time_left": 0
           },
@@ -7970,16 +7774,67 @@
             "source": "song:/lua/default.lua",
             "line": 2152,
             "phase": "callback",
-            "beat": 27.000722885131836,
-            "seconds": 9.546667098999023,
+            "beat": 220.05091857910156,
+            "seconds": 77.68203735351562,
             "args": [
-              -32
+              96.07898712158203
             ],
             "results": [
               {
-                "actor": "0x64da9491ae50",
-                "name": "MultitapP1_2",
-                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_2"
+                "actor": "0x610b008a76d0",
+                "name": "MultitapP1_12",
+                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_12"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0035",
+            "args": [
+              309.7397766113281
+            ],
+            "beat": 220.05091857910156,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2152,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0049",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 2152,
+            "operation": "Actor.y",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 77.68203735351562,
+            "seq": 520866,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.y",
+            "source": "song:/lua/default.lua",
+            "line": 2152,
+            "phase": "callback",
+            "beat": 220.05091857910156,
+            "seconds": 77.68203735351562,
+            "args": [
+              309.7412109375
+            ],
+            "results": [
+              {
+                "actor": "0x610b008a76d0",
+                "name": "MultitapP1_12",
+                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_12"
               }
             ],
             "tween_time_left": 0.0
@@ -7993,13 +7848,18 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-16-igaku-native-arrow-x-entry-diagnostic.json",
-      "entry_diagnostic_frames": 1944,
+      "followup": "sweep-2026-10-16-igaku-native-arrow-zoom-entry-diagnostic.json",
+      "entry_diagnostic_frames": 5383,
       "entry_diagnostic_errors": 0,
-      "entry_diagnostic_mismatches": 0,
+      "entry_diagnostic_mismatches": 59,
       "first_native_X_failure_resolved_in_retained_entry": true,
       "new_full_repair_started": false,
-      "current_diagnostic_failure": "Native X source fix resolves retained first-failure entry. Original later alpha/zoom/Y differences require review before an Igaku first full repair; whole acceptance remains unproven."
+      "current_diagnostic_failure": "Qualified zoom/X retained prefix5383frames has59 X/Y differences,0errors and no zoom/alpha differences. Native option delta discrepancy in component qualification; authored Wave/cachedTipsy omissions source-reviewed before any Igaku full1.",
+      "current_mismatch_operations": {
+        "Actor.x": 30,
+        "Actor.y": 29
+      },
+      "current_zoom_alpha_mismatches": 0
     },
     {
       "position": 244,

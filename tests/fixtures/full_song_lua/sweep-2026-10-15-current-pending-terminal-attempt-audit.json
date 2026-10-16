@@ -1,6 +1,6 @@
 {
-  "generated_utc": "2026-10-16T04:26:25.284976+00:00",
-  "concrete_ledger_sha256": "a44e1ad8c7784853ccf61d2bacd4ab50b2c02801238f6e15eb8c76c7a3d900bd",
+  "generated_utc": "2026-10-16T04:44:48.259635+00:00",
+  "concrete_ledger_sha256": "b55ef83f4d087e2cd7fa433bfa4deb5ec1a1a192b54478f2fa9d3540342a8f3f",
   "counts": {
     "passed": 403,
     "pending": 98,
@@ -29,7 +29,7 @@
       "started_full_repairs": 1,
       "completed_full_repairs": 0,
       "running": true,
-      "observed_utc": "2026-10-16T04:26:30.157267+00:00",
+      "observed_utc": "2026-10-16T04:44:53.521513+00:00",
       "pid": 550586,
       "command": [
         "/home/parity/jobs/native-arrow-x-linux-green-v3/full-song-lua",
@@ -39,8 +39,28 @@
         "/home/parity/jobs/quarantine-sm-native-arrow-x-first1-v1/chart-362/report.json"
       ],
       "actual_process_command_and_cwd_verified": true,
-      "observed_replayed_frames": 692,
+      "observed_replayed_frames": 8552,
       "native_frames": 17554
+    },
+    {
+      "source_simfile": "E2/E.sm",
+      "position": 180,
+      "stage": "e2-sm-qualified-runtime-first1-v1",
+      "started_full_repairs": 1,
+      "completed_full_repairs": 0,
+      "running": true,
+      "observed_utc": "2026-10-16T04:44:53.524652+00:00",
+      "pid": 681922,
+      "command": [
+        "/home/parity/jobs/native-arrow-zoom-linux-green-v1/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/e2-sm-qualified-runtime-first1-v1/chart-180/7f30cbfeb809c75e2819ea28574deb6970ac876e217d51c84967dc3b2666d674.tar.zst",
+        "--report",
+        "/home/parity/jobs/e2-sm-qualified-runtime-first1-v1/chart-180/report.json"
+      ],
+      "actual_process_command_and_cwd_verified": true,
+      "observed_replayed_frames": 797,
+      "native_frames": 14578
     }
   ]
 }

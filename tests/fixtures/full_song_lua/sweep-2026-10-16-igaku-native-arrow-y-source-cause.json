@@ -1,7 +1,7 @@
 {
   "source_simfile": "Igaku/Igaku.ssc",
   "position": 240,
-  "status": "Concrete original Y failure with missing native Wave and cached Tipsy paths; retained updated diagnostic running; no Y implementation selected",
+  "status": "Retained qualified X/zoom prefix confirms29 Y and30 X differences; no full repair spent",
   "full_repairs_spent": 0,
   "original_trace_sha256": "cbef59377be83fab2841cd2188e16a54580fa84997d30c57efbe9b3beb2b5cf5",
   "first_original_y_failure": {
@@ -111,5 +111,15 @@
   "next_work": "Finish the retained through78 diagnostic on the qualified X/zoom helper, reproduce authored Y paths against pinned native code, then fix and qualify the actual failures before Igaku first full repair.",
   "qualified_zoom_fix_commit": "1d3b83abed5560a9bb73eae09e83a3ea13da63ee",
   "native_capture_reused": true,
-  "acceptance_criteria_unchanged": true
+  "acceptance_criteria_unchanged": true,
+  "retained_entry_evidence": "sweep-2026-10-16-igaku-native-arrow-zoom-entry-diagnostic.json",
+  "retained_entry_frames": 5383,
+  "retained_entry_errors": 0,
+  "retained_entry_mismatches": 59,
+  "retained_entry_mismatch_operations": {
+    "Actor.x": 30,
+    "Actor.y": 29
+  },
+  "first_actual_entry_verification_pending": false,
+  "whole_song_acceptance_unproven": true
 }

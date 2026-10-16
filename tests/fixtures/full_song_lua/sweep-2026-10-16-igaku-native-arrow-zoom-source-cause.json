@@ -1,5 +1,5 @@
 {
-  "status": "Source-qualified native zoom implementation; retained original entry pending",
+  "status": "Qualified native zoom; retained5383frame prefix has no zoom/alpha differences but59 X/Y differences remain",
   "source_simfile": "Igaku/Igaku.ssc",
   "position": 240,
   "full_repairs_spent": 0,
@@ -48,5 +48,14 @@
   "native_reference_cases": 53,
   "selection_evidence": "sweep-2026-10-16-native-arrow-zoom-selection.json",
   "Igaku_full_repairs_spent": 0,
-  "first_actual_entry_verification_pending": true
+  "first_actual_entry_verification_pending": false,
+  "retained_entry_evidence": "sweep-2026-10-16-igaku-native-arrow-zoom-entry-diagnostic.json",
+  "retained_entry_frames": 5383,
+  "retained_entry_errors": 0,
+  "retained_entry_mismatches": 59,
+  "retained_entry_mismatch_operations": {
+    "Actor.x": 30,
+    "Actor.y": 29
+  },
+  "whole_song_acceptance_unproven": true
 }

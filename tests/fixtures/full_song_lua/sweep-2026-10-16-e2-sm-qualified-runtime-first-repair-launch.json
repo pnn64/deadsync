@@ -1,0 +1,56 @@
+{
+  "source_simfile": "E2/E.sm",
+  "position": 180,
+  "repair_attempt": 1,
+  "native_frames": 14578,
+  "previous_mismatches": 269809,
+  "previous_callback_errors": [],
+  "original_first_failure": "Command event count/order and native tween-time differences from the early header/life UI callbacks. All five original Lua files are byte-identical to the fully accepted E2 SSC capture; qualified runtime includes native creation/child order, native float tween handling, nonfinite property parsing and final-sample alignment fixes.",
+  "same_original_lua_as_closed_passing_peer": {
+    "source_simfile": "E2/E.sm",
+    "passing_peer": "E2/E.ssc",
+    "all5_lua_files_byte_identical": true,
+    "lua_sha256": {
+      "song/lua/default.lua": "62987b48fb232e37ba6eb9233264a131f44ac3e87aa0f76b289680f267248ffc",
+      "song/lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+      "song/lua/modhelpers.lua": "3cfa9489d4ff586f21a7d28fa6accbdb7a2c4891e2a6617fc310c5aef850a1ff",
+      "song/lua/mods.lua": "95c4fa4ae31002e4d8cd4d2d838eb174fff6a8932ccc404267c9f3bc33cbec5e",
+      "song/lua/multitap_data.lua": "7228cc6d7f90c148678688fa8656dd48622de99ee94379cd9fe62a39b1c5ff44"
+    }
+  },
+  "peer": "E2/E.ssc",
+  "peer_fixture": "e645512a618ca10b8926b9b95948aac88a922d7c5ae3a4f3b0974a851bb8346d.tar.zst",
+  "peer_replayed_again": false,
+  "native_capture_reused": true,
+  "original_uncompressed_capture_sha256": "84c0708abf6202bee66e3adbe20afc036f3a0b4c42efbbb378dfce77b71d0dec",
+  "native_trace_sha256": "7e357a69c3ade5912ebf6f5b8f5986eb9e95382e61d0f386ea80fa8716ced8cb",
+  "fix_commit": "1d3b83abed5560a9bb73eae09e83a3ea13da63ee",
+  "binary_sha256": "a785438f8c9bbdf891c31f903e76cb7a901cd2025abfe9f1eb30a791ce825a66",
+  "qualified_source_files": 1175,
+  "qualified_assets": 50,
+  "all_six_groups_both_hosts_passed": true,
+  "compressed_original_replayed_without_raw_archive_duplicate": true,
+  "no_query_outputs_used_as_runtime_inputs": true,
+  "full_acceptance_criteria_unchanged": true,
+  "actual_running_observation": {
+    "source_simfile": "E2/E.sm",
+    "position": 180,
+    "stage": "e2-sm-qualified-runtime-first1-v1",
+    "started_full_repairs": 1,
+    "completed_full_repairs": 0,
+    "running": true,
+    "observed_utc": "2026-10-16T04:44:32.505658+00:00",
+    "pid": 681922,
+    "command": [
+      "/home/parity/jobs/native-arrow-zoom-linux-green-v1/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/e2-sm-qualified-runtime-first1-v1/chart-180/7f30cbfeb809c75e2819ea28574deb6970ac876e217d51c84967dc3b2666d674.tar.zst",
+      "--report",
+      "/home/parity/jobs/e2-sm-qualified-runtime-first1-v1/chart-180/report.json"
+    ],
+    "actual_process_command_and_cwd_verified": true,
+    "observed_replayed_frames": 600,
+    "native_frames": 14578
+  },
+  "whole_acceptance_unproven": true
+}
