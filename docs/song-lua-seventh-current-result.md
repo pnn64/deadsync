@@ -1,4 +1,57 @@
-# 7th Gear live proxy playback (0.5.1872)
+# 7th Gear: opening effects and performance (0.5.1872)
+
+The previous application check covered startup visibility only. It did not
+establish correct effects after startup or acceptable frame time. Its recorded
+79.4 ms average frame time was already a performance failure.
+
+The old `--headless --drawable-samples` reference used the null renderer. 7th
+Gear checks `VideoRenderers` and disables its AFT branch for that renderer. That
+capture contained two actor definitions and zero drawable samples. It cannot
+validate the effects seen during gameplay. Live replay also hardcoded that
+renderer preference; it now retains the capture's actual preference list.
+
+The harness now supports hidden OpenGL contexts on Windows. It refuses to launch
+headless graphics against an older adapter without that capability, and validates
+the native window visibility observation. The new capture records
+`headless_graphics=true`, `window_visible=false`, 485 actor definitions, three
+AFTs, 120,966 drawable samples, 700 update frames through beat 24.035, and zero
+dropped events or drawable samples. No visible game is needed for this workflow.
+
+The observed opening strip poses are retained in
+[`seventh-headless-opening-poses.json`](../tests/fixtures/interactive_song_lua/seventh-headless-opening-poses.json).
+The fixture preserves actual native frame clocks and observed setter values;
+it does not supply expected results to the live Lua VM. Run the unchanged song
+through the headless regression/profile example:
+
+```powershell
+cargo run --offline --release --config 'profile.release.lto=false' -p deadsync-song-lua --example seventh_profile -- 'C:\GitHub\rework\lua-songs\7th Gear' tests/fixtures/interactive_song_lua/seventh-headless-opening-poses.json
+```
+
+At low frame rates the short opening wave can retain a large distortion: the
+script applies the previous wave sample before evaluating easing callbacks, then
+clears its horizontal wave list at completion. Missing the final decay samples
+leaves the last applied transform. The slow application retained HStrip1 at
+x=247.80, skew=0.599 after the first effect. The native and live strip transforms
+agree when driven by the same native frame clocks. The song is unchanged.
+
+The live bridge was republishing an unchanged full tween pose for every scalar
+setter and idle actor, then reading the complete scene again during Draw even
+without authored draw callbacks. These redundant copies and allocations are
+removed. Scalar reads and capture resets batch VM access. Traversal timing scratch stays
+in Rust, and private callback/rate reads bypass public method lookup. Tests retain coverage
+of queued tween ownership, callback order, and custom Draw.
+
+The earlier development-profile Lua-only baseline averaged 65.87 ms per frame.
+After the fixes, the optimized headless run averages 12.74 ms (P95 19.68 ms) over
+700 frames, with 10,148 opening-pose comparisons passing. These use different
+build profiles; the optimized figure is not a full application FPS measurement.
+The full Lua suite records 646 passes and 15 failures. An older binary records
+640 passes and the exact same 15 failures, with no newly introduced failures.
+The current scalar/getter regressions and all 14 harness runtime tests also pass. The native drawable comparator still
+reports AFT viewport/startup-phase differences; full rendering parity and
+whole-song acceptance remain unproven.
+
+## Previous startup proxy repair
 
 Foreground `OnCommand` runs after the application prepares its visual slots.
 7th Gear binds its NoteField, Combo, Judgment, Underlay and Overlay proxies there.
@@ -25,8 +78,8 @@ and user profiles are unchanged. Both checks use isolated data directories.
 
 Hashes, screenshots and application results are recorded in
 [`seventh-windows.json`](../tests/fixtures/interactive_song_lua/seventh-windows.json).
-These checks establish the live rendering repair; development-build performance
-and full native pixel parity are not certified.
+These checks establish startup proxy visibility only. They did not cover the
+opening effects or certify development-build performance or native pixel parity.
 
 ## Earlier semantic result (0.5.1800)
 
@@ -36,7 +89,7 @@ dance-single Challenge, description `FS+ XO BR- BU- MODS`,
 and seed 1.
 
 The original completion audit reports 228,018/228,019 against
-the superseded reference. The complete current local headless capture passes
+the superseded reference. The earlier local semantic capture passes
 without production changes, comparator changes or tolerance changes. The
 reference records the current native float beat and countdown behavior;
 delete the superseded fixture and retain every emitted observation.

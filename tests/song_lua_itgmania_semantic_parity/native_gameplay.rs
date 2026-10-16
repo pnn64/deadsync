@@ -3347,10 +3347,13 @@ pub(crate) fn replay_with_command_observer(
         f32::from(autoplay),
         &session,
         &config,
-        "null",
+        trace["display"]["video_renderers"].as_str().unwrap_or("null"),
         native_random_seed(trace)?,
         true,
     )?;
+    // The recorded renderer is machine input. Keep its exact preference list:
+    // charts can select an entirely different actor tree when AFTs are disabled.
+    context.video_renderers = trace["display"]["video_renderers"].as_str().unwrap_or("null").to_owned();
     for (player, windows) in context.players.iter_mut().zip(native_theme_timing_windows(trace)?) {
         player.timing_windows = windows;
     }

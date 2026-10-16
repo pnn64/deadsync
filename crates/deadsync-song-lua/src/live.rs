@@ -1203,10 +1203,19 @@ impl SongLuaLiveScene {
         take_output(&self.lua)
     }
 
+    /// False until an authored draw callback has been installed. Removing one
+    /// can leave this true; that only retains the ordinary draw traversal.
+    pub fn has_custom_draw(&self) -> mlua::Result<bool> {
+        Ok(self.lua.globals().raw_get::<Option<bool>>(crate::draw_capture::DRAW_INSTALLED_KEY)?.unwrap_or(false))
+    }
+
     /// ScreenManager::Draw skips a screen before its first Update and after
     /// it has been popped. Authored Draw uses the latest owned tween pose.
     pub fn draw(&mut self) -> mlua::Result<SongLuaLiveOutput> {
         if self.ended || !self.updated { return Ok(SongLuaLiveOutput::default()); }
+        // Ordinary drawing consumes the poses already read by Update/Input.
+        // Only authored Draw callbacks can mutate them again in this phase.
+        if !self.has_custom_draw()? { return take_output(&self.lua); }
         if let Value::Table(root) = &self.root {
             crate::lua_util::run_actor_draw_functions_for_table(&self.lua, root)?;
         }
@@ -1713,7 +1722,7 @@ fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
 }
 
 pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
-    let mut state = crate::actor_overlay_initial_state(actor).map_err(mlua::Error::external)?;
+    let mut state = crate::lua_util::actor_overlay_live_state(lua, actor).map_err(mlua::Error::external)?;
     crate::lua_util::replay_tween_pose(lua, actor, &mut state);
     state.spin_baked = crate::lua_util::spin_render_pose(actor)?.is_some();
     Ok(state)
@@ -2819,6 +2828,42 @@ return setmetatable({__songlua_actor_type='ActorFrame',Name='Declared',
 
     fn compile(name: &str, source: &str) -> Compiled {
         compile_with_context(name, source, |_| {})
+    }
+
+    #[test]
+    fn live_scalar_writes_and_idle_frames_preserve_owned_getter_state() {
+        let mut compiled = compile_with_context("scalar-publication", r#"
+return Def.Actor { InitCommand=function(self)
+    ROOT=self; self:x(10):y(20):zoom(1):diffuse(0.2,0.3,0.4,1)
+end }
+"#, |context| {
+            context.players[0].step_statistics_enabled = false;
+            context.players[1].enabled = false;
+        });
+        let mut scene = compiled.live_scene.take().unwrap();
+        assert!(!scene.has_custom_draw().unwrap());
+        let actor: Table = scene.lua.globals().get("ROOT").unwrap();
+        let colors = actor.raw_get::<Table>("__songlua_state_diffuse").unwrap();
+        scene.lua.load(r#"
+ROOT:skewx(0.25):x(11):zoom(1.25)
+assert(ROOT:GetX()==11 and ROOT:GetZoomX()==1.25)
+ROOT:linear(1):x(99):y(30):skewx(0)
+assert(ROOT:GetX()==11 and ROOT:GetY()==20)
+assert(ROOT:GetDestX()==99 and ROOT:GetDestY()==30)
+"#).exec().unwrap();
+        assert_eq!(actor.raw_get::<Table>("__songlua_state_diffuse").unwrap().to_pointer(), colors.to_pointer(),
+            "scalar writes must preserve the unchanged owned color snapshot");
+        let frame = SongLuaLiveFrame { music_seconds:0.5,screen_seconds:0.5,beat:0.5,
+            delta_seconds:0.5,..Default::default() };
+        assert!(scene.advance(frame.clone()).unwrap().errors.is_empty());
+        scene.lua.load("assert(ROOT:GetX()==55 and ROOT:GetY()==25); ROOT:y(50); assert(ROOT:GetY()==25 and ROOT:GetDestY()==50)").exec().unwrap();
+        assert!(scene.advance(frame.clone()).unwrap().errors.is_empty());
+        scene.lua.load("assert(ROOT:GetX()==99 and ROOT:GetY()==50); ROOT:x(101)").exec().unwrap();
+        let colors = actor.raw_get::<Table>("__songlua_state_diffuse").unwrap();
+        assert!(scene.advance(frame).unwrap().errors.is_empty());
+        assert_eq!(actor.raw_get::<Table>("__songlua_state_diffuse").unwrap().to_pointer(), colors.to_pointer(),
+            "an idle tween queue must not allocate and republish an unchanged pose");
+        scene.lua.load("assert(ROOT:GetX()==101 and ROOT:GetY()==50 and ROOT:GetZoomX()==1.25)").exec().unwrap();
     }
 
     #[test]

@@ -1041,6 +1041,7 @@ impl State {
     fn draw_song_lua(&mut self) -> Result<(), String> {
         if self.song_lua_ended { return Ok(()); }
         let Some(scene) = &mut self.song_lua else { return Ok(()); };
+        if !scene.has_custom_draw().map_err(|error| error.to_string())? { return Ok(()); }
         let output = scene.draw().map_err(|error| error.to_string())?;
         scene.apply_output_player_writes(&output, &mut self.gameplay);
         match output.request.as_ref() {
