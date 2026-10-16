@@ -1,0 +1,73 @@
+{
+  "source_root": "/home/parity/workspace/steps-display-green-v7/deadsync",
+  "binary_sha256": "ae049e8a4846869333ee4734d665de1faad2dfa99b4b9437ec999f8b3f907f0e",
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 273.0822463550139,
+      "log_sha256": "3d3172e3ca415a56051bc65c7a252222555c985fcbec1d6203fdb37dc4a97ac1",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 644 filtered out; finished in 0.33s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 37.49085932405433,
+      "log_sha256": "341ce95f4174f2f9443d222ede962770f0ed1e62353eaae3ae4afb159dc12abf",
+      "results": [
+        "test result: ok. 108 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 36.78s"
+      ]
+    },
+    {
+      "label": "timing-controls",
+      "exit_code": 0,
+      "seconds": 0.4003836559713818,
+      "log_sha256": "236291109feacf9a39b87d23d8aca9ab4e5b4abf3458389088c204c6eedd107e",
+      "results": [
+        "test result: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 74 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 215.27388364897342,
+      "log_sha256": "84ac36bdb868fd5bc51991fbd76654c4b48b70ee2553399675a1f303b846ce80",
+      "results": [
+        "test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 25.26s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 81.22000629402464,
+      "log_sha256": "caf260af7d06f6deaa8b096d848cb2977c56575262023018e55248cce294c6ad",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 1.1672703470103443,
+      "log_sha256": "9b26a139a34af4618cca5b6014642d4623daaf64d58dbb936960f3c8f86bf746",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 644 filtered out; finished in 0.47s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 37.741355400998145,
+      "log_sha256": "0319cb487b459908431ce6727ae678212a4ff0de8067a258b3801cb25d8266c4",
+      "results": []
+    }
+  ],
+  "all_seven_groups_both_hosts_passed": true,
+  "all_1175_sources_48_assets_and_cross_platform_pins_verified": true,
+  "old_107_live_and_43_replay_test_sources_unchanged": true,
+  "meaningful_red_both_hosts": true,
+  "source_scope_exact": true,
+  "full_HOPE_repairs_spent": 0
+}

@@ -1,0 +1,10 @@
+{
+  "source_cause": "sweep-2026-10-16-hope-steps-display-source-cause.json",
+  "production_change": "Construct real native StepsDisplay children and resources, execute inherited metric Load/On/Set commands, populate data from selected Steps, and expose native SetFromSteps/SetFromTrail/SetFromGameState lifecycle.",
+  "full_acceptance_unchanged": true,
+  "query_outputs_used_as_runtime_inputs": false,
+  "all_prior_107_live_and_43_replay_tests_unchanged": true,
+  "full_HOPE_repairs_spent": 0,
+  "native_text_helper_sha256": "7f7be97f1673073e82aed4f13273f6ba2617b4a54d594a3aa1e9e2bdcc503221",
+  "native_text_helper_matches_original_captured_theme": true
+}

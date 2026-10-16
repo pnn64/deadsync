@@ -13894,6 +13894,149 @@ return allReverse and 'SetReverse' or anyReverse and 'SetOneReverse' or 'SetNoRe
     Ok(actor)
 }
 
+// StepsDisplay.cpp::Load/SetInternal and the pinned StepsDisplayGameplay metrics.
+fn create_native_steps_display(
+    lua: &Lua, name: &str,
+    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+) -> mlua::Result<Table> {
+    let display = create_named_actor(lua, "StepsDisplay", name, create_dummy_actor)?;
+    display.raw_set("__songlua_owned_child_lookup", true)?;
+    for (name, kind) in [("Frame", "Sprite"), ("Meter", "BitmapText"),
+        ("Description", "BitmapText"), ("Autogen", "Sprite")] {
+        let child = create_named_actor(lua, kind, name, create_dummy_actor)?;
+        if kind == "Sprite" { set_actor_texture_from_path(&child, load_native_blank_texture()?)?; }
+        else { child.raw_set("Font", "Common Normal")?; child.raw_set("Text", "")?; }
+        child.raw_set("__songlua_parent", display.clone())?;
+        push_sequence_child_once(&display, child.clone())?;
+        actor_children(lua, &display)?.raw_set(name, child)?;
+    }
+    for (name, trail) in [("SetFromSteps", false), ("SetFromTrail", true)] {
+        display.set(name, lua.create_function(move |lua, (display, value): (Table, Option<Table>)| {
+            if let Some(value) = value { native_steps_display_set(lua, &display, Some(value), trail)?; }
+            else { native_steps_display_visibility(lua, &display, false)?; }
+            note_song_lua_side_effect(lua)?;
+            Ok(display)
+        })?)?;
+    }
+    display.set("SetFromGameState", lua.create_function(|lua, (display, player): (Table, Value)| {
+        native_steps_display_from_game_state(lua, &display, player)?;
+        note_song_lua_side_effect(lua)?;
+        Ok(display)
+    })?)?;
+    Ok(display)
+}
+
+fn native_steps_display_visibility(lua: &Lua, actor: &Table, visible: bool) -> mlua::Result<()> {
+    // Native SetVisible updates the immediate property, including GetVisible.
+    actor.raw_set("__songlua_visible", visible)?;
+    capture_immediate_bool(lua, actor, "visible", visible)
+}
+
+fn native_steps_display_set(lua: &Lua, display: &Table, value: Option<Table>, trail: bool) -> mlua::Result<()> {
+    let (difficulty, steps_type, meter) = if let Some(value) = &value {
+        (value.get::<Function>("GetDifficulty")?.call::<String>(value.clone())?,
+         value.get::<Function>("GetStepsType")?.call::<String>(value.clone())?,
+         value.get::<Function>("GetMeter")?.call::<i32>(value.clone())?)
+    } else {
+        (display.raw_get::<String>("__songlua_preferred_difficulty")?, "StepsType_Invalid".into(), 0)
+    };
+    let short = difficulty.strip_prefix("Difficulty_").unwrap_or(&difficulty);
+    // Difficulty.cpp's matching CustomDifficulty entries in the fallback theme.
+    let custom = match (steps_type.as_str(), short) {
+        ("StepsType_Pump_Single", "Hard") => "Crazy",
+        ("StepsType_Pump_Double", "Medium") => "Freestyle",
+        ("StepsType_Pump_Double", "Hard") => "Nightmare",
+        ("StepsType_Pump_Halfdouble", "Medium") => "HalfDouble",
+        (_, "Invalid") => "",
+        _ => short,
+    };
+    let description = if !trail && short == "Edit" && value.is_some() {
+        let steps = value.as_ref().unwrap();
+        steps.get::<Function>("GetDescription")?.call::<String>(steps.clone())?
+    } else {
+        // _fallback/Languages/en.ini [CustomDifficulty], inherited by Simply Love.
+        match custom { "Beginner" => "Novice", "Challenge" => "Expert", _ => custom }.into()
+    };
+    let params = lua.create_table()?;
+    params.raw_set("CustomDifficulty", custom)?;
+    params.raw_set("DisplayDescription", description.clone())?;
+    params.raw_set("Meter", meter)?;
+    params.raw_set("StepsType", steps_type)?;
+    if let Some(value) = &value { params.raw_set(if trail { "Trail" } else { "Steps" }, value.clone())?; }
+    let params = Some(Value::Table(params));
+    native_steps_display_visibility(lua, display, true)?;
+    let children = actor_children(lua, display)?;
+    let frame = children.raw_get::<Table>("Frame")?;
+    run_actor_message_with_params(lua, &frame, "SetCommand", params.clone())?;
+    let text = children.raw_get::<Table>("Meter")?;
+    text.raw_set("Text", if meter == 0 { "?".into() } else { meter.to_string() })?;
+    if meter != 0 { run_actor_message_with_params(lua, &text, "SetCommand", params.clone())?; }
+    let text = children.raw_get::<Table>("Description")?;
+    text.raw_set("Text", description)?;
+    run_actor_message_with_params(lua, &text, "SetCommand", params.clone())?;
+    let autogen = children.raw_get::<Table>("Autogen")?;
+    run_actor_message_with_params(lua, &autogen, "SetCommand", params.clone())?;
+    let is_autogen = !trail && value.as_ref().map(|steps| {
+        steps.get::<Function>("IsAutogen")?.call::<bool>(steps.clone())
+    }).transpose()?.unwrap_or(false);
+    native_steps_display_visibility(lua, &autogen, is_autogen)?;
+    // ActorFrame::HandleMessage forwards a direct message, even when command
+    // propagation is disabled. SetInternal therefore visits these children twice.
+    run_actor_named_command_with_drain_and_params(lua, display, "SetCommand", true, params.clone())?;
+    for child in actor_direct_children(lua, display)? {
+        run_actor_message_with_params(lua, &child, "SetCommand", params.clone())?;
+    }
+    Ok(())
+}
+
+fn native_steps_display_from_game_state(lua: &Lua, display: &Table, player: Value) -> mlua::Result<()> {
+    let game = lua.globals().get::<Table>("GAMESTATE")?;
+    let course = game.get::<Function>("IsCourseMode")?.call::<bool>(game.clone())?;
+    let value = game.get::<Function>(if course { "GetCurrentTrail" } else { "GetCurrentSteps" })?
+        .call::<Option<Table>>((game, player))?;
+    native_steps_display_set(lua, display, value, course)
+}
+
+fn initialize_native_steps_displays(lua: &Lua, screen: &Table) -> mlua::Result<()> {
+    let game = lua.globals().get::<Table>("GAMESTATE")?;
+    let commands = lua.load(r#"
+return {
+    FrameLoadCommand = function(self,param) local bFlip = param.PlayerState and param.PlayerState:GetPlayerNumber() ~= PLAYER_1; self:zoomx(bFlip and -1 or 1); end,
+    FrameSetCommand = function(self,param) if param.CustomDifficulty and param.CustomDifficulty ~= "" then self:diffuse(CustomDifficultyToColor(param.CustomDifficulty)) end end,
+    MeterOnCommand = function(self) self:visible(false) end,
+    MeterSetCommand = function(self,param) MESSAGEMAN:Broadcast("MeterSet") end,
+    DescriptionOnCommand = function(self) self:zoom(0.8):horizalign("left"):vertspacing(-9):_wrapwidthpixels(345) end,
+    DescriptionSetCommand = function(self,params) self:visible(params.Steps ~= nil and params.Steps:GetDifficulty()=="Difficulty_Edit") end,
+}
+"#).set_name("@theme:/metrics.ini:StepsDisplayGameplay").eval::<Table>()?;
+    for index in 0..LUA_PLAYERS {
+        let Some(display) = actor_children(lua, screen)?.raw_get::<Option<Table>>(format!("StepsDisplayP{}", index + 1))? else { continue; };
+        for (name, x, y) in [("Frame", 0.0, 0.0), ("Meter", 30.0, 0.0),
+            ("Description", -265.0, 0.0), ("Autogen", 40.0, 0.0)] {
+            let child = actor_children(lua, &display)?.raw_get::<Table>(name)?;
+            capture_block_set_f32(lua, &child, "x", x)?;
+            capture_block_set_f32(lua, &child, "y", y)?;
+            for command in ["Load", "On", "Set"] {
+                if let Some(callback) = commands.raw_get::<Option<Function>>(format!("{name}{command}Command"))? {
+                    child.raw_set(format!("{command}Command"), callback)?;
+                }
+            }
+            run_actor_named_command(lua, &child, "OnCommand")?;
+        }
+        let player = Value::String(lua.create_string(player_number_name(index))?);
+        let params = lua.create_table()?;
+        params.raw_set("PlayerState", game.get::<Function>("GetPlayerState")?.call::<Table>((game.clone(), player.clone()))?)?;
+        for child in actor_direct_children(lua, &display)? {
+            run_actor_message_with_params(lua, &child, "LoadCommand", Some(Value::Table(params.clone())))?;
+        }
+        native_steps_display_visibility(lua, &display, false)?;
+        // ScreenGameplay::LoadNextSong calls SetFromSteps on each display.
+        let steps = game.get::<Function>("GetCurrentSteps")?.call::<Option<Table>>((game.clone(), player))?;
+        if let Some(steps) = steps { native_steps_display_set(lua, &display, Some(steps), false)?; }
+    }
+    Ok(())
+}
+
 pub fn create_top_screen_theme_actor(
     lua: &Lua,
     parent: &Table,
@@ -14144,8 +14287,7 @@ return {
         return Ok(Some(actor));
     }
     if top_screen_steps_display_index(name).is_some() {
-        // StepsDisplay derives from ActorFrame, not BitmapText.
-        return Ok(Some(create_named_actor(lua, "StepsDisplay", name, create_dummy_actor)?));
+        return create_native_steps_display(lua, name, create_dummy_actor).map(Some);
     }
     if name.starts_with("StepsDescription") || name.starts_with("PlayerOptions")
         || name.starts_with("ActiveAttackList") || name == "SongOptions"
@@ -14388,6 +14530,9 @@ pub fn install_top_screen_theme_children(
         if top_screen_score_index(name).is_some() || top_screen_steps_display_index(name).is_some()
             || name.starts_with("StepsDescription") || matches!(name, "Header" | "Footer") {
             child.raw_set("__songlua_theme_hibernating", true)?;
+        }
+        if let Some(index) = top_screen_steps_display_index(name) {
+            child.raw_set("__songlua_preferred_difficulty", players[index].difficulty.sm_name())?;
         }
         children.set(name, child)?;
     }
@@ -22155,6 +22300,11 @@ pub(crate) fn install_native_gameplay_underlay(
     // Keep normal listener dispatch while excluding both song output streams.
     let source_output = lua.remove_app_data::<LiveSourceBroadcasts>();
     let result = (|| -> mlua::Result<()> {
+        lua.load(include_str!("../assets/simply-love/Scripts/utf8.lua"))
+            .set_name("@theme:/Scripts/utf8.lua").exec()?;
+        lua.load(include_str!("../assets/simply-love/Scripts/SL-Helpers-Text.lua"))
+            .set_name("@theme:/Scripts/SL-Helpers-Text.lua").exec()?;
+        initialize_native_steps_displays(lua, &screen)?;
         let mut panes = Vec::new();
         for player in players.sequence_values::<Value>() {
             let player = player?;

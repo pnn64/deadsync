@@ -6839,4 +6839,47 @@ return Def.ActorFrame {
         assert!(output.errors[0].contains("live diagnostic"), "{:?}", output.errors);
         assert!(scene.advance(frame.clone()).expect("next frame").errors.is_empty(), "native error is reported once");
     }
+    #[test]
+    fn live_steps_display_owns_native_children_resources_and_step_lifecycle() {
+        let mut compiled=compile_with_context("native-gameplay-steps-display", "return Def.Actor {}", |context| {
+            context.defer_initial_live_update=true;
+            context.players[0].enabled=true;context.players[1].enabled=true;
+            context.song_steps=vec![
+                crate::SongLuaStep {steps_type:"StepsType_Dance_Single".into(),difficulty:SongLuaDifficulty::Challenge,
+                    description:"P1 chart".into(),chart_name:String::new(),credit:String::new(),meter:9,
+                    music_file:String::new(),possible_grade_points:0},
+                crate::SongLuaStep {steps_type:"StepsType_Dance_Single".into(),difficulty:SongLuaDifficulty::Edit,
+                    description:"Fixture edit".into(),chart_name:String::new(),credit:String::new(),meter:13,
+                    music_file:String::new(),possible_grade_points:0}];
+            context.player_step_indices=[Some(0),Some(1)];
+        });
+        let scene=compiled.live_scene.take().expect("owned native StepsDisplays");
+        scene.lua.load(r#"
+local screen=SCREENMAN:GetTopScreen()
+for index,pn in ipairs{PLAYER_1,PLAYER_2} do
+    local display=screen:GetChild('StepsDisplayP'..index)
+    assert(display:GetNumChildren()==4, 'native StepsDisplay must own its four metric-loaded children')
+    assert(display:GetParent()==screen)
+    for _,name in ipairs{'Frame','Meter','Description','Autogen'} do
+        assert(display:GetChild(name):GetParent()==display, 'native named child ownership')
+    end
+    assert(display:GetChild('Frame'):GetTexture() and display:GetChild('Autogen'):GetTexture(),
+        'inherited graphics redirections load the native blank resources')
+    assert(display:GetChild('Meter'):GetText()==(index==1 and '9' or '13'))
+    assert(not display:GetChild('Meter'):GetVisible(), 'gameplay MeterOnCommand hides the loaded meter')
+    assert(display:GetChild('Description'):GetVisible()==(index==2))
+    assert(display:GetChild('Description'):GetText()==(index==1 and 'Expert' or 'Fixture edit'))
+    assert(display:SetFromSteps(nil)==display and not display:GetVisible(), 'native Unset keeps the resource tree')
+    assert(display:GetNumChildren()==4)
+    assert(display:SetFromGameState(pn)==display and display:GetVisible())
+end
+local p1=screen:GetChild('StepsDisplayP1')
+p1:SetFromSteps(GAMESTATE:GetCurrentSteps(PLAYER_2))
+assert(p1:GetChild('Meter'):GetText()=='13' and p1:GetChild('Description'):GetText()=='Fixture edit')
+assert(p1:GetChild('Description'):GetVisible(), 'native edit description follows selected Steps')
+p1:SetFromGameState(PLAYER_1)
+assert(p1:GetChild('Meter'):GetText()=='9' and not p1:GetChild('Description'):GetVisible())
+"#).exec().expect("native StepsDisplay resources, metric commands and data lifecycle");
+    }
+
 }
