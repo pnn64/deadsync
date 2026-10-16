@@ -5404,15 +5404,12 @@
     {
       "title": "What a Wonderful World",
       "source_simfile": "What A Wonderful World/WAWW.sm",
-      "harness_version": "0.1.0",
-      "archive": "8ff418d0678800ce2842370a2a5ee572a07454cbf086523567e52aa026169c85.tar.zst",
-      "sha256": "8ff418d0678800ce2842370a2a5ee572a07454cbf086523567e52aa026169c85",
-      "compressed_bytes": 3399129,
-      "uncompressed_sha256": "ee20f4b46b399e307c1421393918946299f3728085dc1e67e5f6b68ef3bcb22a",
-      "compression_level": 22,
-      "aliases": [
-        "0d26aa12b090fced2091aef0e9683b961053255117c7b772960508e175499eb5.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "1ef17a67fbdc88116dbe889a4a05140c8737c0bd646d5e4ecd90a035cf4242f8.tar.zst",
+      "sha256": "1ef17a67fbdc88116dbe889a4a05140c8737c0bd646d5e4ecd90a035cf4242f8",
+      "compressed_bytes": 36610767,
+      "uncompressed_sha256": "8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c",
+      "aliases": []
     },
     {
       "title": "What If The Whole World Turned Their Swag On",
