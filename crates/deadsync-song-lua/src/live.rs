@@ -3867,6 +3867,38 @@ end)
     }
 
     #[test]
+    fn live_empty_bitmap_text_zoomtoheight_sets_native_zoom() {
+        let mut compiled = compile("empty-text-zoomtoheight", r#"
+return Def.BitmapText {
+    Font = 'Common normal',
+    InitCommand = function(self)
+        TEXT = self
+        assert(self:GetText() == '' and self:GetHeight() == 1)
+        self:zoomtoheight(0.004 * SCREEN_HEIGHT)
+        local expected = 1.9199999570846558
+        assert(self:GetZoomY() == expected, 'native ZoomToHeight changes zoom before SetText')
+        self:zoomx(self:GetZoomY())
+        assert(self:GetZoomX() == expected and self:GetZoomedHeight() == expected)
+        self:zoomtoheight(3)
+        assert(self:GetHeight() == 1 and self:GetZoomY() == 3,
+            'repeated sizing divides by the original unzoomed height')
+        self:settext('1:59')
+        assert(self:GetZoomY() == 3, 'later text assignment preserves the authored zoom')
+    end,
+}
+"#);
+        let mut scene = compiled.live_scene.take().expect("live timer text");
+        let output = scene.advance(SongLuaLiveFrame { screen_seconds: 0.1,
+            music_seconds: 0.1, delta_seconds: 0.1, ..Default::default() }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        let text = scene.lua.globals().get::<Table>("TEXT").unwrap();
+        let state = read_state(&scene.lua, &text).unwrap();
+        assert_eq!(state.zoom_x, 1.92);
+        assert_eq!(state.zoom_y, 3.0);
+        assert_eq!(state.size, None, "empty text sizing is a zoom, not a future font fit");
+    }
+
+    #[test]
     fn live_amv_load_texture_preserves_mesh_and_restores_native_default() {
         let compiled = compile_with_context("amv-load-texture", r#"
 return Def.ActorMultiVertex {

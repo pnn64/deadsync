@@ -5807,9 +5807,14 @@ pub fn install_actor_scale_size_methods(lua: &Lua, actor: &Table) -> mlua::Resul
                     return Ok(actor.clone());
                 };
                 let (width, base_height) = actor_base_size(&actor)?;
-                if actor_type_is(&actor, "BitmapText")? {
+                if actor_type_is(&actor, "BitmapText")?
+                    && !lua_text_value(actor.get::<Value>("Text")?)?.is_empty()
+                {
                     capture_block_set_size(lua, &actor, [width, height])?;
                 } else {
+                    // BitmapText::BuildChars leaves the constructor height (1)
+                    // while its text lines are empty. ZoomToHeight must update
+                    // the Lua-visible zoom before text is first assigned.
                     capture_block_set_f32(lua, &actor, "zoom_y", height / base_height)?;
                 }
                 Ok(actor.clone())
