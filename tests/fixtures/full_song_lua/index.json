@@ -2442,14 +2442,15 @@
     {
       "title": "Fof Guys",
       "source_simfile": "fof_guys/fof.ssc",
-      "harness_version": "0.1.0",
-      "archive": "fec59a2d8c1d08ac1580b4d8ea632933208cb30a64fd2971396ab5b9f1b1c35f.tar.zst",
-      "sha256": "fec59a2d8c1d08ac1580b4d8ea632933208cb30a64fd2971396ab5b9f1b1c35f",
-      "compressed_bytes": 260704,
-      "uncompressed_sha256": "58cdb690056771bf0ed4a12dbf5fc35da354dd5cc0db6d505b8cdb52d9d1f714",
-      "compression_level": 22,
+      "harness_version": "0.1.80",
+      "archive": "50ada90f96b306f583ae02382994d5c4497b33546c02fac6b3f826b0b00913fb.tar.zst",
+      "sha256": "50ada90f96b306f583ae02382994d5c4497b33546c02fac6b3f826b0b00913fb",
+      "compressed_bytes": 90340188,
+      "uncompressed_sha256": "756b2e53aa3fbe0d7c26f686475280fbca81789d88c58ba1e63b93a9ba6a017d",
+      "compression_level": 12,
       "aliases": [
-        "3f3f0ac5d6802d3ff6652c239758ab69cf76a30f5b2e466b420360f7f1dba533.tar.zst"
+        "3f3f0ac5d6802d3ff6652c239758ab69cf76a30f5b2e466b420360f7f1dba533.tar.zst",
+        "fec59a2d8c1d08ac1580b4d8ea632933208cb30a64fd2971396ab5b9f1b1c35f.tar.zst"
       ]
     },
     {

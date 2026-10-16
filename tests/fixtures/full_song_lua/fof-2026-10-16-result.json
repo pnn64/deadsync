@@ -1,0 +1,168 @@
+{
+  "source_simfile": "fof_guys/fof.ssc",
+  "status": "passed",
+  "archive_accepted": true,
+  "native_frames": 7378,
+  "replayed_frames": 7378,
+  "checked_stage_samples": 129,
+  "compared_stage_fields": 1419,
+  "mismatch_count": 0,
+  "callback_errors": 0,
+  "full_repairs_spent": 2,
+  "archive": "50ada90f96b306f583ae02382994d5c4497b33546c02fac6b3f826b0b00913fb.tar.zst",
+  "compressed_sha256": "50ada90f96b306f583ae02382994d5c4497b33546c02fac6b3f826b0b00913fb",
+  "compressed_bytes": 90340188,
+  "uncompressed_sha256": "756b2e53aa3fbe0d7c26f686475280fbca81789d88c58ba1e63b93a9ba6a017d",
+  "local_decompression_byte_verified": true,
+  "replay_report": "fof-2026-10-16-replay-report.json.zst",
+  "replay_report_sha256": "59a9c943ca74366a95e954b94084ad2cacbd262d2f0017752c3849efa8a6bfe9",
+  "replay_report_uncompressed_sha256": "3b4b7e4af2e6f509ad76dc59e74b89b57664a2aaf2305da7171f7a346ee00d6d",
+  "coverage": "fof-2026-10-16-coverage.json",
+  "original_capture_compressed_sha256": "f41eb510ace313033c65033df6df08dd0017e4cbbca5433ef3617d54f91d5246",
+  "original_native_capture_and_payloads_unchanged": true,
+  "simfile_sha256": "a40dbf6a805eb74a544ba1fb6179d15d18c6df1ba2220218e3937e25a82a5fe6",
+  "binary_sha256": "5fece87cd4790c86ebf1ec2d6cc96f05967d3f7d6eac92d8112ba5d7f8d14c62",
+  "source_files_verified": 1175,
+  "build_checks": [
+    {
+      "label": "empty-text-zoom",
+      "exit_code": 0,
+      "seconds": 293.3799030169612,
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 651 filtered out; finished in 0.27s"
+      ]
+    },
+    {
+      "label": "load-texture",
+      "exit_code": 0,
+      "seconds": 0.9134468209813349,
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 651 filtered out; finished in 0.25s"
+      ]
+    },
+    {
+      "label": "mesh-controls",
+      "exit_code": 0,
+      "seconds": 0.8659805640345439,
+      "results": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 649 filtered out; finished in 0.27s"
+      ]
+    },
+    {
+      "label": "live-texture-controls",
+      "exit_code": 0,
+      "seconds": 1.0412767060333863,
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 651 filtered out; finished in 0.44s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 199.89060764899477,
+      "results": []
+    }
+  ],
+  "text_controls": [
+    {
+      "test": "compile_song_lua_supports_bitmaptext_fit_methods",
+      "exit_code": 0,
+      "result": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 651 filtered out; finished in 0.22s"
+      ]
+    },
+    {
+      "test": "zoomto_preserves_intrinsic_size",
+      "exit_code": 0,
+      "result": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 651 filtered out; finished in 0.22s"
+      ]
+    },
+    {
+      "test": "compile_song_lua_supports_zoom_to_width_and_height",
+      "exit_code": 0,
+      "result": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 651 filtered out; finished in 0.23s"
+      ]
+    }
+  ],
+  "windows_regressions_passed": [
+    "live_amv_load_texture_preserves_mesh_and_restores_native_default",
+    "live_empty_bitmap_text_zoomtoheight_sets_native_zoom"
+  ],
+  "repairs": [
+    {
+      "attempt": 1,
+      "commit": "b13ccaa65",
+      "failure": "ActorMultiVertex.LoadTexture had no semantic implementation; preparation retained no Lua scene",
+      "native_source": "../itgmania-harness/vendor/itgmania/src/ActorMultiVertex.cpp:834"
+    },
+    {
+      "attempt": 2,
+      "commit": "cd5f663e8",
+      "failure": {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0085",
+          "args": [
+            1.9199999570846558
+          ],
+          "beat": 0,
+          "caller": {
+            "line": 29,
+            "source": "song:/fof/LimitChartDuration.lua",
+            "tail_call": false
+          },
+          "command": "InitCommand",
+          "definition_id": "def-0085",
+          "detail": {
+            "native_tween_time_left": 0
+          },
+          "kind": "call",
+          "line": 29,
+          "operation": "Actor.zoomx",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 0,
+          "seq": 686,
+          "source": "song:/fof/LimitChartDuration.lua",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.zoomx",
+          "source": "song:/fof/LimitChartDuration.lua",
+          "line": 29,
+          "phase": "callback",
+          "beat": 0.0,
+          "seconds": 0.0,
+          "args": [
+            1
+          ],
+          "results": [
+            {
+              "actor": "0x56129bcda430",
+              "name": "",
+              "path": "ScreenGameplay/SongForeground"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      },
+      "native_sources": [
+        "../itgmania-harness/vendor/itgmania/src/Actor.h:455",
+        "../itgmania-harness/vendor/itgmania/src/Actor.cpp:164",
+        "../itgmania-harness/vendor/itgmania/src/BitmapText.cpp:254"
+      ],
+      "theme_source": "../itgmania-harness/vendor/simply-love/Fonts/Common Normal.redir"
+    }
+  ],
+  "full_replay_exit_code": 0,
+  "full_replay_seconds": 899.4742216280429,
+  "full_acceptance_criteria_unchanged": true,
+  "acceptance_gate_added": false,
+  "other_charts_processed": false,
+  "files_over_100_MB_ignored": [],
+  "large_scratch_files_ignore_rule": "/target"
+}

@@ -1,17 +1,37 @@
-# Fof Guys current result
+# Fof Guys full replay result
 
-The supplied `fof_guys/fof.ssc` passes all 39/39 current comparisons.
-The headless reference reaches beat 368.0833435058594 with no
-Lua runtime errors or dropped events. MAIN independently checks this result
-before its 0.5.1771 promotion commit. Passing charts stay out of the investigation
-queue unless a regression is reported.
+`fof_guys/fof.ssc` **passed** the existing full replay on 2026-10-16:
+7,378/7,378 native frames, 129 stage samples, 1,419 stage fields, zero
+mismatches, zero callback errors, and exit code 0. Acceptance is the full
+replay of implemented comparisons; the acceptance tests were unchanged.
 
-The older headless reference misclassified the join sound as a Sprite.
-The current local capture records the Sound actor and passes every section.
-This result covers the supplied join-screen chart; it does not assert that
-interactive minigame branches were exercised.
+The retained native capture was reused. Its simfile and every archived song
+resource match `../rework/lua-songs/fof_guys/`. All comparisons used the
+uncompressed candidate, SHA-256
+`756b2e53aa3fbe0d7c26f686475280fbca81789d88c58ba1e63b93a9ba6a017d`.
+The accepted bytes were then packed with `../itgmania-harness` and their
+decompressed SHA-256 verified again.
 
-Frozen identity: `29216cf8f382a21d`. Supplied local identity: `29216cf8f382a21d`.
-The frozen project manifest and song resources are unchanged. No files were
-downloaded. The current headless result does not establish full native screen
-pixels or interactive input branches.
+Both permitted repairs were used and committed promptly:
+
+- `b13ccaa65`: implement native `ActorMultiVertex.LoadTexture`, including
+  restoring the default texture on nil without replacing the mesh.
+- `cd5f663e8`: apply `zoomtoheight` to empty BitmapText's zoom. Native
+  `BitmapText::BuildChars` leaves its constructor height at 1, so the timer's
+  `GetZoomY()` must return `1.9199999570846558`, rather than 1.
+
+Both regressions passed on Windows and Linux. Existing mesh, texture, and
+text sizing controls passed. Sources, source references, build identity,
+and the concrete failures are recorded in the result below.
+
+- [Complete fixture](../tests/fixtures/full_song_lua/50ada90f96b306f583ae02382994d5c4497b33546c02fac6b3f826b0b00913fb.tar.zst)
+  (90,340,188 bytes, zstd level 12).
+- [Result and repair evidence](../tests/fixtures/full_song_lua/fof-2026-10-16-result.json).
+- [Complete replay report](../tests/fixtures/full_song_lua/fof-2026-10-16-replay-report.json.zst).
+- [Missing coverage](../tests/fixtures/full_song_lua/fof-2026-10-16-coverage.json).
+
+The reported operation and drawable coverage gaps remain separate from
+acceptance. No acceptance gates were added or gaps investigated after the
+pass. No other charts were processed. Files over 100 MB remain under the
+existing `/target` ignore rule; every committed fixture is below 100 MB.
+The earlier 39/39 headless semantic reference remains retained as history.
