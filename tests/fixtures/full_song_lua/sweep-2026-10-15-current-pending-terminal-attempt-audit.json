@@ -1,6 +1,6 @@
 {
-  "generated_utc": "2026-10-16T02:08:42.213367+00:00",
-  "concrete_ledger_sha256": "e78e1369500c82b542d8fc874c6c151ad3cdee5637ed30e4d86fb689bd63078a",
+  "generated_utc": "2026-10-16T02:43:44.827007+00:00",
+  "concrete_ledger_sha256": "c949fb83620076aa45dca3be98b00b63ff80802e8b142d30dd3b9d29dbe1066a",
   "counts": {
     "passed": 401,
     "pending": 100,
@@ -20,5 +20,27 @@
     "completed_full_replay": false,
     "restart_requires_user_resuming_chart": true
   },
-  "no_chart_replays_or_source_mutations": true
+  "no_chart_replays_or_source_mutations": true,
+  "additional_running_repairs_not_counted_as_terminal": [
+    {
+      "source_simfile": "What A Wonderful World/WAWW.sm",
+      "position": 471,
+      "stage": "waww-native-float-math-final2-v1",
+      "started_full_repairs": 2,
+      "completed_full_repairs": 1,
+      "running": true,
+      "observed_utc": "2026-10-16T02:43:49.491504+00:00",
+      "pid": 3974183,
+      "command": [
+        "/home/parity/jobs/native-offset-first-linux-green-v1/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/waww-native-float-math-final2-v1/chart-471/8f5e632ff873776a41ab26ffba830dbe1d1f890d467c18b63226cedf8e1e576c.tar",
+        "--report",
+        "/home/parity/jobs/waww-native-float-math-final2-v1/chart-471/report.json"
+      ],
+      "actual_process_command_and_cwd_verified": true,
+      "observed_replayed_frames": 1475,
+      "native_frames": 7119
+    }
+  ]
 }

@@ -1,0 +1,126 @@
+{
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "errors": [],
+  "dropped_events": 0,
+  "dropped_stage_samples": 0,
+  "dropped_update_frames": 0,
+  "dropped_random_reseeds": 0,
+  "native_frames": 5268,
+  "source_simfile": "Paint the Town Red/PaintTheTownRed.sm",
+  "diagnostic_exit": 2,
+  "seconds": 1512.3118196300347,
+  "full_repairs_spent": 0,
+  "native_capture_reused": true,
+  "candidate_sha256": "542e91a756c07df3af331660a439cbddd9b85b4e32d218048b1751082e8709cd",
+  "trace_sha256": "a2a52901e9b45c2909e6f3cdd25c6d38544a1d9b3234b13b86c5aa99df9ba4d8",
+  "simfile_sha256": "a876df80258c0fb9a9c0eb23294c0857e7a249fc8c37e96f6305f2c4b5456173",
+  "binary_sha256": "ae049e8a4846869333ee4734d665de1faad2dfa99b4b9437ec999f8b3f907f0e",
+  "fix_commit": "8d744316ad5679a61fa806eb7e218c71799965ef",
+  "all_seven_groups_both_hosts_and_1175_source_pins_verified": true,
+  "no_fixture_acceptance": true,
+  "entry_does_not_compare_source_broadcasts": true,
+  "replayed_frames": 2873,
+  "archive_accepted": false,
+  "mismatch_count": 2506,
+  "first_mismatches": [
+    {
+      "field": "command_query_count",
+      "native": 133294,
+      "deadsync": 133432
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "actor": "def-0001",
+        "args": [],
+        "beat": 84.512939453125,
+        "command": "UpdateCommand",
+        "definition_id": "def-0001",
+        "detail": {
+          "name": "UpdateCommand"
+        },
+        "kind": "command",
+        "line": 83,
+        "operation": "command.end",
+        "scene": 1,
+        "seconds": 25.481882095336914,
+        "seq": 253405,
+        "source": "song:/lua/Ambience/snow-simple.lua"
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "call",
+        "operation": "Actor.visible",
+        "source": "song:/lua/Ambience/snow-simple.lua",
+        "line": 83,
+        "phase": "callback",
+        "beat": 84.512939453125,
+        "seconds": 25.481882095336914,
+        "args": [
+          true
+        ],
+        "results": [
+          {
+            "actor": "0x60520712db80",
+            "name": "",
+            "path": "ScreenGameplay/SongForeground/lua"
+          }
+        ],
+        "tween_time_left": 0.0
+      }
+    },
+    {
+      "field": "command_query_event",
+      "native": {
+        "args": [],
+        "beat": 84.512939453125,
+        "callback": "SetUpdateFunction",
+        "caller": {
+          "line": 203,
+          "source": "song:/lua/default.lua",
+          "tail_call": false
+        },
+        "command": "InitCommand",
+        "definition_id": "def-0109",
+        "detail": {
+          "results": [
+            84.512939453125
+          ]
+        },
+        "kind": "query",
+        "line": 203,
+        "operation": "GameState.GetSongBeat",
+        "phase": "callback",
+        "scene": 1,
+        "seconds": 25.481882095336914,
+        "seq": 253406,
+        "source": "song:/lua/default.lua",
+        "results": [
+          84.512939453125
+        ]
+      },
+      "deadsync": {
+        "scene": 1,
+        "kind": "query",
+        "operation": "Actor.getaux",
+        "source": "song:/lua/Ambience/snow-simple.lua",
+        "line": 83,
+        "phase": "callback",
+        "beat": 84.512939453125,
+        "seconds": 25.481882095336914,
+        "args": [],
+        "results": [
+          0
+        ]
+      }
+    }
+  ],
+  "report_sha256": "176c7bb4dca480439e116e10ba432c9b3b1aa98c35cdbcbbc38ce8911aac6599",
+  "existing_whole_song_acceptance_unchanged": true
+}
