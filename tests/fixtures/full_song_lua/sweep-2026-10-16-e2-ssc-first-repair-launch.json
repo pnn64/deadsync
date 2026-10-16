@@ -1,0 +1,71 @@
+{
+  "source_simfile": "E2/E.ssc",
+  "position": 181,
+  "status": "running",
+  "repair_attempt": 1,
+  "previous_full_repairs": 0,
+  "maximum_full_repairs_per_sweep": 2,
+  "entry_evidence": "sweep-2026-10-16-e2-ssc-qualified-entry-diagnostic.json",
+  "entry_frames": 4914,
+  "entry_errors": 0,
+  "entry_mismatches": 0,
+  "entry_does_not_compare_source_broadcasts": true,
+  "native_frames": 14142,
+  "attempt_start": {
+    "position": 181,
+    "source_simfile": "E2/E.ssc",
+    "status": "pending",
+    "repair_attempts": 1,
+    "candidate_sha256": "d60efe1f8247f06f3aed627bf455708ff485fb98d38899c2ceec8773ba71a9e6",
+    "trace_sha256": "5160647245e7b56c3c28bf06a04ec890bc3db530975ffb603a14e22232c4282a",
+    "simfile_sha256": "333782934a7dc6fab316037d7ec30a59e7cc4a34b19a1a14704db27c53936c07",
+    "native_capture_reused": true,
+    "all_candidate_manifest_members_byte_verified": true,
+    "binary_sha256": "ba75e5790ef124738a7e872bc6687d011294e40de885746f5347371e676b0c4c",
+    "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+    "build_proof": "/home/parity/jobs/song-meter-linux-green-v2/proof.json",
+    "fix_commit": "8510f759639bee4ed0338379e03da2243f33a07d",
+    "previous_failure": null,
+    "previous_errors": [],
+    "qualified_existing_underlay_fixes": [
+      "135dcdfd107e0b2cf527c010b827593139433102",
+      "2e561959d28baded6219078922c8fd38012aaaf5",
+      "73562663c1fda754b7cb34c4dd4ccdb849dbfdcd"
+    ],
+    "no_query_outputs_used_as_inputs": true,
+    "original_full_failure": "Original full replay has272110 mismatches starting at initial theme actor queues. Current qualified theme source repairs give a clean retained4914frame entry; all14142 native frames remain unaccepted until full replay.",
+    "full_acceptance_criteria_unchanged": true,
+    "capture_repeated": false,
+    "mawaru9_remains_deferred": true
+  },
+  "actual_running_observation": {
+    "source_simfile": "E2/E.ssc",
+    "attempt_started": 1,
+    "pid": 2916249,
+    "actual_command": [
+      "/home/parity/jobs/song-meter-linux-green-v2/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/e2-ssc-qualified-first-repair-v1/chart-181/d60efe1f8247f06f3aed627bf455708ff485fb98d38899c2ceec8773ba71a9e6.tar",
+      "--report",
+      "/home/parity/jobs/e2-ssc-qualified-first-repair-v1/chart-181/report.json"
+    ],
+    "recorded_command": [
+      "/home/parity/jobs/song-meter-linux-green-v2/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/e2-ssc-qualified-first-repair-v1/chart-181/d60efe1f8247f06f3aed627bf455708ff485fb98d38899c2ceec8773ba71a9e6.tar",
+      "--report",
+      "/home/parity/jobs/e2-ssc-qualified-first-repair-v1/chart-181/report.json"
+    ],
+    "actual_command_matches_record": true,
+    "running": true,
+    "phase": "replay",
+    "result_exists": false,
+    "terminal_result": null,
+    "checked_utc": "2026-10-16T00:17:47.645818+00:00"
+  },
+  "original_candidate_uncompressed_sha256": "d60efe1f8247f06f3aed627bf455708ff485fb98d38899c2ceec8773ba71a9e6",
+  "native_capture_reused": true,
+  "existing_full_comparisons_unchanged": true,
+  "no_fixture_acceptance_claimed": true,
+  "mawaru9_remains_deferred": true
+}

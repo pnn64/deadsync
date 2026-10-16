@@ -1,6 +1,6 @@
 {
-  "generated_utc": "2026-10-16T00:15:30.012572+00:00",
-  "concrete_ledger_sha256": "92234c4bb6b65ae3b6ecaca91160e40e2a37f8e47bc4a48b27d2f4c2cd806e25",
+  "generated_utc": "2026-10-16T00:17:52.714541+00:00",
+  "concrete_ledger_sha256": "6a6f7c01ea927c70bddaf2587c05acaca950dccd49b8d540c9c3865fc8cad422",
   "counts": {
     "passed": 400,
     "pending": 101,
@@ -20,5 +20,32 @@
     "completed_full_replay": false,
     "restart_requires_user_resuming_chart": true
   },
-  "no_chart_replays_or_source_mutations": true
+  "no_chart_replays_or_source_mutations": true,
+  "additional_running_repairs_not_counted_as_terminal": [
+    {
+      "source_simfile": "E2/E.ssc",
+      "attempt_started": 1,
+      "pid": 2916249,
+      "actual_command": [
+        "/home/parity/jobs/song-meter-linux-green-v2/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/e2-ssc-qualified-first-repair-v1/chart-181/d60efe1f8247f06f3aed627bf455708ff485fb98d38899c2ceec8773ba71a9e6.tar",
+        "--report",
+        "/home/parity/jobs/e2-ssc-qualified-first-repair-v1/chart-181/report.json"
+      ],
+      "recorded_command": [
+        "/home/parity/jobs/song-meter-linux-green-v2/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/e2-ssc-qualified-first-repair-v1/chart-181/d60efe1f8247f06f3aed627bf455708ff485fb98d38899c2ceec8773ba71a9e6.tar",
+        "--report",
+        "/home/parity/jobs/e2-ssc-qualified-first-repair-v1/chart-181/report.json"
+      ],
+      "actual_command_matches_record": true,
+      "running": true,
+      "phase": "replay",
+      "result_exists": false,
+      "terminal_result": null,
+      "checked_utc": "2026-10-16T00:17:56.342525+00:00"
+    }
+  ]
 }

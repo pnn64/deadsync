@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-16T00:15:29Z",
+  "updated_utc": "2026-10-16T00:17:52Z",
   "counts": {
     "passed": 400,
     "pending": 101,
@@ -4717,7 +4717,41 @@
       "replayed_frames": 14142,
       "capture_errors": null,
       "completion": null,
-      "no_third_full_repair": false
+      "no_third_full_repair": false,
+      "followup": "sweep-2026-10-16-e2-ssc-first-repair-launch.json",
+      "entry_evidence": "sweep-2026-10-16-e2-ssc-qualified-entry-diagnostic.json",
+      "entry_diagnostic_frames": 4914,
+      "entry_diagnostic_errors": 0,
+      "entry_diagnostic_mismatches": 0,
+      "entry_does_not_compare_broadcasts": true,
+      "started_full_repairs": 1,
+      "new_full_repair_started": true,
+      "actual_running_observation": {
+        "source_simfile": "E2/E.ssc",
+        "attempt_started": 1,
+        "pid": 2916249,
+        "actual_command": [
+          "/home/parity/jobs/song-meter-linux-green-v2/full-song-lua",
+          "--archive",
+          "/home/parity/jobs/e2-ssc-qualified-first-repair-v1/chart-181/d60efe1f8247f06f3aed627bf455708ff485fb98d38899c2ceec8773ba71a9e6.tar",
+          "--report",
+          "/home/parity/jobs/e2-ssc-qualified-first-repair-v1/chart-181/report.json"
+        ],
+        "recorded_command": [
+          "/home/parity/jobs/song-meter-linux-green-v2/full-song-lua",
+          "--archive",
+          "/home/parity/jobs/e2-ssc-qualified-first-repair-v1/chart-181/d60efe1f8247f06f3aed627bf455708ff485fb98d38899c2ceec8773ba71a9e6.tar",
+          "--report",
+          "/home/parity/jobs/e2-ssc-qualified-first-repair-v1/chart-181/report.json"
+        ],
+        "actual_command_matches_record": true,
+        "running": true,
+        "phase": "replay",
+        "result_exists": false,
+        "terminal_result": null,
+        "checked_utc": "2026-10-16T00:17:53.533092+00:00"
+      },
+      "current_diagnostic_failure": "Historical initial theme actor clock/ownership failures; current retained entry is clean. First full repair on14142 native frames is not yet accepted."
     },
     {
       "position": 190,
@@ -23542,7 +23576,7 @@
           ],
           "report_sha256": "835ddbdaa434e29c5c07469bc80c28b279f1e7e817f17f89fe45ba98f7bbf617"
         },
-        "checked_utc": "2026-10-16T00:15:31.230511+00:00"
+        "checked_utc": "2026-10-16T00:17:53.963284+00:00"
       },
       "current_diagnostic_failure": "Full first1:7119frames/0errors/4657mismatches. First command slip atseq89801 is reproduced exactly by native float versus nanosecond foreground start timing, one f32 ULP apart. Source-qualified pre-song boundary fix also required. New timing fix remains unqualified; no final2 started.",
       "full_replay_completed": true,
