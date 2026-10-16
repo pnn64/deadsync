@@ -5701,10 +5701,11 @@ fn scale_background(lua: &Lua, actor: &Table, center: bool) -> mlua::Result<()> 
     let width: f32 = globals.get("SCREEN_WIDTH")?;
     let height: f32 = globals.get("SCREEN_HEIGHT")?;
     let preferences: Table = globals.get("PREFSMAN")?;
-    let mode = preferences
-        .get::<Function>("GetPreference")?
-        .call::<Value>((preferences.clone(), "BackgroundFitMode"))?;
-    let mode = read_string(mode).unwrap_or_default();
+    // _fallback/02 Actor.lua reads this inside the theme helper. Calling the
+    // public Lua binding from Rust attributes that internal query to the song.
+    let values: Table = preferences.raw_get("__songlua_preference_values")?;
+    let mode = values.raw_get::<Option<String>>("BackgroundFitMode")?
+        .unwrap_or_else(|| "BackgroundFitMode_CoverPreserve".into());
     let (base_width, base_height) = actor_base_size(actor)?;
     if base_width > 0.0 && base_height > 0.0 {
         let x = width / base_width;

@@ -1838,6 +1838,7 @@ pub fn create_prefsmgr_table(
     let prefsmgr = lua.create_table()?;
     let pref_store = lua.create_table()?;
     pref_store.set("EventMode", event_mode)?;
+    prefsmgr.raw_set("__songlua_preference_values", pref_store.clone())?;
     let video_renderers = video_renderers.to_string();
     let last_seen_video_driver = last_seen_video_driver.to_string();
     let get_video_driver = last_seen_video_driver.clone();
