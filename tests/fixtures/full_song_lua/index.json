@@ -2170,17 +2170,14 @@
       ]
     },
     {
-      "title": "Delightful Day",
+      "title": "Delightful Day (w/ visual FX, BG video)",
       "source_simfile": "Delightful Day/Delightful Day.ssc",
-      "harness_version": "0.1.0",
-      "archive": "fb5cc6560c8aed0250e2ac6a1167d3994362a8f91b30c636dac4e502a8ea4174.tar.zst",
-      "sha256": "fb5cc6560c8aed0250e2ac6a1167d3994362a8f91b30c636dac4e502a8ea4174",
-      "compressed_bytes": 11594,
-      "uncompressed_sha256": "93eade45a1b4f6fe1ac6c5343a1769b96058da983d67346bbb5f2362614b87d4",
-      "compression_level": 22,
-      "aliases": [
-        "6415b9b78e024a4eda84f82f7140cba66b8eb9e6d6786d5662810d6d2cc87fab.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "02b9b22e9f67e55055e1a080486da4f0fce0ed7f2e6f1c5da56063941f8d0967.tar.zst",
+      "compressed_bytes": 67346070,
+      "sha256": "02b9b22e9f67e55055e1a080486da4f0fce0ed7f2e6f1c5da56063941f8d0967",
+      "uncompressed_sha256": "cbd7ba016a87fde04f37cae8ef4f7abc52df122af7ece6a516822a9b03752e59",
+      "aliases": []
     },
     {
       "title": "Dig Dug Theme",
