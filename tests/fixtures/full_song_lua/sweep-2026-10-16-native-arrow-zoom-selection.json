@@ -1,0 +1,15 @@
+{
+  "fix_commit": "1d3b83abed5560a9bb73eae09e83a3ea13da63ee",
+  "source_root": "/home/parity/workspace/native-arrow-zoom-green-v1/deadsync",
+  "binary_sha256": "a785438f8c9bbdf891c31f903e76cb7a901cd2025abfe9f1eb30a791ce825a66",
+  "build_proof": "/home/parity/jobs/native-arrow-zoom-linux-green-v1/proof.json",
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_sources50_assets_verified": true,
+  "native_reference_cases": 53,
+  "live_controls": 111,
+  "replay_controls": 44,
+  "full_acceptance_criteria_unchanged": true,
+  "native_expected_outputs_are_test_only": true,
+  "native_capture_reused": true,
+  "Igaku_full_repairs_spent": 0
+}
