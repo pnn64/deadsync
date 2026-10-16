@@ -2720,15 +2720,12 @@
     {
       "title": "Happy Now",
       "source_simfile": "Happy Now/Happy Now.sm",
-      "harness_version": "0.1.0",
-      "archive": "a9b4ff850bc8ab768828aa730351155c5f828c889f49463c79ccff92e2e75f81.tar.zst",
-      "sha256": "a9b4ff850bc8ab768828aa730351155c5f828c889f49463c79ccff92e2e75f81",
-      "compressed_bytes": 79544,
-      "uncompressed_sha256": "984a8dd3c38447b100ba924db5a674bc375c28bd009f1cb55d471978a758531c",
-      "compression_level": 22,
-      "aliases": [
-        "a416b17ff21a1dbd523eb66e799a1188dbe99ed9af21562b3d6ef56e03cc33d8.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "acb0e9e5d14752e6555d2b9da0fb9506358aa8778a45de2b079e7a11541d6423.tar.zst",
+      "compressed_bytes": 22408626,
+      "sha256": "acb0e9e5d14752e6555d2b9da0fb9506358aa8778a45de2b079e7a11541d6423",
+      "uncompressed_sha256": "c8c6e29eac2dd17198bb286c3341ab08a10d264fe7097ad51e779459cd4fffd6",
+      "aliases": []
     },
     {
       "title": "Happy Now",
