@@ -1,0 +1,18 @@
+{
+  "cause": "sweep-2026-10-16-multitap-arrow-x-source-cause.json",
+  "production_change": "Implement the complete captured native GetXPos effect accumulation, Tiny spacing, style geometry, player options and timers. Retain native Beat/invert/tornado effect data across actor updates and refresh it after the screen update; expose explicit ArrowEffects.Update.",
+  "native_reference_cases": 130,
+  "source_control": "Copied pinned native C++ functions and invert update body; independent g++ control reproduces fixture outputs.",
+  "all_prior_109_live_and44_replay_assertions_and_full_acceptance_unchanged": true,
+  "runtime_native_getter_outputs_used_as_inputs": false,
+  "Igaku_full_repairs_spent": 0,
+  "Quarantine_full_repairs_spent": 0,
+  "Igaku_other_original_full_mismatches": "Original full report also contains alpha, zoom and Y differences. Their current behavior needs source review before a first full repair.",
+  "Quarantine_SSC_original_full_mismatches": {
+    "Actor.x": 67
+  },
+  "new_full_repair_started": false,
+  "red_first_native_Tornado_inputs_and_expected_output_identical_after_timer_reference_correction": true,
+  "timer_reference_enum_copied_from_pinned_PlayerOptions_h": true,
+  "retired_v1_qualification_not_selected": "Test setup corrected before selection to keep Song/Current option targets aligned."
+}

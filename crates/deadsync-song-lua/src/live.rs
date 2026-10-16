@@ -1178,6 +1178,7 @@ impl SongLuaLiveScene {
             crate::lua_util::report_update_error(&self.lua, &screen,
                 "__songlua_health_error_reported", "HealthStateChanged", &error)?;
         }
+        crate::host::update_native_arrow_effects(&self.lua)?;
         self.updated = true;
         take_output(&self.lua)
     }
@@ -6918,5 +6919,92 @@ return Def.ActorFrame {
         let output = scene.advance(SongLuaLiveFrame {music_seconds:0.1,beat:0.2,
             screen_seconds:0.1,delta_seconds:0.1,..Default::default()}).expect("native nonfinite scalar update");
         assert!(output.errors.is_empty(), "{:?}", output.errors);
+    }
+
+    #[test]
+    fn live_arrow_x_matches_captured_native_source_and_cached_update_phase() {
+        let reference: serde_json::Value = serde_json::from_str(include_str!(
+            "../assets/itgmania/arrow-x-native-reference-v1.json")).unwrap();
+        let cases = reference["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), 130);
+        for case in cases {
+            let style = case["style"].as_str().unwrap();
+            let mut compiled = compile_with_context("native-arrow-x-source", "return Def.ActorFrame {}", |context| {
+                context.defer_initial_live_update = true;
+                context.style_name = style.into();
+                context.screen_height = 480.0;
+                for player in &mut context.players { player.enabled = true; }
+            });
+            let mut scene = compiled.live_scene.take().unwrap();
+            let player = case["player"].as_u64().unwrap();
+            let options = scene.lua.load(format!(
+                "return GAMESTATE:GetPlayerState(PLAYER_{}):GetCurrentPlayerOptions()", player + 1
+            )).eval::<Table>().unwrap();
+            let song_options = scene.lua.load(format!(
+                "return GAMESTATE:GetPlayerState(PLAYER_{}):GetPlayerOptions('ModsLevel_Song')", player + 1
+            )).eval::<Table>().unwrap();
+            // Native Current approaches the Song target before actor updates.
+            // Keep both levels at the same authored values for these math cases.
+            for options in [options, song_options] {
+            for (name, value) in case["effects"].as_object().unwrap() {
+                options.get::<Function>(name.as_str()).unwrap()
+                    .call::<Value>((options.clone(), value.as_f64().unwrap())).unwrap();
+            }
+            options.get::<Function>("Cosecant").unwrap()
+                .call::<Value>((options.clone(), case["cosecant"].as_bool().unwrap())).unwrap();
+            let timer = ["ModTimerType_Game", "ModTimerType_Beat", "ModTimerType_Song", "ModTimerType_Default"]
+                [case["timer"].as_u64().unwrap() as usize];
+            options.get::<Function>("ModTimerSetting").unwrap().call::<Value>((options.clone(), timer)).unwrap();
+            for (method, name) in [("ModTimerOffset", "timer_offset"), ("ModTimerMult", "timer_mult")] {
+                options.get::<Function>(method).unwrap()
+                    .call::<Value>((options.clone(), case[name].as_f64().unwrap())).unwrap();
+            }
+            }
+            let output = scene.advance(SongLuaLiveFrame {
+                beat: case["beat"].as_f64().unwrap(), music_seconds: case["seconds"].as_f64().unwrap(),
+                screen_seconds: 0.1, delta_seconds: 0.1,
+                uptime_seconds: case["uptime"].as_f64(), ..Default::default()
+            }).unwrap();
+            assert!(output.errors.is_empty(), "{}: {:?}", case["id"], output.errors);
+            let actual = scene.lua.load(format!(
+                "return ArrowEffects.GetXPos(GAMESTATE:GetPlayerState(PLAYER_{}), {}, {})",
+                player + 1, case["column"], case["y"]
+            )).eval::<f32>().unwrap();
+            let expected = &case["expected_x"];
+            let valid = match expected.as_str() {
+                Some("nan") => actual.is_nan(),
+                Some("infinity") => actual == f32::INFINITY,
+                Some("-infinity") => actual == f32::NEG_INFINITY,
+                _ => (actual - expected.as_f64().unwrap() as f32).abs() <= 0.0001,
+            };
+            assert!(valid, "native GetXPos must apply source-defined X effects: {} actual={actual:?}, expected={expected}", case["id"]);
+        }
+
+        let mut compiled = compile_with_context("native-arrow-x-update-phase", r#"
+return Def.ActorFrame {InitCommand=function(self) XROOT=self end}
+"#, |context| context.defer_initial_live_update = true);
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.lua.load(r#"
+PS=GAMESTATE:GetPlayerState(PLAYER_1)
+PS:GetCurrentPlayerOptions():Beat(0.05)
+PS:GetPlayerOptions('ModsLevel_Song'):Beat(0.05)
+assert(ArrowEffects.GetXPos(PS,1,0)==-96, 'native Beat cache begins at zero')
+"#).exec().unwrap();
+        let frame = |beat| SongLuaLiveFrame { beat, music_seconds: beat / 2.0,
+            screen_seconds: beat, delta_seconds: 0.01, ..Default::default() };
+        assert!(scene.advance(frame(0.05)).unwrap().errors.is_empty());
+        scene.lua.load(r#"
+PREVIOUS=ArrowEffects.GetXPos(PS,1,0)
+assert(math.abs(PREVIOUS+96)>0.5)
+XROOT:SetUpdateFunction(function() DURING=ArrowEffects.GetXPos(PS,1,0) end)
+"#).exec().unwrap();
+        assert!(scene.advance(frame(0.35)).unwrap().errors.is_empty());
+        scene.lua.load(r#"
+assert(DURING==PREVIOUS, 'native Beat uses the preceding completed screen update')
+assert(ArrowEffects.GetXPos(PS,1,0)==-96, 'native screen update refreshes Beat after actor callbacks')
+PS:GetCurrentPlayerOptions():BeatOffset(0.5)
+ArrowEffects.Update()
+assert(ArrowEffects.GetXPos(PS,1,0)~=-96, 'explicit native Update refreshes effect data')
+"#).exec().unwrap();
     }
 }

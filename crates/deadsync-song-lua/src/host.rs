@@ -1169,23 +1169,16 @@ pub fn create_arrow_effects_table(
             Ok(y_offset * (reverse * -2.0 + 1.0) + shift)
         })?,
     )?;
-    table.set(
-        "GetXPos",
-        lua.create_function(move |lua, args: MultiValue| {
-            let column_index = args
-                .get(1)
-                .cloned()
-                .and_then(read_f32)
-                .map(|value| value as isize - 1)
-                .filter(|value| *value >= 0)
-                .map(|value| value as usize)
-                .unwrap_or(0);
-            Ok(song_lua_style_column_x(
-                &current_style_name(lua),
-                column_index,
-            ))
-        })?,
-    )?;
+    lua.set_app_data(NativeArrowEffects {
+        enabled: std::array::from_fn(|player| context.players[player].enabled),
+        beat_x: [0.0; LUA_PLAYERS], bounds: [[[0.0; 2]; 10]; LUA_PLAYERS],
+        invert: [[0.0; 10]; LUA_PLAYERS], style_name: current_style_name,
+    });
+    table.set("GetXPos", lua.create_function({
+        let screen_height = context.screen_height.max(1.0);
+        move |lua, args: MultiValue| arrow_effects_x_pos(lua, &args, screen_height, current_style_name)
+    })?)?;
+    table.set("Update", lua.create_function(|lua, _args: MultiValue| update_native_arrow_effects(lua))?)?;
     table.set(
         "GetZPos",
         lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
@@ -1221,6 +1214,192 @@ pub fn create_arrow_effects_table(
         lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
     )?;
     Ok(table)
+}
+
+
+#[derive(Clone, Copy)]
+struct NativeArrowEffects {
+    enabled: [bool; LUA_PLAYERS],
+    beat_x: [f32; LUA_PLAYERS],
+    bounds: [[[f32; 2]; 10]; LUA_PLAYERS],
+    invert: [[f32; 10]; LUA_PLAYERS],
+    style_name: fn(&Lua) -> String,
+}
+
+// ArrowEffects::Update runs after ScreenGameplay's actor updates. Lua reads
+// the preceding update's Beat factor; the remaining X options are read now.
+pub(crate) fn update_native_arrow_effects(lua: &Lua) -> mlua::Result<()> {
+    let Some(previous) = lua.app_data_ref::<NativeArrowEffects>().map(|state| *state) else {
+        return Ok(());
+    };
+    let runtime: Table = lua.globals().raw_get(SONG_LUA_RUNTIME_KEY)?;
+    let positions = runtime.raw_get::<Option<Table>>(crate::runtime::PLAYER_SONG_POSITIONS_KEY)?;
+    let options = lua.app_data_ref::<crate::song_tables::SongLuaOptionLevels>()
+        .map(|levels| std::array::from_fn::<_, LUA_PLAYERS, _>(|player| levels.players[player][3].clone()));
+    let mut next = previous;
+    let style = crate::song_lua_style_info(&(previous.style_name)(lua));
+    let two_sides = matches!(style.style_type, "StyleType_OnePlayerTwoSides" | "StyleType_TwoPlayersSharedSides");
+    let per_side = style.columns / if two_sides { 2 } else { 1 };
+    let scale = |x: f32, low: f32, high: f32, to_low: f32, to_high: f32| (x - low) * (to_high - to_low) / (high - low) + to_low;
+    for player in 0..LUA_PLAYERS {
+        if !previous.enabled[player] { continue; }
+        let position = positions.as_ref().map(|positions| positions.raw_get::<Table>(player + 1)).transpose()?;
+        let beat = position.as_ref().unwrap_or(&runtime).raw_get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?;
+        let state = options.as_ref().map(|options| options[player]
+            .raw_get::<Option<Table>>("__songlua_player_option_state")).transpose()?.flatten();
+        let option = |name| -> mlua::Result<f32> {
+            Ok(state.as_ref().map(|state| state.raw_get::<Option<f32>>(name)).transpose()?.flatten().unwrap_or(0.0))
+        };
+        let mut phase = (beat + 0.2 + option("beatoffset")?) * (option("beatmult")? + 1.0);
+        let reverse = phase as i32 % 2 != 0;
+        let mut factor = 0.0;
+        if phase >= 0.0 {
+            phase -= phase.trunc(); phase += 1.0; phase -= phase.trunc();
+            if phase < 0.5 {
+                factor = if phase < 0.2 {
+                    let value = phase / 0.2; value * value
+                } else {
+                    let value = (phase - 0.2) * -1.0 / (0.5 - 0.2) + 1.0;
+                    1.0 - (1.0 - value) * (1.0 - value)
+                };
+                if reverse { factor *= -1.0; }
+                factor *= 20.0;
+            }
+        }
+        next.beat_x[player] = factor;
+        for column in 0..style.columns {
+            let width = if style.columns > 4 { 2 } else { 3 };
+            let range = &style.x_offsets[column.saturating_sub(width)..=(column + width).min(style.columns - 1)];
+            next.bounds[player][column] = [range.iter().copied().fold(f32::MAX, f32::min),
+                range.iter().copied().fold(f32::MIN_POSITIVE, f32::max)];
+            let local = column % per_side;
+            let (first, last) = if local <= (per_side - 1) / 2 { (0, (per_side - 1) / 2) }
+                else if local >= (per_side + 1) / 2 { ((per_side + 1) / 2, per_side - 1) }
+                else { (local / 2, local / 2) };
+            let mirrored = if first == last { 0 } else { scale(local as f32, first as f32, last as f32, last as f32, first as f32) as usize };
+            next.invert[player][column] = style.x_offsets[column / per_side * per_side + mirrored] - style.x_offsets[column];
+        }
+    }
+    lua.set_app_data(next);
+    Ok(())
+}
+
+fn arrow_effects_x_pos(
+    lua: &Lua, args: &MultiValue, screen_height: f32,
+    current_style_name: fn(&Lua) -> String,
+) -> mlua::Result<f32> {
+    use std::f32::consts::PI;
+    let options = arrow_effects_player_options(args)?;
+    let state = options.as_ref().map(|options| options.raw_get::<Option<Table>>("__songlua_player_option_state"))
+        .transpose()?.flatten();
+    let value = |name| -> mlua::Result<f32> {
+        Ok(state.as_ref().map(|state| state.raw_get::<Option<f32>>(name)).transpose()?.flatten().unwrap_or(0.0))
+    };
+    let player = options.as_ref().and_then(|options| lua.app_data_ref::<crate::song_tables::SongLuaOptionLevels>()
+        .and_then(|levels| levels.players.iter().position(|levels| levels[3].to_pointer() == options.to_pointer())))
+        .unwrap_or(0);
+    let number = |index, default| -> mlua::Result<f32> {
+        match args.get(index).filter(|value| !value.is_nil()) {
+            Some(value) => lua.coerce_number(value.clone())?.map(|value| value as f32)
+                .ok_or_else(|| mlua::Error::runtime("expected numeric ArrowEffects argument")),
+            None => Ok(default),
+        }
+    };
+    let column = number(1, 1.0)? as i32 - 1;
+    let y = number(2, 0.0)?;
+    let style = crate::song_lua_style_info(&current_style_name(lua));
+    let column = usize::try_from(column).ok().filter(|column| *column < style.columns)
+        .ok_or_else(|| mlua::Error::runtime("ArrowEffects.GetXPos column out of range"))?;
+    let base_x = style.x_offsets[column];
+    let two_sides = matches!(style.style_type, "StyleType_OnePlayerTwoSides" | "StyleType_TwoPlayersSharedSides");
+    // _fallback GameplayMargins reserves 272px per side, 544px when centered.
+    // ScreenGameplay clamps the resulting style fit zoom to one.
+    let field_zoom = ((if two_sides { 544.0 } else { 272.0 }) / style.width).min(1.0);
+    let runtime: Table = lua.globals().raw_get(SONG_LUA_RUNTIME_KEY)?;
+    let beat = runtime.raw_get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?;
+    let seconds = runtime.raw_get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)?;
+    let uptime = runtime.raw_get::<Option<f64>>("__songlua_uptime_seconds")?.unwrap_or(f64::from(seconds));
+    let timer = state.as_ref().map(|state| state.raw_get::<Option<u8>>("modtimersetting")).transpose()?.flatten().unwrap_or(3);
+    let clock = match timer { 1 => f64::from(beat), 2 => f64::from(seconds), _ => uptime };
+    let time = ((clock + f64::from(value("modtimeroffset")?)) * (1.0 + f64::from(value("modtimermult")?))) as f32;
+    let cosecant = state.as_ref().map(|state| state.raw_get::<Option<bool>>("cosecant")).transpose()?.flatten().unwrap_or(false);
+    let tangent = |angle: f32| if cosecant { 1.0 / angle.sin() } else { angle.tan() };
+    let scale = |x: f32, low: f32, high: f32, to_low: f32, to_high: f32| (x - low) * (to_high - to_low) / (high - low) + to_low;
+    let mut x = 0.0;
+    for (amount, offset, period, tan) in [("tornado", "tornadooffset", "tornadoperiod", false), ("tantornado", "tantornadooffset", "tantornadoperiod", true)] {
+        let amount = value(amount)?;
+        if amount == 0.0 { continue; }
+        let [low, high] = lua.app_data_ref::<NativeArrowEffects>()
+            .map_or([0.0, 0.0], |state| state.bounds[player][column]);
+        let low = low * field_zoom;
+        let high = high * field_zoom;
+        let position = scale(base_x * field_zoom, low, high, -1.0, 1.0);
+        let angle = position.acos() + (y + value(offset)?) * (value(period)? * 6.0 + 6.0) / screen_height;
+        let wave = if tan { tangent(angle) } else { angle.cos() };
+        x += (scale(wave, -1.0, 1.0, low, high) - base_x * field_zoom) * amount;
+    }
+    for (amount, offset, period, tan) in [("bumpyx", "bumpyxoffset", "bumpyxperiod", false), ("tanbumpyx", "tanbumpyxoffset", "tanbumpyxperiod", true)] {
+        let amount = value(amount)?;
+        if amount == 0.0 { continue; }
+        let angle = (y + 100.0 * value(offset)?) / (value(period)? * 16.0 + 16.0);
+        x += amount * 40.0 * if tan { tangent(angle) } else { angle.sin() };
+    }
+    for (amount, speed, offset, period, tan) in [("drunk", "drunkspeed", "drunkoffset", "drunkperiod", false), ("tandrunk", "tandrunkspeed", "tandrunkoffset", "tandrunkperiod", true)] {
+        let amount = value(amount)?;
+        if amount == 0.0 { continue; }
+        let angle = time * (1.0 + value(speed)?) + column as f32 * (value(offset)? * 0.2 + 0.2)
+            + y * (value(period)? * 10.0 + 10.0) / screen_height;
+        let wave = if tan { tangent(angle) } else { angle.cos() };
+        x += amount * (wave * 64.0 * 0.5);
+    }
+    if value("flip")? != 0.0 {
+        x += (style.x_offsets[style.columns - 1 - column] * field_zoom - base_x * field_zoom) * value("flip")?;
+    }
+    if value("invert")? != 0.0 {
+        let distance = lua.app_data_ref::<NativeArrowEffects>().map_or(0.0, |state| state.invert[player][column]);
+        x += distance * value("invert")?;
+    }
+    if value("beat")? != 0.0 {
+        let factor = lua.app_data_ref::<NativeArrowEffects>().map_or(0.0, |state| state.beat_x[player]);
+        x += value("beat")? * (factor * (y / (value("beatperiod")? * 15.0 + 15.0) + PI / 2.0).sin());
+    }
+    if value("zigzag")? != 0.0 {
+        let angle = PI * (1.0 / (value("zigzagperiod")? + 1.0)) * ((y + 100.0 * value("zigzagoffset")?) / 64.0);
+        let mut phase = angle % (PI * 2.0);
+        if phase < 0.0 { phase += PI * 2.0; }
+        let phase = f64::from(phase * (1.0 / PI));
+        let wave = if phase < 0.5 { phase * 2.0 } else if phase < 1.5 { 1.0 - (phase - 0.5) * 2.0 } else { -4.0 + phase * 2.0 } as f32;
+        x += (value("zigzag")? * 64.0 / 2.0) * wave;
+    }
+    if value("sawtooth")? != 0.0 {
+        let phase = (0.5 / (value("sawtoothperiod")? + 1.0) * y) / 64.0;
+        x += (value("sawtooth")? * 64.0) * (phase - phase.floor());
+    }
+    if value("parabolax")? != 0.0 { x += value("parabolax")? * (y / 64.0) * (y / 64.0); }
+    if value("attenuatex")? != 0.0 { x += value("attenuatex")? * (y / 64.0) * (y / 64.0) * (base_x / 64.0); }
+    for (amount, offset, period, steps, tan) in [("digital", "digitaloffset", "digitalperiod", "digitalsteps", false), ("tandigital", "tandigitaloffset", "tandigitalperiod", "tandigitalsteps", true)] {
+        let amount = value(amount)?;
+        if amount == 0.0 { continue; }
+        let angle = PI * (y + value(offset)?) / (64.0 + value(period)? * 64.0);
+        let wave = if tan { tangent(angle) } else { angle.sin() };
+        x += (amount * 64.0 * 0.5) * ((value(steps)? + 1.0) * wave).round() / (value(steps)? + 1.0);
+    }
+    if value("square")? != 0.0 {
+        let angle = PI * (y + value("squareoffset")?) / (64.0 + value("squareperiod")? * 64.0);
+        let mut phase = angle % (PI * 2.0);
+        if phase < 0.01 { phase += PI * 2.0; }
+        x += (value("square")? * 64.0 * 0.5) * if phase >= PI { -1.0 } else { 1.0 };
+    }
+    if value("bounce")? != 0.0 {
+        x += value("bounce")? * 64.0 * 0.5 * ((y + value("bounceoffset")?) / (60.0 + value("bounceperiod")? * 60.0)).sin().abs();
+    }
+    if value("xmode")? != 0.0 {
+        let negative = if two_sides { column >= style.columns / 2 } else { player == 1 };
+        x += value("xmode")? * if negative { -y } else { y };
+    }
+    x += base_x * field_zoom;
+    if value("tiny")? != 0.0 { x *= 0.5f32.powf(value("tiny")?).min(1.0); }
+    Ok(x)
 }
 
 fn arrow_effects_alpha(

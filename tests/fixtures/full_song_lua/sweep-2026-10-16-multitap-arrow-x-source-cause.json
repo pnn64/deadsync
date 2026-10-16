@@ -1,5 +1,5 @@
 {
-  "status": "actual remaining source cause; implementation not started",
+  "status": "Source-qualified native X implementation; retained original entry pending",
   "charts": [
     {
       "source_simfile": "Igaku/Igaku.ssc",
@@ -225,5 +225,12 @@
   "capture_repeated": false,
   "captured_GetXPos_or_Actor_x_values_used_as_runtime_inputs": false,
   "no_new_full_chart_repair_started": true,
-  "full_acceptance_unchanged": true
+  "full_acceptance_unchanged": true,
+  "fix_added": true,
+  "all_six_groups_both_hosts_passed": true,
+  "native_reference_cases": 130,
+  "selection_evidence": "sweep-2026-10-16-native-arrow-x-selection.json",
+  "Igaku_full_repairs_spent": 0,
+  "Quarantine_full_repairs_spent": 0,
+  "first_actual_entry_verification_pending": true
 }
