@@ -1275,7 +1275,8 @@ impl SongLuaLiveScene {
         let game = self.lua.globals().get::<Table>("GAMESTATE")?;
         let options = game.get::<Function>("GetSongOptionsObject")?
             .call::<Table>((game, "ModsLevel_Current"))?;
-        let rate = if rate_tweens { 1.0 } else { options.get::<Function>("MusicRate")?.call::<f32>(options)? };
+        let music_rate = options.get::<Function>("MusicRate")?.call::<f32>(options.clone())?;
+        let rate = if rate_tweens { 1.0 } else { music_rate };
         {
             let inactive = foreground.finished || beat < foreground.start_beat;
             foreground.actor.raw_set("__songlua_live_inactive", inactive)?;
@@ -1289,9 +1290,11 @@ impl SongLuaLiveScene {
                 } else {
                     crate::lua_util::run_actor_startup_commands_for_table(&self.lua, &foreground.actor)?;
                 }
+                // Native TimingData reads the current rate after foreground On.
+                let start_music_rate = options.get::<Function>("MusicRate")?.call::<f32>(options.clone())?;
                 let start = self.context.song_timing.as_ref().map_or_else(
                     || crate::song_elapsed_seconds_at(foreground.start_beat, &self.context) * crate::song_music_rate(&self.context),
-                    |timing| timing.get_time_for_beat(foreground.start_beat));
+                    |timing| timing.get_song_time_for_beat(foreground.start_beat, start_music_rate));
                 let stop = start + crate::lua_util::actor_tween_time_left(&self.lua, &foreground.actor)?;
                 foreground.stop_beat = self.context.song_timing.as_ref().map_or_else(
                     || crate::song_beat_at_elapsed_seconds(stop / crate::song_music_rate(&self.context), &self.context),
@@ -2479,6 +2482,105 @@ return Def.Actor {
         let actor = scene.lua.globals().get::<Table>("BACKGROUND").expect("owned background");
         assert_eq!(actor.get::<Function>("getaux").unwrap().call::<f32>(actor).unwrap(), 1.0,
             "background consumes delta from the native rounded start row");
+    }
+
+    #[test]
+    fn live_native_float_foreground_activation_clock() {
+        use deadsync_rules::timing::{TimingData, TimingSegments};
+        for start_beat in [17.25f32,20.5,44.75] {
+          for music_rate in [1.0f32,2.0] {
+            let bpms=vec![(0.000000f32,71.697998f32),
+                (1.000000f32,71.695999f32),
+                (2.000000f32,74.014000f32),
+                (3.000000f32,74.012001f32),
+                (4.000000f32,72.457001f32),
+                (5.000000f32,72.455002f32),
+                (6.000000f32,72.969002f32),
+                (8.000000f32,72.704002f32),
+                (10.000000f32,72.622002f32),
+                (12.000000f32,71.123001f32),
+                (14.000000f32,73.051003f32),
+                (18.000000f32,73.054001f32),
+                (19.000000f32,73.051003f32),
+                (20.000000f32,71.791000f32),
+                (21.000000f32,71.789001f32),
+                (22.000000f32,72.101997f32),
+                (24.000000f32,72.457001f32),
+                (26.000000f32,73.051003f32),
+                (28.000000f32,68.597000f32),
+                (30.000000f32,76.014999f32),
+                (31.000000f32,76.013000f32),
+                (32.000000f32,70.313004f32),
+                (34.000000f32,73.402000f32),
+                (36.000000f32,70.874001f32),
+                (37.000000f32,70.872002f32),
+                (38.000000f32,71.204002f32),
+                (39.000000f32,71.202003f32),
+                (40.000000f32,69.674004f32),
+                (41.000000f32,69.671997f32),
+                (42.000000f32,74.014000f32),
+                (43.000000f32,74.012001f32),
+                (44.000000f32,72.718002f32)];
+            let song_offset=-0.532426f32;
+            let group_offset=-0.009f32;
+            let global_offset=-0.008f32;
+            let mut elapsed=0.0f32;
+            for (index,&(beat,bpm)) in bpms.iter().enumerate() {
+                let end=bpms.get(index+1).map_or(start_beat,|point|point.0.min(start_beat));
+                if end>beat {elapsed+=(end-beat)/(bpm/60.0);}
+            }
+            // Song.cpp stores the default/group sync separately. The native
+            // timing wrapper subtracts both offsets and the rate-scaled global.
+            let native_start=((elapsed-song_offset)-group_offset)-music_rate*global_offset;
+            let mut timing=TimingData::from_segments(-song_offset,global_offset,
+                &TimingSegments {bpms:bpms.clone(),..Default::default()},&[]);
+            timing.shift_group_offset_seconds(group_offset);
+            assert_eq!(timing.get_song_time_for_beat(start_beat,music_rate).to_bits(),native_start.to_bits(),
+                "native offset components must remain separate");
+            let mut compiled=compile_with_context(&format!("foreground-float-clock-{start_beat}-{music_rate}"),r#"
+return Def.ActorFrame {
+    Def.Actor {OnCommand=function(self) self:sleep(999) end},
+    Def.Actor {
+        InitCommand=function(self) FOREGROUND=self end,
+        OnCommand=function(self) self:aux(1):sleep(1/128):queuecommand('Done') end,
+        DoneCommand=function(self) self:aux(2) end,
+    },
+}
+"#,|context| {
+                context.defer_initial_live_update=true;
+                context.layer_start_beats=vec![start_beat];
+                context.song_timing=Some(timing);
+                context.song_timing_bpms=bpms;
+                context.song_music_rate=music_rate;
+            });
+            let mut scene=compiled.live_scene.take().expect("foreground float event-clock scene");
+            let first=native_start+music_rate/128.0;
+            let next=f32::from_bits(first.to_bits()+1);
+            for (music,delta) in [(first,0.01f32),(next,next-first)] {
+                let output=scene.advance(SongLuaLiveFrame {music_seconds:f64::from(music),
+                    screen_seconds:f64::from(music),delta_seconds:f64::from(delta),
+                    beat:f64::from(start_beat+0.01),..Default::default()}).unwrap();
+                assert!(output.errors.is_empty(),"{:?}",output.errors);
+            }
+            let actor=scene.lua.globals().get::<Table>("FOREGROUND").unwrap();
+            assert_eq!(actor.get::<Function>("getaux").unwrap().call::<f32>(actor).unwrap(),2.0,
+                "foreground command must start from native float timing");
+          }
+        }
+    }
+
+    #[test]
+    fn live_native_float_scale_operation_order() {
+        let compiled=compile("native-scale-operation-order", "return Def.Actor {}");
+        let scene=compiled.live_scene.expect("native scale host");
+        let width=480.0f32*(16.0f32/9.0f32);
+        let actual=scene.lua.globals().get::<Function>("scale").unwrap()
+            .call::<f32>((width,640.0f32,854.0f32,-8.0f32,20.0f32)).unwrap();
+        // RageUtil.h SCALE multiplies before dividing. LuaManager.cpp casts
+        // all five inputs to float before invoking that macro.
+        let native=(width-640.0f32)*(20.0f32-(-8.0f32))/(854.0f32-640.0f32)+(-8.0f32);
+        assert_eq!(actual.to_bits(),native.to_bits(),
+            "native SCALE must multiply before dividing without fused addition");
     }
 
     #[test]

@@ -603,7 +603,7 @@ pub fn song_lua_play_context(
             config.machine_default_sync_pref)
     } else { 0.0 };
     if let Some(timing) = &mut context.song_timing {
-        timing.shift_song_offset_seconds(sync_offset);
+        timing.shift_group_offset_seconds(sync_offset);
         timing.set_global_offset_seconds(config.global_offset_seconds);
     }
     context.player_timing = std::array::from_fn(|player| {
@@ -616,7 +616,7 @@ pub fn song_lua_play_context(
             .enabled
             .then(|| {
                 let mut value = timing[source].clone();
-                value.shift_song_offset_seconds(sync_offset);
+                value.shift_group_offset_seconds(sync_offset);
                 let player_offset = if config.machine_allow_per_player_global_offsets {
                     runtime_profiles[player].global_offset_shift_ms.clamp(-100, 100) as f32 / 1000.0
                 } else { 0.0 };

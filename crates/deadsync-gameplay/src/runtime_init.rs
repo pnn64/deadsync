@@ -263,7 +263,7 @@ where
             / 1000.0
     });
     let mut timing_base = gameplay_charts[0].timing.clone();
-    timing_base.shift_song_offset_seconds(pack_sync_offset_seconds);
+    timing_base.shift_group_offset_seconds(pack_sync_offset_seconds);
     timing_base.set_global_offset_seconds(config.global_offset_seconds);
     let timing = Arc::new(timing_base);
     let build_player_timing = |player: usize| {
@@ -271,7 +271,7 @@ where
             return Arc::clone(&timing);
         }
         let mut t = gameplay_charts[player].timing.clone();
-        t.shift_song_offset_seconds(pack_sync_offset_seconds);
+        t.shift_group_offset_seconds(pack_sync_offset_seconds);
         t.set_global_offset_seconds(
             config.global_offset_seconds + player_global_offset_shift_seconds[player],
         );

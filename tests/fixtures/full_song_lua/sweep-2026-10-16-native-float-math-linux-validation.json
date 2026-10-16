@@ -1,0 +1,112 @@
+{
+  "source_root": "/home/parity/workspace/native-float-math-green-v3/deadsync",
+  "binary_sha256": "84dd18feaf82c236a29df5d4c334b9c7ac7415b36c9b9161dac9a58d3c3d71dd",
+  "all_seven_groups_both_hosts_passed": true,
+  "checks": [
+    {
+      "label": "target-control",
+      "exit_code": 0,
+      "seconds": 274.06249733502045,
+      "log_sha256": "1c6a2c34b3f175fae4ccf167529ffcb2e56a8472848a153d55e85e707768feec",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 642 filtered out; finished in 1.53s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 37.40303159202449,
+      "log_sha256": "df9827e6bb124f322eb7bf6056b17d81cd8f33e3bf7caae64635c8a8e7926d8a",
+      "results": [
+        "test result: ok. 107 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 36.69s"
+      ]
+    },
+    {
+      "label": "timing-controls",
+      "exit_code": 0,
+      "seconds": 2.975711439969018,
+      "log_sha256": "c6508d67a15661b559a13dfe4a36d708426ab99a2ecaff630b79b2f25aa585c6",
+      "results": [
+        "test result: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 74 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 245.46153146098368,
+      "log_sha256": "b265e54dc764bf759d324b813e36e56978ba280e2e9efbf28603a49c9f5d2720",
+      "results": [
+        "test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 28.96s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 77.99271352001233,
+      "log_sha256": "9e239a5cb79853323378dd2a4b315ccfe5ee4d424dbc8c584b2ecad13c655664",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 1.1898786489618942,
+      "log_sha256": "3f8f16c17ca06958ce783cc6973f0d4b3562dd4d433bb18944be63bdd76242e1",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 643 filtered out; finished in 0.45s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 37.472020702960435,
+      "log_sha256": "b75decdb000e52d18c240200f094e0e5722e5a9d9e0d424eb410bf0c9a97e0c1",
+      "results": []
+    }
+  ],
+  "all_1175_raw_linux_and_normalized_cross_platform_source_pins_verified": true,
+  "all_46_assets_and_log_helper_hashes_verified": true,
+  "both_new_live_regressions_exactly_identical_red_green": true,
+  "meaningful_foreground_red_expected2_owned1_and_scale_order_red": true,
+  "all_prior_105_live_and_43_replay_test_sources_unchanged": true,
+  "all_prior_timing_unit_test_sources_unchanged": true,
+  "new_integer_clock_equivalence_unit_source_identical_red_green": true,
+  "existing_integer_clock_algorithm_operations_unchanged": true,
+  "six_declared_production_files_only": true,
+  "group_sync_wiring_uses_existing_input_sources": true,
+  "native_current_music_rate_read_after_foreground_On": true,
+  "shared_red_green_prerequisites": {
+    "files": [
+      "crates/deadsync-song-lua/src/live.rs",
+      "crates/deadsync-rules/src/timing.rs",
+      "crates/deadsync-song-lua/src/tables.rs",
+      "crates/deadsync-profile-gameplay/src/lib.rs",
+      "crates/deadsync-gameplay/src/runtime_init.rs",
+      "crates/deadsync-shell/src/gameplay_entry.rs"
+    ],
+    "shared_red_green_prerequisites": "Separate song/group offset fields, native float API, pack/default-sync group wiring and actual music-rate read; red foreground still uses integer conversion and red SCALE retains old operation order.",
+    "green_changes_from_red": [
+      "Foreground uses native float conversion with actual music rate.",
+      "SCALE uses native multiply-before-divide."
+    ],
+    "integer_clock_preservation_regression": "    #[test]\n    fn song_clock_group_shift_preserves_integer_timing() {\n        let mut original=TimingData::from_segments(0.532426,-0.008,&TimingSegments {\n            bpms:vec![(0.0,71.697998),(2.0,74.014),(14.0,73.051003)],\n            ..Default::default()\n        },&[]);\n        let mut separate=original.clone();\n        original.shift_song_offset_seconds(-0.009);\n        separate.shift_group_offset_seconds(-0.009);\n        for global in [-0.008,0.125] {\n            original.set_global_offset_seconds(global);\n            separate.set_global_offset_seconds(global);\n            for beat in [-4.0,0.0,0.01,17.25,20.5,44.75] {\n                assert_eq!(original.get_time_for_beat_ns(beat),separate.get_time_for_beat_ns(beat));\n                assert_eq!(original.get_time_for_beat_exact(beat).to_bits(),separate.get_time_for_beat_exact(beat).to_bits());\n            }\n        }\n    }\n\n",
+    "new_live_tests_cover_three_start_beats_and_two_music_rates": true,
+    "new_test_sources_identical_red_green": true,
+    "full_WAWW_repairs_spent": 1,
+    "final_repair_started": false
+  },
+  "full_acceptance_and_capture_input_readers_unchanged": true,
+  "captured_query_outputs_used_as_runtime_inputs": false,
+  "production_diffs": {
+    "crates/deadsync-song-lua/src/live.rs": "--- \n+++ \n@@ -1275,7 +1275,8 @@\n         let game = self.lua.globals().get::<Table>(\"GAMESTATE\")?;\n         let options = game.get::<Function>(\"GetSongOptionsObject\")?\n             .call::<Table>((game, \"ModsLevel_Current\"))?;\n-        let rate = if rate_tweens { 1.0 } else { options.get::<Function>(\"MusicRate\")?.call::<f32>(options)? };\n+        let music_rate = options.get::<Function>(\"MusicRate\")?.call::<f32>(options.clone())?;\n+        let rate = if rate_tweens { 1.0 } else { music_rate };\n         {\n             let inactive = foreground.finished || beat < foreground.start_beat;\n             foreground.actor.raw_set(\"__songlua_live_inactive\", inactive)?;\n@@ -1289,9 +1290,11 @@\n                 } else {\n                     crate::lua_util::run_actor_startup_commands_for_table(&self.lua, &foreground.actor)?;\n                 }\n+                // Native TimingData reads the current rate after foreground On.\n+                let start_music_rate = options.get::<Function>(\"MusicRate\")?.call::<f32>(options.clone())?;\n                 let start = self.context.song_timing.as_ref().map_or_else(\n                     || crate::song_elapsed_seconds_at(foreground.start_beat, &self.context) * crate::song_music_rate(&self.context),\n-                    |timing| timing.get_time_for_beat(foreground.start_beat));\n+                    |timing| timing.get_song_time_for_beat(foreground.start_beat, start_music_rate));\n                 let stop = start + crate::lua_util::actor_tween_time_left(&self.lua, &foreground.actor)?;\n                 foreground.stop_beat = self.context.song_timing.as_ref().map_or_else(\n                     || crate::song_beat_at_elapsed_seconds(stop / crate::song_music_rate(&self.context), &self.context),\n@@ -2479,6 +2482,105 @@\n         let actor = scene.lua.globals().get::<Table>(\"BACKGROUND\").expect(\"owned background\");\n         assert_eq!(actor.get::<Function>(\"getaux\").unwrap().call::<f32>(actor).unwrap(), 1.0,\n             \"background consumes delta from the native rounded start row\");\n+    }\n+\n+    #[test]\n+    fn live_native_float_foreground_activation_clock() {\n+        use deadsync_rules::timing::{TimingData, TimingSegments};\n+        for start_beat in [17.25f32,20.5,44.75] {\n+          for music_rate in [1.0f32,2.0] {\n+            let bpms=vec![(0.000000f32,71.697998f32),\n+                (1.000000f32,71.695999f32),\n+                (2.000000f32,74.014000f32),\n+                (3.000000f32,74.012001f32),\n+                (4.000000f32,72.457001f32),\n+                (5.000000f32,72.455002f32),\n+                (6.000000f32,72.969002f32),\n+                (8.000000f32,72.704002f32),\n+                (10.000000f32,72.622002f32),\n+                (12.000000f32,71.123001f32),\n+                (14.000000f32,73.051003f32),\n+                (18.000000f32,73.054001f32),\n+                (19.000000f32,73.051003f32),\n+                (20.000000f32,71.791000f32),\n+                (21.000000f32,71.789001f32),\n+                (22.000000f32,72.101997f32),\n+                (24.000000f32,72.457001f32),\n+                (26.000000f32,73.051003f32),\n+                (28.000000f32,68.597000f32),\n+                (30.000000f32,76.014999f32),\n+                (31.000000f32,76.013000f32),\n+                (32.000000f32,70.313004f32),\n+                (34.000000f32,73.402000f32),\n+                (36.000000f32,70.874001f32),\n+                (37.000000f32,70.872002f32),\n+                (38.000000f32,71.204002f32),\n+                (39.000000f32,71.202003f32),\n+                (40.000000f32,69.674004f32),\n+                (41.000000f32,69.671997f32),\n+                (42.000000f32,74.014000f32),\n+                (43.000000f32,74.012001f32),\n+                (44.000000f32,72.718002f32)];\n+            let song_offset=-0.532426f32;\n+            let group_offset=-0.009f32;\n+            let global_offset=-0.008f32;\n+            let mut elapsed=0.0f32;\n+            for (index,&(beat,bpm)) in bpms.iter().enumerate() {\n+                let end=bpms.get(index+1).map_or(start_beat,|point|point.0.min(start_beat));\n+                if end>beat {elapsed+=(end-beat)/(bpm/60.0);}\n+            }\n+            // Song.cpp stores the default/group sync separately. The native\n+            // timing wrapper subtracts both offsets and the rate-scaled global.\n+            let native_start=((elapsed-song_offset)-group_offset)-music_rate*global_offset;\n+            let mut timing=TimingData::from_segments(-song_offset,global_offset,\n+                &TimingSegments {bpms:bpms.clone(),..Default::default()},&[]);\n+            timing.shift_group_offset_seconds(group_offset);\n+            assert_eq!(timing.get_song_time_for_beat(start_beat,music_rate).to_bits(),native_start.to_bits(),\n+                \"native offset components must remain separate\");\n+            let mut compiled=compile_with_context(&format!(\"foreground-float-clock-{start_beat}-{music_rate}\"),r#\"\n+return Def.ActorFrame {\n+    Def.Actor {OnCommand=function(self) self:sleep(999) end},\n+    Def.Actor {\n+        InitCommand=function(self) FOREGROUND=self end,\n+        OnCommand=function(self) self:aux(1):sleep(1/128):queuecommand('Done') end,\n+        DoneCommand=function(self) self:aux(2) end,\n+    },\n+}\n+\"#,|context| {\n+                context.defer_initial_live_update=true;\n+                context.layer_start_beats=vec![start_beat];\n+                context.song_timing=Some(timing);\n+                context.song_timing_bpms=bpms;\n+                context.song_music_rate=music_rate;\n+            });\n+            let mut scene=compiled.live_scene.take().expect(\"foreground float event-clock scene\");\n+            let first=native_start+music_rate/128.0;\n+            let next=f32::from_bits(first.to_bits()+1);\n+            for (music,delta) in [(first,0.01f32),(next,next-first)] {\n+                let output=scene.advance(SongLuaLiveFrame {music_seconds:f64::from(music),\n+                    screen_seconds:f64::from(music),delta_seconds:f64::from(delta),\n+                    beat:f64::from(start_beat+0.01),..Default::default()}).unwrap();\n+                assert!(output.errors.is_empty(),\"{:?}\",output.errors);\n+            }\n+            let actor=scene.lua.globals().get::<Table>(\"FOREGROUND\").unwrap();\n+            assert_eq!(actor.get::<Function>(\"getaux\").unwrap().call::<f32>(actor).unwrap(),2.0,\n+                \"foreground command must start from native float timing\");\n+          }\n+        }\n+    }\n+\n+    #[test]\n+    fn live_native_float_scale_operation_order() {\n+        let compiled=compile(\"native-scale-operation-order\", \"return Def.Actor {}\");\n+        let scene=compiled.live_scene.expect(\"native scale host\");\n+        let width=480.0f32*(16.0f32/9.0f32);\n+        let actual=scene.lua.globals().get::<Function>(\"scale\").unwrap()\n+            .call::<f32>((width,640.0f32,854.0f32,-8.0f32,20.0f32)).unwrap();\n+        // RageUtil.h SCALE multiplies before dividing. LuaManager.cpp casts\n+        // all five inputs to float before invoking that macro.\n+        let native=(width-640.0f32)*(20.0f32-(-8.0f32))/(854.0f32-640.0f32)+(-8.0f32);\n+        assert_eq!(actual.to_bits(),native.to_bits(),\n+            \"native SCALE must multiply before dividing without fused addition\");\n     }\n \n     #[test]",
+    "crates/deadsync-rules/src/timing.rs": "--- \n+++ \n@@ -401,6 +401,8 @@\n     global_offset_sec: f32,\n     global_offset_ns: TimingNs,\n     beat0_offset_ns: TimingNs,\n+    native_song_offset_sec: f32,\n+    native_group_offset_sec: f32,\n     max_bpm: f32,\n }\n \n@@ -749,6 +751,8 @@\n             global_offset_sec,\n             global_offset_ns,\n             beat0_offset_ns,\n+            native_song_offset_sec: -song_offset_sec,\n+            native_group_offset_sec: 0.0,\n             max_bpm,\n         };\n \n@@ -1364,6 +1368,67 @@\n         self.speed_runtime = runtime;\n     }\n \n+    /// ITGmania's row-rounded float beat-to-song clock. Foreground activation\n+    /// uses event-by-event float accumulation, then applies the song and\n+    /// global offsets. The integer note-judgment clock remains independent.\n+    #[must_use]\n+    pub fn get_song_time_for_beat(&self, beat: f32, music_rate: f32) -> f32 {\n+        let mut start = GetBeatStarts::default();\n+        let mut time = 0.0f32;\n+        let mut bps = self.get_bpm_for_beat(0.0) / 60.0;\n+        // Load-time native float traversal: rounding each event before adding\n+        // the next one differs from converting an accumulated integer time.\n+        loop {\n+            let mut row = i32::MAX;\n+            let mut event = TimingEvent::NotFound;\n+            find_event(\n+                &mut row,\n+                &mut event,\n+                start,\n+                beat,\n+                true,\n+                &self.bpms,\n+                &self.warps,\n+                &self.stops,\n+                &self.delays,\n+            );\n+            if event == TimingEvent::NotFound {\n+                break;\n+            }\n+            time += if start.is_warping {\n+                0.0\n+            } else {\n+                note_row_to_beat(row - start.last_row) / bps\n+            };\n+            match event {\n+                TimingEvent::Marker => break,\n+                TimingEvent::WarpDest => start.is_warping = false,\n+                TimingEvent::Bpm => {\n+                    bps = self.bpms[start.bpm_idx].bpm / 60.0;\n+                    start.bpm_idx += 1;\n+                }\n+                TimingEvent::Stop | TimingEvent::StopDelay => {\n+                    time += self.stops[start.stop_idx].duration;\n+                    start.stop_idx += 1;\n+                }\n+                TimingEvent::Delay => {\n+                    time += self.delays[start.delay_idx].duration;\n+                    start.delay_idx += 1;\n+                }\n+                TimingEvent::Warp => {\n+                    start.is_warping = true;\n+                    let warp = self.warps[start.warp_idx];\n+                    start.warp_destination = start.warp_destination.max(warp.beat + warp.length);\n+                    start.warp_idx += 1;\n+                }\n+                _ => {}\n+            }\n+            start.last_row = row;\n+        }\n+        ((time - self.native_song_offset_sec) - self.native_group_offset_sec)\n+            - music_rate * self.global_offset_sec\n+    }\n+\n     fn speed_start_time(&self, beat: f32) -> f32 {\n         let row = beat_to_note_row(beat);\n         let delay = self\n@@ -1456,6 +1521,20 @@\n             return;\n         }\n         if !self.bpms.is_empty() {\n+            self.native_song_offset_sec += delta_seconds;\n+            self.beat0_offset_ns = timing_ns_add_seconds(self.beat0_offset_ns, delta_seconds);\n+        }\n+        self.rebuild_speed_runtime();\n+    }\n+\n+    /// Apply a pack/default-sync group shift without merging native float offsets.\n+    #[inline(always)]\n+    pub fn shift_group_offset_seconds(&mut self, delta_seconds: f32) {\n+        if delta_seconds.abs() < f32::EPSILON {\n+            return;\n+        }\n+        if !self.bpms.is_empty() {\n+            self.native_group_offset_sec += delta_seconds;\n             self.beat0_offset_ns = timing_ns_add_seconds(self.beat0_offset_ns, delta_seconds);\n         }\n         self.rebuild_speed_runtime();\n@@ -2834,6 +2913,25 @@\n \n #[cfg(test)]\n mod tests {\n+    #[test]\n+    fn song_clock_group_shift_preserves_integer_timing() {\n+        let mut original=TimingData::from_segments(0.532426,-0.008,&TimingSegments {\n+            bpms:vec![(0.0,71.697998),(2.0,74.014),(14.0,73.051003)],\n+            ..Default::default()\n+        },&[]);\n+        let mut separate=original.clone();\n+        original.shift_song_offset_seconds(-0.009);\n+        separate.shift_group_offset_seconds(-0.009);\n+        for global in [-0.008,0.125] {\n+            original.set_global_offset_seconds(global);\n+            separate.set_global_offset_seconds(global);\n+            for beat in [-4.0,0.0,0.01,17.25,20.5,44.75] {\n+                assert_eq!(original.get_time_for_beat_ns(beat),separate.get_time_for_beat_ns(beat));\n+                assert_eq!(original.get_time_for_beat_exact(beat).to_bits(),separate.get_time_for_beat_exact(beat).to_bits());\n+            }\n+        }\n+    }\n+\n     #[test]\n     fn measure_index_rounds_native_signature_boundaries() {\n         let timing = TimingData::from_segments(0.0, 0.0, &TimingSegments {",
+    "crates/deadsync-song-lua/src/tables.rs": "--- \n+++ \n@@ -191,7 +191,7 @@\n     if span.abs() <= f32::EPSILON {\n         to_low\n     } else {\n-        ((value - from_low) / span).mul_add(to_high - to_low, to_low)\n+        (value - from_low) * (to_high - to_low) / span + to_low\n     }\n }\n ",
+    "crates/deadsync-profile-gameplay/src/lib.rs": "--- \n+++ \n@@ -603,7 +603,7 @@\n             config.machine_default_sync_pref)\n     } else { 0.0 };\n     if let Some(timing) = &mut context.song_timing {\n-        timing.shift_song_offset_seconds(sync_offset);\n+        timing.shift_group_offset_seconds(sync_offset);\n         timing.set_global_offset_seconds(config.global_offset_seconds);\n     }\n     context.player_timing = std::array::from_fn(|player| {\n@@ -616,7 +616,7 @@\n             .enabled\n             .then(|| {\n                 let mut value = timing[source].clone();\n-                value.shift_song_offset_seconds(sync_offset);\n+                value.shift_group_offset_seconds(sync_offset);\n                 let player_offset = if config.machine_allow_per_player_global_offsets {\n                     runtime_profiles[player].global_offset_shift_ms.clamp(-100, 100) as f32 / 1000.0\n                 } else { 0.0 };",
+    "crates/deadsync-gameplay/src/runtime_init.rs": "--- \n+++ \n@@ -263,7 +263,7 @@\n             / 1000.0\n     });\n     let mut timing_base = gameplay_charts[0].timing.clone();\n-    timing_base.shift_song_offset_seconds(pack_sync_offset_seconds);\n+    timing_base.shift_group_offset_seconds(pack_sync_offset_seconds);\n     timing_base.set_global_offset_seconds(config.global_offset_seconds);\n     let timing = Arc::new(timing_base);\n     let build_player_timing = |player: usize| {\n@@ -271,7 +271,7 @@\n             return Arc::clone(&timing);\n         }\n         let mut t = gameplay_charts[player].timing.clone();\n-        t.shift_song_offset_seconds(pack_sync_offset_seconds);\n+        t.shift_group_offset_seconds(pack_sync_offset_seconds);\n         t.set_global_offset_seconds(\n             config.global_offset_seconds + player_global_offset_shift_seconds[player],\n         );",
+    "crates/deadsync-shell/src/gameplay_entry.rs": "--- \n+++ \n@@ -236,7 +236,7 @@\n         0.0\n     };\n     for (mut timing, notes, row_beats) in inputs {\n-        timing.shift_song_offset_seconds(sync_offset);\n+        timing.shift_group_offset_seconds(sync_offset);\n         context.song_step_timing.push(timing);\n         context.song_step_notes.push(notes.into());\n         context.song_step_row_beats.push(row_beats.into());"
+  },
+  "full_WAWW_repairs_spent": 1,
+  "full_Flowers_repairs_spent": 0,
+  "new_full_repair_started": false
+}

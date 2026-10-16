@@ -401,6 +401,8 @@ pub struct TimingData {
     global_offset_sec: f32,
     global_offset_ns: TimingNs,
     beat0_offset_ns: TimingNs,
+    native_song_offset_sec: f32,
+    native_group_offset_sec: f32,
     max_bpm: f32,
 }
 
@@ -749,6 +751,8 @@ impl TimingData {
             global_offset_sec,
             global_offset_ns,
             beat0_offset_ns,
+            native_song_offset_sec: -song_offset_sec,
+            native_group_offset_sec: 0.0,
             max_bpm,
         };
 
@@ -1364,6 +1368,67 @@ impl TimingData {
         self.speed_runtime = runtime;
     }
 
+    /// ITGmania's row-rounded float beat-to-song clock. Foreground activation
+    /// uses event-by-event float accumulation, then applies the song and
+    /// global offsets. The integer note-judgment clock remains independent.
+    #[must_use]
+    pub fn get_song_time_for_beat(&self, beat: f32, music_rate: f32) -> f32 {
+        let mut start = GetBeatStarts::default();
+        let mut time = 0.0f32;
+        let mut bps = self.get_bpm_for_beat(0.0) / 60.0;
+        // Load-time native float traversal: rounding each event before adding
+        // the next one differs from converting an accumulated integer time.
+        loop {
+            let mut row = i32::MAX;
+            let mut event = TimingEvent::NotFound;
+            find_event(
+                &mut row,
+                &mut event,
+                start,
+                beat,
+                true,
+                &self.bpms,
+                &self.warps,
+                &self.stops,
+                &self.delays,
+            );
+            if event == TimingEvent::NotFound {
+                break;
+            }
+            time += if start.is_warping {
+                0.0
+            } else {
+                note_row_to_beat(row - start.last_row) / bps
+            };
+            match event {
+                TimingEvent::Marker => break,
+                TimingEvent::WarpDest => start.is_warping = false,
+                TimingEvent::Bpm => {
+                    bps = self.bpms[start.bpm_idx].bpm / 60.0;
+                    start.bpm_idx += 1;
+                }
+                TimingEvent::Stop | TimingEvent::StopDelay => {
+                    time += self.stops[start.stop_idx].duration;
+                    start.stop_idx += 1;
+                }
+                TimingEvent::Delay => {
+                    time += self.delays[start.delay_idx].duration;
+                    start.delay_idx += 1;
+                }
+                TimingEvent::Warp => {
+                    start.is_warping = true;
+                    let warp = self.warps[start.warp_idx];
+                    start.warp_destination = start.warp_destination.max(warp.beat + warp.length);
+                    start.warp_idx += 1;
+                }
+                _ => {}
+            }
+            start.last_row = row;
+        }
+        ((time - self.native_song_offset_sec) - self.native_group_offset_sec)
+            - music_rate * self.global_offset_sec
+    }
+
     fn speed_start_time(&self, beat: f32) -> f32 {
         let row = beat_to_note_row(beat);
         let delay = self
@@ -1456,6 +1521,20 @@ impl TimingData {
             return;
         }
         if !self.bpms.is_empty() {
+            self.native_song_offset_sec += delta_seconds;
+            self.beat0_offset_ns = timing_ns_add_seconds(self.beat0_offset_ns, delta_seconds);
+        }
+        self.rebuild_speed_runtime();
+    }
+
+    /// Apply a pack/default-sync group shift without merging native float offsets.
+    #[inline(always)]
+    pub fn shift_group_offset_seconds(&mut self, delta_seconds: f32) {
+        if delta_seconds.abs() < f32::EPSILON {
+            return;
+        }
+        if !self.bpms.is_empty() {
+            self.native_group_offset_sec += delta_seconds;
             self.beat0_offset_ns = timing_ns_add_seconds(self.beat0_offset_ns, delta_seconds);
         }
         self.rebuild_speed_runtime();
@@ -2834,6 +2913,25 @@ pub fn compute_window_counts_blue_ms(notes: &[Note], blue_window_ms: f32) -> Win
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn song_clock_group_shift_preserves_integer_timing() {
+        let mut original=TimingData::from_segments(0.532426,-0.008,&TimingSegments {
+            bpms:vec![(0.0,71.697998),(2.0,74.014),(14.0,73.051003)],
+            ..Default::default()
+        },&[]);
+        let mut separate=original.clone();
+        original.shift_song_offset_seconds(-0.009);
+        separate.shift_group_offset_seconds(-0.009);
+        for global in [-0.008,0.125] {
+            original.set_global_offset_seconds(global);
+            separate.set_global_offset_seconds(global);
+            for beat in [-4.0,0.0,0.01,17.25,20.5,44.75] {
+                assert_eq!(original.get_time_for_beat_ns(beat),separate.get_time_for_beat_ns(beat));
+                assert_eq!(original.get_time_for_beat_exact(beat).to_bits(),separate.get_time_for_beat_exact(beat).to_bits());
+            }
+        }
+    }
+
     #[test]
     fn measure_index_rounds_native_signature_boundaries() {
         let timing = TimingData::from_segments(0.0, 0.0, &TimingSegments {

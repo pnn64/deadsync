@@ -191,7 +191,7 @@ pub fn scale_value(value: f32, from_low: f32, from_high: f32, to_low: f32, to_hi
     if span.abs() <= f32::EPSILON {
         to_low
     } else {
-        ((value - from_low) / span).mul_add(to_high - to_low, to_low)
+        (value - from_low) * (to_high - to_low) / span + to_low
     }
 }
 
