@@ -1,0 +1,229 @@
+{
+  "status": "actual remaining source cause; implementation not started",
+  "charts": [
+    {
+      "source_simfile": "Igaku/Igaku.ssc",
+      "position": 240,
+      "first_actual_mismatch": {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0013",
+          "args": [
+            -95.51427459716797
+          ],
+          "beat": 27.000722885131836,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 2152,
+            "source": "song:/lua/default.lua",
+            "tail_call": false
+          },
+          "command": "InitCommand",
+          "definition_id": "def-0049",
+          "detail": {
+            "native_tween_time_left": 0
+          },
+          "kind": "call",
+          "line": 2152,
+          "operation": "Actor.x",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 9.546667098999023,
+          "seq": 54881,
+          "source": "song:/lua/default.lua",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.x",
+          "source": "song:/lua/default.lua",
+          "line": 2152,
+          "phase": "callback",
+          "beat": 27.000722885131836,
+          "seconds": 9.546667098999023,
+          "args": [
+            -96
+          ],
+          "results": [
+            {
+              "actor": "0x61a3c4ce8180",
+              "name": "MultitapP1_1",
+              "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_1"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      },
+      "evidence": "sweep-2026-10-15-function-broadcast-retained-capture-diagnostics.json",
+      "replayed_diagnostic_frames": 3106,
+      "full_repairs_spent": 0,
+      "original_source": {
+        "source_simfile": "Igaku/Igaku.ssc",
+        "candidate_sha256": "8eba2affaa1472a742af43ab4208b802c12f31f6402e4c1ef6103fad0ba16183",
+        "selected_original_members": [
+          {
+            "member": "song/lua/default.lua",
+            "sha256": "c638e27ceb5e5a59c9d24c98028e14cba27ec96afd9bc8cc30f6abbedaec41f9",
+            "saved_original_source": "/home/parity/jobs/multitap-original-chart-240-lua.lua",
+            "GetXPos_calls": [
+              {
+                "line": 2173,
+                "source": "    dst:x(ArrowEffects.GetXPos(ps, lane, y_off)      + (apply_extra[\"x\"] and apply_extra[\"x\"] or 0))"
+              }
+            ],
+            "authored_x_modifiers": [
+              {
+                "line": 140,
+                "source": "\t{0, \"*0.15 25% Beat\"},"
+              },
+              {
+                "line": 141,
+                "source": "\t\t{14, \"*1 5% Beat\"},"
+              },
+              {
+                "line": 175,
+                "source": "\t\t{173, \"*100 100% Beat\"},"
+              },
+              {
+                "line": 176,
+                "source": "\t\t{173.25, \"*1 5% Beat\"},"
+              },
+              {
+                "line": 178,
+                "source": "\t\t{174, \"*100 100% Beat\"},"
+              },
+              {
+                "line": 179,
+                "source": "\t\t{174.25, \"*1 5% Beat\"},"
+              },
+              {
+                "line": 181,
+                "source": "\t\t{175, \"*100 100% Beat\"},"
+              },
+              {
+                "line": 182,
+                "source": "\t\t{175.25, \"*1 5% Beat\"},"
+              },
+              {
+                "line": 184,
+                "source": "\t\t{176, \"*100 100% Beat\"},"
+              },
+              {
+                "line": 185,
+                "source": "\t\t{176.25, \"*1 5% Beat\"},"
+              },
+              {
+                "line": 186,
+                "source": "\t\t{207.5, \"*1 100% Beat\"},"
+              },
+              {
+                "line": 191,
+                "source": "    {328, '*1 5000% Bumpy,*25 5000% Tornado,*35 5000% Drunk,*35 5000% Tipsy,*2 200% Mini'},"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "source_simfile": "Quarantine/Quarantine.ssc",
+      "position": 363,
+      "first_actual_mismatch": {
+        "field": "command_query_event",
+        "native": {
+          "actor": "def-0086",
+          "args": [
+            -92.88910675048828
+          ],
+          "beat": 284.39849853515625,
+          "callback": "SetUpdateFunction",
+          "caller": {
+            "line": 998,
+            "source": "song:/multitap/default.lua",
+            "tail_call": false
+          },
+          "command": "InitCommand",
+          "definition_id": "def-0132",
+          "detail": {
+            "native_tween_time_left": 0
+          },
+          "kind": "call",
+          "line": 998,
+          "operation": "Actor.x",
+          "phase": "callback",
+          "scene": 1,
+          "seconds": 103.45344543457031,
+          "seq": 834808,
+          "source": "song:/multitap/default.lua",
+          "tween_time_left": 0
+        },
+        "deadsync": {
+          "scene": 1,
+          "kind": "call",
+          "operation": "Actor.x",
+          "source": "song:/multitap/default.lua",
+          "line": 998,
+          "phase": "callback",
+          "beat": 284.39849853515625,
+          "seconds": 103.45344543457031,
+          "args": [
+            -96
+          ],
+          "results": [
+            {
+              "actor": "0x6351c996a040",
+              "name": "MultitapP1_1",
+              "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
+            }
+          ],
+          "tween_time_left": 0.0
+        }
+      },
+      "evidence": "sweep-2026-10-15-current-concrete-failures.json",
+      "full_repairs_spent": 0,
+      "original_source": {
+        "source_simfile": "Quarantine/Quarantine.ssc",
+        "candidate_sha256": "8a54df1b6626f5392594954ac89090c2bb7c7c36965562244975615e59af38ad",
+        "selected_original_members": [
+          {
+            "member": "song/multitap/Default.lua",
+            "sha256": "02f9f6ce9d6fd54c080f5f881e743f4bb3ae2abede0353df7450b15f6d43d963",
+            "saved_original_source": "/home/parity/jobs/multitap-original-chart-363-multitap.lua",
+            "GetXPos_calls": [
+              {
+                "line": 1019,
+                "source": "\t\tdst:x(ArrowEffects.GetXPos(ps, lane, y_off)\t\t\t+ (apply_extra[\"x\"] and apply_extra[\"x\"] or 0))"
+              },
+              {
+                "line": 1152,
+                "source": "\t\t\t\t\tlocal ex_pos_x = ArrowEffects.GetXPos(ps, lperm, 0)"
+              }
+            ],
+            "authored_x_modifiers": []
+          }
+        ]
+      }
+    }
+  ],
+  "native_source": {
+    "path": "src/ArrowEffects.cpp",
+    "sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+    "native_creation_build_receipt_matches": true,
+    "GetXPos_first_line": 807,
+    "source_semantics": "Native GetXPos accumulates current X effects using player effect data, y offset, theme metrics and note field zoom, then adds the styled column offset and Tiny scaling. The authored Igaku script enables Beat, including5percent frombeat14."
+  },
+  "owned_source": {
+    "path": "crates/deadsync-song-lua/src/host.rs",
+    "sha256_lf_normalized": "263660af09801e69a0120627d1bf090fcd3308ee1e799c911454312db3689592",
+    "GetXPos_first_line": 1173,
+    "source_semantics": "GetXPos reads only the column argument and returns its styled base X. It never reads options, y offset or effect data."
+  },
+  "cause": "The owned GetXPos stub omits native X effects. This explains the repeated exact base-column result -96 while native returns a displaced X. The specific active effect at every Quarantine sample has not yet been reconstructed.",
+  "original_payload_members_verified_against_capture_manifest": true,
+  "original_script_line_numbers_and_trace_caller_lines_recorded_separately": true,
+  "capture_repeated": false,
+  "captured_GetXPos_or_Actor_x_values_used_as_runtime_inputs": false,
+  "no_new_full_chart_repair_started": true,
+  "full_acceptance_unchanged": true
+}
