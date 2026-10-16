@@ -629,6 +629,64 @@
           "production live mode activation"
         ]
       }
+    },
+    "My Penny/My Penny.ssc": {
+      "coverage_gaps": null,
+      "whole_song_parity_proven": false,
+      "coverage": {
+        "scope": "captured-song-lua-context",
+        "observed_song_operations": [
+          "Actor.Center",
+          "Actor.GetName",
+          "Actor.diffusealpha",
+          "Actor.queuecommand",
+          "Actor.sleep",
+          "Actor.smooth",
+          "Actor.visible",
+          "Actor.zoom",
+          "ActorFrame.GetChild",
+          "ActorFrame.GetChildren",
+          "ActorFrame.SetUpdateFunction",
+          "ActorProxy.SetTarget",
+          "GameState.GetSongBeat",
+          "MessageManager.Broadcast",
+          "PrefsManager.GetPreference",
+          "ScreenManager.GetTopScreen",
+          "Sprite.GetTexture",
+          "command.begin",
+          "command.end"
+        ],
+        "uncompared_song_operations": [
+          "Actor.smooth",
+          "ActorFrame.GetChildren"
+        ],
+        "nested_theme_operations": [
+          "Actor.tween",
+          "Actor.xy",
+          "GameState.GetSongPosition"
+        ],
+        "pending": [
+          "uncompared song operations: Actor.smooth, ActorFrame.GetChildren",
+          "native drawable state/resources: ActorProxy, Quad, Sprite",
+          "missing captured subscriber identity for ScreenGameplay/19/1",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1"
+        ],
+        "global_pending": [
+          "full theme stage commitment and history",
+          "unqueried score/alive-time observer fields",
+          "additional game/style/input/course contexts",
+          "production live mode activation"
+        ]
+      }
     }
   }
 }

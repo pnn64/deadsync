@@ -3775,15 +3775,12 @@
     {
       "title": "My Penny",
       "source_simfile": "My Penny/My Penny.ssc",
-      "harness_version": "0.1.0",
-      "archive": "1c492a47ba819c03089bbbe4ca4735c401337687c672e026fef8b8ae01d7d4c1.tar.zst",
-      "sha256": "1c492a47ba819c03089bbbe4ca4735c401337687c672e026fef8b8ae01d7d4c1",
-      "compressed_bytes": 12118,
-      "uncompressed_sha256": "5cb0c8488f02946a9c57012f1328d878f884f12b79cf8d3563db485511a7c010",
-      "compression_level": 22,
-      "aliases": [
-        "9c5cd9a59f73b7bcc74591d1df8e89eb3f36b5416167cde7a3d810a1024d57d0.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "311ee5ed6f5a27c0ab7b5e528fcc539efe6c4158463eba38a6de3b3f05bad2dd.tar.zst",
+      "compressed_bytes": 10405188,
+      "sha256": "311ee5ed6f5a27c0ab7b5e528fcc539efe6c4158463eba38a6de3b3f05bad2dd",
+      "uncompressed_sha256": "bb063f715874b3ba1b316549e958aa60d1b88e145974dffeee868372df867d6e",
+      "aliases": []
     },
     {
       "title": "Myths You Forgot",
