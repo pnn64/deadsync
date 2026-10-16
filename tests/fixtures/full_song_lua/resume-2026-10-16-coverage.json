@@ -43,6 +43,23 @@
         "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
         "missing captured subscriber identity for ScreenGameplay/2/9/1"
       ]
+    },
+    "U-0 - [PCBoyGames]/Srezcat - U-0.ssc": {
+      "source_simfile": "U-0 - [PCBoyGames]/Srezcat - U-0.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.skewx, PlayerOptions.AttenuateX, PlayerOptions.Bumpy, PlayerOptions.BumpyX, PlayerOptions.BumpyXPeriod, PlayerOptions.Dark, PlayerOptions.Dark1, PlayerOptions.Dark2, PlayerOptions.Dark3, PlayerOptions.Dark4, PlayerOptions.Drunk, PlayerOptions.DrunkZ, PlayerOptions.Mini, PlayerOptions.MoveY1, PlayerOptions.MoveY2, PlayerOptions.MoveY3, PlayerOptions.MoveY4, PlayerOptions.Skew, PlayerOptions.Stealth, PlayerOptions.Stealth1, PlayerOptions.Stealth2, PlayerOptions.Stealth3, PlayerOptions.Stealth4, PlayerOptions.StealthPastReceptors, PlayerOptions.Tilt, PlayerOptions.Tipsy, PlayerOptions.XMod, PlayerOptions.Zigzag, PlayerOptions.ZigzagPeriod",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
     }
   }
 }

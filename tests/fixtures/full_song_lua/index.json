@@ -5166,15 +5166,12 @@
     {
       "title": "U-0",
       "source_simfile": "U-0 - [PCBoyGames]/Srezcat - U-0.ssc",
-      "harness_version": "0.1.0",
-      "archive": "264bd06f6c2e74ccb0062f038af1df64db2078aae62bd65955d2bf6d31b12239.tar.zst",
-      "sha256": "264bd06f6c2e74ccb0062f038af1df64db2078aae62bd65955d2bf6d31b12239",
-      "compressed_bytes": 644788,
-      "uncompressed_sha256": "bca2841f8ee7303b275e3f3fa1e87a4ebca54f272bb5030d69d6efda743bd7f3",
-      "compression_level": 22,
-      "aliases": [
-        "edd78968adbeeef4ec51263ce6f53648200708988ce062eae24a5d0a0b80a116.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b2ebdd8b26c93bcc8625726b6dcbbb9854429955494bbe878c21ff2538410730.tar.zst",
+      "compressed_bytes": 18746803,
+      "sha256": "b2ebdd8b26c93bcc8625726b6dcbbb9854429955494bbe878c21ff2538410730",
+      "uncompressed_sha256": "86b750e692317ad64d8383257e70196c21eeebcb6509fa11228581011607a759",
+      "aliases": []
     },
     {
       "title": "U.N. Owen Was Who?",

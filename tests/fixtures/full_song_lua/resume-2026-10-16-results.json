@@ -6612,16 +6612,111 @@
           "c9f5eb970ef0b8b0c2b01fb1206ca1be7b81251f0ec721bf672f6d04a9182431.tar.zst"
         ]
       }
+    },
+    {
+      "position": 229,
+      "source_simfile": "HOPE/HOPE.ssc",
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-12-original-partition-2.json",
+      "simfile_sha256": "40320b6ae63e366213e7fbb060fc36beadd09fa2bb33be032bc9177e8a7b023d",
+      "status": "pending",
+      "previous_concrete_failure": {
+        "failure_text": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.0s] : 0 checks completed, 0 failed\n[14.5s] replaying every native gameplay frame\n[16.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'HOPE': failed to run actor init commands for '/tmp/.tmpswNxBW/song/default.lua': InitCommand failed for ActorFrame: runtime error: script '/tmp/.tmpswNxBW/song/sm5/modules/eases.lua' not found relative to '/tmp/.tmpswNxBW/song'\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'error'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:32: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:26>\n\t(...tail calls...)\n\t[string \"/tmp/.tmpswNxBW/song/sm5/core/main.lua\"]:17: in main chunk\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:44: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:42>\nstack traceback:\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:44: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:42>\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'HOPE' from '/tmp/.tmpswNxBW/song/default.lua': failed to run actor init commands for '/tmp/.tmpswNxBW/song/default.lua': InitCommand failed for ActorFrame: runtime error: script '/tmp/.tmpswNxBW/song/sm5/modules/eases.lua' not found relative to '/tmp/.tmpswNxBW/song'\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'error'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:32: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:26>\n\t(...tail calls...)\n\t[string \"/tmp/.tmpswNxBW/song/sm5/core/main.lua\"]:17: in main chunk\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:44: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:42>\nstack traceback:\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:44: in function <[string \"/tmp/.tmpswNxBW/song/./default.lua\"]:42>\n\n\nthread 'main' (1684281) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[18.0s] replaying every native gameplay frame: frame 0/20574 (0.0%)\n",
+        "callback_errors": [],
+        "mismatch_count": null,
+        "first_concrete_mismatches": [],
+        "capture_exit": null,
+        "replay_exit": 1,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "131158cdb6bad30509de8dd452f771c8b12582c3ad86ea9b37a1fa46d4153919",
+      "retained_candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-229/private-candidate.tar.zst",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 1,
+      "replay_exit": 1,
+      "replay_seconds": 34.33874233800452,
+      "failure_text": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[13.6s] replaying every native gameplay frame\n[14.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'HOPE': failed to run actor init commands for '/tmp/.tmpUBjosu/song/default.lua': InitCommand failed for ActorFrame: runtime error: script '/tmp/.tmpUBjosu/song/sm5/modules/eases.lua' not found relative to '/tmp/.tmpUBjosu/song'\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'error'\n\t[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:32: in function <[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:26>\n\t(...tail calls...)\n\t[string \"/tmp/.tmpUBjosu/song/sm5/core/main.lua\"]:17: in main chunk\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:44: in function <[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:42>\nstack traceback:\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:44: in function <[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:42>\n; retrying layers independently\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'HOPE' from '/tmp/.tmpUBjosu/song/default.lua': failed to run actor init commands for '/tmp/.tmpUBjosu/song/default.lua': InitCommand failed for ActorFrame: runtime error: script '/tmp/.tmpUBjosu/song/sm5/modules/eases.lua' not found relative to '/tmp/.tmpUBjosu/song'\nstack traceback:\n\t[C]: in ?\n\t[C]: in function 'error'\n\t[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:32: in function <[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:26>\n\t(...tail calls...)\n\t[string \"/tmp/.tmpUBjosu/song/sm5/core/main.lua\"]:17: in main chunk\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:44: in function <[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:42>\nstack traceback:\n\t[C]: in local 'chunk'\n\t[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:34: in field 'loadfile'\n\t[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:44: in function <[string \"/tmp/.tmpUBjosu/song/.//default.lua\"]:42>\n\n\nthread 'main' (1432111) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1483:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[16.0s] replaying every native gameplay frame: frame 0/20574 (0.0%)\n"
+    },
+    {
+      "position": 450,
+      "source_simfile": "U-0 - [PCBoyGames]/Srezcat - U-0.ssc",
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json",
+      "simfile_sha256": "e02d69efc0c2670faa1c7e4aba6b34c3a4d4ca96fd80e627848a64836c63dd82",
+      "status": "passed",
+      "previous_concrete_failure": {
+        "failure_text": null,
+        "callback_errors": [],
+        "mismatch_count": 3,
+        "first_concrete_mismatches": [
+          {
+            "field": "stage_sample_clock",
+            "native": 166.36764526367188,
+            "deadsync": 166.4296112060547
+          },
+          {
+            "field": "stage_sample_clock",
+            "native": 166.36764526367188,
+            "deadsync": 166.4296112060547
+          },
+          {
+            "field": "stage_sample_coverage",
+            "native": 172,
+            "deadsync": 170
+          }
+        ],
+        "capture_exit": null,
+        "replay_exit": 2,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "86b750e692317ad64d8383257e70196c21eeebcb6509fa11228581011607a759",
+      "retained_candidate": "/home/parity/jobs/chart-sweep-parallel-v5-7/chart-450/private-candidate.tar.zst",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 1,
+      "replay_exit": 0,
+      "replay_seconds": 168.55902540998068,
+      "native_frames": 48783,
+      "replayed_frames": 48783,
+      "compared_stage_fields": 1892,
+      "archive_accepted": true,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "6c13038a5e36b51398885467fa51fd811f7ed2e7ba7c5fb77814ba2d3f0b43cd",
+      "archive": "b2ebdd8b26c93bcc8625726b6dcbbb9854429955494bbe878c21ff2538410730.tar.zst",
+      "archive_sha256": "b2ebdd8b26c93bcc8625726b6dcbbb9854429955494bbe878c21ff2538410730",
+      "compressed_bytes": 18746803,
+      "harness_version": "0.1.80",
+      "title": "U-0",
+      "complete_uncompressed_replay_passed": true,
+      "decoded_packed_bytes_verified": true,
+      "local_decompressed_bytes_verified": true,
+      "retained_previous_entry": {
+        "title": "U-0",
+        "source_simfile": "U-0 - [PCBoyGames]/Srezcat - U-0.ssc",
+        "harness_version": "0.1.0",
+        "archive": "264bd06f6c2e74ccb0062f038af1df64db2078aae62bd65955d2bf6d31b12239.tar.zst",
+        "sha256": "264bd06f6c2e74ccb0062f038af1df64db2078aae62bd65955d2bf6d31b12239",
+        "compressed_bytes": 644788,
+        "uncompressed_sha256": "bca2841f8ee7303b275e3f3fa1e87a4ebca54f272bb5030d69d6efda743bd7f3",
+        "compression_level": 22,
+        "aliases": [
+          "edd78968adbeeef4ec51263ce6f53648200708988ce062eae24a5d0a0b80a116.tar.zst"
+        ]
+      }
     }
   ],
   "counts": {
-    "passed_fixtures": 407,
-    "pending_charts": 93,
+    "passed_fixtures": 408,
+    "pending_charts": 92,
     "ignored_charts": 1,
-    "new_passing_fixtures": 3,
-    "recorded_outcomes": 45
+    "new_passing_fixtures": 4,
+    "recorded_outcomes": 47
   },
-  "updated_utc": "2026-10-16T22:11:46Z",
+  "updated_utc": "2026-10-16T22:12:53Z",
   "reopened": [
     {
       "source_simfile": "7th Gear/7th Gear.ssc",
