@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-16T05:16:30Z",
+  "updated_utc": "2026-10-16T05:18:57Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -13,8 +13,8 @@
     "RUNWAY/RUNWAY.ssc"
   ],
   "counts": {
-    "passed": 403,
-    "pending": 98,
+    "passed": 404,
+    "pending": 97,
     "unprocessed": 0
   },
   "complete": false,
@@ -1605,9 +1605,9 @@
       "position": 180,
       "source_simfile": "E2/E.sm",
       "simfile_sha256": "b2e21515ee37ecb1864d13ce2b81681163e3e2b50b74ba25b1f41e0674c2af1b",
-      "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-1.json"
+      "status": "passed",
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-16-e2-sm-qualified-runtime-first1-v1.json"
     },
     {
       "position": 181,

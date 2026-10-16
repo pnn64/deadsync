@@ -1,17 +1,17 @@
 {
-  "generated_utc": "2026-10-16T05:16:41.944264+00:00",
-  "concrete_ledger_sha256": "2be0b5f55b1e2748832210e86ed2d870f62685e09937b81433411726baaf252b",
+  "generated_utc": "2026-10-16T05:19:08.002248+00:00",
+  "concrete_ledger_sha256": "d4b9b2a34d76343847d35d6820b64e5b181e96f0f6de3f18e82856fef1b59925",
   "counts": {
-    "passed": 403,
-    "pending": 98,
+    "passed": 404,
+    "pending": 97,
     "unprocessed": 0
   },
   "maximum_published_terminal_attempt_histogram": {
-    "0": 74,
+    "0": 73,
     "1": 13,
     "2": 11
   },
-  "pending_sources": 98,
+  "pending_sources": 97,
   "terminal_attempts_exceed_two": [],
   "differences": [],
   "running_repair_not_counted_as_terminal": null,
@@ -23,33 +23,13 @@
   "no_chart_replays_or_source_mutations": true,
   "additional_running_repairs_not_counted_as_terminal": [
     {
-      "source_simfile": "E2/E.sm",
-      "position": 180,
-      "stage": "e2-sm-qualified-runtime-first1-v1",
-      "started_full_repairs": 1,
-      "completed_full_repairs": 0,
-      "running": true,
-      "observed_utc": "2026-10-16T05:16:47.503442+00:00",
-      "pid": 681922,
-      "command": [
-        "/home/parity/jobs/native-arrow-zoom-linux-green-v1/full-song-lua",
-        "--archive",
-        "/home/parity/jobs/e2-sm-qualified-runtime-first1-v1/chart-180/7f30cbfeb809c75e2819ea28574deb6970ac876e217d51c84967dc3b2666d674.tar.zst",
-        "--report",
-        "/home/parity/jobs/e2-sm-qualified-runtime-first1-v1/chart-180/report.json"
-      ],
-      "actual_process_command_and_cwd_verified": true,
-      "observed_replayed_frames": 14231,
-      "native_frames": 14578
-    },
-    {
       "source_simfile": "Quarantine/Quarantine.ssc",
       "position": 363,
       "stage": "quarantine-native-option-frame-delta-final2-v1",
       "started_full_repairs": 2,
       "completed_full_repairs": 1,
       "running": true,
-      "observed_utc": "2026-10-16T05:16:47.508371+00:00",
+      "observed_utc": "2026-10-16T05:19:13.392792+00:00",
       "pid": 900381,
       "command": [
         "/home/parity/jobs/native-option-frame-delta-linux-green-v1/full-song-lua",
@@ -58,7 +38,29 @@
         "--report",
         "/home/parity/jobs/quarantine-native-option-frame-delta-final2-v1/chart-363/report.json"
       ],
-      "actual_process_command_and_cwd_verified": true
+      "actual_process_command_and_cwd_verified": true,
+      "observed_replayed_frames": 720,
+      "native_frames": 13575
+    },
+    {
+      "source_simfile": "Hallways/hallways.ssc",
+      "position": 220,
+      "stage": "hallways-qualified-runtime-first1-v1",
+      "started_full_repairs": 1,
+      "completed_full_repairs": 0,
+      "running": true,
+      "observed_utc": "2026-10-16T05:19:13.399216+00:00",
+      "pid": 916661,
+      "command": [
+        "/home/parity/jobs/native-option-frame-delta-linux-green-v1/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/hallways-qualified-runtime-first1-v1/chart-220/637f3a9bc612386f5d1c68dfab22fa00670231d4a73acb798c80561de5bffcf4.tar.zst",
+        "--report",
+        "/home/parity/jobs/hallways-qualified-runtime-first1-v1/chart-220/report.json"
+      ],
+      "actual_process_command_and_cwd_verified": true,
+      "observed_replayed_frames": 639,
+      "native_frames": 26879
     }
   ]
 }
