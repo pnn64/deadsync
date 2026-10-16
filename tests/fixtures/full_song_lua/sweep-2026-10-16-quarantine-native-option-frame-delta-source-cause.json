@@ -1,10 +1,10 @@
 {
   "source_simfile": "Quarantine/Quarantine.ssc",
   "position": 363,
-  "status": "Source-qualified direct native frame delta implementation; Quarantine final whole repair remains required",
+  "status": "Source-qualified direct frame delta fix; SSC final second full repair running on original capture",
   "full_repairs_completed": 1,
   "full_repairs_started": 1,
-  "second_full_repair_started": false,
+  "second_full_repair_started": true,
   "native_frames": 13575,
   "errors": 0,
   "mismatches": 10,
@@ -112,5 +112,6 @@
   "fix_added": true,
   "all_six_groups_both_hosts_passed": true,
   "native_reference_cases": 25,
-  "selection_evidence": "sweep-2026-10-16-native-option-frame-delta-selection.json"
+  "selection_evidence": "sweep-2026-10-16-native-option-frame-delta-selection.json",
+  "second_repair_launch_evidence": "sweep-2026-10-16-quarantine-ssc-native-frame-delta-final-repair-launch.json"
 }

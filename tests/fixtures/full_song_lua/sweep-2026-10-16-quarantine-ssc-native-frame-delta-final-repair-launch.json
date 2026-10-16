@@ -1,0 +1,54 @@
+{
+  "source_simfile": "Quarantine/Quarantine.ssc",
+  "position": 363,
+  "repair_attempt": 2,
+  "native_frames": 13575,
+  "latest_completed_full_repair": {
+    "attempt": 1,
+    "mismatches": 10,
+    "errors": 0,
+    "report_sha256": "fa2535a91250134f22521b36b1ac3cfc60d8aa709a39cab2cb03ecf658fb5776"
+  },
+  "source_fix": "Use the exact native float frame delta for Current option approach, preserving native rate/speed multiplication. Source-native regression25cases and all112 live/44 replay controls passed on both platforms.",
+  "selected_fix": {
+    "fix_commit": "3a8e5ab808cd2e2fd3fd509a0ab2641b4619e953",
+    "source_root": "/home/parity/workspace/native-option-frame-delta-green-v1/deadsync",
+    "binary_sha256": "c3d6023bc9a2a35295a7676942598325f53a83b5edf52920b4ebe2e401b6f4bd",
+    "build_proof": "/home/parity/jobs/native-option-frame-delta-linux-green-v1/proof.json",
+    "all_six_groups_both_hosts_passed": true,
+    "all_1175_sources51_assets_verified": true,
+    "native_reference_cases": 25,
+    "live_controls": 112,
+    "replay_controls": 44,
+    "full_acceptance_criteria_unchanged": true,
+    "native_expected_outputs_are_test_only": true,
+    "native_capture_reused": true,
+    "Quarantine_SSC_full_repairs_spent": 1
+  },
+  "actual_running_observation": {
+    "source_simfile": "Quarantine/Quarantine.ssc",
+    "position": 363,
+    "stage": "quarantine-native-option-frame-delta-final2-v1",
+    "started_full_repairs": 2,
+    "completed_full_repairs": 1,
+    "running": true,
+    "observed_utc": "2026-10-16T05:22:50.369327+00:00",
+    "pid": 900381,
+    "command": [
+      "/home/parity/jobs/native-option-frame-delta-linux-green-v1/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/quarantine-native-option-frame-delta-final2-v1/chart-363/f62e218bca95f91c0ad6342a5d4ba8849f5aa131998e5e1a32fe7ce6e7cb732d.tar.zst",
+      "--report",
+      "/home/parity/jobs/quarantine-native-option-frame-delta-final2-v1/chart-363/report.json"
+    ],
+    "actual_process_command_and_cwd_verified": true,
+    "observed_replayed_frames": 2378,
+    "native_frames": 13575
+  },
+  "native_capture_reused": true,
+  "original_uncompressed_capture_sha256": "8a54df1b6626f5392594954ac89090c2bb7c7c36965562244975615e59af38ad",
+  "no_query_outputs_used_as_runtime_inputs": true,
+  "full_acceptance_criteria_unchanged": true,
+  "no_third_full_repair_permitted": true,
+  "accepted": false
+}

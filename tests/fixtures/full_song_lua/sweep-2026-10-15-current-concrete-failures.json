@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-16T05:19:07Z",
+  "updated_utc": "2026-10-16T05:22:59Z",
   "counts": {
     "passed": 404,
     "pending": 97,
@@ -13489,12 +13489,13 @@
       "replayed_frames": 13575,
       "capture_errors": null,
       "completion": null,
-      "no_third_full_repair": false,
-      "followup": "sweep-2026-10-16-quarantine-native-arrow-x-first1-v1.json",
+      "no_third_full_repair": true,
+      "followup": "sweep-2026-10-16-quarantine-ssc-native-frame-delta-final-repair-launch.json",
       "full_replay_completed": true,
-      "new_full_repair_started": false,
-      "current_diagnostic_failure": "First full repair13575frames/0errors/10 residualX mismatches retained. Native direct-frame-delta source fix now fully qualified and committed. Final second repair queued after SM first1 releases slot; no third repair permitted.",
-      "qualified_fix": "sweep-2026-10-16-native-option-frame-delta-selection.json"
+      "new_full_repair_started": true,
+      "current_diagnostic_failure": "SSC final2 running on unchanged13575frame capture with qualified direct native frame delta; first1 had10 X differences. Full acceptance unproven. No third attempt permitted.",
+      "qualified_fix": "sweep-2026-10-16-native-option-frame-delta-selection.json",
+      "full_repairs_started": 2
     },
     {
       "position": 364,
