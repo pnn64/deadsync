@@ -5028,15 +5028,12 @@
     {
       "title": "THE WORLD REVOLVING",
       "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.sm",
-      "harness_version": "0.1.0",
-      "archive": "c01e4da92ef912cc2feeac8813527b508e6604a380517da0e820e29db5124910.tar.zst",
-      "sha256": "c01e4da92ef912cc2feeac8813527b508e6604a380517da0e820e29db5124910",
-      "compressed_bytes": 1985700,
-      "uncompressed_sha256": "50fd2f4a73662a2af6dc4e93160ebc64a408018ec59a5df2d168220987f33728",
-      "compression_level": 22,
-      "aliases": [
-        "c9f5eb970ef0b8b0c2b01fb1206ca1be7b81251f0ec721bf672f6d04a9182431.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "094bded99b321b1461efce49b0b423811110326fe6a88d606bdc6c0b58f337bb.tar.zst",
+      "compressed_bytes": 12706513,
+      "sha256": "094bded99b321b1461efce49b0b423811110326fe6a88d606bdc6c0b58f337bb",
+      "uncompressed_sha256": "a1dce324230b9fe85d37d013f20942b9a015f55251cbb1d0866bd97e1e11e107",
+      "aliases": []
     },
     {
       "title": "THE WORLD REVOLVING",
