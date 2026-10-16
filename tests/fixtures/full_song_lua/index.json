@@ -2286,15 +2286,12 @@
     {
       "title": "e",
       "source_simfile": "E2/E.ssc",
-      "harness_version": "0.1.0",
-      "archive": "ffc97cddcd51efe7fe64c27d9e0eeaf1eeb184c6eae69de9dfef5b5612737660.tar.zst",
-      "sha256": "ffc97cddcd51efe7fe64c27d9e0eeaf1eeb184c6eae69de9dfef5b5612737660",
-      "compressed_bytes": 862563,
-      "uncompressed_sha256": "6aa628c9371cea847277a5b47ceff5c1f7dc5c0aea06705768bb13156d482d27",
-      "compression_level": 22,
-      "aliases": [
-        "8c261469ae95b6214c64cd6ba0799bf48ad110d84c7336b2bc8a3e25467c2c02.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "e645512a618ca10b8926b9b95948aac88a922d7c5ae3a4f3b0974a851bb8346d.tar.zst",
+      "sha256": "e645512a618ca10b8926b9b95948aac88a922d7c5ae3a4f3b0974a851bb8346d",
+      "compressed_bytes": 50876604,
+      "uncompressed_sha256": "d60efe1f8247f06f3aed627bf455708ff485fb98d38899c2ceec8773ba71a9e6",
+      "aliases": []
     },
     {
       "title": "edamame",
