@@ -1,6 +1,6 @@
 {
   "scope": "latest recorded coverage observations for original source simfiles",
-  "updated_utc": "2026-10-16T05:27:54Z",
+  "updated_utc": "2026-10-16T05:32:29Z",
   "coverage_is_separate_from_existing_full_replay_acceptance": true,
   "passing_charts_replayed_or_investigated": false,
   "rows": [
@@ -664,6 +664,32 @@
         "uncompared song operations: Actor.addcommand, Player.SetLife, PlayerOptions.CMod, PlayerStageStats.FailPlayer, PlayerState.GetHealthState, ScreenGameplay.GetLifeMeter"
       ],
       "evidence": "sweep-2026-10-12-great-great-final-repairs.json"
+    },
+    {
+      "position": 220,
+      "source_simfile": "Hallways/hallways.ssc",
+      "fixture_status": "pending",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.glow, Actor.xy, GameState.GetHumanPlayers, Player.SetLife, PlayerOptions.FailSetting, PlayerStageStats.FailPlayer, PlayerState.GetHealthState, ScreenGameplay.GetLifeMeter, Song.GetFirstSecond, Song.GetLastSecond",
+        "native drawable state/resources: BitmapText, Quad",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/4/1",
+        "missing captured subscriber identity for ScreenGameplay/2/8/3",
+        "missing captured subscriber identity for ScreenGameplay/2/8/4",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "native scene 1: no captured factory identity for 1 background entries; foreground ranks retained"
+      ],
+      "evidence": "sweep-2026-10-16-hallways-qualified-runtime-first1-v1.json"
     },
     {
       "position": 228,

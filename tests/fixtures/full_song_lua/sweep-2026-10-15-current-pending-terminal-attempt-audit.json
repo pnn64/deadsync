@@ -1,14 +1,14 @@
 {
-  "generated_utc": "2026-10-16T05:27:54.542505+00:00",
-  "concrete_ledger_sha256": "04135f4c7095272c6d4da372fa41fc54ce59023157fabf4bd7f4a50b8474d90e",
+  "generated_utc": "2026-10-16T05:32:29.281577+00:00",
+  "concrete_ledger_sha256": "49504a2fb2a25156ab033e7f2d6c3ae8ed1a04d8c644184948e5c738966a3fb6",
   "counts": {
     "passed": 404,
     "pending": 97,
     "unprocessed": 0
   },
   "maximum_published_terminal_attempt_histogram": {
-    "0": 73,
-    "1": 13,
+    "0": 72,
+    "1": 14,
     "2": 11
   },
   "pending_sources": 97,
@@ -29,7 +29,7 @@
       "started_full_repairs": 2,
       "completed_full_repairs": 1,
       "running": true,
-      "observed_utc": "2026-10-16T05:27:59.462570+00:00",
+      "observed_utc": "2026-10-16T05:32:34.163703+00:00",
       "pid": 900381,
       "command": [
         "/home/parity/jobs/native-option-frame-delta-linux-green-v1/full-song-lua",
@@ -39,28 +39,8 @@
         "/home/parity/jobs/quarantine-native-option-frame-delta-final2-v1/chart-363/report.json"
       ],
       "actual_process_command_and_cwd_verified": true,
-      "observed_replayed_frames": 4649,
+      "observed_replayed_frames": 7011,
       "native_frames": 13575
-    },
-    {
-      "source_simfile": "Hallways/hallways.ssc",
-      "position": 220,
-      "stage": "hallways-qualified-runtime-first1-v1",
-      "started_full_repairs": 1,
-      "completed_full_repairs": 0,
-      "running": true,
-      "observed_utc": "2026-10-16T05:27:59.465453+00:00",
-      "pid": 916661,
-      "command": [
-        "/home/parity/jobs/native-option-frame-delta-linux-green-v1/full-song-lua",
-        "--archive",
-        "/home/parity/jobs/hallways-qualified-runtime-first1-v1/chart-220/637f3a9bc612386f5d1c68dfab22fa00670231d4a73acb798c80561de5bffcf4.tar.zst",
-        "--report",
-        "/home/parity/jobs/hallways-qualified-runtime-first1-v1/chart-220/report.json"
-      ],
-      "actual_process_command_and_cwd_verified": true,
-      "observed_replayed_frames": 16970,
-      "native_frames": 26879
     }
   ]
 }

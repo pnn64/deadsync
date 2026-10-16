@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-16T05:27:54Z",
+  "updated_utc": "2026-10-16T05:32:29Z",
   "counts": {
     "passed": 404,
     "pending": 97,
@@ -5513,26 +5513,508 @@
     {
       "position": 220,
       "source_simfile": "Hallways/hallways.ssc",
-      "completed_full_repairs": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json",
-      "failure_text": "[0.1s] replaying every native gameplay frame\n\nthread 'main' (1590110) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native background containers do not match the prepared entry count\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "completed_full_repairs": 1,
+      "evidence": "sweep-2026-10-16-hallways-qualified-runtime-first1-v1.json",
+      "failure_text": null,
       "callback_errors": [],
-      "mismatch_count": null,
-      "first_concrete_mismatches": [],
+      "mismatch_count": 341,
+      "first_concrete_mismatches": [
+        {
+          "field": "screen_end_navigation_clock",
+          "native": 25.025758743286133,
+          "deadsync": 22.51714324951172
+        },
+        {
+          "field": "command_query_count",
+          "native": 375,
+          "deadsync": 377
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 10.000251770019531,
+            "caller": {
+              "line": 7,
+              "source": "song:/background.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "results": [
+                {
+                  "actor": "external-0016",
+                  "name": "ScreenGameplay",
+                  "path": "ScreenGameplay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 7,
+            "operation": "ScreenManager.GetTopScreen",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 7.51718807220459,
+            "seq": 30,
+            "source": "song:/background.lua",
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "OnCommand",
+            "source": "song:/background.lua",
+            "line": 7,
+            "beat": 10.000251770019531,
+            "seconds": 7.51718807220459,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0016",
+            "args": [],
+            "beat": 10.000251770019531,
+            "caller": {
+              "line": 7,
+              "source": "song:/background.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "native_tween_time_left": {
+                "type": "number",
+                "value": "infinity"
+              },
+              "results": [
+                "ScreenGameplay"
+              ]
+            },
+            "kind": "query",
+            "line": 7,
+            "operation": "Actor.GetName",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 7.51718807220459,
+            "seq": 31,
+            "source": "song:/background.lua",
+            "results": [
+              "ScreenGameplay"
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ScreenManager.GetTopScreen",
+            "source": "song:/background.lua",
+            "line": 7,
+            "phase": "callback",
+            "beat": 10.000251770019531,
+            "seconds": 7.51718807220459,
+            "args": [],
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0022",
+            "args": [
+              0
+            ],
+            "beat": 10.000251770019531,
+            "caller": {
+              "line": 7,
+              "source": "song:/background.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 7,
+            "operation": "Actor.diffusealpha",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 7.51718807220459,
+            "seq": 32,
+            "source": "song:/background.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Actor.GetName",
+            "source": "song:/background.lua",
+            "line": 7,
+            "phase": "callback",
+            "beat": 10.000251770019531,
+            "seconds": 7.51718807220459,
+            "args": [],
+            "results": [
+              "ScreenGameplay"
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0022",
+            "args": [],
+            "beat": 10.000251770019531,
+            "caller": {
+              "line": 7,
+              "source": "song:/background.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 7,
+            "operation": "Actor.Center",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 7.51718807220459,
+            "seq": 33,
+            "source": "song:/background.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.diffusealpha",
+            "source": "song:/background.lua",
+            "line": 7,
+            "phase": "callback",
+            "beat": 10.000251770019531,
+            "seconds": 7.51718807220459,
+            "args": [
+              0
+            ],
+            "results": [
+              {
+                "actor": "0x5a1939233350",
+                "name": "",
+                "path": "ScreenGameplay/SongBackground"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0022",
+            "args": [
+              0.25
+            ],
+            "beat": 10.000251770019531,
+            "caller": {
+              "line": 7,
+              "source": "song:/background.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 7,
+            "operation": "Actor.zoom",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 7.51718807220459,
+            "seq": 34,
+            "source": "song:/background.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.Center",
+            "source": "song:/background.lua",
+            "line": 7,
+            "phase": "callback",
+            "beat": 10.000251770019531,
+            "seconds": 7.51718807220459,
+            "args": [],
+            "results": [
+              {
+                "actor": "0x5a1939233350",
+                "name": "",
+                "path": "ScreenGameplay/SongBackground"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0022",
+            "args": [
+              2
+            ],
+            "beat": 10.000251770019531,
+            "caller": {
+              "line": 7,
+              "source": "song:/background.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "native_tween_time_left": 2
+            },
+            "kind": "call",
+            "line": 7,
+            "operation": "Actor.linear",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 7.51718807220459,
+            "seq": 35,
+            "source": "song:/background.lua",
+            "tween_time_left": 2
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.zoom",
+            "source": "song:/background.lua",
+            "line": 7,
+            "phase": "callback",
+            "beat": 10.000251770019531,
+            "seconds": 7.51718807220459,
+            "args": [
+              0.25
+            ],
+            "results": [
+              {
+                "actor": "0x5a1939233350",
+                "name": "",
+                "path": "ScreenGameplay/SongBackground"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0022",
+            "args": [
+              1
+            ],
+            "beat": 10.000251770019531,
+            "caller": {
+              "line": 7,
+              "source": "song:/background.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "native_tween_time_left": 2
+            },
+            "kind": "call",
+            "line": 7,
+            "operation": "Actor.diffusealpha",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 7.51718807220459,
+            "seq": 36,
+            "source": "song:/background.lua",
+            "tween_time_left": 2
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.linear",
+            "source": "song:/background.lua",
+            "line": 7,
+            "phase": "callback",
+            "beat": 10.000251770019531,
+            "seconds": 7.51718807220459,
+            "args": [
+              2
+            ],
+            "results": [
+              {
+                "actor": "0x5a1939233350",
+                "name": "",
+                "path": "ScreenGameplay/SongBackground"
+              }
+            ],
+            "tween_time_left": 2.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0022",
+            "args": [
+              70.86449861526489
+            ],
+            "beat": 10.000251770019531,
+            "caller": {
+              "line": 7,
+              "source": "song:/background.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "native_tween_time_left": 72.864501953125
+            },
+            "kind": "call",
+            "line": 7,
+            "operation": "Actor.linear",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 7.51718807220459,
+            "seq": 37,
+            "source": "song:/background.lua",
+            "tween_time_left": 72.864501953125
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.diffusealpha",
+            "source": "song:/background.lua",
+            "line": 7,
+            "phase": "callback",
+            "beat": 10.000251770019531,
+            "seconds": 7.51718807220459,
+            "args": [
+              1
+            ],
+            "results": [
+              {
+                "actor": "0x5a1939233350",
+                "name": "",
+                "path": "ScreenGameplay/SongBackground"
+              }
+            ],
+            "tween_time_left": 2.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0022",
+            "args": [
+              1.25
+            ],
+            "beat": 10.000251770019531,
+            "caller": {
+              "line": 7,
+              "source": "song:/background.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "native_tween_time_left": 72.864501953125
+            },
+            "kind": "call",
+            "line": 7,
+            "operation": "Actor.zoom",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 7.51718807220459,
+            "seq": 38,
+            "source": "song:/background.lua",
+            "tween_time_left": 72.864501953125
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.linear",
+            "source": "song:/background.lua",
+            "line": 7,
+            "phase": "callback",
+            "beat": 10.000251770019531,
+            "seconds": 7.51718807220459,
+            "args": [
+              79.12234497070312
+            ],
+            "results": [
+              {
+                "actor": "0x5a1939233350",
+                "name": "",
+                "path": "ScreenGameplay/SongBackground"
+              }
+            ],
+            "tween_time_left": 81.12234497070312
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0022",
+            "args": [
+              8
+            ],
+            "beat": 10.000251770019531,
+            "caller": {
+              "line": 7,
+              "source": "song:/background.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "native_tween_time_left": 80.864501953125
+            },
+            "kind": "call",
+            "line": 7,
+            "operation": "Actor.linear",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 7.51718807220459,
+            "seq": 39,
+            "source": "song:/background.lua",
+            "tween_time_left": 80.864501953125
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.zoom",
+            "source": "song:/background.lua",
+            "line": 7,
+            "phase": "callback",
+            "beat": 10.000251770019531,
+            "seconds": 7.51718807220459,
+            "args": [
+              1.25
+            ],
+            "results": [
+              {
+                "actor": "0x5a1939233350",
+                "name": "",
+                "path": "ScreenGameplay/SongBackground"
+              }
+            ],
+            "tween_time_left": 81.12234497070312
+          }
+        }
+      ],
       "capture_exit": null,
-      "replay_exit": 1,
-      "native_frames": null,
-      "replayed_frames": null,
+      "replay_exit": 2,
+      "native_frames": 26879,
+      "replayed_frames": 26879,
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-16-hallways-qualified-runtime-first-repair-launch.json",
+      "followup": "sweep-2026-10-16-hallways-qualified-runtime-first1-v1.json",
       "entry_diagnostic_frames": 3200,
       "entry_diagnostic_errors": 0,
       "entry_diagnostic_mismatches": 0,
-      "new_full_repair_started": true,
-      "current_diagnostic_failure": "First full repair running on original26879frame capture after clean retained3200frame entry resolved old setup error. Existing whole acceptance unchanged and remains unproven.",
-      "full_repairs_started": 1
+      "new_full_repair_started": false,
+      "current_diagnostic_failure": "Latest bounded full replay remains pending; exact report failures retained",
+      "full_replay_completed": true
     },
     {
       "position": 221,

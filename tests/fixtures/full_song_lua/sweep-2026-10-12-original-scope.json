@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-16T05:27:44Z",
+  "updated_utc": "2026-10-16T05:32:19Z",
   "scope": {
     "original_simfiles": 501,
     "indexed_sources": 483,
@@ -1926,8 +1926,8 @@
       "source_simfile": "Hallways/hallways.ssc",
       "simfile_sha256": "2f1099184b916460d6d31762b49cac0098a2e26e4a0f57e00a3a2bd8cdafb6bf",
       "status": "pending",
-      "repair_attempts": 0,
-      "evidence": "sweep-2026-10-12-original-partition-2.json"
+      "repair_attempts": 1,
+      "evidence": "sweep-2026-10-16-hallways-qualified-runtime-first1-v1.json"
     },
     {
       "position": 221,
