@@ -1,0 +1,12 @@
+{
+  "fix_commit": "8d744316ad5679a61fa806eb7e218c71799965ef",
+  "source_root": "/home/parity/workspace/steps-display-green-v7/deadsync",
+  "binary_sha256": "ae049e8a4846869333ee4734d665de1faad2dfa99b4b9437ec999f8b3f907f0e",
+  "build_proof": "/home/parity/jobs/steps-display-linux-green-v7/proof.json",
+  "all_seven_groups_both_hosts_passed": true,
+  "all_1175_source_pins_48_native_assets_verified": true,
+  "live_controls": 108,
+  "replay_controls": 43,
+  "full_HOPE_repairs_spent": 0,
+  "full_acceptance_criteria_unchanged": true
+}
