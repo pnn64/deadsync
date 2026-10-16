@@ -1,0 +1,33 @@
+{
+  "completion": {
+    "next_screen": "ScreenEvaluationStage",
+    "reason": "gameplay-exit",
+    "stage_committed": true,
+    "stages_played_after": 1,
+    "stages_played_before": 0
+  },
+  "errors": [],
+  "dropped_events": 0,
+  "dropped_stage_samples": 0,
+  "dropped_update_frames": 0,
+  "dropped_random_reseeds": 0,
+  "native_frames": 48353,
+  "source_simfile": "flowers/flowers.ssc",
+  "diagnostic_exit": 2,
+  "seconds": 126.37097267794888,
+  "full_repairs_spent": 0,
+  "native_capture_reused": true,
+  "candidate_sha256": "7722e7db1464871d24771b03d01dfadd1bba1c8243f120119cd4263182940519",
+  "trace_sha256": "1f61b3db5b298042f944626704722939eff1d27bf8596f0c38a9591fd3ef46f0",
+  "simfile_sha256": "52e86ec7daeca20bdb1e49b6af119c898cd07a20a0e3c0b72703ead58af8bdba",
+  "binary_sha256": "84dd18feaf82c236a29df5d4c334b9c7ac7415b36c9b9161dac9a58d3c3d71dd",
+  "fix_commit": "c1ba44e729bcab98775b7c4fa04ec76d2d15397c",
+  "all_seven_groups_both_hosts_and_1175_source_pins_verified": true,
+  "no_fixture_acceptance": true,
+  "entry_does_not_compare_source_broadcasts": true,
+  "replayed_frames": 2211,
+  "archive_accepted": false,
+  "mismatch_count": 0,
+  "first_mismatches": [],
+  "report_sha256": "158f0260241a9aca673726eddca21b7557cef067c17291ed64c49f9bbb743e86"
+}
