@@ -1,0 +1,14 @@
+{
+  "fix_commit": "ebe0178ea1b8114c096bb3cb48135e4fe50dbd65",
+  "source_root": "/home/parity/workspace/e2-nonfinite-end-green-v4/deadsync",
+  "binary_sha256": "ec5858b0e4c8d56f726ca178eb50b9bf3d3d4c8d4f9087dd0614d906f900c75a",
+  "build_proof": "/home/parity/jobs/e2-nonfinite-end-linux-green-v4/proof.json",
+  "all_seven_groups_both_hosts_passed": true,
+  "all_1175_sources_48_assets_verified": true,
+  "live_controls": 109,
+  "replay_controls": 44,
+  "full_E2_SSC_repairs_spent": 1,
+  "stage_comparison_fields_tolerances_coverage_requirements_and_full_acceptance_unchanged": true,
+  "native_capture_reused": true,
+  "native_nonfinite_scalars_and_ending_observer_phase_qualified": true
+}
