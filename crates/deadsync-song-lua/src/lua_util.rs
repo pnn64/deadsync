@@ -7065,6 +7065,27 @@ fn load_actor_texture(
 
 pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
+        "LoadTexture",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                prepare_capture_scope_actor(lua, &actor)?;
+                let value = method_arg(&args, 0).cloned().unwrap_or(Value::Nil);
+                if value.is_nil() {
+                    // LunaActorMultiVertex::LoadTexture unloads the resource and
+                    // loads RageTexture_Default without changing the mesh.
+                    set_actor_texture_from_value(&actor, Some(&Value::Nil), true)?;
+                    actor.raw_set("__songlua_default_texture", true)?;
+                } else {
+                    let path = lua.coerce_string(value)?
+                        .ok_or_else(|| mlua::Error::runtime("LoadTexture: string expected"))?;
+                    set_actor_texture_from_value(&actor, Some(&Value::String(path)), false)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "SetTexture",
         lua.create_function({
             let actor = actor.clone();

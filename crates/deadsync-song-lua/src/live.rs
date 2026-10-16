@@ -3867,6 +3867,47 @@ end)
     }
 
     #[test]
+    fn live_amv_load_texture_preserves_mesh_and_restores_native_default() {
+        let compiled = compile_with_context("amv-load-texture", r#"
+return Def.ActorMultiVertex {
+    InitCommand = function(self)
+        MESH = self
+        self:SetDrawState{Mode='DrawMode_Triangles'}:SetVertices{
+            {{0,0,0},{1,1,1,1},{0,0}},
+            {{20,0,0},{1,1,1,1},{1,0}},
+            {{0,10,0},{1,1,1,1},{0,1}},
+        }
+        assert(self:LoadTexture(GAMESTATE:GetCurrentSong():GetSongDir() .. 'panel.png') == self)
+        local texture = self:GetTexture()
+        assert(texture:GetSourceWidth() == 16 and texture:GetSourceHeight() == 8)
+        assert(self:GetNumVertices() == 3 and self:GetDestDrawMode() == 'DrawMode_Triangles')
+    end,
+}
+"#, |context| {
+            image::RgbaImage::new(16, 8).save(context.song_dir.join("panel.png")).unwrap();
+        });
+        let SongLuaOverlayKind::ActorMultiVertex { vertices, texture_path: Some(path), .. } =
+            &compiled.overlays[0].kind else { panic!("textured authored mesh") };
+        assert_eq!(path.file_name().unwrap(), "panel.png");
+        assert_eq!(vertices.len(), 3);
+        assert_eq!(vertices[1].pos, [20.0, 0.0]);
+        assert_eq!(vertices[1].uv, [1.0, 0.0]);
+        let scene = compiled.live_scene.expect("live mesh scene");
+        scene.lua.load(r#"
+local retained = MESH:GetTexture()
+assert(MESH:LoadTexture(nil) == MESH)
+local default = MESH:GetTexture()
+assert(default:GetPath() == '' and default:GetSourceWidth() == 1 and default:GetNumFrames() == 1)
+assert(retained:GetSourceWidth() == 16, 'replacement preserves retained texture handles')
+assert(MESH:GetNumVertices() == 3 and MESH:GetDestDrawMode() == 'DrawMode_Triangles')
+MESH:SetTexture(retained)
+assert(MESH:GetTexture() == retained)
+MESH:LoadTexture()
+assert(MESH:GetTexture():GetSourceWidth() == 1, 'missing argument also loads the default')
+"#).exec().expect("native LoadTexture reset and mesh preservation");
+    }
+
+    #[test]
     fn live_quad_default_texture_survives_geometry_and_explicit_rebinding() {
         compile("quad-default-texture", r#"
 local quad, sprite
