@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "E2 SSC final2 bounded repair complete; no further full attempt if pending",
   "acceptance": "full replay of existing implemented comparisons",
   "repair_limit_per_chart": 2,
   "fix_commit": "ebe0178ea1b8114c096bb3cb48135e4fe50dbd65",
