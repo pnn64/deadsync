@@ -1,0 +1,66 @@
+[
+  {
+    "scene": 1,
+    "player": 1,
+    "button": "Right",
+    "key": "right",
+    "down": true,
+    "seconds": 2
+  },
+  {
+    "scene": 1,
+    "player": 1,
+    "button": "Right",
+    "key": "right",
+    "down": false,
+    "seconds": 3
+  },
+  {
+    "scene": 1,
+    "player": 1,
+    "button": "Up",
+    "key": "up",
+    "down": true,
+    "seconds": 4
+  },
+  {
+    "scene": 1,
+    "player": 1,
+    "button": "Up",
+    "key": "up",
+    "down": false,
+    "seconds": 5
+  },
+  {
+    "scene": 1,
+    "player": 1,
+    "button": "Left",
+    "key": "left",
+    "down": true,
+    "seconds": 6
+  },
+  {
+    "scene": 1,
+    "player": 1,
+    "button": "Left",
+    "key": "left",
+    "down": false,
+    "seconds": 7
+  },
+  {
+    "scene": 1,
+    "player": 1,
+    "button": "Down",
+    "key": "down",
+    "down": true,
+    "seconds": 8
+  },
+  {
+    "scene": 1,
+    "player": 1,
+    "button": "Down",
+    "key": "down",
+    "down": false,
+    "seconds": 9
+  }
+]

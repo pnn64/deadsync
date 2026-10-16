@@ -27,14 +27,25 @@ fn main() -> ExitCode {
         eprintln!("expected native trace, simfile and report path");
         return ExitCode::FAILURE;
     }
-    match native_gameplay::replay(Path::new(&args[0]), Path::new(&args[1]), scope, |_, _| {}) {
+    let trace: serde_json::Value = match std::fs::read(&args[0]).map_err(|e| e.to_string())
+        .and_then(|bytes| if Path::new(&args[0]).extension().is_some_and(|e|e=="zst") {
+            zstd::stream::decode_all(bytes.as_slice()).map_err(|e|e.to_string())
+        } else { Ok(bytes) })
+        .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string())) {
+        Ok(trace) => trace,
+        Err(error) => { eprintln!("cannot read native capture: {error}"); return ExitCode::FAILURE; }
+    };
+    match native_gameplay::replay(&trace, Path::new(&args[0]), Path::new(&args[1]), None, scope, |used, total| {
+        if used % 256 == 0 || used == total { eprintln!("replay {used}/{total}"); }
+    }) {
         Ok(report) => {
             match serde_json::to_vec_pretty(&report)
                 .map_err(|error| error.to_string())
                 .and_then(|bytes| {
                     std::fs::write(&args[2], bytes).map_err(|error| error.to_string())
                 }) {
-                Ok(()) => ExitCode::from(2), // Diagnostic coverage does not certify an archive.
+                Ok(()) if report["interactive_checks_passed"] == true => ExitCode::SUCCESS,
+                Ok(()) => ExitCode::from(2), // Other diagnostic coverage does not certify an archive.
                 Err(error) => {
                     eprintln!("could not write report: {error}");
                     ExitCode::FAILURE

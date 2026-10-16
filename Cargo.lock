@@ -1312,6 +1312,7 @@ dependencies = [
  "deadsync-config",
  "deadsync-core",
  "deadsync-gameplay",
+ "deadsync-input",
  "deadsync-noteskin",
  "deadsync-profile",
  "deadsync-profile-gameplay",

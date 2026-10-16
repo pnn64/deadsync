@@ -970,6 +970,22 @@ impl fmt::Debug for SongLuaLiveScene {
 }
 
 impl SongLuaLiveScene {
+    /// ScreenManager dispatches input after the screen's own input handler.
+    /// Callback return values only control the remaining Lua callbacks.
+    pub fn input(&mut self, event: &crate::SongLuaInputEvent<'_>)
+        -> mlua::Result<(bool, SongLuaLiveOutput)>
+    {
+        if self.ended { return Err(mlua::Error::runtime("cannot send input to an ended song Lua scene")); }
+        let (handled, errors) = crate::input::dispatch(&self.lua, event)?;
+        for (actor, state) in self.actors.iter().zip(&mut self.states) {
+            *state = read_state(&self.lua, actor)?;
+        }
+        for (_, actor, state) in &mut self.tracked { *state = read_state(&self.lua, actor)?; }
+        let mut output = take_output(&self.lua)?;
+        output.errors.extend(errors);
+        Ok((handled, output))
+    }
+
     /// Enable a read-only observation at the native gameplay overlay probe phase.
     #[cfg(feature = "test-support")]
     pub fn enable_overlay_stage_observer(&self) -> mlua::Result<()> {
@@ -1560,10 +1576,10 @@ impl SongLuaLiveScene {
 
     /// Apply current local poses. The screen marks these actors dynamic in
     /// FrameScratch at entry, before rendering starts; baked timelines stay empty.
-    pub fn write_visuals<S>(
+    pub fn write_visuals<N, M>(
         &self,
         visuals: &mut deadsync_gameplay::SongLuaRuntimeVisuals<
-            crate::SongLuaOverlayActor<S>, crate::SongLuaCapturedActor,
+            crate::SongLuaOverlayActor<crate::SongLuaOverlayKind<N, M, deadlib_present::actors::TextAttribute>>, crate::SongLuaCapturedActor,
             crate::gameplay::SongLuaRuntimeOverlayStateDelta>,
     ) -> Result<(), String> {
         for &(global, target) in &self.targets {
@@ -1575,6 +1591,8 @@ impl SongLuaLiveScene {
                     .and_then(|layer| layer.overlays.get_mut(local)),
             }.ok_or_else(|| "live Lua actor has no prepared visual slot".to_owned())?;
             actor.initial_state = self.states[global];
+            let owned = &self.actors[global];
+            sync_visual_content(owned, &mut actor.kind)?;
         }
         for (target, state) in self.tracked_states() {
             use crate::SongLuaTrackedActorTarget as T;
@@ -1588,6 +1606,14 @@ impl SongLuaLiveScene {
         }
         visuals.hidden_players = std::array::from_fn(|p| !visuals.player_actors[p].initial_state.visible);
         Ok(())
+    }
+
+    /// Observe factory identities and production visual bindings without
+    /// importing reference poses, vertices, or callback results.
+    #[cfg(feature = "test-support")]
+    pub fn visual_bindings(&self) -> mlua::Result<Vec<(String, SongLuaLiveTarget)>> {
+        self.targets.iter().map(|&(global, target)|
+            Ok((crate::lua_util::message_actor_path(&self.actors[global])?, target))).collect()
     }
 
     pub fn states(&self) -> &[SongLuaOverlayState] { &self.states }
@@ -1607,6 +1633,37 @@ impl SongLuaLiveScene {
     pub fn take_startup_output(&mut self) -> SongLuaLiveOutput {
         std::mem::take(&mut self.startup_output)
     }
+}
+
+fn sync_visual_content<N, M>(owned: &Table, kind: &mut crate::SongLuaOverlayKind<N, M, deadlib_present::actors::TextAttribute>) -> Result<(), String> {
+    match kind {
+        crate::SongLuaOverlayKind::ActorMultiVertex { vertices, texture_path, texture_key, .. } => {
+            *vertices = crate::lua_util::read_actor_multi_vertex_mesh(owned)?.unwrap_or_else(|| std::sync::Arc::from([]));
+            let path = crate::lua_util::live_multi_vertex_texture_path(owned).map_err(|error| error.to_string())?;
+            if *texture_path != path {
+                *texture_key = path.as_ref().map(|path| std::sync::Arc::from(path.to_string_lossy().as_ref()));
+                *texture_path = path;
+            }
+        }
+        crate::SongLuaOverlayKind::BitmapText { text, attributes, stroke_color, .. } => {
+            let current = crate::lua_util::lua_text_value(owned.get("Text").map_err(|error| error.to_string())?)
+                .map_err(|error| error.to_string())?;
+            if text.as_ref() != current { *text = current.into(); }
+            *attributes = crate::lua_util::read_bitmap_text_attributes(owned)?;
+            *stroke_color = crate::lua_util::read_actor_color_field(owned, "__songlua_stroke_color")?;
+        }
+        crate::SongLuaOverlayKind::Sprite { texture_path, texture_key, states, .. } => {
+            if let Some(path) = crate::lua_util::actor_texture_path(owned).map_err(|error| error.to_string())?
+                && *texture_path != path
+            {
+                *texture_key = std::sync::Arc::from(path.to_string_lossy().as_ref());
+                *texture_path = path;
+            }
+            *states = crate::lua_util::read_sprite_states(owned)?.into();
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
@@ -3864,6 +3921,86 @@ end)
             ..Default::default()
         }).expect("advance large live scene");
         assert!(output.errors.is_empty(), "{:?}", output.errors);
+    }
+
+    #[test]
+    fn live_relative_nested_media_keeps_hidden_sprite_slots() {
+        let dir=std::path::PathBuf::from(format!("../../target/song-lua-relative-media-{}",std::process::id()));
+        std::fs::create_dir_all(dir.join("nested")).unwrap();
+        image::RgbaImage::from_pixel(2,2,image::Rgba([255;4])).save(dir.join("nested/ball.png")).unwrap();
+        std::fs::write(dir.join("entry.lua"), "return LoadActor('nested/actor.lua')").unwrap();
+        std::fs::write(dir.join("nested/actor.lua"), "return LoadActor('ball.png') .. {Name='HiddenBall',InitCommand=function(self) self:visible(false) end}").unwrap();
+        let mut context=crate::SongLuaCompileContext::new(&dir,"relative media");
+        context.live=true;
+        let compiled: Compiled=crate::compile_song_lua_with_default_host(&dir.join("entry.lua"), &context, SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).unwrap();
+        let sprite=compiled.overlays.iter().find(|a|a.name.as_deref()==Some("HiddenBall")).expect("hidden sprite retains a visual slot");
+        assert!(matches!(&sprite.kind,SongLuaOverlayKind::Sprite{texture_path,..} if texture_path.is_absolute() && texture_path.is_file()));
+    }
+
+    #[test]
+    fn live_content_reaches_visual_slots_after_input_and_updates() {
+        let mut compiled = compile("live-input-visual-content", r#"
+local mesh, text, held, x = nil, nil, false, 0
+return Def.ActorFrame {
+    OnCommand = function(self)
+        SCREENMAN:GetTopScreen():AddInputCallback(function(event)
+            if event.button == 'Right' then held = event.type ~= 'InputEventType_Release' end
+        end)
+        self:SetUpdateFunction(function(_, delta)
+            if delta <= 0 then return end
+            if held then x = x + 1 end
+            mesh:SetVertices{
+                {{x,0,-10},{1,1,1,1},{0,0}},
+                {{x+10,0,-20},{1,1,1,1},{1,0}},
+                {{x,10,-30},{1,1,1,1},{0,1}},
+                {{0/0,0/0,0/0}}, {{0/0,0/0,0/0}}, {{0/0,0/0,0/0}},
+            }
+            text:settext(tostring(x))
+        end)
+    end,
+    Def.ActorMultiVertex {
+        Name='MovingMesh',
+        InitCommand=function(self) mesh=self; self:SetDrawState{Mode='DrawMode_Triangles'}:SetNumVertices(6) end,
+    },
+    Def.BitmapText { Name='TimerText', Font='Common normal', InitCommand=function(self) text=self end },
+}
+"#);
+        let mesh_local = compiled.overlays.iter().position(|actor| actor.name.as_deref() == Some("MovingMesh"))
+            .expect("initially empty native mesh retains a visual slot");
+        let text_local = compiled.overlays.iter().position(|actor| actor.name.as_deref() == Some("TimerText")).unwrap();
+        let mesh_global = compiled.live_actor_indices()[mesh_local];
+        let text_global = compiled.live_actor_indices()[text_local];
+        let mut mesh = compiled.overlays[mesh_local].kind.clone();
+        let mut text = compiled.overlays[text_local].kind.clone();
+        let mut scene = compiled.live_scene.take().unwrap();
+        let mut input = crate::SongLuaInputEvent {
+            player:Some(0),controller:Some(0),button:"Right",game_button:"MenuRight",
+            kind:crate::SongLuaInputType::FirstPress,device:"InputDevice_Key",device_button:"DeviceButton_right",
+            level:1.0,z:0,down:true,ago:0.0,is_joystick:false,is_mouse:false,
+        };
+        assert!(scene.input(&input).unwrap().1.errors.is_empty());
+        for step in 1..=2 {
+            let seconds = f64::from(step) / 60.0;
+            assert!(scene.advance(SongLuaLiveFrame { screen_seconds:seconds,music_seconds:seconds,
+                delta_seconds:1.0/60.0,..Default::default() }).unwrap().errors.is_empty());
+        }
+        sync_visual_content(&scene.actors[mesh_global], &mut mesh).unwrap();
+        sync_visual_content(&scene.actors[text_global], &mut text).unwrap();
+        let SongLuaOverlayKind::ActorMultiVertex { vertices,texture_path,.. } = &mesh else { panic!("mesh") };
+        assert_eq!(vertices.len(),6,"non-finite vertices preserve native triangle boundaries");
+        assert_eq!(vertices[0].pos,[2.0,0.0]);
+        assert_eq!(vertices.iter().take(3).map(|v| v.z).collect::<Vec<_>>(),[-10.0,-20.0,-30.0]);
+        assert!(vertices[3].pos[0].is_nan());
+        assert!(texture_path.is_some(),"native default texture is opaque white");
+        assert!(matches!(&text,SongLuaOverlayKind::BitmapText{text,..} if text.as_ref()=="2"));
+        input.kind=crate::SongLuaInputType::Release;
+        input.down=false;
+        scene.input(&input).unwrap();
+        scene.advance(SongLuaLiveFrame{screen_seconds:0.05,music_seconds:0.05,
+            delta_seconds:1.0/60.0,..Default::default()}).unwrap();
+        sync_visual_content(&scene.actors[mesh_global], &mut mesh).unwrap();
+        let SongLuaOverlayKind::ActorMultiVertex{vertices,..}=&mesh else{panic!("mesh")};
+        assert_eq!(vertices[0].pos,[2.0,0.0],"release reaches the authored controller");
     }
 
     #[test]

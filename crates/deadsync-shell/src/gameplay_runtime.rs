@@ -693,13 +693,14 @@ pub(crate) fn update(
 pub(crate) fn handle_input(
     state: &mut gameplay::State,
     ev: &InputEvent,
+    physical: Option<deadsync_input::PhysicalInput>,
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
     effects: &mut Vec<ThemeEffect>,
 ) {
     let start_len = effects.len();
-    gameplay::handle_input(state, ev, effects);
+    gameplay::handle_input_with_device(state, ev, physical, effects);
     drain(state, audio, sounds, music_clock);
     debug_assert!(effects.len() - start_len <= MAX_INPUT_EFFECTS);
 }

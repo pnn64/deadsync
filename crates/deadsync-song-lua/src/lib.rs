@@ -23,6 +23,8 @@ pub use draw_capture::{
 mod eases;
 mod files;
 mod host;
+mod input;
+pub use input::{SongLuaInputEvent, SongLuaInputType};
 mod json;
 mod lua_util;
 mod live;
@@ -701,6 +703,7 @@ pub struct SongLuaPlayerContext {
 #[derive(Debug, Clone, Copy)]
 pub struct SongLuaActorMultiVertexPoint {
     pub pos: [f32; 2],
+    pub z: f32,
     pub color: [f32; 4],
     pub uv: [f32; 2],
 }
@@ -1533,6 +1536,11 @@ pub struct SongLuaCompileContext {
 
 impl SongLuaCompileContext {
     pub fn new(song_dir: impl Into<PathBuf>, main_title: impl Into<String>) -> Self {
+        // LoadActor stores resolved media paths. Resolve the entry directory
+        // once so a relative song root is not prepended again when a nested
+        // actor's texture is compiled or rebound by the live renderer.
+        let song_dir = song_dir.into();
+        let song_dir = std::path::absolute(&song_dir).unwrap_or(song_dir);
         Self {
             background_layer_count: 0,
             layer_start_beats: Vec::new(),
@@ -1541,7 +1549,7 @@ impl SongLuaCompileContext {
             live: false,
             defer_initial_live_update: false,
             screen_loading: false,
-            song_dir: song_dir.into(),
+            song_dir,
             song_banner_path: None,
             main_title: main_title.into(),
             song_display_bpms: [60.0, 60.0],
@@ -2126,6 +2134,7 @@ pub enum SongLuaProxyTarget {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SongLuaOverlayMeshVertex {
     pub pos: [f32; 2],
+    pub z: f32,
     pub color: [f32; 4],
     pub uv: [f32; 2],
 }

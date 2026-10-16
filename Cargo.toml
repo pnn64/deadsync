@@ -109,6 +109,7 @@ deadlib-present = { path = "crates/deadlib-present", features = ["conformance"] 
 deadsync-chart = { path = "crates/deadsync-chart" }
 deadsync-core = { path = "crates/deadsync-core" }
 deadsync-gameplay = { path = "crates/deadsync-gameplay" }
+deadsync-input = { path = "crates/deadsync-input" }
 deadsync-noteskin = { path = "crates/deadsync-noteskin" }
 deadsync-profile-gameplay = { path = "crates/deadsync-profile-gameplay" }
 deadsync-rules = { path = "crates/deadsync-rules" }

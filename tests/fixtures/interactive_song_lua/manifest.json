@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "scope": "Fof Guys scripted input and submitted drawable comparisons",
+  "native_engine_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_theme_commit": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+  "source_archive": "../full_song_lua/50ada90f96b306f583ae02382994d5c4497b33546c02fac6b3f826b0b00913fb.tar.zst",
+  "captures": [
+    {
+      "style": "single",
+      "trace": "fof-single.trace.json.zst",
+      "compressed_sha256": "0d7895242bd19b26d50368507888ed6ea360728ed6cf06975b6eea69e14bb682",
+      "uncompressed_sha256": "639f380ba7dbff393e5448f2044d2f9348cbcd78018ea6ae72bc78a0df68ce19",
+      "uncompressed_bytes": 260740075,
+      "inputs": "fof-single.inputs.json",
+      "until_beat": 34,
+      "completion": "beat-limit",
+      "observer_frame_period_seconds": 0.016666666666666666
+    },
+    {
+      "style": "versus",
+      "trace": "fof-versus.trace.json.zst",
+      "compressed_sha256": "2a17a3f75d0cb248f8335cc3d26478a74c009333981398bc3ca87fbe14537cf8",
+      "uncompressed_sha256": "a04e39cd1c37357b07b9456ee98e2d8036a53a2fd8f4e3711b50d8d6516b57ee",
+      "uncompressed_bytes": 378884393,
+      "inputs": "fof-versus.inputs.json",
+      "until_beat": 34,
+      "completion": "beat-limit",
+      "observer_frame_period_seconds": 0.016666666666666666
+    }
+  ],
+  "whole_song_parity_proven": false,
+  "pixel_parity_proven": false,
+  "harness_commit": "771e0ce"
+}

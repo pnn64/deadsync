@@ -1684,10 +1684,10 @@ fn song_lua_overlay_sprite_offscreen(
     let height = size[1] * scale_y;
     let left = width.mul_add(-state.halign, state.x);
     let top = height.mul_add(-state.valign, state.y);
-    left >= overlay_space_width - EDGE_SLOP
-        || left + width <= EDGE_SLOP
-        || top >= overlay_space_height - EDGE_SLOP
-        || top + height <= EDGE_SLOP
+    left >= overlay_space_width + EDGE_SLOP
+        || left + width <= -EDGE_SLOP
+        || top >= overlay_space_height + EDGE_SLOP
+        || top + height <= -EDGE_SLOP
 }
 
 fn song_lua_overlay_uv_rect(
@@ -3303,7 +3303,7 @@ impl SongLuaManualScratch {
                                     .iter()
                                     .map(|vertex| TexturedMeshVertex {
                                         normal: [0.0; 4],
-                                        pos: [vertex.pos[0], vertex.pos[1], 0.0],
+                                        pos: [vertex.pos[0], vertex.pos[1], vertex.z],
                                         uv: vertex.uv,
                                         tex_matrix_scale: [1.0; 2],
                                         color: vertex.color,
@@ -7931,58 +7931,24 @@ fn append_song_lua_actor_multi_vertex_mesh(
 }
 
 fn song_lua_actor_multi_vertex_textured_mesh(
-    vertices: &Arc<[SongLuaOverlayMeshVertex]>,
-    x_scale: f32,
-    y_scale: f32,
-    actor_scale: [f32; 2],
-    effect_scale: [f32; 3],
-    rotation_z_deg: f32,
-    skew: [f32; 2],
+    vertices: &[SongLuaOverlayMeshVertex],
 ) -> Arc<[TexturedMeshVertex]> {
     let mut out = Vec::with_capacity(vertices.len());
-    append_song_lua_actor_multi_vertex_textured_mesh(
-        &mut out,
-        vertices,
-        x_scale,
-        y_scale,
-        actor_scale,
-        effect_scale,
-        rotation_z_deg,
-        skew,
-    );
-    Arc::from(out.into_boxed_slice())
+    append_song_lua_actor_multi_vertex_textured_mesh(&mut out, vertices);
+    out.into()
 }
 
-#[allow(clippy::too_many_arguments)]
 fn append_song_lua_actor_multi_vertex_textured_mesh(
     out: &mut Vec<TexturedMeshVertex>,
     vertices: &[SongLuaOverlayMeshVertex],
-    x_scale: f32,
-    y_scale: f32,
-    actor_scale: [f32; 2],
-    effect_scale: [f32; 3],
-    rotation_z_deg: f32,
-    skew: [f32; 2],
 ) {
-    out.reserve(vertices.len());
-    for vertex in vertices.iter() {
-        let pos = song_lua_actor_multi_vertex_pos(
-            vertex.pos,
-            x_scale,
-            y_scale,
-            actor_scale,
-            effect_scale,
-            rotation_z_deg,
-            skew,
-        );
-        out.push(TexturedMeshVertex {
-            normal: [0.0; 4],
-            pos: [pos[0], pos[1], 0.0],
-            uv: vertex.uv,
-            tex_matrix_scale: [1.0, 1.0],
-            color: vertex.color,
-        });
-    }
+    out.extend(vertices.iter().map(|vertex| TexturedMeshVertex {
+        normal: [0.0; 4],
+        pos: [vertex.pos[0], vertex.pos[1], vertex.z],
+        uv: vertex.uv,
+        tex_matrix_scale: [1.0, 1.0],
+        color: vertex.color,
+    }));
 }
 
 fn song_lua_actor_multi_vertex_pos(
@@ -9659,6 +9625,7 @@ fn append_projected_mesh_vertices(
 
 struct SongLuaProjectedMeshParams {
     texture: Arc<str>,
+    sampler: deadlib_render_core::MeshSampler,
     tint: [f32; 4],
     glow: [f32; 4],
     local_transform: Matrix4,
@@ -9679,7 +9646,10 @@ fn song_lua_projected_mesh_actor_from_grid(
 ) -> Actor {
     if let Some(scratch) = scratch {
         return Actor::ReusableTexturedMesh {
-            environment: None,
+            environment: Some(deadlib_present::actors::MeshEnvironment {
+                sampler: Some(params.sampler), camera: None, transform: Matrix4::IDENTITY,
+                additive_texture: None, additive_uv: [0.0, 0.0, 1.0, 1.0],
+            }),
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             world_z: params.world_z,
@@ -9710,7 +9680,10 @@ fn song_lua_projected_mesh_actor_from_grid(
     );
     append_projected_mesh_vertices(grid, width, height, edge_fade, &mut vertices);
     Actor::TexturedMesh {
-        environment: None,
+        environment: Some(deadlib_present::actors::MeshEnvironment {
+                sampler: Some(params.sampler), camera: None, transform: Matrix4::IDENTITY,
+                additive_texture: None, additive_uv: [0.0, 0.0, 1.0, 1.0],
+            }),
         align: [0.0, 0.0],
         offset: [0.0, 0.0],
         world_z: params.world_z,
@@ -9789,6 +9762,12 @@ fn song_lua_flat_skewed_overlay_actor(
     }
     Some(song_lua_projected_mesh_actor_from_grid(
         SongLuaProjectedMeshParams {
+            sampler: deadlib_render_core::MeshSampler {
+                filter: if state.texture_filtering { deadlib_render_core::SamplerFilter::Linear }
+                    else { deadlib_render_core::SamplerFilter::Nearest },
+                wrap: if state.texture_wrapping { deadlib_render_core::SamplerWrap::Repeat }
+                    else { deadlib_render_core::SamplerWrap::Clamp },
+            },
             local_transform: Matrix4::IDENTITY,
             world_z,
             depth_test: state.depth_test,
@@ -9862,6 +9841,12 @@ fn song_lua_projected_overlay_actor(
     }
     Some(song_lua_projected_mesh_actor_from_grid(
         SongLuaProjectedMeshParams {
+            sampler: deadlib_render_core::MeshSampler {
+                filter: if state.texture_filtering { deadlib_render_core::SamplerFilter::Linear }
+                    else { deadlib_render_core::SamplerFilter::Nearest },
+                wrap: if state.texture_wrapping { deadlib_render_core::SamplerWrap::Repeat }
+                    else { deadlib_render_core::SamplerWrap::Clamp },
+            },
             local_transform,
             world_z: state.z_bias,
             depth_test: state.depth_test,
@@ -10636,36 +10621,44 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 None
             };
             if let Some(texture) = texture {
+                // AMV positions are native XYZ coordinates. Preserve Z and the
+                // homogeneous camera transform until GPU clipping, just as for
+                // projected sprites; the menu camera spans +/-1000 units.
+                let model = Matrix4::from_scale(Vector3::new(x_scale, y_scale, 1.0))
+                    * song_lua_overlay_sprite_matrix(state, [0.0; 2],
+                        [state.x + effect_offset[0], state.y + effect_offset[1], state.z + effect_offset[2]],
+                        effect_rot, effect_scale);
+                let view_proj = camera_state.and_then(|camera|
+                    song_lua_overlay_view_proj(camera, overlay_space_width, overlay_space_height))
+                    .unwrap_or((Matrix4::IDENTITY, song_lua_screen_proj(1000.0)));
+                let transform = song_lua_projected_local_transform(view_proj, model);
                 let mesh_actor = if let Some(scratch) = projected_mesh_scratch.as_deref_mut() {
                     let mesh = scratch.update_textured(|out| {
-                        append_song_lua_actor_multi_vertex_textured_mesh(
-                            out,
-                            vertices,
-                            x_scale,
-                            y_scale,
-                            [size_scale_x, size_scale_y],
-                            effect_scale,
-                            effect_rot[2],
-                            [state.skew_x, state.skew_y],
-                        );
+                        append_song_lua_actor_multi_vertex_textured_mesh(out, vertices);
                     });
                     Actor::ReusableTexturedMesh {
-                        environment: None,
+                        environment: Some(deadlib_present::actors::MeshEnvironment {
+                            sampler: Some(deadlib_render_core::MeshSampler {
+                                filter: if state.texture_filtering { deadlib_render_core::SamplerFilter::Linear }
+                                    else { deadlib_render_core::SamplerFilter::Nearest },
+                                wrap: if state.texture_wrapping { deadlib_render_core::SamplerWrap::Repeat }
+                                    else { deadlib_render_core::SamplerWrap::Clamp },
+                            }),
+                            camera: None, transform: Matrix4::IDENTITY,
+                            additive_texture: None, additive_uv: [0.0, 0.0, 1.0, 1.0],
+                        }),
                         align: [0.0, 0.0],
-                        offset: [
-                            effect_offset[0].mul_add(x_scale, state.x * x_scale),
-                            effect_offset[1].mul_add(y_scale, state.y * y_scale),
-                        ],
-                        world_z: song_lua_biased_world_z(state, effect_offset[2]),
+                        offset: [0.0; 2],
+                        world_z: state.z_bias,
                         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-                        local_transform: Matrix4::IDENTITY,
+                        local_transform: transform,
                         texture: texture.clone(),
                         tint,
                         glow: [1.0, 1.0, 1.0, 0.0],
                         vertices: mesh,
                         geom_cache_key: INVALID_TMESH_CACHE_KEY,
                         uv_scale: [1.0, 1.0],
-                        uv_offset: [0.0, 0.0],
+                        uv_offset: state.texcoord_offset.unwrap_or([0.0; 2]),
                         uv_tex_shift: [0.0, 0.0],
                         depth_test: state.depth_test,
                         clear_depth: false,
@@ -10676,32 +10669,30 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         z,
                     }
                 } else {
-                    let mesh = song_lua_actor_multi_vertex_textured_mesh(
-                        vertices,
-                        x_scale,
-                        y_scale,
-                        [size_scale_x, size_scale_y],
-                        effect_scale,
-                        effect_rot[2],
-                        [state.skew_x, state.skew_y],
-                    );
+                    let mesh = song_lua_actor_multi_vertex_textured_mesh(vertices);
                     Actor::TexturedMesh {
-                        environment: None,
+                        environment: Some(deadlib_present::actors::MeshEnvironment {
+                            sampler: Some(deadlib_render_core::MeshSampler {
+                                filter: if state.texture_filtering { deadlib_render_core::SamplerFilter::Linear }
+                                    else { deadlib_render_core::SamplerFilter::Nearest },
+                                wrap: if state.texture_wrapping { deadlib_render_core::SamplerWrap::Repeat }
+                                    else { deadlib_render_core::SamplerWrap::Clamp },
+                            }),
+                            camera: None, transform: Matrix4::IDENTITY,
+                            additive_texture: None, additive_uv: [0.0, 0.0, 1.0, 1.0],
+                        }),
                         align: [0.0, 0.0],
-                        offset: [
-                            effect_offset[0].mul_add(x_scale, state.x * x_scale),
-                            effect_offset[1].mul_add(y_scale, state.y * y_scale),
-                        ],
-                        world_z: song_lua_biased_world_z(state, effect_offset[2]),
+                        offset: [0.0; 2],
+                        world_z: state.z_bias,
                         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-                        local_transform: Matrix4::IDENTITY,
+                        local_transform: transform,
                         texture,
                         tint,
                         glow: [1.0, 1.0, 1.0, 0.0],
                         vertices: mesh,
                         geom_cache_key: INVALID_TMESH_CACHE_KEY,
                         uv_scale: [1.0, 1.0],
-                        uv_offset: [0.0, 0.0],
+                        uv_offset: state.texcoord_offset.unwrap_or([0.0; 2]),
                         uv_tex_shift: [0.0, 0.0],
                         depth_test: state.depth_test,
                         clear_depth: false,

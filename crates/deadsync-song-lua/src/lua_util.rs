@@ -1603,6 +1603,8 @@ pub fn create_media_actor(
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
 ) -> mlua::Result<Table> {
     let actor = create_dummy_actor(lua, actor_type)?;
+    let absolute = std::path::absolute(resolved_path).map_err(mlua::Error::external)?;
+    let resolved_path = absolute.as_path();
     if actor_type.eq_ignore_ascii_case("Sound") {
         actor.set("File", file_path_string(resolved_path))?;
     } else {
@@ -3001,7 +3003,7 @@ pub(crate) fn install_message_order(lua: &Lua, ranks: &[(String, usize)]) -> mlu
 }
 
 #[cfg(feature = "test-support")]
-fn message_actor_path(actor: &Table) -> mlua::Result<String> {
+pub(crate) fn message_actor_path(actor: &Table) -> mlua::Result<String> {
     let mut current = actor.clone();
     let mut parts = Vec::new();
     let mut seen = rustc_hash::FxHashSet::default();
@@ -15794,9 +15796,8 @@ pub fn create_top_screen_table(
                 .map_or(Value::Nil, Value::Table))
         })?,
     )?;
+    crate::input::install(lua, &top_screen)?;
     for name in [
-        "AddInputCallback",
-        "RemoveInputCallback",
         "PostScreenMessage",
         "SetProfileIndex",
         "Cancel",
@@ -20015,6 +20016,21 @@ pub fn read_actor_multi_vertex_mesh(
     }
 }
 
+pub(crate) fn live_multi_vertex_texture_path(actor: &Table) -> mlua::Result<Option<PathBuf>> {
+    if actor.raw_get::<bool>("__songlua_default_texture")? {
+        // RageTexture_Default is an opaque white texel, unlike the transparent
+        // fallback theme's _blank.png. AMV always has this texture initially.
+        const KEY: &str = "__songlua_native_default_texture.png";
+        static PREPARED: OnceLock<()> = OnceLock::new();
+        PREPARED.get_or_init(|| {
+            deadlib_assets::register_prepared_generated_texture(KEY,
+                image::RgbaImage::from_pixel(1, 1, image::Rgba([255; 4])),
+                [1, 1], Default::default());
+        });
+        Ok(Some(PathBuf::from(KEY)))
+    } else { actor_texture_path(actor) }
+}
+
 pub fn read_model_paths(actor: &Table) -> Result<Option<[PathBuf; 3]>, String> {
     let mut paths = [None, None, None];
     for (index, key) in ["Meshes", "Materials", "Bones"].into_iter().enumerate() {
@@ -20633,10 +20649,14 @@ where
             attributes: Arc::<[TextAttribute]>::from([]),
         }
     } else if actor_type.eq_ignore_ascii_case("ActorMultiVertex") {
-        let Some(vertices) = read_actor_multi_vertex_mesh(actor)? else {
-            return Ok(None);
+        let vertices = match read_actor_multi_vertex_mesh(actor)? {
+            Some(vertices) => vertices,
+            None if context.live => Arc::from([]),
+            None => return Ok(None),
         };
-        let texture_path = read_actor_multi_vertex_texture_path(actor, aft_capture_names)?;
+        let texture_path = if context.live {
+            live_multi_vertex_texture_path(actor).map_err(|error| error.to_string())?
+        } else { read_actor_multi_vertex_texture_path(actor, aft_capture_names)? };
         let texture_key = texture_path
             .as_ref()
             .map(|path| Arc::<str>::from(path.to_string_lossy().into_owned()));
@@ -20807,14 +20827,14 @@ fn read_actor_multi_vertex_point(
     let Value::Table(position) = vertex.raw_get::<Value>(1).map_err(|err| err.to_string())? else {
         return Ok(None);
     };
-    let Some(x) = read_f32(
+    let Some(x) = read_actor_scalar_f32(
         position
             .raw_get::<Value>(1)
             .map_err(|err| err.to_string())?,
     ) else {
         return Ok(None);
     };
-    let Some(y) = read_f32(
+    let Some(y) = read_actor_scalar_f32(
         position
             .raw_get::<Value>(2)
             .map_err(|err| err.to_string())?,
@@ -20840,6 +20860,7 @@ fn read_actor_multi_vertex_point(
     };
     Ok(Some(SongLuaActorMultiVertexPoint {
         pos: [x, y],
+        z: read_actor_scalar_f32(position.raw_get::<Value>(3).map_err(|err| err.to_string())?).unwrap_or(0.0),
         color,
         uv,
     }))
@@ -21019,6 +21040,7 @@ fn actor_multi_vertex_offset_point(
             offset[0].mul_add(sign, vertex.pos[0]),
             offset[1].mul_add(sign, vertex.pos[1]),
         ],
+        z: vertex.z,
         color: vertex.color,
         uv: vertex.uv,
     }
@@ -21052,6 +21074,7 @@ const fn actor_multi_vertex_mesh_vertex(
 ) -> SongLuaOverlayMeshVertex {
     SongLuaOverlayMeshVertex {
         pos: vertex.pos,
+        z: vertex.z,
         color: vertex.color,
         uv: vertex.uv,
     }

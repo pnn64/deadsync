@@ -1,0 +1,71 @@
+{
+  "executable": "deadsync_song_lua-31f55611de4bc928.exe",
+  "sha256": "dbeb6ff7d277ab453a9150da4bb6e9b90ac13fda1d99cf863d96f0e4630c687b",
+  "current_suite": {
+    "passed": 638,
+    "failed": 15,
+    "profile": "dev, deadsync-song-lua opt-level=0 and debug=0"
+  },
+  "failures": [
+    {
+      "test": "multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod",
+      "baseline_exit": 101
+    },
+    {
+      "test": "tests::compile_song_lua_accepts_skewy_probe_calls",
+      "baseline_exit": 101
+    },
+    {
+      "test": "tests::compile_song_lua_accepts_stage_stat_and_high_score_helpers",
+      "baseline_exit": 101
+    },
+    {
+      "test": "tests::compile_song_lua_exposes_save_your_tears_compat_helpers",
+      "baseline_exit": 101
+    },
+    {
+      "test": "tests::compile_song_lua_exposes_theme_branch_and_path_helpers",
+      "baseline_exit": 101
+    },
+    {
+      "test": "tests::compile_song_lua_extracts_sound_actor_assets",
+      "baseline_exit": 101
+    },
+    {
+      "test": "tests::compile_song_lua_keeps_combo_child_callback",
+      "baseline_exit": 101
+    },
+    {
+      "test": "tests::compile_song_lua_supports_named_player_tap_note_shim",
+      "baseline_exit": 101
+    },
+    {
+      "test": "tests::screen_request_keeps_current_name",
+      "baseline_exit": 101
+    },
+    {
+      "test": "tests::song_steps_match_native",
+      "baseline_exit": 101
+    },
+    {
+      "test": "tests::sound_length_reload",
+      "baseline_exit": 101
+    },
+    {
+      "test": "tests::startup_reload_accepts_zero_delta_updates",
+      "baseline_exit": 101
+    },
+    {
+      "test": "tests::startup_reload_bounds_endless_requests",
+      "baseline_exit": 101
+    },
+    {
+      "test": "tests::startup_reload_keeps_globals_and_deletes_old_queues",
+      "baseline_exit": 101
+    },
+    {
+      "test": "tests::startup_reload_matches_native",
+      "baseline_exit": 101
+    }
+  ]
+}

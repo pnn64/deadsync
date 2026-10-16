@@ -15,6 +15,9 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
+#[path = "interactive.rs"]
+mod interactive;
+
 const CALL_OPERATIONS: &[&str] = &[
     "command.begin",
     "command.end",
@@ -1195,6 +1198,59 @@ end }
             [0; 2], prepared, Default::default());
         state.set_live_autoplay_enabled(true);
         state
+    }
+
+    #[test]
+    fn gameplay_hardware_input_drives_live_text_and_releases() {
+        use deadsync_input::{VirtualAction, keymap::{InputState, InputBinding, Keymap}};
+        use deadlib_platform::input::{RawKeyboardEvent, KeyCode};
+        use std::time::Instant;
+        let mut state = owned_judgment_control("interactive-hardware", "0000\n0000\n0000\n0000", r#"
+local text
+local presses, repeats, releases = 0,0,0
+return Def.ActorFrame {
+ OnCommand=function(self)
+  SCREENMAN:GetTopScreen():AddInputCallback(function(e)
+   assert(e.button == 'Right' and e.GameButton == 'MenuRight')
+   assert(e.DeviceInput.device == 'InputDevice_Key' and e.DeviceInput.button == 'DeviceButton_right')
+   if e.type == 'InputEventType_FirstPress' then presses=presses+1
+   elseif e.type == 'InputEventType_Repeat' then repeats=repeats+1
+   elseif e.type == 'InputEventType_Release' then releases=releases+1 end
+   text:settext(presses..':'..repeats..':'..releases)
+  end)
+ end,
+ Def.BitmapText {Font='Common Normal',InitCommand=function(self) text=self; self:settext('0:0:0') end},
+}
+"#, -0.008);
+        update_judgment_control(&mut state, 0, 1_000_000);
+        let mut keymap=Keymap::default();
+        keymap.bind(VirtualAction::p1_right, &[InputBinding::Key(KeyCode::ArrowRight)]);
+        let mut input=InputState::new(&keymap,0.0);
+        let now=Instant::now();
+        let mut edge=|state: &mut gameplay::State, pressed| {
+            let events=input.map_key(input.key_event(RawKeyboardEvent {code:KeyCode::ArrowRight,pressed,repeat:false,
+                timestamp:now,host_nanos:1_000_000}),||now).collect::<Vec<_>>();
+            for event in events { gameplay::handle_input_with_device(state,&event,input.physical_input(&event),&mut Vec::new()); }
+        };
+        let find_text=|s: &gameplay::State| s.gameplay.mods.song_lua_visuals.overlays.iter()
+            .chain(s.gameplay.mods.song_lua_visuals.foreground_visual_layers.iter().flat_map(|l|l.overlays.iter()))
+            .find_map(|a|if let deadsync_assets::song_lua::SongLuaOverlayKind::BitmapText {text,..}=&a.kind {Some(text.to_string())} else {None}).unwrap();
+        edge(&mut state,true);
+        assert_eq!(find_text(&state),"0:0:0","physical callbacks wait for the post-update input phase");
+        gameplay::update(&mut state,0.0,GameplayAudioSnapshot::default(),||1_000_001,&mut Vec::new());
+        assert_eq!(find_text(&state),"1:0:0");
+        gameplay::update(&mut state,0.4,GameplayAudioSnapshot::default(),||2_000_000,&mut Vec::new());
+        assert_eq!(find_text(&state),"1:1:0");
+        edge(&mut state,false);
+        gameplay::update(&mut state,0.0,GameplayAudioSnapshot::default(),||2_000_001,&mut Vec::new());
+        assert_eq!(find_text(&state),"1:1:1");
+        gameplay::update(&mut state,0.5,GameplayAudioSnapshot::default(),||3_000_000,&mut Vec::new());
+        assert_eq!(find_text(&state),"1:1:1","release stops repeats and does not call back twice for a menu alias");
+        edge(&mut state,true);
+        gameplay::update(&mut state,0.0,GameplayAudioSnapshot::default(),||3_000_001,&mut Vec::new());
+        state.clear_song_lua_inputs();
+        assert_eq!(find_text(&state),"2:1:2","focus loss releases held callback buttons");
+        assert!(state.take_song_lua_output().errors.is_empty());
     }
 
     #[test]
@@ -2649,16 +2705,13 @@ fn native_fail_type(trace: &Value) -> Result<deadsync_gameplay::GameplayFailType
             ));
         }
     }
-    let players = preferences["players"]
-        .as_array()
-        .filter(|players| players.len() == 1)
-        .ok_or("native gameplay inputs must contain exactly one player")?;
+    let players = preferences["players"].as_array().filter(|p| !p.is_empty() && p.len() <= 2)
+        .ok_or("native gameplay inputs must contain one or two players")?;
     let player = &players[0];
-    if player["player"] != "PlayerNumber_P1"
-        || player["disabled_timing_windows"] != json!([])
-        || player["min_tns_to_hide_notes"] != "TapNoteScore_W3"
-    {
-        return Err("native player timing modifiers differ; this context remains pending".into());
+    if players.iter().enumerate().any(|(index,p)| p["player"] != format!("PlayerNumber_P{}",index+1)
+        || p["disabled_timing_windows"] != json!([]) || p["min_tns_to_hide_notes"] != "TapNoteScore_W3"
+        || p["fail_setting"] != player["fail_setting"]) {
+        return Err("native player timing or fail modifiers differ; this context remains pending".into());
     }
     match player["fail_setting"].as_str() {
         Some("FailType_Immediate") => Ok(GameplayFailType::Immediate),
@@ -2692,10 +2745,14 @@ pub(crate) fn validate_capture(trace: &Value) -> Result<(), String> {
         || trace["dropped_update_frames"] != 0
         || trace["dropped_events"] != 0
         || trace["dropped_stage_samples"] != 0
-        || trace["completion"]["reason"] != "gameplay-exit"
-        || trace["completion"]["stage_committed"] != true
+        || (trace["completion"]["reason"] != "gameplay-exit"
+            && !(trace["completion"]["reason"] == "beat-limit"
+                && trace["capabilities"]["native_drawable_vertices"] == true))
+        || (trace["completion"]["stage_committed"] != true
+            && trace["capabilities"]["native_drawable_vertices"] != true)
         || trace["update_frame_phase"] != "gameplay-overlay-probe"
-        || trace["input"]["injected_inputs"] != false
+        || (trace["input"]["injected_inputs"] != false
+            && trace["capabilities"]["native_input_events"] != true)
     {
         return Err("a complete executable capture with actual frame clocks is required".into());
     }
@@ -2743,6 +2800,7 @@ pub(crate) fn validate_capture(trace: &Value) -> Result<(), String> {
     {
         return Err("native stage observations are empty".into());
     }
+    interactive::validate(trace)?;
     Ok(())
 }
 
@@ -3064,17 +3122,19 @@ fn compare_stage_sample(
     mismatches: &mut Vec<Value>,
     observations: &mut Vec<Value>,
 ) -> Result<usize, String> {
-    let player = &state.players_runtime.players[0];
-    let score = state.stage_itg_score_inputs(0).ok_or("missing active player score inputs")?;
+    let mut compared=0;
+    for p in 0..state.gameplay.num_players() {
+    let player = &state.players_runtime.players[p];
+    let score = state.stage_itg_score_inputs(p).ok_or("missing active player score inputs")?;
     let selected = if let Some(observation) = overlay_observation {
-        observation.player_step_indices[0]
+        observation.player_step_indices[p]
     } else {
         state.song_lua.as_ref().ok_or("missing Lua metadata")?
-            .selected_context().map_err(|error| error.to_string())?.player_step_indices[0]
+            .selected_context().map_err(|error| error.to_string())?.player_step_indices[p]
     }.ok_or("GAMESTATE has no selected P1 chart")?;
     let metadata = song.charts.get(selected).ok_or("GAMESTATE selected an absent chart")?;
     let actual = if let Some(observation) = overlay_observation {
-        let observed = &observation.players[0];
+        let observed = &observation.players[p];
         json!({"possible":observed.possible_points, "current_possible":observed.current_possible_points,
             "actual":observed.actual_points, "misses":observed.tap_scores[4],
             "w1":observed.tap_scores[9], "w2":observed.tap_scores[8],
@@ -3089,7 +3149,7 @@ fn compare_stage_sample(
         "difficulty":format!("Difficulty_{}", metadata.difficulty),
         "description":metadata.description, "meter":metadata.meter})
     };
-    let native = &sample["players"][0];
+    let native = &sample["players"][p];
     let fields = ["possible", "current_possible", "actual", "misses", "w1", "w2",
         "failed", "life_latest", "difficulty", "description", "meter"];
     for key in fields {
@@ -3100,23 +3160,26 @@ fn compare_stage_sample(
         };
         if !equal {
             mismatches.push(json!({"phase":sample["phase"],"seconds":seconds,
-                "field":key,"native":native[key],"deadsync":actual[key]}));
+                "player_index":p,"field":key,"native":native[key],"deadsync":actual[key]}));
         }
     }
     observations.push(json!({"phase":sample["phase"],"scene":scene,"seconds":seconds,
         "beat":state.clock.song_position.current_beat,
-        "screen_seconds":state.boundary.total_elapsed_in_screen,"player":actual}));
-    Ok(fields.len())
+        "screen_seconds":state.boundary.total_elapsed_in_screen,"player_index":p,"player":actual}));
+    compared += fields.len();
+    }
+    Ok(compared)
 }
 
 fn native_gameplay_session(trace: &Value) -> Result<GameplaySession, String> {
     use deadsync_gameplay::GameplayInputPlayStyle;
     let play_style = match trace["style"].as_str() {
         Some("single") => GameplayInputPlayStyle::Single,
+        Some("versus") => GameplayInputPlayStyle::Versus,
         Some("double") => GameplayInputPlayStyle::Double,
-        _ => return Err("live replay currently supports dance-single and dance-double; other styles remain pending".into()),
+        _ => return Err("live replay currently supports single, versus and double; other styles remain pending".into()),
     };
-    Ok(GameplaySession { play_style, ..Default::default() })
+    Ok(GameplaySession { play_style, joined_sides: [true,play_style.is_versus()], ..Default::default() })
 }
 
 fn native_starting_chart(
@@ -3149,6 +3212,11 @@ pub(crate) fn replay_with_command_observer(
     scope: Scope,
     mut progress: impl FnMut(usize, usize),
 ) -> Result<Value, String> {
+    // Production resolves song media from an absolute root. Use that same
+    // identity for resource checks and authored-query filtering when the CLI
+    // receives a relative simfile path.
+    let absolute_simfile = std::path::absolute(simfile).map_err(|error| error.to_string())?;
+    let simfile = absolute_simfile.as_path();
     validate_capture(&trace)?;
     let autoplay = native_autoplay(&trace)?;
     let session = native_gameplay_session(trace)?;
@@ -3300,7 +3368,7 @@ pub(crate) fn replay_with_command_observer(
     // Native ScreenGameplay updates song position before its first Update(0).
     // Defer preparation's placeholder update and run every recorded frame,
     // including zero-delta inputs, through the actual gameplay entry point.
-    context.defer_initial_live_update = true;
+    assert!(context.defer_initial_live_update, "production preparation must wait for the screen clock");
     let prepared = deadsync_song_lua::playback::prepare_song_lua(
         &song, &context, deadsync_assets::song_lua::compile_song_lua,
         deadsync_assets::song_lua::compile_song_lua_layers,
@@ -3362,6 +3430,15 @@ pub(crate) fn replay_with_command_observer(
         Ok(state)
     };
     let mut state = init_scene(prepared)?;
+    let mut draw_checks = interactive::DrawChecks::default();
+    let draw_samples = trace["drawable_samples"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let input_events = trace["input_events"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let mut input_cursor = 0;
+    let mut draw_cursor = 0;
+    if trace["capabilities"]["native_drawable_vertices"] == true {
+        draw_checks.bind(&state, trace, 1)?;
+    }
+
     let startup = state.take_song_lua_output();
     let startup_scenes = startup
         .broadcasts
@@ -3371,6 +3448,7 @@ pub(crate) fn replay_with_command_observer(
     let mut mismatches = Vec::new();
     let mut scene_count = startup_scenes as u64;
     let mut pending_reload = false;
+    let mut deferred_reload = false;
     let mut errors = startup.errors;
     let mut runtime_coverage: BTreeSet<String> = startup.coverage_gaps.into_iter().collect();
     runtime_coverage.extend(factory_coverage);
@@ -3422,6 +3500,10 @@ pub(crate) fn replay_with_command_observer(
             );
             scene_count += 1;
             starting_scene = true;
+            if trace["capabilities"]["native_drawable_vertices"] == true {
+                draw_checks.bind(&state, trace, scene_count)?;
+            }
+
         }
         if frame["scene"].as_u64() != Some(scene_count) {
             return Err(format!(
@@ -3474,7 +3556,23 @@ pub(crate) fn replay_with_command_observer(
             ..Default::default()
         };
         let mut effects = Vec::new();
-        gameplay::update(&mut state, delta as f32, snapshot, || host, &mut effects);
+        let mut input_error=None;
+        gameplay::update_with_input(&mut state, delta as f32, snapshot, || host, &mut effects, |state| {
+        while let Some(event) = input_events.get(input_cursor) {
+            if event["before_update_sequence"].as_u64() != Some(index as u64+2) { break; }
+            if let Err(error)=interactive::dispatch(state, &event["event"]) { input_error=Some(error); break; }
+            input_cursor += 1;
+        }
+        });
+        if let Some(error)=input_error { return Err(error); }
+        let draw_start = draw_cursor;
+        while draw_samples.get(draw_cursor).is_some_and(|sample|
+            sample["update_sequence"].as_u64() == Some(index as u64+1)) { draw_cursor += 1; }
+        if draw_cursor > draw_start {
+            draw_checks.compare(&state, &draw_samples[draw_start..draw_cursor],
+                [context.screen_width, context.screen_height], [seconds as f32, number(frame,"beat")? as f32],
+                simfile, &mut mismatches)?;
+        }
         let overlay_observation = state.song_lua.as_ref()
             .and_then(|scene| scene.take_overlay_stage_observation());
         if observe_overlay && overlay_observation.is_none() {
@@ -3490,6 +3588,8 @@ pub(crate) fn replay_with_command_observer(
                 )
             )
         });
+        if deferred_reload && !pending_reload { return Err("callback reload did not emit the next production frame effect".into()); }
+        deferred_reload=false;
         if first_navigation.is_none()
             && effects.iter().any(|effect| {
                 matches!(
@@ -3517,7 +3617,7 @@ pub(crate) fn replay_with_command_observer(
                 return Err(format!("unsupported reload target {name}"));
             }
             if !pending_reload {
-                return Err("gameplay reload did not emit the production runtime effect".into());
+                deferred_reload=true;
             }
         }
         for event in output.source_requests {
@@ -3686,6 +3786,17 @@ pub(crate) fn replay_with_command_observer(
         "broadcast_params_compared":true,
         "command_queries":calls,
         "pending_coverage":coverage["pending"],"coverage":coverage});
+    report["interactive"] = draw_checks.report(input_cursor);
+    report["capture_completed_gameplay"] = json!(trace["completion"]["reason"] == "gameplay-exit");
+    if input_cursor != input_events.len() || draw_cursor != draw_samples.len() {
+        report["mismatches"].as_array_mut().unwrap().push(json!({"field":"interactive_observation_coverage",
+            "inputs_replayed":input_cursor,"native_inputs":input_events.len(),
+            "draws_compared":draw_cursor,"native_draws":draw_samples.len()}));
+    }
+    report["interactive_checks_passed"] = json!(scope == Scope::Full
+        && input_cursor > 0 && input_cursor == input_events.len() && draw_cursor > 0 && draw_cursor == draw_samples.len()
+        && report["mismatches"].as_array().is_some_and(Vec::is_empty)
+        && report["errors"].as_array().is_some_and(Vec::is_empty));
     let accepted = archive_passes(scope, &report);
     report["archive_accepted"] = json!(accepted);
     report["diagnostic_only"] = json!(!accepted);
@@ -3703,6 +3814,7 @@ pub(crate) fn replay_with_command_observer(
 
 pub(super) fn archive_passes(scope: Scope, report: &Value) -> bool {
     scope == Scope::Full
+        && report["capture_completed_gameplay"] != false
         && report["native_frames"].as_u64().is_some_and(|frames|
             frames > 0 && report["replayed_frames"].as_u64() == Some(frames))
         && report["mismatches"].as_array().is_some_and(Vec::is_empty)

@@ -640,7 +640,13 @@ fn queue_texture(assets: &mut AssetManager, key: &str) {
     if assets.has_texture_key(key) {
         return;
     }
-    let dims = deadlib_assets::texture_dims(key);
+    // A live executable replay has not run the GPU preloader. Read the
+    // independent source image's logical size before reserving its handle;
+    // a 1px placeholder would overwrite the registry and shrink live sprites.
+    let source_key = key.strip_suffix("#itg-model").unwrap_or(key);
+    let source_dims = image::image_dimensions(source_key).ok();
+    let dims = source_dims.map(|(w,h)| deadlib_assets::TexMeta { w,h })
+        .or_else(|| deadlib_assets::texture_dims(key));
     let width = dims.map_or(1, |dims| dims.w.max(1));
     let height = dims.map_or(1, |dims| dims.h.max(1));
     assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(width, height));

@@ -222,6 +222,8 @@ pub fn song_lua_context(
     );
     context.random_seed = random_seed;
     context.live = live;
+    // The screen owns the first clocked Update(0), after audio is initialized.
+    context.defer_initial_live_update = live;
     context.screen_loading = live;
     let inputs = deadsync_simfile::app_runtime::load_chart_timing_and_notes(
         song,

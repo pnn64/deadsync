@@ -1,0 +1,162 @@
+[
+  {
+    "scene": 1,
+    "seconds": 1,
+    "player": 1,
+    "button": "Up",
+    "key": "w",
+    "down": true
+  },
+  {
+    "scene": 1,
+    "seconds": 1.5,
+    "player": 1,
+    "button": "Up",
+    "key": "w",
+    "down": false
+  },
+  {
+    "scene": 1,
+    "seconds": 2,
+    "player": 2,
+    "button": "Up",
+    "key": "i",
+    "down": true
+  },
+  {
+    "scene": 2,
+    "seconds": 0.5,
+    "player": 2,
+    "button": "Up",
+    "key": "i",
+    "down": false
+  },
+  {
+    "scene": 2,
+    "seconds": 2,
+    "player": 1,
+    "button": "Right",
+    "key": "d",
+    "down": true
+  },
+  {
+    "scene": 2,
+    "seconds": 2,
+    "player": 2,
+    "button": "Left",
+    "key": "j",
+    "down": true
+  },
+  {
+    "scene": 2,
+    "seconds": 3,
+    "player": 1,
+    "button": "Right",
+    "key": "d",
+    "down": false
+  },
+  {
+    "scene": 2,
+    "seconds": 3,
+    "player": 2,
+    "button": "Left",
+    "key": "j",
+    "down": false
+  },
+  {
+    "scene": 2,
+    "seconds": 4,
+    "player": 1,
+    "button": "Up",
+    "key": "w",
+    "down": true
+  },
+  {
+    "scene": 2,
+    "seconds": 4,
+    "player": 2,
+    "button": "Down",
+    "key": "k",
+    "down": true
+  },
+  {
+    "scene": 2,
+    "seconds": 5,
+    "player": 1,
+    "button": "Up",
+    "key": "w",
+    "down": false
+  },
+  {
+    "scene": 2,
+    "seconds": 5,
+    "player": 2,
+    "button": "Down",
+    "key": "k",
+    "down": false
+  },
+  {
+    "scene": 2,
+    "seconds": 6,
+    "player": 1,
+    "button": "Left",
+    "key": "a",
+    "down": true
+  },
+  {
+    "scene": 2,
+    "seconds": 6,
+    "player": 2,
+    "button": "Right",
+    "key": "l",
+    "down": true
+  },
+  {
+    "scene": 2,
+    "seconds": 7,
+    "player": 1,
+    "button": "Left",
+    "key": "a",
+    "down": false
+  },
+  {
+    "scene": 2,
+    "seconds": 7,
+    "player": 2,
+    "button": "Right",
+    "key": "l",
+    "down": false
+  },
+  {
+    "scene": 2,
+    "seconds": 8,
+    "player": 1,
+    "button": "Down",
+    "key": "s",
+    "down": true
+  },
+  {
+    "scene": 2,
+    "seconds": 8,
+    "player": 2,
+    "button": "Up",
+    "key": "i",
+    "down": true
+  },
+  {
+    "scene": 2,
+    "seconds": 9,
+    "player": 1,
+    "button": "Down",
+    "key": "s",
+    "down": false
+  },
+  {
+    "scene": 2,
+    "seconds": 9,
+    "player": 2,
+    "button": "Up",
+    "key": "i",
+    "down": false
+  }
+]

@@ -4738,7 +4738,7 @@ fn song_lua_overlay_culls_fully_offscreen_sprite_frame() {
         y: 240.0,
         ..SongLuaOverlayState::default()
     };
-    let transparent_edge_sliver = SongLuaOverlayState {
+    let visible_edge_sliver = SongLuaOverlayState {
         x: 978.8,
         y: 285.6,
         zoom: 0.94,
@@ -4756,8 +4756,8 @@ fn song_lua_overlay_culls_fully_offscreen_sprite_frame() {
         854.0,
         480.0,
     ));
-    assert!(song_lua_overlay_sprite_offscreen(
-        transparent_edge_sliver,
+    assert!(!song_lua_overlay_sprite_offscreen(
+        visible_edge_sliver,
         [288.0, 352.0],
         854.0,
         480.0,
@@ -7078,16 +7078,19 @@ fn song_lua_actor_multi_vertex_builds_mesh_overlay() {
         kind: SongLuaOverlayKind::ActorMultiVertex {
             vertices: Arc::from(vec![
                 SongLuaOverlayMeshVertex {
+                    z: 0.0,
                     pos: [0.0, 0.0],
                     color: [1.0, 0.0, 0.0, 1.0],
                     uv: [0.0, 0.0],
                 },
                 SongLuaOverlayMeshVertex {
+                    z: 0.0,
                     pos: [10.0, 0.0],
                     color: [0.0, 1.0, 0.0, 1.0],
                     uv: [1.0, 0.0],
                 },
                 SongLuaOverlayMeshVertex {
+                    z: 0.0,
                     pos: [0.0, 10.0],
                     color: [0.0, 0.0, 1.0, 1.0],
                     uv: [0.0, 1.0],
@@ -7221,6 +7224,7 @@ fn song_lua_capture_mesh_keeps_handle_and_uvs() {
                         ([0.0, 32.0], [0.0, 0.5]),
                     ]
                     .map(|(pos, uv)| SongLuaOverlayMeshVertex {
+                        z: 0.0,
                         pos,
                         uv,
                         color: [1.0; 4],
@@ -7294,16 +7298,19 @@ fn song_lua_actor_multi_vertex_builds_textured_mesh_overlay() {
         kind: SongLuaOverlayKind::ActorMultiVertex {
             vertices: Arc::from(vec![
                 SongLuaOverlayMeshVertex {
+                    z: 0.0,
                     pos: [0.0, 0.0],
                     color: [1.0, 1.0, 1.0, 1.0],
                     uv: [0.0, 0.0],
                 },
                 SongLuaOverlayMeshVertex {
+                    z: 0.0,
                     pos: [16.0, 0.0],
                     color: [0.0, 1.0, 0.0, 1.0],
                     uv: [1.0, 0.0],
                 },
                 SongLuaOverlayMeshVertex {
+                    z: 0.0,
                     pos: [0.0, 16.0],
                     color: [0.0, 0.0, 1.0, 0.5],
                     uv: [0.0, 1.0],

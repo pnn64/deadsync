@@ -717,6 +717,14 @@ pub struct KeyEvent {
     binding: CompiledBindingRev,
 }
 
+/// Physical identity retained across delayed debounce delivery.
+#[derive(Clone, Copy, Debug)]
+pub enum PhysicalInput {
+    Key(KeyCode),
+    PadDirection(PadId, PadDir),
+    PadButton(PadId, PadCode),
+}
+
 /// Application-owned bindings and debounce state for one input stream.
 ///
 /// The application thread exclusively owns this session-lifetime state; no
@@ -736,6 +744,8 @@ pub struct InputState {
     keyboard: DebounceStore,
     pad: DebounceStore,
     windows: DebounceWindows,
+    physical_keys: Vec<Option<PhysicalInput>>,
+    physical_pads: Vec<Option<PhysicalInput>>,
 }
 
 impl InputState {
@@ -743,6 +753,8 @@ impl InputState {
     pub fn new(keymap: &Keymap, debounce_seconds: f32) -> Self {
         let mut state = Self {
             compiled: CompiledKeymap::from_keymap(keymap),
+            physical_keys: Vec::new(),
+            physical_pads: Vec::new(),
             keyboard: DebounceStore::new(),
             pad: DebounceStore::new(),
             windows: DebounceWindows::uniform(Duration::from_secs_f32(
@@ -768,6 +780,8 @@ impl InputState {
 
     /// Clears held and pending input, retaining preallocated debounce storage.
     pub fn clear(&mut self) {
+        self.physical_keys.resize(self.compiled.key_slot_count, None);
+        self.physical_pads.resize(self.compiled.pad_slot_capacity, None);
         self.keyboard.prepare_slots(self.compiled.key_slot_count);
         self.pad.prepare_slots(self.compiled.pad_slot_capacity);
         log::debug!(
@@ -775,6 +789,21 @@ impl InputState {
             self.compiled.key_slot_count,
             self.compiled.pad_slot_count
         );
+    }
+
+    /// Current debounced state, including edges received while a screen loads.
+    pub fn is_down(&self, event: &InputEvent) -> bool {
+        match event.source {
+            InputSource::Keyboard => self.keyboard.is_down(event.input_slot as usize),
+            InputSource::Gamepad => self.pad.is_down(event.input_slot as usize),
+        }
+    }
+
+    /// Identity of the physical source that produced a normalized edge.
+    pub fn physical_input(&self, event: &InputEvent) -> Option<PhysicalInput> {
+        let slots = match event.source { InputSource::Keyboard => &self.physical_keys,
+            InputSource::Gamepad => &self.physical_pads };
+        slots.get(event.input_slot as usize).copied().flatten()
     }
 
     /// Resolves system controls and logical bindings with one keyboard lookup.
@@ -807,6 +836,7 @@ impl InputState {
     ) -> impl Iterator<Item = InputEvent> + use<F> {
         let ev = key.raw;
         let binding = key.binding;
+        if binding.mapped() { self.physical_keys[binding.slot as usize] = Some(PhysicalInput::Key(ev.code)); }
         let edges = if (ev.pressed && ev.repeat) || !binding.mapped() {
             DebounceEdges::default()
         } else {
@@ -874,6 +904,14 @@ impl InputState {
             }),
             PadEvent::RawAxis { .. } => None,
         };
+        if let Some((slot, ..)) = binding {
+            if slot >= self.physical_pads.len() { self.physical_pads.resize(slot+1, None); }
+            self.physical_pads[slot] = match *ev {
+                PadEvent::Dir { id, dir, .. } => Some(PhysicalInput::PadDirection(id, dir)),
+                PadEvent::RawButton { id, code, .. } => Some(PhysicalInput::PadButton(id, code)),
+                PadEvent::RawAxis { .. } => None,
+            };
+        }
         let edges = binding.map_or_else(
             DebounceEdges::default,
             |(slot, mask, pressed, timestamp, host_nanos)| {

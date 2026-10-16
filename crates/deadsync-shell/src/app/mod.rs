@@ -1628,7 +1628,8 @@ pub struct App {
     pending_gameplay_init: Option<PendingGameplayInit>,
     /// Sole-owner handoff at a queued Lua screen boundary. The existing CPU
     /// load worker consumes it; replacement actors retain the same Lua VM.
-    pending_song_lua_reload: Option<deadsync_song_lua::SongLuaLiveScene>,
+    pending_song_lua_reload: Option<(deadsync_song_lua::SongLuaLiveScene, gameplay::SongLuaHeldInputs)>,
+    pending_gameplay_lua_inputs: Vec<(InputEvent, Option<deadsync_input::PhysicalInput>)>,
     /// One speculative, CPU-only load owned by the Select Music confirmation
     /// transition. It preloads the selected gameplay chart payload and compiled
     /// song-Lua session. Choosing Player Options drops the handoff; automatic
@@ -2792,7 +2793,7 @@ impl App {
                         &gameplay_config,
                         &video_renderer.to_string(),
                         song_lua_seed(),
-                        false,
+                        true,
                     );
                     GameplayPreload {
                         song_path,
@@ -2894,6 +2895,9 @@ impl App {
         mut gs: gameplay::State,
         finish: &GameplayInitFinish,
     ) -> Vec<Command> {
+        // Releases can arrive while the replacement Lua screen is prepared.
+        gs.reconcile_song_lua_held_inputs(|event| self.input.is_down(event));
+        gs.queue_song_lua_inputs(self.pending_gameplay_lua_inputs.drain(..));
         crate::gameplay_runtime::sync_initial_scores(&mut gs);
         let init_ms = finish.started.elapsed().as_secs_f64() * 1000.0;
 
@@ -5220,6 +5224,7 @@ impl App {
             ui_sfx,
             pending_gameplay_init: None,
             pending_song_lua_reload: None,
+            pending_gameplay_lua_inputs: Vec::new(),
             gameplay_preload: None,
             music_clock,
             live_case: live_case.map(live_case::LiveCaseRuntime::new),
@@ -5482,7 +5487,7 @@ impl App {
                         warn!("Cannot reload song Lua without an active gameplay screen");
                     } else {
                         self.pending_song_lua_reload = self.state.screens.gameplay_state.as_mut()
-                            .and_then(|state| state.song_lua.take());
+                            .and_then(|state| state.song_lua.take().map(|scene| (scene, state.take_song_lua_held_inputs())));
                         self.state.shell.transition = TransitionState::Idle;
                         self.state.session.restart_pending = false;
                         self.state.gameplay_offset_save_prompt = None;
@@ -9616,7 +9621,7 @@ impl App {
                     &gameplay_config_from_config(&cfg),
                     &cfg.video_renderer.to_string(),
                     song_lua_seed(),
-                    false,
+                    true,
                 );
                 match crate::gameplay_entry::apply_song_lua_reload(
                     &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
@@ -9754,6 +9759,9 @@ impl App {
         if target == CurrentScreen::Gameplay {
             let retained_scene = self.pending_song_lua_reload.take();
             let lua_reload = retained_scene.is_some();
+            let (retained_scene, held_inputs) = retained_scene.map_or_else(
+                || (None, gameplay::SongLuaHeldInputs::default()), |(scene, held)| (Some(scene), held));
+
             self.audio.stop_music();
             if prev != CurrentScreen::Gameplay {
                 self.state.session.gameplay_restart_count = 0;
@@ -10140,7 +10148,7 @@ impl App {
                             &gameplay_config,
                             &video_renderer.to_string(),
                             song_lua_seed(),
-                            false,
+                            true,
                         )
                         })
                     };
@@ -10153,7 +10161,7 @@ impl App {
                             &gameplay_charts, &player_profiles, &gameplay_session,
                         );
                     }
-                    Ok(gameplay::init(
+                    let mut state = gameplay::init(
                         song_arc,
                         charts,
                         gameplay_charts,
@@ -10180,7 +10188,9 @@ impl App {
                         combo_carry,
                         prepared_song_lua,
                         gameplay_init_view,
-                    ))
+                    );
+                    state.restore_song_lua_held_inputs(held_inputs);
+                    Ok(state)
                 };
                 if lua_reload || (has_song_lua && !song_lua_prepared) {
                     self.state.screens.gameplay_state = None;

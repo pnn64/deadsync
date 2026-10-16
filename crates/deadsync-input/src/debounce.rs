@@ -88,6 +88,14 @@ impl DebounceStore {
         !self.due_slots.is_empty()
     }
 
+    pub(crate) fn is_down(&self, slot: usize) -> bool {
+        self.slots
+            .get(slot)
+            .filter(|slot| slot.epoch == self.epoch)
+            .and_then(|slot| slot.state)
+            .is_some_and(|state| state.held_reported)
+    }
+
     #[inline(always)]
     fn ensure_slot(&mut self, slot: usize) {
         if slot >= self.slots.len() {

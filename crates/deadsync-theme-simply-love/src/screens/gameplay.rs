@@ -749,11 +749,18 @@ fn smooth_life_p(value: f32) -> f32 {
     }
 }
 
+/// Held physical inputs survive a song-requested ScreenGameplay reload.
+#[derive(Default)]
+pub struct SongLuaHeldInputs(Vec<(InputEvent, Option<deadsync_input::PhysicalInput>, f32)>);
+
 pub struct State {
     pub gameplay: GameplayCoreState,
     /// One initialized song VM owned by the screen, transferred from the load
     /// worker. Its fixed pose bindings and render plan live until screen exit.
     pub song_lua: Option<deadsync_song_lua::SongLuaLiveScene>,
+    song_lua_last_input: Option<InputEvent>,
+    song_lua_pending_inputs: Vec<(InputEvent, Option<deadsync_input::PhysicalInput>)>,
+    song_lua_held_inputs: SongLuaHeldInputs,
     song_lua_output: deadsync_song_lua::SongLuaLiveOutput,
     song_lua_out: Option<SongLuaOut>,
     song_lua_ended: bool,
@@ -1244,6 +1251,9 @@ impl State {
         let state = Self {
             gameplay,
             song_lua: None,
+            song_lua_last_input: None,
+            song_lua_pending_inputs: Vec::new(),
+            song_lua_held_inputs: SongLuaHeldInputs::default(),
             song_lua_output: deadsync_song_lua::SongLuaLiveOutput::default(),
             song_lua_out: None,
             song_lua_ended: false,
@@ -2697,11 +2707,21 @@ fn fail_autoplay_players(players: &mut [deadsync_gameplay::PlayerRuntime]) {
 /// Advances deterministic gameplay using the shell-prepared audio snapshot.
 /// Runtime audio commands remain queued until the shell executes them.
 pub fn update(
+    state: &mut State, delta_time: f32, audio_snapshot: GameplayAudioSnapshot,
+    fallback_host_nanos: impl FnOnce() -> u64, effects: &mut Vec<ThemeEffect>,
+) {
+    update_with_input(state, delta_time, audio_snapshot, fallback_host_nanos, effects, |_| {});
+}
+
+/// Deliver frame-owned input after Update and before authored Draw, matching
+/// native GameLoop. Device owners and deterministic replays share this phase.
+pub fn update_with_input(
     state: &mut State,
     delta_time: f32,
     audio_snapshot: GameplayAudioSnapshot,
     fallback_host_nanos: impl FnOnce() -> u64,
     effects: &mut Vec<ThemeEffect>,
+    after_update_input: impl FnOnce(&mut State),
 ) {
     if state.song_lua_ended { return; }
     let effect_start = effects.len();
@@ -2741,6 +2761,24 @@ pub fn update(
         }
         action => effects.push(map_gameplay_action(action)),
     }
+    let mut pending_inputs = std::mem::take(&mut state.song_lua_pending_inputs);
+    for (event, physical) in pending_inputs.drain(..) {
+        dispatch_song_lua_input(state, &event, physical);
+    }
+    pending_inputs.append(&mut state.song_lua_pending_inputs);
+    state.song_lua_pending_inputs = pending_inputs;
+    // InputFilter's default repeat delay/rate. Repeats reach Lua callbacks
+    // without replaying scoring or menu actions, and work for pads as well as keys.
+    let mut repeats = Vec::new();
+    for (event, physical, held) in &mut state.song_lua_held_inputs.0 {
+        let old = *held;
+        *held += delta_time.max(0.0);
+        if *held > 0.375 && (old < 0.375 || ((old-0.375)/0.125) as u32 != ((*held-0.375)/0.125) as u32) {
+            repeats.push((*event, *physical));
+        }
+    }
+    for (event, physical) in repeats { dispatch_song_lua_callback(state, &event, physical, deadsync_song_lua::SongLuaInputType::Repeat); }
+    after_update_input(state);
     // GameLoop updates the screen manager before drawing. An outgoing screen
     // is already popped; a replacement has not received its first Update yet.
     let pops = effects[effect_start..].iter().any(|effect| matches!(effect,
@@ -2915,6 +2953,11 @@ pub fn report_smx_sensor_profile(state: &State) {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeEffect>) {
+    handle_input_with_device(state, ev, None, effects);
+}
+
+pub fn handle_input_with_device(state: &mut State, ev: &InputEvent,
+    physical: Option<deadsync_input::PhysicalInput>, effects: &mut Vec<ThemeEffect>) {
     let lobby_waiting = gameplay_lobby_wait_active(state);
     let joined_lobby = state.runtime_view.lobby.snapshot.joined_lobby.is_some();
     let lobby_hud_toggled = state.lobby_hud_visibility.handle_input(
@@ -2958,6 +3001,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeE
         return;
     }
     let action = handle_core_input(state, ev);
+    state.queue_song_lua_inputs(std::iter::once((*ev, physical)));
     if matches!(action, GameplayAction::Navigate(GameplayExit::Complete)
         | GameplayAction::NavigateNoFade(GameplayExit::Complete)) {
         let count = state.gameplay.num_players().min(MAX_PLAYERS);
@@ -2970,6 +3014,168 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeE
         state.song_lua_output.errors.push(error);
     }
     effect.append_to(effects);
+}
+
+impl State {
+    pub fn queue_song_lua_inputs(
+        &mut self,
+        events: impl IntoIterator<Item = (InputEvent, Option<deadsync_input::PhysicalInput>)>,
+    ) {
+        if self.song_lua.is_some() && !self.song_lua_ended {
+            self.song_lua_pending_inputs.extend(events);
+        }
+    }
+    pub fn reconcile_song_lua_held_inputs(&mut self, mut is_down: impl FnMut(&InputEvent) -> bool) {
+        self.song_lua_held_inputs.0.retain(|(event, _, _)| is_down(event));
+    }
+    pub fn clear_song_lua_inputs(&mut self) {
+        self.song_lua_pending_inputs.clear();
+        let held = std::mem::take(&mut self.song_lua_held_inputs.0);
+        for (mut event, physical, _) in held {
+            event.pressed = false;
+            dispatch_song_lua_callback(self, &event, physical, deadsync_song_lua::SongLuaInputType::Release);
+        }
+        self.song_lua_last_input = None;
+    }
+    pub fn take_song_lua_held_inputs(&mut self) -> SongLuaHeldInputs { std::mem::take(&mut self.song_lua_held_inputs) }
+    pub fn restore_song_lua_held_inputs(&mut self, held: SongLuaHeldInputs) { self.song_lua_held_inputs = held; }
+}
+
+fn dispatch_song_lua_input(state: &mut State, event: &InputEvent, physical: Option<deadsync_input::PhysicalInput>) {
+    if state.song_lua.is_none() || state.song_lua_ended { return; }
+    use deadsync_song_lua::SongLuaInputType;
+    // Release aliases exist to clear menu repeat state. They are not another
+    // physical input and must not call authored callbacks a second time.
+    if let Some(previous) = state.song_lua_last_input
+        && previous.timestamp == event.timestamp && previous.input_slot == event.input_slot
+        && previous.source == event.source
+        && event.action.primary_from_menu_alias() == Some(previous.action)
+    { return; }
+    state.song_lua_last_input = Some(*event);
+    state.song_lua_held_inputs.0.retain(|(held, _, _)| held.source != event.source
+        || held.input_slot != event.input_slot || held.action != event.action);
+    if event.pressed { state.song_lua_held_inputs.0.push((*event, physical, 0.0)); }
+    dispatch_song_lua_callback(state, event, physical, if event.pressed { SongLuaInputType::FirstPress } else { SongLuaInputType::Release });
+}
+
+fn dispatch_song_lua_callback(state: &mut State, event: &InputEvent, physical: Option<deadsync_input::PhysicalInput>, kind: deadsync_song_lua::SongLuaInputType) {
+    use deadsync_song_lua::SongLuaInputEvent;
+    let (cabinet, button, menu) = match event.action {
+        VirtualAction::p1_left => (0, "Left", "MenuLeft"),
+        VirtualAction::p1_right => (0, "Right", "MenuRight"),
+        VirtualAction::p1_up => (0, "Up", "MenuUp"),
+        VirtualAction::p1_down => (0, "Down", "MenuDown"),
+        VirtualAction::p2_left => (1, "Left", "MenuLeft"),
+        VirtualAction::p2_right => (1, "Right", "MenuRight"),
+        VirtualAction::p2_up => (1, "Up", "MenuUp"),
+        VirtualAction::p2_down => (1, "Down", "MenuDown"),
+        VirtualAction::p1_start => (0, "Start", "Start"),
+        VirtualAction::p2_start => (1, "Start", "Start"),
+        VirtualAction::p1_select => (0, "Select", "Select"),
+        VirtualAction::p2_select => (1, "Select", "Select"),
+        VirtualAction::p1_back => (0, "Back", "Back"),
+        VirtualAction::p2_back => (1, "Back", "Back"),
+        VirtualAction::p1_menu_left => (0, "MenuLeft", "MenuLeft"),
+        VirtualAction::p1_menu_right => (0, "MenuRight", "MenuRight"),
+        VirtualAction::p1_menu_up => (0, "MenuUp", "MenuUp"),
+        VirtualAction::p1_menu_down => (0, "MenuDown", "MenuDown"),
+        VirtualAction::p2_menu_left => (1, "MenuLeft", "MenuLeft"),
+        VirtualAction::p2_menu_right => (1, "MenuRight", "MenuRight"),
+        VirtualAction::p2_menu_up => (1, "MenuUp", "MenuUp"),
+        VirtualAction::p2_menu_down => (1, "MenuDown", "MenuDown"),
+        VirtualAction::p1_center => (0, "Center", ""),
+        VirtualAction::p2_center => (1, "Center", ""),
+        _ => return,
+    };
+    let player = if state.gameplay.num_players() == 1 {
+        let active = usize::from(state.runtime_view.player_side == profile_data::PlayerSide::P2);
+        if !state.runtime_view.play_style.is_double() && cabinet != active { return; }
+        active
+    } else { cabinet };
+    let joystick = event.source == deadsync_core::input::InputSource::Gamepad;
+    let (device, device_button) = song_lua_device_names(physical);
+    let input = SongLuaInputEvent {
+        player: Some(player), controller: Some(cabinet), button, game_button: menu,
+        kind,
+        device: &device,
+        device_button: &device_button, level: if event.pressed { 1.0 } else { 0.0 },
+        z: 0, down: event.pressed, ago: event.timestamp.elapsed().as_secs_f64(),
+        is_joystick: joystick, is_mouse: false,
+    };
+    handle_song_lua_input(state, &input);
+}
+
+/// The screen's callback input route, shared by hardware and recorded native
+/// input owners. Callback return values do not suppress normal gameplay input.
+pub fn handle_song_lua_input(state: &mut State, input: &deadsync_song_lua::SongLuaInputEvent<'_>) {
+    if state.song_lua_ended { return; }
+    let Some(scene) = &mut state.song_lua else { return; };
+    match scene.input(&input) {
+        Ok((_, output)) => {
+            // GameLoop delivers callbacks after ScreenManager::Update and
+            // before Draw. Preserve delayed screen actions across output drains.
+            match output.request.as_ref() {
+                Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen)) if screen=="ScreenGameplay" => {
+                    state.song_lua_draw_reload_pending=true;
+                }
+                Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message)) if message=="SM_DoNextScreen" && state.song_lua_out.is_none() => {
+                    state.gameplay.progress.stage.song_completed_naturally=true;
+                    state.song_lua_out=Some(SongLuaOut {phase:0,left:TRANSITION_OUT_DELAY});
+                }
+                _ => {}
+            }
+
+            scene.apply_output_player_writes(&output, &mut state.gameplay);
+            state.song_lua_output.append(output);
+            if let Err(error) = scene.write_visuals(&mut state.gameplay.mods.song_lua_visuals) {
+                state.song_lua_output.errors.push(error);
+            }
+        }
+        Err(error) => state.song_lua_output.errors.push(error.to_string()),
+    }
+}
+
+fn song_lua_device_names(physical: Option<deadsync_input::PhysicalInput>) -> (String, String) {
+    use deadsync_input::PhysicalInput;
+    use deadlib_platform::input::{KeyCode, PadDir};
+    let (device, button) = match physical {
+        Some(PhysicalInput::Key(key)) => {
+            let name = match key {
+                KeyCode::ArrowLeft => "left".into(), KeyCode::ArrowRight => "right".into(),
+                KeyCode::ArrowUp => "up".into(), KeyCode::ArrowDown => "down".into(),
+                KeyCode::Enter => "enter".into(), KeyCode::Escape => "escape".into(),
+                KeyCode::Space => "space".into(), KeyCode::Tab => "tab".into(),
+                KeyCode::Backspace => "backspace".into(),
+                KeyCode::ControlLeft => "left ctrl".into(), KeyCode::ControlRight => "right ctrl".into(),
+                KeyCode::ShiftLeft => "left shift".into(), KeyCode::ShiftRight => "right shift".into(),
+                KeyCode::AltLeft => "left alt".into(), KeyCode::AltRight => "right alt".into(),
+                KeyCode::SuperLeft => "left super".into(), KeyCode::SuperRight => "right super".into(),
+                KeyCode::PageUp => "pgup".into(), KeyCode::PageDown => "pgdn".into(),
+                KeyCode::Home => "home".into(), KeyCode::End => "end".into(),
+                KeyCode::Insert => "insert".into(), KeyCode::Delete => "delete".into(),
+                KeyCode::Comma => "comma".into(), KeyCode::Period => "period".into(),
+                KeyCode::Backslash => "backslash".into(), KeyCode::Minus => "-".into(),
+                KeyCode::Equal => "=".into(), KeyCode::BracketLeft => "[".into(), KeyCode::BracketRight => "]".into(),
+                KeyCode::Semicolon => ";".into(), KeyCode::Quote => "'".into(), KeyCode::Backquote => "`".into(),
+                KeyCode::NumpadEnter => "KP enter".into(), KeyCode::NumpadAdd => "KP +".into(),
+                KeyCode::NumpadSubtract => "KP -".into(), KeyCode::NumpadMultiply => "KP *".into(),
+                KeyCode::NumpadDivide => "KP /".into(), KeyCode::NumpadDecimal => "KP .".into(),
+                _ => { let key = format!("{key:?}");
+                    if let Some(key)=key.strip_prefix("Key").or_else(|| key.strip_prefix("Digit")) { key.to_ascii_lowercase() }
+                    else if key.strip_prefix('F').and_then(|n|n.parse::<u8>().ok()).is_some_and(|n|(1..=16).contains(&n)) {key}
+                    else if let Some(n)=key.strip_prefix("Numpad").filter(|n|n.len()==1 && n.as_bytes()[0].is_ascii_digit()) { format!("KP {n}") }
+                    else { "Invalid".into() }
+                }
+
+            };
+            ("InputDevice_Key".into(), name)
+        }
+        Some(PhysicalInput::PadDirection(id, dir)) => (format!("InputDevice_Joy{}", id.0+1),
+            match dir { PadDir::Left => "Left1", PadDir::Right => "Right1", PadDir::Up => "Up1", PadDir::Down => "Down1" }.into()),
+        Some(PhysicalInput::PadButton(id, code)) => (format!("InputDevice_Joy{}", id.0+1), if code.into_u32() < 32 { format!("B{}", code.into_u32()+1) } else { "Invalid".into() }),
+        None => return ("InputDevice_Invalid".into(), "DeviceButton_Invalid".into()),
+    };
+    (device, format!("DeviceButton_{button}"))
 }
 
 thread_local! {

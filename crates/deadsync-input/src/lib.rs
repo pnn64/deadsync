@@ -22,7 +22,7 @@ pub use bindings::{
     write_default_keymap_ini_section, write_keymap_ini_section,
 };
 pub use keymap::{
-    InputBinding, Keymap, any_player_has_dedicated_menu_buttons_for_mode,
+    InputBinding, Keymap, PhysicalInput, any_player_has_dedicated_menu_buttons_for_mode,
     any_player_has_four_way_menu_buttons, any_player_has_three_key_menu_buttons, get_keymap,
     set_keymap, with_keymap,
 };
