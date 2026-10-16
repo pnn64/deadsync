@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-16T04:25:15Z",
+  "updated_utc": "2026-10-16T04:26:25Z",
   "counts": {
     "passed": 403,
     "pending": 98,
@@ -13667,7 +13667,11 @@
       "replayed_frames": 17554,
       "capture_errors": null,
       "completion": null,
-      "no_third_full_repair": false
+      "no_third_full_repair": false,
+      "followup": "sweep-2026-10-16-quarantine-sm-native-arrow-x-first-repair-launch.json",
+      "full_repairs_started": 1,
+      "new_full_repair_started": true,
+      "current_diagnostic_failure": "Original248 X-position failures and shared original Lua GetXPos call verified; qualified source fix selected. First full repair running on original compressed capture; no whole acceptance inferred from related SSC result."
     },
     {
       "position": 363,

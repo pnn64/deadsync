@@ -1,6 +1,6 @@
 {
-  "generated_utc": "2026-10-16T04:25:15.355153+00:00",
-  "concrete_ledger_sha256": "5795ed9a8b61ca455c8ae50fa67d69336243cb35ef9871459130813277c3c5bf",
+  "generated_utc": "2026-10-16T04:26:25.284976+00:00",
+  "concrete_ledger_sha256": "a44e1ad8c7784853ccf61d2bacd4ab50b2c02801238f6e15eb8c76c7a3d900bd",
   "counts": {
     "passed": 403,
     "pending": 98,
@@ -20,5 +20,27 @@
     "completed_full_replay": false,
     "restart_requires_user_resuming_chart": true
   },
-  "no_chart_replays_or_source_mutations": true
+  "no_chart_replays_or_source_mutations": true,
+  "additional_running_repairs_not_counted_as_terminal": [
+    {
+      "source_simfile": "Quarantine/Quarantine.sm",
+      "position": 362,
+      "stage": "quarantine-sm-native-arrow-x-first1-v1",
+      "started_full_repairs": 1,
+      "completed_full_repairs": 0,
+      "running": true,
+      "observed_utc": "2026-10-16T04:26:30.157267+00:00",
+      "pid": 550586,
+      "command": [
+        "/home/parity/jobs/native-arrow-x-linux-green-v3/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/quarantine-sm-native-arrow-x-first1-v1/chart-362/d8cfd32c076285e3048db7d55365510eebd993e1a15fa3af5dd740a7b55cdd9f.tar.zst",
+        "--report",
+        "/home/parity/jobs/quarantine-sm-native-arrow-x-first1-v1/chart-362/report.json"
+      ],
+      "actual_process_command_and_cwd_verified": true,
+      "observed_replayed_frames": 692,
+      "native_frames": 17554
+    }
+  ]
 }

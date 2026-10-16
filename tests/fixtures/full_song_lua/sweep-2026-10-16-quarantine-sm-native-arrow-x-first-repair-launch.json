@@ -1,0 +1,52 @@
+{
+  "source_simfile": "Quarantine/Quarantine.sm",
+  "position": 362,
+  "repair_attempt": 1,
+  "native_frames": 17554,
+  "previous_full_mismatches": 248,
+  "previous_full_mismatch_operations": {
+    "Actor.x": 248
+  },
+  "first_original_failure": {
+    "seq": 1150975,
+    "seconds": 103.31460571289062,
+    "beat": 284.0167541503906,
+    "native_x": -101.02710723876953,
+    "owned_x": -96
+  },
+  "source_cause": "Original song/multitap/Default.lua calls ArrowEffects.GetXPos at payload line1019, captured helper caller line998; baseline returned only fixed style columnX. This is the same exact Lua source as the SSC chart. Qualified complete native X math addresses the missing implementation; full acceptance remains unproven.",
+  "original_lua_sha256": "02f9f6ce9d6fd54c080f5f881e743f4bb3ae2abede0353df7450b15f6d43d963",
+  "native_capture_reused": true,
+  "original_capture_uncompressed_sha256": "ad757512a52a750ce0061b7fe716f5ca1e6ab2ccb40a3dfdd6aad13c4ab97f3f",
+  "trace_sha256": "4c9e0e737ac021479f712a2c86cc227ea38da08d3a23f8d9997a88812173a591",
+  "fix_commit": "8cfac82fee6c63025458af81b696aa3e19ebf9f2",
+  "binary_sha256": "01a49433d6ea9251c5a6b444adc3e608407d9aa410f9d04d769595e9276fbecd",
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_sources49_assets_verified": true,
+  "native_reference_cases": 130,
+  "full_acceptance_criteria_unchanged": true,
+  "no_query_outputs_used_as_runtime_inputs": true,
+  "compressed_original_replayed_without_raw_archive_duplicate": true,
+  "actual_running_observation": {
+    "source_simfile": "Quarantine/Quarantine.sm",
+    "position": 362,
+    "stage": "quarantine-sm-native-arrow-x-first1-v1",
+    "started_full_repairs": 1,
+    "completed_full_repairs": 0,
+    "running": true,
+    "observed_utc": "2026-10-16T04:26:18.403126+00:00",
+    "pid": 550586,
+    "command": [
+      "/home/parity/jobs/native-arrow-x-linux-green-v3/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/quarantine-sm-native-arrow-x-first1-v1/chart-362/d8cfd32c076285e3048db7d55365510eebd993e1a15fa3af5dd740a7b55cdd9f.tar.zst",
+      "--report",
+      "/home/parity/jobs/quarantine-sm-native-arrow-x-first1-v1/chart-362/report.json"
+    ],
+    "actual_process_command_and_cwd_verified": true,
+    "observed_replayed_frames": 579,
+    "native_frames": 17554
+  },
+  "accepted": false,
+  "related_SSC_first_repair_result": "All13575frames,0errors,10 residual X mismatches; remaining differences require concrete source review before any SSC final2. SM first1 already started separately; no acceptance is inferred."
+}
