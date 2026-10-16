@@ -1,0 +1,32 @@
+{
+  "source_simfile": "flowers/flowers.ssc",
+  "position": 193,
+  "repair_attempt": 1,
+  "native_frames": 48353,
+  "entry_evidence": "sweep-2026-10-16-flowers-native-float-math-entry-diagnostic.json",
+  "entry_frames": 2211,
+  "entry_errors": 0,
+  "entry_mismatches": 0,
+  "fix_commit": "c1ba44e729bcab98775b7c4fa04ec76d2d15397c",
+  "native_capture_reused": true,
+  "original_capture_uncompressed_sha256": "7722e7db1464871d24771b03d01dfadd1bba1c8243f120119cd4263182940519",
+  "binary_sha256": "84dd18feaf82c236a29df5d4c334b9c7ac7415b36c9b9161dac9a58d3c3d71dd",
+  "full_acceptance_criteria_unchanged": true,
+  "actual_running_observation": {
+    "source_simfile": "flowers/flowers.ssc",
+    "started_full_repairs": 1,
+    "completed_full_repairs": 0,
+    "running": true,
+    "observed_utc": "2026-10-16T01:30:32.191523+00:00",
+    "pid": 3438441,
+    "command": [
+      "/home/parity/jobs/native-float-math-linux-green-v3/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/flowers-native-float-math-first1-v1/chart-193/7722e7db1464871d24771b03d01dfadd1bba1c8243f120119cd4263182940519.tar",
+      "--report",
+      "/home/parity/jobs/flowers-native-float-math-first1-v1/chart-193/report.json"
+    ],
+    "actual_process_command_and_cwd_verified": true
+  },
+  "accepted": false
+}
