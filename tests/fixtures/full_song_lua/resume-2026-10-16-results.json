@@ -4929,20 +4929,46 @@
     {
       "position": 481,
       "source_simfile": "Young Dumb And Broke/YDB.ssc",
-      "completed_full_repairs": 0,
-      "evidence": "sweep-2026-10-14-original-partition-v5-6.json",
       "simfile_sha256": "8768a55012287ef1a6fb4f70a6b18e53f129ec03782bb3d2dfdbdf0517377d4c",
-      "status": "pending",
-      "previous_concrete_failure": {
-        "failure_text": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-744563-1792014784884695162-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-744563-1792014784884695162-0\n",
-        "callback_errors": [],
-        "mismatch_count": null,
-        "first_concrete_mismatches": [],
-        "capture_exit": 1,
-        "replay_exit": null,
-        "concrete_terminal_outcome": null
+      "status": "passed",
+      "repair_attempts": 1,
+      "local_chart": "C:/GitHub/deadsync/target/song-lua-sweep-20261016/native-recovery/chart-481",
+      "title": "Young Dumb And Broke",
+      "native_capture_reused": false,
+      "previous_concrete_failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect /tmp/itgmania-harness-rs/song-lua-744563-1792014784884695162-0/Logs/log.txt; retained run directory /tmp/itgmania-harness-rs/song-lua-744563-1792014784884695162-0\n",
+      "capture_exit": 0,
+      "replay_exit": 0,
+      "candidate_sha256": "a155199f33dd7bc710a417f76f084f9c817b2ea7be46cde95eb0e08c6416e552",
+      "comparison_input": "uncompressed tar",
+      "native_frames": 119215,
+      "replayed_frames": 119215,
+      "compared_stage_fields": 2167,
+      "archive_accepted": true,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "84b09e12ee5c144882c7ea27b10ea61388d642a28dbd2d9325cbf635c7201bf7",
+      "archive": "a2878b466f009d3ae3351a9d10c0814acad8b7b362c9af5a3a00a4b6435e54d9.tar.zst",
+      "archive_sha256": "a2878b466f009d3ae3351a9d10c0814acad8b7b362c9af5a3a00a4b6435e54d9",
+      "compressed_bytes": 297821325,
+      "harness_version": "0.1.80",
+      "uncompressed_bytes_verified": true,
+      "local_decompressed_bytes_verified": true,
+      "retained_previous_entry": {
+        "title": "Episode 19",
+        "source_simfile": "Young Dumb And Broke/YDB.ssc",
+        "harness_version": "0.1.0",
+        "archive": "8022849c5f08e058cf3f8d79201fe4b86bec82b04f3ffa51ce7ed7bf5e83ba40.tar.zst",
+        "sha256": "8022849c5f08e058cf3f8d79201fe4b86bec82b04f3ffa51ce7ed7bf5e83ba40",
+        "compressed_bytes": 319946,
+        "uncompressed_sha256": "7113ca78e9aa61303730a7e93fc071bb537c2c22126254ca31f6ae2d88fe3761",
+        "compression_level": 22,
+        "aliases": [
+          "8199b659412f43a75d7f13730c25c65abbf69a8bb2584f9300a7f63f5cfe5c80.tar.zst"
+        ]
       },
-      "disposition": "no complete retained candidate; original native capture failure retained"
+      "archive_git_ignored": true
     },
     {
       "position": 484,
@@ -38064,13 +38090,13 @@
     }
   ],
   "counts": {
-    "passed_fixtures": 423,
-    "pending_charts": 77,
+    "passed_fixtures": 424,
+    "pending_charts": 76,
     "ignored_charts": 1,
-    "new_passing_fixtures": 19,
+    "new_passing_fixtures": 20,
     "recorded_outcomes": 89
   },
-  "updated_utc": "2026-10-16T23:33:01Z",
+  "updated_utc": "2026-10-16T23:38:34Z",
   "reopened": [
     {
       "source_simfile": "7th Gear/7th Gear.ssc",

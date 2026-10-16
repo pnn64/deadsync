@@ -5445,17 +5445,15 @@
       "local_only": true
     },
     {
-      "title": "Episode 19",
+      "title": "Young Dumb And Broke",
       "source_simfile": "Young Dumb And Broke/YDB.ssc",
-      "harness_version": "0.1.0",
-      "archive": "8022849c5f08e058cf3f8d79201fe4b86bec82b04f3ffa51ce7ed7bf5e83ba40.tar.zst",
-      "sha256": "8022849c5f08e058cf3f8d79201fe4b86bec82b04f3ffa51ce7ed7bf5e83ba40",
-      "compressed_bytes": 319946,
-      "uncompressed_sha256": "7113ca78e9aa61303730a7e93fc071bb537c2c22126254ca31f6ae2d88fe3761",
-      "compression_level": 22,
-      "aliases": [
-        "8199b659412f43a75d7f13730c25c65abbf69a8bb2584f9300a7f63f5cfe5c80.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "a2878b466f009d3ae3351a9d10c0814acad8b7b362c9af5a3a00a4b6435e54d9.tar.zst",
+      "compressed_bytes": 297821325,
+      "sha256": "a2878b466f009d3ae3351a9d10c0814acad8b7b362c9af5a3a00a4b6435e54d9",
+      "uncompressed_sha256": "a155199f33dd7bc710a417f76f084f9c817b2ea7be46cde95eb0e08c6416e552",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Zoku Shimedore 2000",
