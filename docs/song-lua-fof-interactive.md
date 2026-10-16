@@ -1,12 +1,19 @@
-# Fof Guys interactive playback
+# Fof Guys interactive prototype
 
-Fof Guys needs a running Lua game. Production gameplay selected the baked
-compiler, discarded `AddInputCallback`/`RemoveInputCallback`, and transferred
-poses without transferring changing meshes or text. A successful score replay
-therefore did not establish that the ball could move or that the level rendered.
+The live implementation described below is superseded for production. Normal
+gameplay must consume compiled Rust data and must not retain a Lua VM. The
+production preparation API now enforces compiled playback. Fof Guys input
+callbacks are not yet compiled into Rust, so the historical interactive passes
+below do not establish support on the production path.
 
-The repair enables the retained Lua scene in normal, preloaded, and practice
-preparation. The screen owns native-shaped input callbacks, including repeats,
+Fof Guys has input-dependent gameplay. Before the prototype, production selected
+the baked compiler, discarded `AddInputCallback`/`RemoveInputCallback`, and
+transferred poses without transferring changing meshes or text. A successful
+score replay therefore did not establish that the ball could move or that the
+level rendered. Compiling this behavior into a Rust program remains unfinished.
+
+The historical prototype enabled the retained Lua scene in normal, preloaded,
+and practice preparation. Its screen owns native-shaped input callbacks, including repeats,
 removal during dispatch, callback truthiness, and physical keyboard identity.
 Held inputs survive the song's gameplay reload and are released when input is
 cleared. Press and release edges received during asynchronous loading are queued;

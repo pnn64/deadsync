@@ -266,7 +266,8 @@ pub fn song_lua_context(
     Ok(context)
 }
 
-/// Construct the owned gameplay Lua session on the CPU load worker.
+/// Compile song Lua on the load worker into Rust playback data. Normal gameplay
+/// never retains the compiler VM; live scenes are reserved for diagnostic tools.
 pub fn prepare_song_lua(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
@@ -282,14 +283,13 @@ pub fn prepare_song_lua(
     config: &deadsync_gameplay::GameplayConfig,
     video_renderer: &str,
     random_seed: u32,
-    live: bool,
 ) -> PreparedGameplaySongLua {
     if song.background_lua_changes.is_empty() && song.foreground_lua_changes.is_empty() {
         return PreparedGameplaySongLua::default();
     }
     let context = match song_lua_context(song, charts, timing, player_profiles, scroll_speed,
         music_rate, viewport, display_size, display_aspect_ratio, autoplay, session,
-        config, video_renderer, random_seed, live) {
+        config, video_renderer, random_seed, false) {
         Ok(context) => context,
         Err(error) => {
             warn!("Cannot load Lua chart timing for '{}': {error}", song.title);

@@ -955,6 +955,12 @@ impl GameplayPresentationSkeleton {
 }
 
 impl State {
+    #[cfg(not(feature = "test-support"))]
+    pub fn attach_song_lua(&mut self, _scene: deadsync_song_lua::SongLuaLiveScene) -> Result<(), String> {
+        Err("gameplay requires compiled song data; live Lua is a test-support diagnostic".into())
+    }
+
+    #[cfg(feature = "test-support")]
     pub fn attach_song_lua(&mut self, mut scene: deadsync_song_lua::SongLuaLiveScene) -> Result<(), String> {
         scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)?;
         // Simply Love's Player metric is -1; Player.cpp compares it unsigned.

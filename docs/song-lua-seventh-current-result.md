@@ -1,4 +1,53 @@
-# 7th Gear: opening effects and performance (0.5.1872)
+# 7th Gear: compiled playback (0.5.1872)
+
+Production gameplay compiles song Lua during loading and releases the VM before
+playback. The preparation API no longer accepts a live-mode flag; normal entry,
+preload, and practice all use compiled data. Explicit live scenes remain a
+headless diagnostic backend.
+
+The live prototype dropped note-column position and zoom splines when transferring
+its scene into gameplay. That explains the missing reversal behavior beginning
+at beat 111.5. The compiled path already retains those immutable spline tracks.
+A regular headless production regression checks direction reversal, zoom changes,
+reset to normal, and release of the compiler VM before playback.
+
+The actual-chart check uses the normal production preparation API and samples
+all four Rust spline tracks through both reversal sections. All 31 checks pass:
+direction changes at beats 112, 115 and 123, reset at beat 175, lane reversals
+at beats 206.75 and 207.5, and the handoff to ordinary Reverse at beat 208.
+All three AFT stages are retained and the prepared output contains no VM.
+Load-time compilation took 90.26 seconds in the expanded check (78.74 seconds
+in the earlier run); the loading delay remains unresolved.
+
+The Reverse check advances Rust playback in 1/120-beat steps before inspecting
+the result. Song-level targets approach the previous frame's sampled value;
+quarter-beat stepping incorrectly under-sampled the transition and reported
+0.404 at beat 207.5. Frame-sized steps report 0.721 against the authored 0.75
+target (0.05 tolerance allows the compiler's 60 Hz samples), followed by 1.0
+at beat 208.5. This checks authored behavior, not a native pixel comparison.
+
+```powershell
+cargo run --offline --release --config 'profile.release.lto=false' -p deadsync-shell --example seventh_compiled -- 'C:\GitHub\rework\lua-songs\7th Gear\7th Gear.ssc' target/seventh-compiled/production-track-check.json
+```
+
+The retained observations and source hashes are in
+[`seventh-compiled-reversal.json`](../tests/fixtures/interactive_song_lua/seventh-compiled-reversal.json).
+Five headless notefield spline tests also pass, covering composed notes,
+receptors, hold orientation, zoom assignment, and track changes/rewinds.
+
+Both normal development and optimized production executables are rebuilt. The
+optimized build is also available at `target/debug/deadsync-seventh-compiled.exe`
+alongside the installed song assets. It uses compiled playback; the older live
+prototype binaries described below are superseded. No application window was
+launched for this verification, and full application FPS was not measured.
+
+The retained older compiled archive run passes all 2,304 column-spline checks,
+but still has two final ActorProxy visibility mismatches (881,665 passing
+comparisons). It does not establish whole-song rendering parity. The historical
+live CPU measurements and binaries below are superseded and do not represent
+the production execution model.
+
+## Earlier live prototype investigation
 
 The previous application check covered startup visibility only. It did not
 establish correct effects after startup or acceptable frame time. Its recorded

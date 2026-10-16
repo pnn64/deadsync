@@ -1,0 +1,294 @@
+{
+  "song": "7th Gear",
+  "chart_hash": "477fed829d289df2",
+  "retained_lua_vm": false,
+  "compile_ms": 90260.5529,
+  "reversal_checks_passed": 31,
+  "observations": [
+    {
+      "beat": 112.0,
+      "column": 0,
+      "y0": -135.0,
+      "y1": -119.0,
+      "position": true,
+      "zoom": true
+    },
+    {
+      "beat": 112.0,
+      "column": 1,
+      "y0": -135.0,
+      "y1": -119.0,
+      "position": true,
+      "zoom": true
+    },
+    {
+      "beat": 112.0,
+      "column": 2,
+      "y0": -135.0,
+      "y1": -119.0,
+      "position": true,
+      "zoom": true
+    },
+    {
+      "beat": 112.0,
+      "column": 3,
+      "y0": -135.0,
+      "y1": -119.0,
+      "position": true,
+      "zoom": true
+    },
+    {
+      "beat": 115.0,
+      "column": 0,
+      "y0": 135.0,
+      "y1": 119.0,
+      "position": true,
+      "zoom": true
+    },
+    {
+      "beat": 115.0,
+      "column": 1,
+      "y0": 135.0,
+      "y1": 119.0,
+      "position": true,
+      "zoom": true
+    },
+    {
+      "beat": 115.0,
+      "column": 2,
+      "y0": 135.0,
+      "y1": 119.0,
+      "position": true,
+      "zoom": true
+    },
+    {
+      "beat": 115.0,
+      "column": 3,
+      "y0": 135.0,
+      "y1": 119.0,
+      "position": true,
+      "zoom": true
+    },
+    {
+      "beat": 123.0,
+      "column": 0,
+      "y0": -135.0,
+      "y1": -119.0,
+      "position": true,
+      "zoom": true
+    },
+    {
+      "beat": 123.0,
+      "column": 1,
+      "y0": -135.0,
+      "y1": -119.0,
+      "position": true,
+      "zoom": true
+    },
+    {
+      "beat": 123.0,
+      "column": 2,
+      "y0": -135.0,
+      "y1": -119.0,
+      "position": true,
+      "zoom": true
+    },
+    {
+      "beat": 123.0,
+      "column": 3,
+      "y0": -135.0,
+      "y1": -119.0,
+      "position": true,
+      "zoom": true
+    },
+    {
+      "beat": 175.0,
+      "column": 0,
+      "position": false,
+      "zoom": false
+    },
+    {
+      "beat": 175.0,
+      "column": 1,
+      "position": false,
+      "zoom": false
+    },
+    {
+      "beat": 175.0,
+      "column": 2,
+      "position": false,
+      "zoom": false
+    },
+    {
+      "beat": 175.0,
+      "column": 3,
+      "position": false,
+      "zoom": false
+    },
+    {
+      "beat": 206.75,
+      "column": 0,
+      "position": true,
+      "zoom": false,
+      "slope_y": -257.7349853515625
+    },
+    {
+      "beat": 206.75,
+      "column": 1,
+      "position": true,
+      "zoom": false,
+      "slope_y": -346.7597351074219
+    },
+    {
+      "beat": 206.75,
+      "column": 2,
+      "position": true,
+      "zoom": false,
+      "slope_y": -2047.4918212890625
+    },
+    {
+      "beat": 206.75,
+      "column": 3,
+      "position": true,
+      "zoom": false,
+      "slope_y": 2048.0
+    },
+    {
+      "beat": 207.5,
+      "column": 0,
+      "position": true,
+      "zoom": false,
+      "slope_y": -1728.7811279296875
+    },
+    {
+      "beat": 207.5,
+      "column": 1,
+      "position": true,
+      "zoom": false,
+      "slope_y": -2043.4427490234375
+    },
+    {
+      "beat": 207.5,
+      "column": 2,
+      "position": true,
+      "zoom": false,
+      "slope_y": -2047.4918212890625
+    },
+    {
+      "beat": 207.5,
+      "column": 3,
+      "position": true,
+      "zoom": false,
+      "slope_y": -771.1242065429688
+    },
+    {
+      "beat": 208.5,
+      "column": 0,
+      "position": false,
+      "zoom": false
+    },
+    {
+      "beat": 208.5,
+      "column": 1,
+      "position": false,
+      "zoom": false
+    },
+    {
+      "beat": 208.5,
+      "column": 2,
+      "position": false,
+      "zoom": false
+    },
+    {
+      "beat": 208.5,
+      "column": 3,
+      "position": false,
+      "zoom": false
+    }
+  ],
+  "whole_song_parity_proven": false,
+  "pixel_parity_proven": false,
+  "schema_version": 1,
+  "scope": "Production preparation and Rust spline/Reverse handoff checks for both reversal sections, without a window or retained Lua VM. Does not certify full-song or pixel parity.",
+  "synthetic_production_regression": {
+    "name": "compiled_gameplay_keeps_reversal_splines_without_a_lua_vm",
+    "passed": true
+  },
+  "older_archive_check": {
+    "compared": 881667,
+    "passed": 881665,
+    "failed": 2,
+    "column_splines_passed": 2304,
+    "remaining_mismatches": "Final visibility of two ActorProxy instances; not treated as passing."
+  },
+  "song_sources": {
+    "7th Gear.ssc": "cfd14505555c22a91da6042d964526c2636ed9cc35ea8420b4326bc3b7c58fbd",
+    "lua/default.lua": "e72d3d99c5577081e8b75523734cae2e05dde347a8a3b74989c53a21fc26cb0f",
+    "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+    "lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+    "lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+  },
+  "fof_compiled_input_support": false,
+  "aft_stages": 3,
+  "reverse_modifier_samples": [
+    {
+      "beat": 206.5,
+      "reverse": 0.0
+    },
+    {
+      "beat": 207.5,
+      "reverse": 0.7214416265487671
+    },
+    {
+      "beat": 208.5,
+      "reverse": 1.0
+    }
+  ],
+  "reverse_check": {
+    "steps_per_beat": 120,
+    "absolute_tolerance": 0.05,
+    "expected": {
+      "206.5": 0.0,
+      "207.5": 0.75,
+      "208.5": 1.0
+    },
+    "native_comparison": false,
+    "note": "Previous-frame Song-level targets and 60 Hz compiler samples cause a small lag. Quarter-beat replay under-samples the ease and is not used for these assertions."
+  },
+  "loading_delay_resolved": false,
+  "source_base_commit": "00ec997ab",
+  "implementation_sha256": {
+    "crates/deadsync-shell/src/gameplay_entry.rs": "1aaf1c6e1fa285f0d150692d288f8c9464fb0f8b523360e4915513904c7b3242",
+    "crates/deadsync-shell/src/app/mod.rs": "d4f73be872e183abf66895de953e5a614256ec1a42b0520179f86af375e3d6f9",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "014e9badc8e70c7640f48f43fd070ef80aea9847de2f4bdd00c6e2fab830ef10",
+    "crates/deadsync-shell/examples/seventh_compiled.rs": "8e29ca1bd1e44d8d4ad88e9a8a6106c0a7c54cd7f9840e43c7ede556271b633d",
+    "crates/deadsync-shell/src/gameplay_regression_tests.rs": "56615545baeab5d69f1aba2cb2fa2226df7c1c389423d5b22c7071c081ebfd8b"
+  },
+  "builds": {
+    "optimized": {
+      "path": "target/release/deadsync.exe",
+      "bytes": 48535040,
+      "sha256": "68c10f8f9f02c8107778459655b5d3fcf93b551c7fc8915e814b01af79e1a4a1",
+      "lto": false,
+      "test_support": false
+    },
+    "development": {
+      "path": "target/debug/deadsync.exe",
+      "bytes": 138369024,
+      "sha256": "a19f96c6617a2852dbad823cb17621436f3776a3aa8bce3cada42d43c3466ad2",
+      "test_support": false
+    },
+    "optimized_alias": {
+      "path": "target/debug/deadsync-seventh-compiled.exe",
+      "bytes": 48535040,
+      "sha256": "68c10f8f9f02c8107778459655b5d3fcf93b551c7fc8915e814b01af79e1a4a1",
+      "test_support": false
+    }
+  },
+  "renderer_spline_tests": {
+    "passed": 5,
+    "failed": 0,
+    "filter": "cargo test --offline -p deadsync-notefield --lib spline",
+    "scope": "Notes, receptors, holds, zoom and clock-track rewinds; no window."
+  }
+}

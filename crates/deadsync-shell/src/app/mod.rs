@@ -2793,7 +2793,6 @@ impl App {
                         &gameplay_config,
                         &video_renderer.to_string(),
                         song_lua_seed(),
-                        true,
                     );
                     GameplayPreload {
                         song_path,
@@ -9624,7 +9623,6 @@ impl App {
                     &gameplay_config_from_config(&cfg),
                     &cfg.video_renderer.to_string(),
                     song_lua_seed(),
-                    true,
                 );
                 match crate::gameplay_entry::apply_song_lua_reload(
                     &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
@@ -10151,7 +10149,6 @@ impl App {
                             &gameplay_config,
                             &video_renderer.to_string(),
                             song_lua_seed(),
-                            true,
                         )
                         })
                     };

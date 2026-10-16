@@ -703,7 +703,7 @@ mod tests {
             hud,
             ..Default::default()
         };
-        let prepared = crate::gameplay_entry::prepare_song_lua(
+        let mut prepared = crate::gameplay_entry::prepare_song_lua(
             &song,
             &charts,
             std::array::from_fn(|p| &gameplay_charts[p].timing),
@@ -718,8 +718,9 @@ mod tests {
             &GameplayConfig::default(),
             &deadlib_render_core::BackendType::Software.to_string(),
             1,
-            false,
         );
+        assert!(prepared.take_live_scene().expect("compiled preparation").is_none(),
+            "normal gameplay must release the load-time Lua VM");
         screen_gameplay::init(
             song,
             charts,
@@ -1073,6 +1074,68 @@ L000
         set_fixture_time(&mut state, 2.5);
         add_sprite_core_feedback(&mut state, 0, 0, 42);
         (state, fixture_assets(), metrics)
+    }
+
+    #[test]
+    fn compiled_gameplay_keeps_reversal_splines_without_a_lua_vm() {
+        with_session(profile_data::PlayStyle::Single, profile_data::PlayerSide::P1,
+            true, false, || {
+            let simfile = write_fixture("compiled-reversal", r#"
+#TITLE:Compiled reversal;
+#MUSIC:;
+#BPMS:0=120;
+#LASTSECONDHINT:2;
+#FGCHANGES:0=default.lua=1=0=0=0=StretchNoLoop====;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DIFFICULTY:Challenge;
+#METER:1;
+#NOTES:
+1000
+0100
+0010
+0001
+;
+"#);
+            fs::write(simfile.parent().unwrap().join("default.lua"), r#"
+return Def.ActorFrame { OnCommand=function(self)
+    local column = SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField'):GetColumnActors()[1]
+    self:SetUpdateFunction(function()
+        local beat = GAMESTATE:GetSongBeat()
+        local position, zoom = column:GetPosHandler(), column:GetZoomHandler()
+        if beat >= 3 then
+            position:SetSplineMode('NoteColumnSplineMode_Disabled')
+            zoom:SetSplineMode('NoteColumnSplineMode_Disabled')
+            return
+        end
+        local reversed = beat >= 1 and beat < 2
+        local direction, scale = reversed and -1 or 1, reversed and 0.5 or 1
+        for _, handler in ipairs({position, zoom}) do
+            handler:SetSplineMode('NoteColumnSplineMode_Position')
+            handler:SetSubtractSongBeat(true):SetReceptorT(0):SetBeatsPerT(1)
+        end
+        local p, z = position:GetSpline(), zoom:GetSpline()
+        p:SetSize(2):SetPoint(1,{0,-135*direction,0}):SetPoint(2,{0,(-135+128)*direction,0}):Solve()
+        z:SetSize(2):SetPoint(1,{scale,scale,scale}):SetPoint(2,{scale,scale,scale}):Solve()
+    end)
+end }
+"#).unwrap();
+            space::set_current_metrics(space::Metrics::centered(854.0, 480.0));
+            space::set_current_window_px(1280, 720);
+            let state = build_test_state(&simfile, GameplayViewport::new(1280.0,720.0),
+                GameplaySession::default(), std::array::from_fn(|_| profile_data::Profile::default()));
+            let track = state.song_lua_visuals().column_splines[0].iter()
+                .find(|track| track.column == 0).expect("compiled position and zoom track");
+            for (second, direction, scale) in [(0.375,1.0,1.0),(0.875,-1.0,0.5),(1.375,1.0,1.0)] {
+                let frame = track.at_second(second).expect("baked spline frame");
+                let (position, derivative) = frame.position.as_ref().unwrap().view().sample(second*2.0,second*2.0);
+                assert_eq!(position[1],-135.0*direction);
+                assert_eq!(derivative[1],128.0*direction);
+                assert_eq!(frame.zoom.as_ref().unwrap().view().sample(second*2.0,second*2.0).0,[scale;3]);
+            }
+            let cleared = track.at_second(1.875).unwrap();
+            assert!(cleared.position.is_none() && cleared.zoom.is_none());
+        });
     }
 
     #[test]
