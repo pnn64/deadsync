@@ -1,0 +1,201 @@
+{
+  "source_simfile": "Hallways/hallways.ssc",
+  "position": 220,
+  "status": "Live fail-policy bridge fixed and qualified; Hallways full acceptance remains unproven",
+  "fix_commit": "64563b39408cb5a861447dd8c33633b6c26ac970",
+  "full_repairs_completed": 1,
+  "new_full_repair_started": false,
+  "previous_full_failure": {
+    "native_frames": 26879,
+    "replayed_frames": 26879,
+    "errors": 0,
+    "mismatches": 341,
+    "owned_navigation_seconds": 22.51714324951172,
+    "native_navigation_seconds": 25.025758743286133,
+    "matching_authored_transition_request_seconds": 23.51906967163086
+  },
+  "native_source_pins": {
+    "ScreenGameplay.cpp": {
+      "sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+      "captured_source_receipt_keys": [
+        "src/ScreenGameplay.cpp"
+      ],
+      "receipt_matches": true,
+      "relevant_lines": [
+        [
+          1996,
+          "if (pi->GetPlayerState()->m_PlayerOptions.GetCurrent().m_FailType =="
+        ]
+      ]
+    },
+    "PlayerOptions.cpp": {
+      "sha256": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+      "captured_source_receipt_keys": [
+        "src/PlayerOptions.cpp"
+      ],
+      "receipt_matches": true,
+      "relevant_lines": []
+    },
+    "PlayerState.cpp": {
+      "sha256": "d54ad94985f1917627af53a55d96986777c9c0b3949768d7822074b09b796280",
+      "captured_source_receipt_keys": [
+        "src/PlayerState.cpp"
+      ],
+      "receipt_matches": true,
+      "relevant_lines": [
+        [
+          99,
+          "m_PlayerOptions.Update(fDelta);"
+        ]
+      ]
+    },
+    "GameState.cpp": {
+      "sha256": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+      "captured_source_receipt_keys": [
+        "src/GameState.cpp"
+      ],
+      "receipt_matches": true,
+      "relevant_lines": [
+        [
+          1935,
+          "FailType ft = pPlayerState->m_PlayerOptions.GetCurrent().m_FailType;"
+        ]
+      ]
+    }
+  },
+  "native_enum_copy": "PlayerOptions::Approach uses DO_COPY(m_FailType), independent of its numeric approach clock. ScreenGameplay waits until song end for ImmediateContinue and EndOfSong.",
+  "owned_cause": "Live option tables accepted Song FailSetting changes, but gameplay refreshed its fail mode only from attacks or configuration. No live policy reached the gameplay decision.",
+  "change": "Export an explicit live Song fail policy before gameplay updates; preserve it through attack refresh. Preserve configured policy when Lua has none. Health state reads the actual Current fail policy.",
+  "regression": "gameplay_live_song_fail_setting_controls_real_navigation: real zero-life gameplay with FailSetting(ImmediateContinue) and FromString(FailOff); actual navigation effects and runtime policy checked over three frames.",
+  "red_linux": [
+    {
+      "label": "target",
+      "exit_code": 101,
+      "seconds": 271.9608504769858,
+      "log_sha256": "964aa71c07224f30c232dfe6d7e22a69bd19eea13792a362620397f600cbb929",
+      "results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 346 filtered out; finished in 0.47s"
+      ]
+    }
+  ],
+  "green_windows": [
+    {
+      "label": "target",
+      "exit_code": 0,
+      "seconds": 129.49465049998253,
+      "log_sha256": "7ebea6fdccc93e31ee9a177f3e0b20fef7773d7cc88b462ab891d3f54903b679",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 346 filtered out; finished in 1.10s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 486.36015749999206,
+      "log_sha256": "40b91b9315b9399d02eda926858694b9a045936fe359d29e07aee70c3c47d104",
+      "results": [
+        "test result: ok. 113 passed; 0 failed; 0 ignored; 0 measured; 539 filtered out; finished in 82.18s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 72.46751890002633,
+      "log_sha256": "67259cf7e58b8a94ea371ab17aa025ea7c54bf08c8f4674360bea46fe0e66bab",
+      "results": [
+        "test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 28.34s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 76.26765490000253,
+      "log_sha256": "c1ae6eb1e4086e8814c2daa152db56cf4644dd4fa3d8fc4ac6773390a05d23cb",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 2.040215699991677,
+      "log_sha256": "67590d47baf1b74ef1fbc878efe783f315ce8c0f594136964917ae5421c407c6",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 651 filtered out; finished in 0.49s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 24.11683080001967,
+      "log_sha256": "2c95dc421565fa00cdb39a4bb88d824a6421ce9e6d5446836c4cac2005e8c4e8",
+      "results": []
+    }
+  ],
+  "green_linux": [
+    {
+      "label": "target",
+      "exit_code": 0,
+      "seconds": 298.9701675819815,
+      "log_sha256": "2007a013fdbe5badf47783e13e516e68b3f2923fa165859405ff8c2c3bb2a43a",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 346 filtered out; finished in 0.80s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 389.02027406799607,
+      "log_sha256": "8b59986450b9aa9c1bedda6df6c7bb78a21b732ee75cc93ce508552a278cacbd",
+      "results": [
+        "test result: ok. 113 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 37.72s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 24.56453158002114,
+      "log_sha256": "c38ed0d1ce81eaf402c1b8eeaba9ceba9de033e3ad65cd66fd899bb702d26996",
+      "results": [
+        "test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 23.74s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 86.88598269002978,
+      "log_sha256": "d3f6aaa5637f3d770dab1e196016295828635462dcaf6a567b4958c14f850057",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 1.1046224649762735,
+      "log_sha256": "e5a6998077d9d25e8cceff213372423ff7174be9c70ece9904d50f152dc0becb",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 649 filtered out; finished in 0.41s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 40.00994780700421,
+      "log_sha256": "adc90261a555a6cb13a215205d12cbcb34bd52b19419ff0bf5efc63005e6113c",
+      "results": []
+    }
+  ],
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_sources52_assets_verified": true,
+  "cross_host_sources_match_after_line_ending_normalization": true,
+  "live_controls": 113,
+  "replay_controls": 45,
+  "acceptance_module_restored_by_removing_only_new_regression": true,
+  "background_observer_still_under_source_review": true,
+  "final_full_repair_not_started": true,
+  "no_captured_getter_outputs_used_as_runtime_inputs": true,
+  "native_capture_reused": true,
+  "existing_full_acceptance_unchanged": true,
+  "mawaru9_remains_deferred": true
+}

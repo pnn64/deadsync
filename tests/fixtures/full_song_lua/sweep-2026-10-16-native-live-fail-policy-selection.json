@@ -1,0 +1,17 @@
+{
+  "fix_commit": "64563b39408cb5a861447dd8c33633b6c26ac970",
+  "source_root": "/home/parity/workspace/native-live-fail-policy-green-v1/deadsync",
+  "binary_sha256": "46642e30ab3ec7737f3602687a50045576ba756291a188a39068ed70b0a83a1e",
+  "build_proof": "/home/parity/jobs/native-live-fail-policy-linux-green-v1/proof.json",
+  "all_six_groups_both_hosts_passed": true,
+  "all_1175_sources52_assets_verified": true,
+  "full_acceptance_criteria_unchanged": true,
+  "native_expected_outputs_are_test_only": true,
+  "native_capture_reused": true,
+  "live_controls": 113,
+  "replay_controls": 45,
+  "Hallways_full_repairs_spent": 1,
+  "source_cause_evidence": "sweep-2026-10-16-hallways-live-fail-policy-source-cause.json",
+  "numeric_mods_group_clock_fidelity_unproven": true,
+  "numeric_clock_source_correction": "sweep-2026-10-16-native-mods-group-clock-input-correction.json"
+}
