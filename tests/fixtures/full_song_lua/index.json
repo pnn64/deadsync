@@ -2730,15 +2730,12 @@
     {
       "title": "Happy Now",
       "source_simfile": "Happy Now/Happy Now.ssc",
-      "harness_version": "0.1.0",
-      "archive": "abd842dd94c03a23a302ebb3357f6318c068c940aedd16d5760a9179b4b298c2.tar.zst",
-      "sha256": "abd842dd94c03a23a302ebb3357f6318c068c940aedd16d5760a9179b4b298c2",
-      "compressed_bytes": 79581,
-      "uncompressed_sha256": "b0787424d72b3b4cc59062cd53a6582c4b0d0f8ddca241eaa0782127de04a808",
-      "compression_level": 22,
-      "aliases": [
-        "92265d97f5d5897b5566987976250693ae64c9db86314126b09968c6536c667e.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "2d593c336223218398eefd84e4e8d2d8f96e05c8aab4d277d9a172c8398e462e.tar.zst",
+      "compressed_bytes": 22510739,
+      "sha256": "2d593c336223218398eefd84e4e8d2d8f96e05c8aab4d277d9a172c8398e462e",
+      "uncompressed_sha256": "c1e77bbab19eb8da3c910a56ec4dd2c0d45a49c5ccc50fd8cb726b2a2e7a25fc",
+      "aliases": []
     },
     {
       "title": "Haxo",
