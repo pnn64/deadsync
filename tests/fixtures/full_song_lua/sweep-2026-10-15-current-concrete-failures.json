@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-16T05:22:59Z",
+  "updated_utc": "2026-10-16T05:25:28Z",
   "counts": {
     "passed": 404,
     "pending": 97,
@@ -5429,12 +5429,13 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-16-hallways-qualified-entry-diagnostic.json",
+      "followup": "sweep-2026-10-16-hallways-qualified-runtime-first-repair-launch.json",
       "entry_diagnostic_frames": 3200,
       "entry_diagnostic_errors": 0,
       "entry_diagnostic_mismatches": 0,
-      "new_full_repair_started": false,
-      "current_diagnostic_failure": "Original background-container setup failure resolved with current qualified runtime. Retained3200frame diagnostic clean; first full repair queued on original26879frame capture after E2 SM releases slot. Whole acceptance unproven."
+      "new_full_repair_started": true,
+      "current_diagnostic_failure": "First full repair running on original26879frame capture after clean retained3200frame entry resolved old setup error. Existing whole acceptance unchanged and remains unproven.",
+      "full_repairs_started": 1
     },
     {
       "position": 221,
@@ -7284,12 +7285,13 @@
       "entry_diagnostic_mismatches": 59,
       "first_native_X_failure_resolved_in_retained_entry": true,
       "new_full_repair_started": false,
-      "current_diagnostic_failure": "Qualified zoom/X retained prefix5383frames has59 X/Y differences,0errors and no zoom/alpha differences. Native option delta discrepancy in component qualification; authored Wave/cachedTipsy omissions source-reviewed before any Igaku full1.",
+      "current_diagnostic_failure": "Native frame delta and Y/Wave fixes source-qualified and committed; retained original through78 diagnostic running. Previous prefix had30 X/29 Y differences; do not spend first full repair until actual entry reviewed.",
       "current_mismatch_operations": {
         "Actor.x": 30,
         "Actor.y": 29
       },
-      "current_zoom_alpha_mismatches": 0
+      "current_zoom_alpha_mismatches": 0,
+      "qualified_fix": "sweep-2026-10-16-native-arrow-y-selection.json"
     },
     {
       "position": 244,

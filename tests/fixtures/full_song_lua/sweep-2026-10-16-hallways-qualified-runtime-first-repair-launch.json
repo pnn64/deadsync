@@ -1,0 +1,36 @@
+{
+  "source_simfile": "Hallways/hallways.ssc",
+  "position": 220,
+  "repair_attempt": 1,
+  "native_frames": 26879,
+  "retained_entry_evidence": "sweep-2026-10-16-hallways-qualified-entry-diagnostic.json",
+  "retained_entry_frames": 3200,
+  "retained_entry_errors": 0,
+  "retained_entry_mismatches": 0,
+  "actual_running_observation": {
+    "source_simfile": "Hallways/hallways.ssc",
+    "position": 220,
+    "stage": "hallways-qualified-runtime-first1-v1",
+    "started_full_repairs": 1,
+    "completed_full_repairs": 0,
+    "running": true,
+    "observed_utc": "2026-10-16T05:25:17.187033+00:00",
+    "pid": 916661,
+    "command": [
+      "/home/parity/jobs/native-option-frame-delta-linux-green-v1/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/hallways-qualified-runtime-first1-v1/chart-220/637f3a9bc612386f5d1c68dfab22fa00670231d4a73acb798c80561de5bffcf4.tar.zst",
+      "--report",
+      "/home/parity/jobs/hallways-qualified-runtime-first1-v1/chart-220/report.json"
+    ],
+    "actual_process_command_and_cwd_verified": true,
+    "observed_replayed_frames": 12262,
+    "native_frames": 26879
+  },
+  "selected_helper": "sweep-2026-10-16-native-option-frame-delta-selection.json",
+  "native_capture_reused": true,
+  "original_uncompressed_capture_sha256": "25048708fba913d8df34db378b6e74f12d0f2fec932f41544b5fced1ca99b649",
+  "full_acceptance_criteria_unchanged": true,
+  "compressed_original_without_raw_archive_duplicate": true,
+  "accepted": false
+}
