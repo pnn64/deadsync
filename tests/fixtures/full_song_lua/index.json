@@ -2036,15 +2036,12 @@
     {
       "title": "Cursed 2",
       "source_simfile": "Cursed 2/Cursed 2.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a093d07ae1b2c57fc110365e653e0410aa14182b60b4c15772704896f4a73b51.tar.zst",
-      "sha256": "a093d07ae1b2c57fc110365e653e0410aa14182b60b4c15772704896f4a73b51",
-      "compressed_bytes": 292146,
-      "uncompressed_sha256": "47b747a83783e3f6ebdd2bc91d80635034a4596334eda9e292bd8b7f3296d515",
-      "compression_level": 22,
-      "aliases": [
-        "71923f88a9a70aead092e988e1dc8adab06b1873134cdac5c7168ac34b78c018.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "fcc9f5a12a337bd7584352c7bcdd77ff166efe332019000f010c811c79c61ef2.tar.zst",
+      "compressed_bytes": 17575219,
+      "sha256": "fcc9f5a12a337bd7584352c7bcdd77ff166efe332019000f010c811c79c61ef2",
+      "uncompressed_sha256": "a7e479e40a29cb2fa01ea8f781466ae39aa98010bf8112b6f05c929bd5b4d6dc",
+      "aliases": []
     },
     {
       "title": "Cursed Metamorph",
