@@ -2819,15 +2819,12 @@
     {
       "title": "I",
       "source_simfile": "I (Ai)/I (Ai).ssc",
-      "harness_version": "0.1.0",
-      "archive": "d8ed6352c3cf9322eb5274885f749038c4ec25dfa7f0b2a78565abcbb9d1bd72.tar.zst",
-      "sha256": "d8ed6352c3cf9322eb5274885f749038c4ec25dfa7f0b2a78565abcbb9d1bd72",
-      "compressed_bytes": 344593,
-      "uncompressed_sha256": "ac141e84c3af4b46516b07be8750f7a6ef57bf21d3e8c2cc8e101a32f2a8b4bf",
-      "compression_level": 22,
-      "aliases": [
-        "d7f467fabb54ff783a956d5c77fc81579cec011c47b56b96b40620edc31d7aab.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "506d9089f738dafdffe08188477dc7e59583d8898e190c4dc1f07498971be228.tar.zst",
+      "compressed_bytes": 8533601,
+      "sha256": "506d9089f738dafdffe08188477dc7e59583d8898e190c4dc1f07498971be228",
+      "uncompressed_sha256": "f6667882fb75d0c139b19bc56366099a9a965cb396174c08d6dc7853c413383b",
+      "aliases": []
     },
     {
       "title": "I Like To Move It (Wodda Remix)",
