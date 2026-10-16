@@ -1,0 +1,42 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "entry_evidence": "sweep-2026-10-16-hope-steps-display-entry-diagnostic.json",
+  "first_remaining_native_seq": 1232,
+  "native_owner": "ScreenGameplay/Overlay",
+  "native_children": 2,
+  "owned_children": 1,
+  "next_native_seq": 1234,
+  "native_base_overlay_children": 6,
+  "owned_corresponding_children": 0,
+  "source_cause": "The capture harness ScreenGameplay overlay.lua returns an outer ActorFrame containing the actual Simply Love overlay plus the named ITGmaniaHarnessTraceProbe ActorFrame. The original Simply Love default.lua loads FailOnHoldStart plus five per-player tracking modules; WhoIsCurrentlyWinning returns nil for a single human player. The owned Overlay branch only creates a frame with a hand-built FailOnHoldStart listener, omitting the real theme container, tracking actors and probe owner.",
+  "primary_native_theme_directory": "/home/parity/native/source-v1/Themes/Harness Simply Love/BGAnimations/ScreenGameplay overlay",
+  "primary_native_theme_sha256": {
+    "default.lua": "8c78b48fe3058b9c8ad62add6bc67f7c389110970fcee56e07339b6fb2d826d3",
+    "FailOnHoldStart.lua": "ffcd8705267aa7f299ce65970810d74de1db24c821c8a21baa6b9a547d70a269",
+    "JudgmentOffsetTracking.lua": "64903994432c38ccebdcece861c629482db9f91071fc354e1ba3980c6bb423fe",
+    "PerColumnJudgmentTracking.lua": "0f85e3cffcfb27924f3b9fa5f0a6e24a16c39ffb913d550631a8dae195c98ff0",
+    "TrackExScoreJudgments.lua": "af936b454641616c4056cc09d278f41a12dd6465d6228991cdd0e484d4da2fd1",
+    "TrackFailTime.lua": "4bdefd24f8a1b86517b3e156035b4c0beedff2a8880b626c20281c447678377c",
+    "TrackTimeSpentInGameplay.lua": "450f45ad9e1313ac530bf0a2dba8ebbc25e7b45146de692526be75a0a3440107",
+    "WhoIsCurrentlyWinning.lua": "a91dd103841387a66bb67c7ff88d20590afc960e25f0ff6c18de0c3d60e41535"
+  },
+  "primary_frozen_capture_wrapper_sha256": "e823515b341602e9811eb3eeb6006a49a5643bf80eb534e5fc7b53a41bd8653b",
+  "base_overlay_modules": [
+    "WhoIsCurrentlyWinning.lua",
+    "FailOnHoldStart.lua",
+    "TrackTimeSpentInGameplay.lua",
+    "JudgmentOffsetTracking.lua",
+    "TrackExScoreJudgments.lua",
+    "TrackFailTime.lua",
+    "PerColumnJudgmentTracking.lua"
+  ],
+  "owned_source": "crates/deadsync-song-lua/src/lua_util.rs:create_top_screen_theme_actor Overlay branch",
+  "required_repair": "Load the original theme overlay modules with their real Stats, player, message, time and Off lifecycle. Represent the captured wrapper and trace-probe ownership only as actual harness instrumentation, with independent owned observation; preserve the product theme actor tree and do not substitute child counts or native getter outputs. Validate the real resource tree and judgment/Off lifecycle before another retained HOPE diagnostic.",
+  "steps_display_fix_commit": "8d744316ad5679a61fa806eb7e218c71799965ef",
+  "steps_display_seq1186_resolved": true,
+  "full_HOPE_repairs_spent": 0,
+  "fix_added": false,
+  "source_based_counts_are_not_runtime_inputs": true,
+  "existing_acceptance_unchanged": true,
+  "passing_charts_reopened": false
+}
