@@ -6707,16 +6707,120 @@
           "edd78968adbeeef4ec51263ce6f53648200708988ce062eae24a5d0a0b80a116.tar.zst"
         ]
       }
+    },
+    {
+      "position": 440,
+      "source_simfile": "Think About You/Think About You.sm",
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-5.json",
+      "simfile_sha256": "d01ff4ef09316dc0d24520e9ae7df0c98d8f3754bcacb2aa20fef875c3c3ec99",
+      "status": "pending",
+      "previous_concrete_failure": {
+        "failure_text": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[5.2s] replaying every native gameplay frame\n[6.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[8.0s] replaying every native gameplay frame: frame 7/38435 (0.0%)\n[10.0s] replaying every native gameplay frame: frame 96/38435 (0.2%)\n[12.0s] replaying every native gameplay frame: frame 194/38435 (0.5%)\n[14.0s] replaying every native gameplay frame: frame 276/38435 (0.7%)\n[16.0s] replaying every native gameplay frame: frame 357/38435 (0.9%)\n[18.0s] replaying every native gameplay frame: frame 434/38435 (1.1%)\n[20.0s] replaying every native gameplay frame: frame 507/38435 (1.3%)\n[22.0s] replaying every native gameplay frame: frame 593/38435 (1.5%)\n[24.0s] replaying every native gameplay frame: frame 685/38435 (1.8%)\n[26.0s] replaying every native gameplay frame: frame 780/38435 (2.0%)\n[28.0s] replaying every native gameplay frame: frame 865/38435 (2.3%)\n[30.0s] replaying every native gameplay frame: frame 956/38435 (2.5%)\n[32.0s] replaying every native gameplay frame: frame 1054/38435 (2.7%)\n[34.0s] replaying every native gameplay frame: frame 1148/38435 (3.0%)\n[36.0s] replaying every native gameplay frame: frame 1249/38435 (3.2%)\n[38.0s] replaying every native gameplay frame: frame 1350/38435 (3.5%)\n[40.0s] replaying every native gameplay frame: frame 1433/38435 (3.7%)\n[42.0s] replaying every native gameplay frame: frame 1524/38435 (4.0%)\n[44.0s] replaying every native gameplay frame: frame 1615/38435 (4.2%)\n[46.0s] replaying every native gameplay frame: frame 1699/38435 (4.4%)\n[48.0s] replaying every native gameplay frame: frame 1769/38435 (4.6%)\n[50.0s] replaying every native gameplay frame: frame 1863/38435 (4.8%)\n\nthread 'main' (936293) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1474:35:\nnative gameplay replay failed: native scene 2 differs from independent scene 1 at frame 1946\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[52.0s] replaying every native gameplay frame: frame 1945/38435 (5.1%)\n[54.0s] replaying every native gameplay frame: frame 1945/38435 (5.1%)\n",
+        "callback_errors": [],
+        "mismatch_count": null,
+        "first_concrete_mismatches": [],
+        "capture_exit": null,
+        "replay_exit": 1,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "4d83f3dd94561b2692bf707deabd410195c3268a8db55c919863bc548245ef34",
+      "retained_candidate": "/home/parity/jobs/chart-sweep-parallel-v5-5/chart-440/private-candidate.tar.zst",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 1,
+      "replay_exit": 1,
+      "replay_seconds": 15.287076207983773,
+      "failure_text": "[2.0s] : 0 checks completed, 0 failed\n[3.9s] replaying every native gameplay frame\n[4.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[6.0s] replaying every native gameplay frame: frame 409/38435 (1.1%)\n[8.0s] replaying every native gameplay frame: frame 1435/38435 (3.7%)\n\nthread 'main' (1432274) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1483:35:\nnative gameplay replay failed: native scene 2 differs from independent scene 1 at frame 1946\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 441,
+      "source_simfile": "Think About You/Think About You.ssc",
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-6.json",
+      "simfile_sha256": "7e1f7c8e92dafb3603c470d852b1a8b46b7bae33693e0093760b0d9aff079e1c",
+      "status": "pending",
+      "previous_concrete_failure": {
+        "failure_text": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[5.9s] replaying every native gameplay frame\n[6.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[8.0s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[10.0s] replaying every native gameplay frame: frame 0/45828 (0.0%)\n[12.0s] replaying every native gameplay frame: frame 85/45828 (0.2%)\n[14.0s] replaying every native gameplay frame: frame 174/45828 (0.4%)\n[16.0s] replaying every native gameplay frame: frame 263/45828 (0.6%)\n[18.0s] replaying every native gameplay frame: frame 350/45828 (0.8%)\n[20.0s] replaying every native gameplay frame: frame 433/45828 (0.9%)\n[22.0s] replaying every native gameplay frame: frame 517/45828 (1.1%)\n[24.0s] replaying every native gameplay frame: frame 597/45828 (1.3%)\n[26.0s] replaying every native gameplay frame: frame 681/45828 (1.5%)\n[28.0s] replaying every native gameplay frame: frame 766/45828 (1.7%)\n[30.0s] replaying every native gameplay frame: frame 850/45828 (1.9%)\n[32.0s] replaying every native gameplay frame: frame 933/45828 (2.0%)\n[34.0s] replaying every native gameplay frame: frame 1017/45828 (2.2%)\n[36.0s] replaying every native gameplay frame: frame 1100/45828 (2.4%)\n[38.0s] replaying every native gameplay frame: frame 1183/45828 (2.6%)\n[40.0s] replaying every native gameplay frame: frame 1269/45828 (2.8%)\n[42.0s] replaying every native gameplay frame: frame 1346/45828 (2.9%)\n[44.0s] replaying every native gameplay frame: frame 1426/45828 (3.1%)\n[46.0s] replaying every native gameplay frame: frame 1510/45828 (3.3%)\n[48.0s] replaying every native gameplay frame: frame 1594/45828 (3.5%)\n[50.0s] replaying every native gameplay frame: frame 1681/45828 (3.7%)\n[52.0s] replaying every native gameplay frame: frame 1763/45828 (3.8%)\n\nthread 'main' (166893) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native scene 2 differs from independent scene 1 at frame 1797\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[54.0s] replaying every native gameplay frame: frame 1796/45828 (3.9%)\n",
+        "callback_errors": [],
+        "mismatch_count": null,
+        "first_concrete_mismatches": [],
+        "capture_exit": null,
+        "replay_exit": 1,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "8efb7944c12e4ca9ae490961d36e8f6a70d0807a3a9de6b5679241838e339759",
+      "retained_candidate": "/home/parity/jobs/chart-sweep-parallel-v5-6/chart-441/private-candidate.tar.zst",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 1,
+      "replay_exit": 1,
+      "replay_seconds": 19.48456095805159,
+      "failure_text": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[4.6s] replaying every native gameplay frame\n[6.0s] replaying every native gameplay frame: frame 0/45828 (0.0%)\n[8.0s] replaying every native gameplay frame: frame 489/45828 (1.1%)\n[10.0s] replaying every native gameplay frame: frame 1117/45828 (2.4%)\n[12.0s] replaying every native gameplay frame: frame 1785/45828 (3.9%)\n\nthread 'main' (1432399) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1483:35:\nnative gameplay replay failed: native scene 2 differs from independent scene 1 at frame 1797\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "position": 176,
+      "source_simfile": "Do the Mario/DoTheMario.ssc",
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-12-results.json",
+      "simfile_sha256": "ace2cdc3c9f05db78b6fc00695724a97a41f26ea393ad1a8e17aa6df6dafbe00",
+      "status": "passed",
+      "previous_concrete_failure": {
+        "failure_text": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[4.4s] replaying every native gameplay frame\n[6.0s] replaying every native gameplay frame: frame 133/26388 (0.5%)\n[8.0s] replaying every native gameplay frame: frame 457/26388 (1.7%)\n[10.0s] replaying every native gameplay frame: frame 774/26388 (2.9%)\n[12.0s] replaying every native gameplay frame: frame 1105/26388 (4.2%)\n[14.0s] replaying every native gameplay frame: frame 1443/26388 (5.5%)\n[16.0s] replaying every native gameplay frame: frame 1780/26388 (6.7%)\n[18.0s] replaying every native gameplay frame: frame 2112/26388 (8.0%)\n[20.0s] replaying every native gameplay frame: frame 2443/26388 (9.3%)\n[22.0s] replaying every native gameplay frame: frame 2760/26388 (10.5%)\n[24.0s] replaying every native gameplay frame: frame 3093/26388 (11.7%)\n[26.0s] replaying every native gameplay frame: frame 3409/26388 (12.9%)\n[28.0s] replaying every native gameplay frame: frame 3722/26388 (14.1%)\n[30.0s] replaying every native gameplay frame: frame 4029/26388 (15.3%)\n[32.0s] replaying every native gameplay frame: frame 4331/26388 (16.4%)\n[34.0s] replaying every native gameplay frame: frame 4638/26388 (17.6%)\n[36.0s] replaying every native gameplay frame: frame 4985/26388 (18.9%)\n[38.0s] replaying every native gameplay frame: frame 5313/26388 (20.1%)\n[40.0s] replaying every native gameplay frame: frame 5633/26388 (21.3%)\n[42.0s] replaying every native gameplay frame: frame 5981/26388 (22.7%)\n[44.0s] replaying every native gameplay frame: frame 6313/26388 (23.9%)\n[46.0s] replaying every native gameplay frame: frame 6656/26388 (25.2%)\n[48.0s] replaying every native gameplay frame: frame 6990/26388 (26.5%)\n[50.0s] replaying every native gameplay frame: frame 7326/26388 (27.8%)\n[52.0s] replaying every native gameplay frame: frame 7650/26388 (29.0%)\n[54.0s] replaying every native gameplay frame: frame 7962/26388 (30.2%)\n[56.0s] replaying every native gameplay frame: frame 8242/26388 (31.2%)\n[58.0s] replaying every native gameplay frame: frame 8519/26388 (32.3%)\n\nthread 'main' (530864) panicked at tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs:1466:35:\nnative gameplay replay failed: native scene has no instantiated actor root\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[60.0s] replaying every native gameplay frame: frame 8621/26388 (32.7%)\n",
+        "callback_errors": [],
+        "mismatch_count": null,
+        "first_concrete_mismatches": [],
+        "capture_exit": null,
+        "replay_exit": 1,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "f00e9ca96fd6527a6eaad2f7412b3bc04814545940bd623b81156ed204ef1157",
+      "retained_candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-176/private-candidate.tar.zst",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 1,
+      "replay_exit": 0,
+      "replay_seconds": 77.99403896299191,
+      "native_frames": 26388,
+      "replayed_frames": 26388,
+      "compared_stage_fields": 682,
+      "archive_accepted": true,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "8218556a83e51f3bb6521659141815944059cfb9b060ccebe2067bf6dd7bde3b",
+      "archive": "ca27e465c3274701e6c170ed02e8791bcd7bd785b2ad34d1793c937bc18c25d3.tar.zst",
+      "archive_sha256": "ca27e465c3274701e6c170ed02e8791bcd7bd785b2ad34d1793c937bc18c25d3",
+      "compressed_bytes": 11350506,
+      "harness_version": "0.1.80",
+      "title": "Do the mario",
+      "complete_uncompressed_replay_passed": true,
+      "decoded_packed_bytes_verified": true,
+      "local_decompressed_bytes_verified": true,
+      "retained_previous_entry": {
+        "title": "Do the mario",
+        "source_simfile": "Do the Mario/DoTheMario.ssc",
+        "harness_version": "0.1.0",
+        "archive": "8d83d5f88b577713e61cf88223deed22b3146bcb073f2e34baa1499cc87a27b6.tar.zst",
+        "sha256": "8d83d5f88b577713e61cf88223deed22b3146bcb073f2e34baa1499cc87a27b6",
+        "compressed_bytes": 27401,
+        "uncompressed_sha256": "b9fc64f2a859c6222b8ced0b450d1cd6ea98a5d9539ade963e7ed6b63143408b",
+        "compression_level": 22,
+        "aliases": [
+          "450be6c7a13ffc2987ac898dd89b57de7a8047a466b637bbd1d7893f1342b6af.tar.zst"
+        ]
+      }
     }
   ],
   "counts": {
-    "passed_fixtures": 408,
-    "pending_charts": 92,
+    "passed_fixtures": 409,
+    "pending_charts": 91,
     "ignored_charts": 1,
-    "new_passing_fixtures": 4,
-    "recorded_outcomes": 47
+    "new_passing_fixtures": 5,
+    "recorded_outcomes": 50
   },
-  "updated_utc": "2026-10-16T22:12:53Z",
+  "updated_utc": "2026-10-16T22:14:20Z",
   "reopened": [
     {
       "source_simfile": "7th Gear/7th Gear.ssc",

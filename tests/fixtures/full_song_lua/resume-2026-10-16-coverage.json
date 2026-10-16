@@ -60,6 +60,36 @@
         "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
         "missing captured subscriber identity for ScreenGameplay/2/9/1"
       ]
+    },
+    "Do the Mario/DoTheMario.ssc": {
+      "source_simfile": "Do the Mario/DoTheMario.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY",
+        "native drawable state/resources: Quad",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/3/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/3/3",
+        "missing captured subscriber identity for ScreenGameplay/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/5/4",
+        "missing captured subscriber identity for ScreenGameplay/2/7/1",
+        "missing captured subscriber identity for ScreenGameplay/2/7/2",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/2/9/2"
+      ]
     }
   }
 }

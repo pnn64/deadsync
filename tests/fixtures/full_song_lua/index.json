@@ -2224,15 +2224,12 @@
     {
       "title": "Do the mario",
       "source_simfile": "Do the Mario/DoTheMario.ssc",
-      "harness_version": "0.1.0",
-      "archive": "8d83d5f88b577713e61cf88223deed22b3146bcb073f2e34baa1499cc87a27b6.tar.zst",
-      "sha256": "8d83d5f88b577713e61cf88223deed22b3146bcb073f2e34baa1499cc87a27b6",
-      "compressed_bytes": 27401,
-      "uncompressed_sha256": "b9fc64f2a859c6222b8ced0b450d1cd6ea98a5d9539ade963e7ed6b63143408b",
-      "compression_level": 22,
-      "aliases": [
-        "450be6c7a13ffc2987ac898dd89b57de7a8047a466b637bbd1d7893f1342b6af.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "ca27e465c3274701e6c170ed02e8791bcd7bd785b2ad34d1793c937bc18c25d3.tar.zst",
+      "compressed_bytes": 11350506,
+      "sha256": "ca27e465c3274701e6c170ed02e8791bcd7bd785b2ad34d1793c937bc18c25d3",
+      "uncompressed_sha256": "f00e9ca96fd6527a6eaad2f7412b3bc04814545940bd623b81156ed204ef1157",
+      "aliases": []
     },
     {
       "title": "45|HALF|[MASTER] Tacos",
