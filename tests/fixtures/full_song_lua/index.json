@@ -2273,15 +2273,12 @@
     {
       "title": "e",
       "source_simfile": "E2/E.sm",
-      "harness_version": "0.1.0",
-      "archive": "7df9c9273aca0859f6f5764ed321dbec99b7f46a1ce02f2b78b2fb828cb089b1.tar.zst",
-      "sha256": "7df9c9273aca0859f6f5764ed321dbec99b7f46a1ce02f2b78b2fb828cb089b1",
-      "compressed_bytes": 879179,
-      "uncompressed_sha256": "005aea6eae2972445f7ae3962dca9a562970eea534417abe3271ba133675e427",
-      "compression_level": 22,
-      "aliases": [
-        "7ffd3a0c4cce571badcfa6fa49618ce2699de44042034e859e6aefe661e2018d.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "7f30cbfeb809c75e2819ea28574deb6970ac876e217d51c84967dc3b2666d674.tar.zst",
+      "sha256": "7f30cbfeb809c75e2819ea28574deb6970ac876e217d51c84967dc3b2666d674",
+      "compressed_bytes": 50885165,
+      "uncompressed_sha256": "84c0708abf6202bee66e3adbe20afc036f3a0b4c42efbbb378dfce77b71d0dec",
+      "aliases": []
     },
     {
       "title": "e",

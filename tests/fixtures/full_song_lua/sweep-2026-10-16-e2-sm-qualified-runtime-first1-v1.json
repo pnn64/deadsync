@@ -1,0 +1,97 @@
+{
+  "status": "running",
+  "acceptance": "full replay of existing implemented comparisons",
+  "repair_limit_per_chart": 2,
+  "fix_commit": "1d3b83abed5560a9bb73eae09e83a3ea13da63ee",
+  "results": [
+    {
+      "position": 180,
+      "source_simfile": "E2/E.sm",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "84c0708abf6202bee66e3adbe20afc036f3a0b4c42efbbb378dfce77b71d0dec",
+      "trace_sha256": "7e357a69c3ade5912ebf6f5b8f5986eb9e95382e61d0f386ea80fa8716ced8cb",
+      "simfile_sha256": "b2e21515ee37ecb1864d13ce2b81681163e3e2b50b74ba25b1f41e0674c2af1b",
+      "binary_sha256": "a785438f8c9bbdf891c31f903e76cb7a901cd2025abfe9f1eb30a791ce825a66",
+      "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+      "fix_commit": "1d3b83abed5560a9bb73eae09e83a3ea13da63ee",
+      "build_proof": "/home/parity/jobs/native-arrow-zoom-linux-green-v1/proof.json",
+      "native_capture_reused": true,
+      "all_candidate_manifest_members_byte_verified": true,
+      "no_query_outputs_used_as_inputs": true,
+      "full_acceptance_criteria_unchanged": true,
+      "same_original_Lua_as_fully_passing_SSC": {
+        "source_simfile": "E2/E.sm",
+        "passing_peer": "E2/E.ssc",
+        "all5_lua_files_byte_identical": true,
+        "lua_sha256": {
+          "song/lua/default.lua": "62987b48fb232e37ba6eb9233264a131f44ac3e87aa0f76b289680f267248ffc",
+          "song/lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+          "song/lua/modhelpers.lua": "3cfa9489d4ff586f21a7d28fa6accbdb7a2c4891e2a6617fc310c5aef850a1ff",
+          "song/lua/mods.lua": "95c4fa4ae31002e4d8cd4d2d838eb174fff6a8932ccc404267c9f3bc33cbec5e",
+          "song/lua/multitap_data.lua": "7228cc6d7f90c148678688fa8656dd48622de99ee94379cd9fe62a39b1c5ff44"
+        }
+      },
+      "previous_failure": {
+        "mismatches": 269809,
+        "first_field": "command_query_count",
+        "report_sha256": "9ee5d91b9a667e5c6beca67cd776d11d8c5dc8a7c858cdd7dd1a7650e79f7c04"
+      },
+      "compressed_original_replayed_without_raw_archive_duplicate": true,
+      "capture_repeated": false,
+      "mawaru9_remains_deferred": true,
+      "replay_exit": 0,
+      "replay_seconds": 2125.572752168984,
+      "native_frames": 14578,
+      "replayed_frames": 14578,
+      "compared_stage_fields": 1166,
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.SetHeight, Actor.SetTextureFiltering, Actor.SetWidth, Actor.addrotationz, Actor.baserotationz, Actor.bob, Actor.bounce, Actor.effectclock, Actor.effectoffset, Actor.rotationx, Actor.rotationy, Actor.smooth, Actor.stopeffect, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.SetTextureName, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.SetStateProperties, Sprite.setstate",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Model, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ],
+      "archive_accepted": true,
+      "errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "ca711134140315ff92f276c2e7bc0d6057ad3bdf88ea0d9219292396bca711ca",
+      "archive": "7f30cbfeb809c75e2819ea28574deb6970ac876e217d51c84967dc3b2666d674.tar.zst",
+      "archive_sha256": "7f30cbfeb809c75e2819ea28574deb6970ac876e217d51c84967dc3b2666d674",
+      "compressed_bytes": 50885165,
+      "harness_version": "0.1.80",
+      "title": "e",
+      "accepted_compressed_input_preserved_byte_identically": true,
+      "replay_input_compressed_sha256": "7f30cbfeb809c75e2819ea28574deb6970ac876e217d51c84967dc3b2666d674",
+      "retained_original_entry": {
+        "title": "e",
+        "source_simfile": "E2/E.sm",
+        "harness_version": "0.1.0",
+        "archive": "7df9c9273aca0859f6f5764ed321dbec99b7f46a1ce02f2b78b2fb828cb089b1.tar.zst",
+        "sha256": "7df9c9273aca0859f6f5764ed321dbec99b7f46a1ce02f2b78b2fb828cb089b1",
+        "compressed_bytes": 879179,
+        "uncompressed_sha256": "005aea6eae2972445f7ae3962dca9a562970eea534417abe3271ba133675e427",
+        "compression_level": 22,
+        "aliases": [
+          "7ffd3a0c4cce571badcfa6fa49618ce2699de44042034e859e6aefe661e2018d.tar.zst"
+        ]
+      },
+      "local_archive_verified": true
+    }
+  ],
+  "binary_sha256": "a785438f8c9bbdf891c31f903e76cb7a901cd2025abfe9f1eb30a791ce825a66",
+  "harness_sha256": "058ed059a96293a48bf0714e0f355b9e853bdcca8350f43e9e57f88b65996dd4",
+  "repair": "E2 SM bounded first repair with source-qualified runtime including native nonfinite scalars and ending samples",
+  "passed_fixtures": 1,
+  "pending_charts": 0,
+  "processed_charts": 1
+}
