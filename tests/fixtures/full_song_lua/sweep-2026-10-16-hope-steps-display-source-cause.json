@@ -1,10 +1,10 @@
 {
   "source_simfile": "HOPE/HOPE.ssc",
-  "entry_evidence": "sweep-2026-10-16-hope-note-field-container-entry-diagnostic.json",
+  "entry_evidence": "sweep-2026-10-16-hope-steps-display-entry-diagnostic.json",
   "entry_frames": 1688,
   "entry_errors": 0,
   "entry_mismatches": 20473,
-  "first_remaining_native_seq": 1186,
+  "first_remaining_native_seq": 1232,
   "first_remaining_mismatch": {
     "field": "command_query_event",
     "native": {
@@ -113,8 +113,13 @@
   "owned_source": "crates/deadsync-song-lua/src/lua_util.rs:create_top_screen_theme_actor, top_screen_steps_display_index branch",
   "note_field_seq1024_resolved": true,
   "note_field_fix_commit": "9b9ce0d089e584bf2094d282e5bfe838a2e19811",
-  "fix_added": false,
+  "fix_added": true,
   "full_HOPE_repairs_spent": 0,
   "captured_query_outputs_used_as_runtime_inputs": false,
-  "next_action": "Materialize the real named native children/resources and metric Load/On/Set commands, using selected Steps/GameState data and normal ownership/current-song/public StepsDisplay lifecycle. Add meaningful inventory/resource/data/lifecycle regression and qualify from the next committed helper. Do not substitute child counts or captured getter values."
+  "next_action": "Materialize the real named native children/resources and metric Load/On/Set commands, using selected Steps/GameState data and normal ownership/current-song/public StepsDisplay lifecycle. Add meaningful inventory/resource/data/lifecycle regression and qualify from the next committed helper. Do not substitute child counts or captured getter values.",
+  "fix_commit": "8d744316ad5679a61fa806eb7e218c71799965ef",
+  "seven_groups_both_hosts_passed": true,
+  "native_text_and_utf8_helpers_preserved": true,
+  "real_steps_IsAutogen_exposed": true,
+  "seq1186_resolved": true
 }

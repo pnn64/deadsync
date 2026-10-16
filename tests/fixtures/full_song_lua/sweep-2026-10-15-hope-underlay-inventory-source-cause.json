@@ -1,10 +1,10 @@
 {
   "source_simfile": "HOPE/HOPE.ssc",
-  "entry_evidence": "sweep-2026-10-16-hope-note-field-container-entry-diagnostic.json",
+  "entry_evidence": "sweep-2026-10-16-hope-steps-display-entry-diagnostic.json",
   "entry_frames": 1688,
   "entry_errors": 0,
-  "entry_mismatches": 20473,
-  "first_remaining_native_seq": 1186,
+  "entry_mismatches": 20478,
+  "first_remaining_native_seq": 1232,
   "native_underlay_child_count": 10,
   "owned_underlay_child_count": 10,
   "native_direct_children": [
@@ -321,7 +321,7 @@
   "latest_observed_failure": {
     "field": "command_query_event",
     "native": {
-      "actor": "external-0041",
+      "actor": "external-0042",
       "args": [],
       "beat": -15.99990177154541,
       "caller": {
@@ -332,12 +332,9 @@
       "command": "OnCommand",
       "definition_id": "def-0002",
       "detail": {
-        "native_tween_time_left": {
-          "type": "number",
-          "value": "infinity"
-        },
+        "native_tween_time_left": 0,
         "results": [
-          4
+          2
         ]
       },
       "kind": "query",
@@ -346,10 +343,10 @@
       "phase": "callback",
       "scene": 1,
       "seconds": -4.08297061920166,
-      "seq": 1186,
+      "seq": 1232,
       "source": "song:/sm5/modules/grabactors.lua",
       "results": [
-        4
+        2
       ]
     },
     "deadsync": {
@@ -363,7 +360,7 @@
       "seconds": -4.08297061920166,
       "args": [],
       "results": [
-        0
+        1
       ]
     }
   }

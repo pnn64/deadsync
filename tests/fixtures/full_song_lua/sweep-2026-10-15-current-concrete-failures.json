@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-16T01:40:30Z",
+  "updated_utc": "2026-10-16T01:58:12Z",
   "counts": {
     "passed": 400,
     "pending": 101,
@@ -5014,7 +5014,7 @@
           ],
           "report_sha256": "c065258410e6b4457cfc0ceab1ab24ac1deef68d719a1ddf34bc210c7587c0a9"
         },
-        "checked_utc": "2026-10-16T01:40:30.805603+00:00"
+        "checked_utc": "2026-10-16T01:58:13.254148+00:00"
       },
       "current_diagnostic_failure": "First1 pending513:510 nonfinite actor scalar command mismatches; ending native music clock rewinds on final frame. Comparator consumes both ending samples at preceding overshoot because only progress observations are frame-anchored. Source cause now recorded; no final2 before both fixes are qualified.",
       "full_replay_completed": true,
@@ -6590,7 +6590,7 @@
         "started_full_repairs": 1,
         "completed_full_repairs": 0,
         "running": true,
-        "observed_utc": "2026-10-16T01:40:31.280842+00:00",
+        "observed_utc": "2026-10-16T01:58:13.669210+00:00",
         "pid": 3438441,
         "command": [
           "/home/parity/jobs/native-float-math-linux-green-v3/full-song-lua",
@@ -7872,18 +7872,18 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-16-hope-note-field-container-entry-diagnostic.json",
+      "followup": "sweep-2026-10-16-hope-steps-display-entry-diagnostic.json",
       "source_cause": "sweep-2026-10-15-hope-cancel-source-cause.json",
       "entry_diagnostic_frames": 1688,
       "entry_diagnostic_errors": 0,
-      "entry_diagnostic_mismatches": 20473,
+      "entry_diagnostic_mismatches": 20478,
       "archive_namespace_startup_error_cleared_in_diagnostic": true,
       "native_trace_and_all_original_member_bytes_unchanged": true,
       "original_terminal_full_result_preserved": true,
       "new_full_repair_started": false,
       "cancel_child_missing_failure_fixed_by": "c71cc5f319cd5b950b6ce107ec23f65772062260",
-      "remaining_source_cause": "sweep-2026-10-16-hope-steps-display-source-cause.json",
-      "current_diagnostic_failure": "Native seq1186 StepsDisplayP1 GetNumChildren4/owned0. Native StepsDisplay::Load and primary theme metrics require Frame/Meter/Description/Autogen; current owned branch is an empty ActorFrame subtype. NoteField1024 is fixed.",
+      "remaining_source_cause": null,
+      "current_diagnostic_failure": "Retained entry after qualified real StepsDisplay; inspect actual first remaining comparison before attributing its source cause.",
       "diagnostic_only_not_full_acceptance": true,
       "quad_default_texture_fix_commit": "b54321aa6c7eee2671a4da8c6a999da4eaa1a670",
       "quad_texture_all_sixteen_groups_both_hosts_passed": true,
@@ -7913,7 +7913,8 @@
       "danger_texture_seq965_resolved": true,
       "song_meter_seq979_resolved": true,
       "note_field_container_seq1024_resolved": true,
-      "first_remaining_native_seq": 1186
+      "first_remaining_native_seq": 1232,
+      "steps_display_seq1186_resolved": true
     },
     {
       "position": 230,
@@ -23799,7 +23800,7 @@
           ],
           "report_sha256": "835ddbdaa434e29c5c07469bc80c28b279f1e7e817f17f89fe45ba98f7bbf617"
         },
-        "checked_utc": "2026-10-16T01:40:31.706780+00:00"
+        "checked_utc": "2026-10-16T01:58:14.076837+00:00"
       },
       "current_diagnostic_failure": "Retained5474frames/0errors/16mismatches. Capture build pins offset-first TimingData.cpp e93614b8, while committed clock/regression used newer local offset-last340a5684. Independent float queue models reproduce every native and owned frame count for all6 active roses. Correct source reference/offset placement before final2.",
       "full_replay_completed": true,
