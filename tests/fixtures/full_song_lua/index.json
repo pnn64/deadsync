@@ -2387,15 +2387,12 @@
     {
       "title": "flowers",
       "source_simfile": "flowers [R.I.G.H.T.S]/flowers.ssc",
-      "harness_version": "0.1.0",
-      "archive": "1e3f1e28b29d56eca62ce7c2fd0fb5efbf5960616c2975e0e7137a7b0d177abf.tar.zst",
-      "sha256": "1e3f1e28b29d56eca62ce7c2fd0fb5efbf5960616c2975e0e7137a7b0d177abf",
-      "compressed_bytes": 808352,
-      "uncompressed_sha256": "d50435391f36ed4d9a9781b01339f96ef243504789759c0b2a262ed25353710f",
-      "compression_level": 22,
-      "aliases": [
-        "06173257978408c0243052f0ed43304c074ab4304da42111b16c6479b7acabbd.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "8e9849d0cb9f793c1282fd9efda26ed737bb286ffe4fffc40dc5270ec2525e21.tar.zst",
+      "compressed_bytes": 17218736,
+      "sha256": "8e9849d0cb9f793c1282fd9efda26ed737bb286ffe4fffc40dc5270ec2525e21",
+      "uncompressed_sha256": "98832f99930a5a4d037c7156c60dae2791685d683269e6aa3946d95a58f5a7c3",
+      "aliases": []
     },
     {
       "title": "flowers",
