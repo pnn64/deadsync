@@ -1,7 +1,7 @@
 {
   "scope": "all501 original source simfiles",
   "complete": false,
-  "updated_utc": "2026-10-16T02:43:44Z",
+  "updated_utc": "2026-10-16T03:00:08Z",
   "counts": {
     "passed": 401,
     "pending": 100,
@@ -4437,14 +4437,14 @@
       "capture_errors": null,
       "completion": null,
       "no_third_full_repair": false,
-      "followup": "sweep-2026-10-16-e2-ssc-qualified-first-repair-v1.json",
+      "followup": "sweep-2026-10-16-e2-ssc-nonfinite-final-repair-launch.json",
       "entry_evidence": "sweep-2026-10-16-e2-ssc-qualified-entry-diagnostic.json",
       "entry_diagnostic_frames": 4914,
       "entry_diagnostic_errors": 0,
       "entry_diagnostic_mismatches": 0,
       "entry_does_not_compare_broadcasts": true,
       "started_full_repairs": 1,
-      "new_full_repair_started": false,
+      "new_full_repair_started": true,
       "actual_running_observation": {
         "source_simfile": "E2/E.ssc",
         "attempt_started": 1,
@@ -5014,13 +5014,14 @@
           ],
           "report_sha256": "c065258410e6b4457cfc0ceab1ab24ac1deef68d719a1ddf34bc210c7587c0a9"
         },
-        "checked_utc": "2026-10-16T02:43:45.868520+00:00"
+        "checked_utc": "2026-10-16T03:00:09.457892+00:00"
       },
-      "current_diagnostic_failure": "First1 pending513:510 nonfinite actor scalar command mismatches; ending native music clock rewinds on final frame. Comparator consumes both ending samples at preceding overshoot because only progress observations are frame-anchored. Source cause now recorded; no final2 before both fixes are qualified.",
+      "current_diagnostic_failure": "Both actual first-repair causes now source-fixed and qualified on both hosts. Bounded final2 running on original14142frame capture; whole acceptance unproven until terminal.",
       "full_replay_completed": true,
       "failure_analysis": "sweep-2026-10-16-e2-ssc-first-repair-failure-analysis.json",
       "remaining_source_cause": "sweep-2026-10-16-e2-ssc-nonfinite-actor-source-cause.json",
-      "ending_clock_source_cause": "sweep-2026-10-16-e2-ssc-ending-observer-source-cause.json"
+      "ending_clock_source_cause": "sweep-2026-10-16-e2-ssc-ending-observer-source-cause.json",
+      "full_repairs_started": 2
     },
     {
       "position": 190,
@@ -22942,7 +22943,7 @@
           ],
           "report_sha256": "835ddbdaa434e29c5c07469bc80c28b279f1e7e817f17f89fe45ba98f7bbf617"
         },
-        "checked_utc": "2026-10-16T02:43:46.300336+00:00"
+        "checked_utc": "2026-10-16T03:00:09.887264+00:00"
       },
       "current_diagnostic_failure": "Captured-source offset-first clock resolves retained5474-frame entry. Final2 running on original capture; whole acceptance unproven until terminal.",
       "full_replay_completed": true,

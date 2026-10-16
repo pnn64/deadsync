@@ -1,0 +1,37 @@
+{
+  "source_simfile": "E2/E.ssc",
+  "position": 181,
+  "repair_attempt": 2,
+  "native_frames": 14142,
+  "previous_full_repair_frames": 14142,
+  "previous_full_mismatches": 513,
+  "previous_full_errors": 0,
+  "fix_commit": "ebe0178ea1b8114c096bb3cb48135e4fe50dbd65",
+  "binary_sha256": "ec5858b0e4c8d56f726ca178eb50b9bf3d3d4c8d4f9087dd0614d906f900c75a",
+  "native_capture_reused": true,
+  "original_capture_uncompressed_sha256": "d60efe1f8247f06f3aed627bf455708ff485fb98d38899c2ceec8773ba71a9e6",
+  "all_seven_groups_both_hosts_passed": true,
+  "meaningful_actor_and_ending_observer_red_cases_both_hosts": true,
+  "all_prior_108_live_and_43_replay_assertions_unchanged": true,
+  "full_acceptance_criteria_unchanged": true,
+  "actual_running_observation": {
+    "source_simfile": "E2/E.ssc",
+    "position": 181,
+    "stage": "e2-ssc-nonfinite-final2-v1",
+    "started_full_repairs": 2,
+    "completed_full_repairs": 1,
+    "running": true,
+    "observed_utc": "2026-10-16T03:00:01.930282+00:00",
+    "pid": 4136779,
+    "command": [
+      "/home/parity/jobs/e2-nonfinite-end-linux-green-v4/full-song-lua",
+      "--archive",
+      "/home/parity/jobs/e2-ssc-nonfinite-final2-v1/chart-181/d60efe1f8247f06f3aed627bf455708ff485fb98d38899c2ceec8773ba71a9e6.tar",
+      "--report",
+      "/home/parity/jobs/e2-ssc-nonfinite-final2-v1/chart-181/report.json"
+    ],
+    "actual_process_command_and_cwd_verified": true
+  },
+  "accepted": false,
+  "no_third_full_repair": true
+}
