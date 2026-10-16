@@ -1,0 +1,15 @@
+{
+  "source_causes": [
+    "sweep-2026-10-16-e2-ssc-nonfinite-actor-source-cause.json",
+    "sweep-2026-10-16-e2-ssc-ending-observer-source-cause.json"
+  ],
+  "production_change": "Preserve native numeric NaN/infinity in Actor scalar property setters and immediate reads, including a later actor in the same update. Preserve existing validation for durations and other inputs.",
+  "observer_change": "Use recorded frame order for ending stage observations, retaining both ending samples when the final native music clock rewinds. Preserve all compared fields, clock tolerances, sample coverage requirements and whole-song acceptance.",
+  "all_prior_108_live_and_43_replay_assertions_unchanged": true,
+  "six_property_parsing_sites_reviewed": true,
+  "prior_position_and_tween_queue_semantics_unchanged": true,
+  "retired_green2_and_green3_failed_unchanged_target_assertion_and_were_not_selected": true,
+  "captured_stage_values_used_as_runtime_inputs": false,
+  "full_E2_SSC_repairs_spent": 1,
+  "final2_started": false
+}

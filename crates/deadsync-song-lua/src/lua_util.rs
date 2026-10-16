@@ -6470,6 +6470,12 @@ pub fn make_actor_set_size_method(lua: &Lua, actor: &Table) -> mlua::Result<Func
     })
 }
 
+// Actor.cpp's FArg property setters narrow Lua numbers to float without
+// discarding NaN or infinity. Keep duration and other validated inputs on read_f32.
+fn read_actor_scalar_f32(value: Value) -> Option<f32> {
+    match value { Value::Number(value) => Some(value as f32), other => read_f32(other) }
+}
+
 pub fn make_actor_capture_f32_method(
     lua: &Lua,
     actor: &Table,
@@ -6481,7 +6487,7 @@ pub fn make_actor_capture_f32_method(
         if let Some(probe_name) = probe_name {
             record_probe_method_call(lua, &actor, probe_name)?;
         }
-        if let Some(value) = value.and_then(read_f32) {
+        if let Some(value) = value.and_then(read_actor_scalar_f32) {
             capture_block_set_f32(lua, &actor, key, value)?;
         }
         Ok(actor.clone())
@@ -7383,7 +7389,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
             let actor = actor.clone();
             move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                 record_probe_method_call(lua, &actor, "x")?;
-                if let Some(value) = value.and_then(read_f32) {
+                if let Some(value) = value.and_then(read_actor_scalar_f32) {
                     capture_block_set_f32(lua, &actor, "x", value)?;
                 }
                 Ok(actor.clone())
@@ -7396,7 +7402,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
             let actor = actor.clone();
             move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                 record_probe_method_call(lua, &actor, "y")?;
-                if let Some(value) = value.and_then(read_f32) {
+                if let Some(value) = value.and_then(read_actor_scalar_f32) {
                     capture_block_set_f32(lua, &actor, "y", value)?;
                 }
                 Ok(actor.clone())
@@ -7734,7 +7740,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
             let actor = actor.clone();
             move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                 record_probe_method_call(lua, &actor, "zoom")?;
-                if let Some(value) = value.and_then(read_f32) {
+                if let Some(value) = value.and_then(read_actor_scalar_f32) {
                     capture_block_set_f32(lua, &actor, "zoom", value)?;
                     capture_block_set_zoom_axes(lua, &actor, value, "zoom_x", "zoom_y", "zoom_z")?;
                     actor_update_text_pre_zoom_flags(lua, &actor, true, true)?;
@@ -8454,7 +8460,7 @@ pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Resu
             let actor = actor.clone();
             move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                 record_probe_method_call(lua, &actor, "zoomx")?;
-                if let Some(value) = value.and_then(read_f32) {
+                if let Some(value) = value.and_then(read_actor_scalar_f32) {
                     capture_block_set_f32(lua, &actor, "zoom_x", value)?;
                     actor_update_text_pre_zoom_flags(lua, &actor, true, false)?;
                 }
@@ -8468,7 +8474,7 @@ pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Resu
             let actor = actor.clone();
             move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                 record_probe_method_call(lua, &actor, "zoomy")?;
-                if let Some(value) = value.and_then(read_f32) {
+                if let Some(value) = value.and_then(read_actor_scalar_f32) {
                     capture_block_set_f32(lua, &actor, "zoom_y", value)?;
                     actor_update_text_pre_zoom_flags(lua, &actor, false, true)?;
                 }

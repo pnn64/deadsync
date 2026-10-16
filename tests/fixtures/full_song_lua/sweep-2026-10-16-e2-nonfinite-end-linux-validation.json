@@ -1,0 +1,74 @@
+{
+  "source_root": "/home/parity/workspace/e2-nonfinite-end-green-v4/deadsync",
+  "binary_sha256": "ec5858b0e4c8d56f726ca178eb50b9bf3d3d4c8d4f9087dd0614d906f900c75a",
+  "checks": [
+    {
+      "label": "actor-target",
+      "exit_code": 0,
+      "seconds": 284.1552507390152,
+      "log_sha256": "14fbcc1c71369f1fdc186c92e49985d9f8727b5700f81d22a17653ce183023d3",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 645 filtered out; finished in 0.34s"
+      ]
+    },
+    {
+      "label": "observer-target",
+      "exit_code": 0,
+      "seconds": 205.88842266699066,
+      "log_sha256": "d01cd88bb08eef0097f9483945f53a86b94d90123afa59b0c314d6f8c58b9b7a",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 345 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 38.02459023403935,
+      "log_sha256": "6a52ec4bbd544134b473af174940364e0ce5d4efa5de73af2e87000a29d90519",
+      "results": [
+        "test result: ok. 109 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 37.24s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 29.101720019010827,
+      "log_sha256": "c59569946b62a97505eb749b98d5f2d86715e67ee0b30c0d5a65c37563c69413",
+      "results": [
+        "test result: ok. 44 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 28.28s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 71.7590699410066,
+      "log_sha256": "197060fee6d4c773e74cbe9337f868670e7f5515198aef30fe7717e4fa8cda0b",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 1.9319829870364629,
+      "log_sha256": "667158055ee7ac2ff84f2032f54f0ba627ab58a299abed149d326b61269d81df",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 645 filtered out; finished in 0.45s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 40.010725429980084,
+      "log_sha256": "38a82db0dcc5cf330f6d53d58f7e194bd7b435ea7edb943b9675d865852be4f7",
+      "results": []
+    }
+  ],
+  "all_seven_groups_both_hosts_passed": true,
+  "all_1175_sources_48_assets_cross_platform_and_logs_verified": true,
+  "both_meaningful_red_cases_both_hosts": true,
+  "all_prior_108_live_and_43_replay_test_sources_unchanged": true,
+  "actor_scalar_changes_only_and_duration_validation_unchanged": true,
+  "stage_comparison_fields_tolerances_coverage_requirements_and_acceptance_predicate_unchanged": true,
+  "ending_observer_phase_anchored_to_recorded_frame_order": true
+}

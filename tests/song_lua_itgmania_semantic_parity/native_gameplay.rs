@@ -2287,6 +2287,24 @@ end}
     }
 
     #[test]
+    fn ending_stage_observers_follow_final_frame_after_music_rewind() {
+        use serde_json::json;
+        let frames=vec![json!({"scene":1,"seconds":10.0}),
+            json!({"scene":1,"seconds":10.05}),
+            json!({"scene":1,"seconds":10.02})];
+        let mut samples=vec![json!({"phase":"progress","scene":1,"seconds":10.0}),
+            json!({"phase":"screen-end","scene":1,"seconds":10.02}),
+            json!({"phase":"gameplay-exit","scene":1,"seconds":10.02})];
+        let expected=[(0,0),(1,2),(2,2)].into_iter().collect();
+        assert_eq!(super::native_progress_observer_frames(&samples,&frames).expect("recorded ending phases"),
+            expected, "ending observations must wait for their matching native frame, retaining both samples");
+        samples[1]["players"]=json!([{"actual":9999,"failed":true}]);
+        assert_eq!(super::native_progress_observer_frames(&samples,&frames).expect("independent ending phase"),expected);
+        samples[1]["seconds"]=json!(10.03);
+        assert!(!super::native_progress_observer_frames(&samples,&frames).expect("unmatched ending clock remains pending").contains_key(&1));
+    }
+
+    #[test]
     fn progress_observers_follow_frame_order_when_music_rewinds() {
         use serde_json::json;
         let frames = vec![
@@ -2892,15 +2910,21 @@ fn native_creation_order_with_coverage_for_entries(trace: &Value, scene: u64, ba
 fn native_progress_observer_frames(samples: &[Value], frames: &[Value]) -> Result<BTreeMap<usize, usize>, String> {
     let mut result = BTreeMap::new();
     let mut cursor = 0;
-    for (sample_index, sample) in samples.iter().enumerate().filter(|(_, sample)| sample["phase"] == "progress") {
+    for (sample_index, sample) in samples.iter().enumerate().filter(|(_, sample)|
+        matches!(sample["phase"].as_str(), Some("progress" | "screen-end" | "gameplay-exit"))) {
         let seconds = number(sample, "seconds")?;
-        if let Some(relative) = frames[cursor..].iter().position(|frame|
-            frame["scene"] == sample["scene"]
-                && frame["seconds"].as_f64().is_some_and(|time| (time - seconds).abs() <= 1e-6))
-        {
+        let ending = sample["phase"] != "progress";
+        let matches_clock = |frame: &Value| frame["scene"] == sample["scene"]
+            && frame["seconds"].as_f64().is_some_and(|time| (time - seconds).abs() <= 1e-6);
+        // Ending observers run after the scene's final update. Both ending
+        // samples can describe that same update; an audio-clock overshoot in
+        // the preceding frame must not consume them early.
+        let relative = if ending { frames[cursor..].iter().rposition(matches_clock) }
+            else { frames[cursor..].iter().position(matches_clock) };
+        if let Some(relative) = relative {
             let index = cursor + relative;
             result.insert(sample_index, index);
-            cursor = index + 1;
+            cursor = index + usize::from(!ending);
         }
     }
     Ok(result)

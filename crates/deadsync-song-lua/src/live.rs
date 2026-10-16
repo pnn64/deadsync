@@ -6883,4 +6883,40 @@ assert(p1:GetChild('Meter'):GetText()=='9' and not p1:GetChild('Description'):Ge
 "#).exec().expect("native StepsDisplay resources, metric commands and data lifecycle");
     }
 
+    #[test]
+    fn live_native_nonfinite_actor_scalar_write_and_immediate_read() {
+        let mut compiled = compile_with_context("native-nonfinite-actor-scalars", r#"
+local later
+return Def.ActorFrame {
+    Def.ActorFrame {
+        Name='Writer',
+        OnCommand=function(self)
+            later=self:GetParent():GetChild('Later')
+            self:SetUpdateFunction(function()
+                -- The original outCirc expression at t=128-122.5, d=2.5
+                -- has a negative radicand. Native Actor::SetX preserves it.
+                local t=(128-122.5)/2.5-1
+                local value=9*math.sqrt(1-math.pow(t,2))+1
+                assert(value~=value)
+                later:x(value)
+                local x=later:GetX()
+                assert(x~=x, 'native actor scalar setters must retain NaN, including a later actor in the same update')
+                later:zoom(1/x)
+                local zoom=later:GetZoom()
+                assert(zoom~=zoom, 'native zoom must retain a numeric NaN')
+                later:x(math.huge)
+                assert(later:GetX()==math.huge, 'native actor float property retains infinity')
+                later:x(-math.huge)
+                assert(later:GetX()==-math.huge)
+            end)
+        end,
+    },
+    Def.Actor {Name='Later',InitCommand=function(self) self:x(7) end},
+}
+"#, |context| {context.defer_initial_live_update=true;});
+        let mut scene = compiled.live_scene.take().expect("native scalar scene");
+        let output = scene.advance(SongLuaLiveFrame {music_seconds:0.1,beat:0.2,
+            screen_seconds:0.1,delta_seconds:0.1,..Default::default()}).expect("native nonfinite scalar update");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+    }
 }
