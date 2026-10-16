@@ -2418,15 +2418,12 @@
     {
       "title": "flowers",
       "source_simfile": "flowers/flowers.ssc",
-      "harness_version": "0.1.0",
-      "archive": "0eb36d8ab81dbfa78a4b0d89aca7ba566f1cce93bc63d0c4836c8199c3d9bf4f.tar.zst",
-      "sha256": "0eb36d8ab81dbfa78a4b0d89aca7ba566f1cce93bc63d0c4836c8199c3d9bf4f",
-      "compressed_bytes": 808597,
-      "uncompressed_sha256": "f959a206153e86ea8061d8a2dae8d454e4933cafbe7abfa0fc2a8111b68cfa65",
-      "compression_level": 22,
-      "aliases": [
-        "75f00bbc88c0110864c3ef7748abafbec85c4e6f81eebb1cc2beedd0ee23f82c.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "1b5408a6706785a859db150a90ad0d41ec0001231dad19725588addba9dcd589.tar.zst",
+      "sha256": "1b5408a6706785a859db150a90ad0d41ec0001231dad19725588addba9dcd589",
+      "compressed_bytes": 17102589,
+      "uncompressed_sha256": "7722e7db1464871d24771b03d01dfadd1bba1c8243f120119cd4263182940519",
+      "aliases": []
     },
     {
       "title": "Flying Castle",
