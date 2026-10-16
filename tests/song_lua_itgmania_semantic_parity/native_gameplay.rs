@@ -858,6 +858,21 @@ return Def.ActorFrame { OnCommand=function(self) assert(nested()==1) end }
     }
 
     #[test]
+    fn native_reload_starts_with_the_requested_style() {
+        use deadsync_gameplay::GameplayInputPlayStyle;
+        let single = super::native_gameplay_session(&json!({
+            "style":"double", "input":{"style":"single"}
+        })).unwrap();
+        assert_eq!(single.play_style, GameplayInputPlayStyle::Single);
+        assert_eq!(single.joined_sides, [true, false]);
+        let versus = super::native_gameplay_session(&json!({
+            "style":"double", "input":{"style":"versus"}
+        })).unwrap();
+        assert_eq!(versus.play_style, GameplayInputPlayStyle::Versus);
+        assert_eq!(versus.joined_sides, [true, true]);
+    }
+
+    #[test]
     fn native_double_session_selects_double_steps_and_runs_eight_column_scene() {
         paths::init();
         let dir = std::env::temp_dir().join(format!("deadsync-double-native-session-{}", std::process::id()));
@@ -3173,7 +3188,9 @@ fn compare_stage_sample(
 
 fn native_gameplay_session(trace: &Value) -> Result<GameplaySession, String> {
     use deadsync_gameplay::GameplayInputPlayStyle;
-    let play_style = match trace["style"].as_str() {
+    // GameState::SetCurrentStyle can change the final observed style during a
+    // gameplay reload. Replay must begin with the captured launch input.
+    let play_style = match trace["input"]["style"].as_str().or_else(|| trace["style"].as_str()) {
         Some("single") => GameplayInputPlayStyle::Single,
         Some("versus") => GameplayInputPlayStyle::Versus,
         Some("double") => GameplayInputPlayStyle::Double,
