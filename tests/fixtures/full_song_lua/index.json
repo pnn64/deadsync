@@ -5106,17 +5106,14 @@
       "aliases": []
     },
     {
-      "title": "Trancing Pulse",
+      "title": "Trancing Pulse (Random)",
       "source_simfile": "Trancing Pulse (Random)/Trancing Pulse (Random).ssc",
-      "harness_version": "0.1.0",
-      "archive": "ca3f6e2b63b902e1d2828636e8b31c164d2fc89602dccf93101c6194373a3898.tar.zst",
-      "sha256": "ca3f6e2b63b902e1d2828636e8b31c164d2fc89602dccf93101c6194373a3898",
-      "compressed_bytes": 380239,
-      "uncompressed_sha256": "6c5a6f96b472c3823e83a4f053b075d9325bea412a3d3f20e40b43648698d042",
-      "compression_level": 22,
-      "aliases": [
-        "58da3dfc59ab90babf051eeac1d29060285d4f92b902a781c13f9d4ee12a1cb0.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "0330e534ac949b8487647f0e61bb656690b2f0f5dc94426134ae3f77767c0421.tar.zst",
+      "compressed_bytes": 11160603,
+      "sha256": "0330e534ac949b8487647f0e61bb656690b2f0f5dc94426134ae3f77767c0421",
+      "uncompressed_sha256": "0cab4b4440bec3fa12c3f95d507bf3eda8fcd51595a51e2383abbc62eee2dbb5",
+      "aliases": []
     },
     {
       "title": "Trinity Field (RANDOM)",
