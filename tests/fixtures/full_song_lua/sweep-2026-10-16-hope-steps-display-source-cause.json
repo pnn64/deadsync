@@ -1,0 +1,120 @@
+{
+  "source_simfile": "HOPE/HOPE.ssc",
+  "entry_evidence": "sweep-2026-10-16-hope-note-field-container-entry-diagnostic.json",
+  "entry_frames": 1688,
+  "entry_errors": 0,
+  "entry_mismatches": 20473,
+  "first_remaining_native_seq": 1186,
+  "first_remaining_mismatch": {
+    "field": "command_query_event",
+    "native": {
+      "actor": "external-0041",
+      "args": [],
+      "beat": -15.99990177154541,
+      "caller": {
+        "line": 36,
+        "source": "song:/sm5/modules/grabactors.lua",
+        "tail_call": false
+      },
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "native_tween_time_left": {
+          "type": "number",
+          "value": "infinity"
+        },
+        "results": [
+          4
+        ]
+      },
+      "kind": "query",
+      "line": 36,
+      "operation": "ActorFrame.GetNumChildren",
+      "phase": "callback",
+      "scene": 1,
+      "seconds": -4.08297061920166,
+      "seq": 1186,
+      "source": "song:/sm5/modules/grabactors.lua",
+      "results": [
+        4
+      ]
+    },
+    "deadsync": {
+      "scene": 1,
+      "kind": "query",
+      "operation": "ActorFrame.GetNumChildren",
+      "source": "song:/sm5/modules/grabactors.lua",
+      "line": 36,
+      "phase": "callback",
+      "beat": -15.99990177154541,
+      "seconds": -4.08297061920166,
+      "args": [],
+      "results": [
+        0
+      ]
+    }
+  },
+  "native_owner": "external-0041 StepsDisplayP1",
+  "source_cause": "Native StepsDisplay::Load constructs Frame plus metric-enabled Meter, Description and Autogen children. StepsDisplayGameplay inherits StepsDisplay; the primary theme metrics disable Ticks/Credit/StepsType and enable Meter/Description/Autogen. Frame and Autogen graphics redirect to the native blank sprite, and both text fonts redirect to Common Normal. The owned create_top_screen_theme_actor StepsDisplay branch only constructs an empty named StepsDisplay actor.",
+  "expected_children_derived_from_constructor_and_primary_theme_metrics": [
+    {
+      "name": "Frame",
+      "class": "Sprite",
+      "resource": "StepsDisplay frame.redir -> _blank"
+    },
+    {
+      "name": "Meter",
+      "class": "BitmapText",
+      "resource": "Common Normal"
+    },
+    {
+      "name": "Description",
+      "class": "BitmapText",
+      "resource": "Common Normal"
+    },
+    {
+      "name": "Autogen",
+      "class": "Sprite",
+      "resource": "StepsDisplay autogen.redir -> _blank"
+    }
+  ],
+  "primary_cpp": "ITGmania/src/StepsDisplay.cpp:Load,SetInternal,SetFromGameState and LunaStepsDisplay",
+  "primary_cpp_sha256": "8c33c1e5e716c5af285e246314c11d82de4e1e025bda55464623af8e6d6fb8f2",
+  "cpp_local_and_frozen_VM_bytes_match": true,
+  "relevant_primary_metric_sections": {
+    "fallback": {
+      "StepsDisplay": "[StepsDisplay]\nFrameX=0\nFrameY=0\nFrameOnCommand=\nFrameLoadCommand=%function(self,param) local bFlip = param.PlayerState and param.PlayerState:GetPlayerNumber() ~= PLAYER_1; self:zoomx(bFlip and -1 or 1); end\nFrameSetCommand=%function(self,param) if param.CustomDifficulty and param.CustomDifficulty ~= \"\" then self:diffuse(CustomDifficultyToColor(param.CustomDifficulty)) end end\nNumTicks=10\nMaxTicks=14\nTicksX=0\nTicksY=0\nTicksOnCommand=shadowlength,0;\nTicksSetCommand=%function(self,param) if param.CustomDifficulty and param.CustomDifficulty ~= \"\" then  self:diffuse(CustomDifficultyToColor(param.CustomDifficulty)) if param.Meter > 9 then self:glowshift() else self:stopeffect() end end end\nShowTicks=false\nShowMeter=true\nMeterFormatString=\"%i\"\nZeroMeterString=\"?\"\nMeterX=30\nMeterY=0\nMeterOnCommand=shadowlength,0\nMeterSetCommand=%function(self,param) if param.CustomDifficulty and param.CustomDifficulty ~= \"\" then self:diffuse(CustomDifficultyToLightColor(param.CustomDifficulty)); self:strokecolor(CustomDifficultyToDarkColor(param.CustomDifficulty)); end end\nShowDescription=true\nDescriptionX=-10\nDescriptionY=0\nDescriptionOnCommand=shadowlength,0;uppercase,true;\nDescriptionSetCommand=%function(self,param) if param.CustomDifficulty and param.CustomDifficulty ~= \"\" then self:diffuse(CustomDifficultyToLightColor(param.CustomDifficulty)); self:strokecolor(CustomDifficultyToDarkColor(param.CustomDifficulty)); end end\nShowCredit=false\nCreditX=0\nCreditY=0\nCreditOnCommand=\nCreditSetCommand=\nShowAutogen=true\nAutogenX=40\nAutogenY=0\nAutogenOnCommand=\nAutogenSetCommand=\nShowStepsType=false\nStepsTypeX=0\nStepsTypeY=0\nStepsTypeOnCommand=\n",
+      "StepsDisplayGameplay": "[StepsDisplayGameplay]\nFallback=\"StepsDisplay\"\n"
+    },
+    "simply_love": {
+      "StepsDisplay": "[StepsDisplay]\nShowMeter=true\nMeterSetCommand=%function(self, param) MESSAGEMAN:Broadcast(\"MeterSet\") end;\nShowDescription=true\nDescriptionY=0\nDescriptionX=-265\nDescriptionOnCommand=zoom,0.8;horizalign,left;vertspacing,-9;_wrapwidthpixels,345\nDescriptionSetCommand=%function(self,params) self:visible(params.Steps ~= nil and params.Steps:GetDifficulty()==\"Difficulty_Edit\")  end\n",
+      "StepsDisplayGameplay": "[StepsDisplayGameplay]\nMeterOnCommand=visible,false\n\n# ScreenPrompt is used when accepting/rejecting sync changes in gameplay.\n# (Or maybe it's really ScreenSaveSync, but that doesn't have registered metrics.)\n# ScreenPrompt is also used in various places throughout ScreenEdit and\n# when accepting/rejecting changes to local profiles via the operator menu.\n"
+    }
+  },
+  "relevant_metric_sections_match_physical_native_base_themes": true,
+  "native_resource_redirections": {
+    "Graphics/StepsDisplay frame.redir": {
+      "target": "_blank",
+      "sha256": "130ce35772ded9394bc9f89ffee75b07eff713361d0326100aa4f4157ee7480b"
+    },
+    "Graphics/StepsDisplay autogen.redir": {
+      "target": "_blank",
+      "sha256": "130ce35772ded9394bc9f89ffee75b07eff713361d0326100aa4f4157ee7480b"
+    },
+    "Fonts/StepsDisplay meter.redir": {
+      "target": "Common Normal",
+      "sha256": "c37fd510fd07f2ff8825629b33babc7f45beda6489f6a479ce50121742e7b20f"
+    },
+    "Fonts/StepsDisplay description.redir": {
+      "target": "Common Normal",
+      "sha256": "c37fd510fd07f2ff8825629b33babc7f45beda6489f6a479ce50121742e7b20f"
+    }
+  },
+  "owned_source": "crates/deadsync-song-lua/src/lua_util.rs:create_top_screen_theme_actor, top_screen_steps_display_index branch",
+  "note_field_seq1024_resolved": true,
+  "note_field_fix_commit": "9b9ce0d089e584bf2094d282e5bfe838a2e19811",
+  "fix_added": false,
+  "full_HOPE_repairs_spent": 0,
+  "captured_query_outputs_used_as_runtime_inputs": false,
+  "next_action": "Materialize the real named native children/resources and metric Load/On/Set commands, using selected Steps/GameState data and normal ownership/current-song/public StepsDisplay lifecycle. Add meaningful inventory/resource/data/lifecycle regression and qualify from the next committed helper. Do not substitute child counts or captured getter values."
+}
